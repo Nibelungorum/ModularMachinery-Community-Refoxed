@@ -1,0 +1,14 @@
+[submodule "reference/mmce"]
+	path = reference/mmce
+	url = https://github.com/NovaEngineering-Source/ModularMachinery-Community-Edition
+[submodule "reference/kubejs"]
+	path = reference/kubejs
+	url = https://github.com/kube-mods/kubejs
+[submodule "reference/jei"]
+	path = reference/jei
+	url = https://github.com/mezz/JustEnoughItems
+	branch = 26.1
+[submodule "reference/jade"]
+	path = reference/jade
+	url = https://github.com/Snownee/Jade
+	branch = 26.1-neoforge
