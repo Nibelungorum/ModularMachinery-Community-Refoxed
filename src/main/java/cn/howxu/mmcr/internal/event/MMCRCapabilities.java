@@ -1,12 +1,16 @@
 package cn.howxu.mmcr.internal.event;
 
+import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.registry.MMCRRegistries;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.transfer.ResourceHandler;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
@@ -18,6 +22,54 @@ public final class MMCRCapabilities {
                 net.neoforged.neoforge.capabilities.Capabilities.Item.BLOCK,
                 MMCRRegistries.ITEM_BUS_BE.get(),
                 (be, side) -> be instanceof ItemBusBlockEntity ib ? new LegacyItemHandlerAdapter(ib.getItemHandler(side)) : null);
+        event.registerBlockEntity(
+                net.neoforged.neoforge.capabilities.Capabilities.Fluid.BLOCK,
+                MMCRRegistries.FLUID_HATCH_BE.get(),
+                (be, side) -> be instanceof FluidHatchBlockEntity fh ? new LegacyFluidHandlerAdapter(fh.getFluidHandler(side)) : null);
+    }
+
+    private static final class LegacyFluidHandlerAdapter implements ResourceHandler<FluidResource> {
+        private final IFluidHandler handler;
+
+        LegacyFluidHandlerAdapter(IFluidHandler handler) {
+            this.handler = handler;
+        }
+
+        @Override
+        public int size() {
+            return handler.getTanks();
+        }
+
+        @Override
+        public FluidResource getResource(int slot) {
+            FluidStack stack = handler.getFluidInTank(slot);
+            return stack.isEmpty() ? FluidResource.EMPTY : FluidResource.of(stack);
+        }
+
+        @Override
+        public long getAmountAsLong(int slot) {
+            return handler.getFluidInTank(slot).getAmount();
+        }
+
+        @Override
+        public long getCapacityAsLong(int slot, FluidResource resource) {
+            return handler.getTankCapacity(slot);
+        }
+
+        @Override
+        public boolean isValid(int slot, FluidResource resource) {
+            return handler.isFluidValid(slot, resource.toStack(1));
+        }
+
+        @Override
+        public int insert(int slot, FluidResource resource, int amount, TransactionContext tx) {
+            return handler.fill(resource.toStack(amount), IFluidHandler.FluidAction.EXECUTE);
+        }
+
+        @Override
+        public int extract(int slot, FluidResource resource, int amount, TransactionContext tx) {
+            return handler.drain(resource.toStack(amount), IFluidHandler.FluidAction.EXECUTE).getAmount();
+        }
     }
 
     private static final class LegacyItemHandlerAdapter implements ResourceHandler<ItemResource> {

@@ -3,7 +3,9 @@ package cn.howxu.mmcr.registry;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeSerializer;
+import cn.howxu.mmcr.internal.block.FluidHatchBlock;
 import cn.howxu.mmcr.internal.block.ItemBusBlock;
+import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.BlockItem;
@@ -46,6 +48,19 @@ public final class MMCRRegistries {
             BLOCK_ENTITIES.register("item_bus", () -> new BlockEntityType<>(
                     ItemBusBlockEntity::new,
                     MMCRRegistries.ITEM_BUS_BLOCK.get()));
+
+    public static final java.util.function.Supplier<FluidHatchBlock> FLUID_HATCH_BLOCK =
+            BLOCKS.register("fluid_hatch", () -> new FluidHatchBlock(Block.Properties.of()));
+
+    public static final java.util.function.Supplier<Item> FLUID_HATCH_BLOCK_ITEM =
+            ITEMS.register("fluid_hatch", () -> new BlockItem(
+                    MMCRRegistries.FLUID_HATCH_BLOCK.get(),
+                    new Item.Properties()));
+
+    public static final java.util.function.Supplier<BlockEntityType<FluidHatchBlockEntity>> FLUID_HATCH_BE =
+            BLOCK_ENTITIES.register("fluid_hatch", () -> new BlockEntityType<>(
+                    FluidHatchBlockEntity::new,
+                    MMCRRegistries.FLUID_HATCH_BLOCK.get()));
 
     private MMCRRegistries() {
     }
