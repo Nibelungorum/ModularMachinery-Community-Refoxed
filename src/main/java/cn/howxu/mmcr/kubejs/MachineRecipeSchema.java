@@ -21,7 +21,7 @@ import org.jspecify.annotations.Nullable;
 import java.util.List;
 
 public final class MachineRecipeSchema {
-    private static final RecipeComponent<JsonElement> JSON_ELEMENT = new JsonElementComponent();
+    public static final RecipeComponent<JsonElement> JSON_ELEMENT = new JsonElementComponent();
 
     public static final RecipeKey<String> MACHINE =
             new RecipeKey<>(StringComponent.ID, "machine", ComponentRole.OTHER).noFunctions();
@@ -51,7 +51,7 @@ public final class MachineRecipeSchema {
     }
 
     private record JsonElementComponent() implements RecipeComponent<JsonElement> {
-        private static final ResourceKey<RecipeComponentType<?>> TYPE = RecipeComponentType.builtin("json");
+        private static final ResourceKey<RecipeComponentType<?>> TYPE = RecipeComponentType.key(MMCR.id("json"));
 
         @Override
         public ResourceKey<RecipeComponentType<?>> type() {

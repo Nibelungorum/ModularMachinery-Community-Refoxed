@@ -3,6 +3,7 @@ package cn.howxu.mmcr.kubejs;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import dev.latvian.mods.kubejs.plugin.KubeJSPlugin;
+import dev.latvian.mods.kubejs.recipe.component.RecipeComponentTypeRegistry;
 import dev.latvian.mods.kubejs.recipe.schema.RecipeFactoryRegistry;
 import dev.latvian.mods.kubejs.recipe.schema.RecipeSchemaRegistry;
 import dev.latvian.mods.kubejs.script.BindingRegistry;
@@ -18,6 +19,11 @@ public class MMCRKubeJSPlugin implements KubeJSPlugin {
     @Override
     public void registerRecipeFactories(RecipeFactoryRegistry registry) {
         registry.register(MachineRecipeFactory.INSTANCE);
+    }
+
+    @Override
+    public void registerRecipeComponents(RecipeComponentTypeRegistry registry) {
+        registry.unit(MachineRecipeSchema.JSON_ELEMENT);
     }
 
     @Override
