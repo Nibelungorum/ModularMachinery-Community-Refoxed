@@ -45,11 +45,12 @@ Class.forName(line[0])     // FQN 反射加载插件类
 ### 2.1 文件清单
 
 ```
-src/main/resources/kubejs.plugins.txt                        # 插件声明
-src/main/resources/data/mmcr/kubejs/recipe_schema/machine_recipe.json    # KubeJS 配方 schema
+src/main/resources/kubejs.plugins.txt                        # 插件声明（文本，非 JSON）
 src/main/java/cn/howxu/mmcr/kubejs/MMCRKubeJSPlugin.java     # 插件入口
 src/main/java/cn/howxu/mmcr/kubejs/MachineBuilderJS.java      # builder 类型
 src/main/java/cn/howxu/mmcr/kubejs/MachineRecipeBuilderJS.java
+src/main/java/cn/howxu/mmcr/kubejs/MachineRecipeSchema.java   # 配方 schema（程序化注册）
+src/main/java/cn/howxu/mmcr/kubejs/MachineRecipeFactory.java  # 配方 factory
 src/main/java/cn/howxu/mmcr/kubejs/MMCREvents.java           # 事件群
 src/main/java/cn/howxu/mmcr/kubejs/wrappers/BlockArrayWrapper.java
 src/main/java/cn/howxu/mmcr/kubejs/wrappers/ComponentTypeWrapper.java
@@ -116,85 +117,78 @@ public class MMCRKubeJSPlugin implements KubeJSPlugin {
 
 **注意**：上面代码**编译时**会依赖 KubeJS API。这是允许的——因为 `kubejs-neoforge` 已经在 `build.gradle` 里（`runtimeOnly`）。但在 IDE 看不到 KubeJS 源码时会飘红，这是预期行为，不是 bug。
 
-## 3. 配方 Schema 用 JSON 文件声明（推荐做法）
+## 3. 配方 Schema 程序化注册（无 JSON）
 
-**证据**：`reference/kubejs/src/main/resources/data/minecraft/kubejs/recipe_schema/shaped.json` + `JsonRecipeSchemaLoader.java:330` 扫描 `kubejs/recipe_schema` 目录下所有 `.json`。
+> **不做 JSON schema 文件**。KubeJS 提供 Java API `RecipeSchema` + `RecipeKey` 直接构造——结果与 JSON 等价，但无任何资源文件。
 
-放在 `src/main/resources/data/mmcr/kubejs/recipe_schema/machine_recipe.json`：
+**证据**：
+- `reference/kubejs/src/main/java/dev/latvian/mods/kubejs/recipe/schema/RecipeSchema.java`
+- `reference/kubejs/src/main/java/dev/latvian/mods/kubejs/recipe/RecipeKey.java`
+- `reference/kubejs/src/main/java/dev/latvian/mods/kubejs/recipe/component/*.java`（所有 `RecipeComponent` 都有 `static final` 实例）
 
-```json
-{
-  "recipe_factory": "mmcr:machine_recipe",
-  "keys": [
-    {
-      "name": "machine",
-      "role": "other",
-      "type": {
-        "type": "resource_location"
-      }
-    },
-    {
-      "name": "tick_time",
-      "role": "other",
-      "type": {
-        "type": "number",
-        "component": "non_negative_int"
-      }
-    },
-    {
-      "name": "item_inputs",
-      "role": "input",
-      "type": {
-        "type": "list",
-        "component": "sized_ingredient"
-      },
-      "optional": true
-    },
-    {
-      "name": "fluid_inputs",
-      "role": "input",
-      "type": {
-        "type": "list",
-        "component": "sized_fluid_ingredient"
-      },
-      "optional": true
-    },
-    {
-      "name": "energy_per_tick",
-      "role": "other",
-      "type": {
-        "type": "number",
-        "component": "non_negative_int"
-      },
-      "optional": true
-    },
-    {
-      "name": "item_outputs",
-      "role": "output",
-      "type": {
-        "type": "list",
-        "component": "item_stack"
-      },
-      "optional": true
-    },
-    {
-      "name": "fluid_outputs",
-      "role": "output",
-      "type": {
-        "type": "list",
-        "component": "fluid_stack"
-      },
-      "optional": true
-    }
-  ],
-  "unique": ["machine"],
-  "constructors": [
-    { "keys": ["machine", "tick_time"] }
-  ]
+放在 `cn.howxu.mmcr.kubejs.MachineRecipeSchema`：
+
+```java
+public final class MachineRecipeSchema {
+    public static final RecipeKey<ResourceLocation> MACHINE =
+            new RecipeKey<>(StringComponent.ID, "machine", ComponentRole.OTHER)
+                    .noFunctions();
+
+    public static final RecipeKey<Integer> TICK_TIME =
+            new RecipeKey<>(NumberComponent.NON_NEGATIVE_INT, "tick_time", ComponentRole.OTHER);
+
+    public static final RecipeKey<List<SizedIngredient>> ITEM_INPUTS =
+            new RecipeKey<>(ListRecipeComponent.create(SizedIngredientComponent.SIZED_INGREDIENT, true, false), "item_inputs", ComponentRole.INPUT)
+                    .optional(List.of())
+                    .exclude();
+
+    public static final RecipeKey<List<SizedFluidIngredient>> FLUID_INPUTS =
+            new RecipeKey<>(ListRecipeComponent.create(SizedFluidIngredientComponent.SIZED_FLUID_INGREDIENT, true, false), "fluid_inputs", ComponentRole.INPUT)
+                    .optional(List.of())
+                    .exclude();
+
+    public static final RecipeKey<Integer> ENERGY_PER_TICK =
+            new RecipeKey<>(NumberComponent.NON_NEGATIVE_INT, "energy_per_tick", ComponentRole.OTHER)
+                    .optional(0);
+
+    public static final RecipeKey<List<ItemStack>> ITEM_OUTPUTS =
+            new RecipeKey<>(ListRecipeComponent.create(ItemStackComponent.ITEM_STACK, true, false), "item_outputs", ComponentRole.OUTPUT)
+                    .optional(List.of())
+                    .exclude();
+
+    public static final RecipeKey<List<FluidStack>> FLUID_OUTPUTS =
+            new RecipeKey<>(ListRecipeComponent.create(FluidStackComponent.FLUID_STACK, true, false), "fluid_outputs", ComponentRole.OUTPUT)
+                    .optional(List.of())
+                    .exclude();
+
+    public static final RecipeSchema SCHEMA = new RecipeSchema(
+            MACHINE, TICK_TIME,
+            ITEM_INPUTS, FLUID_INPUTS,
+            ENERGY_PER_TICK,
+            ITEM_OUTPUTS, FLUID_OUTPUTS
+    );
 }
 ```
 
-**对应脚本调用**：
+在 `MMCRKubeJSPlugin.registerRecipeSchemas` 注册：
+
+```java
+@Override
+public void registerRecipeSchemas(RecipeSchemaRegistry registry) {
+    registry.register(MMCR.id("machine_recipe"), MachineRecipeSchema.SCHEMA);
+}
+```
+
+`MMCR.id(name)` 工具方法：
+
+```java
+public final class MMCR {
+    public static final String MODID = "mmcr";
+    public static ResourceLocation id(String path) { return ResourceLocation.fromNamespaceAndPath(MODID, path); }
+}
+```
+
+**对应脚本调用**（与原 JSON 版完全等价）：
 ```javascript
 ServerEvents.recipes(event => {
     event.recipes.mmcr.machine_recipe('mmcr:iron_compressor', 40, {
@@ -206,8 +200,9 @@ ServerEvents.recipes(event => {
 ```
 
 **关键点**：
-- `recipe_factory` 字段指 `mmcr:machine_recipe`，意味着 KubeJS 会调 `cn.howxu.mmcr.kubejs.MachineRecipeFactory.create(...)`（如果需要也可以走 JSON-only，不注册 factory）。
-- JSON schema **就是**一份「KubeJS ↔ MMCR API 翻译表」——KubeJS 知道怎么用 `sized_ingredient` 解析 `'2x minecraft:iron_ingot'`，我们不用关心 Rhino 类型转换。
+- `RecipeSchema` 的 7 个 key 用 Java 字段直接声明——**编译期校验**，不会因为 JSON 拼错而运行时崩。
+- `SizedIngredientComponent.SIZED_INGREDIENT` / `FluidStackComponent.FLUID_STACK` 等组件直接复用 KubeJS 内置实例——KubeJS 知道怎么把 `'2x minecraft:iron_ingot'` 解析成 `SizedIngredient`，我们不重写 Rhino 类型转换。
+- 不放任何资源文件——**整个 kubejs 集成包内零 JSON**。
 
 ## 4. KubeJS 端 Builder 设计
 
@@ -353,7 +348,7 @@ boolean hasKubeJS = ModList.get().isLoaded("kubejs");
 |---|---|
 | 模组加载 | 正常，KubeJS 缺位不影响 MMCR 初始化 |
 | 玩家放机器 | 用 Java API 预注册的几台示例机器（如 `mmcr:basic_furnace`） |
-| 玩家写配方 | 通过 KubeJS 脚本（如果有），或 datapack JSON `data/mmcr/recipe/*.json`（NeoForge 自动加载） |
+| 玩家写配方 | 仅通过 KubeJS 脚本；MMCR **不支持** datapack JSON 配方（与 D2 一致） |
 | JEI 显示 | JEI recipe category 仍能枚举 `RecipeManager` 里的所有 `MachineRecipe` |
 | 性能 | 无差异（KubeJS 桥接层一行都不执行） |
 
@@ -398,7 +393,7 @@ runtimeOnly("dev.latvian.mods:kubejs-neoforge:${kubejs_version}")
 |---|---|---|
 | 装 MMCR + KubeJS | 脚本可写机器 + 配方 | 在 `world/server_scripts` 写 `StartupEvents.registry('mmcr:machine', e => e.create('test:demo'))` |
 | 装 MMCR 不装 KubeJS | 启动不报错 | 启动日志无 `Failed to load plugin cn.howxu.mmcr.kubejs.MMCRKubeJSPlugin` |
-| 装 MMCR 不装 KubeJS，但有 datapack JSON | 配方仍加载 | `data/mmcr/recipe/test.json` 出现在 `RecipeManager` 里 |
+| 装 MMCR 不装 KubeJS | 启动正常；只能通过 Java API 注册机器 / 配方 |
 | KubeJS 在场但 MMCR 异常 | KubeJS 不应连带崩溃 | 检查 KubeJS 日志，确认 MMCR 插件错误被单独捕获 |
 
 ## 11. 不做的事

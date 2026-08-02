@@ -74,7 +74,7 @@ youyihj.mmce.*                                    [删除：投影器，Phase 5 
 com.cleanroommc.client.*                          [删除：cleanroommc 移植预览渲染，Phase 5 再加]
 ```
 
-**结论**：MMCE 700+ 文件，MMCR 首期目标约 40-60 个 .java + 若干 .json。
+**结论**：MMCE 700+ 文件，MMCR 首期目标约 40-60 个 .java + MC 基础设施 JSON（blockstate / model / lang——不可去除）+ 资源贴图。
 
 ## 3. 类级映射（关键类的逐一翻译）
 
@@ -336,21 +336,22 @@ cn.howxu.mmcr
 │   ├─ MMCRKubeJSPlugin.java
 │   ├─ MachineBuilderJS.java
 │   ├─ MachineRecipeBuilderJS.java
+│   ├─ MachineRecipeSchema.java       # 程序化 RecipeSchema（无 JSON）
 │   ├─ MachineRecipeFactory.java
 │   ├─ MMCREvents.java
 │   └─ wrappers/
 │      ├─ BlockArrayWrapper.java
 │      └─ ComponentTypeWrapper.java
 └─ resources/
-   ├─ data/mmcr/recipe/<示例>.json   # NeoForge 自动加载（即使无 KubeJS 也能跑）
-   ├─ data/mmcr/kubejs/recipe_schema/machine_recipe.json
-   ├─ assets/mmcr/blockstates/*.json
-   ├─ assets/mmcr/models/{block,item}/*.json
+   │                                       # 注意：本项目零 JSON 数据文件
+   │                                       # 机器 / 配方 / KubeJS schema 全部 Java 注册
+   ├─ assets/mmcr/blockstates/*.json      # MC 基础设施：方块状态（必须 JSON）
+   ├─ assets/mmcr/models/{block,item}/*.json   # MC 基础设施：模型（必须 JSON）
    ├─ assets/mmcr/textures/{block,item,gui}/*.png
-   ├─ assets/mmcr/lang/{en_us,zh_cn}.json
+   ├─ assets/mmcr/lang/{en_us,zh_cn}.json  # MC 基础设施：翻译（必须 JSON）
    └─ META-INF/
-      ├─ neoforge.mods.toml
-      └─ kubejs.plugins.txt
+      ├─ neoforge.mods.toml               # MC 基础设施：mod 元数据（TOML）
+      └─ kubejs.plugins.txt               # KubeJS 基础设施：插件清单（纯文本）
 ```
 
 **关键约束**：

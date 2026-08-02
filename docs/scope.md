@@ -81,7 +81,7 @@ public final class MMCR {
   - `registerBuilderTypes`：暴露 `MachineBuilder`（脚本构造机器）+ `MachineRecipeBuilder`（构造配方）。
   - `registerBindings`：全局绑定 `MMCR.machines` / `MMCR.recipes`。
   - `registerEvents`：暴露 `MMCREvents.machineTick` / `MMCREvents.recipeComplete`。
-  - `registerRecipeSchemas`：**用 JSON schema 文件** 暴露一个 `mmcr:machine_recipe` 配方类型（参考 KubeJS 自身的 `data/<ns>/kubejs/recipe_schema/*.json` 模式）。
+  - `registerRecipeSchemas`：**用 Java `RecipeSchema` API 程序化注册** `mmcr:machine_recipe` 配方类型（**不放任何 JSON schema 文件**——参考 `docs/kubejs-integration.md §3`）。
   - `registerTypeWrappers`：`BlockArray pattern(...)` / `MachineComponent component(...)` 自动转换。
 - 在 `MMCRKubeJSPlugin` 类顶部用 `@dev.latvian.mods.kubejs.plugin.KubeJSPlugin` 引用，但**不**直接 import 任何 KubeJS 内部类——所有调用走 `KubeJSPlugin` 接口的 default 方法。
 - 检测 KubeJS 是否在场的运行时方法：`ModList.get().isLoaded("kubejs")`，仅在此条件成立时才执行 KubeJS 相关逻辑。
@@ -91,7 +91,7 @@ public final class MMCR {
 ### 1.6 配置
 
 - `ModConfigSpec` 一份 `common.toml`：机器最大并行数（首期恒为 1）、能耗缩放、Tick 检查间隔、`enableKubeJSReloadCommand`。
-- 不再做 JSON 机器 / 配方目录扫描——机器与配方只通过 KubeJS 或 Java API 注册。
+- **不做任何 JSON 机器 / 配方 / 配方 schema**——机器、配方、KubeJS recipe schema 全部走 Java API；KubeJS 端 builder / recipe schema 也是 Java 程序化注册。
 
 ## 2. 首期「OUT of Scope」清单（不要做）
 
@@ -174,7 +174,7 @@ public final class MMCR {
 | 3 类 Requirement / Component（Item/Fluid/Energy） | 400-500 | 6-8 |
 | 控制器 + 5 类仓方块 / Tile | 800-1200 | 10-14 |
 | 公共 API（`MMCR` 入口 + 接口） | 200-300 | 4-6 |
-| KubeJS 插件（`MMCRKubeJSPlugin` + bindings + JSON schema）——**可选** | 500-700 | 3-5 + 1 JSON |
+| KubeJS 插件（`MMCRKubeJSPlugin` + bindings + 程序化 RecipeSchema）——**可选** | 500-700 | 4-6 |
 | 数据生成（注册表 → JSON） | 200-300 | 2-3 |
 | **合计** | **~4000-5500 行** | **~45-60 文件** |
 

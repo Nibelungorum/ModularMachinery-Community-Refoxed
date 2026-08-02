@@ -105,7 +105,7 @@
 | `Capability` → `BlockCapability` 的 context 差异 | 首期只用标准 3 类；addon 自写 capability 时再学 |
 | KubeJS 编译时飘红（runtimeOnly 时） | 把 `kubejs-neoforge` 改 `compileOnly + runtimeOnly` 重复声明（建议改 `build.gradle`） |
 | 资源 namespace 替换（`modularmachinery` → `mmcr`） | 批量替换 + 重新校验所有引用；贴图直接拷贝改名 |
-| GSON 完全废弃后，配方 JSON 怎么读 | NeoForge 自动从 `data/<ns>/recipe/*.json` 加载；用 `MapCodec` 反序列化（参考 `docs/api-mapping.md §7.3`） |
+| GSON 完全废弃后，配方怎么注册 | **不读 JSON 配方文件**——`MachineRecipe` 仅通过 Java API 或 KubeJS 注入；`MachineRecipeSerializer` 仅用于客户端缓存 / sync（首期可省） |
 
 ## 7. 验收标准（DoD）
 
@@ -121,7 +121,7 @@
 | 6 | 缺能量或输入 | 配方不执行，控制器 idle |
 | 7 | 拆 1 个外壳 | 控制器 `formed = false`，状态变为 idle |
 | 8 | 重启世界 | 配方 + 机器 + 已组装的控制器状态全部保留 |
-| 9 | 关闭 KubeJS 单独启动 | datapack JSON 配方仍能跑（如果有写） |
+| 9 | 关闭 KubeJS 单独启动 | MMCR 仍加载；只能通过 Java API 注册机器 / 配方（**无 JSON 配方回退路径**） |
 
 ## 8. 不在范围内（永久）
 
@@ -145,3 +145,4 @@
 
 **变更历史**
 - 2026-08-02：初版（D1-D15 决策清单 + §3 范围 + §7 DoD）
+- 2026-08-02（v1.1）：删除 KubeJS 配方 schema JSON + 删除 datapack 配方 JSON 回退路径；D2「JSON 配方定义 OUT」严格化；`MachineRecipe` 仅 Java / KubeJS 注入
