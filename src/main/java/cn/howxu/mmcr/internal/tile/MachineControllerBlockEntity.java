@@ -53,11 +53,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (formed != isFormed()) setFormed(formed);
         if (!formed) {
             if (activeRecipe != null) setActiveRecipe(null);
-            return;
+        } else {
+            if (activeRecipe == null) tryStartNewRecipe();
+            if (activeRecipe != null) tickActiveRecipe();
         }
-
-        if (activeRecipe == null) tryStartNewRecipe();
-        if (activeRecipe != null) tickActiveRecipe();
         broadcastState();
     }
 
