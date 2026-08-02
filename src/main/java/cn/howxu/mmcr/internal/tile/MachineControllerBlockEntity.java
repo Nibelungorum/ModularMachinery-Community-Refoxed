@@ -6,9 +6,13 @@ import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.registry.MMCRRegistries;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -54,6 +58,16 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
         if (activeRecipe == null) tryStartNewRecipe();
         if (activeRecipe != null) tickActiveRecipe();
+        broadcastState();
+    }
+
+    private void broadcastState() {
+        if (!(level instanceof ServerLevel sl)) return;
+        String name = activeRecipe == null ? "" : activeRecipe.id().toString();
+        var pkt = new PktMachineStatePayload(getBlockPos(), name, isFormed());
+        for (var player : sl.getPlayers(p -> p.distanceToSqr(getBlockPos().getCenter()) < 64 * 64)) {
+            ((ServerPlayer) player).connection.send(new ClientboundCustomPayloadPacket(pkt));
+        }
     }
 
     private void tryStartNewRecipe() {
