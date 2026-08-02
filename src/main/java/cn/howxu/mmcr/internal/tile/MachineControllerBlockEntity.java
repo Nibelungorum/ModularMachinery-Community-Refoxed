@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.MMCRRegistries;
@@ -31,4 +32,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public int getTickCounter() { return tickCounter; }
     public void setTickCounter(int t) { this.tickCounter = t; setChanged(); }
+
+    public void serverTick() {
+        if (level == null || level.isClientSide()) return;
+        if (machine == null) return;
+
+        boolean formed = StructureMatcher.matches(
+                machine.pattern(), level, getBlockPos(),
+                getBlockState().getValue(MachineControllerBlock.FACING));
+        if (formed != isFormed()) setFormed(formed);
+    }
 }
