@@ -126,10 +126,10 @@ class BlockArrayTest {
                 ctrl.offset(-1, 0, 0), Blocks.STONE,
                 ctrl.offset(0, 0, -1), Blocks.DIRT)), ctrl, Direction.NORTH)).isTrue();
         assertThat(StructureMatcher.matches(arr, LevelStub.create(Map.of(
-                ctrl.offset(0, 0, 1), Blocks.STONE,
-                ctrl.offset(-1, 0, 0), Blocks.DIRT)), ctrl, Direction.EAST)).isTrue();
-        assertThat(StructureMatcher.matches(arr, LevelStub.create(Map.of(
                 ctrl.offset(0, 0, -1), Blocks.STONE,
-                ctrl.offset(1, 0, 0), Blocks.DIRT)), ctrl, Direction.WEST)).isTrue();
+                ctrl.offset(1, 0, 0), Blocks.DIRT)), ctrl, Direction.EAST)).isTrue();
+        assertThat(StructureMatcher.matches(arr, LevelStub.create(Map.of(
+                ctrl.offset(0, 0, 1), Blocks.STONE,
+                ctrl.offset(-1, 0, 0), Blocks.DIRT)), ctrl, Direction.WEST)).isTrue();
     }
 }
