@@ -1,15 +1,18 @@
 package cn.howxu.mmcr.internal.event;
 
+import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.registry.MMCRRegistries;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
+import net.neoforged.neoforge.energy.IEnergyStorage;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.transfer.ResourceHandler;
+import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
@@ -26,6 +29,10 @@ public final class MMCRCapabilities {
                 net.neoforged.neoforge.capabilities.Capabilities.Fluid.BLOCK,
                 MMCRRegistries.FLUID_HATCH_BE.get(),
                 (be, side) -> be instanceof FluidHatchBlockEntity fh ? new LegacyFluidHandlerAdapter(fh.getFluidHandler(side)) : null);
+        event.registerBlockEntity(
+                net.neoforged.neoforge.capabilities.Capabilities.Energy.BLOCK,
+                MMCRRegistries.ENERGY_HATCH_BE.get(),
+                (be, side) -> be instanceof EnergyHatchBlockEntity eh ? new LegacyEnergyHandlerAdapter(eh.getEnergyStorage(side)) : null);
     }
 
     private static final class LegacyFluidHandlerAdapter implements ResourceHandler<FluidResource> {
@@ -69,6 +76,34 @@ public final class MMCRCapabilities {
         @Override
         public int extract(int slot, FluidResource resource, int amount, TransactionContext tx) {
             return handler.drain(resource.toStack(amount), IFluidHandler.FluidAction.EXECUTE).getAmount();
+        }
+    }
+
+    private static final class LegacyEnergyHandlerAdapter implements EnergyHandler {
+        private final IEnergyStorage storage;
+
+        LegacyEnergyHandlerAdapter(IEnergyStorage storage) {
+            this.storage = storage;
+        }
+
+        @Override
+        public long getAmountAsLong() {
+            return storage.getEnergyStored();
+        }
+
+        @Override
+        public long getCapacityAsLong() {
+            return storage.getMaxEnergyStored();
+        }
+
+        @Override
+        public int insert(int amount, TransactionContext tx) {
+            return storage.receiveEnergy(amount, false);
+        }
+
+        @Override
+        public int extract(int amount, TransactionContext tx) {
+            return storage.extractEnergy(amount, false);
         }
     }
 

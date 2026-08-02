@@ -3,8 +3,10 @@ package cn.howxu.mmcr.registry;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeSerializer;
+import cn.howxu.mmcr.internal.block.EnergyHatchBlock;
 import cn.howxu.mmcr.internal.block.FluidHatchBlock;
 import cn.howxu.mmcr.internal.block.ItemBusBlock;
+import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -61,6 +63,19 @@ public final class MMCRRegistries {
             BLOCK_ENTITIES.register("fluid_hatch", () -> new BlockEntityType<>(
                     FluidHatchBlockEntity::new,
                     MMCRRegistries.FLUID_HATCH_BLOCK.get()));
+
+    public static final java.util.function.Supplier<EnergyHatchBlock> ENERGY_HATCH_BLOCK =
+            BLOCKS.register("energy_hatch", () -> new EnergyHatchBlock(Block.Properties.of()));
+
+    public static final java.util.function.Supplier<Item> ENERGY_HATCH_BLOCK_ITEM =
+            ITEMS.register("energy_hatch", () -> new BlockItem(
+                    MMCRRegistries.ENERGY_HATCH_BLOCK.get(),
+                    new Item.Properties()));
+
+    public static final java.util.function.Supplier<BlockEntityType<EnergyHatchBlockEntity>> ENERGY_HATCH_BE =
+            BLOCK_ENTITIES.register("energy_hatch", () -> new BlockEntityType<>(
+                    EnergyHatchBlockEntity::new,
+                    MMCRRegistries.ENERGY_HATCH_BLOCK.get()));
 
     private MMCRRegistries() {
     }
