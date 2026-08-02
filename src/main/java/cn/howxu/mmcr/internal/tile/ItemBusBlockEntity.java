@@ -20,5 +20,7 @@ public class ItemBusBlockEntity extends BlockEntity {
 
     public IItemHandler getItemHandler(Direction side) { return handler; }
 
+    public ItemStackHandler getItemStackHandler(Direction side) { return handler; }
+
     public IOType ioType() { return getBlockState().getValue(ItemBusBlock.IO_TYPE); }
 }

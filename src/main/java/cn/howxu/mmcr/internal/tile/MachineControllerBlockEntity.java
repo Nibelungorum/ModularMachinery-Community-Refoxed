@@ -6,18 +6,26 @@ import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.machine.MMCRDefaultMachines;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.registry.MMCRRegistries;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.Identifier;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.items.IItemHandler;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 public class MachineControllerBlockEntity extends BlockEntity {
 
@@ -45,6 +53,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public void serverTick() {
         if (level == null || level.isClientSide()) return;
+        if (machine == null) bindDefaultMachine();
         if (machine == null) return;
 
         boolean formed = StructureMatcher.matches(
@@ -70,8 +79,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void tryStartNewRecipe() {
-        for (MachineRecipe recipe : RecipeRegistry.byMachine(machine)) {
-            if (canAcceptInputs(recipe)) {
+        for (MachineRecipe recipe : recipesForMachine()) {
+            if (canAcceptInputs(recipe) && canAcceptOutputs(recipe)) {
                 setActiveRecipe(recipe);
                 setTickCounter(0);
                 return;
@@ -129,12 +138,65 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (recipe == null) return;
         int next = tickCounter + 1;
         if (next >= recipe.tickTime()) {
+            if (!canAcceptOutputs(recipe)) return;
             consumeAndProduce(recipe);
             setActiveRecipe(null);
             setTickCounter(0);
         } else {
             setTickCounter(next);
         }
+    }
+
+    private void bindDefaultMachine() {
+        MMCRDefaultMachines.ensureRegistered();
+        setMachine(cn.howxu.mmcr.api.machine.MachineRegistry.getMachine(cn.howxu.mmcr.MMCR.id("iron_compressor")));
+    }
+
+    private List<MachineRecipe> recipesForMachine() {
+        Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>();
+        for (MachineRecipe recipe : RecipeRegistry.byMachine(machine)) {
+            recipes.put(recipe.id(), recipe);
+        }
+        if (level instanceof ServerLevel sl) {
+            for (RecipeHolder<?> holder : sl.recipeAccess().getRecipes()) {
+                if (holder.value() instanceof MachineRecipe recipe
+                        && recipe.machineId().equals(machine.registryName())) {
+                    recipes.putIfAbsent(recipe.id(), recipe);
+                }
+            }
+        }
+        return new ArrayList<>(recipes.values());
+    }
+
+    private boolean canAcceptOutputs(MachineRecipe recipe) {
+        List<OutputSlotState> slots = outputSlotStates();
+        for (ItemStack output : recipe.outputs()) {
+            ItemStack remaining = output.copy();
+            for (OutputSlotState slot : slots) {
+                if (remaining.isEmpty()) break;
+                remaining = slot.insert(remaining);
+            }
+            if (!remaining.isEmpty()) return false;
+        }
+        return true;
+    }
+
+    private List<OutputSlotState> outputSlotStates() {
+        return outputSlots().stream().map(OutputSlotState::new).toList();
+    }
+
+    private List<OutputSlot> outputSlots() {
+        List<OutputSlot> slots = new ArrayList<>();
+        for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
+            if (level.getBlockEntity(getBlockPos().offset(dx, 1, dz)) instanceof ItemBusBlockEntity bus
+                    && bus.ioType() == IOType.OUTPUT) {
+                IItemHandler handler = bus.getItemHandler(null);
+                for (int slot = 0; slot < handler.getSlots(); slot++) {
+                    slots.add(new OutputSlot(handler, slot));
+                }
+            }
+        }
+        return slots;
     }
 
     private void consumeAndProduce(MachineRecipe recipe) {
@@ -162,15 +224,44 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         for (ItemStack output : recipe.outputs()) {
             ItemStack remaining = output.copy();
-            for (int dx = -1; dx <= 1 && !remaining.isEmpty(); dx++) for (int dz = -1; dz <= 1 && !remaining.isEmpty(); dz++) {
-                if (level.getBlockEntity(getBlockPos().offset(dx, 1, dz)) instanceof ItemBusBlockEntity bus
-                        && bus.ioType() == IOType.OUTPUT) {
-                    IItemHandler handler = bus.getItemHandler(null);
-                    for (int slot = 0; slot < handler.getSlots() && !remaining.isEmpty(); slot++) {
-                        remaining = handler.insertItem(slot, remaining, false);
-                    }
-                }
+            for (OutputSlot slot : outputSlots()) {
+                if (remaining.isEmpty()) break;
+                remaining = slot.handler().insertItem(slot.slot(), remaining, false);
             }
+        }
+    }
+
+    private record OutputSlot(IItemHandler handler, int slot) {}
+
+    private static final class OutputSlotState {
+        private final OutputSlot slot;
+        private ItemStack stack;
+
+        private OutputSlotState(OutputSlot slot) {
+            this.slot = slot;
+            this.stack = slot.handler().getStackInSlot(slot.slot()).copy();
+        }
+
+        private ItemStack insert(ItemStack input) {
+            ItemStack accepted = input.copy();
+            ItemStack simulatedRemainder = slot.handler().insertItem(slot.slot(), accepted, true);
+            accepted.shrink(simulatedRemainder.getCount());
+            if (accepted.isEmpty()) return input;
+            if (!stack.isEmpty() && !ItemStack.isSameItemSameComponents(stack, accepted)) return input;
+
+            int limit = Math.min(slot.handler().getSlotLimit(slot.slot()), accepted.getMaxStackSize());
+            int space = stack.isEmpty() ? limit : limit - stack.getCount();
+            int inserted = Math.min(space, accepted.getCount());
+            if (inserted <= 0) return input;
+
+            if (stack.isEmpty()) {
+                stack = accepted.copyWithCount(inserted);
+            } else {
+                stack.grow(inserted);
+            }
+            ItemStack remaining = input.copy();
+            remaining.shrink(inserted);
+            return remaining;
         }
     }
 }

@@ -14,6 +14,7 @@ public class MMCRKubeJSPlugin implements KubeJSPlugin {
     public void registerBindings(BindingRegistry bindings) {
         bindings.add("MMCR_MACHINES", MachineRegistry.class);
         bindings.add("MMCR_RECIPES", RecipeRegistry.class);
+        bindings.add("MMCR_MACHINE_BUILDER", MachineBuilderJS.class);
     }
 
     @Override

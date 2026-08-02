@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -19,6 +20,10 @@ public class MachineBuilderJS extends BuilderBase<DynamicMachine> {
 
     public MachineBuilderJS(Identifier id) {
         super(id);
+    }
+
+    public MachineBuilderJS(String id) {
+        this(Identifier.parse(id));
     }
 
     public MachineBuilderJS localizedName(String name) {
@@ -70,6 +75,7 @@ public class MachineBuilderJS extends BuilderBase<DynamicMachine> {
 
     private static BlockPredicate toPredicate(Object value) {
         return switch (value) {
+            case String blockId -> new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId)));
             case Block block -> new BlockPredicate.OfBlock(block);
             case BlockState state -> new BlockPredicate.OfBlockState(state);
             case BlockPredicate predicate -> predicate;

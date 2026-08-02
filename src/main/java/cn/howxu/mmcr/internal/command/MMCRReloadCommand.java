@@ -1,8 +1,7 @@
 package cn.howxu.mmcr.internal.command;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.internal.machine.MMCRDefaultMachines;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -15,10 +14,10 @@ public class MMCRReloadCommand {
                 .then(Commands.literal("reload")
                         .requires(src -> src.permissions().hasPermission(net.minecraft.server.permissions.Permissions.COMMANDS_ADMIN))
                         .executes(ctx -> {
+                            MMCRDefaultMachines.ensureRegistered();
                             ctx.getSource().sendSuccess(
-                                    () -> net.minecraft.network.chat.Component.literal("MMCR reload triggered"), true);
-                            RecipeRegistry.clearForTesting();
-                            MachineRegistry.clearForTesting();
+                                    () -> net.minecraft.network.chat.Component.literal(
+                                            "MMCR reload refreshed built-in machines; datapack recipes are read at runtime"), true);
                             if (ModList.get().isLoaded("kubejs")) {
                                 MMCR.LOG.info("KubeJS reload would be triggered here");
                             }

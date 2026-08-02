@@ -20,5 +20,7 @@ public class FluidHatchBlockEntity extends BlockEntity {
 
     public IFluidHandler getFluidHandler(Direction side) { return tank; }
 
+    public FluidTank getFluidTank(Direction side) { return tank; }
+
     public IOType ioType() { return getBlockState().getValue(FluidHatchBlock.IO_TYPE); }
 }

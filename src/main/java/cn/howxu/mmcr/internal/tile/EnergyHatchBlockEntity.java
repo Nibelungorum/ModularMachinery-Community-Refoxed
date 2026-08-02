@@ -12,13 +12,15 @@ import net.neoforged.neoforge.energy.IEnergyStorage;
 
 public class EnergyHatchBlockEntity extends BlockEntity {
 
-    private final EnergyStorage storage = new EnergyStorage(100000, 1000, 1000);
+    private final EnergyStorage storage = new EnergyStorage(100000, 100000, 100000);
 
     public EnergyHatchBlockEntity(BlockPos pos, BlockState state) {
         super(MMCRRegistries.ENERGY_HATCH_BE.get(), pos, state);
     }
 
     public IEnergyStorage getEnergyStorage(Direction side) { return storage; }
+
+    public EnergyStorage getMutableEnergyStorage(Direction side) { return storage; }
 
     public IOType ioType() { return getBlockState().getValue(EnergyHatchBlock.IO_TYPE); }
 }
