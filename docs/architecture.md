@@ -162,7 +162,7 @@ public sealed interface MachineIngredient {
 |---|---|
 | `MachineControllerRenderer` / `BloomGeoModelRenderer` / `ControllerModelRenderManager` | **删除**（无 GeckoLib） |
 | `MachineControllerModel` / `DynamicMachineModelRegistry` | **删除** |
-| `MixinRenderGlobal` / `MixinTileEntityRendererDispatcher` | **删除**（首期零 Mixin） |
+| `MixinRenderGlobal` / `MixinTileEntityRendererDispatcher` | **删除**（对应 GeckoLib / Lumenized 渲染，OUT） |
 | `MachineStructurePreviewPanel` / `WorldSceneRendererWidget` | **删除**（首期无结构预览） |
 | `WorldSceneRenderer` / `FBOWorldSceneRenderer` / `ImmediateWorldSceneRenderer` | **删除** |
 | `com.cleanroommc.client.*` | **整包删除** |
@@ -343,8 +343,9 @@ cn.howxu.mmcr
 │      ├─ BlockArrayWrapper.java
 │      └─ ComponentTypeWrapper.java
 └─ resources/
-   │                                       # 注意：本项目零 JSON 数据文件
-   │                                       # 机器 / 配方 / KubeJS schema 全部 Java 注册
+   │                                       # 机器 / KubeJS recipe schema：零 JSON
+   │                                       # 配方：可走 datapack JSON（用户选项）
+   ├─ data/mmcr/recipe/<id>.json          # 可选：内建配方（datapack JSON）
    ├─ assets/mmcr/blockstates/*.json      # MC 基础设施：方块状态（必须 JSON）
    ├─ assets/mmcr/models/{block,item}/*.json   # MC 基础设施：模型（必须 JSON）
    ├─ assets/mmcr/textures/{block,item,gui}/*.png

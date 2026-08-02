@@ -348,7 +348,7 @@ boolean hasKubeJS = ModList.get().isLoaded("kubejs");
 |---|---|
 | 模组加载 | 正常，KubeJS 缺位不影响 MMCR 初始化 |
 | 玩家放机器 | 用 Java API 预注册的几台示例机器（如 `mmcr:basic_furnace`） |
-| 玩家写配方 | 仅通过 KubeJS 脚本；MMCR **不支持** datapack JSON 配方（与 D2 一致） |
+| 玩家写配方 | 4 种入口（按优先级）：① Java API `RecipeRegistry.register(...)`；② KubeJS 脚本；③ **datapack JSON `data/<ns>/recipe/*.json`**（KubeJS 原生支持，自动经 NeoForge 加载）；④ KubeJS builder 链式 API（`event.recipes.mmcr.machine_recipe(...)`） |
 | JEI 显示 | JEI recipe category 仍能枚举 `RecipeManager` 里的所有 `MachineRecipe` |
 | 性能 | 无差异（KubeJS 桥接层一行都不执行） |
 
@@ -393,7 +393,8 @@ runtimeOnly("dev.latvian.mods:kubejs-neoforge:${kubejs_version}")
 |---|---|---|
 | 装 MMCR + KubeJS | 脚本可写机器 + 配方 | 在 `world/server_scripts` 写 `StartupEvents.registry('mmcr:machine', e => e.create('test:demo'))` |
 | 装 MMCR 不装 KubeJS | 启动不报错 | 启动日志无 `Failed to load plugin cn.howxu.mmcr.kubejs.MMCRKubeJSPlugin` |
-| 装 MMCR 不装 KubeJS | 启动正常；只能通过 Java API 注册机器 / 配方 |
+| 装 MMCR 不装 KubeJS | 启动正常；通过 Java API 或 datapack JSON 注册机器 / 配方 |
+| 装 MMCR + KubeJS + datapack JSON | 全部 4 种入口都可用；JSON 走 NeoForge 加载 → MachineRecipeSerializer 自动识别 |
 | KubeJS 在场但 MMCR 异常 | KubeJS 不应连带崩溃 | 检查 KubeJS 日志，确认 MMCR 插件错误被单独捕获 |
 
 ## 11. 不做的事
@@ -402,3 +403,35 @@ runtimeOnly("dev.latvian.mods:kubejs-neoforge:${kubejs_version}")
 - ❌ KubeJS **不**做机器 / 配方的运行时校验——MMCR 主代码必须能独立验证 KubeJS 没装的情况。
 - ❌ KubeJS **不**做 mod 专属标签（如事件订阅）的「硬绑定」——所有 KubeJS 钩子走 MMCR 自身事件总线。
 - ❌ KubeJS **不**做机器可视化 GUI（结构预览）——那是 Phase 5 / `docs/scope.md §7` 的事。
+
+## 12. 配方注册入口（4 种，按推荐度）
+
+> 「机器结构」**不能**用 JSON（见 D2），但「配方」**可以**——因为 KubeJS 原生支持 datapack JSON 配方。
+
+| 入口 | 适用 | 优先级 |
+|---|---|---|
+| **Java API** `RecipeRegistry.register(MachineRecipe)` | addon mod、程序化生成、单元测试 | ★★★★★（最强类型安全） |
+| **KubeJS 脚本** `StartupEvents.registry` / `ServerEvents.recipes` | 模组开发者 / 玩家脚本 | ★★★★（类型安全 + 编程能力） |
+| **Datapack JSON** `data/<ns>/recipe/<id>.json` | 模组内建配方 / 跨模组兼容 / 玩家用资源包 | ★★★（MC 标准做法） |
+| **KubeJS builder 链式** `event.recipes.mmcr.machine_recipe(...)` | 临时实验 / 调试 | ★★（语法糖） |
+
+**Datapack JSON 示例**（`assets/<modid>/recipe/iron_compressor.json` 或 `data/<modid>/recipe/iron_compressor.json`）：
+
+```json
+{
+  "type": "mmcr:machine_recipe",
+  "machine": "mmcr:iron_compressor",
+  "tick_time": 40,
+  "item_inputs": [
+    { "ingredient": { "item": "minecraft:iron_ingot" }, "count": 2 }
+  ],
+  "item_outputs": [
+    { "id": "minecraft:iron_nugget", "count": 1 }
+  ],
+  "energy_per_tick": 80
+}
+```
+
+**自动加载**：NeoForge 在世界加载时扫 `data/<ns>/recipe/*.json` → `RecipeManager.byType(MACHINE_RECIPE_TYPE)` → `MachineRecipe.matches(RecipeInput, Level)`。
+
+**注意**：JSON 配方里 `machine` 字段必须指向已通过 Java / KubeJS 注册的机器——否则 `MachineRegistry.getMachine(...)` 返回 null，配方被丢弃。

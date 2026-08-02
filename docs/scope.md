@@ -7,7 +7,7 @@
 
 | 维度 | 1.12.2 MMCE | 26.1.2 MMCR（首期） |
 |---|---|---|
-| 配方定义形式 | JSON 文件 + CraftTweaker/ZenScript 插件 | **Java API 优先** + KubeJS 可选绑定；机器 JSON 不再使用 |
+| 配方定义形式 | JSON 文件 + CraftTweaker/ZenScript 插件 | **Java API / KubeJS / datapack JSON** 三入口；机器 JSON 不使用，配方 JSON 可用 |
 | Mod 脚本 API | `@ZenClass`/`@ZenMethod`（CraftTweaker） | **Java API（必需）** + KubeJS 绑定层（**可选**，未装时仍能跑） |
 | 物品 / 流体 / 能量 | 自定义 Capability 拼凑 | **直接用 NeoForge 官方能力**：`Capabilities.ItemHandler` / `Capabilities.FluidHandler` / `Capabilities.EnergyStorage` |
 | 第三方 mod 联动 | AE2 / Mekanism / GTCeu / Botania / GeckoLib / Lumenized 等 10+ 模组深度耦合 | **零深度依赖**——仅保留 Vanilla + NeoForge + KubeJS（可选） + JEI（已在 build.gradle 内） |
@@ -91,7 +91,7 @@ public final class MMCR {
 ### 1.6 配置
 
 - `ModConfigSpec` 一份 `common.toml`：机器最大并行数（首期恒为 1）、能耗缩放、Tick 检查间隔、`enableKubeJSReloadCommand`。
-- **不做任何 JSON 机器 / 配方 / 配方 schema**——机器、配方、KubeJS recipe schema 全部走 Java API；KubeJS 端 builder / recipe schema 也是 Java 程序化注册。
+- **机器、KubeJS recipe schema 不能用 JSON**；**配方可以用 datapack JSON**（KubeJS 原生支持）。详见 `docs/kubejs-integration.md §12`。
 
 ## 2. 首期「OUT of Scope」清单（不要做）
 
@@ -119,7 +119,7 @@ public final class MMCR {
 - ❌ **升级系统**：`MachineUpgrade` / `DynamicMachineUpgrade` / `UpgradeBus` / `RegistryUpgrade`（§14 全章）。
 - ❌ **自动组装**：ikx 的 `MachineAssembly` / `AssemblyEventHandler` / `AssemblyConfig`（§22 全章）。
 - ❌ **蓝图 / 投影器**：`ItemBlueprint` / `ItemConstructTool` / `ItemDebugStruct` / `MachineProjector`（§21 全章）——首期玩家只能用 `/mmcr reload` + 重新进游戏来更新机器。
-- ❌ **Mixin**：4 个 mixin JSON 全删（§31）——首期零 Mixin，零 AccessTransformer。
+- ⚠️ **Mixin**：MMCE 1.12.2 的 4 个 mixin（§31）**全删**——它们针对 GeckoLib / AE2 / JEI GUI（这些功能 OUT）。首期**不主动**写新 Mixin；如果遇到 NeoForge API 不可绕过的限制，**按需**新增（典型场景：对接 AE2 内部 GUI、调整 JEI 渲染流程）。
 - ❌ **安全系统**：owner 校验 / `enableSecuritySystem`（§35.1）——首期任何人能交互所有机器。
 - ❌ **性能监控**：`TimeRecorder` / `/mm performance` / `PktPerformanceReport`（§35.4）——首期不测时延。
 - ❌ **自定义数据 / 全量同步**：`customData` / `cleanCustomDataOnStructureCheckFailed` / `enableFullDataSync`（§35.2 / §35.3）。
@@ -133,12 +133,12 @@ public final class MMCR {
 ### 2.3 JSON / 数据驱动
 
 - ❌ JSON 形式的机器定义（`.json` 放 `assets/.../machinery/`）。
-- ❌ JSON 形式的配方定义。
-- ❌ JSON 形式的 `*.var.json` 变量替换。
+- ❌ JSON 形式的 `*.var.json` 变量替换（MMCE 的变量机制 OUT）。
+- ✅ JSON 形式的配方定义（`data/<ns>/recipe/<id>.json`）——通过 NeoForge 标准路径加载（`MapCodec` 反序列化）。
 - ❌ `MachineLoader.discoverDirectory(...)` 目录扫描（§4.4）。
 - ❌ GSON 两阶段反序列化 `PRELOAD_GSON` + `GSON`（§35.18）。
 
-**首期机器 / 配方只通过 Java API 或 KubeJS 脚本注册——不读 JSON 机器 / 配方文件。**
+**机器只通过 Java API 或 KubeJS builder 注册；配方可走 Java API / KubeJS / datapack JSON 三入口。**
 
 ### 2.4 渲染相关
 
@@ -243,7 +243,7 @@ public final class MMCR {
 以下项即便将来也不会做——超出「多方块合成引擎」的本职：
 
 - 渲染管道替换（GeckoLib / Lumenized）—— NeoForge 原生渲染已足够，首期起就**只用 vanilla + NeoForge**。
-- Mixin（除非遇到 NeoForge API 不可绕过的限制；首选 AccessTransformer）。
+- MMCE 1.12.2 的 4 个 mixin 包（针对 GeckoLib / AE2 / JEI GUI）——首期全删（对应功能 OUT）。需要时**按需新增**，不预先禁止。
 - 自定义网络协议（§17 `PktXxx` 15 个包）——首期用 NeoForge `CustomPacketPayload` + 1-2 个包搞定。
 - 自定义 Config loader（MMCE 的 `ModuleDataHolder`）——首期用 `ModConfigSpec` + TOML。
 - `acceptableRemoteVersions` / `Tags.VERSION` 这类魔数—— `mod_version` 直接读 `gradle.properties`。
