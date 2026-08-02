@@ -1,0 +1,102 @@
+name: Tag Release
+
+on:
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: ${{ !contains(github.ref_name, '+dev-') }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Resolve release version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${GITHUB_REF_NAME}"
+          hash="$(git rev-parse --short HEAD)"
+          version="${tag}+${hash}"
+
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "hash=${hash}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Apply CI version
+        shell: bash
+        run: |
+          set -euo pipefail
+          perl -0pi -e 's/mod_version=DEVELOP-VERSION/mod_version=${{ steps.version.outputs.version }}/' gradle.properties
+
+      - name: Build
+        run: ./gradlew build
+
+      - name: Publish to Maven
+        run: ./gradlew publish
+        env:
+          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
+
+      - name: Build release notes
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          previous_tag="$(git tag --merged "${{ steps.version.outputs.tag }}^" --sort=-v:refname | awk '/^[0-9]+\.[0-9]+\.[0-9]+$/ { print; exit }')"
+          if [ -n "$previous_tag" ]; then
+            range="${previous_tag}..${{ steps.version.outputs.tag }}"
+          else
+            range="${{ steps.version.outputs.tag }}"
+          fi
+
+          changelog="$(git log "$range" --pretty=format:'- %s (%h)' --no-merges)"
+          if [ -z "$changelog" ]; then
+            changelog="- No changes found."
+          fi
+
+          total_lines="$(printf '%s\n' "$changelog" | wc -l | tr -d ' ')"
+          {
+            echo "body<<EOF"
+            if [ "$total_lines" -gt 20 ]; then
+              printf '%s\n' "$changelog" | sed -n '1,20p'
+              echo
+              echo "<details>"
+              echo "<summary>More changes</summary>"
+              echo
+              printf '%s\n' "$changelog" | sed -n '21,$p'
+              echo
+              echo "</details>"
+            else
+              printf '%s\n' "$changelog"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.version }}
+          body: ${{ steps.notes.outputs.body }}
+          files: build/libs/*
