@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.registry;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.MachineRecipeSerializer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
@@ -23,6 +25,11 @@ public final class MMCRRegistries {
             DeferredRegister.create(BuiltInRegistries.RECIPE_SERIALIZER, MMCR.MODID);
     public static final DeferredRegister<CreativeModeTab> CREATIVE_TABS =
             DeferredRegister.create(BuiltInRegistries.CREATIVE_MODE_TAB, MMCR.MODID);
+
+    public static final java.util.function.Supplier<RecipeType<MachineRecipe>> MACHINE_RECIPE_TYPE =
+            RECIPE_TYPES.register("machine_recipe", () -> RecipeType.simple(MMCR.id("machine_recipe")));
+    public static final java.util.function.Supplier<RecipeSerializer<MachineRecipe>> MACHINE_RECIPE_SERIALIZER =
+            RECIPE_SERIALIZERS.register("machine_recipe", () -> MachineRecipeSerializer.INSTANCE);
 
     private MMCRRegistries() {
     }
