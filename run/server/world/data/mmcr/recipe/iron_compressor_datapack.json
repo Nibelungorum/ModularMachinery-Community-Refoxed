@@ -1,6 +1,6 @@
 {
   "type": "mmcr:machine_recipe",
-  "id": "mmcr:iron_compressor",
+  "id": "mmcr:iron_compressor_datapack",
   "machine": "mmcr:iron_compressor",
   "tick_time": 40,
   "inputs": [
