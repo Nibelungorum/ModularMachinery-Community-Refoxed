@@ -109,8 +109,7 @@ public class MMCRKubeJSPlugin implements KubeJSPlugin {
 
     @Override
     public void registerRecipeSchemas(RecipeSchemaRegistry registry) {
-        // 不在这里注册；改用 JSON 文件（见 §3）
-        // 这里只做动态注册（如果未来需要）
+        registry.register(MMCR.id("machine_recipe"), MachineRecipeSchema.SCHEMA);
     }
 }
 ```
@@ -385,7 +384,7 @@ runtimeOnly("dev.latvian.mods:kubejs-neoforge:${kubejs_version}")
 | ZenScript `mods.modularmachinery.MachineBuilder.createBuilder(...)` | KubeJS `StartupEvents.registry('mmcr:machine', e => e.create(...))` |
 | 自定义 `@ZenMethod` 注解 | KubeJS `BindingRegistry` + `TypeWrapperRegistry` |
 
-**迁移收益**：KubeJS 的 builder + schema JSON 模式让 addons 自己写扩展点比 CraftTweaker 更省事——不用学注解和 ZenScript。
+**迁移收益**：KubeJS 的 builder + schema 模式让 addons 自己写扩展点比 CraftTweaker 更省事——不用学注解和 ZenScript。
 
 ## 10. 测试矩阵
 
