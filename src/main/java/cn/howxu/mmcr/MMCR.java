@@ -23,6 +23,7 @@ public class MMCR {
         MMCRRegistries.RECIPE_SERIALIZERS.register(modBus);
         MMCRRegistries.CREATIVE_TABS.register(modBus);
         modContainer.registerConfig(ModConfig.Type.COMMON, MMCRConfig.SPEC);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(cn.howxu.mmcr.internal.event.MMCRCapabilities::register);
         LOG.info("MMCR {} loaded", modContainer.getModInfo().getVersion());
     }
 

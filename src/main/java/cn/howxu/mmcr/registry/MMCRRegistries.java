@@ -3,7 +3,10 @@ package cn.howxu.mmcr.registry;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeSerializer;
+import cn.howxu.mmcr.internal.block.ItemBusBlock;
+import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.crafting.RecipeSerializer;
@@ -30,6 +33,19 @@ public final class MMCRRegistries {
             RECIPE_TYPES.register("machine_recipe", () -> RecipeType.simple(MMCR.id("machine_recipe")));
     public static final java.util.function.Supplier<RecipeSerializer<MachineRecipe>> MACHINE_RECIPE_SERIALIZER =
             RECIPE_SERIALIZERS.register("machine_recipe", () -> MachineRecipeSerializer.INSTANCE);
+
+    public static final java.util.function.Supplier<ItemBusBlock> ITEM_BUS_BLOCK =
+            BLOCKS.register("item_bus", () -> new ItemBusBlock(Block.Properties.of()));
+
+    public static final java.util.function.Supplier<Item> ITEM_BUS_BLOCK_ITEM =
+            ITEMS.register("item_bus", () -> new BlockItem(
+                    MMCRRegistries.ITEM_BUS_BLOCK.get(),
+                    new Item.Properties()));
+
+    public static final java.util.function.Supplier<BlockEntityType<ItemBusBlockEntity>> ITEM_BUS_BE =
+            BLOCK_ENTITIES.register("item_bus", () -> new BlockEntityType<>(
+                    ItemBusBlockEntity::new,
+                    MMCRRegistries.ITEM_BUS_BLOCK.get()));
 
     private MMCRRegistries() {
     }
