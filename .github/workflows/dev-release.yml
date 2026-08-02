@@ -49,7 +49,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          perl -0pi -e 's/mod_version=DEVELOP-VERSION/mod_version=${{ steps.version.outputs.version }}/' gradle.properties
+          perl -0pi -e 's/^mod_version=.*/mod_version=${{ steps.version.outputs.version }}/m' gradle.properties
 
       - name: Build
         run: ./gradlew build
