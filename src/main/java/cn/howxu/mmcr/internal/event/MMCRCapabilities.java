@@ -186,6 +186,8 @@ public final class MMCRCapabilities {
 
         @Override
         public int extract(int slot, ItemResource resource, int amount, TransactionContext tx) {
+            ItemStack stack = handler.getStackInSlot(slot);
+            if (stack.isEmpty() || !ItemResource.of(stack).equals(resource)) return 0;
             updateSnapshots(tx);
             ItemStack extracted = handler.extractItem(slot, amount, false);
             return extracted.getCount();

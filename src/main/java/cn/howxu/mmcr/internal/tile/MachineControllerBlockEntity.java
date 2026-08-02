@@ -138,7 +138,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (recipe == null) return;
         int next = tickCounter + 1;
         if (next >= recipe.tickTime()) {
-            if (!canAcceptOutputs(recipe)) return;
+            if (!canAcceptInputs(recipe) || !canAcceptOutputs(recipe)) {
+                setTickCounter(Math.max(0, recipe.tickTime() - 1));
+                return;
+            }
             consumeAndProduce(recipe);
             setActiveRecipe(null);
             setTickCounter(0);
