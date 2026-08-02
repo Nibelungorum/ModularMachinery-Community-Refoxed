@@ -18,6 +18,35 @@ sourceSets.main.resources {
 }
 
 repositories {
+    maven {
+        // JEI repo
+        name = "Jared's maven"
+        url = "https://maven.blamejared.com/"
+    }
+
+    maven {
+        // Modrinth for Rhino
+        url = "https://api.modrinth.com/maven" 
+    }
+
+    maven {
+        // KubeJS
+        url = "https://maven.latvian.dev/releases"
+        content {
+            includeGroup "dev.latvian.mods"
+            includeGroup "dev.latvian.apps"
+        }
+    }
+
+    maven {
+        // Curse Maven
+        url "https://cursemaven.com"
+    }
+
+    maven {
+        // JitPack
+        url = 'https://www.jitpack.io'
+    }
 
 }
 
@@ -60,7 +89,34 @@ configurations {
 dependencies {
     implementation "net.neoforged:neoforge:${neo_version}"
 
+    // JEI API
+    api("mezz.jei:jei-${minecraft_version}-neoforge-api:${jei_version}")
+    // JEI RUNTIME
+    runtimeOnly("mezz.jei:jei-${minecraft_version}-neoforge:${jei_version}")
 
+    // Jade mc26.1 26.1.3
+    implementation "curse.maven:jade-324717:8251883"
+
+    // KubeJS
+    api("dev.latvian.mods:kubejs-neoforge:${kubejs_version}")
+    // interfaceInjectionData("dev.latvian.mods:kubejs-neoforge:${kubejs_version}")
+    runtimeOnly("dev.latvian.mods:kubejs-neoforge:${kubejs_version}")
+
+    // 2101.2.7-build.81+Rhino-1.21
+    runtimeOnly "maven.modrinth:sk9knFPE:ZdLtebKH"
+
+    // Unit testing
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.assertj:assertj-core:3.25.0'
+}
+
+sourceSets.test {
+    resources.srcDirs('src/test/resources')
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
 }
 
 tasks.withType(ProcessResources).configureEach {
