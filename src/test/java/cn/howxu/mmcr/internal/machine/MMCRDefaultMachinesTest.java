@@ -4,13 +4,20 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.registry.MMCRRegistries;
+import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MMCRDefaultMachinesTest {
+
+    @BeforeAll
+    static void bootstrapMinecraft() throws Exception {
+        TestBootstrap.bootstrap();
+    }
 
     @AfterEach
     void cleanup() {

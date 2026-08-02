@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.recipe;
 
+import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.resources.Identifier;
 import cn.howxu.mmcr.api.machine.BlockArray;
@@ -19,24 +20,7 @@ class MachineRecipeTest {
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
-        Class<?> fmlLoaderCls = Class.forName("net.neoforged.fml.loading.FMLLoader");
-        Class<?> distCls = Class.forName("net.neoforged.api.distmarker.Dist");
-        Class<?> loadingModListCls = Class.forName("net.neoforged.fml.loading.LoadingModList");
-        Constructor<?> fmlCtor = fmlLoaderCls.getDeclaredConstructor(
-                ClassLoader.class, String[].class, distCls, boolean.class, Path.class);
-        fmlCtor.setAccessible(true);
-        Object fmlLoader = fmlCtor.newInstance(Thread.currentThread().getContextClassLoader(),
-                new String[0], distCls.getField("CLIENT").get(null), false, Path.of("."));
-        Constructor<?> lmlCtor = loadingModListCls.getDeclaredConstructor(
-                List.class, List.class, List.class, List.class, java.util.Map.class);
-        lmlCtor.setAccessible(true);
-        Object emptyLoadingModList = lmlCtor.newInstance(
-                List.of(), List.of(), List.of(), List.of(), java.util.Map.of());
-        var loadingModListField = fmlLoaderCls.getDeclaredField("loadingModList");
-        loadingModListField.setAccessible(true);
-        loadingModListField.set(fmlLoader, emptyLoadingModList);
-        Class.forName("net.minecraft.SharedConstants").getMethod("tryDetectVersion").invoke(null);
-        Class.forName("net.minecraft.server.Bootstrap").getMethod("bootStrap").invoke(null);
+        TestBootstrap.bootstrap();
     }
 
     @AfterEach

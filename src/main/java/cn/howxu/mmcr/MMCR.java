@@ -26,7 +26,7 @@ public class MMCR {
         MMCRRegistries.RECIPE_SERIALIZERS.register(modBus);
         MMCRRegistries.CREATIVE_TABS.register(modBus);
         modContainer.registerConfig(ModConfig.Type.COMMON, MMCRConfig.SPEC);
-        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(cn.howxu.mmcr.internal.event.MMCRCapabilities::register);
+        modBus.addListener(cn.howxu.mmcr.internal.event.MMCRCapabilities::register);
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.RegisterCommandsEvent ev) ->
                 cn.howxu.mmcr.internal.command.MMCRReloadCommand.register(ev.getDispatcher()));
         modBus.addListener((RegisterPayloadHandlersEvent ev) -> {
