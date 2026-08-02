@@ -1,4 +1,4 @@
-package cn.howxu.mmcr.kubejs;
+package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
