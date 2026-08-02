@@ -7,9 +7,11 @@ import cn.howxu.mmcr.internal.block.EnergyHatchBlock;
 import cn.howxu.mmcr.internal.block.FluidHatchBlock;
 import cn.howxu.mmcr.internal.block.ItemBusBlock;
 import cn.howxu.mmcr.internal.block.MachineCasingBlock;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
@@ -85,6 +87,19 @@ public final class MMCRRegistries {
             ITEMS.register("casing", () -> new BlockItem(
                     MMCRRegistries.CASING_BLOCK.get(),
                     new Item.Properties()));
+
+    public static final java.util.function.Supplier<MachineControllerBlock> CONTROLLER_BLOCK =
+            BLOCKS.register("controller", () -> new MachineControllerBlock(Block.Properties.of()));
+
+    public static final java.util.function.Supplier<Item> CONTROLLER_BLOCK_ITEM =
+            ITEMS.register("controller", () -> new BlockItem(
+                    MMCRRegistries.CONTROLLER_BLOCK.get(),
+                    new Item.Properties()));
+
+    public static final java.util.function.Supplier<BlockEntityType<MachineControllerBlockEntity>> CONTROLLER_BE =
+            BLOCK_ENTITIES.register("controller", () -> new BlockEntityType<>(
+                    MachineControllerBlockEntity::new,
+                    MMCRRegistries.CONTROLLER_BLOCK.get()));
 
     private MMCRRegistries() {
     }
