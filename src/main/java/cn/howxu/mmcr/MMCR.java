@@ -8,6 +8,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
+import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +27,8 @@ public class MMCR {
         MMCRRegistries.CREATIVE_TABS.register(modBus);
         modContainer.registerConfig(ModConfig.Type.COMMON, MMCRConfig.SPEC);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(cn.howxu.mmcr.internal.event.MMCRCapabilities::register);
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.RegisterCommandsEvent ev) ->
+                cn.howxu.mmcr.internal.command.MMCRReloadCommand.register(ev.getDispatcher()));
         modBus.addListener((RegisterPayloadHandlersEvent ev) -> {
             ev.registrar("1").playToClient(
                     PktMachineStatePayload.TYPE,
