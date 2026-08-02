@@ -8,8 +8,7 @@ displayName="${mod_name}"
 logoFile="mmcr.png"
 authors="howxu and ModularMachinery-Community-Edition developers"
 description='''
-Modular multi-block crafting engine for NeoForge 26.1.2.
-Java API + KubeJS bridge + JEI compatible.
+Nothing here
 '''
 
 [[dependencies.${mod_id}]]
