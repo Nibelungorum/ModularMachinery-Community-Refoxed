@@ -18,6 +18,13 @@ sourceSets.main.resources {
 }
 
 repositories {
+    maven {
+        url = uri('https://maven.latvian.dev/releases')
+        content {
+            includeGroup 'dev.latvian.mods'
+            includeGroup 'dev.latvian.apps'
+        }
+    }
 }
 
 base {
