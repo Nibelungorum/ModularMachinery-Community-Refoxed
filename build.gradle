@@ -17,6 +17,9 @@ sourceSets.main.resources {
     exclude("src/generated/**/.cache")
 }
 
+repositories {
+}
+
 base {
     archivesName = mod_id + "-neoforge-"
 }
