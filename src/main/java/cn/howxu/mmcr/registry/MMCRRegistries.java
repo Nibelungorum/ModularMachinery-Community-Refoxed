@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.recipe.MachineRecipeSerializer;
 import cn.howxu.mmcr.internal.block.EnergyHatchBlock;
 import cn.howxu.mmcr.internal.block.FluidHatchBlock;
 import cn.howxu.mmcr.internal.block.ItemBusBlock;
+import cn.howxu.mmcr.internal.block.MachineCasingBlock;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
@@ -76,6 +77,14 @@ public final class MMCRRegistries {
             BLOCK_ENTITIES.register("energy_hatch", () -> new BlockEntityType<>(
                     EnergyHatchBlockEntity::new,
                     MMCRRegistries.ENERGY_HATCH_BLOCK.get()));
+
+    public static final java.util.function.Supplier<MachineCasingBlock> CASING_BLOCK =
+            BLOCKS.register("casing", () -> new MachineCasingBlock(Block.Properties.of()));
+
+    public static final java.util.function.Supplier<Item> CASING_BLOCK_ITEM =
+            ITEMS.register("casing", () -> new BlockItem(
+                    MMCRRegistries.CASING_BLOCK.get(),
+                    new Item.Properties()));
 
     private MMCRRegistries() {
     }
