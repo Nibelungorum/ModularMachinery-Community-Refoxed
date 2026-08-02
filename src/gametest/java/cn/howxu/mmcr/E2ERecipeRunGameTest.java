@@ -38,14 +38,14 @@ public class E2ERecipeRunGameTest {
             level.setBlock(new BlockPos(x, 1, z), MMCRRegistries.CASING_BLOCK.get().defaultBlockState(), 3);
         BlockPos controllerPos = new BlockPos(1, 1, 1);
         level.setBlock(controllerPos, MMCRRegistries.CONTROLLER_BLOCK.get().defaultBlockState(), 3);
-        BlockPos inputPos = new BlockPos(1, 1, 0);
+        BlockPos inputPos = new BlockPos(1, 2, 0);
         level.setBlock(inputPos, MMCRRegistries.ITEM_BUS_BLOCK.get().defaultBlockState(), 3);
         ((ItemBusBlockEntity) level.getBlockEntity(inputPos)).getItemHandler(null)
                 .insertItem(0, new ItemStack(Items.IRON_INGOT, 2), false);
-        BlockPos outputPos = new BlockPos(1, 1, 2);
+        BlockPos outputPos = new BlockPos(1, 2, 2);
         level.setBlock(outputPos, MMCRRegistries.ITEM_BUS_BLOCK.get().defaultBlockState()
                 .setValue(ItemBusBlock.IO_TYPE, cn.howxu.mmcr.util.IOType.OUTPUT), 3);
-        BlockPos energyPos = new BlockPos(2, 1, 1);
+        BlockPos energyPos = new BlockPos(2, 2, 1);
         level.setBlock(energyPos, MMCRRegistries.ENERGY_HATCH_BLOCK.get().defaultBlockState(), 3);
         ((EnergyHatchBlockEntity) level.getBlockEntity(energyPos)).getEnergyStorage(null).receiveEnergy(10000, false);
 

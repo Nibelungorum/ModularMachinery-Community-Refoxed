@@ -70,14 +70,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
         for (MachineIngredient ingredient : recipe.inputs()) {
             if (ingredient instanceof MachineIngredient.ItemIngredient item && findAndCheckItemBus(item) == null) return false;
             if (ingredient instanceof MachineIngredient.FluidIngredient fluid && findAndCheckFluidHatch(fluid) == null) return false;
-            if (ingredient instanceof MachineIngredient.EnergyIngredient energy && findAndCheckEnergyHatch(energy) == null) return false;
+            if (ingredient instanceof MachineIngredient.EnergyIngredient energy && findAndCheckEnergyHatch(energy, recipe) == null) return false;
         }
         return true;
     }
 
     private ItemBusBlockEntity findAndCheckItemBus(MachineIngredient.ItemIngredient ingredient) {
         for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
-            if (level.getBlockEntity(getBlockPos().offset(dx, 0, dz)) instanceof ItemBusBlockEntity bus
+            if (level.getBlockEntity(getBlockPos().offset(dx, 1, dz)) instanceof ItemBusBlockEntity bus
                     && bus.ioType() == IOType.INPUT) {
                 IItemHandler handler = bus.getItemHandler(null);
                 int count = 0;
@@ -93,18 +93,20 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private FluidHatchBlockEntity findAndCheckFluidHatch(MachineIngredient.FluidIngredient ingredient) {
         for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
-            if (level.getBlockEntity(getBlockPos().offset(dx, 0, dz)) instanceof FluidHatchBlockEntity hatch
+            if (level.getBlockEntity(getBlockPos().offset(dx, 1, dz)) instanceof FluidHatchBlockEntity hatch
                     && hatch.ioType() == IOType.INPUT
-                    && ingredient.fluid().test(hatch.getFluidHandler(null).getFluidInTank(0))) return hatch;
+                    && ingredient.fluid().test(hatch.getFluidHandler(null).getFluidInTank(0))
+                    && hatch.getFluidHandler(null).getFluidInTank(0).getAmount() >= ingredient.amount()) return hatch;
         }
         return null;
     }
 
-    private EnergyHatchBlockEntity findAndCheckEnergyHatch(MachineIngredient.EnergyIngredient ingredient) {
+    private EnergyHatchBlockEntity findAndCheckEnergyHatch(MachineIngredient.EnergyIngredient ingredient, MachineRecipe recipe) {
+        int required = ingredient.fePerTick() * recipe.tickTime();
         for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
-            if (level.getBlockEntity(getBlockPos().offset(dx, 0, dz)) instanceof EnergyHatchBlockEntity hatch
+            if (level.getBlockEntity(getBlockPos().offset(dx, 1, dz)) instanceof EnergyHatchBlockEntity hatch
                     && hatch.ioType() == IOType.INPUT
-                    && hatch.getEnergyStorage(null).getEnergyStored() >= ingredient.fePerTick()) return hatch;
+                    && hatch.getEnergyStorage(null).getEnergyStored() >= required) return hatch;
         }
         return null;
     }
@@ -141,14 +143,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 FluidHatchBlockEntity hatch = findAndCheckFluidHatch(fluid);
                 if (hatch != null) hatch.getFluidHandler(null).drain(fluid.amount(), IFluidHandler.FluidAction.EXECUTE);
             } else if (ingredient instanceof MachineIngredient.EnergyIngredient energy) {
-                EnergyHatchBlockEntity hatch = findAndCheckEnergyHatch(energy);
+                EnergyHatchBlockEntity hatch = findAndCheckEnergyHatch(energy, recipe);
                 if (hatch != null) hatch.getEnergyStorage(null).extractEnergy(energy.fePerTick() * recipe.tickTime(), false);
             }
         }
         for (ItemStack output : recipe.outputs()) {
             ItemStack remaining = output.copy();
             for (int dx = -1; dx <= 1 && !remaining.isEmpty(); dx++) for (int dz = -1; dz <= 1 && !remaining.isEmpty(); dz++) {
-                if (level.getBlockEntity(getBlockPos().offset(dx, 0, dz)) instanceof ItemBusBlockEntity bus
+                if (level.getBlockEntity(getBlockPos().offset(dx, 1, dz)) instanceof ItemBusBlockEntity bus
                         && bus.ioType() == IOType.OUTPUT) {
                     IItemHandler handler = bus.getItemHandler(null);
                     for (int slot = 0; slot < handler.getSlots() && !remaining.isEmpty(); slot++) {
