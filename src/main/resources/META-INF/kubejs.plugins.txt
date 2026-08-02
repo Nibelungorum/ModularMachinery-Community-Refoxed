@@ -1,0 +1,1 @@
+cn.howxu.mmcr.kubejs.MMCRKubeJSPlugin

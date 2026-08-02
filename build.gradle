@@ -59,6 +59,9 @@ configurations {
 dependencies {
     implementation "net.neoforged:neoforge:${neo_version}"
 
+    compileOnly "dev.latvian.mods:kubejs-neoforge:${kubejs_version}"
+    runtimeOnly "dev.latvian.mods:kubejs-neoforge:${kubejs_version}"
+
     // Unit testing
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
