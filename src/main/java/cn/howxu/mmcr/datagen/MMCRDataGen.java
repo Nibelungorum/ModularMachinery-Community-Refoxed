@@ -14,8 +14,7 @@ public final class MMCRDataGen {
     @SubscribeEvent
     public static void onGatherData(GatherDataEvent.Client event) {
         PackOutput output = event.getGenerator().getPackOutput();
-        event.addProvider(new MMCRBlockStateProvider(output));
-        event.addProvider(new MMCRItemModelProvider(output));
+        event.addProvider(new MMCRModelProvider(output));
         event.addProvider(new MMCRLanguageProvider(output, "en_us"));
         event.addProvider(new MMCRLanguageProvider(output, "zh_cn"));
     }
