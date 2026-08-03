@@ -7,7 +7,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
-import cn.howxu.mmcr.internal.block.ItemBusBlock;
+import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -44,7 +44,7 @@ public class E2ERecipeRunGameTest {
                 .insertItem(0, new ItemStack(Items.IRON_INGOT, 2), false);
         BlockPos outputPos = new BlockPos(1, 2, 2);
         level.setBlock(outputPos, MMCRBlocks.BLOCKS.get("io_port_item_basic").get().defaultBlockState()
-                .setValue(ItemBusBlock.IO_TYPE, cn.howxu.mmcr.util.IOType.OUTPUT), 3);
+                .setValue(IOPortBlock.IO_TYPE, cn.howxu.mmcr.util.IOType.OUTPUT), 3);
         BlockPos energyPos = new BlockPos(2, 2, 1);
         level.setBlock(energyPos, MMCRBlocks.BLOCKS.get("io_port_energy_basic").get().defaultBlockState(), 3);
         ((EnergyHatchBlockEntity) level.getBlockEntity(energyPos)).getEnergyStorage(null).receiveEnergy(10000, false);
