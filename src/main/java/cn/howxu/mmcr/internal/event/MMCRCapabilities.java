@@ -3,7 +3,7 @@ package cn.howxu.mmcr.internal.event;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
-import cn.howxu.mmcr.registry.MMCRRegistries;
+import cn.howxu.mmcr.registry.MMCRBlockEntities;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
@@ -30,15 +30,15 @@ public final class MMCRCapabilities {
     public static void register(RegisterCapabilitiesEvent event) {
         event.registerBlockEntity(
                 net.neoforged.neoforge.capabilities.Capabilities.Item.BLOCK,
-                MMCRRegistries.ITEM_BUS_BE.get(),
+                MMCRBlockEntities.BES.get("io_port_item_basic").get(),
                 (be, side) -> be instanceof ItemBusBlockEntity ib ? new LegacyItemHandlerAdapter(ib.getItemStackHandler(side)) : null);
         event.registerBlockEntity(
                 net.neoforged.neoforge.capabilities.Capabilities.Fluid.BLOCK,
-                MMCRRegistries.FLUID_HATCH_BE.get(),
+                MMCRBlockEntities.BES.get("io_port_fluid_basic").get(),
                 (be, side) -> be instanceof FluidHatchBlockEntity fh ? new LegacyFluidHandlerAdapter(fh.getFluidTank(side)) : null);
         event.registerBlockEntity(
                 net.neoforged.neoforge.capabilities.Capabilities.Energy.BLOCK,
-                MMCRRegistries.ENERGY_HATCH_BE.get(),
+                MMCRBlockEntities.BES.get("io_port_energy_basic").get(),
                 (be, side) -> be instanceof EnergyHatchBlockEntity eh ? new LegacyEnergyHandlerAdapter(eh.getMutableEnergyStorage(side)) : null);
     }
 

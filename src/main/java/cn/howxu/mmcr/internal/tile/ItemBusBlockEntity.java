@@ -3,7 +3,7 @@ package cn.howxu.mmcr.internal.tile;
 import cn.howxu.mmcr.internal.block.ItemBusBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.MMCRPortKinds;
-import cn.howxu.mmcr.registry.MMCRRegistries;
+import cn.howxu.mmcr.registry.MMCRBlockEntities;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -16,7 +16,7 @@ public class ItemBusBlockEntity extends IOPortBlockEntity {
     private final ItemStackHandler handler = new ItemStackHandler(9);
 
     public ItemBusBlockEntity(BlockPos pos, BlockState state) {
-        super(MMCRRegistries.ITEM_BUS_BE.get(), pos, state);
+        super(MMCRBlockEntities.BES.get("io_port_item_basic").get(), pos, state);
     }
 
     public IItemHandler getItemHandler(Direction side) { return handler; }

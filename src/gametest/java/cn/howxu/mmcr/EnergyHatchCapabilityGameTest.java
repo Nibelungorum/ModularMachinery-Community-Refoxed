@@ -1,7 +1,7 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
-import cn.howxu.mmcr.registry.MMCRRegistries;
+import cn.howxu.mmcr.registry.MMCRBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.neoforged.neoforge.energy.IEnergyStorage;
@@ -15,7 +15,7 @@ public class EnergyHatchCapabilityGameTest {
     @GameTest(template = "minecraft:empty")
     public void energyHatchStoresFE(net.minecraft.world.level.LevelAccessor level) {
         BlockPos pos = new BlockPos(0, 1, 0);
-        level.setBlock(pos, MMCRRegistries.ENERGY_HATCH_BLOCK.get().defaultBlockState(), 3);
+        level.setBlock(pos, MMCRBlocks.BLOCKS.get("io_port_energy_basic").get().defaultBlockState(), 3);
         var be = (EnergyHatchBlockEntity) level.getBlockEntity(pos);
 
         IEnergyStorage h = be.getEnergyStorage(null);

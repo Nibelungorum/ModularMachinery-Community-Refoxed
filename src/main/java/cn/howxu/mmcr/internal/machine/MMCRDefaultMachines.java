@@ -6,7 +6,7 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.registry.MMCRRegistries;
+import cn.howxu.mmcr.registry.MMCRBlocks;
 import net.minecraft.core.BlockPos;
 
 import java.util.HashMap;
@@ -30,7 +30,7 @@ public final class MMCRDefaultMachines {
         for (int x = -1; x <= 1; x++) {
             for (int z = -1; z <= 1; z++) {
                 if (x != 0 || z != 0) {
-                    pattern.put(new BlockPos(x, 0, z), new BlockPredicate.OfBlock(MMCRRegistries.CASING_BLOCK.get()));
+                    pattern.put(new BlockPos(x, 0, z), new BlockPredicate.OfBlock(MMCRBlocks.CASING.get()));
                 }
             }
         }

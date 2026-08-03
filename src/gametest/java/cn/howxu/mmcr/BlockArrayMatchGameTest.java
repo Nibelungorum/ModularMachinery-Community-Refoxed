@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
-import cn.howxu.mmcr.registry.MMCRRegistries;
+import cn.howxu.mmcr.registry.MMCRBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.resources.Identifier;
@@ -27,17 +27,17 @@ public class BlockArrayMatchGameTest {
         for (int x = 0; x < 3; x++)
             for (int z = 0; z < 3; z++)
                 level.setBlock(new BlockPos(x, 1, z),
-                        MMCRRegistries.CASING_BLOCK.get().defaultBlockState(), 3);
+                        MMCRBlocks.CASING.get().defaultBlockState(), 3);
 
         BlockPos ctrlPos = new BlockPos(1, 1, 1);
-        level.setBlock(ctrlPos, MMCRRegistries.CONTROLLER_BLOCK.get().defaultBlockState(), 3);
+        level.setBlock(ctrlPos, MMCRBlocks.CONTROLLER.get().defaultBlockState(), 3);
 
         Map<BlockPos, BlockPredicate> pattern = new HashMap<>();
         for (int x = -1; x <= 1; x++)
             for (int z = -1; z <= 1; z++)
                 if (x != 0 || z != 0)
                     pattern.put(new BlockPos(x, 0, z),
-                            new BlockPredicate.OfBlock(MMCRRegistries.CASING_BLOCK.get()));
+                            new BlockPredicate.OfBlock(MMCRBlocks.CASING.get()));
         var machine = new DynamicMachine(
                 Identifier.fromNamespaceAndPath(MMCR.MODID, "test_cube"),
                 "Test",

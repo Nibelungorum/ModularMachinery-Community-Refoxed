@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.test;
 
-import cn.howxu.mmcr.registry.MMCRRegistries;
+import cn.howxu.mmcr.registry.MMCRBlocks;
 import net.minecraft.core.Holder;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Block;
@@ -42,7 +42,7 @@ public final class TestBootstrap {
 
         Class.forName("net.minecraft.SharedConstants").getMethod("tryDetectVersion").invoke(null);
         Bootstrap.bootStrap();
-        bind(MMCRRegistries.CASING_BLOCK, net.minecraft.world.level.block.Blocks.STONE);
+        bind(MMCRBlocks.CASING, net.minecraft.world.level.block.Blocks.STONE);
         initialized = true;
     }
 

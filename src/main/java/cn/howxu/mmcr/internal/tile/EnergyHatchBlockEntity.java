@@ -3,7 +3,7 @@ package cn.howxu.mmcr.internal.tile;
 import cn.howxu.mmcr.internal.block.EnergyHatchBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.MMCRPortKinds;
-import cn.howxu.mmcr.registry.MMCRRegistries;
+import cn.howxu.mmcr.registry.MMCRBlockEntities;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -16,7 +16,7 @@ public class EnergyHatchBlockEntity extends IOPortBlockEntity {
     private final EnergyStorage storage = new EnergyStorage(100000, 100000, 100000);
 
     public EnergyHatchBlockEntity(BlockPos pos, BlockState state) {
-        super(MMCRRegistries.ENERGY_HATCH_BE.get(), pos, state);
+        super(MMCRBlockEntities.BES.get("io_port_energy_basic").get(), pos, state);
     }
 
     public IEnergyStorage getEnergyStorage(Direction side) { return storage; }

@@ -3,7 +3,7 @@ package cn.howxu.mmcr.internal.machine;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.registry.MMCRRegistries;
+import cn.howxu.mmcr.registry.MMCRBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import org.junit.jupiter.api.AfterEach;
@@ -36,6 +36,6 @@ class MMCRDefaultMachinesTest {
         assertThat(machine.pattern().pattern()).hasSize(8);
         assertThat(machine.pattern().get(BlockPos.ZERO)).isNull();
         assertThat(machine.pattern().get(new BlockPos(-1, 0, -1)))
-                .isEqualTo(new BlockPredicate.OfBlock(MMCRRegistries.CASING_BLOCK.get()));
+                .isEqualTo(new BlockPredicate.OfBlock(MMCRBlocks.CASING.get()));
     }
 }

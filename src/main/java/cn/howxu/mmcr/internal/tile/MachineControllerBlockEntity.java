@@ -8,7 +8,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.machine.MMCRDefaultMachines;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
-import cn.howxu.mmcr.registry.MMCRRegistries;
+import cn.howxu.mmcr.registry.MMCRBlockEntities;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
@@ -34,7 +34,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private int tickCounter = 0;
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
-        super(MMCRRegistries.CONTROLLER_BE.get(), pos, state);
+        super(MMCRBlockEntities.BES.get("controller").get(), pos, state);
     }
 
     public Machine getMachine() { return machine; }
