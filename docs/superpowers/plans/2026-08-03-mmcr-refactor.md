@@ -778,103 +778,87 @@ cd /home/howxu/Projects/ModularMachinery-Community-Refoxed && \
 - Modify: `src/main/java/cn/howxu/mmcr/MMCR.java`
 - Delete: `src/main/java/cn/howxu/mmcr/registry/MMCRRegistries.java`
 
-- [ ] **Step 1: 编辑 `MMCR.java`**
+- [ ] **Step 1: 编辑 `MMCR.java`(内联 CREATIVE_TABS,符合 spec R5)**
 
-替换 import:
-```java
-import cn.howxu.mmcr.registry.MMCRRegistries;
-```
-→
-```java
-import cn.howxu.mmcr.registry.MMCRBlocks;
-import cn.howxu.mmcr.registry.MMCRBlockEntities;
-import cn.howxu.mmcr.registry.MMCRItems;
-import cn.howxu.mmcr.registry.MMCRRecipeTypes;
-```
+将整个类替换为:
 
-替换构造器方法体:
 ```java
-MMCRRegistries.BLOCKS.register(modBus);
-MMCRRegistries.ITEMS.register(modBus);
-MMCRRegistries.BLOCK_ENTITIES.register(modBus);
-MMCRRegistries.RECIPE_TYPES.register(modBus);
-MMCRRegistries.RECIPE_SERIALIZERS.register(modBus);
-MMCRRegistries.CREATIVE_TABS.register(modBus);
-```
-→
-```java
-MMCRBlocks.register(modBus);
-MMCRItems.register(modBus);
-MMCRBlockEntities.register(modBus);
-MMCRRecipeTypes.register(modBus);
-MMCRCreativeTabs.register(modBus);  // 见下面 Step 2
-```
+package cn.howxu.mmcr;
 
-清理 FQN inline lambda(顺便):
-```java
-modBus.addListener(cn.howxu.mmcr.internal.event.MMCRCapabilities::register);
-NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.RegisterCommandsEvent ev) ->
-        cn.howxu.mmcr.internal.command.MMCRReloadCommand.register(ev.getDispatcher()));
-```
-→
-```java
-modBus.addListener(MMCRCapabilities::register);
-NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent ev) ->
-        MMCRReloadCommand.register(ev.getDispatcher()));
-```
-
-顶部加 import:
-```java
+import cn.howxu.mmcr.config.MMCRConfig;
 import cn.howxu.mmcr.internal.command.MMCRReloadCommand;
 import cn.howxu.mmcr.internal.event.MMCRCapabilities;
-import cn.howxu.mmcr.registry.MMCRCreativeTabs;  // 见下面 Step 2
-import net.neoforged.neoforge.event.RegisterCommandsEvent;
-```
-
-- [ ] **Step 2: 处理 CREATIVE_TABS**
-
-旧 `MMCRRegistries.CREATIVE_TABS` 现在没人接。本轮 spec R5 说"创意 tab 暂留 MMCR.java 内"。暂时:
-
-```bash
-cd /home/howxu/Projects/ModularMachinery-Community-Refoxed && grep -n "CreativeModeTab" src/main/java/cn/howxu/mmcr/MMCR.java
-```
-
-如果 MMCR.java 没有 CreativeModeTab 自注册代码,新建 `src/main/java/cn/howxu/mmcr/registry/MMCRCreativeTabs.java`:
-
-```java
-package cn.howxu.mmcr.registry;
-
-import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
+import cn.howxu.mmcr.registry.MMCRBlockEntities;
+import cn.howxu.mmcr.registry.MMCRBlocks;
+import cn.howxu.mmcr.registry.MMCRItems;
+import cn.howxu.mmcr.registry.MMCRRecipeTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.CreativeModeTab;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.config.ModConfig;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public final class MMCRCreativeTabs {
+@Mod(MMCR.MODID)
+public class MMCR {
+    public static final String MODID = "mmcr";
+    public static final Logger LOG = LoggerFactory.getLogger(MODID);
 
-    public static final DeferredRegister<CreativeModeTab> REGISTER =
-            DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MMCR.MODID);
+    // 创意 tab 注册(spec R5:暂留 MMCR.java 内,后续可拆)
+    public static final DeferredRegister<CreativeModeTab> CREATIVE_TABS =
+            DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
 
-    public static final net.neoforged.neoforge.registries.DeferredHolder<CreativeModeTab, CreativeModeTab> TAB =
-            REGISTER.register(MMCR.MODID, () -> CreativeModeTab.builder()
-                    .title(Component.translatable("itemGroup.mmcr"))
-                    .icon(() -> BuiltInRegistries.ITEM.get(MMCR.id("casing")).getDefaultInstance())
-                    .displayItems((params, output) ->
-                            MMCRItems.ITEMS.values().forEach(h -> output.accept(h.get())))
-                    .build());
-
-    public static void register(net.neoforged.bus.api.IEventBus bus) {
-        REGISTER.register(bus);
+    public MMCR(IEventBus modBus, ModContainer modContainer) {
+        MMCRBlocks.register(modBus);
+        MMCRItems.register(modBus);
+        MMCRBlockEntities.register(modBus);
+        MMCRRecipeTypes.register(modBus);
+        CREATIVE_TABS.register(modBus);
+        modContainer.registerConfig(ModConfig.Type.COMMON, MMCRConfig.SPEC);
+        modBus.addListener(MMCRCapabilities::register);
+        NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent ev) ->
+                MMCRReloadCommand.register(ev.getDispatcher()));
+        modBus.addListener((RegisterPayloadHandlersEvent ev) -> {
+            ev.registrar("1").playToClient(
+                    PktMachineStatePayload.TYPE,
+                    PktMachineStatePayload.STREAM_CODEC,
+                    (payload, ctx) -> MMCR.LOG.debug("Received machine state: {}", payload));
+        });
+        CREATIVE_TABS.register(MODID, () -> CreativeModeTab.builder()
+                .title(Component.translatable("itemGroup.mmcr"))
+                .icon(() -> BuiltInRegistries.ITEM.get(MMCR.id("casing")).getDefaultInstance())
+                .displayItems((params, output) ->
+                        MMCRItems.ITEMS.values().forEach(h -> output.accept(h.get())))
+                .build());
+        LOG.info("MMCR {} loaded", modContainer.getModInfo().getVersion());
     }
 
-    private MMCRCreativeTabs() {}
+    public static Identifier id(String path) {
+        return Identifier.fromNamespaceAndPath(MODID, path);
+    }
 }
 ```
 
-> 若你不想拆 CREATIVE_TABS,也可继续保留在 MMCR.java 内,然后注释掉 `MMCRRegistries.CREATIVE_TABS.register(modBus);` 这一行(等下次)。
+要点:
+- 替换 import 块,显式 import `MMCRReloadCommand` / `MMCRCapabilities` / `RegisterCommandsEvent`(消除 R9 的 FQN)
+- 删 `import cn.howxu.mmcr.registry.MMCRRegistries`,换 `MMCRBlocks` / `MMCRItems` / `MMCRBlockEntities` / `MMCRRecipeTypes`
+- `MMCRRegistries.X.register(modBus)` 6 行换成 5 行(`CREATIVE_TABS` 留在类内)
+- 删 2 行 inline FQN lambda(method reference),改短名
+- 加 `CREATIVE_TABS` 内联 DeferredRegister + DeferredHolder
 
-- [ ] **Step 3: 删除旧文件**
+> 你现在看到 `CREATIVE_TABS.register(modBus);` 在前、`CREATIVE_TABS.register(MODID, () -> ...)` 在后 —— 是因为 `register(IEventBus)` 是 DeferredRegister 的方法、第二个 `register` 是同名 DeferredHolder 工厂。先后顺序无影响(都是 lambda,延迟到事件触发)。
+
+- [ ] **Step 2: 删除旧文件**
 
 ```bash
 cd /home/howxu/Projects/ModularMachinery-Community-Refoxed && \
@@ -894,9 +878,11 @@ cd /home/howxu/Projects/ModularMachinery-Community-Refoxed && \
 
 ```bash
 cd /home/howxu/Projects/ModularMachinery-Community-Refoxed && \
-  git add -u && \
+  git add . && \
   git commit -m "refactor: switch MMCR.java to new registries; delete old MMCRRegistries.java; clean FQN in MMCR.java"
 ```
+
+> 用 `git add .` 而非 `git add -u`,因为 Task 6 添加了 4 个新 Registry 类(java),`git add -u` 不会捕获。Task 6 暂未提交,这里一并加入。
 
 ---
 
