@@ -1,7 +1,7 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
-import cn.howxu.mmcr.registry.MMCRBlocks;
+import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.world.level.material.Fluids;
@@ -17,7 +17,7 @@ public class FluidHatchCapabilityGameTest {
     @GameTest(template = "minecraft:empty")
     public void fluidHatchStoresWater(net.minecraft.world.level.LevelAccessor level) {
         BlockPos pos = new BlockPos(0, 1, 0);
-        level.setBlock(pos, MMCRBlocks.BLOCKS.get("io_port_fluid_basic").get().defaultBlockState(), 3);
+        level.setBlock(pos, ModBlocks.BLOCKS.get("io_port_fluid_basic").get().defaultBlockState(), 3);
         var be = (FluidHatchBlockEntity) level.getBlockEntity(pos);
 
         IFluidHandler handler = be.getFluidHandler(null);

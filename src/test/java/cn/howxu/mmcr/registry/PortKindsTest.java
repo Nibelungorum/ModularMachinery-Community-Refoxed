@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class MMCRPortKindsTest {
+class PortKindsTest {
 
     @BeforeAll
     static void setup() throws Exception {
@@ -20,12 +20,12 @@ class MMCRPortKindsTest {
 
     @BeforeEach
     void resetRegistry() {
-        MMCRPortKinds.clearForTesting();
+        PortKinds.clearForTesting();
     }
 
     @Test
     void native_kinds_present() {
-        assertThat(MMCRPortKinds.all()).extracting(IOPortKind::id)
+        assertThat(PortKinds.all()).extracting(IOPortKind::id)
                 .contains("item", "fluid", "energy");
     }
 
@@ -33,9 +33,9 @@ class MMCRPortKindsTest {
     void register_appends_new_kind() {
         BlockEntityType.BlockEntitySupplier<cn.howxu.mmcr.internal.tile.IOPortBlockEntity> dummyFactory =
                 (BlockPos p, BlockState s) -> null;
-        IOPortKind extra = new MMCRPortKinds.Simple("test_extra", dummyFactory);
-        MMCRPortKinds.register(extra);
-        assertThat(MMCRPortKinds.all()).hasSize(4);
-        assertThat(MMCRPortKinds.all()).extracting(IOPortKind::id).contains("test_extra");
+        IOPortKind extra = new PortKinds.Simple("test_extra", dummyFactory);
+        PortKinds.register(extra);
+        assertThat(PortKinds.all()).hasSize(4);
+        assertThat(PortKinds.all()).extracting(IOPortKind::id).contains("test_extra");
     }
 }

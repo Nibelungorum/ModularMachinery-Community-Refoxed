@@ -6,9 +6,9 @@ import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
-import cn.howxu.mmcr.internal.machine.MMCRDefaultMachines;
+import cn.howxu.mmcr.internal.machine.DefaultMachines;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
-import cn.howxu.mmcr.registry.MMCRBlockEntities;
+import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
@@ -34,7 +34,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private int tickCounter = 0;
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
-        super(MMCRBlockEntities.BES.get("controller").get(), pos, state);
+        super(ModBlockEntities.BES.get("controller").get(), pos, state);
     }
 
     public Machine getMachine() { return machine; }
@@ -151,8 +151,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void bindDefaultMachine() {
-        MMCRDefaultMachines.ensureRegistered();
-        setMachine(cn.howxu.mmcr.api.machine.MachineRegistry.getMachine(cn.howxu.mmcr.MMCR.id("iron_compressor")));
+        DefaultMachines.ensureRegistered();
+        setMachine(cn.howxu.mmcr.api.machine.MachineRegistry.getMachine(cn.howxu.mmcr.MMCR.id("blast_furnace")));
     }
 
     private List<MachineRecipe> recipesForMachine() {

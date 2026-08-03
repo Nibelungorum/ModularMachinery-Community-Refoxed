@@ -3,7 +3,7 @@ package cn.howxu.mmcr.api.recipe;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import cn.howxu.mmcr.registry.MMCRRecipeTypes;
+import cn.howxu.mmcr.registry.ModRecipeTypes;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.PlacementInfo;
@@ -54,12 +54,12 @@ public record MachineRecipe(
 
     @Override
     public RecipeSerializer<? extends Recipe<RecipeInput>> getSerializer() {
-        return MMCRRecipeTypes.MACHINE_RECIPE_SERIALIZER.get();
+        return ModRecipeTypes.MACHINE_RECIPE_SERIALIZER.get();
     }
 
     @Override
     public RecipeType<? extends Recipe<RecipeInput>> getType() {
-        return MMCRRecipeTypes.MACHINE_RECIPE_TYPE.get();
+        return ModRecipeTypes.MACHINE_RECIPE_TYPE.get();
     }
 
     @Override

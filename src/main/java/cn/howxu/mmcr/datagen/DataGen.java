@@ -7,15 +7,15 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.data.event.GatherDataEvent;
 
 @EventBusSubscriber(modid = MMCR.MODID)
-public final class MMCRDataGen {
-    private MMCRDataGen() {
+public final class DataGen {
+    private DataGen() {
     }
 
     @SubscribeEvent
     public static void onGatherData(GatherDataEvent.Client event) {
         PackOutput output = event.getGenerator().getPackOutput();
-        event.addProvider(new MMCRModelProvider(output));
-        event.addProvider(new MMCRLanguageProvider(output, "en_us"));
-        event.addProvider(new MMCRLanguageProvider(output, "zh_cn"));
+        event.addProvider(new ModelGen(output));
+        event.addProvider(new LangProvider(output, "en_us"));
+        event.addProvider(new LangProvider(output, "zh_cn"));
     }
 }

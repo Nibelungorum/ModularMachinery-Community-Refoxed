@@ -2,13 +2,12 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
-import dev.latvian.mods.kubejs.plugin.KubeJSPlugin;
 import dev.latvian.mods.kubejs.recipe.component.RecipeComponentTypeRegistry;
 import dev.latvian.mods.kubejs.recipe.schema.RecipeFactoryRegistry;
 import dev.latvian.mods.kubejs.recipe.schema.RecipeSchemaRegistry;
 import dev.latvian.mods.kubejs.script.BindingRegistry;
 
-public class MMCRKubeJSPlugin implements KubeJSPlugin {
+public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
 
     @Override
     public void registerBindings(BindingRegistry bindings) {

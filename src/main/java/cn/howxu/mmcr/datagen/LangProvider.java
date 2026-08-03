@@ -6,18 +6,18 @@ import net.neoforged.neoforge.common.data.LanguageProvider;
 
 import java.util.Map;
 
-public final class MMCRLanguageProvider extends LanguageProvider {
+public final class LangProvider extends LanguageProvider {
 
     private final String locale;
 
-    public MMCRLanguageProvider(PackOutput output, String locale) {
+    public LangProvider(PackOutput output, String locale) {
         super(output, MMCR.MODID, locale);
         this.locale = locale;
     }
 
     @Override
     protected void addTranslations() {
-        Map<String, String> map = MMCRTranslations.ALL.get(locale);
+        Map<String, String> map = Translations.ALL.get(locale);
         if (map != null) map.forEach(this::add);
     }
 }

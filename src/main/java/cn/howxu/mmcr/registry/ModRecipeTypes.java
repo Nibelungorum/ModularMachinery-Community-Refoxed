@@ -10,7 +10,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
-public final class MMCRRecipeTypes {
+public final class ModRecipeTypes {
 
     public static final DeferredRegister<RecipeType<?>> REGISTER =
             DeferredRegister.create(BuiltInRegistries.RECIPE_TYPE, MMCR.MODID);
@@ -28,5 +28,5 @@ public final class MMCRRecipeTypes {
         SERIALIZER_REGISTER.register(bus);
     }
 
-    private MMCRRecipeTypes() {}
+    private ModRecipeTypes() {}
 }

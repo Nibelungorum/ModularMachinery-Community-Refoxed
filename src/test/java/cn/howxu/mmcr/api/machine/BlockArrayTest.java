@@ -4,15 +4,12 @@ import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.server.Bootstrap;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Constructor;
-import java.nio.file.Path;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -69,15 +66,46 @@ class BlockArrayTest {
         assertThat(arr.get(new BlockPos(1, 0, 0))).isNull();
     }
 
+    @Test void builder_groups_input_as_y_layers_from_arr_columns() {
+        var x = new BlockPredicate.OfBlock(Blocks.STONE);
+        var i = new BlockPredicate.OfBlock(Blocks.OAK_PLANKS);
+        var c = new BlockPredicate.OfBlock(Blocks.DIRT);
+        var arr = BlockArray.builder()
+                .pattern(
+                        "XXX", "XIX", "XXX",
+                        "XXX", "I I", "XXX",
+                        "XXX", "XCX", "XXX")
+                .set('X', x)
+                .set('I', i)
+                .set('C', c)
+                .build();
+
+        assertThat(arr.get(BlockPos.ZERO)).isEqualTo(c);
+        assertThat(arr.get(new BlockPos(-1, -1, -2))).isEqualTo(x);
+        assertThat(arr.get(new BlockPos(0, -1, -1))).isEqualTo(x);
+        assertThat(arr.get(new BlockPos(1, -1, 0))).isEqualTo(x);
+        assertThat(arr.get(new BlockPos(0, 0, -2))).isEqualTo(i);
+        assertThat(arr.get(new BlockPos(-1, 0, -1))).isEqualTo(i);
+        assertThat(arr.get(new BlockPos(1, 0, -1))).isEqualTo(i);
+        assertThat(arr.get(new BlockPos(0, 0, -1))).isNull();
+    }
+
+    /**
+     * pattern 默认按 NORTH 摆;controller FACING = NORTH 时 pattern 原貌对应世界坐标。
+     */
     @Test void matcher_matches_perfect_structure() {
         Map<BlockPos, BlockPredicate> m = new HashMap<>();
-        for (int x = 0; x < 3; x++)
-            for (int z = 0; z < 3; z++)
+        for (int x = -1; x <= 1; x++)
+            for (int z = -1; z <= 1; z++)
                 m.put(new BlockPos(x, 0, z), new BlockPredicate.OfBlock(Blocks.STONE));
         var arr = new BlockArray(m);
 
-        var level = LevelStub.create(Blocks.STONE, 3, 1, 3, new BlockPos(-1, 0, -1));
-        assertThat(StructureMatcher.matches(arr, level, new BlockPos(1, 0, 1), Direction.NORTH)).isTrue();
+        var ctrl = new BlockPos(2, 2, 2);
+        Map<BlockPos, Block> blocks = new HashMap<>();
+        for (int x = -1; x <= 1; x++)
+            for (int z = -1; z <= 1; z++)
+                blocks.put(ctrl.offset(x, 0, z), Blocks.STONE);
+        assertThat(StructureMatcher.matches(arr, LevelStub.create(blocks), ctrl, Direction.NORTH)).isTrue();
     }
 
     @Test void matcher_rejects_wrong_block() {
@@ -88,26 +116,34 @@ class BlockArrayTest {
                 new BlockPos(0, 0, 0), Blocks.STONE,
                 new BlockPos(0, 0, 1), Blocks.COBBLESTONE));
 
-        assertThat(StructureMatcher.matches(arr, level, BlockPos.ZERO, Direction.SOUTH)).isFalse();
+        assertThat(StructureMatcher.matches(arr, level, BlockPos.ZERO, Direction.NORTH)).isFalse();
     }
 
-    @Test void matcher_rotates_pattern_for_horizontal_facings() {
+    @Test void matcher_ignores_controller_facing_for_structure_positions() {
         var arr = new BlockArray(Map.of(
-                new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE),
+                new BlockPos(-1, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE),
                 new BlockPos(0, 0, 1), new BlockPredicate.OfBlock(Blocks.DIRT)));
         var ctrl = new BlockPos(10, 2, 10);
-
-        assertThat(StructureMatcher.matches(arr, LevelStub.create(Map.of(
-                ctrl.offset(1, 0, 0), Blocks.STONE,
-                ctrl.offset(0, 0, 1), Blocks.DIRT)), ctrl, Direction.SOUTH)).isTrue();
-        assertThat(StructureMatcher.matches(arr, LevelStub.create(Map.of(
+        var level = LevelStub.create(Map.of(
                 ctrl.offset(-1, 0, 0), Blocks.STONE,
-                ctrl.offset(0, 0, -1), Blocks.DIRT)), ctrl, Direction.NORTH)).isTrue();
-        assertThat(StructureMatcher.matches(arr, LevelStub.create(Map.of(
-                ctrl.offset(0, 0, -1), Blocks.STONE,
-                ctrl.offset(1, 0, 0), Blocks.DIRT)), ctrl, Direction.EAST)).isTrue();
-        assertThat(StructureMatcher.matches(arr, LevelStub.create(Map.of(
-                ctrl.offset(0, 0, 1), Blocks.STONE,
-                ctrl.offset(-1, 0, 0), Blocks.DIRT)), ctrl, Direction.WEST)).isTrue();
+                ctrl.offset(0, 0, 1), Blocks.DIRT));
+
+        for (Direction facing : Direction.Plane.HORIZONTAL) {
+            assertThat(StructureMatcher.matches(arr, level, ctrl, facing)).isTrue();
+        }
+    }
+
+    @Test void block_rotator_keeps_mmce_yaw_math_available_for_preview_or_tools() {
+        BlockPos left = new BlockPos(-1, 0, 0);
+        BlockPos front = new BlockPos(0, 0, 1);
+
+        assertThat(BlockRotator.rotateYCCWNorthUntil(left, Direction.NORTH)).isEqualTo(new BlockPos(-1, 0, 0));
+        assertThat(BlockRotator.rotateYCCWNorthUntil(front, Direction.NORTH)).isEqualTo(new BlockPos(0, 0, 1));
+        assertThat(BlockRotator.rotateYCCWNorthUntil(left, Direction.SOUTH)).isEqualTo(new BlockPos(1, 0, 0));
+        assertThat(BlockRotator.rotateYCCWNorthUntil(front, Direction.SOUTH)).isEqualTo(new BlockPos(0, 0, -1));
+        assertThat(BlockRotator.rotateYCCWNorthUntil(left, Direction.WEST)).isEqualTo(new BlockPos(0, 0, 1));
+        assertThat(BlockRotator.rotateYCCWNorthUntil(front, Direction.WEST)).isEqualTo(new BlockPos(1, 0, 0));
+        assertThat(BlockRotator.rotateYCCWNorthUntil(left, Direction.EAST)).isEqualTo(new BlockPos(0, 0, -1));
+        assertThat(BlockRotator.rotateYCCWNorthUntil(front, Direction.EAST)).isEqualTo(new BlockPos(-1, 0, 0));
     }
 }

@@ -8,6 +8,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
@@ -27,7 +28,7 @@ public class IOPortBlock extends Block implements EntityBlock {
     public IOPortBlock(String kind,
                        Supplier<? extends BlockEntityType<?>> beType,
                        Properties props) {
-        super(props);
+        super(props.sound(SoundType.METAL));
         this.kind = kind;
         this.beType = beType;
         registerDefaultState(stateDefinition.any().setValue(IO_TYPE, IOType.INPUT));

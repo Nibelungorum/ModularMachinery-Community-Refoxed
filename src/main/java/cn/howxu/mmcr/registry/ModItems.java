@@ -11,14 +11,14 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 
 import java.util.LinkedHashMap;
 
-public final class MMCRItems {
+public final class ModItems {
 
     public static final DeferredRegister.Items REGISTER = DeferredRegister.createItems(MMCR.MODID);
 
     public static final LinkedHashMap<String, DeferredHolder<Item, Item>> ITEMS = new LinkedHashMap<>();
 
     static {
-        MMCRBlocks.BLOCKS.forEach((name, blockHolder) -> {
+        ModBlocks.BLOCKS.forEach((name, blockHolder) -> {
             DeferredHolder<Item, Item> itemHolder = REGISTER.register(name, () ->
                     new BlockItem(blockHolder.get(),
                             new Item.Properties().setId(
@@ -31,5 +31,5 @@ public final class MMCRItems {
         REGISTER.register(bus);
     }
 
-    private MMCRItems() {}
+    private ModItems() {}
 }

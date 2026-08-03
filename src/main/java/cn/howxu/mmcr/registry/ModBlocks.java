@@ -14,7 +14,7 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 import java.util.LinkedHashMap;
 import java.util.function.Supplier;
 
-public final class MMCRBlocks {
+public final class ModBlocks {
 
     public static final DeferredRegister.Blocks REGISTER = DeferredRegister.createBlocks(MMCR.MODID);
 
@@ -23,7 +23,7 @@ public final class MMCRBlocks {
     static {
         BLOCKS.put("controller", REGISTER.registerBlock("controller", MachineControllerBlock::new));
         BLOCKS.put("casing", REGISTER.registerBlock("casing", MachineCasingBlock::new));
-        MMCRPortKinds.all().forEach(MMCRBlocks::registerIoPort);
+        PortKinds.all().forEach(ModBlocks::registerIoPort);
     }
 
     public static final DeferredHolder<Block, Block> CONTROLLER = BLOCKS.get("controller");
@@ -32,7 +32,7 @@ public final class MMCRBlocks {
     private static void registerIoPort(IOPortKind kind) {
         String name = "io_port_" + kind.id() + "_basic";
         Supplier<? extends BlockEntityType<?>> beTypeSupplier =
-                () -> MMCRBlockEntities.BES.get(name).get();
+                () -> ModBlockEntities.BES.get(name).get();
         BLOCKS.put(name, REGISTER.registerBlock(name,
                 properties -> new IOPortBlock(kind.id(), beTypeSupplier, properties)));
     }
@@ -41,5 +41,5 @@ public final class MMCRBlocks {
         REGISTER.register(bus);
     }
 
-    private MMCRBlocks() {}
+    private ModBlocks() {}
 }

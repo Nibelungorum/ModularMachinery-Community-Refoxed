@@ -7,7 +7,7 @@ import java.util.Optional;
 
 /**
  * 一种 IO 端口类型的协议。新增一种 IO 端口(气体、魔源等)
- * 只需实现本接口并通过 {@link cn.howxu.mmcr.registry.MMCRPortKinds#register} 注册。
+ * 只需实现本接口并通过 {@link cn.howxu.mmcr.registry.PortKinds#register} 注册。
  */
 public interface IOPortKind {
 

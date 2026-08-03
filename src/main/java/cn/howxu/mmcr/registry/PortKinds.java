@@ -11,7 +11,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-public final class MMCRPortKinds {
+public final class PortKinds {
 
     public record Simple(
             String id,
@@ -35,5 +35,5 @@ public final class MMCRPortKinds {
         REGISTRY.addAll(List.of(ITEM, FLUID, ENERGY));
     }
 
-    private MMCRPortKinds() {}
+    private PortKinds() {}
 }

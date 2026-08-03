@@ -1,12 +1,14 @@
 package cn.howxu.mmcr.datagen;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.registry.MMCRBlocks;
-import cn.howxu.mmcr.registry.MMCRItems;
+import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.ModItems;
 import net.minecraft.client.data.models.BlockModelGenerators;
 import net.minecraft.client.data.models.ItemModelGenerators;
 import net.minecraft.client.data.models.ModelProvider;
+import net.minecraft.client.data.models.model.ModelLocationUtils;
 import net.minecraft.client.data.models.model.TexturedModel;
+import net.minecraft.client.data.models.model.TextureSlot;
 import net.minecraft.client.resources.model.sprite.Material;
 import net.minecraft.core.Holder;
 import net.minecraft.data.PackOutput;
@@ -15,26 +17,28 @@ import net.minecraft.world.level.block.Block;
 
 import java.util.stream.Stream;
 
-public final class MMCRModelProvider extends ModelProvider {
+public final class ModelGen extends ModelProvider {
 
-    public MMCRModelProvider(PackOutput output) {
+    public ModelGen(PackOutput output) {
         super(output, MMCR.MODID);
     }
 
     @Override
     protected void registerModels(BlockModelGenerators blockModels, ItemModelGenerators itemModels) {
-        MMCRBlocks.BLOCKS.forEach((name, blockHolder) -> {
+        ModBlocks.BLOCKS.forEach((name, blockHolder) -> {
             Block block = blockHolder.get();
-            Material texture = textureFor(name);
 
             if ("controller".equals(name)) {
-                blockModels.createHorizontallyRotatedBlock(block, TexturedModel.CUBE.updateTexture(
-                        m -> m.put(net.minecraft.client.data.models.model.TextureSlot.ALL, texture)));
+                blockModels.createHorizontallyRotatedBlock(block, TexturedModel.ORIENTABLE.updateTexture(m -> m
+                        .put(TextureSlot.FRONT, textureFor("controller"))
+                        .put(TextureSlot.SIDE, textureFor("casing"))
+                        .put(TextureSlot.TOP, textureFor("casing"))
+                        .put(TextureSlot.BOTTOM, textureFor("casing"))));
                 blockModels.registerSimpleItemModel(block.asItem(),
-                        net.minecraft.client.data.models.model.ModelLocationUtils.getModelLocation(block));
+                        ModelLocationUtils.getModelLocation(block));
             } else {
                 blockModels.createTrivialBlock(block, TexturedModel.CUBE.updateTexture(
-                        m -> m.put(net.minecraft.client.data.models.model.TextureSlot.ALL, texture)));
+                        m -> m.put(TextureSlot.ALL, textureFor(name))));
             }
         });
     }
@@ -46,13 +50,13 @@ public final class MMCRModelProvider extends ModelProvider {
 
     @Override
     protected Stream<? extends Holder<Block>> getKnownBlocks() {
-        return MMCRBlocks.BLOCKS.values().stream()
+        return ModBlocks.BLOCKS.values().stream()
                 .map(h -> h.get().builtInRegistryHolder());
     }
 
     @Override
     protected Stream<? extends Holder<Item>> getKnownItems() {
-        return MMCRItems.ITEMS.values().stream()
+        return ModItems.ITEMS.values().stream()
                 .map(h -> h.get().builtInRegistryHolder());
     }
 }

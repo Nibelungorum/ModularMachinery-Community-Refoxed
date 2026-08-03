@@ -1,13 +1,14 @@
 package cn.howxu.mmcr;
 
-import cn.howxu.mmcr.config.MMCRConfig;
-import cn.howxu.mmcr.internal.command.MMCRReloadCommand;
-import cn.howxu.mmcr.internal.event.MMCRCapabilities;
+import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.internal.command.BuildCommand;
+import cn.howxu.mmcr.internal.command.ReloadCommand;
+import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
-import cn.howxu.mmcr.registry.MMCRBlockEntities;
-import cn.howxu.mmcr.registry.MMCRBlocks;
-import cn.howxu.mmcr.registry.MMCRItems;
-import cn.howxu.mmcr.registry.MMCRRecipeTypes;
+import cn.howxu.mmcr.registry.ModBlockEntities;
+import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.ModItems;
+import cn.howxu.mmcr.registry.ModRecipeTypes;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -32,15 +33,17 @@ public class MMCR {
             DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
 
     public MMCR(IEventBus modBus, ModContainer modContainer) {
-        MMCRBlocks.register(modBus);
-        MMCRItems.register(modBus);
-        MMCRBlockEntities.register(modBus);
-        MMCRRecipeTypes.register(modBus);
+        ModBlocks.register(modBus);
+        ModItems.register(modBus);
+        ModBlockEntities.register(modBus);
+        ModRecipeTypes.register(modBus);
         CREATIVE_TABS.register(modBus);
-        modContainer.registerConfig(ModConfig.Type.COMMON, MMCRConfig.SPEC);
-        modBus.addListener(MMCRCapabilities::register);
-        NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent ev) ->
-                MMCRReloadCommand.register(ev.getDispatcher()));
+        modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
+        modBus.addListener(ModCapabilities::register);
+        NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent ev) -> {
+            ReloadCommand.register(ev.getDispatcher());
+            BuildCommand.register(ev.getDispatcher());
+        });
         modBus.addListener((RegisterPayloadHandlersEvent ev) -> {
             ev.registrar("1").playToClient(
                     PktMachineStatePayload.TYPE,
@@ -49,9 +52,9 @@ public class MMCR {
         });
         CREATIVE_TABS.register(MODID, () -> CreativeModeTab.builder()
                 .title(Component.translatable("itemGroup.mmcr"))
-                .icon(() -> MMCRItems.ITEMS.get("casing").get().getDefaultInstance())
+                .icon(() -> ModItems.ITEMS.get("casing").get().getDefaultInstance())
                 .displayItems((params, output) ->
-                        MMCRItems.ITEMS.values().forEach(h -> output.accept(h.get())))
+                        ModItems.ITEMS.values().forEach(h -> output.accept(h.get())))
                 .build());
         LOG.info("MMCR {} loaded", modContainer.getModInfo().getVersion());
     }

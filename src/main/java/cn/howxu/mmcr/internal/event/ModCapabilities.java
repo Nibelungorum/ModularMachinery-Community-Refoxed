@@ -3,7 +3,7 @@ package cn.howxu.mmcr.internal.event;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
-import cn.howxu.mmcr.registry.MMCRBlockEntities;
+import cn.howxu.mmcr.registry.ModBlockEntities;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
@@ -24,21 +24,21 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import java.util.ArrayList;
 import java.util.List;
 
-public final class MMCRCapabilities {
-    private MMCRCapabilities() {}
+public final class ModCapabilities {
+    private ModCapabilities() {}
 
     public static void register(RegisterCapabilitiesEvent event) {
         event.registerBlockEntity(
                 net.neoforged.neoforge.capabilities.Capabilities.Item.BLOCK,
-                MMCRBlockEntities.BES.get("io_port_item_basic").get(),
+                ModBlockEntities.BES.get("io_port_item_basic").get(),
                 (be, side) -> be instanceof ItemBusBlockEntity ib ? new LegacyItemHandlerAdapter(ib.getItemStackHandler(side)) : null);
         event.registerBlockEntity(
                 net.neoforged.neoforge.capabilities.Capabilities.Fluid.BLOCK,
-                MMCRBlockEntities.BES.get("io_port_fluid_basic").get(),
+                ModBlockEntities.BES.get("io_port_fluid_basic").get(),
                 (be, side) -> be instanceof FluidHatchBlockEntity fh ? new LegacyFluidHandlerAdapter(fh.getFluidTank(side)) : null);
         event.registerBlockEntity(
                 net.neoforged.neoforge.capabilities.Capabilities.Energy.BLOCK,
-                MMCRBlockEntities.BES.get("io_port_energy_basic").get(),
+                ModBlockEntities.BES.get("io_port_energy_basic").get(),
                 (be, side) -> be instanceof EnergyHatchBlockEntity eh ? new LegacyEnergyHandlerAdapter(eh.getMutableEnergyStorage(side)) : null);
     }
 

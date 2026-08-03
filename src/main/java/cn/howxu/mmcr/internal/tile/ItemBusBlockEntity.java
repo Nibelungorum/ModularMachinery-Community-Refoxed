@@ -1,8 +1,8 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.internal.port.IOPortKind;
-import cn.howxu.mmcr.registry.MMCRBlockEntities;
-import cn.howxu.mmcr.registry.MMCRPortKinds;
+import cn.howxu.mmcr.registry.ModBlockEntities;
+import cn.howxu.mmcr.registry.PortKinds;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.state.BlockState;
@@ -14,7 +14,7 @@ public class ItemBusBlockEntity extends IOPortBlockEntity {
     private final ItemStackHandler handler = new ItemStackHandler(9);
 
     public ItemBusBlockEntity(BlockPos pos, BlockState state) {
-        super(MMCRBlockEntities.BES.get("io_port_item_basic").get(), pos, state);
+        super(ModBlockEntities.BES.get("io_port_item_basic").get(), pos, state);
     }
 
     public IItemHandler getItemHandler(Direction side) { return handler; }
@@ -22,5 +22,5 @@ public class ItemBusBlockEntity extends IOPortBlockEntity {
     public ItemStackHandler getItemStackHandler(Direction side) { return handler; }
 
     @Override
-    public IOPortKind kind() { return MMCRPortKinds.ITEM; }
+    public IOPortKind kind() { return PortKinds.ITEM; }
 }

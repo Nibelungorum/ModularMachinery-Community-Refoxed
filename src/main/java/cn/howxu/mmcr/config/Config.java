@@ -2,7 +2,7 @@ package cn.howxu.mmcr.config;
 
 import net.neoforged.neoforge.common.ModConfigSpec;
 
-public final class MMCRConfig {
+public final class Config {
     public static final ModConfigSpec SPEC;
     public static final ModConfigSpec.IntValue MACHINE_CHECK_INTERVAL_TICKS;
     public static final ModConfigSpec.DoubleValue ENERGY_CONSUMPTION_MULTIPLIER;
@@ -18,6 +18,6 @@ public final class MMCRConfig {
         SPEC = b.build();
     }
 
-    private MMCRConfig() {
+    private Config() {
     }
 }

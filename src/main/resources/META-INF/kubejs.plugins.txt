@@ -1,1 +1,1 @@
-cn.howxu.mmcr.compat.kubejs.MMCRKubeJSPlugin
+cn.howxu.mmcr.compat.kubejs.Plugin

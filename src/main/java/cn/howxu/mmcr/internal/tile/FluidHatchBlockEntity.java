@@ -1,8 +1,8 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.internal.port.IOPortKind;
-import cn.howxu.mmcr.registry.MMCRBlockEntities;
-import cn.howxu.mmcr.registry.MMCRPortKinds;
+import cn.howxu.mmcr.registry.ModBlockEntities;
+import cn.howxu.mmcr.registry.PortKinds;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.state.BlockState;
@@ -14,7 +14,7 @@ public class FluidHatchBlockEntity extends IOPortBlockEntity {
     private final FluidTank tank = new FluidTank(8000);
 
     public FluidHatchBlockEntity(BlockPos pos, BlockState state) {
-        super(MMCRBlockEntities.BES.get("io_port_fluid_basic").get(), pos, state);
+        super(ModBlockEntities.BES.get("io_port_fluid_basic").get(), pos, state);
     }
 
     public IFluidHandler getFluidHandler(Direction side) { return tank; }
@@ -22,5 +22,5 @@ public class FluidHatchBlockEntity extends IOPortBlockEntity {
     public FluidTank getFluidTank(Direction side) { return tank; }
 
     @Override
-    public IOPortKind kind() { return MMCRPortKinds.FLUID; }
+    public IOPortKind kind() { return PortKinds.FLUID; }
 }

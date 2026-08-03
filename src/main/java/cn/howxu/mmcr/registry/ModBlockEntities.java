@@ -11,7 +11,7 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 import java.util.LinkedHashMap;
 import java.util.function.Supplier;
 
-public final class MMCRBlockEntities {
+public final class ModBlockEntities {
 
     public static final DeferredRegister<BlockEntityType<?>> REGISTER =
             DeferredRegister.create(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.MODID);
@@ -21,12 +21,12 @@ public final class MMCRBlockEntities {
 
     static {
         BES.put("controller", register("controller", () -> new BlockEntityType<>(
-                MachineControllerBlockEntity::new, MMCRBlocks.CONTROLLER.get())));
-        MMCRPortKinds.all().forEach(kind -> {
+                MachineControllerBlockEntity::new, ModBlocks.CONTROLLER.get())));
+        PortKinds.all().forEach(kind -> {
             String name = "io_port_" + kind.id() + "_basic";
             BES.put(name, register(name, () -> new BlockEntityType<>(
                     (BlockEntityType.BlockEntitySupplier) kind.entityFactory(),
-                    MMCRBlocks.BLOCKS.get(name).get())));
+                    ModBlocks.BLOCKS.get(name).get())));
         });
     }
 
@@ -41,5 +41,5 @@ public final class MMCRBlockEntities {
         REGISTER.register(bus);
     }
 
-    private MMCRBlockEntities() {}
+    private ModBlockEntities() {}
 }

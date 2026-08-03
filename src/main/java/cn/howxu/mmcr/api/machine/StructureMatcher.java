@@ -9,25 +9,16 @@ public final class StructureMatcher {
     private StructureMatcher() {}
 
     /**
-     * Checks whether the pattern matches the world at ctrlPos with +Z aligned to facing.
+     * mmce 风格:pattern 相对 controller 固定摆放,controller 的 FACING 只影响方块状态/渲染,
+     * 不参与结构坐标旋转,也不应导致已摆好的结构不成型。
      */
-    public static boolean matches(BlockArray pattern, Level level, BlockPos ctrlPos, Direction facing) {
+    public static boolean matches(BlockArray pattern, Level level, BlockPos ctrlPos, Direction ctrlFacing) {
         if (pattern.isEmpty()) return false;
 
         for (var entry : pattern.pattern().entrySet()) {
-            BlockPos worldPos = ctrlPos.offset(rotatePos(entry.getKey(), facing));
+            BlockPos worldPos = ctrlPos.offset(entry.getKey());
             if (!entry.getValue().matches(level.getBlockState(worldPos))) return false;
         }
         return true;
-    }
-
-    private static BlockPos rotatePos(BlockPos pos, Direction facing) {
-        return switch (facing) {
-            case NORTH -> new BlockPos(-pos.getX(), pos.getY(), -pos.getZ());
-            case SOUTH -> pos;
-            case EAST -> new BlockPos(pos.getZ(), pos.getY(), -pos.getX());
-            case WEST -> new BlockPos(-pos.getZ(), pos.getY(), pos.getX());
-            default -> pos;
-        };
     }
 }
