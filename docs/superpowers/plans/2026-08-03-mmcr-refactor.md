@@ -107,7 +107,7 @@ public interface IOPortKind {
     String id();
 
     /** 该 kind 对应的 BlockEntity 工厂。Block 注册时由这里创建对应实体。 */
-    BlockEntityType.BlockEntityFactory<? extends IOPortBlockEntity> entityFactory();
+    BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory();
 
     /** 该 kind 的主 capability 类型(对接 Forge / 第三方 capability)。默认无。 */
     default Optional<Class<?>> primaryCapability() { return Optional.empty(); }
@@ -308,7 +308,7 @@ public final class MMCRPortKinds {
 
     public record Simple(
             String id,
-            BlockEntityType.BlockEntityFactory<? extends IOPortBlockEntity> factory)
+            BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> factory)
             implements IOPortKind {}
 
     public static final IOPortKind ITEM   = new Simple("item",   ItemBusBlockEntity::new);
@@ -370,7 +370,7 @@ class MMCRPortKindsTest {
 
     @Test
     void register_appends_new_kind() {
-        BlockEntityType.BlockEntityFactory<cn.howxu.mmcr.internal.tile.IOPortBlockEntity> dummyFactory =
+        BlockEntityType.BlockEntitySupplier<cn.howxu.mmcr.internal.tile.IOPortBlockEntity> dummyFactory =
                 (BlockPos p, BlockState s) -> null;
         IOPortKind extra = new MMCRPortKinds.Simple("test_extra", dummyFactory);
         MMCRPortKinds.register(extra);
@@ -381,6 +381,8 @@ class MMCRPortKindsTest {
 ```
 
 > dummy factory 返回 null(测试只查注册表的可枚举性,不触发 `BlockEntityType.create()`)。`BeforeEach` 调 `clearForTesting()` 保证测试间不互相污染。
+>
+> **API 校对:** Minecraft 26.1.2 用的是 `BlockEntityType.BlockEntitySupplier<T>` 而非 `BlockEntityFactory`;plan 里所有出现 `BlockEntityFactory` 的地方(任务 1 文件、任务 4 文件、任务 4 测试)都已改为 `BlockEntitySupplier`。
 
 - [ ] **Step 3: 运行测试**
 
