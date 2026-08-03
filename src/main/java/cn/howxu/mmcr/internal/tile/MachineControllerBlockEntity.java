@@ -6,7 +6,6 @@ import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
-import cn.howxu.mmcr.internal.machine.DefaultMachines;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.util.IOType;
@@ -21,6 +20,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.items.IItemHandler;
+import org.nibelungorum.DefaultMachines;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -34,7 +34,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private int tickCounter = 0;
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
-        super(ModBlockEntities.BES.get("controller").get(), pos, state);
+        super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
+    }
+
+    private static Identifier machineIdFromState(BlockState state) {
+        if (state.getBlock() instanceof MachineControllerBlock controller) {
+            return controller.machineId();
+        }
+        throw new IllegalArgumentException("MachineControllerBlockEntity requires a MachineControllerBlock state");
     }
 
     public Machine getMachine() { return machine; }
@@ -150,9 +157,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
     }
 
-    private void bindDefaultMachine() {
+    void bindDefaultMachine() {
+        bindDefaultMachine(machineIdFromState(getBlockState()));
+    }
+
+    void bindDefaultMachine(Identifier machineId) {
         DefaultMachines.ensureRegistered();
-        setMachine(cn.howxu.mmcr.api.machine.MachineRegistry.getMachine(cn.howxu.mmcr.MMCR.id("blast_furnace")));
+        setMachine(cn.howxu.mmcr.api.machine.MachineRegistry.getMachine(machineId));
     }
 
     private List<MachineRecipe> recipesForMachine() {

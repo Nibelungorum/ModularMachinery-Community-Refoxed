@@ -8,4 +8,6 @@ public sealed interface Machine permits DynamicMachine {
     String localizedName();
 
     BlockArray pattern();
+
+    MachineControllerSpec controller();
 }

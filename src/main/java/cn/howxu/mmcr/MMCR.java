@@ -1,5 +1,6 @@
 package cn.howxu.mmcr;
 
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.command.BuildCommand;
 import cn.howxu.mmcr.internal.command.ReloadCommand;
@@ -9,6 +10,7 @@ import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.ModRecipeTypes;
+import org.nibelungorum.BuiltinMachines;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -33,6 +35,8 @@ public class MMCR {
             DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
 
     public MMCR(IEventBus modBus, ModContainer modContainer) {
+        BuiltinMachines.register();
+        MachineDefinitions.bootstrapBuiltins();
         ModBlocks.register(modBus);
         ModItems.register(modBus);
         ModBlockEntities.register(modBus);
@@ -52,7 +56,7 @@ public class MMCR {
         });
         CREATIVE_TABS.register(MODID, () -> CreativeModeTab.builder()
                 .title(Component.translatable("itemGroup.mmcr"))
-                .icon(() -> ModItems.ITEMS.get("casing").get().getDefaultInstance())
+                .icon(() -> ModItems.ITEMS.get("basic_casing").get().getDefaultInstance())
                 .displayItems((params, output) ->
                         ModItems.ITEMS.values().forEach(h -> output.accept(h.get())))
                 .build());

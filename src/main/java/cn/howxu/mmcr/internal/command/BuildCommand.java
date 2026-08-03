@@ -2,19 +2,19 @@ package cn.howxu.mmcr.internal.command;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.BlockRotator;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineSelector;
-import cn.howxu.mmcr.internal.machine.DefaultMachines;
 import cn.howxu.mmcr.registry.ModBlocks;
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.IdentifierArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
@@ -25,6 +25,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.gameevent.GameEvent;
+import org.nibelungorum.DefaultMachines;
 
 public final class BuildCommand {
 
@@ -39,7 +40,7 @@ public final class BuildCommand {
         dispatcher.register(Commands.literal("mmcr")
                 .then(Commands.literal("build")
                         .executes(BuildCommand::buildDefault)
-                        .then(Commands.argument("machineId", StringArgumentType.string())
+                        .then(Commands.argument("machineId", IdentifierArgument.id())
                                 .suggests(machineSuggestions)
                                 .executes(BuildCommand::buildNamed))));
     }
@@ -49,8 +50,7 @@ public final class BuildCommand {
     }
 
     private static int buildNamed(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
-        String id = StringArgumentType.getString(ctx, "machineId");
-        Identifier parsed = Identifier.tryParse(id);
+        Identifier parsed = IdentifierArgument.getId(ctx, "machineId");
         return run(ctx, parsed);
     }
 
@@ -88,15 +88,16 @@ public final class BuildCommand {
     }
 
     /**
-     * 按 pattern 相对 controller 的固定偏移逐格 setBlock;controller 朝向不旋转结构坐标。
+     * 按 pattern 相对 controller 的偏移逐格 setBlock;结构坐标随 controller 朝向旋转。
      */
     private static void placeMachine(ServerLevel level, Machine machine, BlockPos controller, Direction ctrlFacing) {
-        BlockState controllerState = ModBlocks.CONTROLLER.get().defaultBlockState()
+        BlockState controllerState = ModBlocks.controllerFor(machine).get().defaultBlockState()
                 .setValue(BlockStateProperties.HORIZONTAL_FACING, ctrlFacing);
         setBlock(level, controller, controllerState);
 
         for (var entry : machine.pattern().pattern().entrySet()) {
-            BlockPos world = controller.offset(entry.getKey());
+            if (entry.getKey().equals(BlockPos.ZERO)) continue;
+            BlockPos world = controller.offset(BlockRotator.rotateYCCWSouthUntil(entry.getKey(), ctrlFacing));
             BlockState state = resolveBlockState(entry.getValue());
             if (state == null) continue;
             setBlock(level, world, state);

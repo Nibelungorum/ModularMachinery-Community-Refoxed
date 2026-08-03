@@ -91,7 +91,7 @@ class BlockArrayTest {
     }
 
     /**
-     * pattern 默认按 NORTH 摆;controller FACING = NORTH 时 pattern 原貌对应世界坐标。
+     * pattern 默认按 SOUTH 摆;controller FACING = SOUTH 时 pattern 原貌对应世界坐标。
      */
     @Test void matcher_matches_perfect_structure() {
         Map<BlockPos, BlockPredicate> m = new HashMap<>();
@@ -105,7 +105,7 @@ class BlockArrayTest {
         for (int x = -1; x <= 1; x++)
             for (int z = -1; z <= 1; z++)
                 blocks.put(ctrl.offset(x, 0, z), Blocks.STONE);
-        assertThat(StructureMatcher.matches(arr, LevelStub.create(blocks), ctrl, Direction.NORTH)).isTrue();
+        assertThat(StructureMatcher.matches(arr, LevelStub.create(blocks), ctrl, Direction.SOUTH)).isTrue();
     }
 
     @Test void matcher_rejects_wrong_block() {
@@ -119,31 +119,31 @@ class BlockArrayTest {
         assertThat(StructureMatcher.matches(arr, level, BlockPos.ZERO, Direction.NORTH)).isFalse();
     }
 
-    @Test void matcher_ignores_controller_facing_for_structure_positions() {
+    @Test void matcher_rotates_structure_positions_from_controller_facing() {
         var arr = new BlockArray(Map.of(
                 new BlockPos(-1, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE),
                 new BlockPos(0, 0, 1), new BlockPredicate.OfBlock(Blocks.DIRT)));
         var ctrl = new BlockPos(10, 2, 10);
-        var level = LevelStub.create(Map.of(
-                ctrl.offset(-1, 0, 0), Blocks.STONE,
-                ctrl.offset(0, 0, 1), Blocks.DIRT));
 
         for (Direction facing : Direction.Plane.HORIZONTAL) {
+            var level = LevelStub.create(Map.of(
+                    ctrl.offset(BlockRotator.rotateYCCWSouthUntil(new BlockPos(-1, 0, 0), facing)), Blocks.STONE,
+                    ctrl.offset(BlockRotator.rotateYCCWSouthUntil(new BlockPos(0, 0, 1), facing)), Blocks.DIRT));
             assertThat(StructureMatcher.matches(arr, level, ctrl, facing)).isTrue();
         }
     }
 
-    @Test void block_rotator_keeps_mmce_yaw_math_available_for_preview_or_tools() {
+    @Test void block_rotator_treats_raw_multiblock_template_as_south_facing() {
         BlockPos left = new BlockPos(-1, 0, 0);
         BlockPos front = new BlockPos(0, 0, 1);
 
-        assertThat(BlockRotator.rotateYCCWNorthUntil(left, Direction.NORTH)).isEqualTo(new BlockPos(-1, 0, 0));
-        assertThat(BlockRotator.rotateYCCWNorthUntil(front, Direction.NORTH)).isEqualTo(new BlockPos(0, 0, 1));
-        assertThat(BlockRotator.rotateYCCWNorthUntil(left, Direction.SOUTH)).isEqualTo(new BlockPos(1, 0, 0));
-        assertThat(BlockRotator.rotateYCCWNorthUntil(front, Direction.SOUTH)).isEqualTo(new BlockPos(0, 0, -1));
-        assertThat(BlockRotator.rotateYCCWNorthUntil(left, Direction.WEST)).isEqualTo(new BlockPos(0, 0, 1));
-        assertThat(BlockRotator.rotateYCCWNorthUntil(front, Direction.WEST)).isEqualTo(new BlockPos(1, 0, 0));
-        assertThat(BlockRotator.rotateYCCWNorthUntil(left, Direction.EAST)).isEqualTo(new BlockPos(0, 0, -1));
-        assertThat(BlockRotator.rotateYCCWNorthUntil(front, Direction.EAST)).isEqualTo(new BlockPos(-1, 0, 0));
+        assertThat(BlockRotator.rotateYCCWSouthUntil(left, Direction.SOUTH)).isEqualTo(new BlockPos(-1, 0, 0));
+        assertThat(BlockRotator.rotateYCCWSouthUntil(front, Direction.SOUTH)).isEqualTo(new BlockPos(0, 0, 1));
+        assertThat(BlockRotator.rotateYCCWSouthUntil(left, Direction.NORTH)).isEqualTo(new BlockPos(1, 0, 0));
+        assertThat(BlockRotator.rotateYCCWSouthUntil(front, Direction.NORTH)).isEqualTo(new BlockPos(0, 0, -1));
+        assertThat(BlockRotator.rotateYCCWSouthUntil(left, Direction.EAST)).isEqualTo(new BlockPos(0, 0, 1));
+        assertThat(BlockRotator.rotateYCCWSouthUntil(front, Direction.EAST)).isEqualTo(new BlockPos(1, 0, 0));
+        assertThat(BlockRotator.rotateYCCWSouthUntil(left, Direction.WEST)).isEqualTo(new BlockPos(0, 0, -1));
+        assertThat(BlockRotator.rotateYCCWSouthUntil(front, Direction.WEST)).isEqualTo(new BlockPos(-1, 0, 0));
     }
 }

@@ -3,6 +3,8 @@ package cn.howxu.mmcr.compat.kubejs;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
 import net.minecraft.core.BlockPos;
@@ -17,6 +19,10 @@ import java.util.Map;
 public class MachineBuilderJS extends BuilderBase<DynamicMachine> {
     public transient String localizedName = "Unknown Machine";
     public transient BlockArray pattern = new BlockArray(Map.of());
+    public transient Identifier controllerFrontTexture;
+    public transient Identifier controllerSideTexture;
+    public transient Identifier controllerTopTexture;
+    public transient Identifier controllerBottomTexture;
 
     public MachineBuilderJS(Identifier id) {
         super(id);
@@ -61,11 +67,69 @@ public class MachineBuilderJS extends BuilderBase<DynamicMachine> {
 
     @Override
     public DynamicMachine createObject() {
-        return new DynamicMachine(id, localizedName, pattern);
+        return new DynamicMachine(id, localizedName, pattern, controllerSpec());
+    }
+
+    public MachineBuilderJS controllerTextures(String front, String otherFive) {
+        return controllerTextures(Identifier.parse(front), Identifier.parse(otherFive));
+    }
+
+    public MachineBuilderJS controllerTextures(Identifier front, Identifier otherFive) {
+        this.controllerFrontTexture = front;
+        this.controllerSideTexture = otherFive;
+        this.controllerTopTexture = otherFive;
+        this.controllerBottomTexture = otherFive;
+        return this;
+    }
+
+    public MachineBuilderJS controllerTextures(Identifier front, Identifier side, Identifier top, Identifier bottom) {
+        this.controllerFrontTexture = front;
+        this.controllerSideTexture = side;
+        this.controllerTopTexture = top;
+        this.controllerBottomTexture = bottom;
+        return this;
+    }
+
+    public MachineBuilderJS controllerFrontTexture(String texture) {
+        return controllerFrontTexture(Identifier.parse(texture));
+    }
+
+    public MachineBuilderJS controllerFrontTexture(Identifier texture) {
+        this.controllerFrontTexture = texture;
+        return this;
+    }
+
+    public MachineBuilderJS controllerSideTexture(String texture) {
+        return controllerSideTexture(Identifier.parse(texture));
+    }
+
+    public MachineBuilderJS controllerSideTexture(Identifier texture) {
+        this.controllerSideTexture = texture;
+        return this;
+    }
+
+    public MachineBuilderJS controllerTopTexture(String texture) {
+        return controllerTopTexture(Identifier.parse(texture));
+    }
+
+    public MachineBuilderJS controllerTopTexture(Identifier texture) {
+        this.controllerTopTexture = texture;
+        return this;
+    }
+
+    public MachineBuilderJS controllerBottomTexture(String texture) {
+        return controllerBottomTexture(Identifier.parse(texture));
+    }
+
+    public MachineBuilderJS controllerBottomTexture(Identifier texture) {
+        this.controllerBottomTexture = texture;
+        return this;
     }
 
     public void registerObject() {
-        MachineRegistry.register(createObject());
+        var machine = createObject();
+        MachineDefinitions.register(machine);
+        MachineRegistry.register(machine);
     }
 
     public MachineBuilderJS register() {
@@ -81,5 +145,15 @@ public class MachineBuilderJS extends BuilderBase<DynamicMachine> {
             case BlockPredicate predicate -> predicate;
             default -> throw new IllegalArgumentException("Unknown pattern key value: " + value);
         };
+    }
+
+    private MachineControllerSpec controllerSpec() {
+        MachineControllerSpec defaults = MachineControllerSpec.defaultsFor(id);
+        return new MachineControllerSpec(
+                defaults.id(),
+                controllerFrontTexture != null ? controllerFrontTexture : defaults.frontTexture(),
+                controllerSideTexture != null ? controllerSideTexture : defaults.sideTexture(),
+                controllerTopTexture != null ? controllerTopTexture : defaults.topTexture(),
+                controllerBottomTexture != null ? controllerBottomTexture : defaults.bottomTexture());
     }
 }

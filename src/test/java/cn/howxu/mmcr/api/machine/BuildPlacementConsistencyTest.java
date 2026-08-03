@@ -10,6 +10,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import org.nibelungorum.DefaultMachines;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 验证 BuildCommand.placeMachine 与 StructureMatcher.matches 在同一 ctrlFacing 下
- * 共享 BlockRotator.rotateYCCWNorthUntil,贴盘与检查 position 一致。
+ * 共享 BlockRotator.rotateYCCWSouthUntil,贴盘与检查 position 一致。
  */
 class BuildPlacementConsistencyTest {
 
@@ -50,32 +51,42 @@ class BuildPlacementConsistencyTest {
     }
 
     @Test
-    void controller_facing_does_not_rotate_or_reject_structure() {
+    void build_placement_does_not_overwrite_controller_with_pattern_controller_block() {
+        Machine machine = fixture();
+        BlockPos controller = new BlockPos(50, 4, 50);
+
+        Map<BlockPos, BlockState> world = buildPlacement(machine, controller, Direction.EAST);
+
+        assertThat(world.get(controller).getBlock()).isEqualTo(ModBlocks.controllerFor(machine).get());
+    }
+
+    @Test
+    void controller_facing_requires_matching_rotated_structure() {
         Machine machine = fixture();
         BlockPos controller = new BlockPos(50, 4, 50);
         Map<BlockPos, BlockState> world = buildPlacement(machine, controller, Direction.NORTH);
 
-        for (Direction ctrlFacing : Direction.Plane.HORIZONTAL) {
-            assertThat(StructureMatcher.matches(machine.pattern(), levelFor(world), controller, ctrlFacing))
-                    .as("结构位置相同但 controller facing=%s 时仍应成型", ctrlFacing)
-                    .isTrue();
-        }
+        assertThat(StructureMatcher.matches(machine.pattern(), levelFor(world), controller, Direction.NORTH)).isTrue();
+        assertThat(StructureMatcher.matches(machine.pattern(), levelFor(world), controller, Direction.EAST))
+                .as("未旋转的 NORTH 结构不应在 EAST controller facing 下成型")
+                .isFalse();
     }
 
     /**
      * 模拟 BuildCommand.placeMachine 的写盘:
-     * 对 pattern 每格 (rel, predicate),设 worldPos = controller + rel,
+     * 对 pattern 每格 (rel, predicate),按 controller facing 旋转后写到 worldPos,
      * 解析 predicate 为 BlockState 写到 written map。
      */
     private static Map<BlockPos, BlockState> buildPlacement(Machine machine, BlockPos controller, Direction ctrlFacing) {
         Map<BlockPos, BlockState> written = new LinkedHashMap<>();
-        BlockState ctrlBase = ModBlocks.CONTROLLER.get().defaultBlockState();
+        BlockState ctrlBase = ModBlocks.controllerFor(machine).get().defaultBlockState();
         BlockState ctrlFinal = ctrlBase.hasProperty(BlockStateProperties.HORIZONTAL_FACING)
                 ? ctrlBase.setValue(BlockStateProperties.HORIZONTAL_FACING, ctrlFacing)
                 : ctrlBase;
         written.put(controller, ctrlFinal);
         for (var entry : machine.pattern().pattern().entrySet()) {
-            BlockPos world = controller.offset(entry.getKey());
+            if (entry.getKey().equals(BlockPos.ZERO)) continue;
+            BlockPos world = controller.offset(BlockRotator.rotateYCCWSouthUntil(entry.getKey(), ctrlFacing));
             written.put(world, resolve(entry.getValue()));
         }
         return written;
@@ -104,7 +115,7 @@ class BuildPlacementConsistencyTest {
     }
 
     private static Machine fixture() {
-        return cn.howxu.mmcr.internal.machine.DefaultMachines.blastFurnace(
-                Blocks.STONE, ModBlocks.CONTROLLER.get(), Blocks.OAK_PLANKS, Blocks.SPRUCE_PLANKS);
+        return DefaultMachines.blastFurnace(
+                Blocks.STONE, Blocks.OAK_PLANKS, Blocks.SPRUCE_PLANKS);
     }
 }

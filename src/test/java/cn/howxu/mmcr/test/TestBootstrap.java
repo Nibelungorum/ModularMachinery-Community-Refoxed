@@ -1,10 +1,12 @@
 package cn.howxu.mmcr.test;
 
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.Holder;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import org.nibelungorum.BuiltinMachines;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -42,9 +44,11 @@ public final class TestBootstrap {
         loadingModListField.set(fmlLoader, emptyLoadingModList);
 
         Class.forName("net.minecraft.SharedConstants").getMethod("tryDetectVersion").invoke(null);
+        BuiltinMachines.register();
+        MachineDefinitions.bootstrapBuiltins();
         Bootstrap.bootStrap();
         bind(ModBlocks.CASING, Blocks.STONE);
-        bind(ModBlocks.CONTROLLER, Blocks.IRON_BLOCK);
+        bind(ModBlocks.controllerFor(cn.howxu.mmcr.MMCR.id("blast_furnace")), Blocks.IRON_BLOCK);
         bind(ModBlocks.BLOCKS.get("io_port_item_basic"), Blocks.CHEST);
         bind(ModBlocks.BLOCKS.get("io_port_fluid_basic"), Blocks.BARREL);
         bind(ModBlocks.BLOCKS.get("io_port_energy_basic"), Blocks.COPPER_BLOCK);

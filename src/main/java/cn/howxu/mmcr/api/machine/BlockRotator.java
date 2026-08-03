@@ -4,10 +4,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 
 /**
- * mmce 标准的 yaw 旋转:
+ * 多方块模板的 yaw 旋转:
  * <ul>
  *     <li>{@code rotateYCCW(pos)} = (z, y, -x)</li>
- *     <li>{@code rotateYCCWNorthUntil(pos, target)} 从 NORTH 起步一直 YCCW 直到 target。</li>
+ *     <li>{@code rotateYCCWSouthUntil(pos, target)} 从 SOUTH 起步一直 YCCW 直到 target。</li>
  * </ul>
  * BuildCommand 与 StructureMatcher 共用,这样两者对同一 ctrlFacing 计算 world offset 一致。
  */
@@ -20,10 +20,10 @@ public final class BlockRotator {
     }
 
     /**
-     * 起点 NORTH,循环 rotateYCCW 直到 facing 等于 target。
+     * 起点 SOUTH,循环 rotateYCCW 直到 facing 等于 target。
      */
-    public static BlockPos rotateYCCWNorthUntil(BlockPos pos, Direction target) {
-        Direction current = Direction.NORTH;
+    public static BlockPos rotateYCCWSouthUntil(BlockPos pos, Direction target) {
+        Direction current = Direction.SOUTH;
         BlockPos r = pos;
         while (current != target) {
             current = current.getCounterClockWise();

@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * mmce 标准: yaw YCCW 旋转 90° = (x, y, z) → (z, y, -x)。
- * 起点 NORTH,旋转到 ctrlFacing 后写盘;StructureMatcher 用相同 ctrlFacing 旋转检查。
+ * 起点 SOUTH,旋转到 ctrlFacing 后写盘;StructureMatcher 用相同 ctrlFacing 旋转检查。
  *
  * 单测两个互相操作的写法(BuildCommand 与 StructureMatcher)round-trip。
  */
@@ -35,31 +35,31 @@ class BlockRotatorTest {
     }
 
     @Test
-    void rotateYCCWNorthUntil_NORTH_is_identity() {
-        assertThat(BlockRotator.rotateYCCWNorthUntil(new BlockPos(1, 0, 1), Direction.NORTH))
+    void rotateYCCWSouthUntil_SOUTH_is_identity() {
+        assertThat(BlockRotator.rotateYCCWSouthUntil(new BlockPos(1, 0, 1), Direction.SOUTH))
                 .isEqualTo(new BlockPos(1, 0, 1));
     }
 
     @Test
-    void rotateYCCWNorthUntil_EAST_rotates_90_CCW_thrice() {
-        // 起点 NORTH 转 to EAST: 累计 3 步 YCCW。
+    void rotateYCCWSouthUntil_WEST_rotates_90_CCW_thrice() {
+        // 起点 SOUTH 转 to WEST: 累计 3 步 YCCW。
         BlockPos src = new BlockPos(1, 0, 1);
-        assertThat(BlockRotator.rotateYCCWNorthUntil(src, Direction.EAST))
+        assertThat(BlockRotator.rotateYCCWSouthUntil(src, Direction.WEST))
                 .isEqualTo(BlockRotator.rotateYCCW(
                         BlockRotator.rotateYCCW(
                                 BlockRotator.rotateYCCW(src))));
     }
 
     @Test
-    void rotateYCCWNorthUntil_step_count_matches() {
-        // NORTH → WEST:1 步,(x,y,z)=(1,0,0)→(z,y,-x)=(0,0,-1)
-        assertThat(BlockRotator.rotateYCCWNorthUntil(new BlockPos(1, 0, 0), Direction.WEST))
+    void rotateYCCWSouthUntil_step_count_matches() {
+        // SOUTH → EAST:1 步,(x,y,z)=(1,0,0)→(z,y,-x)=(0,0,-1)
+        assertThat(BlockRotator.rotateYCCWSouthUntil(new BlockPos(1, 0, 0), Direction.EAST))
                 .isEqualTo(new BlockPos(0, 0, -1));
-        // NORTH → SOUTH:2 步
-        assertThat(BlockRotator.rotateYCCWNorthUntil(new BlockPos(1, 0, 0), Direction.SOUTH))
+        // SOUTH → NORTH:2 步
+        assertThat(BlockRotator.rotateYCCWSouthUntil(new BlockPos(1, 0, 0), Direction.NORTH))
                 .isEqualTo(new BlockPos(-1, 0, 0));
-        // NORTH → EAST:3 步 (-1,0,0)→(0,0,1)
-        assertThat(BlockRotator.rotateYCCWNorthUntil(new BlockPos(1, 0, 0), Direction.EAST))
+        // SOUTH → WEST:3 步 (-1,0,0)→(0,0,1)
+        assertThat(BlockRotator.rotateYCCWSouthUntil(new BlockPos(1, 0, 0), Direction.WEST))
                 .isEqualTo(new BlockPos(0, 0, 1));
     }
 }
