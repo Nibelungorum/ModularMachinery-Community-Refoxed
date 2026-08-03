@@ -8,27 +8,23 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.LevelAccessor;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import static net.minecraft.gametest.framework.GameTestAssert.assertTrue;
-
 @GameTestHolder(MMCR.MODID)
 public class ControllerTickGameTest {
 
     @GameTest(template = "minecraft:empty")
-    public void structureForms3x3Casing(LevelAccessor accessor) {
-        Level level = (Level) accessor;
+    public void structureForms3x3Casing(GameTestHelper helper) {
         for (int x = 0; x < 3; x++) for (int z = 0; z < 3; z++)
-            level.setBlock(new BlockPos(x, 1, z), ModBlocks.CASING.get().defaultBlockState(), 3);
+            helper.setBlock(new BlockPos(x, 1, z), ModBlocks.CASING.get().defaultBlockState());
 
         BlockPos controllerPos = new BlockPos(1, 1, 1);
-        level.setBlock(controllerPos, ModBlocks.CONTROLLER.get().defaultBlockState(), 3);
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("controller_tick")).get().defaultBlockState());
         Map<BlockPos, BlockPredicate> pattern = new HashMap<>();
         for (int x = -1; x <= 1; x++) for (int z = -1; z <= 1; z++)
             if (x != 0 || z != 0) pattern.put(new BlockPos(x, 0, z),
@@ -37,9 +33,10 @@ public class ControllerTickGameTest {
         var machine = new DynamicMachine(Identifier.fromNamespaceAndPath(MMCR.MODID, "controller_tick"),
                 "Controller Tick", new BlockArray(pattern));
         MachineRegistry.register(machine);
-        var controller = (MachineControllerBlockEntity) level.getBlockEntity(controllerPos);
+        var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(machine);
         controller.serverTick();
-        assertTrue(controller.isFormed(), "Structure formed");
+        helper.assertTrue(controller.isFormed(), "Structure formed");
+        helper.succeed();
     }
 }

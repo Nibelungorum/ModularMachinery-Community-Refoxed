@@ -1,15 +1,18 @@
 package cn.howxu.mmcr.test;
 
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.Holder;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import org.nibelungorum.BuiltinMachines;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 
@@ -45,14 +48,27 @@ public final class TestBootstrap {
 
         Class.forName("net.minecraft.SharedConstants").getMethod("tryDetectVersion").invoke(null);
         BuiltinMachines.register();
+        MachineDefinitions.addBuiltinSupplier(() ->
+                new DynamicMachine(id("test_cube"), "Test", new BlockArray(Map.of())));
+        MachineDefinitions.addBuiltinSupplier(() ->
+                new DynamicMachine(id("controller_tick"), "Controller Tick", new BlockArray(Map.of())));
+        MachineDefinitions.addBuiltinSupplier(() ->
+                new DynamicMachine(id("iron_compressor"), "Iron Compressor", new BlockArray(Map.of())));
         MachineDefinitions.bootstrapBuiltins();
         Bootstrap.bootStrap();
         bind(ModBlocks.CASING, Blocks.STONE);
-        bind(ModBlocks.controllerFor(cn.howxu.mmcr.MMCR.id("blast_furnace")), Blocks.IRON_BLOCK);
+        bind(ModBlocks.controllerFor(MMCR.id("blast_furnace")), Blocks.IRON_BLOCK);
+        bind(ModBlocks.controllerFor(id("test_cube")), Blocks.IRON_BLOCK);
+        bind(ModBlocks.controllerFor(id("controller_tick")), Blocks.IRON_BLOCK);
+        bind(ModBlocks.controllerFor(id("iron_compressor")), Blocks.IRON_BLOCK);
         bind(ModBlocks.BLOCKS.get("io_port_item_basic"), Blocks.CHEST);
         bind(ModBlocks.BLOCKS.get("io_port_fluid_basic"), Blocks.BARREL);
         bind(ModBlocks.BLOCKS.get("io_port_energy_basic"), Blocks.COPPER_BLOCK);
         initialized = true;
+    }
+
+    private static Identifier id(String path) {
+        return Identifier.fromNamespaceAndPath(MMCR.MODID, path);
     }
 
     private static void bind(Object deferredHolder, Block block) throws Exception {

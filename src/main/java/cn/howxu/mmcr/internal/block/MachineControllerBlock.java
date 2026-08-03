@@ -1,10 +1,16 @@
 package cn.howxu.mmcr.internal.block;
 
-import cn.howxu.mmcr.registry.ModBlockEntities;
+import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.MenuProvider;
+import net.minecraft.world.SimpleMenuProvider;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -18,6 +24,7 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
+import net.minecraft.world.phys.BlockHitResult;
 
 public class MachineControllerBlock extends Block implements EntityBlock {
 
@@ -58,6 +65,24 @@ public class MachineControllerBlock extends Block implements EntityBlock {
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         return ModBlockEntities.controllerFor(machineId).get().create(pos, state);
+    }
+
+    @Override
+    public MenuProvider getMenuProvider(BlockState state, Level level, BlockPos pos) {
+        return new SimpleMenuProvider(
+                (containerId, playerInv, player) -> new MachineControllerMenu(containerId, playerInv,
+                        level.getBlockEntity(pos) instanceof MachineControllerBlockEntity mc ? mc : null),
+                Component.translatable("container.mmcr.machine_controller"));
+    }
+
+    @Override
+    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
+                                                Player player, BlockHitResult hit) {
+        if (!level.isClientSide()) {
+            MenuProvider provider = state.getMenuProvider(level, pos);
+            if (provider != null) player.openMenu(provider);
+        }
+        return InteractionResult.SUCCESS;
     }
 
     @Override

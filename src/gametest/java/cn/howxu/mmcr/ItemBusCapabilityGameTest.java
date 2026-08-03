@@ -3,13 +3,17 @@ package cn.howxu.mmcr;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
+import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.items.IItemHandler;
 
+@GameTestHolder(MMCR.MODID)
 public class ItemBusCapabilityGameTest {
 
+    @GameTest(template = "minecraft:empty")
     public static void itemBusAcceptsItems(GameTestHelper helper) {
         BlockPos busPos = new BlockPos(0, 1, 0);
         helper.setBlock(busPos, ModBlocks.BLOCKS.get("io_port_item_basic").get().defaultBlockState());

@@ -9,6 +9,7 @@ import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
+import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.registry.ModRecipeTypes;
 import org.nibelungorum.BuiltinMachines;
 import net.minecraft.core.registries.Registries;
@@ -21,6 +22,7 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import org.slf4j.Logger;
@@ -36,10 +38,12 @@ public class MMCR {
 
     public MMCR(IEventBus modBus, ModContainer modContainer) {
         BuiltinMachines.register();
+        registerGameTestMachineDefinitions();
         MachineDefinitions.bootstrapBuiltins();
         ModBlocks.register(modBus);
         ModItems.register(modBus);
         ModBlockEntities.register(modBus);
+        ModUIs.register(modBus);
         ModRecipeTypes.register(modBus);
         CREATIVE_TABS.register(modBus);
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
@@ -54,6 +58,7 @@ public class MMCR {
                     PktMachineStatePayload.STREAM_CODEC,
                     (payload, ctx) -> MMCR.LOG.debug("Received machine state: {}", payload));
         });
+        modBus.addListener((RegisterGameTestsEvent ev) -> registerGameTests(ev));
         CREATIVE_TABS.register(MODID, () -> CreativeModeTab.builder()
                 .title(Component.translatable("itemGroup.mmcr"))
                 .icon(() -> ModItems.ITEMS.get("basic_casing").get().getDefaultInstance())
@@ -65,5 +70,25 @@ public class MMCR {
 
     public static Identifier id(String path) {
         return Identifier.fromNamespaceAndPath(MODID, path);
+    }
+
+    private static void registerGameTestMachineDefinitions() {
+        if (!Boolean.getBoolean("neoforge.enableGameTest")) return;
+        MachineDefinitions.addBuiltinSupplier(() -> new cn.howxu.mmcr.api.machine.DynamicMachine(
+                id("test_cube"), "Test", new cn.howxu.mmcr.api.machine.BlockArray(java.util.Map.of())));
+        MachineDefinitions.addBuiltinSupplier(() -> new cn.howxu.mmcr.api.machine.DynamicMachine(
+                id("controller_tick"), "Controller Tick", new cn.howxu.mmcr.api.machine.BlockArray(java.util.Map.of())));
+        MachineDefinitions.addBuiltinSupplier(() -> new cn.howxu.mmcr.api.machine.DynamicMachine(
+                id("iron_compressor"), "Iron Compressor", new cn.howxu.mmcr.api.machine.BlockArray(java.util.Map.of())));
+    }
+
+    private static void registerGameTests(RegisterGameTestsEvent event) {
+        try {
+            Class.forName("cn.howxu.mmcr.MMCRGameTests")
+                    .getMethod("registerAll", RegisterGameTestsEvent.class)
+                    .invoke(null, event);
+        } catch (ReflectiveOperationException ignored) {
+            // GameTest classes are only present in the gametest source set.
+        }
     }
 }

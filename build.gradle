@@ -55,6 +55,15 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
+sourceSets {
+    gametest {
+        java.srcDirs = ['src/gametest/java']
+        resources.srcDirs = ['src/gametest/resources']
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + sourceSets.main.output
+    }
+}
+
 runs {
     configureEach {
         systemProperty 'forge.logging.markers', 'REGISTRIES'
@@ -73,6 +82,7 @@ runs {
     }
 
     gameTestServer {
+        modSource project.sourceSets.gametest
         systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
     }
 
@@ -83,6 +93,9 @@ runs {
 
 configurations {
     runtimeClasspath.extendsFrom localRuntime
+    gametestImplementation.extendsFrom implementation, api
+    gametestCompileOnly.extendsFrom compileOnly
+    gametestRuntimeOnly.extendsFrom runtimeOnly, localRuntime
 }
 
 dependencies {
@@ -111,6 +124,12 @@ dependencies {
 
 sourceSets.test {
     resources.srcDirs('src/test/resources')
+}
+
+dependencies {
+    gametestCompileOnly fileTree("${gradle.gradleUserHomeDir}/caches/neoformruntime/intermediate_results") {
+        include 'compiledWithNeoForge_*_output.jar'
+    }
 }
 
 tasks.withType(Test).configureEach {
