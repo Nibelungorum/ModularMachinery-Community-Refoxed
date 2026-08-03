@@ -1,16 +1,17 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.internal.block.EnergyHatchBlock;
+import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.registry.MMCRPortKinds;
 import cn.howxu.mmcr.registry.MMCRRegistries;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.energy.EnergyStorage;
 import net.neoforged.neoforge.energy.IEnergyStorage;
 
-public class EnergyHatchBlockEntity extends BlockEntity {
+public class EnergyHatchBlockEntity extends IOPortBlockEntity {
 
     private final EnergyStorage storage = new EnergyStorage(100000, 100000, 100000);
 
@@ -22,5 +23,9 @@ public class EnergyHatchBlockEntity extends BlockEntity {
 
     public EnergyStorage getMutableEnergyStorage(Direction side) { return storage; }
 
+    @Override
     public IOType ioType() { return getBlockState().getValue(EnergyHatchBlock.IO_TYPE); }
+
+    @Override
+    public IOPortKind kind() { return MMCRPortKinds.ENERGY; }
 }

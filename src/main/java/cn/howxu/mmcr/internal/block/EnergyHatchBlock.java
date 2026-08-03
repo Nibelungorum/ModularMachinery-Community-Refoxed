@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.block;
 
+import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
@@ -12,7 +13,7 @@ import net.minecraft.world.level.block.state.properties.EnumProperty;
 
 public class EnergyHatchBlock extends Block implements EntityBlock {
 
-    public static final EnumProperty<IOType> IO_TYPE = EnumProperty.create("io_type", IOType.class);
+    public static final EnumProperty<IOType> IO_TYPE = IOPortBlock.IO_TYPE;
 
     public EnergyHatchBlock(Properties props) {
         super(props);
