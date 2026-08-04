@@ -1,7 +1,9 @@
 package cn.howxu.mmcr.internal.event;
 
+import cn.howxu.mmcr.internal.tile.DebugInfiniteFluidSourceBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.InfiniteEnergyHandler;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import net.minecraft.core.Direction;
@@ -13,6 +15,7 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
 import net.neoforged.neoforge.items.ItemStackHandler;
+import net.neoforged.neoforge.transfer.InfiniteResourceHandler;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
@@ -58,6 +61,22 @@ public final class ModCapabilities {
                 ENERGY_BLOCK,
                 ModBlockEntities.BES.get("energy_output_hatch").get(),
                 (be, side) -> be instanceof EnergyHatchBlockEntity eh ? new LegacyEnergyHandlerAdapter(eh.getMutableEnergyStorage(side), false, true) : null);
+        event.registerBlockEntity(
+                ENERGY_BLOCK,
+                ModBlockEntities.BES.get("debug_infinite_energy_source").get(),
+                (be, side) -> InfiniteEnergyHandler.INSTANCE);
+        event.registerBlockEntity(
+                FLUID_BLOCK,
+                ModBlockEntities.BES.get("debug_infinite_water_source").get(),
+                (be, side) -> be instanceof DebugInfiniteFluidSourceBlockEntity fs
+                        ? new InfiniteResourceHandler<>(FluidResource.of(fs.getFluid()))
+                        : null);
+        event.registerBlockEntity(
+                FLUID_BLOCK,
+                ModBlockEntities.BES.get("debug_infinite_lava_source").get(),
+                (be, side) -> be instanceof DebugInfiniteFluidSourceBlockEntity fs
+                        ? new InfiniteResourceHandler<>(FluidResource.of(fs.getFluid()))
+                        : null);
     }
 
     private static final class LegacyFluidHandlerAdapter extends SnapshotJournal<FluidStack> implements ResourceHandler<FluidResource> {

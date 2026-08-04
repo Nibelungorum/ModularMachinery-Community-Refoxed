@@ -3,15 +3,24 @@ package cn.howxu.mmcr.registry;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.internal.tile.DebugInfiniteEnergySourceBlockEntity;
+import cn.howxu.mmcr.internal.tile.DebugInfiniteFluidSourceBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.Fluid;
+import net.minecraft.world.level.material.Fluids;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 public final class ModBlockEntities {
@@ -30,6 +39,13 @@ public final class ModBlockEntities {
                     (BlockEntityType.BlockEntitySupplier) kind.entityFactory(),
                     ModBlocks.BLOCKS.get(name).get())));
         });
+        registerDebugBe("debug_infinite_energy_source", (pos, state) ->
+                new DebugInfiniteEnergySourceBlockEntity(pos, state));
+        Map<Fluid, String> debugFluidBe = Map.of(
+                Fluids.WATER, "debug_infinite_water_source",
+                Fluids.LAVA,  "debug_infinite_lava_source");
+        debugFluidBe.forEach((fluid, name) -> registerDebugBe(name, (pos, state) ->
+                new DebugInfiniteFluidSourceBlockEntity(pos, state, fluid)));
     }
 
     private static void registerMachineController(Identifier machineId) {
@@ -50,6 +66,13 @@ public final class ModBlockEntities {
             String name, Supplier<BlockEntityType<?>> supplier) {
         return (DeferredHolder<BlockEntityType<?>, BlockEntityType<?>>) (DeferredHolder<?, ?>)
                 REGISTER.register(name, supplier);
+    }
+
+    private static void registerDebugBe(String name,
+                                         BiFunction<BlockPos, BlockState, ? extends BlockEntity> factory) {
+        BES.put(name, register(name, () -> new BlockEntityType<>(
+                (BlockEntityType.BlockEntitySupplier) factory::apply,
+                ModBlocks.BLOCKS.get(name).get())));
     }
 
     public static void register(IEventBus bus) {
