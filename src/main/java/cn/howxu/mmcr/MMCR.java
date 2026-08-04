@@ -56,7 +56,7 @@ public class MMCR {
             ev.registrar("1").playToClient(
                     PktMachineStatePayload.TYPE,
                     PktMachineStatePayload.STREAM_CODEC,
-                    (payload, ctx) -> MMCR.LOG.debug("Received machine state: {}", payload));
+                    (payload, ctx) -> {});
         });
         modBus.addListener((RegisterGameTestsEvent ev) -> registerGameTests(ev));
         CREATIVE_TABS.register(MODID, () -> CreativeModeTab.builder()
@@ -74,7 +74,7 @@ public class MMCR {
 
     static void registerGameTestMachineDefinitionsIfPresent() {
         try {
-            Class.forName("cn.howxu.mmcr.MMCRGameTests");
+            Class.forName("cn.howxu.mmcr.GameTestRegistry");
         } catch (ClassNotFoundException ignored) {
             return;
         }
@@ -92,7 +92,7 @@ public class MMCR {
 
     private static void registerGameTests(RegisterGameTestsEvent event) {
         try {
-            Class.forName("cn.howxu.mmcr.MMCRGameTests")
+            Class.forName("cn.howxu.mmcr.GameTestRegistry")
                     .getMethod("registerAll", RegisterGameTestsEvent.class)
                     .invoke(null, event);
         } catch (ReflectiveOperationException ignored) {

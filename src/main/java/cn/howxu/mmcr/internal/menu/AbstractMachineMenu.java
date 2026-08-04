@@ -9,9 +9,9 @@ import net.minecraft.world.inventory.Slot;
  * 所有具体菜单类的基类,提供玩家物品栏布局的复用方法。
  * 具体子类决定使用哪个 {@link MenuType};槽位数据由服务端数据包同步给客户端实例。
  */
-public abstract class MMCRMenuBase extends AbstractContainerMenu {
+public abstract class AbstractMachineMenu extends AbstractContainerMenu {
 
-    protected MMCRMenuBase(MenuType<?> type, int containerId) {
+    protected AbstractMachineMenu(MenuType<?> type, int containerId) {
         super(type, containerId);
     }
 

@@ -133,6 +133,18 @@ class BlockArrayTest {
         }
     }
 
+    @Test void block_array_cache_rotates_and_reuses_pattern_for_facing() {
+        BlockArrayCache.clearForTesting();
+        var stone = new BlockPredicate.OfBlock(Blocks.STONE);
+        var arr = new BlockArray(Map.of(new BlockPos(1, 0, 0), stone));
+
+        BlockArray east = BlockArrayCache.get(arr, Direction.EAST);
+        BlockArray eastAgain = BlockArrayCache.get(arr, Direction.EAST);
+
+        assertThat(east.get(new BlockPos(0, 0, -1))).isSameAs(stone);
+        assertThat(eastAgain).isSameAs(east);
+    }
+
     @Test void block_rotator_treats_raw_multiblock_template_as_south_facing() {
         BlockPos left = new BlockPos(-1, 0, 0);
         BlockPos front = new BlockPos(0, 0, 1);

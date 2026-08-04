@@ -32,9 +32,10 @@ public final class Translations {
                     Map.entry("container.mmcr.energy_output_hatch", "Energy Output Hatch"),
                     Map.entry("container.mmcr.machine_controller", "Machine Controller"),
                     Map.entry("gui.mmcr.controller.machine",       "Machine: %s"),
-                    Map.entry("gui.mmcr.controller.formed",        "Structure: Formed"),
-                    Map.entry("gui.mmcr.controller.unformed",      "Structure: Not Formed"),
-                    Map.entry("gui.mmcr.controller.idle",          "Status: Idle"),
+                    Map.entry("gui.mmcr.controller.status_label",  "Status:"),
+                    Map.entry("gui.mmcr.controller.formed",        "Formed"),
+                    Map.entry("gui.mmcr.controller.unformed",      "Not Formed"),
+                    Map.entry("gui.mmcr.controller.idle",          "Idle"),
                     Map.entry("gui.mmcr.controller.progress",      "Progress: %s%%"))),
             Map.entry("zh_cn", Map.ofEntries(
                     Map.entry("itemGroup.mmcr",                    "模块化机械社区版"),
@@ -62,9 +63,10 @@ public final class Translations {
                     Map.entry("container.mmcr.energy_output_hatch", "能量输出仓"),
                     Map.entry("container.mmcr.machine_controller", "机器控制器"),
                     Map.entry("gui.mmcr.controller.machine",       "机器: %s"),
-                    Map.entry("gui.mmcr.controller.formed",        "结构: 已成型"),
-                    Map.entry("gui.mmcr.controller.unformed",      "结构: 未成型"),
-                    Map.entry("gui.mmcr.controller.idle",          "状态: 空闲"),
+                    Map.entry("gui.mmcr.controller.status_label",  "状态:"),
+                    Map.entry("gui.mmcr.controller.formed",        "已成型"),
+                    Map.entry("gui.mmcr.controller.unformed",      "未成型"),
+                    Map.entry("gui.mmcr.controller.idle",          "待机中"),
                     Map.entry("gui.mmcr.controller.progress",      "进度: %s%%")))
     );
 

@@ -1,6 +1,9 @@
 package cn.howxu.mmcr.internal.tile;
 
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.BlockArrayCache;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -9,6 +12,7 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.server.level.ServerLevel;
@@ -29,6 +33,9 @@ import java.util.Map;
 public class MachineControllerBlockEntity extends BlockEntity {
 
     private Machine machine;
+    private Machine foundMachine;
+    private BlockArray foundPattern;
+    private Direction controllerFacing;
     private MachineRecipe activeRecipe;
     private int tickCounter = 0;
 
@@ -46,6 +53,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public Machine getMachine() { return machine; }
     public void setMachine(Machine m) { this.machine = m; setChanged(); }
 
+    public Machine getFoundMachine() { return foundMachine; }
+    public BlockArray getFoundPattern() { return foundPattern; }
+
     public boolean isFormed() { return getBlockState().getValue(MachineControllerBlock.FORMED); }
     public void setFormed(boolean f) {
         level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.FORMED, f), 3);
@@ -60,19 +70,62 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public void serverTick() {
         if (level == null || level.isClientSide()) return;
         if (machine == null) bindDefaultMachine();
-        if (machine == null) return;
 
-        boolean formed = StructureMatcher.matches(
-                machine.pattern(), level, getBlockPos(),
-                getBlockState().getValue(MachineControllerBlock.FACING));
-        if (formed != isFormed()) setFormed(formed);
-        if (!formed) {
-            if (activeRecipe != null) setActiveRecipe(null);
-        } else {
+        checkStructure();
+        if (isFormed()) {
             if (activeRecipe == null) tryStartNewRecipe();
             if (activeRecipe != null) tickActiveRecipe();
         }
         broadcastState();
+    }
+
+    private void checkStructure() {
+        Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
+        if (foundMachine != null && foundPattern != null && controllerFacing == facing) {
+            if (StructureMatcher.matchesRotated(foundPattern, level, getBlockPos())) {
+                if (!isFormed()) setFormed(true);
+                return;
+            }
+            resetMachine();
+        }
+
+        if (machine != null && tryFormMachine(machine, facing)) return;
+        checkAllPatterns(facing);
+        if (!isFormed()) resetMachine();
+    }
+
+    private void checkAllPatterns(Direction facing) {
+        for (Machine candidate : MachineRegistry.getAll().values()) {
+            if (candidate == machine) continue;
+            if (tryFormMachine(candidate, facing)) return;
+        }
+    }
+
+    private boolean tryFormMachine(Machine candidate, Direction facing) {
+        BlockArray rotatedPattern = BlockArrayCache.get(candidate.pattern(), facing);
+        if (!StructureMatcher.matchesRotated(rotatedPattern, level, getBlockPos())) return false;
+
+        onStructureFormed(candidate, rotatedPattern, facing);
+        return true;
+    }
+
+    private void onStructureFormed(Machine matchedMachine, BlockArray rotatedPattern, Direction facing) {
+        foundMachine = matchedMachine;
+        foundPattern = rotatedPattern;
+        controllerFacing = facing;
+        machine = matchedMachine;
+        if (!isFormed()) setFormed(true);
+        setChanged();
+    }
+
+    private void resetMachine() {
+        foundMachine = null;
+        foundPattern = null;
+        controllerFacing = null;
+        if (activeRecipe != null) activeRecipe = null;
+        if (tickCounter != 0) tickCounter = 0;
+        if (isFormed()) setFormed(false);
+        setChanged();
     }
 
     private void broadcastState() {

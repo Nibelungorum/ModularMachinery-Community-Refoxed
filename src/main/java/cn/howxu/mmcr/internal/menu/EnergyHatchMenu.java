@@ -7,7 +7,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.energy.EnergyStorage;
 
-public class EnergyHatchMenu extends MMCRMenuBase {
+public class EnergyHatchMenu extends AbstractMachineMenu {
 
     private final EnergyHatchBlockEntity owner;
 
@@ -35,11 +35,11 @@ public class EnergyHatchMenu extends MMCRMenuBase {
 
     @Override
     public ItemStack quickMoveStack(Player player, int index) {
-        return MMCRMenu.noopQuickMove();
+        return MenuSupport.noopQuickMove();
     }
 
     @Override
     public boolean stillValid(Player player) {
-        return owner == null || MMCRMenu.stillValidWithin(player, owner.getBlockPos());
+        return owner == null || MenuSupport.stillValidWithin(player, owner.getBlockPos());
     }
 }

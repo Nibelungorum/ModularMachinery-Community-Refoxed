@@ -178,7 +178,7 @@ MMCE 1.12.2 的 `common/crafting/requirement/` + `requirement/type/` + `requirem
 - ❌ `ComponentOutputRestrictor` —— 本轮**保留空类占位**（签名在，方法体 throw），Phase 3 tick 调度用
 - ❌ `tooltip/RequirementTip.java` + `TooltipEnergyInput.java` + `TooltipEnergyOutput.java` + `TooltipFuelInput.java` + `TooltipInterfaceNumberInput.java` —— 5 个 tooltip 文件
 
-**为什么不 port tooltip**：当前项目 GUI 还在 `MMCRMenuScreen` 占位阶段，recipe 内的 tooltip 渲染无宿主。等 GUI 完整化（Phase 5）再补。
+**为什么不 port tooltip**：当前项目 GUI 还在 `MachineMenuScreen` 占位阶段，recipe 内的 tooltip 渲染无宿主。等 GUI 完整化（Phase 5）再补。
 
 ### 2.11 lib / registry 包装（5 文件）
 

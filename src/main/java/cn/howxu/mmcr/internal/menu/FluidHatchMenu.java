@@ -7,7 +7,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
 
-public class FluidHatchMenu extends MMCRMenuBase {
+public class FluidHatchMenu extends AbstractMachineMenu {
 
     private final FluidHatchBlockEntity owner;
 
@@ -35,11 +35,11 @@ public class FluidHatchMenu extends MMCRMenuBase {
 
     @Override
     public ItemStack quickMoveStack(Player player, int index) {
-        return MMCRMenu.noopQuickMove();
+        return MenuSupport.noopQuickMove();
     }
 
     @Override
     public boolean stillValid(Player player) {
-        return owner == null || MMCRMenu.stillValidWithin(player, owner.getBlockPos());
+        return owner == null || MenuSupport.stillValidWithin(player, owner.getBlockPos());
     }
 }

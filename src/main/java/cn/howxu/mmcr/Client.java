@@ -1,6 +1,6 @@
 package cn.howxu.mmcr;
 
-import cn.howxu.mmcr.client.gui.MMCRMenuScreen;
+import cn.howxu.mmcr.client.gui.MachineMenuScreen;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
@@ -14,6 +14,6 @@ public class Client {
     }
 
     private static void registerMenuScreens(RegisterMenuScreensEvent event) {
-        MMCRMenuScreen.registerScreens(event);
+        MachineMenuScreen.registerScreens(event);
     }
 }

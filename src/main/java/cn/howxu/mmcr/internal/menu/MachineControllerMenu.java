@@ -3,17 +3,23 @@ package cn.howxu.mmcr.internal.menu;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
-public class MachineControllerMenu extends MMCRMenuBase {
+public class MachineControllerMenu extends AbstractMachineMenu {
 
     private final MachineControllerBlockEntity owner;
+    private final DataSlot formed;
 
     public MachineControllerMenu(int containerId, Inventory playerInv, MachineControllerBlockEntity owner) {
         super(ModUIs.MACHINE_CONTROLLER.get(), containerId);
         this.owner = owner;
+        this.formed = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
+            @Override public int get() { return owner.isFormed() ? 1 : 0; }
+            @Override public void set(int value) {}
+        });
         addControllerPlayerSlots(playerInv);
     }
 
@@ -40,13 +46,17 @@ public class MachineControllerMenu extends MMCRMenuBase {
         return owner;
     }
 
+    public boolean isFormed() {
+        return formed.get() != 0;
+    }
+
     @Override
     public ItemStack quickMoveStack(Player player, int index) {
-        return MMCRMenu.noopQuickMove();
+        return MenuSupport.noopQuickMove();
     }
 
     @Override
     public boolean stillValid(Player player) {
-        return owner == null || MMCRMenu.stillValidWithin(player, owner.getBlockPos());
+        return owner == null || MenuSupport.stillValidWithin(player, owner.getBlockPos());
     }
 }

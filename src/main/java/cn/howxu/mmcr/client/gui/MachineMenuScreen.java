@@ -20,12 +20,17 @@ import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.fluids.FluidStack;
 
 /** 一个屏幕入口,按具体菜单类型分派纹理 / 尺寸 / 自定义渲染。 */
-public class MMCRMenuScreen extends AbstractContainerScreen<AbstractContainerMenu> implements MenuAccess<AbstractContainerMenu> {
+public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainerMenu> implements MenuAccess<AbstractContainerMenu> {
 
     private static final Identifier ITEM_BUS_TEXTURE    = MMCR.id("textures/gui/inventory_normal.png");
     private static final Identifier TANK_TEXTURE        = MMCR.id("textures/gui/guitank.png");
     private static final Identifier CONTROLLER_TEXTURE  = MMCR.id("textures/gui/guicontroller_large.png");
-    static final int TITLE_COLOR = -12566464;
+    static final int TITLE_COLOR = 0xFFE8E8E8;
+    static final int STATUS_LABEL_COLOR = TITLE_COLOR;
+    static final int FORMED_STATUS_COLOR = 0xFF55FF55;
+    static final int UNFORMED_STATUS_COLOR = 0xFFFF5555;
+    static final int IDLE_STATUS_COLOR = 0xFFFFAA00;
+    static final int PROGRESS_STATUS_COLOR = -1;
     static final int TITLE_OFFSET_X = 2;
     static final int TITLE_OFFSET_Y = 4;
     static final int FLUID_TITLE_OFFSET_X = 32;
@@ -33,6 +38,7 @@ public class MMCRMenuScreen extends AbstractContainerScreen<AbstractContainerMen
     static final int TANK_TITLE_OFFSET_Y = 3;
     static final int ITEM_BUS_TITLE_OFFSET_X = -4;
     static final int ITEM_BUS_TITLE_OFFSET_Y = -2;
+    static final int CONTROLLER_STATUS_OFFSET_Y = 12;
     static final int HIDDEN_INVENTORY_LABEL_Y = -1000;
 
     private static final int TANK_X = 63;
@@ -45,7 +51,7 @@ public class MMCRMenuScreen extends AbstractContainerScreen<AbstractContainerMen
     private static final int ENERGY_W = 48;
     private static final int ENERGY_H = 58;
 
-    public MMCRMenuScreen(AbstractContainerMenu menu, Inventory inventory, Component title) {
+    public MachineMenuScreen(AbstractContainerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title,
                 menu instanceof MachineControllerMenu ? 176 : 176,
                 menu instanceof MachineControllerMenu ? 213 : 166);
@@ -92,6 +98,10 @@ public class MMCRMenuScreen extends AbstractContainerScreen<AbstractContainerMen
 
     static int hiddenInventoryLabelY() {
         return HIDDEN_INVENTORY_LABEL_Y;
+    }
+
+    static int controllerStatusY(int titleY) {
+        return titleY + CONTROLLER_STATUS_OFFSET_Y;
     }
 
     @Override
@@ -150,38 +160,49 @@ public class MMCRMenuScreen extends AbstractContainerScreen<AbstractContainerMen
 
     private void renderControllerStatus(GuiGraphicsExtractor g, MachineControllerMenu menu, int x, int y) {
         MachineControllerBlockEntity owner = menu.owner();
-        if (owner == null) return;
-        int textY = y + 12;
+        int textY = y + controllerStatusY(titleLabelY);
         int textX = x + 12;
-        int color = 0xFFFFFF;
+        MachineRecipe activeRecipe = owner == null ? null : owner.getActiveRecipe();
+        boolean active = activeRecipe != null;
 
-        if (owner.getMachine() != null) {
+        if (owner != null && owner.getMachine() != null) {
             g.text(font, Component.translatable("gui.mmcr.controller.machine", owner.getMachine().localizedName()),
-                    textX, textY, color, true);
+                    textX, textY, PROGRESS_STATUS_COLOR, true);
             textY += 12;
         }
-        g.text(font, Component.translatable(owner.isFormed() ? "gui.mmcr.controller.formed" : "gui.mmcr.controller.unformed"),
-                textX, textY, color, true);
+        renderControllerStatusLine(g, textX, textY, Component.translatable(controllerStatusKey(menu.isFormed(), active)),
+                controllerStatusColor(menu.isFormed(), active));
         textY += 12;
 
-        MachineRecipe active = owner.getActiveRecipe();
-        if (active != null) {
-            int total = active.tickTime();
+        if (activeRecipe != null) {
+            int total = activeRecipe.tickTime();
             int current = Math.min(total, owner.getTickCounter());
             int percent = total > 0 ? (current * 100 / total) : 0;
-            g.text(font, Component.translatable("gui.mmcr.controller.progress", percent),
-                    textX, textY, color, true);
-        } else {
-            g.text(font, Component.translatable("gui.mmcr.controller.idle"),
-                    textX, textY, color, true);
+            g.text(font, Component.translatable("gui.mmcr.controller.progress", percent), textX, textY, PROGRESS_STATUS_COLOR, true);
         }
     }
 
-    /** 把同一个 {@link MMCRMenuScreen} 注册到所有 MMCR 菜单类型(根据具体菜单类型分派渲染)。 */
+    private void renderControllerStatusLine(GuiGraphicsExtractor g, int x, int y, Component value, int valueColor) {
+        Component label = Component.translatable("gui.mmcr.controller.status_label");
+        g.text(font, label, x, y, STATUS_LABEL_COLOR, true);
+        g.text(font, value, x + font.width(label) + 4, y, valueColor, true);
+    }
+
+    static String controllerStatusKey(boolean formed, boolean active) {
+        if (!formed) return "gui.mmcr.controller.unformed";
+        return active ? "gui.mmcr.controller.formed" : "gui.mmcr.controller.idle";
+    }
+
+    static int controllerStatusColor(boolean formed, boolean active) {
+        if (!formed) return UNFORMED_STATUS_COLOR;
+        return active ? FORMED_STATUS_COLOR : IDLE_STATUS_COLOR;
+    }
+
+    /** 把同一个 {@link MachineMenuScreen} 注册到所有 MMCR 菜单类型(根据具体菜单类型分派渲染)。 */
     public static void registerScreens(RegisterMenuScreensEvent event) {
-        event.register(ModUIs.ITEM_BUS.get(),          MMCRMenuScreen::new);
-        event.register(ModUIs.FLUID_HATCH.get(),       MMCRMenuScreen::new);
-        event.register(ModUIs.ENERGY_HATCH.get(),      MMCRMenuScreen::new);
-        event.register(ModUIs.MACHINE_CONTROLLER.get(), MMCRMenuScreen::new);
+        event.register(ModUIs.ITEM_BUS.get(),          MachineMenuScreen::new);
+        event.register(ModUIs.FLUID_HATCH.get(),       MachineMenuScreen::new);
+        event.register(ModUIs.ENERGY_HATCH.get(),      MachineMenuScreen::new);
+        event.register(ModUIs.MACHINE_CONTROLLER.get(), MachineMenuScreen::new);
     }
 }

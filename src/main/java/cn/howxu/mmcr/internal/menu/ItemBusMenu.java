@@ -8,7 +8,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
-public class ItemBusMenu extends MMCRMenuBase {
+public class ItemBusMenu extends AbstractMachineMenu {
 
     public static final int COLS = 3;
     public static final int ROWS = 2;
@@ -90,6 +90,6 @@ public class ItemBusMenu extends MMCRMenuBase {
 
     @Override
     public boolean stillValid(Player player) {
-        return owner == null || MMCRMenu.stillValidWithin(player, owner.getBlockPos());
+        return owner == null || MenuSupport.stillValidWithin(player, owner.getBlockPos());
     }
 }

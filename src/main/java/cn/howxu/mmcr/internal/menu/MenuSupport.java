@@ -5,9 +5,9 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 
 /** 通用工具:玩家物品栏复制 / 距离检查 / 跨菜单复用的常量。 */
-public final class MMCRMenu {
+public final class MenuSupport {
 
-    private MMCRMenu() {}
+    private MenuSupport() {}
 
     public static ItemStack noopQuickMove() {
         return ItemStack.EMPTY;

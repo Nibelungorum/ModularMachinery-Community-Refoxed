@@ -14,13 +14,14 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 
 import java.util.function.Consumer;
 
-public final class MMCRGameTests {
-    private MMCRGameTests() {
+public final class GameTestRegistry {
+    private GameTestRegistry() {
     }
 
     public static void registerAll(RegisterGameTestsEvent event) {
         register(event, "block_array_match", 100, helper -> new BlockArrayMatchGameTest().structureForms3x3Casing(helper));
         register(event, "controller_tick", 100, helper -> new ControllerTickGameTest().structureForms3x3Casing(helper));
+        register(event, "controller_tick_scan_registry", 100, helper -> new ControllerTickGameTest().scansRegisteredMachineWhenDefaultBindingIsEmpty(helper));
         register(event, "e2e_recipe_run", 200, helper -> new E2ERecipeRunGameTest().ironCompressorRuns(helper));
         register(event, "energy_hatch_capability", 100, helper -> new EnergyHatchCapabilityGameTest().energyHatchStoresFE(helper));
         register(event, "fluid_hatch_capability", 100, helper -> new FluidHatchCapabilityGameTest().fluidHatchStoresWater(helper));
