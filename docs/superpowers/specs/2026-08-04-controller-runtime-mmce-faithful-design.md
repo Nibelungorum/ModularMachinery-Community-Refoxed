@@ -57,11 +57,12 @@ Re-shape `ActiveMachineRecipe.tick(RecipeCraftingContext context)` to:
 
 1. If `recipe == null` or `total <= 0`: return `TickStatus.WAITING`.
 2. **If `isCompleted()`**: return `TickStatus.WAITING` — MMCE's `CraftingStatus.working()` once the recipe is finished; the controller will clear us on the next orchestration step. This preserves the existing completion-then-clear behavior.
-3. Compute `int nextTick = Math.min(getTick() + 1, total)` (kept as before — we don't actually mutate tick until after `ioTick` succeeds).
-4. Probe `IoTickResult probe = context.ioTick(nextTick)`:
-   - `SUCCESS` → `setTick(nextTick)`. If `isCompleted()` → return `FINISHED` (commit happens in step 5). Otherwise → `CONTINUE`.
-   - `FAILURE` → resolve `RecipeFailureActions action = machine.failureAction()` (default `STILL`); call `doFailureAction(action)`. Return `WAITING`.
-5. On `FINISHED`: the controller invokes `commitOutputs` then `commitInputs` (the same two calls as today), then clears the active recipe. Energy is **not** deducted here because step 4 already drained it per tick.
+3. Probe `IoTickResult probe = context.ioTick(getTick())` — pass the **current** tick, matching MMCE's `ioTick(tick)` call where `tick++` happens after `ioTick` succeeds.
+4. On `SUCCESS`:
+   - Compute `int nextTick = Math.min(getTick() + 1, total)` and `setTick(nextTick)`.
+   - If `isCompleted()`: run the existing completion path inline — `simulateOutputs` / `simulateInputs` re-check, then `commitOutputs` followed by `commitInputs`. Return `FINISHED` on success, `WAITING` if re-simulation fails (outputs are written first so a failed output insertion does not consume inputs). Energy is **not** deducted here — it was already drained by `ioTick` over the previous ticks.
+   - Otherwise → `CONTINUE`.
+5. On `FAILURE`: resolve `RecipeFailureActions action = context.machine().failureAction()` (default `STILL`); call `doFailureAction(action)`. Tick is **not** advanced. Return `WAITING`.
 
 ### `RecipeCraftingContext.ioTick(int currentTick)`
 
@@ -92,12 +93,11 @@ Non-energy ingredients are not touched here; they are checked at start (via `sim
 
 ### Failure Action Resolution
 
-`ActiveMachineRecipe.tick` reads `machine.failureAction()` from the controller context. Today the controller passes only `Level` + `BlockPos` to `RecipeCraftingContext`; we need to pass the active `Machine` too:
+`ActiveMachineRecipe.tick` reads `machine.failureAction()` from the context. Today the controller passes only `Level` + `BlockPos` to `RecipeCraftingContext`; we need to pass the active `Machine` too:
 
 - `RecipeCraftingContext(Level level, BlockPos controllerPos, Machine machine)`.
 - The machine is held by reference for `failureAction()` lookup; it is also the machine the controller already has bound, so no new state is introduced on the controller.
-
-`RecipeCraftingContext` does not cache `Machine`; it just reads it on demand. The controller's `Machine` may change after a structure re-form, so we want the live value.
+- `public Machine machine()` accessor exposed for the `tick()` path. The context does not cache any other machine-derived state — only the live reference.
 
 ## Data Ownership
 
@@ -178,7 +178,7 @@ No code change required — the entity already exposes `getFluidHandler(Directio
 
 ### KubeJS binding
 
-- `MachineRecipeBuilderJS`: add `ItemOutput fluidOutput(FluidStack stack)` (KubeJS-style — returns the builder for chaining).
+- `MachineRecipeBuilderJS`: add `MachineRecipe fluidOutput(FluidStack stack)` (KubeJS-style — returns the builder for chaining).
 - `MachineRecipeSchema`: register a new `FluidStack` component (or expose `fluidOutput(FluidStack)`) so KubeJS scripts can declare fluid outputs.
 - These are minimal additions; no existing API changes.
 
