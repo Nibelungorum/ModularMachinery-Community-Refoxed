@@ -551,7 +551,7 @@ rtk git commit -m "feat(machine): add failureAction to Machine/DynamicMachine"
   - `public enum IoTickResult { SUCCESS, FAILURE }` (nested static enum on the class).
   - `public IoTickResult ioTick(int currentTick)` — for each `MachineIngredient.EnergyIngredient` in the recipe, scan 3×3 for an `EnergyInputHatchBlockEntity`, simulate `extractEnergy(fePerTick, true)`. If simulated `< fePerTick`, return `FAILURE`. Otherwise commit `extractEnergy(fePerTick, false)` and continue. If no hatch matched at all, return `FAILURE`.
   - `public Machine machine()` accessor.
-  - `private List<FluidOutputHatchInfo> fluidOutputSlots()` and `private List<FluidOutputSlotState> fluidOutputSlotStates()` — mirrors of the existing `outputSlots()` / `outputSlotStates()` for fluid output hatches.
+  - `private List<FluidOutputSlot> fluidOutputSlots()` and `private List<FluidOutputSlotState> fluidOutputSlotStates()` — mirrors of the existing `outputSlots()` / `outputSlotStates()` for fluid output hatches.
 - Removes:
   - The energy branch in `commitInputs(MachineRecipe)`.
   - The `recipe` parameter usage from `findAndCheckEnergyHatch` — replaced by a new helper `findEnergyHatchForTick(int fePerTick)` used by `ioTick`.
@@ -577,7 +577,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.fluids.capability.IluidHandler;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.items.IItemHandler;
 
 import java.util.ArrayList;
@@ -604,8 +604,8 @@ public final class RecipeCraftingContext {
         return machine;
     }
 
-    public IoTickResult ioTick(int currentTick) {
-        for (MachineIngredient ingredient : machineRecipe().inputs()) {
+    public IoTickResult ioTick(MachineRecipe recipe) {
+        for (MachineIngredient ingredient : recipe.inputs()) {
             if (ingredient instanceof MachineIngredient.EnergyIngredient energy) {
                 EnergyInputHatchBlockEntity hatch = findEnergyHatchForTick(energy.fePerTick());
                 if (hatch == null) {
@@ -694,9 +694,13 @@ public final class RecipeCraftingContext {
     }
 
     private boolean simulateFluidOutput(FluidStack stack) {
+        FluidStack probe = stack.copy();
         for (FluidOutputSlotState slot : fluidOutputSlotStates()) {
-            FluidStack remainder = slot.fill(stack.copy(), true);
-            if (remainder.isEmpty()) return true;
+            FluidStack remainder = slot.fill(probe, true);
+            if (remainder.isEmpty()) {
+                return true;
+            }
+            probe = remainder;
         }
         return false;
     }
@@ -776,10 +780,6 @@ public final class RecipeCraftingContext {
         return fluidOutputSlots().stream().map(FluidOutputSlotState::new).toList();
     }
 
-    private MachineRecipe machineRecipe() {
-        return null;
-    }
-
     private record OutputSlot(IItemHandler handler, int slot) {}
 
     private static final class OutputSlotState {
@@ -837,78 +837,24 @@ public final class RecipeCraftingContext {
             int inserted = Math.min(space, accepted.getAmount());
             if (inserted <= 0) return input;
 
-            if (!simulate) {
-                if (stack.isEmpty()) {
-                    stack = accepted.copyWithAmount(inserted);
-                } else {
-                    stack.grow(inserted);
-                }
-                FluidStack remainder = input.copy();
-                remainder.shrink(inserted);
-                return remainder;
+            if (stack.isEmpty()) {
+                stack = accepted.copyWithAmount(inserted);
+            } else {
+                stack.grow(inserted);
             }
-            FluidStack remainder = input.copy();
-            remainder.shrink(inserted);
-            return remainder;
+            FluidStack remaining = input.copy();
+            remaining.shrink(inserted);
+            return remaining;
         }
     }
 }
 ```
 
-Two corrections to apply when pasting the above:
+Notes on the file above:
 
-1. **Typo fix**: change `import net.neoforged.neoforge.fluids.capability.IluidHandler;` to `import net.neoforged.neoforge.fluids.capability.IFluidHandler;`.
-2. **`machineRecipe()` placeholder**: the method body `return null;` is a placeholder. Replace it with the real implementation:
-
-```java
-    private MachineRecipe machineRecipe() {
-        if (machine instanceof ActiveMachineRecipeAccessor accessor) {
-            return accessor.activeRecipe();
-        }
-        return null;
-    }
-```
-
-   Add a temporary accessor interface in this same file:
-
-```java
-    public interface ActiveMachineRecipeAccessor {
-        MachineRecipe activeRecipe();
-    }
-```
-
-   `ActiveMachineRecipe` will be updated in Task 6 to implement this interface and expose `getRecipe()` through `activeRecipe()`. **Or, simpler:** drop the `machineRecipe()` indirection entirely. The `ioTick` body only uses `MachineIngredient.EnergyIngredient` shape, which it can read by accepting the recipe explicitly:
-
-   Replace `ioTick` to take the recipe as a parameter:
-
-   ```java
-   public IoTickResult ioTick(MachineRecipe recipe) {
-       for (MachineIngredient ingredient : recipe.inputs()) {
-           if (ingredient instanceof MachineIngredient.EnergyIngredient energy) {
-               EnergyInputHatchBlockEntity hatch = findEnergyHatchForTick(energy.fePerTick());
-               if (hatch == null) {
-                   return IoTickResult.FAILURE;
-               }
-               int simulated = hatch.getEnergyStorage(null).extractEnergy(energy.fePerTick(), true);
-               if (simulated < energy.fePerTick()) {
-                   return IoTickResult.FAILURE;
-               }
-               hatch.getEnergyStorage(null).extractEnergy(energy.fePerTick(), false);
-           }
-       }
-       return IoTickResult.SUCCESS;
-   }
-   ```
-
-   Remove `machineRecipe()` and the `ActiveMachineRecipeAccessor` interface. `ActiveMachineRecipe.tick` (Task 6) will pass `recipe` directly:
-
-   ```java
-   IoTickResult probe = context.ioTick(recipe);
-   ```
-
-   **Use this simpler version.** The `machineRecipe()` block above is **not** part of the final file.
-
-After both corrections the final file compiles in isolation.
+- `ioTick(MachineRecipe recipe)` takes the recipe explicitly (no `machineRecipe()` accessor indirection on the context). `ActiveMachineRecipe.tick` (Task 6) passes `recipe` directly.
+- `simulateFluidOutput` walks the slot states, refilling the probe as it goes, so a single output can spread across multiple tank slots of the same fluid (matches the item-output behavior).
+- `FluidOutputSlotState.fill(...)` mirrors the existing `OutputSlotState.insert(...)` semantics for tanks: simulate first, accept only matching fluid or empty, clamp by tank capacity.
 
 - [ ] **Step 2: Compile (expect failure — `MachineControllerBlockEntity` still passes the old constructor)**
 
@@ -1034,20 +980,37 @@ Open `src/main/java/cn/howxu/mmcr/internal/tile/MachineControllerBlockEntity.jav
 
 - [ ] **Step 2: Update `loadAdditional`**
 
-Locate the `loadAdditional` method. Find the line that builds the restored context:
+Locate the `loadAdditional` method. The existing structure is:
 
-- Replace:
-  ```java
-              context = new RecipeCraftingContext(level, getBlockPos());
-  ```
-- With:
-  ```java
-              context = new RecipeCraftingContext(level, getBlockPos(), MachineRegistry.getMachine(restored.getRecipe() != null ? restored.getRecipe().machineId() : machineIdFromState(getBlockState())));
-  ```
+```java
+        ActiveMachineRecipe restored = new ActiveMachineRecipe(recipeTag);
+        if (restored.getRecipe() == null) {
+            active = null;
+            context = null;
+            return;
+        }
+        active = restored;
+        context = new RecipeCraftingContext(level, getBlockPos());
+        setChanged();
+```
 
-   The lookup `restored.getRecipe().machineId()` is the recipe's owning-machine id, which the controller must resolve through `MachineRegistry` at reload time. If the saved recipe is gone but the controller's bound machine id is still valid, fall back to that.
+Replace the two-line block that assigns `active` and rebuilds `context` with:
 
-   If the original `loadAdditional` does not look like the snippet above, locate every `new RecipeCraftingContext(...)` call in this method and update each to pass `machine` (third arg). Look up `machine` via `MachineRegistry.getMachine(...)` using the same fallback the existing code uses for `bindDefaultMachine`.
+```java
+        Machine boundMachine = MachineRegistry.getMachine(restored.getRecipe().machineId());
+        if (boundMachine == null) {
+            active = null;
+            context = null;
+            return;
+        }
+        active = restored;
+        context = new RecipeCraftingContext(level, getBlockPos(), boundMachine);
+        setChanged();
+```
+
+Add an import for `cn.howxu.mmcr.api.machine.MachineRegistry` at the top of the file if not already present.
+
+Rationale: if the saved recipe's machine id no longer resolves (recipe datapack removed, machine registry cleared), the controller drops the active recipe — same pattern as the existing `if (restored.getRecipe() == null)` guard. Otherwise, the context is rebuilt with the live machine reference so `failureAction()` lookup at tick time always sees the current value.
 
 - [ ] **Step 3: Compile**
 
