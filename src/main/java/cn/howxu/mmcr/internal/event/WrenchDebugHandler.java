@@ -6,6 +6,7 @@ import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.registry.ModItems;
+import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -13,6 +14,7 @@ import net.minecraft.util.TriState;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -44,6 +46,17 @@ public final class WrenchDebugHandler {
 
         ServerPlayer player = (ServerPlayer) event.getEntity();
         BlockPos pos = event.getPos();
+
+        if (player.isShiftKeyDown()
+                && player.gameMode.getGameModeForPlayer() == GameType.CREATIVE
+                && port instanceof EnergyHatchBlockEntity energyIn
+                && energyIn.ioType() == IOType.INPUT) {
+            energyIn.getMutableEnergyStorage(null).receiveEnergy(1000, false);
+            event.setUseItem(TriState.FALSE);
+            event.setUseBlock(TriState.FALSE);
+            event.setCancellationResult(InteractionResult.SUCCESS);
+            return;
+        }
 
         if (port instanceof ItemBusBlockEntity bus) {
             printItemBus(player, pos, bus);
