@@ -120,6 +120,42 @@ public final class ActiveMachineRecipe {
         return tag;
     }
 
+    public enum TickStatus {
+        CONTINUE,
+        WAITING,
+        FINISHED
+    }
+
+    public TickStatus tick(RecipeCraftingContext context) {
+        if (recipe == null) {
+            return TickStatus.WAITING;
+        }
+        int total = getTotalTick();
+        if (total <= 0) {
+            return TickStatus.WAITING;
+        }
+        int nextTick = Math.min(getTick() + 1, total);
+        setTick(nextTick);
+
+        if (!isCompleted()) {
+            return TickStatus.CONTINUE;
+        }
+
+        if (!context.simulateOutputs(recipe) || !context.simulateInputs(recipe)) {
+            setTick(Math.max(0, total - 1));
+            return TickStatus.WAITING;
+        }
+
+        boolean outputsOk = context.commitOutputs(recipe);
+        boolean inputsOk = context.commitInputs(recipe);
+        if (!outputsOk || !inputsOk) {
+            setTick(Math.max(0, total - 1));
+            return TickStatus.WAITING;
+        }
+
+        return TickStatus.FINISHED;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
