@@ -13,6 +13,7 @@ import net.minecraft.client.data.models.ModelProvider;
 import net.minecraft.client.data.models.blockstates.MultiVariantGenerator;
 import net.minecraft.client.data.models.model.ModelLocationUtils;
 import net.minecraft.client.data.models.model.ModelTemplate;
+import net.minecraft.client.data.models.model.ModelTemplates;
 import net.minecraft.client.data.models.model.TextureMapping;
 import net.minecraft.client.data.models.model.TexturedModel;
 import net.minecraft.client.data.models.model.TextureSlot;
@@ -89,6 +90,7 @@ public final class ModelGen extends ModelProvider {
                         m -> m.put(TextureSlot.ALL, textureFor(name))));
             }
         });
+        itemModels.generateFlatItem(ModItems.WRENCH.get(), ModelTemplates.FLAT_ITEM);
     }
 
     /** 用 block 注册名生成纹理 Material:modid:block/<name>。每个 block 自带独立贴图。 */

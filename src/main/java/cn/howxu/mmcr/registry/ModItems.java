@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.registry;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.item.WrenchItem;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.BlockItem;
@@ -15,6 +16,9 @@ public final class ModItems {
 
     public static final DeferredRegister.Items REGISTER = DeferredRegister.createItems(MMCR.MODID);
 
+    public static final DeferredHolder<Item, Item> WRENCH =
+            REGISTER.register("wrench", WrenchItem::new);
+
     public static final LinkedHashMap<String, DeferredHolder<Item, Item>> ITEMS = new LinkedHashMap<>();
 
     static {
@@ -25,6 +29,7 @@ public final class ModItems {
                                     ResourceKey.create(Registries.ITEM, MMCR.id(name)))));
             ITEMS.put(name, itemHolder);
         });
+        ITEMS.put("wrench", WRENCH);
     }
 
     public static void register(IEventBus bus) {
