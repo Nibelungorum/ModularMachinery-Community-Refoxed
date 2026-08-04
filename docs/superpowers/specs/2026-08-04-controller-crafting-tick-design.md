@@ -4,15 +4,15 @@ Date: 2026-08-04
 
 ## Context
 
-Recipes have already been initially ported: `MachineRecipe`, `MachineIngredient`, `RecipeRegistry`, KubeJS builder support, and simplified item/fluid/energy recipe inputs exist. The previous recipe port intentionally left execution scheduling out of scope. The next migration step is to let a formed controller actually run a recipe while keeping the runtime structure close enough to MMCE to support later requirement, modifier, and event work.
+Recipes have already been initially ported: `MachineRecipe`, `MachineIngredient`, `RecipeRegistry`, KubeJS builder support, and simplified item/fluid/energy recipe inputs exist. `MachineControllerBlockEntity` already runs a working prototype that binds the machine, checks structure, scans recipes, tracks `tickCounter`, simulates outputs, and consumes/produces at completion — see `tryStartNewRecipe`, `canAcceptInputs`, `canAcceptOutputs`, `tickActiveRecipe`, `consumeAndProduce` in `MachineControllerBlockEntity`.
 
-The current `MachineControllerBlockEntity` already contains a direct prototype loop that checks structure, searches recipes, tracks `tickCounter`, and consumes/produces at completion. This design replaces that direct logic with a small MMCE-shaped runtime boundary: an active recipe state object plus a simplified crafting context.
+The next migration step is **a refactor**, not a first implementation: move the recipe execution details out of `MachineControllerBlockEntity` behind a small MMCE-shaped runtime boundary made of `ActiveMachineRecipe` (runtime state, already implemented) and a new `RecipeCraftingContext` (component I/O simulation and commit, currently inlined as `findAndCheck*` helpers). The controller keeps lifecycle responsibilities but delegates the recipe mechanics to those two objects.
 
 ## Goals
 
 - Let a formed machine controller start and complete one matching recipe.
 - Support the currently ported ingredient types: item input, fluid input, and energy input.
-- Support item outputs into item output buses.
+- Support item outputs into item output buses. Fluid outputs are not part of this step and are explicitly deferred.
 - Keep controller tick readable by moving recipe execution details out of `MachineControllerBlockEntity`.
 - Preserve current simple behavior before adding full MMCE systems.
 - Document deferred systems explicitly so temporary simplifications are visible.
@@ -30,11 +30,11 @@ The current `MachineControllerBlockEntity` already contains a direct prototype l
 
 Use a structured runtime loop modeled after MMCE but intentionally smaller:
 
-1. `MachineControllerBlockEntity.serverTick()` remains responsible for server-side orchestration: bind machine, check structure, start active recipe, tick active recipe, and broadcast state.
-2. `ActiveMachineRecipe` owns active runtime state: recipe reference, current tick, total tick time, and status.
-3. `RecipeCraftingContext` owns recipe I/O checks and commit behavior for the currently formed controller.
-4. Controller startup creates both objects only after input and output checks pass.
-5. Completion performs a second check, commits input consumption and output insertion, clears active state, and resets progress.
+1. `MachineControllerBlockEntity.serverTick()` remains responsible for server-side orchestration: bind machine, check structure, start active recipe, tick active recipe, persist active state, and broadcast state.
+2. `ActiveMachineRecipe` owns active runtime state: recipe reference, current tick, total tick time, max parallelism, parallelism, and an arbitrary data compound. An instance already exists; this design adopts it as the controller's active state field.
+3. `RecipeCraftingContext` is new. It owns recipe I/O simulation and commit behavior for the currently formed controller and hides `IItemHandler` / `IFluidHandler` / energy storage access from the controller.
+4. On startup, the controller creates an `ActiveMachineRecipe` and a `RecipeCraftingContext` only after both input simulation and output simulation pass for the first matching recipe.
+5. Completion re-simulates inputs and outputs, commits outputs first then inputs (so a failed commit does not lose recipe ingredients), clears the active recipe and context, and resets progress.
 
 This is intentionally not the full MMCE executor. It gives later phases stable names and seams without carrying over the 1.12.2 thread pool, event, and requirement complexity too early.
 
@@ -67,12 +67,10 @@ Recipe selection stays simple and deterministic:
 `ActiveMachineRecipe.tick(...)` should:
 
 - Recompute or read total tick time from `MachineRecipe.tickTime()`.
-- Increment progress while requirements remain broadly valid.
-- At completion, re-check inputs and output capacity.
-- Commit consumption and output only after the completion check passes.
-- Return a small status value so the controller can decide whether to continue, wait, finish, or clear the recipe.
-
-For this step, checks may be conservative: if inputs disappear or output fills before completion, the active recipe waits instead of applying a complex MMCE failure action.
+- Increment progress (`tick = Math.min(tick + 1, totalTick)`) while requirements remain broadly valid.
+- Detect completion by `tick >= totalTick`. At that point re-check inputs and output capacity before committing.
+- Commit outputs first, then inputs. If the completion re-check fails, leave the recipe waiting at `totalTick - 1` (pause/wait), matching the current conservative behavior. Energy that becomes unavailable mid-recipe also takes this pause path; we do not yet support per-tick energy drain or void-on-failure.
+- Return a small status value so the controller can decide whether to continue, wait, finish, or clear the recipe. Suggested enum for the plan phase: `CONTINUE` / `WAITING` / `FINISHED`.
 
 ## Data Ownership
 
@@ -80,36 +78,38 @@ For this step, checks may be conservative: if inputs disappear or output fills b
 
 Responsibilities:
 
-- Store `MachineRecipe recipe`.
-- Store current progress tick.
-- Expose `recipe()`, `tick()`, `totalTick()`, `isCompleted()`.
-- Advance execution using `RecipeCraftingContext`.
-- Avoid direct world scans except through the context.
+- Store `MachineRecipe recipe`, current `tick`, `totalTick`, `maxParallelism` (default `1` for this step), `parallelism` (default `1`), and a freeform `CompoundTag data`.
+- Expose `recipe()`, `getTick()`, `getTotalTick()`, `isCompleted()`, plus NBT `serialize()` / deserialization constructor that already exists in the project.
+- Advance execution through `RecipeCraftingContext`; do not scan the world directly.
 
-The class should be small and serializable later, but this step does not need full NBT persistence unless existing controller persistence already serializes active recipe state.
+The controller adopts this class as its active recipe field (replacing the current `MachineRecipe activeRecipe`). `maxParallelism` and `parallelism` are kept for forward compatibility but are forced to `1` in this step — the controller never constructs an `ActiveMachineRecipe` with anything larger.
 
 ### `RecipeCraftingContext`
 
 Responsibilities:
 
-- Locate item input buses, fluid input hatches, energy input hatches, and item output buses around the formed machine using current controller search rules.
-- Simulate all required inputs and outputs.
-- Commit input consumption and output insertion.
-- Hide low-level `IItemHandler`, `IFluidHandler`, and energy storage operations from the controller.
+- Locate item input buses, fluid input hatches, energy input hatches, and item output buses around the formed machine using the current controller search rules.
+- Expose staged simulation/commit methods that the controller calls in order:
+  - `simulateInputs(recipe): boolean` — check every ingredient can be sourced.
+  - `simulateOutputs(recipe): boolean` — simulate inserting every output.
+  - `commitOutputs(recipe): boolean` — perform real output insertion.
+  - `commitInputs(recipe): boolean` — perform real input consumption and energy drain.
+- Hide `IItemHandler`, `IFluidHandler`, and energy storage access from the controller.
 
-The context can be rebuilt when a recipe starts and reused while active. If component locations may change, completion checks must revalidate before committing.
+The context holds no mutable per-tick state of its own beyond resolved component locations. It is rebuilt when a recipe starts and reused while active. At completion the controller must call `simulateInputs` / `simulateOutputs` again before `commitOutputs` / `commitInputs`, because components may have moved or been emptied in the meantime.
 
 ### `MachineControllerBlockEntity`
 
 Responsibilities after refactor:
 
 - Structure lifecycle and machine binding.
-- Active recipe lifecycle fields.
-- Recipe lookup.
+- Active recipe lifecycle fields (`ActiveMachineRecipe active`, `RecipeCraftingContext context`).
+- Recipe lookup via `RecipeRegistry.byMachine(machine)` plus server datapack recipes.
 - Delegation to `RecipeCraftingContext` and `ActiveMachineRecipe`.
+- NBT persistence for the active recipe: add `loadAdditional` / `saveAdditional` in this step so active progress survives chunk unload.
 - Network/menu state exposure.
 
-It should no longer contain the detailed item/fluid/energy consume and output simulation logic directly.
+It should no longer contain the detailed item/fluid/energy consume and output simulation logic directly. The existing `findAndCheck*` helpers and `consumeAndProduce` move into `RecipeCraftingContext`.
 
 ## Ingredient Semantics
 
@@ -130,6 +130,7 @@ It should no longer contain the detailed item/fluid/energy consume and output si
 - Treat `MachineIngredient.EnergyIngredient.fePerTick()` as the already documented per-tick value.
 - For this step, require and consume `fePerTick * recipe.tickTime()` as a total completion cost.
 - Do not drain energy every tick yet.
+- Energy is treated as any other input for the pause/wait path: if total stored FE drops below the required amount, the recipe waits at `totalTick - 1` instead of failing.
 
 ### Item Output
 
@@ -137,27 +138,35 @@ It should no longer contain the detailed item/fluid/energy consume and output si
 - Preserve existing stack compatibility behavior: merge only with same item/components or empty slots.
 - On commit, insert copies of output stacks and leave the recipe unfinished if simulation says output would not fit.
 
+### Fluid Output
+
+- Not supported in this step. Recipes that would need fluid outputs are deferred.
+
 ## Error Handling
 
-- If the structure breaks, clear the active recipe and progress.
-- If inputs or outputs become invalid before completion, pause/wait rather than voiding progress.
-- If completion commit cannot proceed after a successful simulation, abort commit safely and keep the active recipe waiting where possible.
+- If the structure breaks, clear the active recipe and context, and reset progress.
+- If inputs (item, fluid, or energy) or outputs become invalid before completion, pause/wait rather than voiding progress. The controller pins the active recipe at `totalTick - 1` and retries next tick.
+- If completion commit cannot proceed after a successful re-simulation, abort commit safely and keep the active recipe waiting where possible.
+- Commit order is fixed: outputs first, then inputs. A failed output insertion must not consume inputs.
 - Do not add broad `try/catch` wrappers around game logic unless a specific NeoForge API requires it.
 
 ## Persistence and Sync
 
-This step should preserve current behavior first. If the controller already saves active recipe id or progress, keep it. If it does not, active progress may reset on unload in this migration step and must be recorded in the deferred work document.
+The controller does not currently implement `loadAdditional` / `saveAdditional`. This step adds them so the active recipe state survives chunk unload and reload:
 
-Network/menu state should continue to expose enough information for the existing GUI to show formed state, active recipe id, and progress if those fields already exist. GUI improvements are not part of this step.
+- `saveAdditional`: write the `ActiveMachineRecipe` `CompoundTag` (via `ActiveMachineRecipe.serialize()`) under a known key, plus the current `tickCounter`-equivalent from `active.getTick()`. Existing block state (formed, facing, machine binding) continues to round-trip as today.
+- `loadAdditional`: read the saved `CompoundTag` and reconstruct the `ActiveMachineRecipe` via its `CompoundTag` constructor. If the saved recipe id no longer resolves, drop the active recipe and log once.
+
+Network/menu state continues to expose enough information for the existing GUI to show formed state, active recipe id, and progress. The GUI reads the active recipe id from `active.getRecipe().id()` (full `namespace:path`); note that the existing `ActiveMachineRecipe.getRegistryName()` returns only the path — either widen it to the full id or have the controller expose a `getActiveRecipeId()` helper. Pick whichever is cleaner in the plan phase. GUI improvements are not part of this step.
 
 ## Testing and Verification
 
 Minimum verification:
 
 - `./gradlew compileJava --no-daemon`
-- Existing unit or GameTest coverage that constructs controller recipes, if it compiles in the current project state.
+- Existing GameTest `E2ERecipeRunGameTest.ironCompressorRuns` must continue to pass after the refactor (40 ticks, 2 iron ingots consumed, 1 iron nugget inserted, energy drained by `80 * 40 = 3200 FE`, leaving 6800 FE stored).
 
-Behavioral checks to add or update if practical:
+Behavioral checks to add or update only if practical and existing tests already cover the path:
 
 - A formed controller starts a matching item recipe.
 - Completion consumes item input and inserts item output.
@@ -170,9 +179,10 @@ Project guidance says tests are auxiliary for this port, so implementation shoul
 
 Create or update a document near the recipe docs that records unfinished controller crafting systems:
 
-- Active recipe NBT persistence if not completed in this step.
+- Active recipe NBT persistence (this step adds basic save/load; modifier/restore semantics and migration across recipe removal are still future work).
 - Per-tick energy drain.
 - Duration and I/O modifier application during execution.
+- Fluid output support.
 - Full requirement/component routing.
 - Failure actions and void-on-failure policies.
 - Recipe events.
@@ -182,8 +192,10 @@ Create or update a document near the recipe docs that records unfinished control
 
 ## Acceptance Criteria
 
-- Controller crafting runtime is structured around `ActiveMachineRecipe` and `RecipeCraftingContext`.
-- Existing direct consume/produce details are removed from `MachineControllerBlockEntity` or reduced to delegation.
+- Controller crafting runtime is structured around `ActiveMachineRecipe` (controller field) and `RecipeCraftingContext` (controller field).
+- Existing direct consume/produce details are removed from `MachineControllerBlockEntity` or reduced to delegation through the context.
 - A simple formed machine can complete a supported recipe using item/fluid/energy inputs and item outputs.
-- Unimplemented MMCE systems are documented explicitly.
+- Controller `saveAdditional` / `loadAdditional` round-trip the active recipe across chunk reload.
+- `E2ERecipeRunGameTest.ironCompressorRuns` continues to pass.
+- Unimplemented MMCE systems are documented explicitly in the deferred document.
 - Java compilation passes, or any unrelated pre-existing build blocker is clearly separated from this change.
