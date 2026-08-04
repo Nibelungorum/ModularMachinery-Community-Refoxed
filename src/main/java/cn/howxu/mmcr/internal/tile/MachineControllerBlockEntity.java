@@ -21,6 +21,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import org.nibelungorum.DefaultMachines;
 
 import java.util.ArrayList;
@@ -182,5 +184,35 @@ public class MachineControllerBlockEntity extends BlockEntity {
             }
         }
         return new ArrayList<>(recipes.values());
+    }
+
+    @Override
+    protected void saveAdditional(ValueOutput output) {
+        super.saveAdditional(output);
+        if (active != null) {
+            output.putBoolean("has_active", true);
+            active.serialize(output.child("active_recipe"));
+        } else {
+            output.putBoolean("has_active", false);
+        }
+    }
+
+    @Override
+    protected void loadAdditional(ValueInput input) {
+        super.loadAdditional(input);
+        if (!input.getBooleanOr("has_active", false)) {
+            active = null;
+            context = null;
+            return;
+        }
+        ActiveMachineRecipe restored = ActiveMachineRecipe.from(input.childOrEmpty("active_recipe"));
+        if (restored.getRecipe() == null) {
+            active = null;
+            context = null;
+            return;
+        }
+        active = restored;
+        context = new RecipeCraftingContext(level, getBlockPos());
+        setChanged();
     }
 }

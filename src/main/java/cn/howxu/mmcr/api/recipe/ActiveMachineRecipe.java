@@ -2,6 +2,8 @@ package cn.howxu.mmcr.api.recipe;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
@@ -118,6 +120,29 @@ public final class ActiveMachineRecipe {
             tag.put("data", data);
         }
         return tag;
+    }
+
+    public void serialize(ValueOutput output) {
+        output.putString("recipeName", recipe == null ? "" : recipe.id().toString());
+        output.putInt("tick", this.tick);
+        output.putInt("totalTick", this.totalTick);
+        output.putInt("maxParallelism", this.maxParallelism);
+        output.putInt("parallelism", this.parallelism);
+        if (!data.isEmpty()) {
+            output.store("data", CompoundTag.CODEC, data);
+        }
+    }
+
+    public static ActiveMachineRecipe from(ValueInput input) {
+        String recipeName = input.getStringOr("recipeName", "");
+        Identifier recipeId = recipeName.isEmpty() ? null : Identifier.parse(recipeName);
+        MachineRecipe recipe = RecipeRegistry.getRecipe(recipeId);
+        ActiveMachineRecipe result = new ActiveMachineRecipe(recipe, input.getIntOr("maxParallelism", 1));
+        result.tick = input.getIntOr("tick", 0);
+        result.totalTick = input.getIntOr("totalTick", 0);
+        result.parallelism = input.getIntOr("parallelism", 1);
+        result.data = input.read("data", CompoundTag.CODEC).orElseGet(CompoundTag::new);
+        return result;
     }
 
     public enum TickStatus {
