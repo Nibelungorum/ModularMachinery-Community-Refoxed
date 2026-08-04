@@ -1,0 +1,219 @@
+package cn.howxu.mmcr.api.recipe;
+
+import cn.howxu.mmcr.api.recipe.helper.CraftCheck;
+import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.test.TestBootstrap;
+import com.google.gson.JsonElement;
+import com.mojang.serialization.DynamicOps;
+import com.mojang.serialization.JsonOps;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.RegistryOps;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class RecipeApiSmokeTest {
+
+    @BeforeAll
+    static void bootstrapMinecraft() throws Exception {
+        TestBootstrap.bootstrap();
+    }
+
+    @AfterEach
+    void cleanup() {
+        RecipeRegistry.clearForTesting();
+    }
+
+    @Test
+    void recipe_codec_roundtrip_preserves_modifiers_and_priority() {
+        var id = Identifier.fromNamespaceAndPath("mmcr", "smoke_with_mods");
+        var machineId = Identifier.fromNamespaceAndPath("mmcr", "smoke_machine");
+        var mods = List.of(
+                new RecipeModifier("duration", RecipeModifier.IOType.INPUT, 0.5F, RecipeModifier.Operation.MULTIPLY, false),
+                new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 2.0F, RecipeModifier.Operation.ADD, false)
+        );
+        var recipe = new MachineRecipe(
+                id, machineId, 100,
+                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
+                List.of(),
+                mods, 5, 4
+        );
+
+        var ops = jsonOps();
+        var json = MachineRecipe.CODEC.codec().encodeStart(ops, recipe).getOrThrow();
+        var back = MachineRecipe.CODEC.codec().parse(ops, json).getOrThrow();
+
+        assertThat(back).isEqualTo(recipe);
+        assertThat(back.modifiers()).hasSize(2);
+        assertThat(back.priority()).isEqualTo(5);
+        assertThat(back.maxThreads()).isEqualTo(4);
+        assertThat(back.getRecipeTotalTickTime()).isEqualTo(100);
+        assertThat(back.getRegistryName()).isEqualTo(id);
+        assertThat(back.getOwningMachineIdentifier()).isEqualTo(machineId);
+    }
+
+    @Test
+    void recipe_codec_optional_fields_have_defaults() {
+        var recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "minimal"),
+                Identifier.fromNamespaceAndPath("mmcr", "minimal_machine"),
+                20, List.of(), List.of()
+        );
+        var json = MachineRecipe.CODEC.codec().encodeStart(JsonOps.INSTANCE, recipe).getOrThrow();
+        var back = MachineRecipe.CODEC.codec().parse(JsonOps.INSTANCE, json).getOrThrow();
+
+        assertThat(back.modifiers()).isEmpty();
+        assertThat(back.priority()).isZero();
+        assertThat(back.maxThreads()).isEqualTo(1);
+    }
+
+    @Test
+    void recipe_modifier_apply_modifiers_combines_add_and_multiply() {
+        var mods = List.of(
+                new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 2.0F, RecipeModifier.Operation.ADD, false),
+                new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 1.5F, RecipeModifier.Operation.MULTIPLY, false)
+        );
+        float result = RecipeModifier.applyModifiers(mods, "item", RecipeModifier.IOType.OUTPUT, 10F, false);
+        assertThat(result).isEqualTo((10F + 2F) * 1.5F);
+    }
+
+    @Test
+    void recipe_modifier_filters_by_target_and_io() {
+        var mods = List.of(
+                new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 5F, RecipeModifier.Operation.ADD, false),
+                new RecipeModifier("fluid", RecipeModifier.IOType.INPUT, 5F, RecipeModifier.Operation.ADD, false),
+                new RecipeModifier("item", RecipeModifier.IOType.INPUT, 99F, RecipeModifier.Operation.ADD, false)
+        );
+        float itemOut = RecipeModifier.applyModifiers(mods, "item", RecipeModifier.IOType.OUTPUT, 1F, false);
+        float fluidIn = RecipeModifier.applyModifiers(mods, "fluid", RecipeModifier.IOType.INPUT, 1F, false);
+        assertThat(itemOut).isEqualTo(6F);
+        assertThat(fluidIn).isEqualTo(6F);
+    }
+
+    @Test
+    void recipe_modifier_nbt_roundtrip() {
+        var mod = new RecipeModifier("duration", RecipeModifier.IOType.INPUT, 0.25F, RecipeModifier.Operation.MULTIPLY, true);
+        var tag = mod.serializeNbt();
+        var back = RecipeModifier.deserializeNbt(tag);
+        assertThat(back).isEqualTo(mod);
+    }
+
+    @Test
+    void integration_helper_applies_duration_modifier() {
+        var mods = List.of(
+                new RecipeModifier(IntegrationTypeHelper.TARGET_DURATION, RecipeModifier.IOType.INPUT, 0.5F, RecipeModifier.Operation.MULTIPLY, false)
+        );
+        assertThat(IntegrationTypeHelper.applyDuration(mods, 200)).isEqualTo(100F);
+    }
+
+    @Test
+    void registry_groups_recipes_by_machine_and_priority() {
+        var machineA = Identifier.fromNamespaceAndPath("mmcr", "machine_a");
+        var machineB = Identifier.fromNamespaceAndPath("mmcr", "machine_b");
+
+        var recipe1 = new MachineRecipe(Identifier.fromNamespaceAndPath("mmcr", "r1"), machineA, 10, List.of(), List.of(), List.of(), 0, 1);
+        var recipe2 = new MachineRecipe(Identifier.fromNamespaceAndPath("mmcr", "r2"), machineA, 20, List.of(), List.of(), List.of(), 5, 1);
+        var recipe3 = new MachineRecipe(Identifier.fromNamespaceAndPath("mmcr", "r3"), machineB, 30, List.of(), List.of(), List.of(), 0, 1);
+
+        RecipeRegistry.register(recipe1);
+        RecipeRegistry.register(recipe2);
+        RecipeRegistry.register(recipe3);
+
+        assertThat(RecipeRegistry.getRecipe(recipe1.id())).isEqualTo(recipe1);
+        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(3);
+        assertThat(RecipeRegistry.byMachineId(machineA)).containsExactly(recipe1, recipe2);
+        assertThat(RecipeRegistry.byMachineId(machineB)).containsExactly(recipe3);
+        assertThat(RecipeRegistry.byMachineId(Identifier.fromNamespaceAndPath("mmcr", "unknown"))).isEmpty();
+    }
+
+    @Test
+    void active_recipe_nbt_roundtrip() {
+        var recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "active_test"),
+                Identifier.fromNamespaceAndPath("mmcr", "active_test_machine"),
+                100, List.of(), List.of()
+        );
+        RecipeRegistry.register(recipe);
+
+        var active = new ActiveMachineRecipe(recipe, 4);
+        active.setTick(50);
+        active.setTotalTick(200);
+        active.setParallelism(2);
+        active.getDataCompound().putInt("custom", 42);
+
+        var tag = active.serialize();
+        var back = new ActiveMachineRecipe(tag);
+
+        assertThat(back.getRecipe()).isEqualTo(recipe);
+        assertThat(back.getTick()).isEqualTo(50);
+        assertThat(back.getTotalTick()).isEqualTo(200);
+        assertThat(back.getMaxParallelism()).isEqualTo(4);
+        assertThat(back.getParallelism()).isEqualTo(2);
+        assertThat(back.getDataCompound().getIntOr("custom", 0)).isEqualTo(42);
+        assertThat(back.isCompleted()).isFalse();
+    }
+
+    @Test
+    void active_recipe_marks_completed_when_tick_reaches_total() {
+        var recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "done_test"),
+                Identifier.fromNamespaceAndPath("mmcr", "done_test_machine"),
+                10, List.of(), List.of()
+        );
+        RecipeRegistry.register(recipe);
+        var active = new ActiveMachineRecipe(recipe);
+        active.setTick(10);
+        assertThat(active.isCompleted()).isTrue();
+    }
+
+    @Test
+    void prepared_recipe_converts_to_machine_recipe() {
+        var prepared = new PreparedRecipe(
+                "mmcr:from_prepared",
+                "mmcr:prep_machine",
+                50,
+                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.DIAMOND), 1)),
+                List.of(),
+                List.of(new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 1F, RecipeModifier.Operation.ADD, false)),
+                3, 2
+        );
+        var mr = prepared.toMachineRecipe();
+        assertThat(mr.id().toString()).isEqualTo("mmcr:from_prepared");
+        assertThat(mr.machineId().toString()).isEqualTo("mmcr:prep_machine");
+        assertThat(mr.tickTime()).isEqualTo(50);
+        assertThat(mr.priority()).isEqualTo(3);
+        assertThat(mr.maxThreads()).isEqualTo(2);
+        assertThat(mr.inputs()).hasSize(1);
+        assertThat(mr.outputs()).isEmpty();
+    }
+
+    @Test
+    void craft_check_reports_success_and_failure() {
+        assertThat(CraftCheck.success().isSuccess()).isTrue();
+        assertThat(CraftCheck.partialSuccess().isSuccess()).isFalse();
+        assertThat(CraftCheck.failure("nope").isSuccess()).isFalse();
+        assertThat(CraftCheck.skipComponent().isInvalid()).isTrue();
+    }
+
+    @Test
+    void crafting_status_reflects_working_and_failure() {
+        assertThat(CraftingStatus.working().isCrafting()).isTrue();
+        assertThat(CraftingStatus.failure("err").isFailure()).isTrue();
+        assertThat(CraftingStatus.IDLE.isCrafting()).isFalse();
+        assertThat(CraftingStatus.MISSING_STRUCTURE.isCrafting()).isFalse();
+    }
+
+    private static DynamicOps<JsonElement> jsonOps() {
+        return RegistryOps.create(JsonOps.INSTANCE, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+    }
+}
