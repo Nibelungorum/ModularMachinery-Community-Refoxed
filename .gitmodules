@@ -12,3 +12,7 @@
 	path = reference/jade
 	url = https://github.com/Snownee/Jade
 	branch = 26.1-neoforge
+[submodule "reference/pipez"]
+	path = reference/pipez
+	url = https://github.com/henkelmax/pipez
+	branch = 26.1
