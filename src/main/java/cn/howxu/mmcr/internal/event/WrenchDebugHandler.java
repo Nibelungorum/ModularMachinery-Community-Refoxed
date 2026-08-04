@@ -6,7 +6,6 @@ import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.registry.ModItems;
-import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -49,9 +48,8 @@ public final class WrenchDebugHandler {
 
         if (player.isShiftKeyDown()
                 && player.gameMode.getGameModeForPlayer() == GameType.CREATIVE
-                && port instanceof EnergyHatchBlockEntity energyIn
-                && energyIn.ioType() == IOType.INPUT) {
-            energyIn.getMutableEnergyStorage(null).receiveEnergy(1000, false);
+                && port instanceof EnergyHatchBlockEntity energyHatch) {
+            energyHatch.getMutableEnergyStorage(null).receiveEnergy(1000, false);
             event.setUseItem(TriState.FALSE);
             event.setUseBlock(TriState.FALSE);
             event.setCancellationResult(InteractionResult.SUCCESS);
