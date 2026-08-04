@@ -5,14 +5,13 @@ import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import net.minecraft.core.Direction;
+import net.neoforged.neoforge.capabilities.BlockCapability;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
-import net.neoforged.neoforge.energy.IEnergyStorage;
 import net.neoforged.neoforge.energy.EnergyStorage;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
-import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.ItemStackHandler;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.energy.EnergyHandler;
@@ -25,28 +24,51 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class ModCapabilities {
+    public static final BlockCapability<ResourceHandler<ItemResource>, Direction> ITEM_BLOCK =
+            net.neoforged.neoforge.capabilities.Capabilities.Item.BLOCK;
+    public static final BlockCapability<ResourceHandler<FluidResource>, Direction> FLUID_BLOCK =
+            net.neoforged.neoforge.capabilities.Capabilities.Fluid.BLOCK;
+    public static final BlockCapability<EnergyHandler, Direction> ENERGY_BLOCK =
+            net.neoforged.neoforge.capabilities.Capabilities.Energy.BLOCK;
+
     private ModCapabilities() {}
 
     public static void register(RegisterCapabilitiesEvent event) {
         event.registerBlockEntity(
-                net.neoforged.neoforge.capabilities.Capabilities.Item.BLOCK,
-                ModBlockEntities.BES.get("io_port_item_basic").get(),
-                (be, side) -> be instanceof ItemBusBlockEntity ib ? new LegacyItemHandlerAdapter(ib.getItemStackHandler(side)) : null);
+                ITEM_BLOCK,
+                ModBlockEntities.BES.get("item_input_bus").get(),
+                (be, side) -> be instanceof ItemBusBlockEntity ib ? new LegacyItemHandlerAdapter(ib.getItemStackHandler(side), true, false) : null);
         event.registerBlockEntity(
-                net.neoforged.neoforge.capabilities.Capabilities.Fluid.BLOCK,
-                ModBlockEntities.BES.get("io_port_fluid_basic").get(),
-                (be, side) -> be instanceof FluidHatchBlockEntity fh ? new LegacyFluidHandlerAdapter(fh.getFluidTank(side)) : null);
+                ITEM_BLOCK,
+                ModBlockEntities.BES.get("item_output_bus").get(),
+                (be, side) -> be instanceof ItemBusBlockEntity ib ? new LegacyItemHandlerAdapter(ib.getItemStackHandler(side), false, true) : null);
         event.registerBlockEntity(
-                net.neoforged.neoforge.capabilities.Capabilities.Energy.BLOCK,
-                ModBlockEntities.BES.get("io_port_energy_basic").get(),
-                (be, side) -> be instanceof EnergyHatchBlockEntity eh ? new LegacyEnergyHandlerAdapter(eh.getMutableEnergyStorage(side)) : null);
+                FLUID_BLOCK,
+                ModBlockEntities.BES.get("fluid_input_hatch").get(),
+                (be, side) -> be instanceof FluidHatchBlockEntity fh ? new LegacyFluidHandlerAdapter(fh.getFluidTank(side), true, false) : null);
+        event.registerBlockEntity(
+                FLUID_BLOCK,
+                ModBlockEntities.BES.get("fluid_output_hatch").get(),
+                (be, side) -> be instanceof FluidHatchBlockEntity fh ? new LegacyFluidHandlerAdapter(fh.getFluidTank(side), false, true) : null);
+        event.registerBlockEntity(
+                ENERGY_BLOCK,
+                ModBlockEntities.BES.get("energy_input_hatch").get(),
+                (be, side) -> be instanceof EnergyHatchBlockEntity eh ? new LegacyEnergyHandlerAdapter(eh.getMutableEnergyStorage(side), true, false) : null);
+        event.registerBlockEntity(
+                ENERGY_BLOCK,
+                ModBlockEntities.BES.get("energy_output_hatch").get(),
+                (be, side) -> be instanceof EnergyHatchBlockEntity eh ? new LegacyEnergyHandlerAdapter(eh.getMutableEnergyStorage(side), false, true) : null);
     }
 
     private static final class LegacyFluidHandlerAdapter extends SnapshotJournal<FluidStack> implements ResourceHandler<FluidResource> {
         private final FluidTank handler;
+        private final boolean canInsert;
+        private final boolean canExtract;
 
-        LegacyFluidHandlerAdapter(FluidTank handler) {
+        LegacyFluidHandlerAdapter(FluidTank handler, boolean canInsert, boolean canExtract) {
             this.handler = handler;
+            this.canInsert = canInsert;
+            this.canExtract = canExtract;
         }
 
         @Override
@@ -77,12 +99,14 @@ public final class ModCapabilities {
 
         @Override
         public int insert(int slot, FluidResource resource, int amount, TransactionContext tx) {
+            if (!canInsert) return 0;
             updateSnapshots(tx);
             return handler.fill(resource.toStack(amount), IFluidHandler.FluidAction.EXECUTE);
         }
 
         @Override
         public int extract(int slot, FluidResource resource, int amount, TransactionContext tx) {
+            if (!canExtract) return 0;
             updateSnapshots(tx);
             return handler.drain(resource.toStack(amount), IFluidHandler.FluidAction.EXECUTE).getAmount();
         }
@@ -100,9 +124,13 @@ public final class ModCapabilities {
 
     private static final class LegacyEnergyHandlerAdapter extends SnapshotJournal<Integer> implements EnergyHandler {
         private final EnergyStorage storage;
+        private final boolean canInsert;
+        private final boolean canExtract;
 
-        LegacyEnergyHandlerAdapter(EnergyStorage storage) {
+        LegacyEnergyHandlerAdapter(EnergyStorage storage, boolean canInsert, boolean canExtract) {
             this.storage = storage;
+            this.canInsert = canInsert;
+            this.canExtract = canExtract;
         }
 
         @Override
@@ -117,12 +145,14 @@ public final class ModCapabilities {
 
         @Override
         public int insert(int amount, TransactionContext tx) {
+            if (!canInsert) return 0;
             updateSnapshots(tx);
             return storage.receiveEnergy(amount, false);
         }
 
         @Override
         public int extract(int amount, TransactionContext tx) {
+            if (!canExtract) return 0;
             updateSnapshots(tx);
             return storage.extractEnergy(amount, false);
         }
@@ -146,9 +176,13 @@ public final class ModCapabilities {
 
     private static final class LegacyItemHandlerAdapter extends SnapshotJournal<List<ItemStack>> implements ResourceHandler<ItemResource> {
         private final ItemStackHandler handler;
+        private final boolean canInsert;
+        private final boolean canExtract;
 
-        LegacyItemHandlerAdapter(ItemStackHandler handler) {
+        LegacyItemHandlerAdapter(ItemStackHandler handler, boolean canInsert, boolean canExtract) {
             this.handler = handler;
+            this.canInsert = canInsert;
+            this.canExtract = canExtract;
         }
 
         @Override
@@ -179,6 +213,7 @@ public final class ModCapabilities {
 
         @Override
         public int insert(int slot, ItemResource resource, int amount, TransactionContext tx) {
+            if (!canInsert) return 0;
             updateSnapshots(tx);
             ItemStack remainder = handler.insertItem(slot, resource.toStack(amount), false);
             return amount - remainder.getCount();
@@ -186,6 +221,7 @@ public final class ModCapabilities {
 
         @Override
         public int extract(int slot, ItemResource resource, int amount, TransactionContext tx) {
+            if (!canExtract) return 0;
             ItemStack stack = handler.getStackInSlot(slot);
             if (stack.isEmpty() || !ItemResource.of(stack).equals(resource)) return 0;
             updateSnapshots(tx);

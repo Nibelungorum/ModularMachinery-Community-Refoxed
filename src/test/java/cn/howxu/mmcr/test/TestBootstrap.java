@@ -61,9 +61,12 @@ public final class TestBootstrap {
         bind(ModBlocks.controllerFor(id("test_cube")), Blocks.IRON_BLOCK);
         bind(ModBlocks.controllerFor(id("controller_tick")), Blocks.IRON_BLOCK);
         bind(ModBlocks.controllerFor(id("iron_compressor")), Blocks.IRON_BLOCK);
-        bind(ModBlocks.BLOCKS.get("io_port_item_basic"), Blocks.CHEST);
-        bind(ModBlocks.BLOCKS.get("io_port_fluid_basic"), Blocks.BARREL);
-        bind(ModBlocks.BLOCKS.get("io_port_energy_basic"), Blocks.COPPER_BLOCK);
+        bind(ModBlocks.BLOCKS.get("item_input_bus"), Blocks.CHEST);
+        bind(ModBlocks.BLOCKS.get("item_output_bus"), Blocks.CHEST);
+        bind(ModBlocks.BLOCKS.get("fluid_input_hatch"), Blocks.BARREL);
+        bind(ModBlocks.BLOCKS.get("fluid_output_hatch"), Blocks.BARREL);
+        bind(ModBlocks.BLOCKS.get("energy_input_hatch"), Blocks.COPPER_BLOCK);
+        bind(ModBlocks.BLOCKS.get("energy_output_hatch"), Blocks.COPPER_BLOCK);
         initialized = true;
     }
 

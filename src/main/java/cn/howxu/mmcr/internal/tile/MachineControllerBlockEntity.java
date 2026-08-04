@@ -8,7 +8,6 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.registry.ModBlockEntities;
-import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
@@ -104,10 +103,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return true;
     }
 
-    private ItemBusBlockEntity findAndCheckItemBus(MachineIngredient.ItemIngredient ingredient) {
+    private ItemInputBusBlockEntity findAndCheckItemBus(MachineIngredient.ItemIngredient ingredient) {
         for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
-            if (level.getBlockEntity(getBlockPos().offset(dx, 1, dz)) instanceof ItemBusBlockEntity bus
-                    && bus.ioType() == IOType.INPUT) {
+            if (level.getBlockEntity(getBlockPos().offset(dx, 1, dz)) instanceof ItemInputBusBlockEntity bus) {
                 IItemHandler handler = bus.getItemHandler(null);
                 int count = 0;
                 for (int slot = 0; slot < handler.getSlots(); slot++) {
@@ -120,21 +118,19 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return null;
     }
 
-    private FluidHatchBlockEntity findAndCheckFluidHatch(MachineIngredient.FluidIngredient ingredient) {
+    private FluidInputHatchBlockEntity findAndCheckFluidHatch(MachineIngredient.FluidIngredient ingredient) {
         for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
-            if (level.getBlockEntity(getBlockPos().offset(dx, 1, dz)) instanceof FluidHatchBlockEntity hatch
-                    && hatch.ioType() == IOType.INPUT
+            if (level.getBlockEntity(getBlockPos().offset(dx, 1, dz)) instanceof FluidInputHatchBlockEntity hatch
                     && ingredient.fluid().test(hatch.getFluidHandler(null).getFluidInTank(0))
                     && hatch.getFluidHandler(null).getFluidInTank(0).getAmount() >= ingredient.amount()) return hatch;
         }
         return null;
     }
 
-    private EnergyHatchBlockEntity findAndCheckEnergyHatch(MachineIngredient.EnergyIngredient ingredient, MachineRecipe recipe) {
+    private EnergyInputHatchBlockEntity findAndCheckEnergyHatch(MachineIngredient.EnergyIngredient ingredient, MachineRecipe recipe) {
         int required = ingredient.fePerTick() * recipe.tickTime();
         for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
-            if (level.getBlockEntity(getBlockPos().offset(dx, 1, dz)) instanceof EnergyHatchBlockEntity hatch
-                    && hatch.ioType() == IOType.INPUT
+            if (level.getBlockEntity(getBlockPos().offset(dx, 1, dz)) instanceof EnergyInputHatchBlockEntity hatch
                     && hatch.getEnergyStorage(null).getEnergyStored() >= required) return hatch;
         }
         return null;
@@ -202,8 +198,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private List<OutputSlot> outputSlots() {
         List<OutputSlot> slots = new ArrayList<>();
         for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
-            if (level.getBlockEntity(getBlockPos().offset(dx, 1, dz)) instanceof ItemBusBlockEntity bus
-                    && bus.ioType() == IOType.OUTPUT) {
+            if (level.getBlockEntity(getBlockPos().offset(dx, 1, dz)) instanceof ItemOutputBusBlockEntity bus) {
                 IItemHandler handler = bus.getItemHandler(null);
                 for (int slot = 0; slot < handler.getSlots(); slot++) {
                     slots.add(new OutputSlot(handler, slot));
@@ -216,7 +211,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private void consumeAndProduce(MachineRecipe recipe) {
         for (MachineIngredient ingredient : recipe.inputs()) {
             if (ingredient instanceof MachineIngredient.ItemIngredient item) {
-                ItemBusBlockEntity bus = findAndCheckItemBus(item);
+                ItemInputBusBlockEntity bus = findAndCheckItemBus(item);
                 if (bus == null) continue;
                 IItemHandler handler = bus.getItemHandler(null);
                 int left = item.count();
@@ -229,10 +224,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     }
                 }
             } else if (ingredient instanceof MachineIngredient.FluidIngredient fluid) {
-                FluidHatchBlockEntity hatch = findAndCheckFluidHatch(fluid);
+                FluidInputHatchBlockEntity hatch = findAndCheckFluidHatch(fluid);
                 if (hatch != null) hatch.getFluidHandler(null).drain(fluid.amount(), IFluidHandler.FluidAction.EXECUTE);
             } else if (ingredient instanceof MachineIngredient.EnergyIngredient energy) {
-                EnergyHatchBlockEntity hatch = findAndCheckEnergyHatch(energy, recipe);
+                EnergyInputHatchBlockEntity hatch = findAndCheckEnergyHatch(energy, recipe);
                 if (hatch != null) hatch.getEnergyStorage(null).extractEnergy(energy.fePerTick() * recipe.tickTime(), false);
             }
         }

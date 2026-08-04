@@ -2,17 +2,16 @@ package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
+import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.items.ItemStackHandler;
-import net.neoforged.neoforge.items.SlotItemHandler;
 
 public class ItemBusMenu extends MMCRMenuBase {
 
     public static final int COLS = 3;
-    public static final int ROWS = 3;
+    public static final int ROWS = 2;
 
     private final ItemBusBlockEntity owner;
 
@@ -20,7 +19,7 @@ public class ItemBusMenu extends MMCRMenuBase {
     public ItemBusMenu(int containerId, Inventory playerInv, ItemBusBlockEntity owner) {
         super(ModUIs.ITEM_BUS.get(), containerId);
         this.owner = owner;
-        if (owner != null) addBusSlots(owner.getItemStackHandler(null));
+        addBusSlots(owner);
         addPlayerSlots(playerInv);
     }
 
@@ -37,11 +36,13 @@ public class ItemBusMenu extends MMCRMenuBase {
         return owner;
     }
 
-    private void addBusSlots(ItemStackHandler handler) {
+    private void addBusSlots(ItemBusBlockEntity owner) {
+        SimpleContainer clientContainer = owner == null ? new SimpleContainer(COLS * ROWS) : null;
         for (int row = 0; row < ROWS; row++) {
             for (int col = 0; col < COLS; col++) {
                 int index = row * COLS + col;
-                addSlot(new SlotItemHandler(handler, index, 62 + col * 18, 18 + row * 18));
+                if (owner == null) addSlot(new Slot(clientContainer, index, 61 + col * 18, 18 + row * 18));
+                else addSlot(new DirectionalItemSlot(owner.getItemStackHandler(null), index, 61 + col * 18, 18 + row * 18, owner.ioType()));
             }
         }
     }
@@ -57,9 +58,29 @@ public class ItemBusMenu extends MMCRMenuBase {
 
         int busSlots = COLS * ROWS;
         if (index < busSlots) {
+            if (!slot.mayPickup(player)) return ItemStack.EMPTY;
             if (!moveItemStackTo(stack, busSlots, slots.size(), true)) return ItemStack.EMPTY;
-        } else if (!moveItemStackTo(stack, 0, busSlots, false)) {
-            return ItemStack.EMPTY;
+        } else {
+            if (owner == null || owner.ioType() != cn.howxu.mmcr.util.IOType.INPUT) return ItemStack.EMPTY;
+            boolean moved = false;
+            for (int slotIndex = 0; slotIndex < busSlots && !stack.isEmpty(); slotIndex++) {
+                Slot busSlot = slots.get(slotIndex);
+                if (!busSlot.mayPlace(stack)) continue;
+                ItemStack current = busSlot.getItem();
+                if (current.isEmpty()) {
+                    busSlot.setByPlayer(stack.copyAndClear());
+                    moved = true;
+                } else if (ItemStack.isSameItemSameComponents(current, stack)) {
+                    int movedCount = Math.min(stack.getCount(), Math.min(busSlot.getMaxStackSize(stack), current.getMaxStackSize()) - current.getCount());
+                    if (movedCount > 0) {
+                        current.grow(movedCount);
+                        stack.shrink(movedCount);
+                        busSlot.setChanged();
+                        moved = true;
+                    }
+                }
+            }
+            if (!moved) return ItemStack.EMPTY;
         }
 
         if (stack.isEmpty()) slot.setByPlayer(ItemStack.EMPTY);

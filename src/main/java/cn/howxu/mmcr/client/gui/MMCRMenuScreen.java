@@ -25,14 +25,23 @@ public class MMCRMenuScreen extends AbstractContainerScreen<AbstractContainerMen
     private static final Identifier ITEM_BUS_TEXTURE    = MMCR.id("textures/gui/inventory_normal.png");
     private static final Identifier TANK_TEXTURE        = MMCR.id("textures/gui/guitank.png");
     private static final Identifier CONTROLLER_TEXTURE  = MMCR.id("textures/gui/guicontroller_large.png");
+    static final int TITLE_COLOR = -12566464;
+    static final int TITLE_OFFSET_X = 2;
+    static final int TITLE_OFFSET_Y = 4;
+    static final int FLUID_TITLE_OFFSET_X = 32;
+    static final int ENERGY_TITLE_OFFSET_X = 32;
+    static final int TANK_TITLE_OFFSET_Y = 3;
+    static final int ITEM_BUS_TITLE_OFFSET_X = -4;
+    static final int ITEM_BUS_TITLE_OFFSET_Y = -2;
+    static final int HIDDEN_INVENTORY_LABEL_Y = -1000;
 
     private static final int TANK_X = 63;
-    private static final int TANK_Y = 17;
+    static final int TANK_Y = 17;
     private static final int TANK_W = 50;
     private static final int TANK_H = 60;
 
     private static final int ENERGY_X = 64;
-    private static final int ENERGY_Y = 18;
+    static final int ENERGY_Y = 18;
     private static final int ENERGY_W = 48;
     private static final int ENERGY_H = 58;
 
@@ -40,7 +49,54 @@ public class MMCRMenuScreen extends AbstractContainerScreen<AbstractContainerMen
         super(menu, inventory, title,
                 menu instanceof MachineControllerMenu ? 176 : 176,
                 menu instanceof MachineControllerMenu ? 213 : 166);
-        this.inventoryLabelY = (menu instanceof MachineControllerMenu ? 213 : 166) - 94;
+        boolean fluidMenu = menu instanceof FluidHatchMenu;
+        boolean energyMenu = menu instanceof EnergyHatchMenu;
+        boolean itemBusMenu = menu instanceof ItemBusMenu;
+        this.titleLabelX = titleX(titleLabelX, fluidMenu, energyMenu, itemBusMenu);
+        this.titleLabelY = titleY(titleLabelY, fluidMenu || energyMenu, itemBusMenu);
+        this.inventoryLabelY = hiddenInventoryLabelY();
+    }
+
+    static int titleX(int baseX) {
+        return titleX(baseX, false);
+    }
+
+    static int titleX(int baseX, boolean tankMenu) {
+        return titleX(baseX, tankMenu, false);
+    }
+
+    static int titleX(int baseX, boolean tankMenu, boolean itemBusMenu) {
+        return titleX(baseX, tankMenu, false, itemBusMenu);
+    }
+
+    static int titleX(int baseX, boolean fluidMenu, boolean energyMenu, boolean itemBusMenu) {
+        if (fluidMenu) return baseX + FLUID_TITLE_OFFSET_X;
+        if (energyMenu) return baseX + ENERGY_TITLE_OFFSET_X;
+        if (itemBusMenu) return baseX + ITEM_BUS_TITLE_OFFSET_X;
+        return baseX + TITLE_OFFSET_X;
+    }
+
+    static int titleY(int baseY) {
+        return titleY(baseY, false);
+    }
+
+    static int titleY(int baseY, boolean tankMenu) {
+        return titleY(baseY, tankMenu, false);
+    }
+
+    static int titleY(int baseY, boolean tankMenu, boolean itemBusMenu) {
+        if (tankMenu) return baseY + TANK_TITLE_OFFSET_Y;
+        if (itemBusMenu) return baseY + ITEM_BUS_TITLE_OFFSET_Y;
+        return baseY + TITLE_OFFSET_Y;
+    }
+
+    static int hiddenInventoryLabelY() {
+        return HIDDEN_INVENTORY_LABEL_Y;
+    }
+
+    @Override
+    protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+        graphics.text(font, title, titleLabelX, titleLabelY, TITLE_COLOR, false);
     }
 
     @Override

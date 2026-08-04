@@ -32,9 +32,13 @@ public final class DefaultMachines {
     public static void ensureRegistered() {
         if (MachineRegistry.getMachine(BLAST_FURNACE_ID) == null) {
             Block casing = ModBlocks.CASING.get();
-            Block itemPort = ModBlocks.BLOCKS.get("io_port_item_basic").get();
-            Block fluidPort = ModBlocks.BLOCKS.get("io_port_fluid_basic").get();
-            MachineRegistry.register(blastFurnace(casing, itemPort, fluidPort));
+            Block itemInput = ModBlocks.BLOCKS.get("item_input_bus").get();
+            Block itemOutput = ModBlocks.BLOCKS.get("item_output_bus").get();
+            Block fluidInput = ModBlocks.BLOCKS.get("fluid_input_hatch").get();
+            Block fluidOutput = ModBlocks.BLOCKS.get("fluid_output_hatch").get();
+            Block energyInput = ModBlocks.BLOCKS.get("energy_input_hatch").get();
+            Block energyOutput = ModBlocks.BLOCKS.get("energy_output_hatch").get();
+            MachineRegistry.register(blastFurnace(casing, itemInput, itemOutput, fluidInput, fluidOutput, energyInput, energyOutput));
         }
     }
 
@@ -42,11 +46,22 @@ public final class DefaultMachines {
      * 构筑高炉 pattern。Builder 接收具体 Block 实例(不再依赖静态 init 时的 holder 解析),
      * 让 DefaultMachines 类可在 TestBootstrap 反射 bind 任意 block 之后被调用。
      */
-    public static Machine blastFurnace(Block casing, Block itemPort, Block fluidPort) {
+    public static Machine blastFurnace(
+            Block casing,
+            Block itemInput,
+            Block itemOutput,
+            Block fluidInput,
+            Block fluidOutput,
+            Block energyInput,
+            Block energyOutput) {
         Block controller = ModBlocks.controllerFor(BLAST_FURNACE_ID).get();
         BlockPredicate ioPort = new BlockPredicate.AnyOf(List.of(
-                new BlockPredicate.OfBlock(itemPort),
-                new BlockPredicate.OfBlock(fluidPort)));
+                new BlockPredicate.OfBlock(itemInput),
+                new BlockPredicate.OfBlock(itemOutput),
+                new BlockPredicate.OfBlock(fluidInput),
+                new BlockPredicate.OfBlock(fluidOutput),
+                new BlockPredicate.OfBlock(energyInput),
+                new BlockPredicate.OfBlock(energyOutput)));
 
         BlockArray pattern = BlockArray.builder()
                 .pattern(

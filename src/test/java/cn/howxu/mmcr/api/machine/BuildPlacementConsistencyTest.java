@@ -116,6 +116,12 @@ class BuildPlacementConsistencyTest {
 
     private static Machine fixture() {
         return DefaultMachines.blastFurnace(
-                Blocks.STONE, Blocks.OAK_PLANKS, Blocks.SPRUCE_PLANKS);
+                Blocks.STONE,
+                Blocks.OAK_PLANKS,
+                Blocks.SPRUCE_PLANKS,
+                Blocks.BIRCH_PLANKS,
+                Blocks.JUNGLE_PLANKS,
+                Blocks.ACACIA_PLANKS,
+                Blocks.DARK_OAK_PLANKS);
     }
 }

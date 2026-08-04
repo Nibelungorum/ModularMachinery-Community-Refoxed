@@ -3,10 +3,10 @@ package cn.howxu.mmcr.internal.block;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
 import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
+import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
-import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
@@ -21,29 +21,24 @@ import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.StateDefinition;
-import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.phys.BlockHitResult;
 
 import java.util.function.Supplier;
 
 public class IOPortBlock extends Block implements EntityBlock {
 
-    public static final EnumProperty<IOType> IO_TYPE = EnumProperty.create("io_type", IOType.class);
-
-    private final String kind;
+    private final IOPortKind kind;
     private final Supplier<? extends BlockEntityType<?>> beType;
 
-    public IOPortBlock(String kind,
+    public IOPortBlock(IOPortKind kind,
                        Supplier<? extends BlockEntityType<?>> beType,
                        Properties props) {
         super(props.sound(SoundType.METAL));
         this.kind = kind;
         this.beType = beType;
-        registerDefaultState(stateDefinition.any().setValue(IO_TYPE, IOType.INPUT));
     }
 
-    public String kind() { return kind; }
+    public IOPortKind kind() { return kind; }
 
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
@@ -51,24 +46,15 @@ public class IOPortBlock extends Block implements EntityBlock {
     }
 
     @Override
-    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> b) {
-        b.add(IO_TYPE);
-    }
-
-    @Override
     public MenuProvider getMenuProvider(BlockState state, Level level, BlockPos pos) {
         return new SimpleMenuProvider(
-                (containerId, playerInv, player) -> openServerMenu(kind, containerId, playerInv, level, pos),
-                titleFor(kind));
+                (containerId, playerInv, player) -> openServerMenu(kind.id(), containerId, playerInv, level, pos),
+                titleFor(kind.id()));
     }
 
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
                                                 Player player, BlockHitResult hit) {
-        if (player.isShiftKeyDown() && !level.isClientSide()) {
-            level.setBlock(pos, state.cycle(IO_TYPE), 3);
-            return InteractionResult.SUCCESS;
-        }
         if (!level.isClientSide()) {
             MenuProvider provider = state.getMenuProvider(level, pos);
             if (provider != null) player.openMenu(provider);
@@ -80,21 +66,24 @@ public class IOPortBlock extends Block implements EntityBlock {
                                                         net.minecraft.world.entity.player.Inventory playerInv,
                                                         Level level, BlockPos pos) {
         return switch (kind) {
-            case "item"   -> new ItemBusMenu(containerId, playerInv,
-                    level.getBlockEntity(pos) instanceof ItemBusBlockEntity ib ? ib : null);
-            case "fluid"  -> new FluidHatchMenu(containerId, playerInv,
-                    level.getBlockEntity(pos) instanceof FluidHatchBlockEntity fh ? fh : null);
-            case "energy" -> new EnergyHatchMenu(containerId, playerInv,
-                    level.getBlockEntity(pos) instanceof EnergyHatchBlockEntity eh ? eh : null);
+            case "item_input_bus", "item_output_bus" -> new ItemBusMenu(containerId, playerInv,
+                    level.getBlockEntity(pos) instanceof ItemBusBlockEntity bus ? bus : null);
+            case "fluid_input_hatch", "fluid_output_hatch" -> new FluidHatchMenu(containerId, playerInv,
+                    level.getBlockEntity(pos) instanceof FluidHatchBlockEntity hatch ? hatch : null);
+            case "energy_input_hatch", "energy_output_hatch" -> new EnergyHatchMenu(containerId, playerInv,
+                    level.getBlockEntity(pos) instanceof EnergyHatchBlockEntity hatch ? hatch : null);
             default       -> null;
         };
     }
 
     private static Component titleFor(String kind) {
         return switch (kind) {
-            case "item"   -> Component.translatable("container.mmcr.item_bus");
-            case "fluid"  -> Component.translatable("container.mmcr.fluid_hatch");
-            case "energy" -> Component.translatable("container.mmcr.energy_hatch");
+            case "item_input_bus" -> Component.translatable("container.mmcr.item_input_bus");
+            case "item_output_bus" -> Component.translatable("container.mmcr.item_output_bus");
+            case "fluid_input_hatch" -> Component.translatable("container.mmcr.fluid_input_hatch");
+            case "fluid_output_hatch" -> Component.translatable("container.mmcr.fluid_output_hatch");
+            case "energy_input_hatch" -> Component.translatable("container.mmcr.energy_input_hatch");
+            case "energy_output_hatch" -> Component.translatable("container.mmcr.energy_output_hatch");
             default       -> Component.literal(kind);
         };
     }

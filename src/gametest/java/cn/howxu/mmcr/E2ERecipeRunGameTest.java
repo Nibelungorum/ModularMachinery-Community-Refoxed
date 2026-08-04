@@ -7,9 +7,9 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
-import cn.howxu.mmcr.internal.block.IOPortBlock;
-import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
-import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
@@ -35,15 +35,14 @@ public class E2ERecipeRunGameTest {
         BlockPos controllerPos = new BlockPos(1, 1, 1);
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("iron_compressor")).get().defaultBlockState());
         BlockPos inputPos = new BlockPos(1, 2, 0);
-        helper.setBlock(inputPos, ModBlocks.BLOCKS.get("io_port_item_basic").get().defaultBlockState());
-        helper.getBlockEntity(inputPos, ItemBusBlockEntity.class).getItemHandler(null)
+        helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+        helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null)
                 .insertItem(0, new ItemStack(Items.IRON_INGOT, 2), false);
         BlockPos outputPos = new BlockPos(1, 2, 2);
-        helper.setBlock(outputPos, ModBlocks.BLOCKS.get("io_port_item_basic").get().defaultBlockState()
-                .setValue(IOPortBlock.IO_TYPE, cn.howxu.mmcr.util.IOType.OUTPUT));
+        helper.setBlock(outputPos, ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState());
         BlockPos energyPos = new BlockPos(2, 2, 1);
-        helper.setBlock(energyPos, ModBlocks.BLOCKS.get("io_port_energy_basic").get().defaultBlockState());
-        helper.getBlockEntity(energyPos, EnergyHatchBlockEntity.class).getEnergyStorage(null).receiveEnergy(10000, false);
+        helper.setBlock(energyPos, ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState());
+        helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).getEnergyStorage(null).receiveEnergy(10000, false);
 
         Map<BlockPos, BlockPredicate> pattern = new HashMap<>();
         for (int x = -1; x <= 1; x++) for (int z = -1; z <= 1; z++)
@@ -63,8 +62,12 @@ public class E2ERecipeRunGameTest {
         controller.serverTick();
         helper.assertTrue(controller.isFormed(), "Structure formed");
         for (int tick = 0; tick < 40; tick++) controller.serverTick();
-        ItemStack output = helper.getBlockEntity(outputPos, ItemBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
+        ItemStack input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
+        ItemStack output = helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
+        int energy = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).getEnergyStorage(null).getEnergyStored();
+        helper.assertTrue(input.isEmpty(), "Input ingots consumed");
         helper.assertTrue(output.is(Items.IRON_NUGGET), "Output is iron nugget");
+        helper.assertTrue(energy == 6800, "Energy consumed");
         helper.succeed();
     }
 }

@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.block;
 
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
@@ -72,7 +74,14 @@ public class MachineControllerBlock extends Block implements EntityBlock {
         return new SimpleMenuProvider(
                 (containerId, playerInv, player) -> new MachineControllerMenu(containerId, playerInv,
                         level.getBlockEntity(pos) instanceof MachineControllerBlockEntity mc ? mc : null),
-                Component.translatable("container.mmcr.machine_controller"));
+                titleFor(machineId));
+    }
+
+    static Component titleFor(Identifier machineId) {
+        Machine machine = MachineDefinitions.get(machineId);
+        return machine == null
+                ? Component.translatable("container.mmcr.machine_controller")
+                : Component.literal(machine.localizedName());
     }
 
     @Override

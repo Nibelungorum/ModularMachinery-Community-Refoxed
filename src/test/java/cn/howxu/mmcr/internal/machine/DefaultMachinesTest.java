@@ -53,6 +53,12 @@ class DefaultMachinesTest {
                 .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.CASING.get()));
         assertThat(machine.pattern().get(new BlockPos(0, 0, -2)))
                 .isEqualTo(portPredicate());
+        assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("energy_output_hatch").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, 1, 0)))
                 .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.CASING.get()));
     }
@@ -61,14 +67,18 @@ class DefaultMachinesTest {
     void default_blast_furnace_raw_pattern_faces_south() {
         Machine machine = DefaultMachines.blastFurnace(
                 ModBlocks.CASING.get(),
-                ModBlocks.BLOCKS.get("io_port_item_basic").get(),
-                ModBlocks.BLOCKS.get("io_port_fluid_basic").get());
+                ModBlocks.BLOCKS.get("item_input_bus").get(),
+                ModBlocks.BLOCKS.get("item_output_bus").get(),
+                ModBlocks.BLOCKS.get("fluid_input_hatch").get(),
+                ModBlocks.BLOCKS.get("fluid_output_hatch").get(),
+                ModBlocks.BLOCKS.get("energy_input_hatch").get(),
+                ModBlocks.BLOCKS.get("energy_output_hatch").get());
         BlockPos controller = new BlockPos(10, 4, 10);
         Map<BlockPos, Block> blocks = new HashMap<>();
         for (var entry : machine.pattern().pattern().entrySet()) {
             blocks.put(controller.offset(entry.getKey()), switch (entry.getValue()) {
                 case BlockPredicate.OfBlock of -> of.block();
-                case BlockPredicate.AnyOf ignored -> ModBlocks.BLOCKS.get("io_port_item_basic").get();
+                case BlockPredicate.AnyOf ignored -> ModBlocks.BLOCKS.get("item_input_bus").get();
                 default -> ModBlocks.CASING.get();
             });
         }
@@ -83,7 +93,11 @@ class DefaultMachinesTest {
 
     private static BlockPredicate portPredicate() {
         return new BlockPredicate.AnyOf(java.util.List.of(
-                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("io_port_item_basic").get()),
-                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("io_port_fluid_basic").get())));
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_output_bus").get()),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("fluid_input_hatch").get()),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("fluid_output_hatch").get()),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("energy_input_hatch").get()),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("energy_output_hatch").get())));
     }
 }

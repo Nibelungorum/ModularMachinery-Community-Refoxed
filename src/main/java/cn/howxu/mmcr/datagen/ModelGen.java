@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
+import cn.howxu.mmcr.registry.PortKinds;
 import net.minecraft.client.data.models.BlockModelGenerators;
 import net.minecraft.client.data.models.ItemModelGenerators;
 import net.minecraft.client.data.models.ModelProvider;
@@ -33,11 +34,17 @@ public final class ModelGen extends ModelProvider {
     private static final TextureSlot OV_TOP = TextureSlot.create("ov_top");
     private static final TextureSlot OV_SIDE = TextureSlot.create("ov_side");
     private static final TextureSlot OV_FRONT = TextureSlot.create("ov_front");
+    private static final TextureSlot OV_ALL = TextureSlot.create("ov_all");
 
     private static final ModelTemplate CONTROLLER_OVERLAY = new ModelTemplate(
             Optional.of(MMCR.id("block/machine_controller_overlay")),
             Optional.empty(),
             BG_ALL, OV_TOP, OV_SIDE, OV_FRONT);
+
+    private static final ModelTemplate BUS_HATCH_OVERLAY = new ModelTemplate(
+            Optional.of(MMCR.id("block/bus_hatch_overlay")),
+            Optional.empty(),
+            BG_ALL, OV_ALL);
 
     public ModelGen(PackOutput output) {
         super(output, MMCR.MODID);
@@ -68,6 +75,15 @@ public final class ModelGen extends ModelProvider {
                         .with(MachineControllerVariants.full()));
                 blockModels.registerSimpleItemModel(block.asItem(),
                         ModelLocationUtils.getModelLocation(block));
+            } else if (isIoPort(name)) {
+                TextureMapping mapping = new TextureMapping()
+                        .put(BG_ALL, new Material(MMCR.id("block/basic_casing")))
+                        .put(OV_ALL, new Material(MMCR.id("block/" + overlayTextureFor(name))));
+                Identifier modelId = BUS_HATCH_OVERLAY.create(block, mapping, blockModels.modelOutput);
+                blockModels.blockStateOutput.accept(MultiVariantGenerator
+                        .dispatch(block, BlockModelGenerators.plainVariant(modelId)));
+                blockModels.registerSimpleItemModel(block.asItem(),
+                        ModelLocationUtils.getModelLocation(block));
             } else {
                 blockModels.createTrivialBlock(block, TexturedModel.CUBE.updateTexture(
                         m -> m.put(TextureSlot.ALL, textureFor(name))));
@@ -78,6 +94,22 @@ public final class ModelGen extends ModelProvider {
     /** 用 block 注册名生成纹理 Material:modid:block/<name>。每个 block 自带独立贴图。 */
     private static Material textureFor(String blockName) {
         return new Material(MMCR.id("block/" + blockName));
+    }
+
+    private static boolean isIoPort(String blockName) {
+        return PortKinds.all().stream().anyMatch(kind -> kind.id().equals(blockName));
+    }
+
+    private static String overlayTextureFor(String blockName) {
+        return switch (blockName) {
+            case "item_input_bus" -> "overlay_inputbus_normal";
+            case "item_output_bus" -> "overlay_outputbus_normal";
+            case "fluid_input_hatch" -> "overlay_fluidinputhatch_normal";
+            case "fluid_output_hatch" -> "overlay_fluidoutputhatch_normal";
+            case "energy_input_hatch" -> "overlay_energyinputhatch_normal";
+            case "energy_output_hatch" -> "overlay_energyoutputhatch_normal";
+            default -> throw new IllegalArgumentException("No overlay texture for I/O port: " + blockName);
+        };
     }
 
     @Override

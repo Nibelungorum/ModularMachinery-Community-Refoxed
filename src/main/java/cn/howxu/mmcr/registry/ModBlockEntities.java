@@ -25,7 +25,7 @@ public final class ModBlockEntities {
     static {
         MachineDefinitions.all().forEach(machine -> registerMachineController(machine.registryName()));
         PortKinds.all().forEach(kind -> {
-            String name = "io_port_" + kind.id() + "_basic";
+            String name = kind.id();
             BES.put(name, register(name, () -> new BlockEntityType<>(
                     (BlockEntityType.BlockEntitySupplier) kind.entityFactory(),
                     ModBlocks.BLOCKS.get(name).get())));

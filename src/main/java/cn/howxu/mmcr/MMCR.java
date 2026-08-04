@@ -38,7 +38,7 @@ public class MMCR {
 
     public MMCR(IEventBus modBus, ModContainer modContainer) {
         BuiltinMachines.register();
-        registerGameTestMachineDefinitions();
+        registerGameTestMachineDefinitionsIfPresent();
         MachineDefinitions.bootstrapBuiltins();
         ModBlocks.register(modBus);
         ModItems.register(modBus);
@@ -72,8 +72,16 @@ public class MMCR {
         return Identifier.fromNamespaceAndPath(MODID, path);
     }
 
-    private static void registerGameTestMachineDefinitions() {
-        if (!Boolean.getBoolean("neoforge.enableGameTest")) return;
+    static void registerGameTestMachineDefinitionsIfPresent() {
+        try {
+            Class.forName("cn.howxu.mmcr.MMCRGameTests");
+        } catch (ClassNotFoundException ignored) {
+            return;
+        }
+        registerGameTestMachineDefinitions();
+    }
+
+    public static void registerGameTestMachineDefinitions() {
         MachineDefinitions.addBuiltinSupplier(() -> new cn.howxu.mmcr.api.machine.DynamicMachine(
                 id("test_cube"), "Test", new cn.howxu.mmcr.api.machine.BlockArray(java.util.Map.of())));
         MachineDefinitions.addBuiltinSupplier(() -> new cn.howxu.mmcr.api.machine.DynamicMachine(

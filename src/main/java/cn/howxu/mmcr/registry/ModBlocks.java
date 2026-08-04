@@ -62,11 +62,11 @@ public final class ModBlocks {
     }
 
     private static void registerIoPort(IOPortKind kind) {
-        String name = "io_port_" + kind.id() + "_basic";
+        String name = kind.id();
         Supplier<? extends BlockEntityType<?>> beTypeSupplier =
                 () -> ModBlockEntities.BES.get(name).get();
         BLOCKS.put(name, REGISTER.registerBlock(name,
-                properties -> new IOPortBlock(kind.id(), beTypeSupplier, properties)));
+                properties -> new IOPortBlock(kind, beTypeSupplier, properties)));
     }
 
     public static void register(IEventBus bus) {

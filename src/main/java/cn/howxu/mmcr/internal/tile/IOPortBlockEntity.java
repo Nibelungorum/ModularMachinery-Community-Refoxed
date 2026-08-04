@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.internal.tile;
 
-import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
@@ -14,9 +13,7 @@ public abstract class IOPortBlockEntity extends BlockEntity {
         super(type, pos, state);
     }
 
-    public IOType ioType() {
-        return getBlockState().getValue(IOPortBlock.IO_TYPE);
-    }
+    public abstract IOType ioType();
 
     public abstract IOPortKind kind();
 
