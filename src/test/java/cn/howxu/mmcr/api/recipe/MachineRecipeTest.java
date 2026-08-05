@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.recipe;
 
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -17,12 +19,13 @@ import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.material.Fluid;
+import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Constructor;
-import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -132,6 +135,32 @@ class MachineRecipeTest {
         assertThatThrownBy(() -> RecipeRegistry.register(
                 new MachineRecipe(null, machineId, 1, List.of(), List.of())))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void fluidOnlyRequirementRecipeAssemblesEmptyItemStack() {
+        bindFluidComponents(Fluids.WATER);
+        var recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "fluid_only"),
+                Identifier.fromNamespaceAndPath("mmcr", "machine"),
+                20,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new FluidStack(Fluids.WATER, 1000)))
+        );
+
+        assertThat(recipe.assemble(null)).isEqualTo(ItemStack.EMPTY);
+    }
+
+    private static Holder<Fluid> bindFluidComponents(Fluid fluid) {
+        var holder = fluid.builtInRegistryHolder();
+        holder.bindComponents(DataComponentMap.EMPTY);
+        return holder;
     }
 
     private static JsonArray legacyItemInputs(String itemId, int count) {
