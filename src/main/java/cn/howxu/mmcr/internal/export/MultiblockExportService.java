@@ -62,15 +62,8 @@ public final class MultiblockExportService {
         out.append("import cn.howxu.mmcr.api.machine.BlockPredicate;").append(newline);
 
         LinkedHashMap<Identifier, Character> symbols = assignSymbols(rendered);
-        boolean usesRegistry = symbols.keySet().stream().anyMatch(id -> !isVanillaConstant(id));
-        boolean usesBlocks = symbols.keySet().stream().anyMatch(MultiblockExportService::isVanillaConstant);
-        if (usesRegistry) {
-            out.append("import net.minecraft.core.registries.BuiltInRegistries;").append(newline);
-            out.append("import net.minecraft.resources.Identifier;").append(newline);
-        }
-        if (usesBlocks) {
-            out.append("import net.minecraft.world.level.block.Blocks;").append(newline);
-        }
+        out.append("import net.minecraft.core.registries.BuiltInRegistries;").append(newline);
+        out.append("import net.minecraft.resources.Identifier;").append(newline);
         out.append(newline);
 
         out.append("BlockArray pattern = BlockArray.builder()").append(newline);
@@ -167,28 +160,8 @@ public final class MultiblockExportService {
         return symbols;
     }
 
-    private static boolean isVanillaConstant(Identifier id) {
-        return "minecraft".equals(id.getNamespace()) && vanillaBlocksConstant(id.getPath()) != null;
-    }
-
     private static String predicateExpression(Identifier id) {
-        String vanilla = "minecraft".equals(id.getNamespace()) ? vanillaBlocksConstant(id.getPath()) : null;
-        if (vanilla != null) return "new BlockPredicate.OfBlock(Blocks." + vanilla + ")";
         return "new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"" + id + "\")))";
-    }
-
-    private static String vanillaBlocksConstant(String path) {
-        return switch (path) {
-            case "stone" -> "STONE";
-            case "cobblestone" -> "COBBLESTONE";
-            case "dirt" -> "DIRT";
-            case "oak_planks" -> "OAK_PLANKS";
-            case "glass" -> "GLASS";
-            case "iron_block" -> "IRON_BLOCK";
-            case "gold_block" -> "GOLD_BLOCK";
-            case "diamond_block" -> "DIAMOND_BLOCK";
-            default -> null;
-        };
     }
 
     public record SnapshotEntry(BlockPos offset, Identifier blockId, boolean air) {}

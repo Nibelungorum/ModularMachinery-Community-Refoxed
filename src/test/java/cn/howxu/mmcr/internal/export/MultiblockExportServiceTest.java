@@ -63,14 +63,14 @@ class MultiblockExportServiceTest {
     }
 
     @Test
-    void renderJavaUsesBlocksConstantsForKnownVanillaBlocks() {
+    void renderJavaUsesBuiltinRegistryForVanillaBlocks() {
         String java = MultiblockExportService.renderJava(List.of(
                 new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, Identifier.fromNamespaceAndPath("minecraft", "stone"), false)
         ), Direction.SOUTH);
 
-        assertThat(java).contains("import net.minecraft.world.level.block.Blocks;");
-        assertThat(java).contains(".set('X', new BlockPredicate.OfBlock(Blocks.STONE))");
-        assertThat(java).doesNotContain("Identifier.parse(\"minecraft:stone\")");
+        assertThat(java).doesNotContain("import net.minecraft.world.level.block.Blocks;");
+        assertThat(java).doesNotContain("Blocks.STONE");
+        assertThat(java).contains(".set('X', new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"minecraft:stone\"))))");
     }
 
     @Test
