@@ -16,7 +16,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 public class PortMenuDirectionGameTest {
 
     @GameTest(template = "minecraft:empty")
-    public void itemBusMenuRestrictsSlotsByDirection(GameTestHelper helper) {
+    public void itemBusMenuAllowsContainerSlotTransfers(GameTestHelper helper) {
         BlockPos inputPos = new BlockPos(0, 1, 0);
         BlockPos outputPos = new BlockPos(0, 2, 0);
         helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
@@ -28,7 +28,6 @@ public class PortMenuDirectionGameTest {
 
         Slot inputSlot = inputMenu.getSlot(0);
         helper.assertTrue(inputSlot.mayPlace(new ItemStack(Items.IRON_INGOT)), "Input slot accepts placement");
-        helper.assertTrue(!inputSlot.mayPickup(player), "Input slot rejects pickup");
 
         helper.getBlockEntity(outputPos, ItemBusBlockEntity.class).getItemStackHandler(null)
                 .setStackInSlot(0, new ItemStack(Items.GOLD_INGOT));
@@ -38,7 +37,8 @@ public class PortMenuDirectionGameTest {
 
         player.getInventory().setItem(0, new ItemStack(Items.IRON_INGOT));
         helper.assertTrue(!inputMenu.quickMoveStack(player, 33).isEmpty(), "Player stack moves into input port");
-        helper.assertTrue(inputMenu.quickMoveStack(player, 0).isEmpty(), "Input port stack does not move to player");
+        helper.assertTrue(inputSlot.mayPickup(player), "Input slot accepts pickup after it contains an item");
+        helper.assertTrue(!inputMenu.quickMoveStack(player, 0).isEmpty(), "Input port stack moves to player");
 
         helper.assertTrue(!outputMenu.quickMoveStack(player, 0).isEmpty(), "Output port stack moves to player");
         player.getInventory().setItem(1, new ItemStack(Items.COPPER_INGOT));

@@ -26,7 +26,7 @@ public final class GameTestRegistry {
         register(event, "energy_hatch_capability", 100, helper -> new EnergyHatchCapabilityGameTest().energyHatchStoresFE(helper));
         register(event, "fluid_hatch_capability", 100, helper -> new FluidHatchCapabilityGameTest().fluidHatchStoresWater(helper));
         register(event, "item_bus_capability", 100, ItemBusCapabilityGameTest::itemBusAcceptsItems);
-        register(event, "port_menu_direction", 100, helper -> new PortMenuDirectionGameTest().itemBusMenuRestrictsSlotsByDirection(helper));
+        register(event, "port_menu_direction", 100, helper -> new PortMenuDirectionGameTest().itemBusMenuAllowsContainerSlotTransfers(helper));
     }
 
     private static void register(RegisterGameTestsEvent event, String name, int maxTicks, Consumer<GameTestHelper> test) {
