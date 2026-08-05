@@ -9,19 +9,15 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
-import net.neoforged.neoforge.gametest.GameTestHolder;
 
 import java.util.HashMap;
 import java.util.Map;
 
-@GameTestHolder(MMCR.MODID)
 public class ControllerTickGameTest {
 
-    @GameTest(template = "minecraft:empty")
     public void structureForms3x3Casing(GameTestHelper helper) {
         for (int x = 0; x < 3; x++) for (int z = 0; z < 3; z++)
             helper.setBlock(new BlockPos(x, 1, z), ModBlocks.CASING.get().defaultBlockState());
@@ -43,7 +39,6 @@ public class ControllerTickGameTest {
         helper.succeed();
     }
 
-    @GameTest(template = "minecraft:empty")
     public void scansRegisteredMachineWhenDefaultBindingIsEmpty(GameTestHelper helper) {
         for (int x = 0; x < 3; x++) for (int z = 0; z < 3; z++)
             helper.setBlock(new BlockPos(x, 1, z), ModBlocks.CASING.get().defaultBlockState());

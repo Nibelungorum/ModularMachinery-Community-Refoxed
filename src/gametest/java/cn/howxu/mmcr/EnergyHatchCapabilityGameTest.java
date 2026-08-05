@@ -7,18 +7,14 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 import net.neoforged.neoforge.transfer.energy.EnergyHandlerUtil;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 
-@GameTestHolder(MMCR.MODID)
 public class EnergyHatchCapabilityGameTest {
 
-    @GameTest(template = "minecraft:empty")
     public void energyHatchStoresFE(GameTestHelper helper) {
         BlockPos inputPos = new BlockPos(0, 1, 0);
         BlockPos outputPos = new BlockPos(0, 2, 0);

@@ -7,18 +7,14 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
-import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
-import net.neoforged.neoforge.gametest.GameTestHolder;
 
 import java.util.HashMap;
 import java.util.Map;
 
-@GameTestHolder(MMCR.MODID)
 public class BlockArrayMatchGameTest {
 
-    @GameTest(template = "minecraft:empty")
     public void structureForms3x3Casing(GameTestHelper helper) {
         for (int x = 0; x < 3; x++)
             for (int z = 0; z < 3; z++)

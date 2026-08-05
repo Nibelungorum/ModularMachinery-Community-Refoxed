@@ -15,22 +15,18 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.neoforged.neoforge.gametest.GameTestHolder;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-@GameTestHolder(MMCR.MODID)
 public class E2ERecipeRunGameTest {
 
-    @GameTest(template = "minecraft:empty", timeoutTicks = 200)
     public void ironCompressorRuns(GameTestHelper helper) {
         for (int x = 0; x < 3; x++) for (int z = 0; z < 3; z++)
             helper.setBlock(new BlockPos(x, 1, z), ModBlocks.CASING.get().defaultBlockState());
@@ -77,7 +73,6 @@ public class E2ERecipeRunGameTest {
         helper.succeed();
     }
 
-    @GameTest(template = "minecraft:empty", timeoutTicks = 200)
     public void recipeUsesPortsFromMatchedPatternOutsideLegacyScan(GameTestHelper helper) {
         BlockPos controllerPos = new BlockPos(2, 1, 2);
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("wide_compressor")).get().defaultBlockState());

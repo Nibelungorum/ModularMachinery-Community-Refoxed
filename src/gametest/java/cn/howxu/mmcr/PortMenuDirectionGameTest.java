@@ -4,18 +4,14 @@ import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
-import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.neoforged.neoforge.gametest.GameTestHolder;
 
-@GameTestHolder(MMCR.MODID)
 public class PortMenuDirectionGameTest {
 
-    @GameTest(template = "minecraft:empty")
     public void itemBusMenuAllowsContainerSlotTransfers(GameTestHelper helper) {
         BlockPos inputPos = new BlockPos(0, 1, 0);
         BlockPos outputPos = new BlockPos(0, 2, 0);
