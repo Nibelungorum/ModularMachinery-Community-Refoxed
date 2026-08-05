@@ -6,13 +6,14 @@ import cn.howxu.mmcr.internal.tile.FluidOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.api.recipe.helper.EnergyRecipeIo;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.items.IItemHandler;
+import net.neoforged.neoforge.energy.IEnergyStorage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,12 +25,10 @@ public final class RecipeCraftingContext {
     private static final Logger LOG = LoggerFactory.getLogger(RecipeCraftingContext.class);
 
     private final MachineControllerBlockEntity controller;
-    private final Level level;
     private final BlockPos controllerPos;
 
     public RecipeCraftingContext(MachineControllerBlockEntity controller) {
         this.controller = controller;
-        this.level = controller.getLevel();
         this.controllerPos = controller.getBlockPos();
         LOG.debug("Crafting context created: controllerPos={} components={}", controllerPos, controller.getComponents().size());
     }
@@ -38,18 +37,13 @@ public final class RecipeCraftingContext {
         for (MachineIngredient ingredient : recipe.inputs()) {
             if (!(ingredient instanceof MachineIngredient.EnergyIngredient energy)) continue;
 
-            EnergyInputHatchBlockEntity hatch = findAndCheckEnergyHatch(energy);
-            if (hatch == null) {
+            List<EnergyInputHatchBlockEntity> hatches = liveEnergyInputs();
+            if (!EnergyRecipeIo.consumeInputs(energyStorages(hatches), energy.fePerTick(), 1)) {
                 LOG.info("[ioTick] recipe={} missing {}FE/t energy input", recipe.id(), energy.fePerTick());
                 return false;
             }
-            int extracted = hatch.getEnergyStorage(null).extractEnergy(energy.fePerTick(), false);
-            if (extracted < energy.fePerTick()) {
-                LOG.info("[ioTick] recipe={} extracted only {}FE / {}FE from hatch at {}",
-                        recipe.id(), extracted, energy.fePerTick(), hatch.getBlockPos());
-                return false;
-            }
-            LOG.debug("[ioTick] recipe={} drained {}FE from hatch at {}", recipe.id(), extracted, hatch.getBlockPos());
+            LOG.debug("[ioTick] recipe={} drained {}FE across {} energy input hatch(es)",
+                    recipe.id(), energy.fePerTick(), hatches.size());
         }
         return true;
     }
@@ -76,15 +70,14 @@ public final class RecipeCraftingContext {
                 LOG.debug("[simulateInputs]   ✓ fluid ingredient {}mb {} via hatch at {}",
                         fluid.amount(), describeFluid(fluid.fluid()), hatch.getBlockPos());
             } else if (ingredient instanceof MachineIngredient.EnergyIngredient energy) {
-                EnergyInputHatchBlockEntity hatch = findAndCheckEnergyHatch(energy);
-                if (hatch == null) {
+                List<EnergyInputHatchBlockEntity> hatches = liveEnergyInputs();
+                if (!EnergyRecipeIo.canConsumeInputs(energyStorages(hatches), energy.fePerTick(), 1)) {
                     LOG.info("[simulateInputs]   ✗ energy ingredient {}FE/t → no matching energy hatch in formed structure",
                             energy.fePerTick());
                     return false;
                 }
-                int stored = hatch.getEnergyStorage(null).getEnergyStored();
-                LOG.debug("[simulateInputs]   ✓ energy ingredient {}FE/t via hatch at {} (stored={}FE)",
-                        energy.fePerTick(), hatch.getBlockPos(), stored);
+                LOG.debug("[simulateInputs]   ✓ energy ingredient {}FE/t across {} energy input hatch(es)",
+                        energy.fePerTick(), hatches.size());
             }
         }
         LOG.debug("[simulateInputs] recipe={} OK", recipe.id());
@@ -119,6 +112,14 @@ public final class RecipeCraftingContext {
         }
         LOG.debug("[simulateOutputs] recipe={} OK", recipe.id());
         return true;
+    }
+
+    public boolean startCrafting(MachineRecipe recipe) {
+        return commitInputs(recipe);
+    }
+
+    public boolean finishCrafting(MachineRecipe recipe) {
+        return commitOutputs(recipe);
     }
 
     public boolean commitOutputs(MachineRecipe recipe) {
@@ -255,23 +256,14 @@ public final class RecipeCraftingContext {
         return null;
     }
 
-    private EnergyInputHatchBlockEntity findAndCheckEnergyHatch(MachineIngredient.EnergyIngredient ingredient) {
-        int required = ingredient.fePerTick();
-        int scanned = 0;
-        for (EnergyInputHatchBlockEntity hatch : liveComponents(EnergyInputHatchBlockEntity.class)) {
-            scanned++;
-            int stored = hatch.getEnergyStorage(null).getEnergyStored();
-            if (stored >= required) {
-                LOG.debug("[scanEnergyHatch] component pos={} matched: stored {}FE (need {}FE)",
-                        hatch.getBlockPos(), stored, required);
-                return hatch;
-            }
-            LOG.debug("[scanEnergyHatch] component pos={} insufficient: stored {}FE (need {}FE)",
-                    hatch.getBlockPos(), stored, required);
-        }
-        LOG.debug("[scanEnergyHatch] scanned {} structure energy input hatch(es); none held {}FE",
-                scanned, required);
-        return null;
+    private List<EnergyInputHatchBlockEntity> liveEnergyInputs() {
+        return liveComponents(EnergyInputHatchBlockEntity.class);
+    }
+
+    private static List<IEnergyStorage> energyStorages(List<EnergyInputHatchBlockEntity> hatches) {
+        return hatches.stream()
+                .map(hatch -> hatch.getEnergyStorage(null))
+                .toList();
     }
 
     private List<OutputSlot> outputSlots() {
@@ -297,6 +289,7 @@ public final class RecipeCraftingContext {
     }
 
     private <T extends BlockEntity> List<T> liveComponents(Class<T> type) {
+        var level = controller.getLevel();
         if (level == null) return List.of();
 
         List<T> matches = new ArrayList<>();

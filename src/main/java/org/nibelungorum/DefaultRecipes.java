@@ -43,7 +43,11 @@ public final class DefaultRecipes {
                         new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1),
                         new MachineIngredient.EnergyIngredient(1)
                 ),
-                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1))
+                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)),
+                List.of(),
+                0,
+                1,
+                true
         );
         RecipeRegistry.register(recipe);
         int totalEnergy = recipe.inputs().stream()

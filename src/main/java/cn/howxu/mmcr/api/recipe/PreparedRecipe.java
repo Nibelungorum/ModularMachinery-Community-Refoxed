@@ -16,6 +16,7 @@ public final class PreparedRecipe {
     private final List<RecipeModifier> modifiers;
     private int priority;
     private int maxThreads;
+    private boolean cancelRecipeOnPerTickFailure;
 
     public PreparedRecipe(String registryName,
                           String machineId,
@@ -33,6 +34,18 @@ public final class PreparedRecipe {
                           List<RecipeModifier> modifiers,
                           int priority,
                           int maxThreads) {
+        this(registryName, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads, false);
+    }
+
+    public PreparedRecipe(String registryName,
+                          String machineId,
+                          int tickTime,
+                          List<MachineIngredient> inputs,
+                          List<ItemStack> outputs,
+                          List<RecipeModifier> modifiers,
+                          int priority,
+                          int maxThreads,
+                          boolean cancelRecipeOnPerTickFailure) {
         this.registryName = registryName;
         this.machineId = machineId;
         this.tickTime = Math.max(1, tickTime);
@@ -41,6 +54,7 @@ public final class PreparedRecipe {
         this.modifiers = modifiers == null ? Collections.emptyList() : List.copyOf(modifiers);
         this.priority = priority;
         this.maxThreads = Math.max(1, maxThreads);
+        this.cancelRecipeOnPerTickFailure = cancelRecipeOnPerTickFailure;
     }
 
     public String getRegistryName() {
@@ -75,6 +89,10 @@ public final class PreparedRecipe {
         return maxThreads;
     }
 
+    public boolean doesCancelRecipeOnPerTickFailure() {
+        return cancelRecipeOnPerTickFailure;
+    }
+
     public void setTickTime(int tickTime) {
         this.tickTime = Math.max(1, tickTime);
     }
@@ -87,6 +105,10 @@ public final class PreparedRecipe {
         this.maxThreads = Math.max(1, maxThreads);
     }
 
+    public void setCancelRecipeOnPerTickFailure(boolean cancelRecipeOnPerTickFailure) {
+        this.cancelRecipeOnPerTickFailure = cancelRecipeOnPerTickFailure;
+    }
+
     public MachineRecipe toMachineRecipe() {
         return new MachineRecipe(
                 net.minecraft.resources.Identifier.parse(registryName),
@@ -96,7 +118,8 @@ public final class PreparedRecipe {
                 outputs,
                 modifiers,
                 priority,
-                maxThreads
+                maxThreads,
+                cancelRecipeOnPerTickFailure
         );
     }
 }

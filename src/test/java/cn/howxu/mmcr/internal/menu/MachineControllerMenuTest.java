@@ -31,6 +31,23 @@ class MachineControllerMenuTest {
         assertThat(menu.isFormed()).isTrue();
     }
 
+    @Test
+    void client_menu_updates_recipe_progress_from_synced_data_slots() {
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory());
+
+        assertThat(menu.hasActiveRecipe()).isFalse();
+        assertThat(menu.activeRecipeTick()).isZero();
+        assertThat(menu.activeRecipeTotalTick()).isZero();
+
+        menu.setData(1, 1);
+        menu.setData(2, 35);
+        menu.setData(3, 100);
+
+        assertThat(menu.hasActiveRecipe()).isTrue();
+        assertThat(menu.activeRecipeTick()).isEqualTo(35);
+        assertThat(menu.activeRecipeTotalTick()).isEqualTo(100);
+    }
+
     private static Inventory emptyInventory() {
         return new Inventory(null, null);
     }

@@ -183,6 +183,19 @@ public final class ActiveMachineRecipe {
         FINISHED
     }
 
+    public boolean start(RecipeCraftingContext context) {
+        if (recipe == null) {
+            LOG.debug("ActiveMachineRecipe#{} start(): no recipe attached → refused", instanceId);
+            return false;
+        }
+        boolean started = context.startCrafting(recipe);
+        if (started) {
+            this.totalTick = IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyDuration(recipe.modifiers(), recipe.getRecipeTotalTickTime()));
+        }
+        LOG.info("ActiveMachineRecipe#{} start(): recipe {} started={} totalTick={}", instanceId, recipe.id(), started, totalTick);
+        return started;
+    }
+
     public TickStatus tick(RecipeCraftingContext context) {
         if (recipe == null) {
             LOG.debug("ActiveMachineRecipe#{} tick(): no recipe attached → WAITING", instanceId);
@@ -196,17 +209,11 @@ public final class ActiveMachineRecipe {
         int beforeTick = getTick();
         int nextTick = Math.min(beforeTick + 1, total);
         if (nextTick >= total) {
-            boolean simOutputs = context.simulateOutputs(recipe);
-            boolean simInputs = context.simulateInputs(recipe);
-            if (!simOutputs || !simInputs) {
-                LOG.info("ActiveMachineRecipe#{} tick(): recipe {} simulate refused before completion (simOutputs={} simInputs={}) → WAITING at tick {}",
-                        instanceId, recipe.id(), simOutputs, simInputs, beforeTick);
+            if (!context.simulateOutputs(recipe)) {
+                LOG.info("ActiveMachineRecipe#{} tick(): recipe {} outputs unavailable before completion → WAITING at tick {}",
+                        instanceId, recipe.id(), beforeTick);
                 return TickStatus.WAITING;
             }
-        } else if (!context.simulateInputs(recipe)) {
-            doFailureAction(false);
-            LOG.info("ActiveMachineRecipe#{} tick(): recipe {} inputs unavailable at tick {} → WAITING", instanceId, recipe.id(), beforeTick);
-            return TickStatus.WAITING;
         }
         if (!context.ioTick(recipe)) {
             doFailureAction(false);
@@ -222,17 +229,16 @@ public final class ActiveMachineRecipe {
 
         LOG.info("ActiveMachineRecipe#{} tick(): recipe {} reached completion tick {} of {}; entering final commit phase", instanceId, recipe.id(), nextTick, total);
 
-        boolean outputsOk = context.commitOutputs(recipe);
-        boolean inputsOk = context.commitInputs(recipe);
-        if (!outputsOk || !inputsOk) {
+        boolean outputsOk = context.finishCrafting(recipe);
+        if (!outputsOk) {
             int restored = Math.max(0, total - 1);
-            LOG.info("ActiveMachineRecipe#{} tick(): recipe {} commit failed (commitOutputs={} commitInputs={}) → rollback tick {} → {} (WAITING)",
-                    instanceId, recipe.id(), outputsOk, inputsOk, nextTick, restored);
+            LOG.info("ActiveMachineRecipe#{} tick(): recipe {} finish failed → rollback tick {} → {} (WAITING)",
+                    instanceId, recipe.id(), nextTick, restored);
             setTick(restored);
             return TickStatus.WAITING;
         }
 
-        LOG.info("ActiveMachineRecipe#{} tick(): recipe {} FINISHED at tick {} of {}; outputs and inputs committed", instanceId, recipe.id(), nextTick, total);
+        LOG.info("ActiveMachineRecipe#{} tick(): recipe {} FINISHED at tick {} of {}; outputs committed", instanceId, recipe.id(), nextTick, total);
         return TickStatus.FINISHED;
     }
 

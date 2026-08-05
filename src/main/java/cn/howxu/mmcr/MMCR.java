@@ -58,7 +58,7 @@ public class MMCR {
             ev.registrar("1").playToClient(
                     PktMachineStatePayload.TYPE,
                     PktMachineStatePayload.STREAM_CODEC,
-                    (payload, ctx) -> {});
+                    PktMachineStatePayload::handle);
         });
         modBus.addListener((RegisterGameTestsEvent ev) -> registerGameTests(ev));
         CREATIVE_TABS.register(MODID, () -> CreativeModeTab.builder()

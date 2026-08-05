@@ -89,7 +89,7 @@ public class MachineControllerBlock extends Block implements EntityBlock {
                                                 Player player, BlockHitResult hit) {
         if (!level.isClientSide()) {
             MenuProvider provider = state.getMenuProvider(level, pos);
-            if (provider != null) player.openMenu(provider);
+            if (provider != null) player.openMenu(provider, pos);
         }
         return InteractionResult.SUCCESS;
     }

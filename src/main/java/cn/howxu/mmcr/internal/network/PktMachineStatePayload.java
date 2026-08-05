@@ -1,11 +1,13 @@
 package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean formed) implements CustomPacketPayload {
 
@@ -19,4 +21,14 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                     PktMachineStatePayload::new);
 
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+
+    public void handle(IPayloadContext ctx) {
+        ctx.enqueueWork(() -> {
+            var player = ctx.player();
+            if (player == null) return;
+            if (player.level().getBlockEntity(pos) instanceof MachineControllerBlockEntity controller) {
+                controller.applyClientState(recipeName, formed);
+            }
+        });
+    }
 }

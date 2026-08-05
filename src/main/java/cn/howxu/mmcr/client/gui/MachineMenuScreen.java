@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
 import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
@@ -136,6 +135,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     @Override
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         graphics.text(font, title, titleLabelX, titleLabelY, titleColor(menu instanceof MachineControllerMenu), false);
+        if (menu instanceof MachineControllerMenu mc) renderControllerStatus(graphics, mc, 0, 0);
     }
 
     @Override
@@ -154,7 +154,6 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
 
         if (menu instanceof FluidHatchMenu fh)        renderFluidTank(graphics, fh, x, y);
         else if (menu instanceof EnergyHatchMenu eh)  renderEnergyBar(graphics, eh, x, y);
-        else if (menu instanceof MachineControllerMenu mc) renderControllerStatus(graphics, mc, x, y);
     }
 
     private static Identifier textureFor(AbstractContainerMenu menu) {
@@ -226,11 +225,10 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     }
 
     private void renderControllerStatus(GuiGraphicsExtractor g, MachineControllerMenu menu, int x, int y) {
-        MachineControllerBlockEntity owner = menu.owner();
+        MachineControllerBlockEntity owner = menu.resolvedOwner();
         int textY = y + controllerStatusY(titleLabelY);
         int textX = x + controllerStatusX(titleLabelX);
-        MachineRecipe activeRecipe = owner == null ? null : owner.getActiveRecipe();
-        boolean active = activeRecipe != null;
+        boolean active = menu.hasActiveRecipe();
 
         if (owner != null && owner.getMachine() != null) {
             g.text(font, Component.translatable("gui.mmcr.controller.machine", owner.getMachine().localizedName()),
@@ -241,11 +239,9 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
                 controllerStatusColor(menu.isFormed(), active));
         textY += 12;
 
-        if (activeRecipe != null) {
-            int total = activeRecipe.tickTime();
-            int current = Math.min(total, owner.getTickCounter());
-            int percent = total > 0 ? (current * 100 / total) : 0;
-            g.text(font, Component.translatable("gui.mmcr.controller.progress", percent), textX, textY, PROGRESS_STATUS_COLOR, true);
+        if (active) {
+            int percent = progressPercent(menu.activeRecipeTick(), menu.activeRecipeTotalTick());
+            g.text(font, Component.translatable("gui.mmcr.controller.progress", percent + "%" + progressDots(percent)), textX, textY, PROGRESS_STATUS_COLOR, true);
         }
     }
 
@@ -257,7 +253,16 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
 
     static String controllerStatusKey(boolean formed, boolean active) {
         if (!formed) return "gui.mmcr.controller.unformed";
-        return active ? "gui.mmcr.controller.formed" : "gui.mmcr.controller.idle";
+        return active ? "gui.mmcr.controller.running" : "gui.mmcr.controller.idle";
+    }
+
+    static int progressPercent(int current, int total) {
+        if (total <= 0) return 0;
+        return Math.min(total, current) * 100 / total;
+    }
+
+    static String progressDots(int percent) {
+        return ".".repeat((Math.max(0, Math.min(100, percent)) / 5) % 5);
     }
 
     static int controllerStatusColor(boolean formed, boolean active) {

@@ -49,6 +49,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private ActiveMachineRecipe active;
     private RecipeCraftingContext context;
     private final List<ProcessingComponent> components = new ArrayList<>();
+    private boolean clientActive;
+    private Boolean lastBroadcastFormed;
+    private boolean lastBroadcastActive;
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
@@ -87,12 +90,27 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public ActiveMachineRecipe getActive() { return active; }
 
+    public void applyClientState(String recipeName, boolean formed) {
+        if (level == null || !level.isClientSide()) return;
+        boolean active = recipeName != null && !recipeName.isEmpty();
+        if (isFormed() != formed) {
+            level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.FORMED, formed), 3);
+        }
+        if (getBlockState().getValue(MachineControllerBlock.ACTIVE) != active) {
+            level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.ACTIVE, active), 3);
+        }
+        this.clientActive = active;
+    }
+
+    public boolean hasClientActiveRecipe() { return clientActive; }
+
     public List<ProcessingComponent> getComponents() { return List.copyOf(components); }
 
     public void serverTick() {
         if (level == null || level.isClientSide()) return;
         Identifier boundMachine = machine == null ? null : machine.registryName();
         Identifier activeRecipe = active == null ? null : active.getRecipe().id();
+        boolean activeBefore = active != null;
         LOG.debug("[Ctrl#{}] serverTick pos={} formed={} boundMachine={} activeRecipe={} tick={}/{}",
                 instanceId, getBlockPos(), isFormed(), boundMachine, activeRecipe,
                 active == null ? -1 : active.getTick(), active == null ? -1 : active.getTotalTick());
@@ -103,7 +121,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (active == null) tryStartNewRecipe();
             if (active != null) tickActiveRecipe();
         }
-        broadcastState();
+        broadcastStateIfChanged(activeBefore);
     }
 
     private void checkStructure() {
@@ -213,6 +231,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (active != null) {
             active = null;
             context = null;
+            setActiveState(false);
         }
         if (wasFormed) setFormed(false);
         if (dropped != null || hadActive) {
@@ -221,10 +240,17 @@ public class MachineControllerBlockEntity extends BlockEntity {
         setChanged();
     }
 
-    private void broadcastState() {
+    private void broadcastStateIfChanged(boolean activeBeforeTick) {
+        boolean formed = isFormed();
+        boolean activeNow = active != null;
+        if (lastBroadcastFormed != null && lastBroadcastFormed == formed && lastBroadcastActive == activeNow && activeBeforeTick == activeNow) {
+            return;
+        }
+        lastBroadcastFormed = formed;
+        lastBroadcastActive = activeNow;
         if (!(level instanceof ServerLevel sl)) return;
         String name = active == null ? "" : active.getRecipe().id().toString();
-        var pkt = new PktMachineStatePayload(getBlockPos(), name, isFormed());
+        var pkt = new PktMachineStatePayload(getBlockPos(), name, formed);
         int sent = 0;
         for (var player : sl.getPlayers(p -> p.distanceToSqr(getBlockPos().getCenter()) < 64 * 64)) {
             ((ServerPlayer) player).connection.send(new ClientboundCustomPayloadPacket(pkt));
@@ -250,6 +276,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
             ActiveMachineRecipe next = new ActiveMachineRecipe(recipe, 1);
             active = next;
             context = candidate;
+            if (!next.start(context)) {
+                active = null;
+                context = null;
+                LOG.info("[Ctrl#{}] tryStartNewRecipe: recipe={} refused during start; waiting for I/O at pos={}",
+                        instanceId, recipe.id(), getBlockPos());
+                continue;
+            }
+            setActiveState(true);
             LOG.info("[Ctrl#{}] tryStartNewRecipe: START recipe={} tickTime={} priority={} maxParallel={} (chosen {}/{} candidates)",
                     instanceId, recipe.id(), recipe.tickTime(), recipe.priority(), next.getMaxParallelism(), index, candidates.size());
             setChanged();
@@ -267,14 +301,29 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     instanceId, active.getRecipe().id(), active.getTick(), active.getTotalTick(), getBlockPos());
             active = null;
             context = null;
+            setActiveState(false);
         } else if (status == ActiveMachineRecipe.TickStatus.WAITING) {
             LOG.debug("[Ctrl#{}] tickActiveRecipe: recipe {} WAITING ({} → {} of {}) at pos={}",
                     instanceId, active.getRecipe().id(), before, active.getTick(), active.getTotalTick(), getBlockPos());
+            if (active.getRecipe().doesCancelRecipeOnPerTickFailure()) {
+                LOG.info("[Ctrl#{}] tickActiveRecipe: recipe {} canceled after per-tick failure at pos={}; already consumed inputs are voided",
+                        instanceId, active.getRecipe().id(), getBlockPos());
+                active = null;
+                context = null;
+                setActiveState(false);
+            }
         } else {
             LOG.debug("[Ctrl#{}] tickActiveRecipe: recipe {} CONTINUE ({} → {} of {}) at pos={}",
                     instanceId, active.getRecipe().id(), before, active.getTick(), active.getTotalTick(), getBlockPos());
         }
         setChanged();
+    }
+
+    private void setActiveState(boolean activeState) {
+        if (level == null || level.isClientSide()) return;
+        if (getBlockState().getValue(MachineControllerBlock.ACTIVE) != activeState) {
+            level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.ACTIVE, activeState), 3);
+        }
     }
 
     void bindDefaultMachine() {

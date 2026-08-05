@@ -41,9 +41,10 @@ public final class Translations {
                     Map.entry("gui.mmcr.controller.machine",       "Machine: %s"),
                     Map.entry("gui.mmcr.controller.status_label",  "Status:"),
                     Map.entry("gui.mmcr.controller.formed",        "Formed"),
+                    Map.entry("gui.mmcr.controller.running",       "Running"),
                     Map.entry("gui.mmcr.controller.unformed",      "Not Formed"),
                     Map.entry("gui.mmcr.controller.idle",          "Idle"),
-                    Map.entry("gui.mmcr.controller.progress",      "Progress: %s%%"))),
+                    Map.entry("gui.mmcr.controller.progress",      "Progress: %s"))),
             Map.entry("zh_cn", Map.ofEntries(
                     Map.entry("itemGroup.mmcr",                    "模块化机械社区版"),
                     Map.entry("block.mmcr.blast_furnace_controller", "高炉控制器"),
@@ -79,9 +80,10 @@ public final class Translations {
                     Map.entry("gui.mmcr.controller.machine",       "机器: %s"),
                     Map.entry("gui.mmcr.controller.status_label",  "状态:"),
                     Map.entry("gui.mmcr.controller.formed",        "已成型"),
+                    Map.entry("gui.mmcr.controller.running",       "运行中"),
                     Map.entry("gui.mmcr.controller.unformed",      "未成型"),
                     Map.entry("gui.mmcr.controller.idle",          "待机中"),
-                    Map.entry("gui.mmcr.controller.progress",      "进度: %s%%")))
+                    Map.entry("gui.mmcr.controller.progress",      "进度: %s")))
     );
 
     private Translations() {}

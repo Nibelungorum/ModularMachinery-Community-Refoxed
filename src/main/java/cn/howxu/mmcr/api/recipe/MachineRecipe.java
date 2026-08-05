@@ -29,7 +29,8 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
             ItemStack.CODEC.listOf().fieldOf("outputs").forGetter(MachineRecipe::outputs),
             RecipeModifier.CODEC.listOf().optionalFieldOf("modifiers", Collections.emptyList()).forGetter(MachineRecipe::modifiers),
             Codec.INT.optionalFieldOf("priority", 0).forGetter(MachineRecipe::priority),
-            Codec.INT.optionalFieldOf("max_threads", 1).forGetter(MachineRecipe::maxThreads)
+            Codec.INT.optionalFieldOf("max_threads", 1).forGetter(MachineRecipe::maxThreads),
+            Codec.BOOL.optionalFieldOf("cancelIfPerTickFails", false).forGetter(MachineRecipe::doesCancelRecipeOnPerTickFailure)
     ).apply(instance, MachineRecipe::new));
 
     private final Identifier id;
@@ -40,6 +41,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     private final List<RecipeModifier> modifiers;
     private final int priority;
     private final int maxThreads;
+    private final boolean cancelRecipeOnPerTickFailure;
 
     public MachineRecipe(Identifier id,
                          Identifier machineId,
@@ -57,6 +59,18 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                          List<RecipeModifier> modifiers,
                          int priority,
                          int maxThreads) {
+        this(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads, false);
+    }
+
+    public MachineRecipe(Identifier id,
+                         Identifier machineId,
+                         int tickTime,
+                         List<MachineIngredient> inputs,
+                         List<ItemStack> outputs,
+                         List<RecipeModifier> modifiers,
+                         int priority,
+                         int maxThreads,
+                         boolean cancelRecipeOnPerTickFailure) {
         if (id == null) {
             throw new IllegalArgumentException("Recipe id must not be null");
         }
@@ -71,6 +85,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         this.modifiers = modifiers == null ? Collections.emptyList() : List.copyOf(modifiers);
         this.priority = priority;
         this.maxThreads = Math.max(1, maxThreads);
+        this.cancelRecipeOnPerTickFailure = cancelRecipeOnPerTickFailure;
     }
 
     public Identifier id() {
@@ -103,6 +118,10 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
 
     public int maxThreads() {
         return maxThreads;
+    }
+
+    public boolean doesCancelRecipeOnPerTickFailure() {
+        return cancelRecipeOnPerTickFailure;
     }
 
     public Identifier getRegistryName() {
@@ -172,11 +191,12 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                 && machineId.equals(that.machineId)
                 && inputs.equals(that.inputs)
                 && outputs.equals(that.outputs)
-                && modifiers.equals(that.modifiers);
+                && modifiers.equals(that.modifiers)
+                && cancelRecipeOnPerTickFailure == that.cancelRecipeOnPerTickFailure;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads);
+        return Objects.hash(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure);
     }
 }

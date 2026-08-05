@@ -37,8 +37,22 @@ class MenuScreenTest {
     @Test
     void controller_status_key_uses_single_three_state_value() {
         assertThat(MachineMenuScreen.controllerStatusKey(false, false)).isEqualTo("gui.mmcr.controller.unformed");
-        assertThat(MachineMenuScreen.controllerStatusKey(true, true)).isEqualTo("gui.mmcr.controller.formed");
+        assertThat(MachineMenuScreen.controllerStatusKey(true, true)).isEqualTo("gui.mmcr.controller.running");
         assertThat(MachineMenuScreen.controllerStatusKey(true, false)).isEqualTo("gui.mmcr.controller.idle");
+    }
+
+    @Test
+    void progress_dots_add_one_dot_per_five_percent() {
+        assertThat(MachineMenuScreen.progressPercent(35, 100)).isEqualTo(35);
+        assertThat(MachineMenuScreen.progressPercent(150, 100)).isEqualTo(100);
+        assertThat(MachineMenuScreen.progressPercent(10, 0)).isZero();
+        assertThat(MachineMenuScreen.progressDots(0)).isEmpty();
+        assertThat(MachineMenuScreen.progressDots(4)).isEmpty();
+        assertThat(MachineMenuScreen.progressDots(5)).isEqualTo(".");
+        assertThat(MachineMenuScreen.progressDots(20)).isEqualTo("....");
+        assertThat(MachineMenuScreen.progressDots(25)).isEmpty();
+        assertThat(MachineMenuScreen.progressDots(35)).isEqualTo("..");
+        assertThat(MachineMenuScreen.progressDots(100)).isEmpty();
     }
 
     @Test

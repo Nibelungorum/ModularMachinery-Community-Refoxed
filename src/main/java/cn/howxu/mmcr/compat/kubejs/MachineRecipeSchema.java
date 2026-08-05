@@ -6,6 +6,7 @@ import com.mojang.serialization.Codec;
 import dev.latvian.mods.kubejs.recipe.RecipeKey;
 import dev.latvian.mods.kubejs.recipe.RecipeScriptContext;
 import dev.latvian.mods.kubejs.recipe.component.ComponentRole;
+import dev.latvian.mods.kubejs.recipe.component.BooleanComponent;
 import dev.latvian.mods.kubejs.recipe.component.ListRecipeComponent;
 import dev.latvian.mods.kubejs.recipe.component.NumberComponent;
 import dev.latvian.mods.kubejs.recipe.component.RecipeComponent;
@@ -40,7 +41,10 @@ public final class MachineRecipeSchema {
             new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false), "outputs", ComponentRole.OUTPUT)
                     .optional(List.of()).exclude();
 
-    public static final RecipeSchema SCHEMA = new RecipeSchema(MACHINE, TICK_TIME, INPUTS, ENERGY_PER_TICK, OUTPUTS)
+    public static final RecipeKey<Boolean> CANCEL_IF_PER_TICK_FAILS =
+            new RecipeKey<>(BooleanComponent.BOOLEAN, "cancelIfPerTickFails", ComponentRole.OTHER).optional(false);
+
+    public static final RecipeSchema SCHEMA = new RecipeSchema(MACHINE, TICK_TIME, INPUTS, ENERGY_PER_TICK, OUTPUTS, CANCEL_IF_PER_TICK_FAILS)
             .factory(MachineRecipeFactory.INSTANCE);
 
     private MachineRecipeSchema() {

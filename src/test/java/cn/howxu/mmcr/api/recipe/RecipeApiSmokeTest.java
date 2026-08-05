@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.recipe;
 import cn.howxu.mmcr.api.recipe.helper.CraftCheck;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.DynamicOps;
@@ -18,6 +19,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,7 +49,7 @@ class RecipeApiSmokeTest {
                 id, machineId, 100,
                 List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
                 List.of(),
-                mods, 5, 4
+                mods, 5, 4, true
         );
 
         var ops = jsonOps();
@@ -60,6 +63,7 @@ class RecipeApiSmokeTest {
         assertThat(back.getRecipeTotalTickTime()).isEqualTo(100);
         assertThat(back.getRegistryName()).isEqualTo(id);
         assertThat(back.getOwningMachineIdentifier()).isEqualTo(machineId);
+        assertThat(back.doesCancelRecipeOnPerTickFailure()).isTrue();
     }
 
     @Test
@@ -75,6 +79,7 @@ class RecipeApiSmokeTest {
         assertThat(back.modifiers()).isEmpty();
         assertThat(back.priority()).isZero();
         assertThat(back.maxThreads()).isEqualTo(1);
+        assertThat(back.doesCancelRecipeOnPerTickFailure()).isFalse();
     }
 
     @Test
@@ -177,6 +182,23 @@ class RecipeApiSmokeTest {
     }
 
     @Test
+    void active_recipe_does_not_recheck_started_inputs_mid_process() {
+        var recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "vanishing_input"),
+                Identifier.fromNamespaceAndPath("mmcr", "vanishing_input_machine"),
+                10,
+                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
+                List.of()
+        );
+        var active = new ActiveMachineRecipe(recipe);
+        active.setTick(2);
+
+        assertThat(active.tick(new RecipeCraftingContext(controllerWithoutComponents())))
+                .isEqualTo(ActiveMachineRecipe.TickStatus.CONTINUE);
+        assertThat(active.getTick()).isEqualTo(3);
+    }
+
+    @Test
     void prepared_recipe_converts_to_machine_recipe() {
         var prepared = new PreparedRecipe(
                 "mmcr:from_prepared",
@@ -193,6 +215,7 @@ class RecipeApiSmokeTest {
         assertThat(mr.tickTime()).isEqualTo(50);
         assertThat(mr.priority()).isEqualTo(3);
         assertThat(mr.maxThreads()).isEqualTo(2);
+        assertThat(mr.doesCancelRecipeOnPerTickFailure()).isFalse();
         assertThat(mr.inputs()).hasSize(1);
         assertThat(mr.outputs()).isEmpty();
     }
@@ -215,5 +238,20 @@ class RecipeApiSmokeTest {
 
     private static DynamicOps<JsonElement> jsonOps() {
         return RegistryOps.create(JsonOps.INSTANCE, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+    }
+
+    private static MachineControllerBlockEntity controllerWithoutComponents() {
+        try {
+            Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+            unsafeField.setAccessible(true);
+            sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+            MachineControllerBlockEntity controller = (MachineControllerBlockEntity) unsafe.allocateInstance(MachineControllerBlockEntity.class);
+            Field components = MachineControllerBlockEntity.class.getDeclaredField("components");
+            components.setAccessible(true);
+            components.set(controller, new ArrayList<>());
+            return controller;
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("Unable to allocate MachineControllerBlockEntity for crafting context test", e);
+        }
     }
 }

@@ -19,6 +19,7 @@ public class MachineRecipeBuilderJS {
     public final List<MachineIngredient> inputs = new ArrayList<>();
     public final List<ItemStack> outputs = new ArrayList<>();
     public int energyPerTick = 0;
+    public boolean cancelIfPerTickFails = false;
 
     private Identifier id;
 
@@ -68,6 +69,11 @@ public class MachineRecipeBuilderJS {
         return this;
     }
 
+    public MachineRecipeBuilderJS cancelIfPerTickFails(boolean cancelIfPerTickFails) {
+        this.cancelIfPerTickFails = cancelIfPerTickFails;
+        return this;
+    }
+
     public void build() {
         if (machine == null) {
             throw new IllegalStateException("machine() not called");
@@ -79,6 +85,6 @@ public class MachineRecipeBuilderJS {
             recipeInputs.add(new MachineIngredient.EnergyIngredient(energyPerTick));
         }
 
-        RecipeRegistry.register(new MachineRecipe(id, machine.registryName(), tickTime, List.copyOf(recipeInputs), List.copyOf(outputs)));
+        RecipeRegistry.register(new MachineRecipe(id, machine.registryName(), tickTime, List.copyOf(recipeInputs), List.copyOf(outputs), List.of(), 0, 1, cancelIfPerTickFails));
     }
 }

@@ -29,7 +29,7 @@ public final class ModUIs {
             REGISTER.register("energy_hatch", () -> new MenuType<>((IContainerFactory<EnergyHatchMenu>) EnergyHatchMenu::clientOpen, FeatureFlags.VANILLA_SET));
 
     public static final DeferredHolder<MenuType<?>, MenuType<MachineControllerMenu>> MACHINE_CONTROLLER =
-            REGISTER.register("machine_controller", () -> new MenuType<>(MachineControllerMenu::clientOpen, FeatureFlags.VANILLA_SET));
+            REGISTER.register("machine_controller", () -> new MenuType<>((IContainerFactory<MachineControllerMenu>) MachineControllerMenu::clientOpen, FeatureFlags.VANILLA_SET));
 
     public static void register(IEventBus bus) {
         REGISTER.register(bus);
