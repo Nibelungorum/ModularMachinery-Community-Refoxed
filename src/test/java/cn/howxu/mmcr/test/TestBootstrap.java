@@ -24,6 +24,7 @@ public final class TestBootstrap {
 
     public static synchronized void bootstrap() throws Exception {
         if (initialized) {
+            restoreMachineDefinitions();
             return;
         }
 
@@ -69,6 +70,17 @@ public final class TestBootstrap {
         bind(ModBlocks.BLOCKS.get("energy_output_hatch"), Blocks.COPPER_BLOCK);
         registerRuntimeBuiltins();
         initialized = true;
+    }
+
+    public static void restoreMachineDefinitions() {
+        BuiltinMachines.register();
+        MachineDefinitions.addBuiltinSupplier(() ->
+                new DynamicMachine(id("test_cube"), "Test", new BlockArray(Map.of())));
+        MachineDefinitions.addBuiltinSupplier(() ->
+                new DynamicMachine(id("controller_tick"), "Controller Tick", new BlockArray(Map.of())));
+        MachineDefinitions.addBuiltinSupplier(() ->
+                new DynamicMachine(id("iron_compressor"), "Iron Compressor", new BlockArray(Map.of())));
+        MachineDefinitions.bootstrapBuiltins();
     }
 
     public static void registerRuntimeBuiltins() {

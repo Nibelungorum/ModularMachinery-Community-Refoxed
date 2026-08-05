@@ -2,12 +2,18 @@ package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.nibelungorum.BuiltinMachines;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MachineDefinitionBootstrapTest {
+
+    @BeforeEach
+    void resetDefinitions() {
+        MachineDefinitions.clearForTesting();
+    }
 
     @AfterEach
     void cleanup() {

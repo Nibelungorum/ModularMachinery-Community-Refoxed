@@ -2,10 +2,14 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidInputHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.FluidOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.items.IItemHandler;
@@ -19,13 +23,35 @@ public final class RecipeCraftingContext {
 
     private static final Logger LOG = LoggerFactory.getLogger(RecipeCraftingContext.class);
 
+    private final MachineControllerBlockEntity controller;
     private final Level level;
     private final BlockPos controllerPos;
 
-    public RecipeCraftingContext(Level level, BlockPos controllerPos) {
-        this.level = level;
-        this.controllerPos = controllerPos;
-        LOG.debug("Crafting context created: controllerPos={}", controllerPos);
+    public RecipeCraftingContext(MachineControllerBlockEntity controller) {
+        this.controller = controller;
+        this.level = controller.getLevel();
+        this.controllerPos = controller.getBlockPos();
+        LOG.debug("Crafting context created: controllerPos={} components={}", controllerPos, controller.getComponents().size());
+    }
+
+    public boolean ioTick(MachineRecipe recipe) {
+        for (MachineIngredient ingredient : recipe.inputs()) {
+            if (!(ingredient instanceof MachineIngredient.EnergyIngredient energy)) continue;
+
+            EnergyInputHatchBlockEntity hatch = findAndCheckEnergyHatch(energy);
+            if (hatch == null) {
+                LOG.info("[ioTick] recipe={} missing {}FE/t energy input", recipe.id(), energy.fePerTick());
+                return false;
+            }
+            int extracted = hatch.getEnergyStorage(null).extractEnergy(energy.fePerTick(), false);
+            if (extracted < energy.fePerTick()) {
+                LOG.info("[ioTick] recipe={} extracted only {}FE / {}FE from hatch at {}",
+                        recipe.id(), extracted, energy.fePerTick(), hatch.getBlockPos());
+                return false;
+            }
+            LOG.debug("[ioTick] recipe={} drained {}FE from hatch at {}", recipe.id(), extracted, hatch.getBlockPos());
+        }
+        return true;
     }
 
     public boolean simulateInputs(MachineRecipe recipe) {
@@ -50,16 +76,15 @@ public final class RecipeCraftingContext {
                 LOG.debug("[simulateInputs]   ✓ fluid ingredient {}mb {} via hatch at {}",
                         fluid.amount(), describeFluid(fluid.fluid()), hatch.getBlockPos());
             } else if (ingredient instanceof MachineIngredient.EnergyIngredient energy) {
-                int required = energy.fePerTick() * recipe.tickTime();
-                EnergyInputHatchBlockEntity hatch = findAndCheckEnergyHatch(energy, recipe);
+                EnergyInputHatchBlockEntity hatch = findAndCheckEnergyHatch(energy);
                 if (hatch == null) {
-                    LOG.info("[simulateInputs]   ✗ energy ingredient {}FE/t ({}FE total) → no matching energy hatch above controller",
-                            energy.fePerTick(), required);
+                    LOG.info("[simulateInputs]   ✗ energy ingredient {}FE/t → no matching energy hatch in formed structure",
+                            energy.fePerTick());
                     return false;
                 }
                 int stored = hatch.getEnergyStorage(null).getEnergyStored();
-                LOG.debug("[simulateInputs]   ✓ energy ingredient {}FE/t ({}FE total) via hatch at {} (stored={}FE)",
-                        energy.fePerTick(), required, hatch.getBlockPos(), stored);
+                LOG.debug("[simulateInputs]   ✓ energy ingredient {}FE/t via hatch at {} (stored={}FE)",
+                        energy.fePerTick(), hatch.getBlockPos(), stored);
             }
         }
         LOG.debug("[simulateInputs] recipe={} OK", recipe.id());
@@ -140,7 +165,7 @@ public final class RecipeCraftingContext {
                 if (bus == null) {
                     LOG.warn("[commitInputs]   ✗ item[{} of {}] {}x {} bus vanished between simulate and commit",
                             idx, recipe.inputs().size(), item.count(), describeIngredient(item.item()));
-                    continue;
+                    return false;
                 }
                 IItemHandler handler = bus.getItemHandler(null);
                 int left = item.count();
@@ -161,29 +186,25 @@ public final class RecipeCraftingContext {
                 LOG.info("[commitInputs]   ✓ item[{} of {}] {}x {} extracted ({} short of {}) from bus at {} across {} slot(s)",
                         idx, recipe.inputs().size(), totalExtracted, describeIngredient(item.item()),
                         left, beforeLeft, bus.getBlockPos(), slotsTouched);
+                if (left > 0) {
+                    return false;
+                }
             } else if (ingredient instanceof MachineIngredient.FluidIngredient fluid) {
                 FluidInputHatchBlockEntity hatch = findAndCheckFluidHatch(fluid);
                 if (hatch == null) {
                     LOG.warn("[commitInputs]   ✗ fluid[{} of {}] {}mb {} hatch vanished between simulate and commit",
                             idx, recipe.inputs().size(), fluid.amount(), describeFluid(fluid.fluid()));
-                    continue;
+                    return false;
                 }
                 int drained = hatch.getFluidHandler(null).drain(fluid.amount(), IFluidHandler.FluidAction.EXECUTE).getAmount();
                 LOG.info("[commitInputs]   ✓ fluid[{} of {}] drained {}mb / requested {}mb {} from hatch at {}",
                         idx, recipe.inputs().size(), drained, fluid.amount(), describeFluid(fluid.fluid()), hatch.getBlockPos());
-            } else if (ingredient instanceof MachineIngredient.EnergyIngredient energy) {
-                int required = energy.fePerTick() * recipe.tickTime();
-                EnergyInputHatchBlockEntity hatch = findAndCheckEnergyHatch(energy, recipe);
-                if (hatch == null) {
-                    LOG.warn("[commitInputs]   ✗ energy[{} of {}] {}FE hatch vanished between simulate and commit",
-                            idx, recipe.inputs().size(), required);
-                    continue;
+                if (drained < fluid.amount()) {
+                    return false;
                 }
-                int extracted = hatch.getEnergyStorage(null).extractEnergy(required, false);
-                int remaining = hatch.getEnergyStorage(null).getEnergyStored();
-                LOG.info("[commitInputs]   ✓ energy[{} of {}] extracted {}FE / requested {}FE ({}FE/t × {}t) from hatch at {}, hatch now has {}FE",
-                        idx, recipe.inputs().size(), extracted, required, energy.fePerTick(), recipe.tickTime(),
-                        hatch.getBlockPos(), remaining);
+            } else if (ingredient instanceof MachineIngredient.EnergyIngredient energy) {
+                LOG.debug("[commitInputs]   energy[{} of {}] already drained per tick at {}FE/t",
+                        idx, recipe.inputs().size(), energy.fePerTick());
             }
         }
         return true;
@@ -191,73 +212,64 @@ public final class RecipeCraftingContext {
 
     private ItemInputBusBlockEntity findAndCheckItemBus(MachineIngredient.ItemIngredient ingredient) {
         int scanned = 0;
-        for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
-            BlockPos candidate = controllerPos.offset(dx, 1, dz);
-            if (level.getBlockEntity(candidate) instanceof ItemInputBusBlockEntity bus) {
-                scanned++;
-                IItemHandler handler = bus.getItemHandler(null);
-                int count = 0;
-                int matchingSlots = 0;
-                for (int slot = 0; slot < handler.getSlots(); slot++) {
-                    ItemStack stack = handler.getStackInSlot(slot);
-                    if (ingredient.item().test(stack)) {
-                        count += stack.getCount();
-                        matchingSlots++;
-                    }
+        for (ItemInputBusBlockEntity bus : liveComponents(ItemInputBusBlockEntity.class)) {
+            scanned++;
+            IItemHandler handler = bus.getItemHandler(null);
+            int count = 0;
+            int matchingSlots = 0;
+            for (int slot = 0; slot < handler.getSlots(); slot++) {
+                ItemStack stack = handler.getStackInSlot(slot);
+                if (ingredient.item().test(stack)) {
+                    count += stack.getCount();
+                    matchingSlots++;
                 }
-                if (count >= ingredient.count()) {
-                    LOG.debug("[scanItemBus] candidate pos={} matched: {}/{} required (across {} matching slot(s))",
-                            candidate, count, ingredient.count(), matchingSlots);
-                    return bus;
-                }
-                LOG.debug("[scanItemBus] candidate pos={} insufficient: {}/{} required (across {} matching slot(s))",
-                        candidate, count, ingredient.count(), matchingSlots);
             }
+            if (count >= ingredient.count()) {
+                LOG.debug("[scanItemBus] component pos={} matched: {}/{} required (across {} matching slot(s))",
+                        bus.getBlockPos(), count, ingredient.count(), matchingSlots);
+                return bus;
+            }
+            LOG.debug("[scanItemBus] component pos={} insufficient: {}/{} required (across {} matching slot(s))",
+                    bus.getBlockPos(), count, ingredient.count(), matchingSlots);
         }
-        LOG.debug("[scanItemBus] scanned {} input bus(es) in 3x3 above controller; none matched {}x of {}", scanned, ingredient.count(), describeIngredient(ingredient.item()));
+        LOG.debug("[scanItemBus] scanned {} structure input bus(es); none matched {}x of {}", scanned, ingredient.count(), describeIngredient(ingredient.item()));
         return null;
     }
 
     private FluidInputHatchBlockEntity findAndCheckFluidHatch(MachineIngredient.FluidIngredient ingredient) {
         int scanned = 0;
-        for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
-            BlockPos candidate = controllerPos.offset(dx, 1, dz);
-            if (level.getBlockEntity(candidate) instanceof FluidInputHatchBlockEntity hatch) {
-                scanned++;
-                var tank = hatch.getFluidHandler(null).getFluidInTank(0);
-                if (ingredient.fluid().test(tank) && tank.getAmount() >= ingredient.amount()) {
-                    LOG.debug("[scanFluidHatch] candidate pos={} matched: tank has {}mb of {} (need {}mb)",
-                            candidate, tank.getAmount(), tank.getFluid().builtInRegistryHolder().getRegisteredName(), ingredient.amount());
-                    return hatch;
-                }
-                LOG.debug("[scanFluidHatch] candidate pos={} insufficient: tank has {}mb of {} (need {}mb of {})",
-                        candidate, tank.getAmount(), tank.getFluid().builtInRegistryHolder().getRegisteredName(),
-                        ingredient.amount(), describeFluid(ingredient.fluid()));
+        for (FluidInputHatchBlockEntity hatch : liveComponents(FluidInputHatchBlockEntity.class)) {
+            scanned++;
+            var tank = hatch.getFluidHandler(null).getFluidInTank(0);
+            if (ingredient.fluid().test(tank) && tank.getAmount() >= ingredient.amount()) {
+                LOG.debug("[scanFluidHatch] component pos={} matched: tank has {}mb of {} (need {}mb)",
+                        hatch.getBlockPos(), tank.getAmount(), tank.getFluid().builtInRegistryHolder().getRegisteredName(), ingredient.amount());
+                return hatch;
             }
+            LOG.debug("[scanFluidHatch] component pos={} insufficient: tank has {}mb of {} (need {}mb of {})",
+                    hatch.getBlockPos(), tank.getAmount(), tank.getFluid().builtInRegistryHolder().getRegisteredName(),
+                    ingredient.amount(), describeFluid(ingredient.fluid()));
         }
-        LOG.debug("[scanFluidHatch] scanned {} fluid input hatch(es) in 3x3 above controller; none matched {}mb of {}",
+        LOG.debug("[scanFluidHatch] scanned {} structure fluid input hatch(es); none matched {}mb of {}",
                 scanned, ingredient.amount(), describeFluid(ingredient.fluid()));
         return null;
     }
 
-    private EnergyInputHatchBlockEntity findAndCheckEnergyHatch(MachineIngredient.EnergyIngredient ingredient, MachineRecipe recipe) {
-        int required = ingredient.fePerTick() * recipe.tickTime();
+    private EnergyInputHatchBlockEntity findAndCheckEnergyHatch(MachineIngredient.EnergyIngredient ingredient) {
+        int required = ingredient.fePerTick();
         int scanned = 0;
-        for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
-            BlockPos candidate = controllerPos.offset(dx, 1, dz);
-            if (level.getBlockEntity(candidate) instanceof EnergyInputHatchBlockEntity hatch) {
-                scanned++;
-                int stored = hatch.getEnergyStorage(null).getEnergyStored();
-                if (stored >= required) {
-                    LOG.debug("[scanEnergyHatch] candidate pos={} matched: stored {}FE (need {}FE)",
-                            candidate, stored, required);
-                    return hatch;
-                }
-                LOG.debug("[scanEnergyHatch] candidate pos={} insufficient: stored {}FE (need {}FE)",
-                        candidate, stored, required);
+        for (EnergyInputHatchBlockEntity hatch : liveComponents(EnergyInputHatchBlockEntity.class)) {
+            scanned++;
+            int stored = hatch.getEnergyStorage(null).getEnergyStored();
+            if (stored >= required) {
+                LOG.debug("[scanEnergyHatch] component pos={} matched: stored {}FE (need {}FE)",
+                        hatch.getBlockPos(), stored, required);
+                return hatch;
             }
+            LOG.debug("[scanEnergyHatch] component pos={} insufficient: stored {}FE (need {}FE)",
+                    hatch.getBlockPos(), stored, required);
         }
-        LOG.debug("[scanEnergyHatch] scanned {} energy input hatch(es) in 3x3 above controller; none held {}FE",
+        LOG.debug("[scanEnergyHatch] scanned {} structure energy input hatch(es); none held {}FE",
                 scanned, required);
         return null;
     }
@@ -265,21 +277,37 @@ public final class RecipeCraftingContext {
     private List<OutputSlot> outputSlots() {
         List<OutputSlot> slots = new ArrayList<>();
         int buses = 0;
-        for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
-            BlockPos candidate = controllerPos.offset(dx, 1, dz);
-            if (level.getBlockEntity(candidate) instanceof ItemOutputBusBlockEntity bus) {
-                buses++;
-                IItemHandler handler = bus.getItemHandler(null);
-                int usable = 0;
-                for (int slot = 0; slot < handler.getSlots(); slot++) {
-                    slots.add(new OutputSlot(handler, slot));
-                    usable++;
-                }
-                LOG.debug("[scanOutputBus] candidate pos={} contributed {} slot(s) (total slots so far: {})", candidate, usable, slots.size());
+        for (ItemOutputBusBlockEntity bus : liveComponents(ItemOutputBusBlockEntity.class)) {
+            buses++;
+            IItemHandler handler = bus.getItemHandler(null);
+            int usable = 0;
+            for (int slot = 0; slot < handler.getSlots(); slot++) {
+                slots.add(new OutputSlot(handler, slot));
+                usable++;
+            }
+            LOG.debug("[scanOutputBus] component pos={} contributed {} slot(s) (total slots so far: {})", bus.getBlockPos(), usable, slots.size());
+        }
+        LOG.debug("[scanOutputBus] discovered {} structure output bus(es) → {} total slot(s) at controllerPos={}", buses, slots.size(), controllerPos);
+        return slots;
+    }
+
+    public List<FluidOutputHatchBlockEntity> fluidOutputs() {
+        // Fluid outputs do not have a MachineRecipe output type yet; expose routed hatches for that next step.
+        return liveComponents(FluidOutputHatchBlockEntity.class);
+    }
+
+    private <T extends BlockEntity> List<T> liveComponents(Class<T> type) {
+        if (level == null) return List.of();
+
+        List<T> matches = new ArrayList<>();
+        for (ProcessingComponent component : controller.getComponents()) {
+            if (!type.isInstance(component.getContainer())) continue;
+            BlockEntity live = level.getBlockEntity(component.getPos());
+            if (live == component.getContainer()) {
+                matches.add(type.cast(live));
             }
         }
-        LOG.debug("[scanOutputBus] discovered {} output bus(es) → {} total slot(s) at controllerPos={}", buses, slots.size(), controllerPos);
-        return slots;
+        return matches;
     }
 
     private List<OutputSlotState> outputSlotStates() {

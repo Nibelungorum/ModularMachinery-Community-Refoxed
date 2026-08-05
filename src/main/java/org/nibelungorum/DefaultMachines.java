@@ -74,6 +74,8 @@ public final class DefaultMachines {
                 .build();
 
         Machine definition = MachineDefinitions.get(BLAST_FURNACE_ID);
-        return new DynamicMachine(BLAST_FURNACE_ID, "高炉", pattern, definition.controller());
+        return definition == null
+                ? new DynamicMachine(BLAST_FURNACE_ID, "高炉", pattern)
+                : new DynamicMachine(BLAST_FURNACE_ID, "高炉", pattern, definition.controller());
     }
 }

@@ -6,9 +6,11 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
+import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.registry.ModBlockEntities;
@@ -46,6 +48,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private Direction controllerFacing;
     private ActiveMachineRecipe active;
     private RecipeCraftingContext context;
+    private final List<ProcessingComponent> components = new ArrayList<>();
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
@@ -84,6 +87,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public ActiveMachineRecipe getActive() { return active; }
 
+    public List<ProcessingComponent> getComponents() { return List.copyOf(components); }
+
     public void serverTick() {
         if (level == null || level.isClientSide()) return;
         Identifier boundMachine = machine == null ? null : machine.registryName();
@@ -106,6 +111,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (foundMachine != null && foundPattern != null && controllerFacing == facing) {
             if (StructureMatcher.matchesRotated(foundPattern, level, getBlockPos())) {
                 if (!isFormed()) setFormed(true);
+                updateComponents();
                 return;
             }
             LOG.info("[Ctrl#{}] checkStructure: cached pattern for {} no longer matches → reset", instanceId, foundMachine.registryName());
@@ -159,8 +165,40 @@ public class MachineControllerBlockEntity extends BlockEntity {
         controllerFacing = facing;
         machine = matchedMachine;
         if (!isFormed()) setFormed(true);
+        updateComponents();
         LOG.info("[Ctrl#{}] onStructureFormed: pos={} machine={} facing={}", instanceId, getBlockPos(), matchedMachine.registryName(), facing);
         setChanged();
+    }
+
+    private void updateComponents() {
+        components.clear();
+        if (level == null || foundMachine == null || foundPattern == null) return;
+
+        int itemInputs = 0;
+        int itemOutputs = 0;
+        int fluidInputs = 0;
+        int fluidOutputs = 0;
+        int energyInputs = 0;
+        int energyOutputs = 0;
+        for (BlockPos relativePos : foundPattern.pattern().keySet()) {
+            BlockPos worldPos = getBlockPos().offset(relativePos);
+            if (!(level.getBlockEntity(worldPos) instanceof MachineComponentTile tile)) continue;
+
+            var component = tile.provideComponent();
+            if (!(tile instanceof BlockEntity container)) continue;
+            components.add(new ProcessingComponent(component, container, worldPos, relativePos, null));
+            switch (component.kind().id()) {
+                case "item_input_bus" -> itemInputs++;
+                case "item_output_bus" -> itemOutputs++;
+                case "fluid_input_hatch" -> fluidInputs++;
+                case "fluid_output_hatch" -> fluidOutputs++;
+                case "energy_input_hatch" -> energyInputs++;
+                case "energy_output_hatch" -> energyOutputs++;
+                default -> { }
+            }
+        }
+        LOG.info("[Ctrl#{}] updateComponents: machine={} components={} itemInputs={} itemOutputs={} fluidInputs={} fluidOutputs={} energyInputs={} energyOutputs={}",
+                instanceId, foundMachine.registryName(), components.size(), itemInputs, itemOutputs, fluidInputs, fluidOutputs, energyInputs, energyOutputs);
     }
 
     private void resetMachine() {
@@ -171,6 +209,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         foundMachine = null;
         foundPattern = null;
         controllerFacing = null;
+        components.clear();
         if (active != null) {
             active = null;
             context = null;
@@ -200,7 +239,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         int index = 0;
         for (MachineRecipe recipe : candidates) {
             index++;
-            RecipeCraftingContext candidate = new RecipeCraftingContext(level, getBlockPos());
+            RecipeCraftingContext candidate = new RecipeCraftingContext(this);
             boolean inputsOk = candidate.simulateInputs(recipe);
             boolean outputsOk = candidate.simulateOutputs(recipe);
             if (!inputsOk || !outputsOk) {
@@ -302,7 +341,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return;
         }
         active = restored;
-        context = new RecipeCraftingContext(level, getBlockPos());
+        context = new RecipeCraftingContext(this);
         LOG.info("[Ctrl#{}] loadAdditional: pos={} restored active recipe={} tick={}/{}", instanceId, getBlockPos(), restored.getRecipe().id(), restored.getTick(), restored.getTotalTick());
         setChanged();
     }

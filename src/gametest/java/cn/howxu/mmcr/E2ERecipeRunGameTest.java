@@ -67,7 +67,53 @@ public class E2ERecipeRunGameTest {
         int energy = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).getEnergyStorage(null).getEnergyStored();
         helper.assertTrue(input.isEmpty(), "Input ingots consumed");
         helper.assertTrue(output.is(Items.IRON_NUGGET), "Output is iron nugget");
-        helper.assertTrue(energy == 6800, "Energy consumed");
+        helper.assertTrue(energy == 6800, "Energy consumed per tick");
+        helper.succeed();
+    }
+
+    @GameTest(template = "minecraft:empty", timeoutTicks = 200)
+    public void recipeUsesPortsFromMatchedPatternOutsideLegacyScan(GameTestHelper helper) {
+        BlockPos controllerPos = new BlockPos(2, 1, 2);
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("wide_compressor")).get().defaultBlockState());
+
+        BlockPos inputPos = controllerPos.offset(2, 0, 0);
+        helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+        helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null)
+                .insertItem(0, new ItemStack(Items.IRON_INGOT), false);
+
+        BlockPos outputPos = controllerPos.offset(0, 0, 2);
+        helper.setBlock(outputPos, ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState());
+
+        BlockPos energyPos = controllerPos.offset(-2, 0, 0);
+        helper.setBlock(energyPos, ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState());
+        helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).getEnergyStorage(null).receiveEnergy(10000, false);
+
+        Map<BlockPos, BlockPredicate> pattern = new HashMap<>();
+        pattern.put(inputPos.subtract(controllerPos), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()));
+        pattern.put(outputPos.subtract(controllerPos), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_output_bus").get()));
+        pattern.put(energyPos.subtract(controllerPos), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("energy_input_hatch").get()));
+
+        Identifier machineId = Identifier.fromNamespaceAndPath(MMCR.MODID, "wide_compressor");
+        var machine = new DynamicMachine(machineId, "Wide Compressor", new BlockArray(pattern));
+        MachineRegistry.register(machine);
+        RecipeRegistry.register(new MachineRecipe(Identifier.fromNamespaceAndPath(MMCR.MODID, "wide_compressor_recipe"),
+                machineId, 20,
+                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1),
+                        new MachineIngredient.EnergyIngredient(50)),
+                List.of(new ItemStack(Items.IRON_NUGGET))));
+
+        var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(machine);
+        controller.serverTick();
+        helper.assertTrue(controller.isFormed(), "Structure formed");
+        for (int tick = 0; tick < 20; tick++) controller.serverTick();
+
+        ItemStack input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
+        ItemStack output = helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
+        int energy = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).getEnergyStorage(null).getEnergyStored();
+        helper.assertTrue(input.isEmpty(), "Pattern input bus consumed ingot outside legacy scan");
+        helper.assertTrue(output.is(Items.IRON_NUGGET), "Pattern output bus received nugget outside legacy scan");
+        helper.assertTrue(energy == 9000, "Pattern energy hatch consumed energy outside legacy scan");
         helper.succeed();
     }
 }

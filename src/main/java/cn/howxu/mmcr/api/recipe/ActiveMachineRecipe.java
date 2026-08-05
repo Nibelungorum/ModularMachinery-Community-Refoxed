@@ -31,7 +31,7 @@ public final class ActiveMachineRecipe {
 
     public ActiveMachineRecipe(MachineRecipe recipe, int maxParallelism) {
         this.recipe = recipe;
-        this.totalTick = recipe == null ? 0 : recipe.getRecipeTotalTickTime();
+        this.totalTick = recipe == null ? 0 : IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyDuration(recipe.modifiers(), recipe.getRecipeTotalTickTime()));
         this.maxParallelism = Math.max(1, maxParallelism);
         this.parallelism = 1;
         this.data = new CompoundTag();
@@ -195,6 +195,24 @@ public final class ActiveMachineRecipe {
         }
         int beforeTick = getTick();
         int nextTick = Math.min(beforeTick + 1, total);
+        if (nextTick >= total) {
+            boolean simOutputs = context.simulateOutputs(recipe);
+            boolean simInputs = context.simulateInputs(recipe);
+            if (!simOutputs || !simInputs) {
+                LOG.info("ActiveMachineRecipe#{} tick(): recipe {} simulate refused before completion (simOutputs={} simInputs={}) → WAITING at tick {}",
+                        instanceId, recipe.id(), simOutputs, simInputs, beforeTick);
+                return TickStatus.WAITING;
+            }
+        } else if (!context.simulateInputs(recipe)) {
+            doFailureAction(false);
+            LOG.info("ActiveMachineRecipe#{} tick(): recipe {} inputs unavailable at tick {} → WAITING", instanceId, recipe.id(), beforeTick);
+            return TickStatus.WAITING;
+        }
+        if (!context.ioTick(recipe)) {
+            doFailureAction(false);
+            LOG.info("ActiveMachineRecipe#{} tick(): recipe {} ioTick refused at tick {} → WAITING", instanceId, recipe.id(), beforeTick);
+            return TickStatus.WAITING;
+        }
         setTick(nextTick);
         LOG.debug("ActiveMachineRecipe#{} tick(): recipe {} advance {} → {} of {}", instanceId, recipe.id(), beforeTick, nextTick, total);
 
@@ -203,16 +221,6 @@ public final class ActiveMachineRecipe {
         }
 
         LOG.info("ActiveMachineRecipe#{} tick(): recipe {} reached completion tick {} of {}; entering final commit phase", instanceId, recipe.id(), nextTick, total);
-
-        boolean simOutputs = context.simulateOutputs(recipe);
-        boolean simInputs = context.simulateInputs(recipe);
-        if (!simOutputs || !simInputs) {
-            int restored = Math.max(0, total - 1);
-            LOG.info("ActiveMachineRecipe#{} tick(): recipe {} simulate refused (simOutputs={} simInputs={}) → rollback tick {} → {} (WAITING)",
-                    instanceId, recipe.id(), simOutputs, simInputs, nextTick, restored);
-            setTick(restored);
-            return TickStatus.WAITING;
-        }
 
         boolean outputsOk = context.commitOutputs(recipe);
         boolean inputsOk = context.commitInputs(recipe);
