@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
@@ -25,6 +26,14 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
 
     default List<String> tags() {
         return List.of();
+    }
+
+    boolean simulate(RecipeCraftingContext context, int requirementIndex);
+
+    boolean commit(RecipeCraftingContext context, int requirementIndex);
+
+    default boolean ioTick(RecipeCraftingContext context, int requirementIndex) {
+        return true;
     }
 
     static MachineRequirement fromInput(MachineIngredient ingredient) {

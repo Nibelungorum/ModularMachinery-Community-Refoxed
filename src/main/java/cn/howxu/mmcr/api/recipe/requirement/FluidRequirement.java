@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
@@ -23,5 +24,19 @@ public record FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredie
     @Override
     public String type() {
         return "fluid";
+    }
+
+    @Override
+    public boolean simulate(RecipeCraftingContext context, int requirementIndex) {
+        return io == RecipeModifier.IOType.INPUT
+                ? context.simulateFluidInput(requirementIndex, this)
+                : context.simulateFluidOutput(requirementIndex, this);
+    }
+
+    @Override
+    public boolean commit(RecipeCraftingContext context, int requirementIndex) {
+        return io == RecipeModifier.IOType.INPUT
+                ? context.collectFluidInputRoute(requirementIndex)
+                : context.collectFluidOutputRoute(requirementIndex);
     }
 }

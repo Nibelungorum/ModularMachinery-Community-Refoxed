@@ -23,12 +23,14 @@
 - `MachineRecipe` / `RecipeRegistry` / `ActiveMachineRecipe` / `RecipeCraftingContext` / modifier 最小集。
 - Java API 注册默认机器/配方，KubeJS builder 初步入口，datagen 资源生成。
 - Debug wrench 与 debug infinite source，用于手动验证 IO。
+- Phase 2 Requirement / Component 正式层已闭环：只保留 `api.recipe.requirement.*` 一套 requirement，item/fluid/energy runtime 由 requirement 分派，selector tag 成功与 mismatch failure 均有测试覆盖。
 
 ### 当前优先收尾
 
 - 修复当前 dirty runtime 改动导致的 `RecipeApiSmokeTest.recipe_codec_roundtrip_preserves_modifiers_and_priority` 失败。
 - 完成 matched pattern 组件上下文：`MachineComponentTile` → `ProcessingComponent` → `RecipeCraftingContext`。
 - 确认端口只要在 matched pattern 内就能参与 recipe IO，且 pattern 外端口不会被误用。
+- Phase 2 后续仅保留非阻塞收敛项：继续把 context 内部 item/fluid/energy route helper 拆成更薄的 adapter；当前主调度和 public requirement 模型已完成闭环。
 - 在此阶段提交前必须通过 `./gradlew compileJava --no-daemon` 和 `./gradlew test --no-daemon`；相关 GameTest 能跑时再跑结构/配方 E2E。
 
 ## 2. Phase 1：核心运行时闭环
