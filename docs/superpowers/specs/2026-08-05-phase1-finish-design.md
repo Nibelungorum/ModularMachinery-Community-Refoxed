@@ -154,10 +154,42 @@ public RecipeFailureActions failureAction() {
 - Fluid 输出和 item 输出若同时存在，commit 顺序固定为 item → fluid，simulate 也按同序；任何倒序都视为非需求改动。
 - `Machine.failureAction()` 默认值变更属于行为扩展；KubeJS 端若要覆盖，应在 DynamicMachine 后续字段里加，不在本阶段处理。
 
-## 11. 完成定义
+## 11. 控制器 GUI 同步增量
+
+为保持“控制器屏与运行时一致”，下面三项与 §4 / §5 / §6 同 PR 落地；不补其他阶段的视觉项。
+
+### 11.1 Failure message 透出
+
+- `RecipeCraftingContext` 新增只读字段 `lastFailureUnloc`（最近一次 `simulate/commit/ioTick` 失败的未本地化消息；可空）。
+- `MachineControllerBlockEntity` 暴露 `getLastFailureUnloc()`，在每次失败 / 重置时更新。
+- `MachineControllerMenu` 新增 `DataSlot lastFailure`，并提供 `lastFailureMessage()` getter。
+- `MachineMenuScreen.renderControllerStatus` 在 `active == null` 且 `lastFailureMessage()` 非空时，追加一行 `gui.mmcr.controller.last_failure`（带参数）；不再额外弹 toast。
+- 重置结构（`resetMachine`）或重启时清空。
+
+### 11.2 红石停机
+
+- `MachineControllerBlockEntity.serverTick` 开头读取 `level.getStrongPower(getBlockPos())`；若 >0：
+  - 若有 active recipe，把 `active` 引用与 `context` 暂存到 `_paused`，`active/context = null`，不调用 `tickActiveRecipe`；状态从 `Running` 回退到 `Idle`（已通过现有 `broadcastStateIfChanged`）。
+  - 不取消 active recipe 的 tick 数；红石消失后从原 tick 继续。
+- `MachineControllerMenu` 新增 `DataSlot redstonePaused`，渲染时显示 `gui.mmcr.controller.redstone_stopped` 行（参考 MMCE 文案）。
+
+### 11.3 多行换行 + 缩放
+
+- `MachineMenuScreen.renderControllerStatus` 改用 `PoseStack.scale(0.72F)`，文本用 `font.split(component, scaledWidth)` 拆行；与 MMCE `scale=0.72` 视觉一致。
+- 标题行（机器本地化名）保留原色与位置，不缩放，避免与状态行错位。
+- 进度行的 dot 动画保留；`progressDots` 函数不变。
+
+### 11.4 不在 Phase 1 收尾范围
+
+- `ControllerGUIRenderEvent` extraInfo 钩子（KubeJS 集成）→ 留给 Phase 5/6 同步。
+- Blueprint / Structure 段、`usedTimeCache` 性能行 → 留给 Phase 5/6/7。
+- Controller 屏内 fluid tank / energy bar → Phase 2 spec §10 末尾合并。
+
+## 12. 完成定义
 
 - 控制器运行时完全基于 `getComponents()` 路由 I/O。
 - `RecipeFailureActions` 已接线到 context / active recipe。
 - Fluid output 通过结构内 hatch capability 走通 simulate + commit。
+- Failure message 透出到控制器 GUI；红石停机逻辑与 GUI 文案就位；状态行升级为 0.72 倍缩放 + 多行换行。
 - `RecipeApiSmokeTest` 全绿；`gradlew compileJava` / `gradlew test` 通过。
 - roadmap 中 Phase 1 的“当前优先收尾”清单全部消化。

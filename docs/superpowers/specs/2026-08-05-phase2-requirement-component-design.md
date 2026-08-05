@@ -167,11 +167,40 @@ public sealed interface MachineRequirement
 - Phase 2 把 requirement 路由放到 context 内，破坏了“controller 仅生命周期调度”的边界；这是 Phase 2 不可避免的中间态，Phase 3 modifier 重构时再考虑下沉到独立 service。
 - Selector tag 涉及 KubeJS / JSON 改动；本阶段仅 API 层，不输出示例 JSON。
 
-## 11. 完成定义
+## 11. 控制器 GUI 同步增量（接 Phase 1 收尾 §11）
+
+Phase 1 仅把 failure / 红石 / 缩放落地，控制器屏内仍缺结构级能量与流体聚合展示。Phase 2 把这两个 slot 一并接入。
+
+### 11.1 控制器屏内 energy bar
+
+- `MachineControllerBlockEntity` 暴露两个聚合 getter：
+  - `long totalStoredEnergy()`：遍历 `getComponents()` 中 `EnergyInputHatchBlockEntity`，累加 `getEnergyStorage(null).getEnergyStored()`。
+  - `long totalCapacityEnergy()`：累加 `getMaxEnergyStored()`。
+- `MachineControllerMenu` 新增两个 `DataSlot` 同步这两个值；client-only fallback 在 `resolvedOwner()` 为 null 时返回 0。
+- `MachineMenuScreen` 新增 `renderControllerEnergyBar(...)`：在状态行下方用 `TANK_TEXTURE` 切片画一条竖直能量条（沿用现有 `ENERGY_X/Y/W/H` 与配色 `0xFFE03B27`），右侧用 `amountText(...)` 写 `FE`；无能量输入组件时整条不绘制。
+- 数值随 `broadcastStateIfChanged` 频率同步即可，不需要新 payload；DataSlot 自动节流。
+
+### 11.2 控制器屏内 fluid tank 概览
+
+- 仅显示第一个非空 `FluidInputHatchBlockEntity`（或显式指定“primary input” tag，Phase 2 暂取前者）。`FluidOutputHatchBlockEntity` 单独显示一个只读输出槽，标识“首个输出”。
+- `MachineControllerBlockEntity` 暴露：
+  - `FluidStack primaryFluid()`：`components` 中第一个含流体的 `FluidInputHatchBlockEntity` 的 tank 内容；空则 `FluidStack.EMPTY`。
+  - `FluidStack primaryOutputFluid()`：同理，取 `FluidOutputHatchBlockEntity`。
+- `MachineControllerMenu` 同步这两个 `FluidStack` 的 `(fluidId, amount)` 到 `DataSlot`（两个槽），无需自定义 payload。
+- `MachineMenuScreen` 新增 `renderControllerFluidPreview(...)`：复用现有 `drawFluid(...)` 工具，左侧 input 流体方块，右侧 output 流体方块；空流体则空槽位。
+- 注意：本阶段不引入 fluid tank 交互点击；fluid input / output 的具体库存操作仍走 hatch 自己的 GUI。
+
+### 11.3 不在 Phase 2 范围
+
+- 控制器屏显示**每个**输入 bus / hatch 的详细存储（仅聚合与第一项预览）；详细库存走各自屏。
+- 失败时把 last failure 文案附带“哪个组件 short 多少”的扩展行：该项 Phase 2 已在 §5.3 实现并写入 context，渲染端在 Phase 1 §11.1 已接基础文案；扩展行排版作为 Phase 3 polish。
+
+## 12. 完成定义
 
 - `MachineRequirement` 三类实现就位；`MachineIngredient` 不再被 `RecipeCraftingContext` 直接分支消费。
 - `MachineRecipe.requirements()` 是 context 的唯一 IO 路由入口；旧 `inputs()` / `outputs()` 保留但由 requirements 派生。
 - Selector tag API（tag 形参 + `BlockArray` per-position metadata + `ProcessingComponent.tag` 命中）落地，未声明 tag 的 recipe 行为不变。
 - 错误信息（缺哪种 / 缺多少 / 在哪些组件中查找过）能进入 `CraftCheck.failure(...)`。
+- 控制器 GUI 聚合 energy bar + fluid preview 落地；hatch / bus 屏自身不受影响。
 - `compileJava` / `test` 全绿；现有 E2E GameTest 不退化。
 - roadmap Phase 2 验收项 3.1 / 3.2 / 3.3 全部消化。
