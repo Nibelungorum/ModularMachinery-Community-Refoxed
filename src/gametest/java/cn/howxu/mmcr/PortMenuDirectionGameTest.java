@@ -28,21 +28,21 @@ public class PortMenuDirectionGameTest {
 
         Slot inputSlot = inputMenu.getSlot(0);
         helper.assertTrue(inputSlot.mayPlace(new ItemStack(Items.IRON_INGOT)), "Input slot accepts placement");
-        helper.assertTrue(inputSlot.mayPickup(player), "Input slot accepts pickup");
+        helper.assertTrue(!inputSlot.mayPickup(player), "Input slot rejects pickup");
 
+        helper.getBlockEntity(outputPos, ItemBusBlockEntity.class).getItemStackHandler(null)
+                .setStackInSlot(0, new ItemStack(Items.GOLD_INGOT));
         Slot outputSlot = outputMenu.getSlot(0);
         helper.assertTrue(outputSlot.mayPlace(new ItemStack(Items.IRON_INGOT)), "Output slot accepts placement");
         helper.assertTrue(outputSlot.mayPickup(player), "Output slot accepts pickup");
 
         player.getInventory().setItem(0, new ItemStack(Items.IRON_INGOT));
-        helper.assertTrue(!inputMenu.quickMoveStack(player, 36).isEmpty(), "Player stack moves into input port");
-        helper.assertTrue(!inputMenu.quickMoveStack(player, 0).isEmpty(), "Input port stack moves to player");
+        helper.assertTrue(!inputMenu.quickMoveStack(player, 33).isEmpty(), "Player stack moves into input port");
+        helper.assertTrue(inputMenu.quickMoveStack(player, 0).isEmpty(), "Input port stack does not move to player");
 
-        helper.getBlockEntity(outputPos, ItemBusBlockEntity.class).getItemStackHandler(null)
-                .setStackInSlot(0, new ItemStack(Items.GOLD_INGOT));
         helper.assertTrue(!outputMenu.quickMoveStack(player, 0).isEmpty(), "Output port stack moves to player");
         player.getInventory().setItem(1, new ItemStack(Items.COPPER_INGOT));
-        helper.assertTrue(!outputMenu.quickMoveStack(player, 37).isEmpty(), "Player stack moves into output port");
+        helper.assertTrue(!outputMenu.quickMoveStack(player, 34).isEmpty(), "Player stack moves into output port");
 
         helper.succeed();
     }

@@ -7,12 +7,14 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
@@ -33,7 +35,8 @@ public class E2ERecipeRunGameTest {
         for (int x = 0; x < 3; x++) for (int z = 0; z < 3; z++)
             helper.setBlock(new BlockPos(x, 1, z), ModBlocks.CASING.get().defaultBlockState());
         BlockPos controllerPos = new BlockPos(1, 1, 1);
-        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("iron_compressor")).get().defaultBlockState());
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("iron_compressor")).get().defaultBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
         BlockPos inputPos = new BlockPos(1, 2, 0);
         helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
         helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null)
@@ -48,6 +51,9 @@ public class E2ERecipeRunGameTest {
         for (int x = -1; x <= 1; x++) for (int z = -1; z <= 1; z++)
             if (x != 0 || z != 0) pattern.put(new BlockPos(x, 0, z),
                     new BlockPredicate.OfBlock(ModBlocks.CASING.get()));
+        pattern.put(inputPos.subtract(controllerPos), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()));
+        pattern.put(outputPos.subtract(controllerPos), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_output_bus").get()));
+        pattern.put(energyPos.subtract(controllerPos), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("energy_input_hatch").get()));
         Identifier machineId = Identifier.fromNamespaceAndPath(MMCR.MODID, "iron_compressor");
         var machine = new DynamicMachine(machineId, "Iron Compressor", new BlockArray(pattern));
         MachineRegistry.register(machine);

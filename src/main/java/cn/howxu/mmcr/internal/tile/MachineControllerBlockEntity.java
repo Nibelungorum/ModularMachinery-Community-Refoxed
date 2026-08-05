@@ -195,8 +195,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
         checkStructure();
         if (isFormed()) {
-            if (active == null) tryStartNewRecipe();
-            if (active != null) tickActiveRecipe();
+            boolean startedThisTick = false;
+            if (active == null) {
+                startedThisTick = tryStartNewRecipe();
+            }
+            if (active != null && !startedThisTick) tickActiveRecipe();
         }
         broadcastStateIfChanged(activeBefore);
     }
@@ -334,7 +337,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
     }
 
-    private void tryStartNewRecipe() {
+    private boolean tryStartNewRecipe() {
         List<MachineRecipe> candidates = recipesForMachine();
         int index = 0;
         RecipeCraftingContext lastTried = null;
@@ -365,13 +368,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
             LOG.info("[Ctrl#{}] tryStartNewRecipe: START recipe={} tickTime={} priority={} maxParallel={} (chosen {}/{} candidates)",
                     instanceId, recipe.id(), recipe.tickTime(), recipe.priority(), next.getMaxParallelism(), index, candidates.size());
             setChanged();
-            return;
+            return true;
         }
         if (lastTried != null && lastTried.getLastFailureUnloc() != null) {
             lastFailureUnloc = lastTried.getLastFailureUnloc();
         } else {
             lastFailureUnloc = null;
         }
+        return false;
     }
 
     private void tickActiveRecipe() {
