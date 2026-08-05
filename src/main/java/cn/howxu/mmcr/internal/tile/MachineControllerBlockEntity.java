@@ -25,6 +25,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.Nullable;
 import org.nibelungorum.DefaultMachines;
 import org.slf4j.Logger;
@@ -118,6 +119,50 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public boolean hasClientActiveRecipe() { return clientActive; }
 
     public List<ProcessingComponent> getComponents() { return List.copyOf(components); }
+
+    public long totalStoredEnergy() {
+        long total = 0;
+        for (ProcessingComponent component : components) {
+            if (component.getContainer() instanceof EnergyInputHatchBlockEntity hatch) {
+                total += hatch.getEnergyStorage(null).getEnergyStored();
+            } else if (component.getContainer() instanceof EnergyOutputHatchBlockEntity hatch) {
+                total += hatch.getEnergyStorage(null).getEnergyStored();
+            }
+        }
+        return total;
+    }
+
+    public long totalCapacityEnergy() {
+        long total = 0;
+        for (ProcessingComponent component : components) {
+            if (component.getContainer() instanceof EnergyInputHatchBlockEntity hatch) {
+                total += hatch.getEnergyStorage(null).getMaxEnergyStored();
+            } else if (component.getContainer() instanceof EnergyOutputHatchBlockEntity hatch) {
+                total += hatch.getEnergyStorage(null).getMaxEnergyStored();
+            }
+        }
+        return total;
+    }
+
+    public FluidStack primaryFluid() {
+        for (ProcessingComponent component : components) {
+            if (component.getContainer() instanceof FluidInputHatchBlockEntity hatch) {
+                FluidStack stack = hatch.getFluidTank(null).getFluid();
+                if (!stack.isEmpty()) return stack.copy();
+            }
+        }
+        return FluidStack.EMPTY;
+    }
+
+    public FluidStack primaryOutputFluid() {
+        for (ProcessingComponent component : components) {
+            if (component.getContainer() instanceof FluidOutputHatchBlockEntity hatch) {
+                FluidStack stack = hatch.getFluidTank(null).getFluid();
+                if (!stack.isEmpty()) return stack.copy();
+            }
+        }
+        return FluidStack.EMPTY;
+    }
 
     public void serverTick() {
         if (level == null || level.isClientSide()) return;
