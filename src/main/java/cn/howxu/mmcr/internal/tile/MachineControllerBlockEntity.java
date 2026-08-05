@@ -120,12 +120,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public void serverTick() {
         if (level == null || level.isClientSide()) return;
-        Identifier boundMachine = machine == null ? null : machine.registryName();
-        Identifier activeRecipe = active == null ? null : active.getRecipe().id();
         boolean activeBefore = active != null;
-        LOG.debug("[Ctrl#{}] serverTick pos={} formed={} boundMachine={} activeRecipe={} tick={}/{}",
-                instanceId, getBlockPos(), isFormed(), boundMachine, activeRecipe,
-                active == null ? -1 : active.getTick(), active == null ? -1 : active.getTotalTick());
         if (machine == null) bindDefaultMachine();
 
         if (level.getDirectSignalTo(getBlockPos()) > 0) {
@@ -146,7 +141,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
             pausedActive = null;
             pausedContext = null;
             setActiveState(true);
-            activeBefore = active != null;
         }
 
         checkStructure();
@@ -172,33 +166,19 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
         if (machine != null) {
             if (tryFormMachine(machine, facing)) {
-                LOG.debug("[Ctrl#{}] checkStructure: pre-bound machine {} matched facing {}", instanceId, machine.registryName(), facing);
                 return;
             }
-            LOG.debug("[Ctrl#{}] checkStructure: pre-bound machine {} did not match, scanning registry", instanceId, machine.registryName());
         }
         checkAllPatterns(facing);
         if (!isFormed()) resetMachine();
     }
 
     private void checkAllPatterns(Direction facing) {
-        int totalCandidates = 0;
-        int rejected = 0;
-        int accepted = -1;
         for (Machine candidate : MachineRegistry.getAll().values()) {
             if (candidate == machine) continue;
-            totalCandidates++;
             if (tryFormMachine(candidate, facing)) {
-                accepted = totalCandidates;
-                LOG.info("[Ctrl#{}] checkAllPatterns: auto-matched {} from registry (scanned {} of {} candidates, rejected {} before)",
-                        instanceId, candidate.registryName(), totalCandidates, MachineRegistry.getAll().size(), rejected);
                 return;
             }
-            rejected++;
-        }
-        if (totalCandidates > 0 && accepted < 0) {
-            LOG.debug("[Ctrl#{}] checkAllPatterns: no match among {} candidates at pos={} facing {}",
-                    instanceId, totalCandidates, getBlockPos(), facing);
         }
     }
 
@@ -225,12 +205,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         components.clear();
         if (level == null || foundMachine == null || foundPattern == null) return;
 
-        int itemInputs = 0;
-        int itemOutputs = 0;
-        int fluidInputs = 0;
-        int fluidOutputs = 0;
-        int energyInputs = 0;
-        int energyOutputs = 0;
         for (BlockPos relativePos : foundPattern.pattern().keySet()) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
             if (!(level.getBlockEntity(worldPos) instanceof MachineComponentTile tile)) continue;
@@ -238,18 +212,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             var component = tile.provideComponent();
             if (!(tile instanceof BlockEntity container)) continue;
             components.add(new ProcessingComponent(component, container, worldPos, relativePos, null));
-            switch (component.kind().id()) {
-                case "item_input_bus" -> itemInputs++;
-                case "item_output_bus" -> itemOutputs++;
-                case "fluid_input_hatch" -> fluidInputs++;
-                case "fluid_output_hatch" -> fluidOutputs++;
-                case "energy_input_hatch" -> energyInputs++;
-                case "energy_output_hatch" -> energyOutputs++;
-                default -> { }
-            }
         }
-        LOG.info("[Ctrl#{}] updateComponents: machine={} components={} itemInputs={} itemOutputs={} fluidInputs={} fluidOutputs={} energyInputs={} energyOutputs={}",
-                instanceId, foundMachine.registryName(), components.size(), itemInputs, itemOutputs, fluidInputs, fluidOutputs, energyInputs, energyOutputs);
     }
 
     private void resetMachine() {
@@ -287,12 +250,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (!(level instanceof ServerLevel sl)) return;
         String name = active == null ? "" : active.getRecipe().id().toString();
         var pkt = new PktMachineStatePayload(getBlockPos(), name, formed);
-        int sent = 0;
         for (var player : sl.getPlayers(p -> p.distanceToSqr(getBlockPos().getCenter()) < 64 * 64)) {
             ((ServerPlayer) player).connection.send(new ClientboundCustomPayloadPacket(pkt));
-            sent++;
         }
-        LOG.debug("[Ctrl#{}] broadcastState: pos={} recipe='{}' formed={} → {} player(s) within 64 blocks", instanceId, getBlockPos(), name, isFormed(), sent);
     }
 
     private void tryStartNewRecipe() {
@@ -335,7 +295,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void tickActiveRecipe() {
         if (active == null || context == null) return;
-        int before = active.getTick();
         ActiveMachineRecipe.TickStatus status = active.tick(context);
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
             LOG.info("[Ctrl#{}] tickActiveRecipe: recipe {} FINISHED after {} ticks (total {}) at pos={}; slot cleared",
@@ -344,8 +303,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
             context = null;
             setActiveState(false);
         } else if (status == ActiveMachineRecipe.TickStatus.WAITING) {
-            LOG.debug("[Ctrl#{}] tickActiveRecipe: recipe {} WAITING ({} → {} of {}) at pos={}",
-                    instanceId, active.getRecipe().id(), before, active.getTick(), active.getTotalTick(), getBlockPos());
             if (active.getRecipe().doesCancelRecipeOnPerTickFailure()) {
                 LOG.info("[Ctrl#{}] tickActiveRecipe: recipe {} canceled after per-tick failure at pos={}; already consumed inputs are voided",
                         instanceId, active.getRecipe().id(), getBlockPos());
@@ -353,9 +310,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 context = null;
                 setActiveState(false);
             }
-        } else {
-            LOG.debug("[Ctrl#{}] tickActiveRecipe: recipe {} CONTINUE ({} → {} of {}) at pos={}",
-                    instanceId, active.getRecipe().id(), before, active.getTick(), active.getTotalTick(), getBlockPos());
         }
         setChanged();
     }
@@ -383,7 +337,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         for (MachineRecipe recipe : RecipeRegistry.byMachine(machine)) {
             recipes.put(recipe.id(), recipe);
         }
-        int fromRegistry = recipes.size();
         if (level instanceof ServerLevel sl) {
             for (RecipeHolder<?> holder : sl.recipeAccess().getRecipes()) {
                 if (holder.value() instanceof MachineRecipe recipe
@@ -392,25 +345,18 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 }
             }
         }
-        int fromVanilla = recipes.size() - fromRegistry;
-        LOG.debug("[Ctrl#{}] recipesForMachine({}): total={} (RecipeRegistry={}, RecipeManager={})",
-                instanceId, machine.registryName(), recipes.size(), fromRegistry, fromVanilla);
         return new ArrayList<>(recipes.values());
     }
 
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
-        Identifier recipeId = active == null ? null : active.getRecipe().id();
-        int tick = active == null ? -1 : active.getTick();
-        int totalTick = active == null ? -1 : active.getTotalTick();
         if (active != null) {
             output.putBoolean("has_active", true);
             active.serialize(output.child("active_recipe"));
         } else {
             output.putBoolean("has_active", false);
         }
-        LOG.debug("[Ctrl#{}] saveAdditional: pos={} hasActive={} recipe={} tick={}/{}", instanceId, getBlockPos(), active != null, recipeId, tick, totalTick);
     }
 
     @Override
@@ -419,7 +365,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         pausedActive = null;
         pausedContext = null;
         if (!input.getBooleanOr("has_active", false)) {
-            LOG.debug("[Ctrl#{}] loadAdditional: pos={} no active recipe stored", instanceId, getBlockPos());
             active = null;
             context = null;
             return;

@@ -21,6 +21,7 @@ import net.minecraft.world.level.ExplosionDamageCalculator;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.FuelValues;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.border.WorldBorder;
@@ -70,6 +71,13 @@ public final class LevelStub {
         return createFromStates(map);
     }
 
+    public static Level createWithBlockEntities(List<BlockEntity> blockEntities) {
+        Level level = create(Map.of());
+        ((TestLevel) level).blockEntities = blockEntities.stream()
+                .collect(java.util.stream.Collectors.toMap(BlockEntity::getBlockPos, be -> be));
+        return level;
+    }
+
     private static Level createFromStates(Map<BlockPos, BlockState> blocks) {
         try {
             var level = (TestLevel) unsafe().allocateInstance(TestLevel.class);
@@ -88,6 +96,7 @@ public final class LevelStub {
 
     private static final class TestLevel extends Level {
         private Map<BlockPos, BlockState> blocks;
+        private Map<BlockPos, BlockEntity> blockEntities = Map.of();
 
         private TestLevel() {
             super(null, Level.OVERWORLD, null, null, false, false, 0L, 0);
@@ -95,6 +104,10 @@ public final class LevelStub {
 
         @Override public BlockState getBlockState(BlockPos pos) {
             return blocks.getOrDefault(pos, Blocks.AIR.defaultBlockState());
+        }
+
+        @Override public BlockEntity getBlockEntity(BlockPos pos) {
+            return blockEntities.get(pos);
         }
 
         @Override public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) {}

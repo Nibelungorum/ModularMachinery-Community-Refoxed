@@ -23,9 +23,9 @@ import java.util.List;
 
 public final class RecipeCraftingContext {
 
-    public static final String FAILURE_MISSING_INPUT = "gui.mmcr.controller.failure.missing_input";
-    public static final String FAILURE_MISSING_OUTPUT = "gui.mmcr.controller.failure.missing_output";
-    public static final String FAILURE_MISSING_ENERGY = "gui.mmcr.controller.failure.missing_energy";
+    static final String FAILURE_MISSING_INPUT = "gui.mmcr.controller.failure.missing_input";
+    static final String FAILURE_MISSING_OUTPUT = "gui.mmcr.controller.failure.missing_output";
+    static final String FAILURE_MISSING_ENERGY = "gui.mmcr.controller.failure.missing_energy";
 
     private final MachineControllerBlockEntity controller;
 
