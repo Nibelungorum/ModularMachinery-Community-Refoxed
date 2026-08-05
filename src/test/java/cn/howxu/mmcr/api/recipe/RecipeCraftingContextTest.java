@@ -431,6 +431,22 @@ class RecipeCraftingContextTest {
         });
     }
 
+    @Test
+    void missingItemInputFailureRecordsSearchedComponents() {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerWithComponents(input);
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "missing_item_trace",
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateInputs(recipe)).isFalse();
+        assertThat(context.getLastRequirementFailure().searchedComponents()).isNotEmpty();
+        assertThat(context.getLastRequirementFailure().matchedComponents()).isNotNull();
+    }
+
     private static ItemInputBusBlockEntity itemInputBus(BlockPos pos) {
         return allocateItemBus(ItemInputBusBlockEntity.class, pos);
     }
