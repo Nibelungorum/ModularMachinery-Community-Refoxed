@@ -1,0 +1,124 @@
+package cn.howxu.mmcr.api.recipe.requirement;
+
+import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.DataResult;
+import com.mojang.serialization.DynamicOps;
+import com.mojang.datafixers.util.Pair;
+import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.fluids.FluidStack;
+
+/**
+ * @author howxu <dev@howxu.cn>
+ */
+public sealed interface MachineRequirement permits ItemRequirement, FluidRequirement, EnergyRequirement {
+
+    Codec<MachineRequirement> CODEC = Codec.of(MachineRequirement::encode, MachineRequirement::decode);
+
+    String type();
+
+    RecipeModifier.IOType io();
+
+    static MachineRequirement fromInput(MachineIngredient ingredient) {
+        if (ingredient instanceof MachineIngredient.ItemIngredient item) {
+            return new ItemRequirement(RecipeModifier.IOType.INPUT, item.item(), item.count(), ItemStack.EMPTY);
+        }
+        if (ingredient instanceof MachineIngredient.FluidIngredient fluid) {
+            return new FluidRequirement(RecipeModifier.IOType.INPUT, fluid.fluid(), fluid.amount(), FluidStack.EMPTY);
+        }
+        if (ingredient instanceof MachineIngredient.EnergyIngredient energy) {
+            return new EnergyRequirement(energy.fePerTick());
+        }
+        throw new IllegalArgumentException("Unknown machine ingredient: " + ingredient);
+    }
+
+    static MachineRequirement itemOutput(ItemStack stack) {
+        return new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, stack.copy());
+    }
+
+    static MachineRequirement fluidOutput(FluidStack stack) {
+        return new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, stack.copy());
+    }
+
+    private static <T> DataResult<T> encode(MachineRequirement requirement, DynamicOps<T> ops, T prefix) {
+        var builder = ops.mapBuilder()
+                .add("type", ops.createString(requirement.type()))
+                .add("io", RecipeModifier.IO_TYPE_CODEC.encodeStart(ops, requirement.io()).getOrThrow());
+        if (requirement instanceof ItemRequirement item) {
+            if (item.io() == RecipeModifier.IOType.INPUT) {
+                return builder
+                        .add("item", item.item(), net.minecraft.world.item.crafting.Ingredient.CODEC)
+                        .add("count", ops.createInt(item.count()))
+                        .build(prefix);
+            }
+            return builder.add("stack", item.stack(), ItemStack.CODEC).build(prefix);
+        }
+        if (requirement instanceof FluidRequirement fluid) {
+            if (fluid.io() == RecipeModifier.IOType.INPUT) {
+                return builder
+                        .add("fluid", fluid.fluid(), net.neoforged.neoforge.fluids.crafting.FluidIngredient.CODEC)
+                        .add("amount", ops.createInt(fluid.amount()))
+                        .build(prefix);
+            }
+            return builder.add("stack", fluid.stack(), FluidStack.CODEC).build(prefix);
+        }
+        if (requirement instanceof EnergyRequirement energy) {
+            return builder.add("fe_per_tick", ops.createInt(energy.fePerTick())).build(prefix);
+        }
+        return DataResult.error(() -> "Unknown machine requirement: " + requirement);
+    }
+
+    private static <T> DataResult<Pair<MachineRequirement, T>> decode(DynamicOps<T> ops, T input) {
+        return ops.get(input, "type")
+                .flatMap(ops::getStringValue)
+                .flatMap(type -> decodeByType(type, ops, input))
+                .map(requirement -> Pair.of(requirement, input));
+    }
+
+    private static <T> DataResult<MachineRequirement> decodeByType(String type, DynamicOps<T> ops, T input) {
+        return switch (type) {
+            case "item" -> decodeItem(ops, input);
+            case "fluid" -> decodeFluid(ops, input);
+            case "energy" -> ops.get(input, "fe_per_tick")
+                    .flatMap(ops::getNumberValue)
+                    .map(fePerTick -> new EnergyRequirement(fePerTick.intValue()));
+            default -> DataResult.error(() -> "Unknown requirement type: " + type);
+        };
+    }
+
+    private static <T> DataResult<MachineRequirement> decodeItem(DynamicOps<T> ops, T input) {
+        return decodeIo(ops, input).flatMap(io -> {
+            if (io == RecipeModifier.IOType.OUTPUT) {
+                return ops.get(input, "stack")
+                        .flatMap(value -> ItemStack.CODEC.parse(ops, value))
+                        .map(stack -> new ItemRequirement(io, null, 0, stack));
+            }
+            return ops.get(input, "item")
+                    .flatMap(value -> net.minecraft.world.item.crafting.Ingredient.CODEC.parse(ops, value))
+                    .flatMap(item -> ops.get(input, "count")
+                            .flatMap(ops::getNumberValue)
+                            .map(count -> new ItemRequirement(io, item, count.intValue(), ItemStack.EMPTY)));
+        });
+    }
+
+    private static <T> DataResult<MachineRequirement> decodeFluid(DynamicOps<T> ops, T input) {
+        return decodeIo(ops, input).flatMap(io -> {
+            if (io == RecipeModifier.IOType.OUTPUT) {
+                return ops.get(input, "stack")
+                        .flatMap(value -> FluidStack.CODEC.parse(ops, value))
+                        .map(stack -> new FluidRequirement(io, null, 0, stack));
+            }
+            return ops.get(input, "fluid")
+                    .flatMap(value -> net.neoforged.neoforge.fluids.crafting.FluidIngredient.CODEC.parse(ops, value))
+                    .flatMap(fluid -> ops.get(input, "amount")
+                            .flatMap(ops::getNumberValue)
+                            .map(amount -> new FluidRequirement(io, fluid, amount.intValue(), FluidStack.EMPTY)));
+        });
+    }
+
+    private static <T> DataResult<RecipeModifier.IOType> decodeIo(DynamicOps<T> ops, T input) {
+        return ops.get(input, "io")
+                .flatMap(value -> RecipeModifier.IO_TYPE_CODEC.parse(ops, value));
+    }
+}

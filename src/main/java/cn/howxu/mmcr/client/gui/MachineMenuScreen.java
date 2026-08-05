@@ -238,7 +238,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
             textY += 12;
         }
 
-        final float scale = 0.72F;
+        final float scale = 0.9F;
         g.pose().pushMatrix();
         g.pose().scale(scale, scale);
         int scaledX = (int) (textX / scale);

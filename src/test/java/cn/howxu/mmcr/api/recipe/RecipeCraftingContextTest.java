@@ -9,6 +9,7 @@ import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
@@ -123,6 +124,27 @@ class RecipeCraftingContextTest {
     }
 
     @Test
+    void commitOutputsMergesMatchingStacksBeforeUsingEmptySlots() {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        output.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(10));
+        MachineControllerBlockEntity controller = controllerWithComponents(output);
+        MachineRecipe recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "merge_output"),
+                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                20,
+                List.of(),
+                List.of(Items.IRON_INGOT.getDefaultInstance().copyWithCount(5))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(15);
+        assertThat(output.getItemStackHandler(null).getStackInSlot(1).isEmpty()).isTrue();
+    }
+
+    @Test
     void legacyFindAndCheckHelpersStayRemoved() {
         assertThat(Arrays.stream(RecipeCraftingContext.class.getDeclaredMethods())
                 .map(java.lang.reflect.Method::getName)
@@ -139,7 +161,7 @@ class RecipeCraftingContextTest {
     }
 
     private static void bindItemComponents(Item item) {
-        item.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+        item.builtInRegistryHolder().bindComponents(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
     }
 
     @SuppressWarnings({"removal", "unchecked"})

@@ -158,8 +158,6 @@ public final class ActiveMachineRecipe {
         if (!data.isEmpty()) {
             output.store("data", CompoundTag.CODEC, data);
         }
-        LOG.debug("ActiveMachineRecipe#{} serialize(ValueOutput): recipe={} tick={}/{} maxParallelism={} parallelism={} dataKeys={}",
-                instanceId, recipe == null ? "" : recipe.id(), tick, totalTick, maxParallelism, parallelism, data.keySet().size());
     }
 
     public static ActiveMachineRecipe from(ValueInput input) {
@@ -220,7 +218,6 @@ public final class ActiveMachineRecipe {
             return TickStatus.WAITING;
         }
         setTick(nextTick);
-        LOG.debug("ActiveMachineRecipe#{} tick(): recipe {} advance {} → {} of {}", instanceId, recipe.id(), beforeTick, nextTick, total);
 
         if (!isCompleted()) {
             return TickStatus.CONTINUE;

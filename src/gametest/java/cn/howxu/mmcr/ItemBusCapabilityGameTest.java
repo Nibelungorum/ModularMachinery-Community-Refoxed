@@ -58,7 +58,7 @@ public class ItemBusCapabilityGameTest {
         try (Transaction tx = Transaction.openRoot()) {
             int inserted = output.insert(0, ItemResource.of(Items.IRON_INGOT), 1, tx);
             int extracted = output.extract(0, ItemResource.of(Items.IRON_INGOT), 4, tx);
-            helper.assertTrue(inserted == 0, "Output capability rejects insertion");
+            helper.assertTrue(inserted == 1, "Output capability inserts");
             helper.assertTrue(extracted == 4, "Output capability extracts");
             tx.commit();
         }

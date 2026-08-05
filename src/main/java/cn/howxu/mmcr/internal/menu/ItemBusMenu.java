@@ -61,23 +61,25 @@ public class ItemBusMenu extends AbstractMachineMenu {
             if (!slot.mayPickup(player)) return ItemStack.EMPTY;
             if (!moveItemStackTo(stack, busSlots, slots.size(), true)) return ItemStack.EMPTY;
         } else {
-            if (owner == null || owner.ioType() != cn.howxu.mmcr.util.IOType.INPUT) return ItemStack.EMPTY;
             boolean moved = false;
             for (int slotIndex = 0; slotIndex < busSlots && !stack.isEmpty(); slotIndex++) {
                 Slot busSlot = slots.get(slotIndex);
-                if (!busSlot.mayPlace(stack)) continue;
                 ItemStack current = busSlot.getItem();
-                if (current.isEmpty()) {
-                    busSlot.setByPlayer(stack.copyAndClear());
-                    moved = true;
-                } else if (ItemStack.isSameItemSameComponents(current, stack)) {
-                    int movedCount = Math.min(stack.getCount(), Math.min(busSlot.getMaxStackSize(stack), current.getMaxStackSize()) - current.getCount());
-                    if (movedCount > 0) {
-                        current.grow(movedCount);
-                        stack.shrink(movedCount);
-                        busSlot.setChanged();
+                if (!current.isEmpty() && ItemStack.isSameItemSameComponents(current, stack)) {
+                    int previousCount = stack.getCount();
+                    stack = busSlot.safeInsert(stack);
+                    if (stack.getCount() < previousCount) {
                         moved = true;
                     }
+                }
+            }
+            for (int slotIndex = 0; slotIndex < busSlots && !stack.isEmpty(); slotIndex++) {
+                Slot busSlot = slots.get(slotIndex);
+                if (busSlot.hasItem()) continue;
+                int previousCount = stack.getCount();
+                stack = busSlot.safeInsert(stack);
+                if (stack.getCount() < previousCount) {
+                    moved = true;
                 }
             }
             if (!moved) return ItemStack.EMPTY;

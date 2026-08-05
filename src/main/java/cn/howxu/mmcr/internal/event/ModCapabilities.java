@@ -45,7 +45,7 @@ public final class ModCapabilities {
         event.registerBlockEntity(
                 ITEM_BLOCK,
                 ModBlockEntities.BES.get("item_output_bus").get(),
-                (be, side) -> be instanceof ItemBusBlockEntity ib ? new LegacyItemHandlerAdapter(ib.getItemStackHandler(side), false, true) : null);
+                (be, side) -> be instanceof ItemBusBlockEntity ib ? new LegacyItemHandlerAdapter(ib.getItemStackHandler(side), true, true) : null);
         event.registerBlockEntity(
                 FLUID_BLOCK,
                 ModBlockEntities.BES.get("fluid_input_hatch").get(),

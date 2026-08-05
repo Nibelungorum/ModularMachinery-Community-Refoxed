@@ -120,6 +120,10 @@ public final class RecipeCraftingContext {
             List<ItemOutputTransfer> transfers = new ArrayList<>();
             ItemStack remaining = output.copy();
             for (ItemOutputState state : itemStates) {
+                remaining = state.insertIntoMatchingStack(remaining, transfers);
+                if (remaining.isEmpty()) break;
+            }
+            for (ItemOutputState state : itemStates) {
                 remaining = state.insert(remaining, transfers);
                 if (remaining.isEmpty()) break;
             }
@@ -434,6 +438,10 @@ public final class RecipeCraftingContext {
             ItemStack remaining = input.copy();
             remaining.shrink(inserted);
             return remaining;
+        }
+
+        private ItemStack insertIntoMatchingStack(ItemStack input, List<ItemOutputTransfer> transfers) {
+            return stack.isEmpty() ? input : insert(input, transfers);
         }
     }
 

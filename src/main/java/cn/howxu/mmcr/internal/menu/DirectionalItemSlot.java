@@ -7,7 +7,13 @@ import net.neoforged.neoforge.items.ItemStackHandler;
 import net.neoforged.neoforge.items.SlotItemHandler;
 
 public class DirectionalItemSlot extends SlotItemHandler {
+
     private final IOType ioType;
+
+    public DirectionalItemSlot(ItemStackHandler itemHandler, int index, int xPosition, int yPosition) {
+        super(itemHandler, index, xPosition, yPosition);
+        this.ioType = IOType.INPUT;
+    }
 
     public DirectionalItemSlot(ItemStackHandler itemHandler, int index, int xPosition, int yPosition, IOType ioType) {
         super(itemHandler, index, xPosition, yPosition);
@@ -16,11 +22,16 @@ public class DirectionalItemSlot extends SlotItemHandler {
 
     @Override
     public boolean mayPlace(ItemStack stack) {
-        return ioType == IOType.INPUT;
+        return super.mayPlace(stack);
     }
 
     @Override
-    public boolean mayPickup(Player player) {
-        return true;
+    public boolean mayPickup(Player playerIn) {
+        return super.mayPickup(playerIn);
+    }
+
+    @Override
+    public ItemStack safeInsert(ItemStack inputStack, int inputAmount) {
+        return super.safeInsert(inputStack, inputAmount);
     }
 }

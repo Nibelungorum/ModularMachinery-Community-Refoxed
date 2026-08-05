@@ -29,6 +29,9 @@ bin/
 ### VS Code ###
 .vscode/
 
+### Local worktrees ###
+.worktrees/
+
 ### Mac OS ###
 .DS_Store
 
