@@ -25,6 +25,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import org.jetbrains.annotations.Nullable;
 import org.nibelungorum.DefaultMachines;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,6 +53,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private boolean clientActive;
     private Boolean lastBroadcastFormed;
     private boolean lastBroadcastActive;
+    private @Nullable String lastFailureUnloc;
+    private @Nullable ActiveMachineRecipe pausedActive;
+    private @Nullable RecipeCraftingContext pausedContext;
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
@@ -90,6 +94,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public ActiveMachineRecipe getActive() { return active; }
 
+    public @Nullable String getLastFailureUnloc() { return lastFailureUnloc; }
+
+    public void setLastFailureUnloc(@Nullable String key) {
+        this.lastFailureUnloc = key;
+    }
+
+    public boolean isRedstonePaused() { return pausedActive != null; }
+
     public void applyClientState(String recipeName, boolean formed) {
         if (level == null || !level.isClientSide()) return;
         boolean active = recipeName != null && !recipeName.isEmpty();
@@ -115,6 +127,27 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 instanceId, getBlockPos(), isFormed(), boundMachine, activeRecipe,
                 active == null ? -1 : active.getTick(), active == null ? -1 : active.getTotalTick());
         if (machine == null) bindDefaultMachine();
+
+        if (level.getDirectSignalTo(getBlockPos()) > 0) {
+            if (active != null) {
+                pausedActive = active;
+                pausedContext = context;
+                active = null;
+                context = null;
+                setActiveState(false);
+                broadcastStateIfChanged(true);
+            }
+            setChanged();
+            return;
+        }
+        if (active == null && pausedActive != null) {
+            active = pausedActive;
+            context = pausedContext;
+            pausedActive = null;
+            pausedContext = null;
+            setActiveState(true);
+            activeBefore = active != null;
+        }
 
         checkStructure();
         if (isFormed()) {
@@ -233,6 +266,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
             context = null;
             setActiveState(false);
         }
+        pausedActive = null;
+        pausedContext = null;
+        lastFailureUnloc = null;
         if (wasFormed) setFormed(false);
         if (dropped != null || hadActive) {
             LOG.info("[Ctrl#{}] resetMachine: pos={} dropped={} clearedActiveRecipe={} wasFormed={}", instanceId, getBlockPos(), dropped, activeRecipe, wasFormed);
@@ -262,9 +298,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private void tryStartNewRecipe() {
         List<MachineRecipe> candidates = recipesForMachine();
         int index = 0;
+        RecipeCraftingContext lastTried = null;
         for (MachineRecipe recipe : candidates) {
             index++;
             RecipeCraftingContext candidate = new RecipeCraftingContext(this);
+            lastTried = candidate;
             boolean inputsOk = candidate.simulateInputs(recipe);
             boolean outputsOk = candidate.simulateOutputs(recipe);
             if (!inputsOk || !outputsOk) {
@@ -281,10 +319,16 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 continue;
             }
             setActiveState(true);
+            lastFailureUnloc = null;
             LOG.info("[Ctrl#{}] tryStartNewRecipe: START recipe={} tickTime={} priority={} maxParallel={} (chosen {}/{} candidates)",
                     instanceId, recipe.id(), recipe.tickTime(), recipe.priority(), next.getMaxParallelism(), index, candidates.size());
             setChanged();
             return;
+        }
+        if (lastTried != null && lastTried.getLastFailureUnloc() != null) {
+            lastFailureUnloc = lastTried.getLastFailureUnloc();
+        } else {
+            lastFailureUnloc = null;
         }
         LOG.info("[Ctrl#{}] tryStartNewRecipe: no compatible recipe among {} candidates; waiting for I/O at pos={}", instanceId, candidates.size(), getBlockPos());
     }
@@ -372,6 +416,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
+        pausedActive = null;
+        pausedContext = null;
         if (!input.getBooleanOr("has_active", false)) {
             LOG.debug("[Ctrl#{}] loadAdditional: pos={} no active recipe stored", instanceId, getBlockPos());
             active = null;

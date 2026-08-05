@@ -16,11 +16,16 @@ import net.neoforged.neoforge.energy.IEnergyStorage;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.items.IItemHandler;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public final class RecipeCraftingContext {
+
+    public static final String FAILURE_MISSING_INPUT = "gui.mmcr.controller.failure.missing_input";
+    public static final String FAILURE_MISSING_OUTPUT = "gui.mmcr.controller.failure.missing_output";
+    public static final String FAILURE_MISSING_ENERGY = "gui.mmcr.controller.failure.missing_energy";
 
     private final MachineControllerBlockEntity controller;
 
@@ -28,6 +33,7 @@ public final class RecipeCraftingContext {
     private List<ItemOutputRoute> itemOutputRoutes = List.of();
     private List<FluidInputRoute> fluidInputRoutes = List.of();
     private List<FluidOutputRoute> fluidOutputRoutes = List.of();
+    private @Nullable String lastFailureUnloc;
 
     public RecipeCraftingContext(MachineControllerBlockEntity controller) {
         this.controller = controller;
@@ -38,12 +44,22 @@ public final class RecipeCraftingContext {
         return m == null ? RecipeFailureActions.getDefaultAction() : m.failureAction();
     }
 
+    public @Nullable String getLastFailureUnloc() {
+        return lastFailureUnloc;
+    }
+
+    private void setFailure(String key) {
+        this.lastFailureUnloc = key;
+    }
+
     public boolean ioTick(MachineRecipe recipe) {
+        lastFailureUnloc = null;
         for (MachineIngredient ingredient : recipe.inputs()) {
             if (!(ingredient instanceof MachineIngredient.EnergyIngredient energy)) continue;
 
             List<EnergyInputHatchBlockEntity> hatches = liveEnergyInputs();
             if (!EnergyRecipeIo.consumeInputs(energyStorages(hatches), energy.fePerTick(), 1)) {
+                setFailure(FAILURE_MISSING_ENERGY);
                 return false;
             }
         }
@@ -51,6 +67,7 @@ public final class RecipeCraftingContext {
     }
 
     public boolean simulateInputs(MachineRecipe recipe) {
+        lastFailureUnloc = null;
         itemInputRoutes = new ArrayList<>();
         fluidInputRoutes = new ArrayList<>();
 
@@ -69,6 +86,7 @@ public final class RecipeCraftingContext {
                     }
                 }
                 if (available < item.count()) {
+                    setFailure(FAILURE_MISSING_INPUT);
                     return false;
                 }
                 itemInputRoutes.add(new ItemInputRoute(buses, item.count()));
@@ -84,12 +102,14 @@ public final class RecipeCraftingContext {
                     }
                 }
                 if (available < fluid.amount()) {
+                    setFailure(FAILURE_MISSING_INPUT);
                     return false;
                 }
                 fluidInputRoutes.add(new FluidInputRoute(hatches, fluid.amount()));
             } else if (ingredient instanceof MachineIngredient.EnergyIngredient energy) {
                 List<EnergyInputHatchBlockEntity> hatches = liveEnergyInputs();
                 if (!EnergyRecipeIo.canConsumeInputs(energyStorages(hatches), energy.fePerTick(), 1)) {
+                    setFailure(FAILURE_MISSING_ENERGY);
                     return false;
                 }
             }
@@ -98,6 +118,7 @@ public final class RecipeCraftingContext {
     }
 
     public boolean simulateOutputs(MachineRecipe recipe) {
+        lastFailureUnloc = null;
         itemOutputRoutes = new ArrayList<>();
         fluidOutputRoutes = new ArrayList<>();
 
@@ -112,6 +133,7 @@ public final class RecipeCraftingContext {
                 }
             }
             if (!remaining.isEmpty()) {
+                setFailure(FAILURE_MISSING_OUTPUT);
                 return false;
             }
             itemOutputRoutes.add(new ItemOutputRoute(buses, output));
@@ -130,6 +152,7 @@ public final class RecipeCraftingContext {
                 }
             }
             if (remaining > 0) {
+                setFailure(FAILURE_MISSING_OUTPUT);
                 return false;
             }
             fluidOutputRoutes.add(new FluidOutputRoute(hatches, output));

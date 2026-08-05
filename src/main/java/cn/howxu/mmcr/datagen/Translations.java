@@ -44,7 +44,12 @@ public final class Translations {
                     Map.entry("gui.mmcr.controller.running",       "Running"),
                     Map.entry("gui.mmcr.controller.unformed",      "Not Formed"),
                     Map.entry("gui.mmcr.controller.idle",          "Idle"),
-                    Map.entry("gui.mmcr.controller.progress",      "Progress: %s"))),
+                    Map.entry("gui.mmcr.controller.progress",      "Progress: %s"),
+                    Map.entry("gui.mmcr.controller.last_failure",  "Last Failure: %s"),
+                    Map.entry("gui.mmcr.controller.failure.missing_input",   "Missing Input"),
+                    Map.entry("gui.mmcr.controller.failure.missing_output",  "Missing Output"),
+                    Map.entry("gui.mmcr.controller.failure.missing_energy",  "Missing Energy"),
+                    Map.entry("gui.mmcr.controller.redstone_stopped",        "Stopped by Redstone"))),
             Map.entry("zh_cn", Map.ofEntries(
                     Map.entry("itemGroup.mmcr",                    "模块化机械社区版"),
                     Map.entry("block.mmcr.blast_furnace_controller", "高炉控制器"),
@@ -83,7 +88,12 @@ public final class Translations {
                     Map.entry("gui.mmcr.controller.running",       "运行中"),
                     Map.entry("gui.mmcr.controller.unformed",      "未成型"),
                     Map.entry("gui.mmcr.controller.idle",          "待机中"),
-                    Map.entry("gui.mmcr.controller.progress",      "进度: %s")))
+                    Map.entry("gui.mmcr.controller.progress",      "进度: %s"),
+                    Map.entry("gui.mmcr.controller.last_failure",  "上次失败: %s"),
+                    Map.entry("gui.mmcr.controller.failure.missing_input",   "缺少输入"),
+                    Map.entry("gui.mmcr.controller.failure.missing_output",  "缺少输出"),
+                    Map.entry("gui.mmcr.controller.failure.missing_energy",  "缺少能量"),
+                    Map.entry("gui.mmcr.controller.redstone_stopped",        "红石停机")))
     );
 
     private Translations() {}

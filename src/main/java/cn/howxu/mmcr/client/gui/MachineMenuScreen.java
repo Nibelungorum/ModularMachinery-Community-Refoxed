@@ -19,6 +19,7 @@ import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.ModelManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.level.material.Fluid;
@@ -27,6 +28,7 @@ import net.neoforged.neoforge.client.fluid.FluidTintSource;
 import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.text.NumberFormat;
+import java.util.List;
 import java.util.Optional;
 
 /** 一个屏幕入口,按具体菜单类型分派纹理 / 尺寸 / 自定义渲染。 */
@@ -235,20 +237,59 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
                     textX, textY, PROGRESS_STATUS_COLOR, true);
             textY += 12;
         }
-        renderControllerStatusLine(g, textX, textY, Component.translatable(controllerStatusKey(menu.isFormed(), active)),
+
+        final float scale = 0.72F;
+        g.pose().pushMatrix();
+        g.pose().scale(scale, scale);
+        int scaledX = (int) (textX / scale);
+        int scaledY = (int) (textY / scale);
+        int scaledWidth = (int) (imageWidth * scale);
+
+        renderControllerStatusLineScaled(g, scaledX, scaledY,
+                Component.translatable(controllerStatusKey(menu.isFormed(), active)),
                 controllerStatusColor(menu.isFormed(), active));
-        textY += 12;
+        scaledY += font.lineHeight;
 
         if (active) {
             int percent = progressPercent(menu.activeRecipeTick(), menu.activeRecipeTotalTick());
-            g.text(font, Component.translatable("gui.mmcr.controller.progress", percent + "%" + progressDots(percent)), textX, textY, PROGRESS_STATUS_COLOR, true);
+            Component progressLine = Component.translatable("gui.mmcr.controller.progress", percent + "%" + progressDots(percent));
+            scaledY = renderScaledWrappedLine(g, progressLine, scaledX, scaledY, scaledWidth, PROGRESS_STATUS_COLOR);
         }
+
+        if (!active) {
+            String failure = menu.lastFailureMessage();
+            if (failure != null) {
+                Component failureLine = Component.translatable("gui.mmcr.controller.last_failure", Component.translatable(failure));
+                scaledY = renderScaledWrappedLine(g, failureLine, scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
+            }
+        }
+
+        if (menu.isRedstonePaused()) {
+            Component redstoneLine = Component.translatable("gui.mmcr.controller.redstone_stopped");
+            scaledY = renderScaledWrappedLine(g, redstoneLine, scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
+        }
+
+        g.pose().popMatrix();
     }
 
-    private void renderControllerStatusLine(GuiGraphicsExtractor g, int x, int y, Component value, int valueColor) {
+    private void renderControllerStatusLineScaled(GuiGraphicsExtractor g, int x, int y, Component value, int valueColor) {
         Component label = Component.translatable("gui.mmcr.controller.status_label");
         g.text(font, label, x, y, STATUS_LABEL_COLOR, true);
         g.text(font, value, x + font.width(label) + 4, y, valueColor, true);
+    }
+
+    private int renderScaledWrappedLine(GuiGraphicsExtractor g, Component text, int x, int y, int maxWidth, int color) {
+        if (font.width(text) <= maxWidth) {
+            g.text(font, text, x, y, color, true);
+            return y + font.lineHeight;
+        }
+        List<FormattedCharSequence> lines = font.split(text, maxWidth);
+        int cy = y;
+        for (FormattedCharSequence line : lines) {
+            g.text(font, line, x, cy, color, true);
+            cy += font.lineHeight;
+        }
+        return cy;
     }
 
     static String controllerStatusKey(boolean formed, boolean active) {

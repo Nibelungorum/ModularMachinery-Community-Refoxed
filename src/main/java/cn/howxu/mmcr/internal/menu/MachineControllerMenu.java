@@ -11,6 +11,7 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import org.jetbrains.annotations.Nullable;
 
 public class MachineControllerMenu extends AbstractMachineMenu {
 
@@ -110,6 +111,16 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     public int activeRecipeTotalTick() {
         MachineControllerBlockEntity controller = resolvedOwner();
         return controller == null || controller.getActive() == null ? activeTotalTick.get() : controller.getActive().getTotalTick();
+    }
+
+    public @Nullable String lastFailureMessage() {
+        MachineControllerBlockEntity controller = resolvedOwner();
+        return controller == null ? null : controller.getLastFailureUnloc();
+    }
+
+    public boolean isRedstonePaused() {
+        MachineControllerBlockEntity controller = resolvedOwner();
+        return controller != null && controller.isRedstonePaused();
     }
 
     @Override
