@@ -15,11 +15,23 @@ class MenuScreenTest {
         assertThat(MachineMenuScreen.titleX(8, false, true, false)).isEqualTo(40);
         assertThat(MachineMenuScreen.titleX(8, false, false, true)).isEqualTo(4);
         assertThat(MachineMenuScreen.titleY(6, false, true)).isEqualTo(4);
-        assertThat(MachineMenuScreen.TANK_Y).isEqualTo(17);
-        assertThat(MachineMenuScreen.ENERGY_Y).isEqualTo(18);
         assertThat(MachineMenuScreen.hiddenInventoryLabelY()).isEqualTo(-1000);
-        assertThat(MachineMenuScreen.TITLE_COLOR).isEqualTo(0xFFE8E8E8);
+        assertThat(MachineMenuScreen.TITLE_COLOR).isEqualTo(-12566464);
+        assertThat(MachineMenuScreen.CONTROLLER_TITLE_COLOR).isEqualTo(0xFFE8E8E8);
+        assertThat(MachineMenuScreen.titleColor(false)).isEqualTo(MachineMenuScreen.TITLE_COLOR);
+        assertThat(MachineMenuScreen.titleColor(true)).isEqualTo(MachineMenuScreen.CONTROLLER_TITLE_COLOR);
+        assertThat(MachineMenuScreen.controllerStatusX(10)).isEqualTo(10);
         assertThat(MachineMenuScreen.controllerStatusY(10)).isEqualTo(22);
+    }
+
+    @Test
+    void storage_text_x_aligns_with_title_x() {
+        assertThat(MachineMenuScreen.storageTextX(40)).isEqualTo(40);
+    }
+
+    @Test
+    void storage_text_y_aligns_below_title_y() {
+        assertThat(MachineMenuScreen.storageTextY(9)).isEqualTo(21);
     }
 
     @Test
@@ -38,7 +50,7 @@ class MenuScreenTest {
 
     @Test
     void controller_status_colors_match_ui_semantics() {
-        assertThat(MachineMenuScreen.STATUS_LABEL_COLOR).isEqualTo(MachineMenuScreen.TITLE_COLOR);
+        assertThat(MachineMenuScreen.STATUS_LABEL_COLOR).isEqualTo(MachineMenuScreen.CONTROLLER_TITLE_COLOR);
         assertThat(MachineMenuScreen.FORMED_STATUS_COLOR).isEqualTo(0xFF55FF55);
         assertThat(MachineMenuScreen.UNFORMED_STATUS_COLOR).isEqualTo(0xFFFF5555);
         assertThat(MachineMenuScreen.IDLE_STATUS_COLOR).isEqualTo(0xFFFFAA00);

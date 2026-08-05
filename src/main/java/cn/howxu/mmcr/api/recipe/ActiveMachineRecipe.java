@@ -5,10 +5,18 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public final class ActiveMachineRecipe {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ActiveMachineRecipe.class);
+    private static final AtomicInteger INSTANCE_COUNTER = new AtomicInteger();
+
+    private final int instanceId = INSTANCE_COUNTER.incrementAndGet();
 
     private final MachineRecipe recipe;
     private CompoundTag data;
@@ -27,6 +35,12 @@ public final class ActiveMachineRecipe {
         this.maxParallelism = Math.max(1, maxParallelism);
         this.parallelism = 1;
         this.data = new CompoundTag();
+        if (recipe != null) {
+            LOG.info("ActiveMachineRecipe#{} new: recipe={} machine={} tickTime={} maxParallelism={} initialTick=0/{}",
+                    instanceId, recipe.id(), recipe.machineId(), this.totalTick, this.maxParallelism, this.totalTick);
+        } else {
+            LOG.warn("ActiveMachineRecipe#{} created with null recipe", instanceId);
+        }
     }
 
     public ActiveMachineRecipe(CompoundTag serialized) {
@@ -37,6 +51,9 @@ public final class ActiveMachineRecipe {
         this.data = serialized.contains("data") ? serialized.getCompoundOrEmpty("data") : new CompoundTag();
         this.maxParallelism = serialized.getIntOr("maxParallelism", 1);
         this.parallelism = serialized.getIntOr("parallelism", 1);
+        LOG.info("ActiveMachineRecipe#{} restored from NBT: recipe={} resolved={} tick={}/{} maxParallelism={} parallelism={}",
+                instanceId, recipeId, this.recipe == null ? null : this.recipe.id(),
+                this.tick, this.totalTick, this.maxParallelism, this.parallelism);
     }
 
     public MachineRecipe getRecipe() {
@@ -91,10 +108,13 @@ public final class ActiveMachineRecipe {
     }
 
     public void reset() {
+        int before = this.tick;
         this.tick = 0;
         this.parallelism = 1;
         this.maxParallelism = 1;
         this.data = new CompoundTag();
+        LOG.info("ActiveMachineRecipe#{} reset: tick {} → 0; parallelism and data cleared (recipe={})",
+                instanceId, before, recipe == null ? null : recipe.id());
     }
 
     public boolean isCompleted() {
@@ -103,9 +123,15 @@ public final class ActiveMachineRecipe {
 
     public void doFailureAction(boolean reset) {
         if (reset) {
+            int before = this.tick;
             this.tick = 0;
+            LOG.info("ActiveMachineRecipe#{} doFailureAction(reset=true): tick {} → 0 (recipe={})", instanceId, before, recipe == null ? null : recipe.id());
         } else if (this.tick > 0) {
+            int before = this.tick;
             this.tick--;
+            LOG.info("ActiveMachineRecipe#{} doFailureAction(reset=false): tick {} → {} (recipe={})", instanceId, before, this.tick, recipe == null ? null : recipe.id());
+        } else {
+            LOG.debug("ActiveMachineRecipe#{} doFailureAction(reset=false): tick already 0 (recipe={})", instanceId, recipe == null ? null : recipe.id());
         }
     }
 
@@ -119,6 +145,8 @@ public final class ActiveMachineRecipe {
         if (!data.isEmpty()) {
             tag.put("data", data);
         }
+        LOG.debug("ActiveMachineRecipe#{} serialize(): recipe={} tick={}/{} maxParallelism={} parallelism={} dataKeys={}",
+                instanceId, recipe == null ? "" : recipe.id(), tick, totalTick, maxParallelism, parallelism, data.keySet().size());
         return tag;
     }
 
@@ -131,6 +159,8 @@ public final class ActiveMachineRecipe {
         if (!data.isEmpty()) {
             output.store("data", CompoundTag.CODEC, data);
         }
+        LOG.debug("ActiveMachineRecipe#{} serialize(ValueOutput): recipe={} tick={}/{} maxParallelism={} parallelism={} dataKeys={}",
+                instanceId, recipe == null ? "" : recipe.id(), tick, totalTick, maxParallelism, parallelism, data.keySet().size());
     }
 
     public static ActiveMachineRecipe from(ValueInput input) {
@@ -142,6 +172,8 @@ public final class ActiveMachineRecipe {
         result.totalTick = input.getIntOr("totalTick", 0);
         result.parallelism = input.getIntOr("parallelism", 1);
         result.data = input.read("data", CompoundTag.CODEC).orElseGet(CompoundTag::new);
+        LOG.debug("ActiveMachineRecipe#{} from(ValueInput) → recipe={} tick={}/{} maxParallelism={} parallelism={}",
+                result.instanceId, recipeId, result.tick, result.totalTick, result.maxParallelism, result.parallelism);
         return result;
     }
 
@@ -153,31 +185,46 @@ public final class ActiveMachineRecipe {
 
     public TickStatus tick(RecipeCraftingContext context) {
         if (recipe == null) {
+            LOG.debug("ActiveMachineRecipe#{} tick(): no recipe attached → WAITING", instanceId);
             return TickStatus.WAITING;
         }
         int total = getTotalTick();
         if (total <= 0) {
+            LOG.debug("ActiveMachineRecipe#{} tick(): recipe {} totalTick <=0 → WAITING", instanceId, recipe.id());
             return TickStatus.WAITING;
         }
-        int nextTick = Math.min(getTick() + 1, total);
+        int beforeTick = getTick();
+        int nextTick = Math.min(beforeTick + 1, total);
         setTick(nextTick);
+        LOG.debug("ActiveMachineRecipe#{} tick(): recipe {} advance {} → {} of {}", instanceId, recipe.id(), beforeTick, nextTick, total);
 
         if (!isCompleted()) {
             return TickStatus.CONTINUE;
         }
 
-        if (!context.simulateOutputs(recipe) || !context.simulateInputs(recipe)) {
-            setTick(Math.max(0, total - 1));
+        LOG.info("ActiveMachineRecipe#{} tick(): recipe {} reached completion tick {} of {}; entering final commit phase", instanceId, recipe.id(), nextTick, total);
+
+        boolean simOutputs = context.simulateOutputs(recipe);
+        boolean simInputs = context.simulateInputs(recipe);
+        if (!simOutputs || !simInputs) {
+            int restored = Math.max(0, total - 1);
+            LOG.info("ActiveMachineRecipe#{} tick(): recipe {} simulate refused (simOutputs={} simInputs={}) → rollback tick {} → {} (WAITING)",
+                    instanceId, recipe.id(), simOutputs, simInputs, nextTick, restored);
+            setTick(restored);
             return TickStatus.WAITING;
         }
 
         boolean outputsOk = context.commitOutputs(recipe);
         boolean inputsOk = context.commitInputs(recipe);
         if (!outputsOk || !inputsOk) {
-            setTick(Math.max(0, total - 1));
+            int restored = Math.max(0, total - 1);
+            LOG.info("ActiveMachineRecipe#{} tick(): recipe {} commit failed (commitOutputs={} commitInputs={}) → rollback tick {} → {} (WAITING)",
+                    instanceId, recipe.id(), outputsOk, inputsOk, nextTick, restored);
+            setTick(restored);
             return TickStatus.WAITING;
         }
 
+        LOG.info("ActiveMachineRecipe#{} tick(): recipe {} FINISHED at tick {} of {}; outputs and inputs committed", instanceId, recipe.id(), nextTick, total);
         return TickStatus.FINISHED;
     }
 

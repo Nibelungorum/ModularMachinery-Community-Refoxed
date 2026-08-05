@@ -12,6 +12,7 @@ import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.registry.ModRecipeTypes;
 import org.nibelungorum.BuiltinMachines;
+import org.nibelungorum.DefaultRecipes;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -45,6 +46,7 @@ public class MMCR {
         ModBlockEntities.register(modBus);
         ModUIs.register(modBus);
         ModRecipeTypes.register(modBus);
+        registerRuntimeBuiltins();
         CREATIVE_TABS.register(modBus);
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
         modBus.addListener(ModCapabilities::register);
@@ -70,6 +72,10 @@ public class MMCR {
 
     public static Identifier id(String path) {
         return Identifier.fromNamespaceAndPath(MODID, path);
+    }
+
+    public static void registerRuntimeBuiltins() {
+        DefaultRecipes.ensureRegistered();
     }
 
     static void registerGameTestMachineDefinitionsIfPresent() {

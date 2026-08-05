@@ -67,7 +67,12 @@ public final class TestBootstrap {
         bind(ModBlocks.BLOCKS.get("fluid_output_hatch"), Blocks.BARREL);
         bind(ModBlocks.BLOCKS.get("energy_input_hatch"), Blocks.COPPER_BLOCK);
         bind(ModBlocks.BLOCKS.get("energy_output_hatch"), Blocks.COPPER_BLOCK);
+        registerRuntimeBuiltins();
         initialized = true;
+    }
+
+    public static void registerRuntimeBuiltins() {
+        MMCR.registerRuntimeBuiltins();
     }
 
     private static Identifier id(String path) {

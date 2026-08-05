@@ -8,16 +8,27 @@ import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.MenuAccess;
+import net.minecraft.client.renderer.block.FluidModel;
+import net.minecraft.client.renderer.block.FluidStateModelSet;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.resources.model.ModelManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.level.material.Fluid;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
+import net.neoforged.neoforge.client.fluid.FluidTintSource;
 import net.neoforged.neoforge.fluids.FluidStack;
+
+import java.text.NumberFormat;
+import java.util.Optional;
 
 /** 一个屏幕入口,按具体菜单类型分派纹理 / 尺寸 / 自定义渲染。 */
 public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainerMenu> implements MenuAccess<AbstractContainerMenu> {
@@ -25,8 +36,10 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     private static final Identifier ITEM_BUS_TEXTURE    = MMCR.id("textures/gui/inventory_normal.png");
     private static final Identifier TANK_TEXTURE        = MMCR.id("textures/gui/guitank.png");
     private static final Identifier CONTROLLER_TEXTURE  = MMCR.id("textures/gui/guicontroller_large.png");
-    static final int TITLE_COLOR = 0xFFE8E8E8;
-    static final int STATUS_LABEL_COLOR = TITLE_COLOR;
+    private static final NumberFormat NUMBER_FORMAT = NumberFormat.getIntegerInstance();
+    static final int TITLE_COLOR = -12566464;
+    static final int CONTROLLER_TITLE_COLOR = 0xFFE8E8E8;
+    static final int STATUS_LABEL_COLOR = CONTROLLER_TITLE_COLOR;
     static final int FORMED_STATUS_COLOR = 0xFF55FF55;
     static final int UNFORMED_STATUS_COLOR = 0xFFFF5555;
     static final int IDLE_STATUS_COLOR = 0xFFFFAA00;
@@ -39,18 +52,18 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     static final int ITEM_BUS_TITLE_OFFSET_X = -4;
     static final int ITEM_BUS_TITLE_OFFSET_Y = -2;
     static final int CONTROLLER_STATUS_OFFSET_Y = 12;
+    static final int STORAGE_TEXT_OFFSET_Y = 12;
     static final int HIDDEN_INVENTORY_LABEL_Y = -1000;
 
-    private static final int TANK_X = 63;
-    static final int TANK_Y = 17;
-    private static final int TANK_W = 50;
-    private static final int TANK_H = 60;
+    private static final int TANK_X = 15;
+    static final int TANK_Y = 10;
+    private static final int TANK_W = 20;
+    private static final int TANK_H = 61;
 
-    private static final int ENERGY_X = 64;
-    static final int ENERGY_Y = 18;
-    private static final int ENERGY_W = 48;
-    private static final int ENERGY_H = 58;
-
+    private static final int ENERGY_X = 15;
+    static final int ENERGY_Y = 10;
+    private static final int ENERGY_W = 20;
+    private static final int ENERGY_H = 61;
     public MachineMenuScreen(AbstractContainerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title,
                 menu instanceof MachineControllerMenu ? 176 : 176,
@@ -100,13 +113,29 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         return HIDDEN_INVENTORY_LABEL_Y;
     }
 
+    static int titleColor(boolean controllerMenu) {
+        return controllerMenu ? CONTROLLER_TITLE_COLOR : TITLE_COLOR;
+    }
+
+    static int controllerStatusX(int titleX) {
+        return titleX;
+    }
+
     static int controllerStatusY(int titleY) {
         return titleY + CONTROLLER_STATUS_OFFSET_Y;
     }
 
+    static int storageTextX(int titleX) {
+        return titleX;
+    }
+
+    static int storageTextY(int titleY) {
+        return titleY + STORAGE_TEXT_OFFSET_Y;
+    }
+
     @Override
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
-        graphics.text(font, title, titleLabelX, titleLabelY, TITLE_COLOR, false);
+        graphics.text(font, title, titleLabelX, titleLabelY, titleColor(menu instanceof MachineControllerMenu), false);
     }
 
     @Override
@@ -136,32 +165,70 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         return ITEM_BUS_TEXTURE;
     }
 
-    private static void renderFluidTank(GuiGraphicsExtractor g, FluidHatchMenu menu, int x, int y) {
-        if (menu.tank() == null) return;
-        FluidStack fluid = menu.tank().getFluid();
-        int capacity = menu.tank().getCapacity();
+    private void renderFluidTank(GuiGraphicsExtractor g, FluidHatchMenu menu, int x, int y) {
+        int amount = menu.fluidAmount();
+        int capacity = menu.fluidCapacity();
         if (capacity <= 0) return;
 
-        int filled = fluid.isEmpty() ? 0 : (int) Math.ceil((double) fluid.getAmount() * TANK_H / capacity);
-        int drawY = y + TANK_Y + (TANK_H - filled);
-        int color = fluid.isEmpty() ? 0xFF606060 : 0xFF3B7BE0;
-        g.fill(x + TANK_X, drawY, x + TANK_X + TANK_W, y + TANK_Y + TANK_H, color);
+        FluidStack fluid = menu.tank() == null ? FluidStack.EMPTY : menu.tank().getFluid();
+        int filled = amount <= 0 ? 0 : Math.max(1, (int) Math.ceil((double) amount * TANK_H / capacity));
+        if (!fluid.isEmpty() && filled > 0) {
+            drawFluid(g, fluid, x + TANK_X, y + TANK_Y, TANK_W, TANK_H, Math.min(filled, TANK_H));
+        }
+        renderAmountText(g, x, y, amountText(amount, capacity, "mB"));
     }
 
-    private static void renderEnergyBar(GuiGraphicsExtractor g, EnergyHatchMenu menu, int x, int y) {
-        if (menu.storage() == null) return;
-        int stored = menu.storage().getEnergyStored();
-        int capacity = menu.storage().getMaxEnergyStored();
+    private void renderEnergyBar(GuiGraphicsExtractor g, EnergyHatchMenu menu, int x, int y) {
+        int stored = menu.storedEnergy();
+        int capacity = menu.energyCapacity();
         if (capacity <= 0) return;
-        int filled = (int) Math.ceil((double) stored * ENERGY_H / capacity);
+        int filled = stored <= 0 ? 0 : Math.max(1, (int) Math.ceil((double) stored * ENERGY_H / capacity));
         int drawY = y + ENERGY_Y + (ENERGY_H - filled);
-        g.fill(x + ENERGY_X, drawY, x + ENERGY_X + ENERGY_W, y + ENERGY_Y + ENERGY_H, 0xFFE03B27);
+        if (filled > 0) {
+            g.fill(x + ENERGY_X, drawY, x + ENERGY_X + ENERGY_W, y + ENERGY_Y + ENERGY_H, 0xFFE03B27);
+        }
+        renderAmountText(g, x, y, amountText(stored, capacity, "FE"));
+    }
+
+    private void renderAmountText(GuiGraphicsExtractor g, int x, int y, String text) {
+        g.text(font, Component.literal(text), x + storageTextX(titleLabelX), y + storageTextY(titleLabelY), TITLE_COLOR, false);
+    }
+
+    private static String amountText(int amount, int capacity, String unit) {
+        return NUMBER_FORMAT.format(amount) + " / " + NUMBER_FORMAT.format(capacity) + " " + unit;
+    }
+
+    private static void drawFluid(GuiGraphicsExtractor g, FluidStack fluid, int x, int y, int width, int height, int filled) {
+        Optional<TextureAtlasSprite> sprite = stillFluidSprite(fluid);
+        if (sprite.isEmpty()) return;
+
+        int color = fluidColor(fluid);
+        int drawY = y + height - filled;
+        g.blitSprite(RenderPipelines.GUI_TEXTURED, sprite.get(), x, drawY, width, filled, color);
+    }
+
+    private static Optional<TextureAtlasSprite> stillFluidSprite(FluidStack stack) {
+        Fluid fluid = stack.getFluid();
+        ModelManager modelManager = Minecraft.getInstance().getModelManager();
+        FluidStateModelSet modelSet = modelManager.getFluidStateModelSet();
+        FluidModel model = modelSet.get(fluid.defaultFluidState());
+        TextureAtlasSprite sprite = model.stillMaterial().sprite();
+        return Optional.ofNullable(sprite).filter(s -> s.atlasLocation() != MissingTextureAtlasSprite.getLocation());
+    }
+
+    private static int fluidColor(FluidStack stack) {
+        Fluid fluid = stack.getFluid();
+        ModelManager modelManager = Minecraft.getInstance().getModelManager();
+        FluidStateModelSet modelSet = modelManager.getFluidStateModelSet();
+        FluidModel model = modelSet.get(fluid.defaultFluidState());
+        FluidTintSource tintSource = model.fluidTintSource();
+        return tintSource == null ? 0xFFFFFFFF : tintSource.colorAsStack(stack);
     }
 
     private void renderControllerStatus(GuiGraphicsExtractor g, MachineControllerMenu menu, int x, int y) {
         MachineControllerBlockEntity owner = menu.owner();
         int textY = y + controllerStatusY(titleLabelY);
-        int textX = x + 12;
+        int textX = x + controllerStatusX(titleLabelX);
         MachineRecipe activeRecipe = owner == null ? null : owner.getActiveRecipe();
         boolean active = activeRecipe != null;
 

@@ -50,7 +50,7 @@ public class FluidHatchCapabilityGameTest {
             int inserted = input.insert(0, FluidResource.of(Fluids.WATER), 1000, tx);
             int extracted = input.extract(0, FluidResource.of(Fluids.WATER), 500, tx);
             helper.assertTrue(inserted == 1000, "Input fluid capability fills");
-            helper.assertTrue(extracted == 0, "Input fluid capability rejects drain");
+            helper.assertTrue(extracted == 500, "Input fluid capability drains");
             tx.commit();
         }
 

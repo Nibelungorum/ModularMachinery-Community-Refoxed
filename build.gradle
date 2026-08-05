@@ -18,6 +18,8 @@ sourceSets.main.resources {
 }
 
 repositories {
+    // Mek repo
+    maven { url 'https://modmaven.dev/' }
     maven {
         // JEI repo
         name = "Jared's maven"
@@ -113,6 +115,15 @@ dependencies {
     compileOnly "curse.maven:kubejs-238086:8219059"
     // interfaceInjectionData("dev.latvian.mods:kubejs-neoforge:${kubejs_version}")
     // runtimeOnly("dev.latvian.mods:kubejs-neoforge:${kubejs_version}")
+
+    // Mek
+    // runtimeOnly "com.github.mekanism:Mekanism:26.1.2-10.8.0.homebaked"
+    // Oritech
+    runtimeOnly "curse.maven:athena-841890:7970442"
+    runtimeOnly "curse.maven:geckolib-388172:8327201"
+    runtimeOnly "curse.maven:oritech-1030830:8571095"
+    // pipez 1.2.31+26.1.2
+    // runtimeOnly "curse.maven:pipez-443900:8351634"
 
     // 2101.2.7-build.85+Rhino-1.21
     implementation "curse.maven:rhino-416294:8218748"

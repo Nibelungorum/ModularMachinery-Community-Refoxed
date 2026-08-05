@@ -17,6 +17,7 @@ import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
 import net.neoforged.neoforge.items.ItemStackHandler;
 import net.neoforged.neoforge.transfer.InfiniteResourceHandler;
 import net.neoforged.neoforge.transfer.ResourceHandler;
+import net.neoforged.neoforge.transfer.TransferPreconditions;
 import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
@@ -40,7 +41,7 @@ public final class ModCapabilities {
         event.registerBlockEntity(
                 ITEM_BLOCK,
                 ModBlockEntities.BES.get("item_input_bus").get(),
-                (be, side) -> be instanceof ItemBusBlockEntity ib ? new LegacyItemHandlerAdapter(ib.getItemStackHandler(side), true, false) : null);
+                (be, side) -> be instanceof ItemBusBlockEntity ib ? new LegacyItemHandlerAdapter(ib.getItemStackHandler(side), true, true) : null);
         event.registerBlockEntity(
                 ITEM_BLOCK,
                 ModBlockEntities.BES.get("item_output_bus").get(),
@@ -48,7 +49,7 @@ public final class ModCapabilities {
         event.registerBlockEntity(
                 FLUID_BLOCK,
                 ModBlockEntities.BES.get("fluid_input_hatch").get(),
-                (be, side) -> be instanceof FluidHatchBlockEntity fh ? new LegacyFluidHandlerAdapter(fh.getFluidTank(side), true, false) : null);
+                (be, side) -> be instanceof FluidHatchBlockEntity fh ? new LegacyFluidHandlerAdapter(fh.getFluidTank(side), true, true) : null);
         event.registerBlockEntity(
                 FLUID_BLOCK,
                 ModBlockEntities.BES.get("fluid_output_hatch").get(),
@@ -56,11 +57,11 @@ public final class ModCapabilities {
         event.registerBlockEntity(
                 ENERGY_BLOCK,
                 ModBlockEntities.BES.get("energy_input_hatch").get(),
-                (be, side) -> be instanceof EnergyHatchBlockEntity eh ? new LegacyEnergyHandlerAdapter(eh.getMutableEnergyStorage(side), true, false) : null);
+                (be, side) -> be instanceof EnergyHatchBlockEntity eh ? new LegacyEnergyHandlerAdapter(eh, true, false) : null);
         event.registerBlockEntity(
                 ENERGY_BLOCK,
                 ModBlockEntities.BES.get("energy_output_hatch").get(),
-                (be, side) -> be instanceof EnergyHatchBlockEntity eh ? new LegacyEnergyHandlerAdapter(eh.getMutableEnergyStorage(side), false, true) : null);
+                (be, side) -> be instanceof EnergyHatchBlockEntity eh ? new LegacyEnergyHandlerAdapter(eh, false, true) : null);
         event.registerBlockEntity(
                 ENERGY_BLOCK,
                 ModBlockEntities.BES.get("debug_infinite_energy_source").get(),
@@ -142,12 +143,14 @@ public final class ModCapabilities {
     }
 
     private static final class LegacyEnergyHandlerAdapter extends SnapshotJournal<Integer> implements EnergyHandler {
+        private final EnergyHatchBlockEntity hatch;
         private final EnergyStorage storage;
         private final boolean canInsert;
         private final boolean canExtract;
 
-        LegacyEnergyHandlerAdapter(EnergyStorage storage, boolean canInsert, boolean canExtract) {
-            this.storage = storage;
+        LegacyEnergyHandlerAdapter(EnergyHatchBlockEntity hatch, boolean canInsert, boolean canExtract) {
+            this.hatch = hatch;
+            this.storage = hatch.getMutableEnergyStorage(null);
             this.canInsert = canInsert;
             this.canExtract = canExtract;
         }
@@ -164,6 +167,7 @@ public final class ModCapabilities {
 
         @Override
         public int insert(int amount, TransactionContext tx) {
+            TransferPreconditions.checkNonNegative(amount);
             if (!canInsert) return 0;
             updateSnapshots(tx);
             return storage.receiveEnergy(amount, false);
@@ -171,6 +175,7 @@ public final class ModCapabilities {
 
         @Override
         public int extract(int amount, TransactionContext tx) {
+            TransferPreconditions.checkNonNegative(amount);
             if (!canExtract) return 0;
             updateSnapshots(tx);
             return storage.extractEnergy(amount, false);
@@ -189,6 +194,13 @@ public final class ModCapabilities {
                 storage.extractEnergy(current - target, false);
             } else if (current < target) {
                 storage.receiveEnergy(target - current, false);
+            }
+        }
+
+        @Override
+        protected void onRootCommit(Integer originalState) {
+            if (originalState == null || originalState != storage.getEnergyStored()) {
+                hatch.setChanged();
             }
         }
     }

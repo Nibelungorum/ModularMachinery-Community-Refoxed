@@ -49,7 +49,7 @@ public class ItemBusCapabilityGameTest {
             int inserted = input.insert(0, ItemResource.of(Items.IRON_INGOT), 4, tx);
             int extracted = input.extract(0, ItemResource.of(Items.IRON_INGOT), 1, tx);
             helper.assertTrue(inserted == 4, "Input capability inserts");
-            helper.assertTrue(extracted == 0, "Input capability rejects extraction");
+            helper.assertTrue(extracted == 1, "Input capability extracts");
             tx.commit();
         }
 
