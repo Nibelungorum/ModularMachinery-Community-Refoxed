@@ -9,16 +9,23 @@ import com.mojang.datafixers.util.Pair;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 
+import java.util.List;
+
 /**
  * @author howxu <dev@howxu.cn>
  */
 public sealed interface MachineRequirement permits ItemRequirement, FluidRequirement, EnergyRequirement {
 
+    Codec<List<String>> TAGS_CODEC = Codec.STRING.listOf();
     Codec<MachineRequirement> CODEC = Codec.of(MachineRequirement::encode, MachineRequirement::decode);
 
     String type();
 
     RecipeModifier.IOType io();
+
+    default List<String> tags() {
+        return List.of();
+    }
 
     static MachineRequirement fromInput(MachineIngredient ingredient) {
         if (ingredient instanceof MachineIngredient.ItemIngredient item) {
@@ -45,6 +52,9 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
         var builder = ops.mapBuilder()
                 .add("type", ops.createString(requirement.type()))
                 .add("io", RecipeModifier.IO_TYPE_CODEC.encodeStart(ops, requirement.io()).getOrThrow());
+        if (!requirement.tags().isEmpty()) {
+            builder = builder.add("tags", requirement.tags(), TAGS_CODEC);
+        }
         if (requirement instanceof ItemRequirement item) {
             if (item.io() == RecipeModifier.IOType.INPUT) {
                 return builder
@@ -89,32 +99,41 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
 
     private static <T> DataResult<MachineRequirement> decodeItem(DynamicOps<T> ops, T input) {
         return decodeIo(ops, input).flatMap(io -> {
+            List<String> tags = decodeTags(ops, input);
             if (io == RecipeModifier.IOType.OUTPUT) {
                 return ops.get(input, "stack")
                         .flatMap(value -> ItemStack.CODEC.parse(ops, value))
-                        .map(stack -> new ItemRequirement(io, null, 0, stack));
+                        .map(stack -> new ItemRequirement(io, null, 0, stack, tags));
             }
             return ops.get(input, "item")
                     .flatMap(value -> net.minecraft.world.item.crafting.Ingredient.CODEC.parse(ops, value))
                     .flatMap(item -> ops.get(input, "count")
                             .flatMap(ops::getNumberValue)
-                            .map(count -> new ItemRequirement(io, item, count.intValue(), ItemStack.EMPTY)));
+                            .map(count -> new ItemRequirement(io, item, count.intValue(), ItemStack.EMPTY, tags)));
         });
     }
 
     private static <T> DataResult<MachineRequirement> decodeFluid(DynamicOps<T> ops, T input) {
         return decodeIo(ops, input).flatMap(io -> {
+            List<String> tags = decodeTags(ops, input);
             if (io == RecipeModifier.IOType.OUTPUT) {
                 return ops.get(input, "stack")
                         .flatMap(value -> FluidStack.CODEC.parse(ops, value))
-                        .map(stack -> new FluidRequirement(io, null, 0, stack));
+                        .map(stack -> new FluidRequirement(io, null, 0, stack, tags));
             }
             return ops.get(input, "fluid")
                     .flatMap(value -> net.neoforged.neoforge.fluids.crafting.FluidIngredient.CODEC.parse(ops, value))
                     .flatMap(fluid -> ops.get(input, "amount")
                             .flatMap(ops::getNumberValue)
-                            .map(amount -> new FluidRequirement(io, fluid, amount.intValue(), FluidStack.EMPTY)));
+                            .map(amount -> new FluidRequirement(io, fluid, amount.intValue(), FluidStack.EMPTY, tags)));
         });
+    }
+
+    private static <T> List<String> decodeTags(DynamicOps<T> ops, T input) {
+        return ops.get(input, "tags")
+                .flatMap(value -> TAGS_CODEC.parse(ops, value))
+                .result()
+                .orElse(List.of());
     }
 
     private static <T> DataResult<RecipeModifier.IOType> decodeIo(DynamicOps<T> ops, T input) {

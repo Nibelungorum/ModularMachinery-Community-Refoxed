@@ -109,14 +109,12 @@ public final class RecipeCraftingContext {
         List<MachineRequirement> requirements = recipe.requirements();
         itemInputRoutes = emptyItemInputRoutes(requirements.size());
         fluidInputRoutes = emptyFluidInputRoutes(requirements.size());
-        List<ItemInputState> itemStates = itemInputStates();
-        List<FluidInputState> fluidStates = fluidInputStates();
-        List<ItemInputBusBlockEntity> itemHatches = liveComponents(ItemInputBusBlockEntity.class);
-        List<FluidInputHatchBlockEntity> fluidHatches = liveComponents(FluidInputHatchBlockEntity.class);
 
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT) {
+                List<ItemInputState> itemStates = itemInputStates(item.tags());
+                List<ItemInputBusBlockEntity> itemHatches = liveComponents(ItemInputBusBlockEntity.class, item.tags());
                 List<ItemInputTransfer> transfers = new ArrayList<>();
                 MachineIngredient.ItemIngredient ingredient = new MachineIngredient.ItemIngredient(item.item(), item.count());
                 int remaining = item.count();
@@ -128,19 +126,14 @@ public final class RecipeCraftingContext {
                     if (remaining <= 0) break;
                 }
                 if (remaining > 0) {
-                    setFailure(FAILURE_MISSING_INPUT, new RequirementFailure(
-                            requirementIndex,
-                            RequirementFailure.Kind.MISSING_INPUT,
-                            item.count(),
-                            item.count() - remaining,
-                            remaining,
-                            componentTraces(new ArrayList<>(itemHatches)),
-                            componentTraces(matched)
-                    ));
+                    RequirementFailure failure = buildMissingInputFailure(requirementIndex, item.count(), remaining, itemHatches, matched);
+                    setFailure(FAILURE_MISSING_INPUT, failure);
                     return false;
                 }
                 itemInputRoutes.set(requirementIndex, new ItemInputRoute(transfers));
             } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.INPUT) {
+                List<FluidInputState> fluidStates = fluidInputStates(fluid.tags());
+                List<FluidInputHatchBlockEntity> fluidHatches = liveComponents(FluidInputHatchBlockEntity.class, fluid.tags());
                 List<FluidInputTransfer> transfers = new ArrayList<>();
                 MachineIngredient.FluidIngredient ingredient = new MachineIngredient.FluidIngredient(fluid.fluid(), fluid.amount());
                 int remaining = fluid.amount();
@@ -152,15 +145,8 @@ public final class RecipeCraftingContext {
                     if (remaining <= 0) break;
                 }
                 if (remaining > 0) {
-                    setFailure(FAILURE_MISSING_INPUT, new RequirementFailure(
-                            requirementIndex,
-                            RequirementFailure.Kind.MISSING_INPUT,
-                            fluid.amount(),
-                            fluid.amount() - remaining,
-                            remaining,
-                            componentTraces(new ArrayList<>(fluidHatches)),
-                            componentTraces(matched)
-                    ));
+                    RequirementFailure failure = buildMissingInputFailure(requirementIndex, fluid.amount(), remaining, fluidHatches, matched);
+                    setFailure(FAILURE_MISSING_INPUT, failure);
                     return false;
                 }
                 fluidInputRoutes.set(requirementIndex, new FluidInputRoute(transfers));
@@ -190,14 +176,12 @@ public final class RecipeCraftingContext {
         List<MachineRequirement> requirements = recipe.requirements();
         itemOutputRoutes = emptyItemOutputRoutes(requirements.size());
         fluidOutputRoutes = emptyFluidOutputRoutes(requirements.size());
-        List<ItemOutputState> itemStates = itemOutputStates();
-        List<FluidOutputState> fluidStates = fluidOutputStates();
-        List<ItemOutputBusBlockEntity> itemHatches = liveComponents(ItemOutputBusBlockEntity.class);
-        List<FluidOutputHatchBlockEntity> fluidHatches = liveComponents(FluidOutputHatchBlockEntity.class);
 
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
+                List<ItemOutputState> itemStates = itemOutputStates(item.tags());
+                List<ItemOutputBusBlockEntity> itemHatches = liveComponents(ItemOutputBusBlockEntity.class, item.tags());
                 List<ItemOutputTransfer> transfers = new ArrayList<>();
                 ItemStack output = item.stack();
                 ItemStack remaining = normalizeRecipeOutput(output);
@@ -215,19 +199,14 @@ public final class RecipeCraftingContext {
                     if (remaining.isEmpty()) break;
                 }
                 if (!remaining.isEmpty()) {
-                    setFailure(FAILURE_MISSING_OUTPUT, new RequirementFailure(
-                            requirementIndex,
-                            RequirementFailure.Kind.MISSING_OUTPUT,
-                            output.getCount(),
-                            output.getCount() - remaining.getCount(),
-                            remaining.getCount(),
-                            componentTraces(new ArrayList<>(itemHatches)),
-                            componentTraces(matched)
-                    ));
+                    RequirementFailure failure = buildMissingOutputFailure(requirementIndex, output.getCount(), remaining.getCount(), itemHatches, matched);
+                    setFailure(FAILURE_MISSING_OUTPUT, failure);
                     return false;
                 }
                 itemOutputRoutes.set(requirementIndex, new ItemOutputRoute(transfers));
             } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT) {
+                List<FluidOutputState> fluidStates = fluidOutputStates(fluid.tags());
+                List<FluidOutputHatchBlockEntity> fluidHatches = liveComponents(FluidOutputHatchBlockEntity.class, fluid.tags());
                 List<FluidOutputTransfer> transfers = new ArrayList<>();
                 FluidStack output = fluid.stack();
                 int remaining = output.getAmount();
@@ -239,21 +218,38 @@ public final class RecipeCraftingContext {
                     if (remaining <= 0) break;
                 }
                 if (remaining > 0) {
-                    setFailure(FAILURE_MISSING_OUTPUT, new RequirementFailure(
-                            requirementIndex,
-                            RequirementFailure.Kind.MISSING_OUTPUT,
-                            output.getAmount(),
-                            output.getAmount() - remaining,
-                            remaining,
-                            componentTraces(new ArrayList<>(fluidHatches)),
-                            componentTraces(matched)
-                    ));
+                    RequirementFailure failure = buildMissingOutputFailure(requirementIndex, output.getAmount(), remaining, fluidHatches, matched);
+                    setFailure(FAILURE_MISSING_OUTPUT, failure);
                     return false;
                 }
                 fluidOutputRoutes.set(requirementIndex, new FluidOutputRoute(transfers));
             }
         }
         return true;
+    }
+
+    private RequirementFailure buildMissingInputFailure(int requirementIndex, int required, int remaining, List<? extends BlockEntity> searched, List<? extends BlockEntity> matched) {
+        return new RequirementFailure(
+                requirementIndex,
+                RequirementFailure.Kind.MISSING_INPUT,
+                required,
+                required - remaining,
+                remaining,
+                componentTraces(new ArrayList<>(searched)),
+                componentTraces(new ArrayList<>(matched))
+        );
+    }
+
+    private RequirementFailure buildMissingOutputFailure(int requirementIndex, int required, int remaining, List<? extends BlockEntity> searched, List<? extends BlockEntity> matched) {
+        return new RequirementFailure(
+                requirementIndex,
+                RequirementFailure.Kind.MISSING_OUTPUT,
+                required,
+                required - remaining,
+                remaining,
+                componentTraces(new ArrayList<>(searched)),
+                componentTraces(new ArrayList<>(matched))
+        );
     }
 
     public boolean startCrafting(MachineRecipe recipe) {
@@ -450,12 +446,17 @@ public final class RecipeCraftingContext {
     }
 
     private <T extends BlockEntity> List<T> liveComponents(Class<T> type) {
+        return liveComponents(type, List.of());
+    }
+
+    private <T extends BlockEntity> List<T> liveComponents(Class<T> type, List<String> requiredTags) {
         var level = controller.getLevel();
         if (level == null) return List.of();
 
         List<T> matches = new ArrayList<>();
         for (ProcessingComponent component : controller.getComponents()) {
             if (!type.isInstance(component.getContainer())) continue;
+            if (!tagsMatch(requiredTags, component.tags())) continue;
             BlockEntity live = level.getBlockEntity(component.getPos());
             if (live == component.getContainer()) {
                 matches.add(type.cast(live));
@@ -464,9 +465,18 @@ public final class RecipeCraftingContext {
         return matches;
     }
 
-    private List<ItemInputState> itemInputStates() {
+    private static boolean tagsMatch(List<String> required, List<String> componentTags) {
+        if (required.isEmpty()) return true;
+        if (componentTags.isEmpty()) return false;
+        for (String tag : required) {
+            if (componentTags.contains(tag)) return true;
+        }
+        return false;
+    }
+
+    private List<ItemInputState> itemInputStates(List<String> requiredTags) {
         List<ItemInputState> states = new ArrayList<>();
-        for (ItemInputBusBlockEntity bus : liveComponents(ItemInputBusBlockEntity.class)) {
+        for (ItemInputBusBlockEntity bus : liveComponents(ItemInputBusBlockEntity.class, requiredTags)) {
             IItemHandler handler = bus.getItemHandler(null);
             for (int slot = 0; slot < handler.getSlots(); slot++) {
                 states.add(new ItemInputState(bus, handler, slot, handler.getStackInSlot(slot).copy()));
@@ -475,9 +485,9 @@ public final class RecipeCraftingContext {
         return states;
     }
 
-    private List<ItemOutputState> itemOutputStates() {
+    private List<ItemOutputState> itemOutputStates(List<String> requiredTags) {
         List<ItemOutputState> states = new ArrayList<>();
-        for (ItemOutputBusBlockEntity bus : liveComponents(ItemOutputBusBlockEntity.class)) {
+        for (ItemOutputBusBlockEntity bus : liveComponents(ItemOutputBusBlockEntity.class, requiredTags)) {
             IItemHandler handler = bus.getItemHandler(null);
             for (int slot = 0; slot < handler.getSlots(); slot++) {
                 states.add(new ItemOutputState(bus, handler, slot, handler.getStackInSlot(slot).copy(), handler.getSlotLimit(slot)));
@@ -486,9 +496,9 @@ public final class RecipeCraftingContext {
         return states;
     }
 
-    private List<FluidInputState> fluidInputStates() {
+    private List<FluidInputState> fluidInputStates(List<String> requiredTags) {
         List<FluidInputState> states = new ArrayList<>();
-        for (FluidInputHatchBlockEntity hatch : liveComponents(FluidInputHatchBlockEntity.class)) {
+        for (FluidInputHatchBlockEntity hatch : liveComponents(FluidInputHatchBlockEntity.class, requiredTags)) {
             IFluidHandler handler = hatch.getFluidHandler(null);
             for (int tank = 0; tank < handler.getTanks(); tank++) {
                 states.add(new FluidInputState(hatch, handler, tank, handler.getFluidInTank(tank).copy()));
@@ -497,9 +507,9 @@ public final class RecipeCraftingContext {
         return states;
     }
 
-    private List<FluidOutputState> fluidOutputStates() {
+    private List<FluidOutputState> fluidOutputStates(List<String> requiredTags) {
         List<FluidOutputState> states = new ArrayList<>();
-        for (FluidOutputHatchBlockEntity hatch : liveComponents(FluidOutputHatchBlockEntity.class)) {
+        for (FluidOutputHatchBlockEntity hatch : liveComponents(FluidOutputHatchBlockEntity.class, requiredTags)) {
             IFluidHandler handler = hatch.getFluidHandler(null);
             for (int tank = 0; tank < handler.getTanks(); tank++) {
                 states.add(new FluidOutputState(hatch, handler, tank, handler.getFluidInTank(tank).copy(), handler.getTankCapacity(tank)));

@@ -21,5 +21,8 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build with Gradle
+      - name: Compile Test
         run: ./gradlew compileJava --no-daemon
+      
+      - name: Unit Test and GameTest
+        run: ./gradlew test --no-daemon

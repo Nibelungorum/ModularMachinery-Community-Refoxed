@@ -73,7 +73,7 @@ class RecipeCraftingContextTest {
     }
 
     @Test
-    void simulateInputsFailsWhenDuplicateIngredientsExceedCombinedInput() {
+    void commitInputsFailsWhenDuplicateIngredientsExceedCombinedInput() {
         bindItemComponents(Items.IRON_INGOT);
         ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
         bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(5));
@@ -88,8 +88,11 @@ class RecipeCraftingContextTest {
                 ),
                 List.of()
         );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
-        assertThat(new RecipeCraftingContext(controller).simulateInputs(recipe)).isFalse();
+        assertThat(context.simulateInputs(recipe)).isTrue();
+        assertThat(context.commitInputs(recipe)).isFalse();
+        assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(5);
     }
 
     @Test
@@ -179,7 +182,7 @@ class RecipeCraftingContextTest {
     }
 
     @Test
-    void simulateOutputsFailsWhenDuplicateOutputsExceedCombinedRoom() {
+    void commitOutputsFailsWhenDuplicateOutputsExceedCombinedRoom() {
         bindItemComponents(Items.COBBLESTONE);
         bindItemComponents(Items.IRON_INGOT);
         ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
@@ -197,8 +200,10 @@ class RecipeCraftingContextTest {
                         Items.IRON_INGOT.getDefaultInstance()
                 )
         );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
-        assertThat(new RecipeCraftingContext(controller).simulateOutputs(recipe)).isFalse();
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitOutputs(recipe)).isFalse();
     }
 
     @Test
@@ -445,6 +450,44 @@ class RecipeCraftingContextTest {
         assertThat(context.simulateInputs(recipe)).isFalse();
         assertThat(context.getLastRequirementFailure().searchedComponents()).isNotEmpty();
         assertThat(context.getLastRequirementFailure().matchedComponents()).isNotNull();
+    }
+
+    @Test
+    void taggedRequirementRoutesOnlyToTaggedComponent() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemInputBusBlockEntity untagged = itemInputBus(new BlockPos(1, 0, 0));
+        untagged.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(2));
+        ItemInputBusBlockEntity tagged = itemInputBus(new BlockPos(2, 0, 0));
+        tagged.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(4));
+        MachineControllerBlockEntity controller = controllerWithComponents(untagged, tagged);
+        Field componentsField = MachineControllerBlockEntity.class.getDeclaredField("components");
+        componentsField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        List<ProcessingComponent> list = (List<ProcessingComponent>) componentsField.get(controller);
+        list.clear();
+        MachineComponent port = new MachineComponent(PortKinds.ITEM_INPUT, cn.howxu.mmcr.util.IOType.INPUT);
+        list.add(new ProcessingComponent(port, untagged, untagged.getBlockPos(), BlockPos.ZERO, (String) null));
+        list.add(new ProcessingComponent(port, tagged, tagged.getBlockPos(), BlockPos.ZERO, List.of("input_a")));
+
+        MachineRecipe recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "tagged_input"),
+                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                20,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 4, ItemStack.EMPTY, List.of("input_a")))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateInputs(recipe)).isTrue();
+        assertThat(context.commitInputs(recipe)).isTrue();
+        assertThat(untagged.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
+        assertThat(tagged.getItemStackHandler(null).getStackInSlot(0).getCount()).isZero();
     }
 
     private static ItemInputBusBlockEntity itemInputBus(BlockPos pos) {

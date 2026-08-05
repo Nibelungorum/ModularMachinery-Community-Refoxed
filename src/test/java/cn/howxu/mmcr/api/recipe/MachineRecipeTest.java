@@ -157,6 +157,45 @@ class MachineRecipeTest {
         assertThat(recipe.assemble(null)).isEqualTo(ItemStack.EMPTY);
     }
 
+    @Test
+    void recipeRequirementTagsRoundTripAndDefaultEmpty() {
+        var root = new JsonObject();
+        root.addProperty("id", "mmcr:tagged");
+        root.addProperty("machine", "mmcr:machine");
+        root.addProperty("tick_time", 20);
+        var input = itemRequirement("input", itemId(Items.IRON_INGOT), 1);
+        var tags = new JsonArray();
+        tags.add("input_a");
+        input.add("tags", tags);
+        var requirements = new JsonArray();
+        requirements.add(input);
+        root.add("requirements", requirements);
+
+        var recipe = MachineRecipe.CODEC.codec().parse(jsonOps(), root).getOrThrow();
+
+        assertThat(recipe.requirements().getFirst().tags()).containsExactly("input_a");
+        var encoded = MachineRecipe.CODEC.codec().encodeStart(jsonOps(), recipe).getOrThrow().getAsJsonObject();
+        assertThat(encoded.getAsJsonArray("requirements").get(0).getAsJsonObject().getAsJsonArray("tags"))
+                .extracting(JsonElement::getAsString)
+                .containsExactly("input_a");
+    }
+
+    @Test
+    void requirementsWithoutTagsDecodeToEmptyList() {
+        var root = new JsonObject();
+        root.addProperty("id", "mmcr:untagged");
+        root.addProperty("machine", "mmcr:machine");
+        root.addProperty("tick_time", 20);
+        var input = itemRequirement("input", itemId(Items.IRON_INGOT), 1);
+        var requirements = new JsonArray();
+        requirements.add(input);
+        root.add("requirements", requirements);
+
+        var recipe = MachineRecipe.CODEC.codec().parse(jsonOps(), root).getOrThrow();
+
+        assertThat(recipe.requirements().getFirst().tags()).isEmpty();
+    }
+
     private static Holder<Fluid> bindFluidComponents(Fluid fluid) {
         var holder = fluid.builtInRegistryHolder();
         holder.bindComponents(DataComponentMap.EMPTY);
