@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.util.IOType;
 import com.mojang.serialization.JsonOps;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.DynamicOps;
@@ -47,6 +48,33 @@ class MachineIngredientCodecTest {
         var json = MachineIngredient.CODEC.encodeStart(jsonOps(), ing).getOrThrow();
         var back = MachineIngredient.CODEC.parse(jsonOps(), json).getOrThrow();
         assertThat(back).isEqualTo(ing);
+    }
+
+    @Test void itemRequirement_roundtrip_with_io_and_tag() {
+        var requirement = new ItemRequirement(Ingredient.of(Items.IRON_INGOT), 3, "north_buses", IOType.INPUT);
+
+        var json = MachineRequirement.CODEC.encodeStart(jsonOps(), requirement).getOrThrow();
+        var back = MachineRequirement.CODEC.parse(jsonOps(), json).getOrThrow();
+
+        assertThat(back).isEqualTo(requirement);
+    }
+
+    @Test void fluidRequirement_roundtrip_with_output_io() {
+        var requirement = new FluidRequirement(FluidIngredient.of(Fluids.WATER), 1000, null, IOType.OUTPUT);
+
+        var json = MachineRequirement.CODEC.encodeStart(jsonOps(), requirement).getOrThrow();
+        var back = MachineRequirement.CODEC.parse(jsonOps(), json).getOrThrow();
+
+        assertThat(back).isEqualTo(requirement);
+    }
+
+    @Test void energyRequirement_roundtrip() {
+        var requirement = new EnergyRequirement(80);
+
+        var json = MachineRequirement.CODEC.encodeStart(jsonOps(), requirement).getOrThrow();
+        var back = MachineRequirement.CODEC.parse(jsonOps(), json).getOrThrow();
+
+        assertThat(back).isEqualTo(requirement);
     }
 
     private static DynamicOps<JsonElement> jsonOps() {

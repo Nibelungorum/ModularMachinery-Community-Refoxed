@@ -8,10 +8,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.ToIntFunction;
 
-public record BlockArray(Map<BlockPos, BlockPredicate> pattern) {
+public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, List<String>> tags) {
+
+    public BlockArray(Map<BlockPos, BlockPredicate> pattern) {
+        this(pattern, Map.of());
+    }
+
+    public BlockArray {
+        pattern = Map.copyOf(pattern);
+        tags = copyTags(tags);
+    }
 
     public @Nullable BlockPredicate get(BlockPos pos) {
         return pattern.get(pos);
+    }
+
+    public List<String> tags(BlockPos pos) {
+        return tags.getOrDefault(pos, List.of());
     }
 
     public boolean isEmpty() {
@@ -66,6 +79,7 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern) {
      */
     public static final class Builder {
         private final LinkedHashMap<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
+        private final Map<BlockPos, List<String>> tags = new LinkedHashMap<>();
         private final Map<Character, BlockPredicate> symbols = new LinkedHashMap<>();
         private List<List<String>> layers = List.of();
 
@@ -103,6 +117,11 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern) {
             return this;
         }
 
+        public Builder tagged(BlockPos pos, String... tags) {
+            this.tags.put(pos, normalizeTags(List.of(tags)));
+            return this;
+        }
+
         public BlockArray build() {
             entries.clear();
             if (layers.isEmpty()) {
@@ -128,13 +147,34 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern) {
             }
             if (controller != null && !controller.equals(BlockPos.ZERO)) {
                 LinkedHashMap<BlockPos, BlockPredicate> normalized = new LinkedHashMap<>();
+                LinkedHashMap<BlockPos, List<String>> normalizedTags = new LinkedHashMap<>();
                 for (var entry : entries.entrySet()) {
                     normalized.put(entry.getKey().subtract(controller), entry.getValue());
                 }
+                for (var entry : tags.entrySet()) {
+                    normalizedTags.put(entry.getKey().subtract(controller), entry.getValue());
+                }
                 entries.clear();
                 entries.putAll(normalized);
+                tags.clear();
+                tags.putAll(normalizedTags);
             }
-            return new BlockArray(Map.copyOf(entries));
+            return new BlockArray(Map.copyOf(entries), tags);
         }
+    }
+
+    private static Map<BlockPos, List<String>> copyTags(Map<BlockPos, List<String>> source) {
+        if (source == null || source.isEmpty()) return Map.of();
+        LinkedHashMap<BlockPos, List<String>> copy = new LinkedHashMap<>();
+        for (var entry : source.entrySet()) {
+            List<String> tags = normalizeTags(entry.getValue());
+            if (!tags.isEmpty()) copy.put(entry.getKey(), tags);
+        }
+        return Map.copyOf(copy);
+    }
+
+    private static List<String> normalizeTags(List<String> tags) {
+        if (tags == null || tags.isEmpty()) return List.of();
+        return tags.stream().filter(tag -> tag != null && !tag.isBlank()).distinct().toList();
     }
 }

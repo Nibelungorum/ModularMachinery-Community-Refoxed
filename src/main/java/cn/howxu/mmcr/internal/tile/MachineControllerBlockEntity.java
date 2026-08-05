@@ -204,7 +204,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
             var component = tile.provideComponent();
             if (!(tile instanceof BlockEntity container)) continue;
-            components.add(new ProcessingComponent(component, container, worldPos, relativePos, null));
+            components.add(new ProcessingComponent(component, container, worldPos, relativePos, foundPattern.tags(relativePos)));
             switch (component.kind().id()) {
                 case "item_input_bus" -> itemInputs++;
                 case "item_output_bus" -> itemOutputs++;
