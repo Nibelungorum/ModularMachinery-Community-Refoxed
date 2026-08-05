@@ -261,7 +261,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void tryStartNewRecipe() {
         List<MachineRecipe> candidates = recipesForMachine();
-        LOG.debug("[Ctrl#{}] tryStartNewRecipe: considering {} candidate recipe(s) for machine {}", instanceId, candidates.size(), machine.registryName());
         int index = 0;
         for (MachineRecipe recipe : candidates) {
             index++;
@@ -269,8 +268,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
             boolean inputsOk = candidate.simulateInputs(recipe);
             boolean outputsOk = candidate.simulateOutputs(recipe);
             if (!inputsOk || !outputsOk) {
-                LOG.info("[Ctrl#{}]   candidate[{} of {}] {} skipped: simulate inputs={} outputs={} priority={} tickTime={}",
-                        instanceId, index, candidates.size(), recipe.id(), inputsOk, outputsOk, recipe.priority(), recipe.tickTime());
                 continue;
             }
             ActiveMachineRecipe next = new ActiveMachineRecipe(recipe, 1);

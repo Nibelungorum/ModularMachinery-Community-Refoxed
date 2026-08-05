@@ -49,45 +49,29 @@ public final class RecipeCraftingContext {
     }
 
     public boolean simulateInputs(MachineRecipe recipe) {
-        LOG.debug("[simulateInputs] recipe={} controllerPos={} ingredients={}", recipe.id(), controllerPos, recipe.inputs().size());
         for (MachineIngredient ingredient : recipe.inputs()) {
             if (ingredient instanceof MachineIngredient.ItemIngredient item) {
                 ItemInputBusBlockEntity bus = findAndCheckItemBus(item);
                 if (bus == null) {
-                    LOG.info("[simulateInputs]   ✗ item ingredient {}x {} → no matching input bus",
-                            item.count(), describeIngredient(item.item()));
                     return false;
                 }
-                LOG.debug("[simulateInputs]   ✓ item ingredient {}x {} via bus at {}",
-                        item.count(), describeIngredient(item.item()), bus.getBlockPos());
             } else if (ingredient instanceof MachineIngredient.FluidIngredient fluid) {
                 FluidInputHatchBlockEntity hatch = findAndCheckFluidHatch(fluid);
                 if (hatch == null) {
-                    LOG.info("[simulateInputs]   ✗ fluid ingredient {}mb {} → no matching fluid hatch",
-                            fluid.amount(), describeFluid(fluid.fluid()));
                     return false;
                 }
-                LOG.debug("[simulateInputs]   ✓ fluid ingredient {}mb {} via hatch at {}",
-                        fluid.amount(), describeFluid(fluid.fluid()), hatch.getBlockPos());
             } else if (ingredient instanceof MachineIngredient.EnergyIngredient energy) {
                 List<EnergyInputHatchBlockEntity> hatches = liveEnergyInputs();
                 if (!EnergyRecipeIo.canConsumeInputs(energyStorages(hatches), energy.fePerTick(), 1)) {
-                    LOG.info("[simulateInputs]   ✗ energy ingredient {}FE/t → no matching energy hatch in formed structure",
-                            energy.fePerTick());
                     return false;
                 }
-                LOG.debug("[simulateInputs]   ✓ energy ingredient {}FE/t across {} energy input hatch(es)",
-                        energy.fePerTick(), hatches.size());
             }
         }
-        LOG.debug("[simulateInputs] recipe={} OK", recipe.id());
         return true;
     }
 
     public boolean simulateOutputs(MachineRecipe recipe) {
         List<OutputSlotState> slots = outputSlotStates();
-        LOG.debug("[simulateOutputs] recipe={} controllerPos={} outputs={} candidateSlots={}",
-                recipe.id(), controllerPos, recipe.outputs().size(), slots.size());
         int idx = 0;
         for (ItemStack output : recipe.outputs()) {
             idx++;
@@ -102,15 +86,9 @@ public final class RecipeCraftingContext {
                 placed += delta;
             }
             if (!remaining.isEmpty()) {
-                LOG.info("[simulateOutputs]   ✗ output[{} of {}] {}x {} would leave {} unabsorbed across {} slot(s)",
-                        idx, recipe.outputs().size(), initial, output.getItem().builtInRegistryHolder().getRegisteredName(),
-                        remaining.getCount(), slots.size());
                 return false;
             }
-            LOG.debug("[simulateOutputs]   ✓ output[{} of {}] {}x {} would fully fit ({} slot visits, {} total absorbed)",
-                    idx, recipe.outputs().size(), initial, output.getItem().builtInRegistryHolder().getRegisteredName(), slots.size(), placed);
         }
-        LOG.debug("[simulateOutputs] recipe={} OK", recipe.id());
         return true;
     }
 
@@ -212,28 +190,19 @@ public final class RecipeCraftingContext {
     }
 
     private ItemInputBusBlockEntity findAndCheckItemBus(MachineIngredient.ItemIngredient ingredient) {
-        int scanned = 0;
         for (ItemInputBusBlockEntity bus : liveComponents(ItemInputBusBlockEntity.class)) {
-            scanned++;
             IItemHandler handler = bus.getItemHandler(null);
             int count = 0;
-            int matchingSlots = 0;
             for (int slot = 0; slot < handler.getSlots(); slot++) {
                 ItemStack stack = handler.getStackInSlot(slot);
                 if (ingredient.item().test(stack)) {
                     count += stack.getCount();
-                    matchingSlots++;
                 }
             }
             if (count >= ingredient.count()) {
-                LOG.debug("[scanItemBus] component pos={} matched: {}/{} required (across {} matching slot(s))",
-                        bus.getBlockPos(), count, ingredient.count(), matchingSlots);
                 return bus;
             }
-            LOG.debug("[scanItemBus] component pos={} insufficient: {}/{} required (across {} matching slot(s))",
-                    bus.getBlockPos(), count, ingredient.count(), matchingSlots);
         }
-        LOG.debug("[scanItemBus] scanned {} structure input bus(es); none matched {}x of {}", scanned, ingredient.count(), describeIngredient(ingredient.item()));
         return null;
     }
 
@@ -268,18 +237,12 @@ public final class RecipeCraftingContext {
 
     private List<OutputSlot> outputSlots() {
         List<OutputSlot> slots = new ArrayList<>();
-        int buses = 0;
         for (ItemOutputBusBlockEntity bus : liveComponents(ItemOutputBusBlockEntity.class)) {
-            buses++;
             IItemHandler handler = bus.getItemHandler(null);
-            int usable = 0;
             for (int slot = 0; slot < handler.getSlots(); slot++) {
                 slots.add(new OutputSlot(handler, slot));
-                usable++;
             }
-            LOG.debug("[scanOutputBus] component pos={} contributed {} slot(s) (total slots so far: {})", bus.getBlockPos(), usable, slots.size());
         }
-        LOG.debug("[scanOutputBus] discovered {} structure output bus(es) → {} total slot(s) at controllerPos={}", buses, slots.size(), controllerPos);
         return slots;
     }
 
