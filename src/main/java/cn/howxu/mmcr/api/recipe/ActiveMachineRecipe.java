@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.recipe;
 
+import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.storage.ValueInput;
@@ -121,18 +122,16 @@ public final class ActiveMachineRecipe {
         return this.tick >= totalTick;
     }
 
-    public void doFailureAction(boolean reset) {
-        if (reset) {
-            int before = this.tick;
-            this.tick = 0;
-            LOG.info("ActiveMachineRecipe#{} doFailureAction(reset=true): tick {} → 0 (recipe={})", instanceId, before, recipe == null ? null : recipe.id());
-        } else if (this.tick > 0) {
-            int before = this.tick;
-            this.tick--;
-            LOG.info("ActiveMachineRecipe#{} doFailureAction(reset=false): tick {} → {} (recipe={})", instanceId, before, this.tick, recipe == null ? null : recipe.id());
-        } else {
-            LOG.debug("ActiveMachineRecipe#{} doFailureAction(reset=false): tick already 0 (recipe={})", instanceId, recipe == null ? null : recipe.id());
+    public void doFailureAction(RecipeFailureActions action) {
+        if (action == null) action = RecipeFailureActions.getDefaultAction();
+        int before = this.tick;
+        switch (action) {
+            case RESET -> this.tick = 0;
+            case DECREASE -> { if (this.tick > 0) this.tick--; }
+            case STILL -> { /* no-op */ }
         }
+        LOG.info("ActiveMachineRecipe#{} doFailureAction({}): tick {} → {} (recipe={})",
+                instanceId, action, before, this.tick, recipe == null ? null : recipe.id());
     }
 
     public CompoundTag serialize() {
@@ -216,7 +215,7 @@ public final class ActiveMachineRecipe {
             }
         }
         if (!context.ioTick(recipe)) {
-            doFailureAction(false);
+            doFailureAction(context.failureAction());
             LOG.info("ActiveMachineRecipe#{} tick(): recipe {} ioTick refused at tick {} → WAITING", instanceId, recipe.id(), beforeTick);
             return TickStatus.WAITING;
         }

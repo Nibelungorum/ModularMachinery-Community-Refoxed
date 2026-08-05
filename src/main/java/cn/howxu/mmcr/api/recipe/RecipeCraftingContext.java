@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.recipe;
 
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.recipe.helper.EnergyRecipeIo;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
@@ -29,6 +31,11 @@ public final class RecipeCraftingContext {
 
     public RecipeCraftingContext(MachineControllerBlockEntity controller) {
         this.controller = controller;
+    }
+
+    public RecipeFailureActions failureAction() {
+        Machine m = controller.getMachine();
+        return m == null ? RecipeFailureActions.getDefaultAction() : m.failureAction();
     }
 
     public boolean ioTick(MachineRecipe recipe) {

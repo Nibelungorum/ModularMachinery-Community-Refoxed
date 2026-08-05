@@ -10,4 +10,8 @@ public sealed interface Machine permits DynamicMachine {
     BlockArray pattern();
 
     MachineControllerSpec controller();
+
+    default RecipeFailureActions failureAction() {
+        return RecipeFailureActions.getDefaultAction();
+    }
 }
