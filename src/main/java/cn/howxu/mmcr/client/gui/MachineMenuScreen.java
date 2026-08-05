@@ -269,6 +269,31 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
             scaledY = renderScaledWrappedLine(g, redstoneLine, scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
         }
 
+        long stored = menu.totalStoredEnergy();
+        long capacity = menu.totalCapacityEnergy();
+        if (stored > 0 || capacity > 0) {
+            Component energyLine = Component.translatable("gui.mmcr.controller.energy",
+                    Component.literal(NUMBER_FORMAT.format(stored)),
+                    Component.literal(NUMBER_FORMAT.format(capacity)));
+            scaledY = renderScaledWrappedLine(g, energyLine, scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
+        }
+
+        FluidStack inputFluid = menu.primaryFluid();
+        if (!inputFluid.isEmpty()) {
+            Component fluidLine = Component.translatable("gui.mmcr.controller.fluid_input",
+                    Component.literal(inputFluid.getFluid().toString()),
+                    Component.literal(NUMBER_FORMAT.format(inputFluid.getAmount())));
+            scaledY = renderScaledWrappedLine(g, fluidLine, scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
+        }
+
+        FluidStack outputFluid = menu.primaryOutputFluid();
+        if (!outputFluid.isEmpty()) {
+            Component fluidLine = Component.translatable("gui.mmcr.controller.fluid_output",
+                    Component.literal(outputFluid.getFluid().toString()),
+                    Component.literal(NUMBER_FORMAT.format(outputFluid.getAmount())));
+            scaledY = renderScaledWrappedLine(g, fluidLine, scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
+        }
+
         g.pose().popMatrix();
     }
 

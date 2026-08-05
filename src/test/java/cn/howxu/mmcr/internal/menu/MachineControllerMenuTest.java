@@ -62,6 +62,16 @@ class MachineControllerMenuTest {
         assertThat(menu.isRedstonePaused()).isTrue();
     }
 
+    @Test
+    void client_menu_returns_zero_energy_and_empty_fluid_when_owner_missing() {
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory());
+
+        assertThat(menu.totalStoredEnergy()).isZero();
+        assertThat(menu.totalCapacityEnergy()).isZero();
+        assertThat(menu.primaryFluid().isEmpty()).isTrue();
+        assertThat(menu.primaryOutputFluid().isEmpty()).isTrue();
+    }
+
     private static Inventory emptyInventory() {
         return new Inventory(null, null);
     }

@@ -11,6 +11,7 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.Nullable;
 
 public class MachineControllerMenu extends AbstractMachineMenu {
@@ -134,6 +135,26 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     public boolean isRedstonePaused() {
         MachineControllerBlockEntity controller = resolvedOwner();
         return (controller != null && controller.isRedstonePaused()) || redstonePaused.get() != 0;
+    }
+
+    public long totalStoredEnergy() {
+        MachineControllerBlockEntity controller = resolvedOwner();
+        return controller == null ? 0L : controller.totalStoredEnergy();
+    }
+
+    public long totalCapacityEnergy() {
+        MachineControllerBlockEntity controller = resolvedOwner();
+        return controller == null ? 0L : controller.totalCapacityEnergy();
+    }
+
+    public FluidStack primaryFluid() {
+        MachineControllerBlockEntity controller = resolvedOwner();
+        return controller == null ? FluidStack.EMPTY : controller.primaryFluid();
+    }
+
+    public FluidStack primaryOutputFluid() {
+        MachineControllerBlockEntity controller = resolvedOwner();
+        return controller == null ? FluidStack.EMPTY : controller.primaryOutputFluid();
     }
 
     private static int failureCode(@Nullable String key) {
