@@ -70,42 +70,34 @@ public final class RecipeCraftingContext {
         lastFailureUnloc = null;
         itemInputRoutes = new ArrayList<>();
         fluidInputRoutes = new ArrayList<>();
+        List<ItemInputState> itemStates = itemInputStates();
+        List<FluidInputState> fluidStates = fluidInputStates();
 
         for (MachineIngredient ingredient : recipe.inputs()) {
             if (ingredient instanceof MachineIngredient.ItemIngredient item) {
-                List<BusWithSlots> buses = new ArrayList<>();
-                int available = 0;
-                for (ItemInputBusBlockEntity bus : liveComponents(ItemInputBusBlockEntity.class)) {
-                    IItemHandler handler = bus.getItemHandler(null);
-                    buses.add(new BusWithSlots(handler));
-                    for (int slot = 0; slot < handler.getSlots(); slot++) {
-                        ItemStack stack = handler.getStackInSlot(slot);
-                        if (item.item().test(stack)) {
-                            available += stack.getCount();
-                        }
-                    }
+                List<ItemInputTransfer> transfers = new ArrayList<>();
+                int remaining = item.count();
+                for (ItemInputState state : itemStates) {
+                    remaining = state.extract(item, remaining, transfers);
+                    if (remaining <= 0) break;
                 }
-                if (available < item.count()) {
+                if (remaining > 0) {
                     setFailure(FAILURE_MISSING_INPUT);
                     return false;
                 }
-                itemInputRoutes.add(new ItemInputRoute(buses, item.count()));
+                itemInputRoutes.add(new ItemInputRoute(transfers));
             } else if (ingredient instanceof MachineIngredient.FluidIngredient fluid) {
-                List<HatchWithTank> hatches = new ArrayList<>();
-                int available = 0;
-                for (FluidInputHatchBlockEntity hatch : liveComponents(FluidInputHatchBlockEntity.class)) {
-                    IFluidHandler handler = hatch.getFluidHandler(null);
-                    FluidStack tank = handler.getFluidInTank(0);
-                    if (fluid.fluid().test(tank)) {
-                        available += tank.getAmount();
-                        hatches.add(new HatchWithTank(handler));
-                    }
+                List<FluidInputTransfer> transfers = new ArrayList<>();
+                int remaining = fluid.amount();
+                for (FluidInputState state : fluidStates) {
+                    remaining = state.drain(fluid, remaining, transfers);
+                    if (remaining <= 0) break;
                 }
-                if (available < fluid.amount()) {
+                if (remaining > 0) {
                     setFailure(FAILURE_MISSING_INPUT);
                     return false;
                 }
-                fluidInputRoutes.add(new FluidInputRoute(hatches, fluid.amount()));
+                fluidInputRoutes.add(new FluidInputRoute(transfers));
             } else if (ingredient instanceof MachineIngredient.EnergyIngredient energy) {
                 List<EnergyInputHatchBlockEntity> hatches = liveEnergyInputs();
                 if (!EnergyRecipeIo.canConsumeInputs(energyStorages(hatches), energy.fePerTick(), 1)) {
@@ -121,41 +113,35 @@ public final class RecipeCraftingContext {
         lastFailureUnloc = null;
         itemOutputRoutes = new ArrayList<>();
         fluidOutputRoutes = new ArrayList<>();
+        List<ItemOutputState> itemStates = itemOutputStates();
+        List<FluidOutputState> fluidStates = fluidOutputStates();
 
         for (ItemStack output : recipe.outputs()) {
-            List<BusWithSlots> buses = new ArrayList<>();
+            List<ItemOutputTransfer> transfers = new ArrayList<>();
             ItemStack remaining = output.copy();
-            for (ItemOutputBusBlockEntity bus : liveComponents(ItemOutputBusBlockEntity.class)) {
-                IItemHandler handler = bus.getItemHandler(null);
-                buses.add(new BusWithSlots(handler));
-                for (int slot = 0; slot < handler.getSlots() && !remaining.isEmpty(); slot++) {
-                    remaining = handler.insertItem(slot, remaining, true);
-                }
+            for (ItemOutputState state : itemStates) {
+                remaining = state.insert(remaining, transfers);
+                if (remaining.isEmpty()) break;
             }
             if (!remaining.isEmpty()) {
                 setFailure(FAILURE_MISSING_OUTPUT);
                 return false;
             }
-            itemOutputRoutes.add(new ItemOutputRoute(buses, output));
+            itemOutputRoutes.add(new ItemOutputRoute(transfers));
         }
 
         for (FluidStack output : recipe.fluidOutputs()) {
-            List<HatchWithTank> hatches = new ArrayList<>();
+            List<FluidOutputTransfer> transfers = new ArrayList<>();
             int remaining = output.getAmount();
-            for (FluidOutputHatchBlockEntity hatch : liveComponents(FluidOutputHatchBlockEntity.class)) {
-                IFluidHandler handler = hatch.getFluidHandler(null);
-                hatches.add(new HatchWithTank(handler));
-                if (remaining > 0) {
-                    FluidStack offer = output.copy();
-                    offer.setAmount(remaining);
-                    remaining -= handler.fill(offer, IFluidHandler.FluidAction.SIMULATE);
-                }
+            for (FluidOutputState state : fluidStates) {
+                remaining = state.fill(output, remaining, transfers);
+                if (remaining <= 0) break;
             }
             if (remaining > 0) {
                 setFailure(FAILURE_MISSING_OUTPUT);
                 return false;
             }
-            fluidOutputRoutes.add(new FluidOutputRoute(hatches, output));
+            fluidOutputRoutes.add(new FluidOutputRoute(transfers));
         }
         return true;
     }
@@ -174,34 +160,16 @@ public final class RecipeCraftingContext {
         for (MachineIngredient ingredient : recipe.inputs()) {
             if (ingredient instanceof MachineIngredient.ItemIngredient item) {
                 ItemInputRoute route = itemInputRoutes.get(itemIdx++);
-                int left = item.count();
-                for (BusWithSlots bus : route.buses()) {
-                    if (left <= 0) break;
-                    IItemHandler handler = bus.handler();
-                    for (int slot = 0; slot < handler.getSlots() && left > 0; slot++) {
-                        ItemStack stack = handler.getStackInSlot(slot);
-                        if (item.item().test(stack)) {
-                            int taken = Math.min(left, stack.getCount());
-                            handler.extractItem(slot, taken, false);
-                            left -= taken;
-                        }
-                    }
-                }
-                if (left > 0) {
+                if (!canExtract(route.transfers())) {
                     return false;
                 }
+                extract(route.transfers());
             } else if (ingredient instanceof MachineIngredient.FluidIngredient fluid) {
                 FluidInputRoute route = fluidInputRoutes.get(fluidIdx++);
-                int drained = 0;
-                for (HatchWithTank hatch : route.hatches()) {
-                    if (drained >= fluid.amount()) break;
-                    int remaining = fluid.amount() - drained;
-                    FluidStack result = hatch.handler().drain(remaining, IFluidHandler.FluidAction.EXECUTE);
-                    drained += result.getAmount();
-                }
-                if (drained < fluid.amount()) {
+                if (!canDrain(route.transfers())) {
                     return false;
                 }
+                drain(route.transfers());
             }
         }
         return true;
@@ -210,35 +178,20 @@ public final class RecipeCraftingContext {
     public boolean commitOutputs(MachineRecipe recipe) {
         List<ItemStack> outputs = recipe.outputs();
         for (int i = 0; i < outputs.size(); i++) {
-            ItemStack output = outputs.get(i);
             ItemOutputRoute route = itemOutputRoutes.get(i);
-            ItemStack remaining = output.copy();
-            for (BusWithSlots bus : route.buses()) {
-                if (remaining.isEmpty()) break;
-                IItemHandler handler = bus.handler();
-                for (int slot = 0; slot < handler.getSlots() && !remaining.isEmpty(); slot++) {
-                    remaining = handler.insertItem(slot, remaining, false);
-                }
-            }
-            if (!remaining.isEmpty()) {
+            if (!canInsert(route.transfers())) {
                 return false;
             }
+            insert(route.transfers());
         }
 
         List<FluidStack> fluidOutputs = recipe.fluidOutputs();
         for (int i = 0; i < fluidOutputs.size(); i++) {
-            FluidStack output = fluidOutputs.get(i);
             FluidOutputRoute route = fluidOutputRoutes.get(i);
-            int remaining = output.getAmount();
-            for (HatchWithTank hatch : route.hatches()) {
-                if (remaining <= 0) break;
-                FluidStack offer = output.copy();
-                offer.setAmount(remaining);
-                remaining -= hatch.handler().fill(offer, IFluidHandler.FluidAction.EXECUTE);
-            }
-            if (remaining > 0) {
+            if (!canFill(route.transfers())) {
                 return false;
             }
+            fill(route.transfers());
         }
         return true;
     }
@@ -272,15 +225,220 @@ public final class RecipeCraftingContext {
         return matches;
     }
 
-    private record ItemInputRoute(List<BusWithSlots> buses, int required) {}
+    private List<ItemInputState> itemInputStates() {
+        List<ItemInputState> states = new ArrayList<>();
+        for (ItemInputBusBlockEntity bus : liveComponents(ItemInputBusBlockEntity.class)) {
+            IItemHandler handler = bus.getItemHandler(null);
+            for (int slot = 0; slot < handler.getSlots(); slot++) {
+                states.add(new ItemInputState(handler, slot, handler.getStackInSlot(slot).copy()));
+            }
+        }
+        return states;
+    }
 
-    private record ItemOutputRoute(List<BusWithSlots> buses, ItemStack stack) {}
+    private List<ItemOutputState> itemOutputStates() {
+        List<ItemOutputState> states = new ArrayList<>();
+        for (ItemOutputBusBlockEntity bus : liveComponents(ItemOutputBusBlockEntity.class)) {
+            IItemHandler handler = bus.getItemHandler(null);
+            for (int slot = 0; slot < handler.getSlots(); slot++) {
+                states.add(new ItemOutputState(handler, slot, handler.getStackInSlot(slot).copy(), handler.getSlotLimit(slot)));
+            }
+        }
+        return states;
+    }
 
-    private record FluidInputRoute(List<HatchWithTank> hatches, int required) {}
+    private List<FluidInputState> fluidInputStates() {
+        List<FluidInputState> states = new ArrayList<>();
+        for (FluidInputHatchBlockEntity hatch : liveComponents(FluidInputHatchBlockEntity.class)) {
+            IFluidHandler handler = hatch.getFluidHandler(null);
+            for (int tank = 0; tank < handler.getTanks(); tank++) {
+                states.add(new FluidInputState(handler, tank, handler.getFluidInTank(tank).copy()));
+            }
+        }
+        return states;
+    }
 
-    private record FluidOutputRoute(List<HatchWithTank> hatches, FluidStack stack) {}
+    private List<FluidOutputState> fluidOutputStates() {
+        List<FluidOutputState> states = new ArrayList<>();
+        for (FluidOutputHatchBlockEntity hatch : liveComponents(FluidOutputHatchBlockEntity.class)) {
+            IFluidHandler handler = hatch.getFluidHandler(null);
+            for (int tank = 0; tank < handler.getTanks(); tank++) {
+                states.add(new FluidOutputState(handler, tank, handler.getFluidInTank(tank).copy(), handler.getTankCapacity(tank)));
+            }
+        }
+        return states;
+    }
 
-    private record BusWithSlots(IItemHandler handler) {}
+    private static boolean canExtract(List<ItemInputTransfer> transfers) {
+        for (ItemInputTransfer transfer : transfers) {
+            ItemStack extracted = transfer.handler().extractItem(transfer.slot(), transfer.amount(), true);
+            if (extracted.getCount() < transfer.amount() || !transfer.ingredient().item().test(extracted)) return false;
+        }
+        return true;
+    }
 
-    private record HatchWithTank(IFluidHandler handler) {}
+    private static void extract(List<ItemInputTransfer> transfers) {
+        for (ItemInputTransfer transfer : transfers) {
+            transfer.handler().extractItem(transfer.slot(), transfer.amount(), false);
+        }
+    }
+
+    private static boolean canInsert(List<ItemOutputTransfer> transfers) {
+        for (ItemOutputTransfer transfer : transfers) {
+            if (!transfer.handler().insertItem(transfer.slot(), transfer.stack(), true).isEmpty()) return false;
+        }
+        return true;
+    }
+
+    private static void insert(List<ItemOutputTransfer> transfers) {
+        for (ItemOutputTransfer transfer : transfers) {
+            transfer.handler().insertItem(transfer.slot(), transfer.stack(), false);
+        }
+    }
+
+    private static boolean canDrain(List<FluidInputTransfer> transfers) {
+        for (FluidInputTransfer transfer : transfers) {
+            if (transfer.handler().drain(transfer.stack(), IFluidHandler.FluidAction.SIMULATE).getAmount() < transfer.stack().getAmount()) return false;
+        }
+        return true;
+    }
+
+    private static void drain(List<FluidInputTransfer> transfers) {
+        for (FluidInputTransfer transfer : transfers) {
+            transfer.handler().drain(transfer.stack(), IFluidHandler.FluidAction.EXECUTE);
+        }
+    }
+
+    private static boolean canFill(List<FluidOutputTransfer> transfers) {
+        for (FluidOutputTransfer transfer : transfers) {
+            if (transfer.handler().fill(transfer.stack(), IFluidHandler.FluidAction.SIMULATE) < transfer.stack().getAmount()) return false;
+        }
+        return true;
+    }
+
+    private static void fill(List<FluidOutputTransfer> transfers) {
+        for (FluidOutputTransfer transfer : transfers) {
+            transfer.handler().fill(transfer.stack(), IFluidHandler.FluidAction.EXECUTE);
+        }
+    }
+
+    private record ItemInputRoute(List<ItemInputTransfer> transfers) {}
+
+    private record ItemOutputRoute(List<ItemOutputTransfer> transfers) {}
+
+    private record FluidInputRoute(List<FluidInputTransfer> transfers) {}
+
+    private record FluidOutputRoute(List<FluidOutputTransfer> transfers) {}
+
+    private record ItemInputTransfer(IItemHandler handler, int slot, MachineIngredient.ItemIngredient ingredient, int amount) {}
+
+    private record ItemOutputTransfer(IItemHandler handler, int slot, ItemStack stack) {}
+
+    private record FluidInputTransfer(IFluidHandler handler, FluidStack stack) {}
+
+    private record FluidOutputTransfer(IFluidHandler handler, FluidStack stack) {}
+
+    private static final class ItemInputState {
+        private final IItemHandler handler;
+        private final int slot;
+        private final ItemStack stack;
+
+        private ItemInputState(IItemHandler handler, int slot, ItemStack stack) {
+            this.handler = handler;
+            this.slot = slot;
+            this.stack = stack;
+        }
+
+        private int extract(MachineIngredient.ItemIngredient ingredient, int remaining, List<ItemInputTransfer> transfers) {
+            if (remaining <= 0 || !ingredient.item().test(stack)) return remaining;
+            int taken = Math.min(remaining, stack.getCount());
+            if (taken <= 0) return remaining;
+            transfers.add(new ItemInputTransfer(handler, slot, ingredient, taken));
+            stack.shrink(taken);
+            return remaining - taken;
+        }
+    }
+
+    private static final class ItemOutputState {
+        private final IItemHandler handler;
+        private final int slot;
+        private ItemStack stack;
+        private final int limit;
+
+        private ItemOutputState(IItemHandler handler, int slot, ItemStack stack, int limit) {
+            this.handler = handler;
+            this.slot = slot;
+            this.stack = stack;
+            this.limit = limit;
+        }
+
+        private ItemStack insert(ItemStack input, List<ItemOutputTransfer> transfers) {
+            if (input.isEmpty()) return input;
+            if (!stack.isEmpty() && !ItemStack.isSameItemSameComponents(stack, input)) return input;
+            int slotLimit = Math.min(limit, input.getMaxStackSize());
+            int room = stack.isEmpty() ? slotLimit : slotLimit - stack.getCount();
+            int inserted = Math.min(room, input.getCount());
+            if (inserted <= 0) return input;
+            ItemStack insertedStack = input.copyWithCount(inserted);
+            transfers.add(new ItemOutputTransfer(handler, slot, insertedStack));
+            if (stack.isEmpty()) {
+                stack = insertedStack.copy();
+            } else {
+                stack.grow(inserted);
+            }
+            ItemStack remaining = input.copy();
+            remaining.shrink(inserted);
+            return remaining;
+        }
+    }
+
+    private static final class FluidInputState {
+        private final IFluidHandler handler;
+        private final FluidStack stack;
+
+        private FluidInputState(IFluidHandler handler, int tank, FluidStack stack) {
+            this.handler = handler;
+            this.stack = stack;
+        }
+
+        private int drain(MachineIngredient.FluidIngredient ingredient, int remaining, List<FluidInputTransfer> transfers) {
+            if (remaining <= 0 || !ingredient.fluid().test(stack)) return remaining;
+            int drained = Math.min(remaining, stack.getAmount());
+            if (drained <= 0) return remaining;
+            FluidStack transfer = stack.copy();
+            transfer.setAmount(drained);
+            transfers.add(new FluidInputTransfer(handler, transfer));
+            stack.shrink(drained);
+            return remaining - drained;
+        }
+    }
+
+    private static final class FluidOutputState {
+        private final IFluidHandler handler;
+        private FluidStack stack;
+        private final int capacity;
+
+        private FluidOutputState(IFluidHandler handler, int tank, FluidStack stack, int capacity) {
+            this.handler = handler;
+            this.stack = stack;
+            this.capacity = capacity;
+        }
+
+        private int fill(FluidStack input, int remaining, List<FluidOutputTransfer> transfers) {
+            if (remaining <= 0) return remaining;
+            if (!stack.isEmpty() && !FluidStack.isSameFluidSameComponents(stack, input)) return remaining;
+            int room = stack.isEmpty() ? capacity : capacity - stack.getAmount();
+            int filled = Math.min(room, remaining);
+            if (filled <= 0) return remaining;
+            FluidStack transfer = input.copy();
+            transfer.setAmount(filled);
+            transfers.add(new FluidOutputTransfer(handler, transfer));
+            if (stack.isEmpty()) {
+                stack = transfer.copy();
+            } else {
+                stack.grow(filled);
+            }
+            return remaining - filled;
+        }
+    }
 }

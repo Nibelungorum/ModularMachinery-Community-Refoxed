@@ -123,6 +123,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         boolean activeBefore = active != null;
         if (machine == null) bindDefaultMachine();
 
+        // 1.21+ exposes the old strong-power query through SignalGetter's direct signal helper.
         if (level.getDirectSignalTo(getBlockPos()) > 0) {
             if (active != null) {
                 pausedActive = active;
@@ -264,8 +265,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
             RecipeCraftingContext candidate = new RecipeCraftingContext(this);
             lastTried = candidate;
             boolean inputsOk = candidate.simulateInputs(recipe);
+            if (!inputsOk) {
+                continue;
+            }
             boolean outputsOk = candidate.simulateOutputs(recipe);
-            if (!inputsOk || !outputsOk) {
+            if (!outputsOk) {
                 continue;
             }
             ActiveMachineRecipe next = new ActiveMachineRecipe(recipe, 1);

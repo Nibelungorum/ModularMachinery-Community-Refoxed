@@ -48,6 +48,20 @@ class MachineControllerMenuTest {
         assertThat(menu.activeRecipeTotalTick()).isEqualTo(100);
     }
 
+    @Test
+    void client_menu_updates_failure_and_redstone_state_from_synced_data_slots() {
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory());
+
+        assertThat(menu.lastFailureMessage()).isNull();
+        assertThat(menu.isRedstonePaused()).isFalse();
+
+        menu.setData(4, 1);
+        menu.setData(5, 1);
+
+        assertThat(menu.lastFailureMessage()).isEqualTo("gui.mmcr.controller.failure.missing_input");
+        assertThat(menu.isRedstonePaused()).isTrue();
+    }
+
     private static Inventory emptyInventory() {
         return new Inventory(null, null);
     }

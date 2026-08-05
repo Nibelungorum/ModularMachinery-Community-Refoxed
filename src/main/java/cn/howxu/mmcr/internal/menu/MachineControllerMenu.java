@@ -22,6 +22,8 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     private final DataSlot active;
     private final DataSlot activeTick;
     private final DataSlot activeTotalTick;
+    private final DataSlot lastFailure;
+    private final DataSlot redstonePaused;
 
     public MachineControllerMenu(int containerId, Inventory playerInv, MachineControllerBlockEntity owner) {
         super(ModUIs.MACHINE_CONTROLLER.get(), containerId);
@@ -44,6 +46,14 @@ public class MachineControllerMenu extends AbstractMachineMenu {
             @Override public int get() { return owner.getActive() == null ? 0 : owner.getActive().getTotalTick(); }
             @Override public void set(int value) {}
         });
+        this.lastFailure = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
+            @Override public int get() { return failureCode(owner.getLastFailureUnloc()); }
+            @Override public void set(int value) {}
+        });
+        this.redstonePaused = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
+            @Override public int get() { return owner.isRedstonePaused() ? 1 : 0; }
+            @Override public void set(int value) {}
+        });
         addControllerPlayerSlots(playerInv);
     }
 
@@ -56,6 +66,8 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.active = addDataSlot(DataSlot.standalone());
         this.activeTick = addDataSlot(DataSlot.standalone());
         this.activeTotalTick = addDataSlot(DataSlot.standalone());
+        this.lastFailure = addDataSlot(DataSlot.standalone());
+        this.redstonePaused = addDataSlot(DataSlot.standalone());
         addControllerPlayerSlots(playerInv);
     }
 
@@ -115,12 +127,29 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     public @Nullable String lastFailureMessage() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? null : controller.getLastFailureUnloc();
+        if (controller != null && controller.getLastFailureUnloc() != null) return controller.getLastFailureUnloc();
+        return failureKey(lastFailure.get());
     }
 
     public boolean isRedstonePaused() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller != null && controller.isRedstonePaused();
+        return (controller != null && controller.isRedstonePaused()) || redstonePaused.get() != 0;
+    }
+
+    private static int failureCode(@Nullable String key) {
+        if ("gui.mmcr.controller.failure.missing_input".equals(key)) return 1;
+        if ("gui.mmcr.controller.failure.missing_output".equals(key)) return 2;
+        if ("gui.mmcr.controller.failure.missing_energy".equals(key)) return 3;
+        return 0;
+    }
+
+    private static @Nullable String failureKey(int code) {
+        return switch (code) {
+            case 1 -> "gui.mmcr.controller.failure.missing_input";
+            case 2 -> "gui.mmcr.controller.failure.missing_output";
+            case 3 -> "gui.mmcr.controller.failure.missing_energy";
+            default -> null;
+        };
     }
 
     @Override

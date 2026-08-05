@@ -60,6 +60,26 @@ class RecipeCraftingContextTest {
     }
 
     @Test
+    void simulateInputsFailsWhenDuplicateIngredientsExceedCombinedInput() {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
+        bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(5));
+        MachineControllerBlockEntity controller = controllerWithComponents(bus);
+        MachineRecipe recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "duplicate_input"),
+                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                20,
+                List.of(
+                        new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 5),
+                        new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 5)
+                ),
+                List.of()
+        );
+
+        assertThat(new RecipeCraftingContext(controller).simulateInputs(recipe)).isFalse();
+    }
+
+    @Test
     void simulateOutputsReturnsFalseWhenOutputBusHasNoRoom() {
         bindItemComponents(Items.COBBLESTONE);
         bindItemComponents(Items.IRON_INGOT);
@@ -74,6 +94,29 @@ class RecipeCraftingContextTest {
                 20,
                 List.of(),
                 List.of(Items.IRON_INGOT.getDefaultInstance())
+        );
+
+        assertThat(new RecipeCraftingContext(controller).simulateOutputs(recipe)).isFalse();
+    }
+
+    @Test
+    void simulateOutputsFailsWhenDuplicateOutputsExceedCombinedRoom() {
+        bindItemComponents(Items.COBBLESTONE);
+        bindItemComponents(Items.IRON_INGOT);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        for (int slot = 1; slot < output.getItemStackHandler(null).getSlots(); slot++) {
+            output.getItemStackHandler(null).setStackInSlot(slot, Items.COBBLESTONE.getDefaultInstance().copyWithCount(64));
+        }
+        MachineControllerBlockEntity controller = controllerWithComponents(output);
+        MachineRecipe recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "duplicate_output"),
+                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                20,
+                List.of(),
+                List.of(
+                        Items.IRON_INGOT.getDefaultInstance().copyWithCount(64),
+                        Items.IRON_INGOT.getDefaultInstance()
+                )
         );
 
         assertThat(new RecipeCraftingContext(controller).simulateOutputs(recipe)).isFalse();
