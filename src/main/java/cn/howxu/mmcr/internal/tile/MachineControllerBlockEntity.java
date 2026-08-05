@@ -247,7 +247,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         machine = matchedMachine;
         if (!isFormed()) setFormed(true);
         updateComponents();
-        LOG.info("[Ctrl#{}] onStructureFormed: pos={} machine={} facing={}", instanceId, getBlockPos(), matchedMachine.registryName(), facing);
+        ComponentCounts counts = componentCounts();
+        LOG.info("[Ctrl#{}] onStructureFormed: pos={} machine={} facing={} components=itemIn:{} itemOut:{} fluidIn:{} fluidOut:{} energyIn:{} energyOut:{}",
+                instanceId, getBlockPos(), matchedMachine.registryName(), facing,
+                counts.itemInputs(), counts.itemOutputs(), counts.fluidInputs(), counts.fluidOutputs(), counts.energyInputs(), counts.energyOutputs());
         setChanged();
     }
 
@@ -264,6 +267,31 @@ public class MachineControllerBlockEntity extends BlockEntity {
             components.add(new ProcessingComponent(component, container, worldPos, relativePos, foundPattern.tagsAt(relativePos)));
         }
     }
+
+    private ComponentCounts componentCounts() {
+        int itemInputs = 0;
+        int itemOutputs = 0;
+        int fluidInputs = 0;
+        int fluidOutputs = 0;
+        int energyInputs = 0;
+        int energyOutputs = 0;
+        for (ProcessingComponent processingComponent : components) {
+            var component = processingComponent.getComponent();
+            if (component == null || component.kind() == null) continue;
+            switch (component.kind().id()) {
+                case "item_input_bus" -> itemInputs++;
+                case "item_output_bus" -> itemOutputs++;
+                case "fluid_input_hatch" -> fluidInputs++;
+                case "fluid_output_hatch" -> fluidOutputs++;
+                case "energy_input_hatch" -> energyInputs++;
+                case "energy_output_hatch" -> energyOutputs++;
+                default -> { }
+            }
+        }
+        return new ComponentCounts(itemInputs, itemOutputs, fluidInputs, fluidOutputs, energyInputs, energyOutputs);
+    }
+
+    private record ComponentCounts(int itemInputs, int itemOutputs, int fluidInputs, int fluidOutputs, int energyInputs, int energyOutputs) { }
 
     private void resetMachine() {
         boolean wasFormed = isFormed();
