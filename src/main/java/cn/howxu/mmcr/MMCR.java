@@ -3,11 +3,14 @@ package cn.howxu.mmcr;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.command.BuildCommand;
+import cn.howxu.mmcr.internal.command.ExportCommand;
 import cn.howxu.mmcr.internal.command.ReloadCommand;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
+import cn.howxu.mmcr.internal.network.PktMultiblockDetectorPickPayload;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.ModDataComponents;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.registry.ModRecipeTypes;
@@ -41,6 +44,7 @@ public class MMCR {
         BuiltinMachines.register();
         registerGameTestMachineDefinitionsIfPresent();
         MachineDefinitions.bootstrapBuiltins();
+        ModDataComponents.register(modBus);
         ModBlocks.register(modBus);
         ModItems.register(modBus);
         ModBlockEntities.register(modBus);
@@ -53,12 +57,17 @@ public class MMCR {
         NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent ev) -> {
             ReloadCommand.register(ev.getDispatcher());
             BuildCommand.register(ev.getDispatcher());
+            ExportCommand.register(ev.getDispatcher());
         });
         modBus.addListener((RegisterPayloadHandlersEvent ev) -> {
             ev.registrar("1").playToClient(
                     PktMachineStatePayload.TYPE,
                     PktMachineStatePayload.STREAM_CODEC,
-                    PktMachineStatePayload::handle);
+                    PktMachineStatePayload::handle)
+                    .playToServer(
+                            PktMultiblockDetectorPickPayload.TYPE,
+                            PktMultiblockDetectorPickPayload.STREAM_CODEC,
+                            PktMultiblockDetectorPickPayload::handle);
         });
         modBus.addListener((RegisterGameTestsEvent ev) -> registerGameTests(ev));
         CREATIVE_TABS.register(MODID, () -> CreativeModeTab.builder()
