@@ -261,7 +261,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
             var component = tile.provideComponent();
             if (!(tile instanceof BlockEntity container)) continue;
-            components.add(new ProcessingComponent(component, container, worldPos, relativePos, (String) null));
+            components.add(new ProcessingComponent(component, container, worldPos, relativePos, foundPattern.tagsAt(relativePos)));
         }
     }
 

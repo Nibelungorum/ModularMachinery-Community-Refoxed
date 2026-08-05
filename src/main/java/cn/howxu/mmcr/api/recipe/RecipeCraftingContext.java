@@ -25,7 +25,9 @@ import net.neoforged.neoforge.items.IItemHandlerModifiable;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 
 public final class RecipeCraftingContext {
 
@@ -39,6 +41,7 @@ public final class RecipeCraftingContext {
     private List<ItemOutputRoute> itemOutputRoutes = List.of();
     private List<FluidInputRoute> fluidInputRoutes = List.of();
     private List<FluidOutputRoute> fluidOutputRoutes = List.of();
+    private final Map<cn.howxu.mmcr.api.recipe.MachineRequirement, List<?>> routes = new IdentityHashMap<>();
     private @Nullable String lastFailureUnloc;
     private @Nullable RequirementFailure lastRequirementFailure;
 
@@ -106,6 +109,7 @@ public final class RecipeCraftingContext {
     public boolean simulateInputs(MachineRecipe recipe) {
         lastFailureUnloc = null;
         lastRequirementFailure = null;
+        routes.clear();
         List<MachineRequirement> requirements = recipe.requirements();
         itemInputRoutes = emptyItemInputRoutes(requirements.size());
         fluidInputRoutes = emptyFluidInputRoutes(requirements.size());
@@ -339,6 +343,41 @@ public final class RecipeCraftingContext {
             if (available >= Integer.MAX_VALUE) return Integer.MAX_VALUE;
         }
         return (int) available;
+    }
+
+    public List<IEnergyStorage> energyStorages() {
+        return energyStorages(liveEnergyInputs());
+    }
+
+    public String energyComponentSummary() {
+        return liveEnergyInputs().stream()
+                .map(hatch -> hatch.getBlockPos() + ":energy_input_hatch=" + hatch.getEnergyStorage(null).getEnergyStored())
+                .toList()
+                .toString();
+    }
+
+    public List<ProcessingComponent> componentsMatching(cn.howxu.mmcr.api.recipe.MachineRequirement requirement) {
+        var level = controller.getLevel();
+        if (level == null) return List.of();
+
+        List<ProcessingComponent> matches = new ArrayList<>();
+        for (ProcessingComponent component : controller.getComponents()) {
+            if (!requirement.matches(component)) continue;
+            BlockEntity live = level.getBlockEntity(component.getPos());
+            if (live == component.getContainer()) matches.add(component);
+        }
+        return matches;
+    }
+
+    public void route(cn.howxu.mmcr.api.recipe.MachineRequirement requirement, List<?> route) {
+        routes.put(requirement, List.copyOf(route));
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> List<T> route(cn.howxu.mmcr.api.recipe.MachineRequirement requirement, Class<T> type) {
+        List<?> route = routes.get(requirement);
+        if (route == null) return null;
+        return (List<T>) route;
     }
 
     private static List<ItemInputRoute> emptyItemInputRoutes(int size) {

@@ -75,6 +75,16 @@ public final class ProcessingComponent {
         return tags;
     }
 
+    public List<String> getTags() {
+        return tags;
+    }
+
+    public boolean matchesTag(@Nullable String requirementTag) {
+        if (requirementTag == null || requirementTag.isBlank()) return true;
+        if (tags.isEmpty()) return true;
+        return tags.contains(requirementTag);
+    }
+
     public BlockPos getPos() {
         return pos;
     }
