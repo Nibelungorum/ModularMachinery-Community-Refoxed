@@ -1,6 +1,9 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
@@ -490,6 +493,97 @@ class RecipeCraftingContextTest {
         assertThat(tagged.getItemStackHandler(null).getStackInSlot(0).getCount()).isZero();
     }
 
+    @Test
+    void itemRequirementWrongTagRecordsTagMismatchFailure() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemInputBusBlockEntity tagged = itemInputBus(new BlockPos(1, 0, 0));
+        tagged.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(4));
+        MachineControllerBlockEntity controller = controllerWithComponents(tagged);
+        replaceComponents(controller, List.of(new ProcessingComponent(
+                new MachineComponent(PortKinds.ITEM_INPUT, cn.howxu.mmcr.util.IOType.INPUT),
+                tagged,
+                tagged.getBlockPos(),
+                BlockPos.ZERO,
+                List.of("input_a")
+        )));
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "wrong_item_tag",
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 4, ItemStack.EMPTY, List.of("input_b")))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateInputs(recipe)).isFalse();
+        assertThat(context.getLastFailureUnloc()).isEqualTo(RecipeCraftingContext.FAILURE_MISSING_INPUT);
+        assertThat(context.getLastRequirementFailure()).satisfies(failure -> {
+            assertThat(failure.kind()).isEqualTo(RequirementFailure.Kind.TAG_MISMATCH);
+            assertThat(failure.searchedComponents()).isNotEmpty();
+            assertThat(failure.matchedComponents()).isEmpty();
+        });
+    }
+
+    @Test
+    void fluidRequirementWrongTagRecordsTagMismatchFailure() throws Exception {
+        bindFluidComponents(Fluids.WATER);
+        FluidInputHatchBlockEntity tagged = fluidInputHatch(new BlockPos(1, 0, 0));
+        tagged.getFluidTank(null).setFluid(new FluidStack(Fluids.WATER, 1000));
+        MachineControllerBlockEntity controller = controllerWithComponents(tagged);
+        replaceComponents(controller, List.of(new ProcessingComponent(
+                new MachineComponent(PortKinds.FLUID_INPUT, cn.howxu.mmcr.util.IOType.INPUT),
+                tagged,
+                tagged.getBlockPos(),
+                BlockPos.ZERO,
+                List.of("input_a")
+        )));
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "wrong_fluid_tag",
+                List.of(new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1000, FluidStack.EMPTY, List.of("input_b")))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateInputs(recipe)).isFalse();
+        assertThat(context.getLastFailureUnloc()).isEqualTo(RecipeCraftingContext.FAILURE_MISSING_INPUT);
+        assertThat(context.getLastRequirementFailure()).satisfies(failure -> {
+            assertThat(failure.kind()).isEqualTo(RequirementFailure.Kind.TAG_MISMATCH);
+            assertThat(failure.searchedComponents()).isNotEmpty();
+            assertThat(failure.matchedComponents()).isEmpty();
+        });
+    }
+
+    @Test
+    void blockArrayTagsFlowThroughControllerComponentsToRuntimeRoutes() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemInputBusBlockEntity tagged = itemInputBus(new BlockPos(1, 0, 0));
+        tagged.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(4));
+        ItemInputBusBlockEntity other = itemInputBus(new BlockPos(2, 0, 0));
+        other.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(4));
+        MachineControllerBlockEntity controller = controllerWithComponents(tagged, other);
+        setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
+        setField(BlockEntity.class, controller, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
+        BlockArray pattern = new BlockArray(java.util.Map.of(
+                tagged.getBlockPos(), new BlockPredicate.Any(),
+                other.getBlockPos(), new BlockPredicate.Any()
+        )).tagged(tagged.getBlockPos(), "input_a");
+        setField(MachineControllerBlockEntity.class, controller, "foundMachine",
+                new DynamicMachine(Identifier.fromNamespaceAndPath("mmcr", "tagged_structure"), "Tagged Structure", pattern));
+        setField(MachineControllerBlockEntity.class, controller, "foundPattern", pattern);
+        var updateComponents = MachineControllerBlockEntity.class.getDeclaredMethod("updateComponents");
+        updateComponents.setAccessible(true);
+
+        updateComponents.invoke(controller);
+
+        assertThat(controller.getComponents())
+                .anySatisfy(component -> assertThat(component.tags()).containsExactly("input_a"));
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "structure_tagged_input",
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 4, ItemStack.EMPTY, List.of("input_a")))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+        assertThat(context.simulateInputs(recipe)).isTrue();
+        assertThat(context.commitInputs(recipe)).isTrue();
+        assertThat(tagged.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(other.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(4);
+    }
+
     private static ItemInputBusBlockEntity itemInputBus(BlockPos pos) {
         return allocateItemBus(ItemInputBusBlockEntity.class, pos);
     }
@@ -608,6 +702,15 @@ class RecipeCraftingContextTest {
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate MachineControllerBlockEntity for crafting context test", e);
         }
+    }
+
+    private static void replaceComponents(MachineControllerBlockEntity controller, List<ProcessingComponent> replacements) throws Exception {
+        Field components = MachineControllerBlockEntity.class.getDeclaredField("components");
+        components.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        List<ProcessingComponent> list = (List<ProcessingComponent>) components.get(controller);
+        list.clear();
+        list.addAll(replacements);
     }
 
     private static MachineComponent componentFor(BlockEntity port) {

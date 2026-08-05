@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -23,5 +24,19 @@ public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient ite
     @Override
     public String type() {
         return "item";
+    }
+
+    @Override
+    public boolean simulate(RecipeCraftingContext context, int requirementIndex) {
+        return io == RecipeModifier.IOType.INPUT
+                ? context.simulateItemInput(requirementIndex, this)
+                : context.simulateItemOutput(requirementIndex, this);
+    }
+
+    @Override
+    public boolean commit(RecipeCraftingContext context, int requirementIndex) {
+        return io == RecipeModifier.IOType.INPUT
+                ? context.collectItemInputRoute(requirementIndex)
+                : context.collectItemOutputRoute(requirementIndex);
     }
 }
