@@ -14,6 +14,7 @@ import net.minecraft.world.item.crafting.RecipeInput;
 import net.minecraft.world.item.crafting.RecipeSerializer;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.Level;
+import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.Collections;
 import java.util.List;
@@ -27,17 +28,19 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
             Codec.INT.fieldOf("tick_time").forGetter(MachineRecipe::tickTime),
             MachineIngredient.CODEC.listOf().fieldOf("inputs").forGetter(MachineRecipe::inputs),
             ItemStack.CODEC.listOf().fieldOf("outputs").forGetter(MachineRecipe::outputs),
+            FluidStack.CODEC.listOf().optionalFieldOf("fluid_outputs", Collections.emptyList()).forGetter(MachineRecipe::fluidOutputs),
             RecipeModifier.CODEC.listOf().optionalFieldOf("modifiers", Collections.emptyList()).forGetter(MachineRecipe::modifiers),
             Codec.INT.optionalFieldOf("priority", 0).forGetter(MachineRecipe::priority),
             Codec.INT.optionalFieldOf("max_threads", 1).forGetter(MachineRecipe::maxThreads),
             Codec.BOOL.optionalFieldOf("cancelIfPerTickFails", false).forGetter(MachineRecipe::doesCancelRecipeOnPerTickFailure)
-    ).apply(instance, MachineRecipe::new));
+    ).apply(instance, MachineRecipe::create));
 
     private final Identifier id;
     private final Identifier machineId;
     private final int tickTime;
     private final List<MachineIngredient> inputs;
     private final List<ItemStack> outputs;
+    private final List<FluidStack> fluidOutputs;
     private final List<RecipeModifier> modifiers;
     private final int priority;
     private final int maxThreads;
@@ -71,6 +74,19 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                          int priority,
                          int maxThreads,
                          boolean cancelRecipeOnPerTickFailure) {
+        this(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure, Collections.emptyList());
+    }
+
+    public MachineRecipe(Identifier id,
+                         Identifier machineId,
+                         int tickTime,
+                         List<MachineIngredient> inputs,
+                         List<ItemStack> outputs,
+                         List<RecipeModifier> modifiers,
+                         int priority,
+                         int maxThreads,
+                         boolean cancelRecipeOnPerTickFailure,
+                         List<FluidStack> fluidOutputs) {
         if (id == null) {
             throw new IllegalArgumentException("Recipe id must not be null");
         }
@@ -82,10 +98,24 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         this.tickTime = Math.max(1, tickTime);
         this.inputs = inputs == null ? Collections.emptyList() : List.copyOf(inputs);
         this.outputs = outputs == null ? Collections.emptyList() : List.copyOf(outputs);
+        this.fluidOutputs = fluidOutputs == null ? Collections.emptyList() : List.copyOf(fluidOutputs);
         this.modifiers = modifiers == null ? Collections.emptyList() : List.copyOf(modifiers);
         this.priority = priority;
         this.maxThreads = Math.max(1, maxThreads);
         this.cancelRecipeOnPerTickFailure = cancelRecipeOnPerTickFailure;
+    }
+
+    private static MachineRecipe create(Identifier id,
+                                        Identifier machineId,
+                                        int tickTime,
+                                        List<MachineIngredient> inputs,
+                                        List<ItemStack> outputs,
+                                        List<FluidStack> fluidOutputs,
+                                        List<RecipeModifier> modifiers,
+                                        int priority,
+                                        int maxThreads,
+                                        boolean cancelRecipeOnPerTickFailure) {
+        return new MachineRecipe(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure, fluidOutputs);
     }
 
     public Identifier id() {
@@ -106,6 +136,10 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
 
     public List<ItemStack> outputs() {
         return outputs;
+    }
+
+    public List<FluidStack> fluidOutputs() {
+        return fluidOutputs;
     }
 
     public List<RecipeModifier> modifiers() {
@@ -191,12 +225,13 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                 && machineId.equals(that.machineId)
                 && inputs.equals(that.inputs)
                 && outputs.equals(that.outputs)
+                && fluidOutputs.equals(that.fluidOutputs)
                 && modifiers.equals(that.modifiers)
                 && cancelRecipeOnPerTickFailure == that.cancelRecipeOnPerTickFailure;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure);
+        return Objects.hash(id, machineId, tickTime, inputs, outputs, fluidOutputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure);
     }
 }

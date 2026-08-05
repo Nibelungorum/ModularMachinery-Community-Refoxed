@@ -92,6 +92,7 @@ public final class RecipeCraftingContext {
 
     public boolean simulateOutputs(MachineRecipe recipe) {
         itemOutputRoutes = new ArrayList<>();
+        fluidOutputRoutes = new ArrayList<>();
 
         for (ItemStack output : recipe.outputs()) {
             List<BusWithSlots> buses = new ArrayList<>();
@@ -107,6 +108,24 @@ public final class RecipeCraftingContext {
                 return false;
             }
             itemOutputRoutes.add(new ItemOutputRoute(buses, output));
+        }
+
+        for (FluidStack output : recipe.fluidOutputs()) {
+            List<HatchWithTank> hatches = new ArrayList<>();
+            int remaining = output.getAmount();
+            for (FluidOutputHatchBlockEntity hatch : liveComponents(FluidOutputHatchBlockEntity.class)) {
+                IFluidHandler handler = hatch.getFluidHandler(null);
+                hatches.add(new HatchWithTank(handler));
+                if (remaining > 0) {
+                    FluidStack offer = output.copy();
+                    offer.setAmount(remaining);
+                    remaining -= handler.fill(offer, IFluidHandler.FluidAction.SIMULATE);
+                }
+            }
+            if (remaining > 0) {
+                return false;
+            }
+            fluidOutputRoutes.add(new FluidOutputRoute(hatches, output));
         }
         return true;
     }
@@ -172,6 +191,22 @@ public final class RecipeCraftingContext {
                 }
             }
             if (!remaining.isEmpty()) {
+                return false;
+            }
+        }
+
+        List<FluidStack> fluidOutputs = recipe.fluidOutputs();
+        for (int i = 0; i < fluidOutputs.size(); i++) {
+            FluidStack output = fluidOutputs.get(i);
+            FluidOutputRoute route = fluidOutputRoutes.get(i);
+            int remaining = output.getAmount();
+            for (HatchWithTank hatch : route.hatches()) {
+                if (remaining <= 0) break;
+                FluidStack offer = output.copy();
+                offer.setAmount(remaining);
+                remaining -= hatch.handler().fill(offer, IFluidHandler.FluidAction.EXECUTE);
+            }
+            if (remaining > 0) {
                 return false;
             }
         }

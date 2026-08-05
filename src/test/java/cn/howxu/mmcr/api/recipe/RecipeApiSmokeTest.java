@@ -13,8 +13,13 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.RegistryOps;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.material.Fluid;
+import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -64,6 +69,53 @@ class RecipeApiSmokeTest {
         assertThat(back.getRegistryName()).isEqualTo(id);
         assertThat(back.getOwningMachineIdentifier()).isEqualTo(machineId);
         assertThat(back.doesCancelRecipeOnPerTickFailure()).isTrue();
+    }
+
+    @Test
+    void recipe_codec_roundtrip_preserves_fluid_outputs_empty_and_one() {
+        var waterHolder = bindFluidComponents(Fluids.WATER);
+
+        var machineId = Identifier.fromNamespaceAndPath("mmcr", "fluid_outputs_machine");
+
+        var emptyRecipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "fluid_outputs_empty"),
+                machineId, 20,
+                List.of(),
+                List.of(),
+                List.of(), 0, 1, false, List.of()
+        );
+
+        var oneRecipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "fluid_outputs_one"),
+                machineId, 20,
+                List.of(),
+                List.of(),
+                List.of(), 0, 1, false,
+                List.of(new FluidStack(waterHolder, 250))
+        );
+
+        var ops = jsonOps();
+
+        var emptyJson = MachineRecipe.CODEC.codec().encodeStart(ops, emptyRecipe).getOrThrow();
+        assertThat(emptyJson.getAsJsonObject().has("fluid_outputs")).isFalse();
+        var emptyBack = MachineRecipe.CODEC.codec().parse(ops, emptyJson).getOrThrow();
+        assertThat(emptyBack.fluidOutputs()).isEmpty();
+        assertThat(emptyBack).isEqualTo(emptyRecipe);
+
+        var oneJson = MachineRecipe.CODEC.codec().encodeStart(ops, oneRecipe).getOrThrow();
+        var oneBack = MachineRecipe.CODEC.codec().parse(ops, oneJson).getOrThrow();
+        assertThat(oneBack.fluidOutputs()).hasSize(1);
+        assertThat(oneBack.fluidOutputs().getFirst().getFluid()).isEqualTo(Fluids.WATER);
+        assertThat(oneBack.fluidOutputs().getFirst().getAmount()).isEqualTo(250);
+        assertThat(oneBack.id()).isEqualTo(oneRecipe.id());
+        assertThat(oneBack.machineId()).isEqualTo(oneRecipe.machineId());
+        assertThat(oneBack.tickTime()).isEqualTo(oneRecipe.tickTime());
+    }
+
+    private static Holder<Fluid> bindFluidComponents(Fluid fluid) {
+        var holder = fluid.builtInRegistryHolder();
+        holder.bindComponents(DataComponentMap.EMPTY);
+        return holder;
     }
 
     @Test
