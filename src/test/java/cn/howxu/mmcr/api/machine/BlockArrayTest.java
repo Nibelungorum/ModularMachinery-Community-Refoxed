@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SuppressWarnings("deprecation")
 class BlockArrayTest {
@@ -87,6 +88,32 @@ class BlockArrayTest {
         assertThat(arr.get(new BlockPos(-1, 0, -1))).isEqualTo(i);
         assertThat(arr.get(new BlockPos(1, 0, -1))).isEqualTo(i);
         assertThat(arr.get(new BlockPos(0, 0, -1))).isNull();
+    }
+
+    @Test void builder_accepts_arbitrary_width_height_and_depth() {
+        var x = new BlockPredicate.OfBlock(Blocks.STONE);
+        var c = new BlockPredicate.OfBlock(Blocks.DIRT);
+
+        var arr = BlockArray.builder()
+                .pattern("XXXX", "X  X")
+                .pattern("X  X", "XC X")
+                .set('X', x)
+                .set('C', c)
+                .build();
+
+        assertThat(arr.get(BlockPos.ZERO)).isEqualTo(c);
+        assertThat(arr.get(new BlockPos(-1, -1, -1))).isEqualTo(x);
+        assertThat(arr.get(new BlockPos(2, -1, -1))).isEqualTo(x);
+        assertThat(arr.get(new BlockPos(-1, 0, 0))).isEqualTo(x);
+        assertThat(arr.get(new BlockPos(2, 0, 0))).isEqualTo(x);
+        assertThat(arr.get(new BlockPos(0, 0, -1))).isNull();
+    }
+
+    @Test void builder_rejects_pattern_slices_with_inconsistent_row_widths() {
+        assertThatThrownBy(() -> BlockArray.builder()
+                .pattern("XX", "XXX"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("same width");
     }
 
     /**

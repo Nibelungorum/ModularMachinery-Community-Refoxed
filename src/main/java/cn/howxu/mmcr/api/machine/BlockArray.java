@@ -107,33 +107,43 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
      *     .set(' ', new BlockPredicate.Air())
      *     .build();
      * </pre>
-     * 每个字符串 3 个字符;每 3 行为一个俯视 arr,相同 row 的 arr1/arr2/arr3 组成一个 y 层。
+     * 每次 {@code pattern(...)} 调用表示一个 z 切片;切片内 row 映射到 y,字符列映射到 x。
+     * 所有切片必须拥有相同宽度和高度。
      * 字符 ' ' (空格) 或未通过 {@code set(...)} 绑定的字符视作空气(不放入 pattern)。
      */
     public static final class Builder {
         private final LinkedHashMap<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
         private final Map<Character, BlockPredicate> symbols = new LinkedHashMap<>();
-        private List<List<String>> layers = List.of();
+        private List<List<String>> slices = List.of();
+        private int width = -1;
+        private int height = -1;
 
         public Builder pattern(String... rows) {
-            if (rows.length % 3 != 0) {
-                throw new IllegalArgumentException("Rows must be a multiple of 3, got " + rows.length);
+            if (rows.length == 0) {
+                throw new IllegalArgumentException("pattern(...) must contain at least one row");
             }
-            int layerCount = rows.length / 3;
-            java.util.List<List<String>> built = new java.util.ArrayList<>(this.layers.size() + layerCount);
-            built.addAll(this.layers);
-            for (int i = 0; i < layerCount; i++) {
-                String[] triple = new String[3];
-                System.arraycopy(rows, i * 3, triple, 0, 3);
-                List<String> layerRows = List.of(triple[0], triple[1], triple[2]);
-                for (int r = 0; r < 3; r++) {
-                    if (layerRows.get(r).length() != 3) {
-                        throw new IllegalArgumentException("Each row must be exactly 3 chars, got \"" + layerRows.get(r) + "\"");
-                    }
+            int sliceWidth = rows[0].length();
+            if (sliceWidth == 0) {
+                throw new IllegalArgumentException("pattern rows must not be empty");
+            }
+            for (String row : rows) {
+                if (row.length() != sliceWidth) {
+                    throw new IllegalArgumentException("All rows in a pattern slice must have the same width");
                 }
-                built.add(layerRows);
             }
-            this.layers = List.copyOf(built);
+            if (width != -1 && sliceWidth != width) {
+                throw new IllegalArgumentException("All pattern slices must have the same width");
+            }
+            if (height != -1 && rows.length != height) {
+                throw new IllegalArgumentException("All pattern slices must have the same height");
+            }
+
+            width = sliceWidth;
+            height = rows.length;
+            java.util.List<List<String>> built = new java.util.ArrayList<>(this.slices.size() + 1);
+            built.addAll(this.slices);
+            built.add(List.of(rows));
+            this.slices = List.copyOf(built);
             return this;
         }
 
@@ -152,18 +162,21 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
 
         public BlockArray build() {
             entries.clear();
-            if (layers.isEmpty()) {
+            if (slices.isEmpty()) {
                 throw new IllegalStateException("pattern(...) must be provided before build()");
             }
             BlockPos controller = null;
-            int arrCount = layers.size();
-            for (int row = 0; row < 3; row++) {
-                int y = row - 1;
-                for (int arr = 0; arr < arrCount; arr++) {
-                    int z = arr - (arrCount - 1) / 2;
-                    String chars = layers.get(arr).get(row);
-                    for (int col = 0; col < 3; col++) {
-                        int x = col - 1;
+            int depth = slices.size();
+            int xOrigin = width / 2;
+            int yOrigin = height / 2;
+            int zOrigin = depth / 2;
+            for (int row = 0; row < height; row++) {
+                int y = row - yOrigin;
+                for (int slice = 0; slice < depth; slice++) {
+                    int z = slice - zOrigin;
+                    String chars = slices.get(slice).get(row);
+                    for (int col = 0; col < width; col++) {
+                        int x = col - xOrigin;
                         char c = chars.charAt(col);
                         BlockPredicate predicate = symbols.get(c);
                         if (predicate == null) continue; // 空格 / 未注册字符 = 空气,跳过

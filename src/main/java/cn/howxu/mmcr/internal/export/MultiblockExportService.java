@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,37 +56,58 @@ public final class MultiblockExportService {
                         .thenComparing(entry -> entry.blockId().toString()))
                 .toList();
 
-        LinkedHashMap<Identifier, String> variables = new LinkedHashMap<>();
-        for (RenderedEntry entry : rendered) {
-            variables.computeIfAbsent(entry.blockId(), id -> uniqueName(id, variables));
-        }
-
         String newline = System.lineSeparator();
         StringBuilder out = new StringBuilder();
         out.append("import cn.howxu.mmcr.api.machine.BlockArray;").append(newline);
         out.append("import cn.howxu.mmcr.api.machine.BlockPredicate;").append(newline);
-        out.append("import net.minecraft.core.BlockPos;").append(newline);
-        out.append("import net.minecraft.core.registries.BuiltInRegistries;").append(newline);
-        out.append("import net.minecraft.resources.Identifier;").append(newline);
-        out.append("import net.minecraft.world.level.block.Block;").append(newline);
-        out.append("import java.util.LinkedHashMap;").append(newline);
-        out.append("import java.util.Map;").append(newline);
-        out.append(newline);
-        out.append("Map<BlockPos, BlockPredicate> blocks = new LinkedHashMap<>();").append(newline);
-        for (Map.Entry<Identifier, String> variable : variables.entrySet()) {
-            out.append("Block ").append(variable.getValue()).append(" = BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"")
-                    .append(variable.getKey()).append("\")); // ").append(variable.getKey()).append(newline);
+
+        LinkedHashMap<Identifier, Character> symbols = assignSymbols(rendered);
+        boolean usesRegistry = symbols.keySet().stream().anyMatch(id -> !isVanillaConstant(id));
+        boolean usesBlocks = symbols.keySet().stream().anyMatch(MultiblockExportService::isVanillaConstant);
+        if (usesRegistry) {
+            out.append("import net.minecraft.core.registries.BuiltInRegistries;").append(newline);
+            out.append("import net.minecraft.resources.Identifier;").append(newline);
         }
-        for (RenderedEntry entry : rendered) {
-            BlockPos pos = entry.pos();
-            out.append("blocks.put(new BlockPos(")
-                    .append(pos.getX()).append(", ")
-                    .append(pos.getY()).append(", ")
-                    .append(pos.getZ()).append("), new BlockPredicate.OfBlock(")
-                    .append(variables.get(entry.blockId())).append("));")
+        if (usesBlocks) {
+            out.append("import net.minecraft.world.level.block.Blocks;").append(newline);
+        }
+        out.append(newline);
+
+        out.append("BlockArray pattern = BlockArray.builder()").append(newline);
+        if (rendered.isEmpty()) {
+            out.append("        .pattern(\" \")").append(newline);
+        } else {
+            int minX = rendered.stream().mapToInt(entry -> entry.pos().getX()).min().orElse(0);
+            int maxX = rendered.stream().mapToInt(entry -> entry.pos().getX()).max().orElse(0);
+            int minY = rendered.stream().mapToInt(entry -> entry.pos().getY()).min().orElse(0);
+            int maxY = rendered.stream().mapToInt(entry -> entry.pos().getY()).max().orElse(0);
+            int minZ = rendered.stream().mapToInt(entry -> entry.pos().getZ()).min().orElse(0);
+            int maxZ = rendered.stream().mapToInt(entry -> entry.pos().getZ()).max().orElse(0);
+
+            Map<BlockPos, Character> charsByPos = new HashMap<>();
+            for (RenderedEntry entry : rendered) {
+                charsByPos.put(entry.pos(), symbols.get(entry.blockId()));
+            }
+
+            for (int z = minZ; z <= maxZ; z++) {
+                out.append("        .pattern(");
+                for (int y = minY; y <= maxY; y++) {
+                    if (y > minY) out.append(", ");
+                    out.append('"');
+                    for (int x = minX; x <= maxX; x++) {
+                        out.append(charsByPos.getOrDefault(new BlockPos(x, y, z), ' '));
+                    }
+                    out.append('"');
+                }
+                out.append(")").append(newline);
+            }
+        }
+        for (Map.Entry<Identifier, Character> symbol : symbols.entrySet()) {
+            out.append("        .set('").append(symbol.getValue()).append("', ")
+                    .append(predicateExpression(symbol.getKey())).append(")")
                     .append(newline);
         }
-        out.append("BlockArray pattern = new BlockArray(Map.copyOf(blocks));").append(newline);
+        out.append("        .build();").append(newline);
         return out.toString();
     }
 
@@ -107,32 +129,66 @@ public final class MultiblockExportService {
         return path;
     }
 
-    private static String uniqueName(Identifier id, Map<Identifier, String> existing) {
-        String base = sanitize(id.getPath());
-        if (base.isBlank()) base = "block";
-        if (Character.isDigit(base.charAt(0))) base = "block_" + base;
-        String candidate = base;
-        int index = 2;
-        while (existing.containsValue(candidate)) {
-            candidate = base + index;
-            index++;
+    private static LinkedHashMap<Identifier, Character> assignSymbols(List<RenderedEntry> rendered) {
+        LinkedHashMap<Identifier, Character> symbols = new LinkedHashMap<>();
+        Map<Identifier, Integer> counts = new HashMap<>();
+        for (RenderedEntry entry : rendered) {
+            counts.merge(entry.blockId(), 1, Integer::sum);
         }
-        return candidate;
-    }
 
-    private static String sanitize(String path) {
-        StringBuilder out = new StringBuilder(path.length());
-        boolean upperNext = false;
-        for (int i = 0; i < path.length(); i++) {
-            char c = path.charAt(i);
-            if (Character.isLetterOrDigit(c)) {
-                out.append(upperNext ? Character.toUpperCase(c) : c);
-                upperNext = false;
-            } else {
-                upperNext = out.length() > 0;
+        Identifier controller = null;
+        Identifier casing = null;
+        for (Identifier id : counts.keySet()) {
+            String path = id.getPath();
+            if (controller == null && (path.endsWith("_controller") || path.equals("controller"))) {
+                controller = id;
+            }
+            if (casing == null || counts.get(id) > counts.get(casing)) {
+                casing = id;
             }
         }
-        return out.toString();
+
+        if (controller != null) symbols.put(controller, 'C');
+        if (casing != null && !symbols.containsKey(casing)) symbols.put(casing, 'X');
+
+        String available = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        for (RenderedEntry entry : rendered) {
+            if (symbols.containsKey(entry.blockId())) continue;
+            for (int i = 0; i < available.length(); i++) {
+                char c = available.charAt(i);
+                if (c == 'C' || c == 'X' || symbols.containsValue(c)) continue;
+                symbols.put(entry.blockId(), c);
+                break;
+            }
+            if (!symbols.containsKey(entry.blockId())) {
+                throw new IllegalArgumentException("Too many unique blocks to export as single-character pattern symbols");
+            }
+        }
+        return symbols;
+    }
+
+    private static boolean isVanillaConstant(Identifier id) {
+        return "minecraft".equals(id.getNamespace()) && vanillaBlocksConstant(id.getPath()) != null;
+    }
+
+    private static String predicateExpression(Identifier id) {
+        String vanilla = "minecraft".equals(id.getNamespace()) ? vanillaBlocksConstant(id.getPath()) : null;
+        if (vanilla != null) return "new BlockPredicate.OfBlock(Blocks." + vanilla + ")";
+        return "new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"" + id + "\")))";
+    }
+
+    private static String vanillaBlocksConstant(String path) {
+        return switch (path) {
+            case "stone" -> "STONE";
+            case "cobblestone" -> "COBBLESTONE";
+            case "dirt" -> "DIRT";
+            case "oak_planks" -> "OAK_PLANKS";
+            case "glass" -> "GLASS";
+            case "iron_block" -> "IRON_BLOCK";
+            case "gold_block" -> "GOLD_BLOCK";
+            case "diamond_block" -> "DIAMOND_BLOCK";
+            default -> null;
+        };
     }
 
     public record SnapshotEntry(BlockPos offset, Identifier blockId, boolean air) {}
