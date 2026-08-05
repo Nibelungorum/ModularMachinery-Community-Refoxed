@@ -91,6 +91,7 @@ public final class ModelGen extends ModelProvider {
             }
         });
         itemModels.generateFlatItem(ModItems.WRENCH.get(), ModelTemplates.FLAT_ITEM);
+        itemModels.generateFlatItem(ModItems.MULTIBLOCK_DETECTOR.get(), ModelTemplates.FLAT_ITEM);
     }
 
     /** 用 block 注册名生成纹理 Material:modid:block/<name>。每个 block 自带独立贴图。 */
