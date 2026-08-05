@@ -71,10 +71,9 @@ class BlockArrayTest {
         var i = new BlockPredicate.OfBlock(Blocks.OAK_PLANKS);
         var c = new BlockPredicate.OfBlock(Blocks.DIRT);
         var arr = BlockArray.builder()
-                .pattern(
-                        "XXX", "XIX", "XXX",
-                        "XXX", "I I", "XXX",
-                        "XXX", "XCX", "XXX")
+                .pattern("XXX", "XIX", "XXX")
+                .pattern("XXX", "I I", "XXX")
+                .pattern("XXX", "XCX", "XXX")
                 .set('X', x)
                 .set('I', i)
                 .set('C', c)
@@ -157,5 +156,24 @@ class BlockArrayTest {
         assertThat(BlockRotator.rotateYCCWSouthUntil(front, Direction.EAST)).isEqualTo(new BlockPos(1, 0, 0));
         assertThat(BlockRotator.rotateYCCWSouthUntil(left, Direction.WEST)).isEqualTo(new BlockPos(0, 0, -1));
         assertThat(BlockRotator.rotateYCCWSouthUntil(front, Direction.WEST)).isEqualTo(new BlockPos(-1, 0, 0));
+    }
+
+    @Test void tagged_stores_multiple_tags_at_position() {
+        var stone = new BlockPredicate.OfBlock(Blocks.STONE);
+        var arr = new BlockArray(Map.of(new BlockPos(1, 0, 0), stone))
+                .tagged(new BlockPos(1, 0, 0), "input_a", "fast");
+
+        assertThat(arr.tagsAt(new BlockPos(1, 0, 0))).containsExactly("input_a", "fast");
+        assertThat(arr.tagsAt(new BlockPos(0, 0, 0))).isEmpty();
+    }
+
+    @Test void cache_preserves_tags_for_non_zero_relative_position() {
+        BlockArrayCache.clearForTesting();
+        var stone = new BlockPredicate.OfBlock(Blocks.STONE);
+        BlockArray arr = new BlockArray(Map.of(new BlockPos(1, 0, 0), stone))
+                .tagged(new BlockPos(1, 0, 0), "input_a");
+
+        BlockArray rotated = BlockArrayCache.get(arr, Direction.EAST);
+        assertThat(rotated.tagsAt(new BlockPos(0, 0, -1))).contains("input_a");
     }
 }

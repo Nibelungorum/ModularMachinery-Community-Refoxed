@@ -64,10 +64,9 @@ public final class DefaultMachines {
                 new BlockPredicate.OfBlock(energyOutput)));
 
         BlockArray pattern = BlockArray.builder()
-                .pattern(
-                        "XXX", "XIX", "XXX",
-                        "XXX", "I I", "XXX",
-                        "XXX", "XCX", "XXX")
+                .pattern("XXX", "XIX", "XXX")
+                .pattern("XXX", "I I", "XXX")
+                .pattern("XXX", "XCX", "XXX")
                 .set('X', new BlockPredicate.OfBlock(casing))
                 .set('C', new BlockPredicate.OfBlock(controller))
                 .set('I', ioPort)

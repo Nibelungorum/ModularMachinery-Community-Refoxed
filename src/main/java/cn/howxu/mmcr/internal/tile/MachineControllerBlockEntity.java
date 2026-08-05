@@ -216,7 +216,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
             var component = tile.provideComponent();
             if (!(tile instanceof BlockEntity container)) continue;
-            components.add(new ProcessingComponent(component, container, worldPos, relativePos, null));
+            components.add(new ProcessingComponent(component, container, worldPos, relativePos, (String) null));
         }
     }
 
@@ -299,7 +299,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         } else {
             lastFailureUnloc = null;
         }
-        LOG.debug("[Ctrl#{}] tryStartNewRecipe: no compatible recipe among {} candidates; waiting for I/O at pos={}", instanceId, candidates.size(), getBlockPos());
     }
 
     private void tickActiveRecipe() {

@@ -4,6 +4,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -29,7 +30,11 @@ public final class BlockArrayCache {
         for (var entry : key.pattern().pattern().entrySet()) {
             rotated.put(BlockRotator.rotateYCCWSouthUntil(entry.getKey(), key.facing()), entry.getValue());
         }
-        return new BlockArray(Map.copyOf(rotated));
+        Map<BlockPos, List<String>> rotatedTags = new LinkedHashMap<>();
+        for (var entry : key.pattern().tagsByPosition().entrySet()) {
+            rotatedTags.put(BlockRotator.rotateYCCWSouthUntil(entry.getKey(), key.facing()), entry.getValue());
+        }
+        return new BlockArray(Map.copyOf(rotated), Map.copyOf(rotatedTags));
     }
 
     private record Key(BlockArray pattern, Direction facing) {

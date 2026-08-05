@@ -3,15 +3,29 @@ package cn.howxu.mmcr.api.machine;
 import net.minecraft.core.BlockPos;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.ToIntFunction;
 
-public record BlockArray(Map<BlockPos, BlockPredicate> pattern) {
+public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, List<String>> tagsByPosition) {
+
+    public BlockArray(Map<BlockPos, BlockPredicate> pattern) {
+        this(pattern, Map.of());
+    }
+
+    public BlockArray {
+        tagsByPosition = tagsByPosition == null ? Map.of() : Map.copyOf(tagsByPosition);
+    }
 
     public @Nullable BlockPredicate get(BlockPos pos) {
         return pattern.get(pos);
+    }
+
+    public List<String> tagsAt(BlockPos pos) {
+        return tagsByPosition.getOrDefault(pos, List.of());
     }
 
     public boolean isEmpty() {
@@ -43,6 +57,39 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern) {
         return max - min + 1;
     }
 
+    public BlockArray tagged(BlockPos pos, String... tags) {
+        if (tags == null || tags.length == 0) return this;
+        Map<BlockPos, List<String>> merged = new LinkedHashMap<>(tagsByPosition);
+        List<String> existing = merged.getOrDefault(pos, List.of());
+        List<String> combined = new ArrayList<>(existing.size() + tags.length);
+        combined.addAll(existing);
+        for (String tag : tags) {
+            if (tag == null || tag.isEmpty()) continue;
+            if (!combined.contains(tag)) combined.add(tag);
+        }
+        if (combined.equals(existing)) return this;
+        merged.put(pos, Collections.unmodifiableList(combined));
+        return new BlockArray(pattern, merged);
+    }
+
+    public BlockArray withPattern(Map<BlockPos, BlockPredicate> rotated) {
+        return new BlockArray(rotated, rotateTags(rotated.keySet()));
+    }
+
+    private Map<BlockPos, List<String>> rotateTags(java.util.Set<BlockPos> newPositions) {
+        if (tagsByPosition.isEmpty()) return Map.of();
+        Map<BlockPos, BlockPos> inverse = new LinkedHashMap<>();
+        for (BlockPos newPos : newPositions) {
+            if (tagsByPosition.containsKey(newPos)) inverse.put(newPos, newPos);
+        }
+        if (inverse.isEmpty()) return Map.of();
+        Map<BlockPos, List<String>> rotated = new LinkedHashMap<>();
+        for (var entry : inverse.entrySet()) {
+            rotated.put(entry.getKey(), tagsByPosition.getOrDefault(entry.getValue(), List.of()));
+        }
+        return rotated;
+    }
+
     public static Builder builder() {
         return new Builder();
     }
@@ -51,10 +98,9 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern) {
      * 流式构造一个 {@link BlockArray},沿用参考项目的 CraftTweaker / KubeJS 风格:
      * <pre>
      * BlockArray.builder()
-     *     .pattern(
-     *         "XXX", "XIX", "XXX",   // arr1
-     *         "XXX", "I I", "XXX",   // arr2
-     *         "XXX", "XCX", "XXX")   // arr3
+     *     .pattern("XXX", "XIX", "XXX") // arr1
+     *     .pattern("XXX", "I I", "XXX") // arr2
+     *     .pattern("XXX", "XCX", "XXX") // arr3
      *     .set('X', casing)
      *     .set('I', ioPort)
      *     .set('C', controller)
@@ -74,7 +120,8 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern) {
                 throw new IllegalArgumentException("Rows must be a multiple of 3, got " + rows.length);
             }
             int layerCount = rows.length / 3;
-            java.util.List<List<String>> built = new java.util.ArrayList<>(layerCount);
+            java.util.List<List<String>> built = new java.util.ArrayList<>(this.layers.size() + layerCount);
+            built.addAll(this.layers);
             for (int i = 0; i < layerCount; i++) {
                 String[] triple = new String[3];
                 System.arraycopy(rows, i * 3, triple, 0, 3);

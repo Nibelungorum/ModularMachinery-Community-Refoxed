@@ -559,7 +559,7 @@ class RecipeCraftingContextTest {
             list.clear();
             for (net.minecraft.world.level.block.entity.BlockEntity port : ports) {
                 MachineComponent component = componentFor(port);
-                list.add(new ProcessingComponent(component, port, port.getBlockPos(), BlockPos.ZERO, null));
+                list.add(new ProcessingComponent(component, port, port.getBlockPos(), BlockPos.ZERO, (String) null));
             }
             return controller;
         } catch (ReflectiveOperationException e) {
