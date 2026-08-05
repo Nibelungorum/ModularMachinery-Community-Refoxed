@@ -2,16 +2,20 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -101,6 +105,46 @@ class RecipeCraftingContextTest {
     }
 
     @Test
+    void explicitItemInputRequirementRunsWhenLegacyInputsAreEmpty() {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 0, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(2));
+        MachineControllerBlockEntity controller = controllerWithComponents(input);
+        MachineRecipe recipe = explicitItemRecipe(
+                "explicit_input",
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateInputs(recipe)).isTrue();
+        assertThat(context.commitInputs(recipe)).isTrue();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+    }
+
+    @Test
+    void missingItemInputRecordsStructuredRequirementFailure() {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 0, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance());
+        MachineControllerBlockEntity controller = controllerWithComponents(input);
+        MachineRecipe recipe = explicitItemRecipe(
+                "structured_input_failure",
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 3, ItemStack.EMPTY))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateInputs(recipe)).isFalse();
+        assertThat(context.getLastFailureUnloc()).isEqualTo(RecipeCraftingContext.FAILURE_MISSING_INPUT);
+        assertThat(context.getLastRequirementFailure()).satisfies(failure -> {
+            assertThat(failure.requirementIndex()).isZero();
+            assertThat(failure.kind()).isEqualTo(RequirementFailure.Kind.MISSING_INPUT);
+            assertThat(failure.required()).isEqualTo(3);
+            assertThat(failure.available()).isEqualTo(1);
+            assertThat(failure.shortAmount()).isEqualTo(2);
+        });
+    }
+
+    @Test
     void simulateOutputsFailsWhenDuplicateOutputsExceedCombinedRoom() {
         bindItemComponents(Items.COBBLESTONE);
         bindItemComponents(Items.IRON_INGOT);
@@ -145,6 +189,65 @@ class RecipeCraftingContextTest {
     }
 
     @Test
+    void commitOutputsNormalizesLegacyVanillaStacksBeforeCapacityChecks() {
+        bindItemComponents(Items.IRON_NUGGET);
+        ItemStack legacyOutput = new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1);
+        assertThat(legacyOutput.getMaxStackSize()).isEqualTo(1);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        output.getItemStackHandler(null).setStackInSlot(0, legacyOutput.copy());
+        MachineControllerBlockEntity controller = controllerWithComponents(output);
+        MachineRecipe recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "legacy_vanilla_output_stack"),
+                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                20,
+                List.of(),
+                List.of(legacyOutput.copy())
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
+        assertThat(output.getItemStackHandler(null).getStackInSlot(1).isEmpty()).isTrue();
+    }
+
+    @Test
+    void explicitItemOutputRequirementRunsWhenLegacyOutputsAreEmpty() {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerWithComponents(output);
+        MachineRecipe recipe = explicitItemRecipe(
+                "explicit_output",
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(2)))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
+    }
+
+    @Test
+    void commitInputsValidatesAllItemRoutesBeforeMutating() {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemInputBusBlockEntity first = itemInputBus(new BlockPos(1, 0, 0));
+        ItemInputBusBlockEntity second = itemInputBus(new BlockPos(2, 0, 0));
+        first.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(2));
+        second.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(2));
+        MachineControllerBlockEntity controller = controllerWithComponents(first, second);
+        MachineRecipe recipe = explicitItemRecipe(
+                "route_invalidation",
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 4, ItemStack.EMPTY))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateInputs(recipe)).isTrue();
+        second.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
+        assertThat(context.commitInputs(recipe)).isFalse();
+        assertThat(first.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
+    }
+
+    @Test
     void legacyFindAndCheckHelpersStayRemoved() {
         assertThat(Arrays.stream(RecipeCraftingContext.class.getDeclaredMethods())
                 .map(java.lang.reflect.Method::getName)
@@ -162,6 +265,22 @@ class RecipeCraftingContextTest {
 
     private static void bindItemComponents(Item item) {
         item.builtInRegistryHolder().bindComponents(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
+    }
+
+    private static MachineRecipe explicitItemRecipe(String path, List<cn.howxu.mmcr.api.recipe.requirement.MachineRequirement> requirements) {
+        return new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", path),
+                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                20,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                requirements
+        );
     }
 
     @SuppressWarnings({"removal", "unchecked"})

@@ -1,5 +1,8 @@
 package cn.howxu.mmcr.api.recipe.helper;
 
+import cn.howxu.mmcr.api.recipe.RequirementFailure;
+import org.jetbrains.annotations.Nullable;
+
 public final class CraftCheck {
 
     public enum ResultType {
@@ -9,16 +12,22 @@ public final class CraftCheck {
         INVALID_SKIP
     }
 
-    private static final CraftCheck SUCCESS = new CraftCheck(ResultType.SUCCESS, "");
-    private static final CraftCheck PARTIAL_SUCCESS = new CraftCheck(ResultType.PARTIAL_SUCCESS, "");
-    private static final CraftCheck INVALID_SKIP = new CraftCheck(ResultType.INVALID_SKIP, "");
+    private static final CraftCheck SUCCESS = new CraftCheck(ResultType.SUCCESS, "", null);
+    private static final CraftCheck PARTIAL_SUCCESS = new CraftCheck(ResultType.PARTIAL_SUCCESS, "", null);
+    private static final CraftCheck INVALID_SKIP = new CraftCheck(ResultType.INVALID_SKIP, "", null);
 
     private final ResultType type;
     private final String unlocalizedMessage;
+    private final @Nullable RequirementFailure requirementFailure;
 
     protected CraftCheck(ResultType type, String unlocalizedMessage) {
+        this(type, unlocalizedMessage, null);
+    }
+
+    protected CraftCheck(ResultType type, String unlocalizedMessage, @Nullable RequirementFailure requirementFailure) {
         this.type = type;
         this.unlocalizedMessage = unlocalizedMessage;
+        this.requirementFailure = requirementFailure;
     }
 
     public static CraftCheck success() {
@@ -34,7 +43,11 @@ public final class CraftCheck {
     }
 
     public static CraftCheck failure(String unlocMessage) {
-        return new CraftCheck(ResultType.FAILURE_MISSING_INPUT, unlocMessage);
+        return new CraftCheck(ResultType.FAILURE_MISSING_INPUT, unlocMessage, null);
+    }
+
+    public static CraftCheck failure(String unlocMessage, RequirementFailure requirementFailure) {
+        return new CraftCheck(ResultType.FAILURE_MISSING_INPUT, unlocMessage, requirementFailure);
     }
 
     public ResultType getType() {
@@ -43,6 +56,10 @@ public final class CraftCheck {
 
     public String getUnlocalizedMessage() {
         return unlocalizedMessage;
+    }
+
+    public @Nullable RequirementFailure getRequirementFailure() {
+        return requirementFailure;
     }
 
     public boolean isSuccess() {
@@ -57,11 +74,13 @@ public final class CraftCheck {
     public boolean equals(Object obj) {
         if (this == obj) return true;
         if (!(obj instanceof CraftCheck other)) return false;
-        return type == other.type && unlocalizedMessage.equals(other.unlocalizedMessage);
+        return type == other.type
+                && unlocalizedMessage.equals(other.unlocalizedMessage)
+                && java.util.Objects.equals(requirementFailure, other.requirementFailure);
     }
 
     @Override
     public int hashCode() {
-        return 31 * type.hashCode() + unlocalizedMessage.hashCode();
+        return java.util.Objects.hash(type, unlocalizedMessage, requirementFailure);
     }
 }

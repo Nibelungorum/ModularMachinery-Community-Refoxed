@@ -281,6 +281,16 @@ class RecipeApiSmokeTest {
     }
 
     @Test
+    void craft_check_preserves_structured_requirement_failure() {
+        var failure = new RequirementFailure(2, RequirementFailure.Kind.MISSING_OUTPUT, 8, 5);
+
+        var check = CraftCheck.failure("no room", failure);
+
+        assertThat(check.getUnlocalizedMessage()).isEqualTo("no room");
+        assertThat(check.getRequirementFailure()).isEqualTo(failure);
+    }
+
+    @Test
     void crafting_status_reflects_working_and_failure() {
         assertThat(CraftingStatus.working().isCrafting()).isTrue();
         assertThat(CraftingStatus.failure("err").isFailure()).isTrue();
