@@ -54,6 +54,9 @@ jobs:
       - name: Unit Test and GameTest
         run: ./gradlew test --no-daemon
 
+      - name: Gametest Server
+        run: ./gradlew runGameTestServer --no-daemon
+
       - name: Build
         run: ./gradlew build
 

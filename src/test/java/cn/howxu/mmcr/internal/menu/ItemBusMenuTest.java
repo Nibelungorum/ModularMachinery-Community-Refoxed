@@ -55,14 +55,14 @@ class ItemBusMenuTest {
     }
 
     @Test
-    void input_slots_accept_insert_but_reject_manual_pickup() {
+    void input_slots_allow_inserting_and_pickup() {
         bindItemComponents(Items.IRON_INGOT);
         ItemStackHandler handler = new ItemStackHandler(1);
         handler.setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance());
         DirectionalItemSlot slot = new DirectionalItemSlot(handler, 0, 0, 0, IOType.INPUT);
 
         assertThat(slot.mayPlace(Items.IRON_INGOT.getDefaultInstance())).isTrue();
-        assertThat(slot.mayPickup(null)).isFalse();
+        assertThat(slot.mayPickup(null)).isTrue();
     }
 
     @Test
