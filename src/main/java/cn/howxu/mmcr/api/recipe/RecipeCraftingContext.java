@@ -210,20 +210,21 @@ public final class RecipeCraftingContext {
         List<ItemInputTransfer> itemTransfers = new ArrayList<>();
         List<FluidInputTransfer> fluidTransfers = new ArrayList<>();
         List<MachineRequirement> requirements = recipe.requirements();
+        RequirementFailure itemFailure = firstItemInputFailure(requirements);
+        if (itemFailure != null) {
+            setFailure(FAILURE_MISSING_INPUT, itemFailure);
+            return false;
+        }
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT) {
                 ItemInputRoute route = requirementIndex < itemInputRoutes.size() ? itemInputRoutes.get(requirementIndex) : null;
-                if (route == null || !canExtract(route.transfers())) {
-                    setFailure(FAILURE_MISSING_INPUT, itemFailure(requirementIndex, RequirementFailure.Kind.MISSING_INPUT, item.count(), route));
-                    return false;
-                }
-                itemTransfers.addAll(route.transfers());
+                if (route != null) itemTransfers.addAll(route.transfers());
             } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.INPUT) {
                 fluidTransfers.addAll(fluidInputRoutes.get(fluidIdx++).transfers());
             }
         }
-        if (!canExtract(itemTransfers) || !canDrain(fluidTransfers)) {
+        if (!canDrain(fluidTransfers)) {
             setFailure(FAILURE_MISSING_INPUT);
             return false;
         }
@@ -237,20 +238,21 @@ public final class RecipeCraftingContext {
         List<FluidOutputTransfer> fluidTransfers = new ArrayList<>();
         int fluidIdx = 0;
         List<MachineRequirement> requirements = recipe.requirements();
+        RequirementFailure itemFailure = firstItemOutputFailure(requirements);
+        if (itemFailure != null) {
+            setFailure(FAILURE_MISSING_OUTPUT, itemFailure);
+            return false;
+        }
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
                 ItemOutputRoute route = requirementIndex < itemOutputRoutes.size() ? itemOutputRoutes.get(requirementIndex) : null;
-                if (route == null || !canInsert(route.transfers())) {
-                    setFailure(FAILURE_MISSING_OUTPUT, itemFailure(requirementIndex, RequirementFailure.Kind.MISSING_OUTPUT, item.stack().getCount(), route));
-                    return false;
-                }
-                itemTransfers.addAll(route.transfers());
+                if (route != null) itemTransfers.addAll(route.transfers());
             } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT) {
                 fluidTransfers.addAll(fluidOutputRoutes.get(fluidIdx++).transfers());
             }
         }
-        if (!canInsert(itemTransfers) || !canFill(fluidTransfers)) {
+        if (!canFill(fluidTransfers)) {
             setFailure(FAILURE_MISSING_OUTPUT);
             return false;
         }
@@ -294,26 +296,44 @@ public final class RecipeCraftingContext {
         return routes;
     }
 
-    private static RequirementFailure itemFailure(int requirementIndex,
-                                                  RequirementFailure.Kind kind,
-                                                  int required,
-                                                  @Nullable ItemInputRoute route) {
-        int available = 0;
-        if (route != null) {
-            for (ItemInputTransfer transfer : route.transfers()) available += transfer.amount();
+    private @Nullable RequirementFailure firstItemInputFailure(List<MachineRequirement> requirements) {
+        List<ItemInputState> states = new ArrayList<>();
+        for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
+            MachineRequirement requirement = requirements.get(requirementIndex);
+            if (!(requirement instanceof ItemRequirement item) || item.io() != RecipeModifier.IOType.INPUT) continue;
+            ItemInputRoute route = requirementIndex < itemInputRoutes.size() ? itemInputRoutes.get(requirementIndex) : null;
+            if (route == null) return new RequirementFailure(requirementIndex, RequirementFailure.Kind.MISSING_INPUT, item.count(), 0);
+            int available = 0;
+            for (ItemInputTransfer transfer : route.transfers()) {
+                ItemInputState state = itemInputState(states, transfer);
+                int remaining = state.extract(transfer.ingredient(), transfer.amount(), new ArrayList<>());
+                available += transfer.amount() - remaining;
+                if (remaining > 0) {
+                    return new RequirementFailure(requirementIndex, RequirementFailure.Kind.MISSING_INPUT, item.count(), available);
+                }
+            }
         }
-        return new RequirementFailure(requirementIndex, kind, required, available);
+        return null;
     }
 
-    private static RequirementFailure itemFailure(int requirementIndex,
-                                                  RequirementFailure.Kind kind,
-                                                  int required,
-                                                  @Nullable ItemOutputRoute route) {
-        int available = 0;
-        if (route != null) {
-            for (ItemOutputTransfer transfer : route.transfers()) available += transfer.stack().getCount();
+    private @Nullable RequirementFailure firstItemOutputFailure(List<MachineRequirement> requirements) {
+        List<ItemOutputState> states = new ArrayList<>();
+        for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
+            MachineRequirement requirement = requirements.get(requirementIndex);
+            if (!(requirement instanceof ItemRequirement item) || item.io() != RecipeModifier.IOType.OUTPUT) continue;
+            ItemOutputRoute route = requirementIndex < itemOutputRoutes.size() ? itemOutputRoutes.get(requirementIndex) : null;
+            if (route == null) return new RequirementFailure(requirementIndex, RequirementFailure.Kind.MISSING_OUTPUT, item.stack().getCount(), 0);
+            int available = 0;
+            for (ItemOutputTransfer transfer : route.transfers()) {
+                ItemOutputState state = itemOutputState(states, transfer);
+                ItemStack remaining = state.insert(transfer.stack(), new ArrayList<>());
+                available += transfer.stack().getCount() - remaining.getCount();
+                if (!remaining.isEmpty()) {
+                    return new RequirementFailure(requirementIndex, RequirementFailure.Kind.MISSING_OUTPUT, item.stack().getCount(), available);
+                }
+            }
         }
-        return new RequirementFailure(requirementIndex, kind, required, available);
+        return null;
     }
 
     private <T extends BlockEntity> List<T> liveComponents(Class<T> type) {
@@ -375,28 +395,10 @@ public final class RecipeCraftingContext {
         return states;
     }
 
-    private static boolean canExtract(List<ItemInputTransfer> transfers) {
-        List<ItemInputState> states = new ArrayList<>();
-        for (ItemInputTransfer transfer : transfers) {
-            ItemInputState state = itemInputState(states, transfer);
-            if (state.extract(transfer.ingredient(), transfer.amount(), new ArrayList<>()) > 0) return false;
-        }
-        return true;
-    }
-
     private static void extract(List<ItemInputTransfer> transfers) {
         for (ItemInputTransfer transfer : transfers) {
             transfer.handler().extractItem(transfer.slot(), transfer.amount(), false);
         }
-    }
-
-    private static boolean canInsert(List<ItemOutputTransfer> transfers) {
-        List<ItemOutputState> states = new ArrayList<>();
-        for (ItemOutputTransfer transfer : transfers) {
-            ItemOutputState state = itemOutputState(states, transfer);
-            if (!state.insert(transfer.stack(), new ArrayList<>()).isEmpty()) return false;
-        }
-        return true;
     }
 
     private static void insert(List<ItemOutputTransfer> transfers) {

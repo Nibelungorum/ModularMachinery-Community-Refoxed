@@ -299,7 +299,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         } else {
             lastFailureUnloc = null;
         }
-        LOG.info("[Ctrl#{}] tryStartNewRecipe: no compatible recipe among {} candidates; waiting for I/O at pos={}", instanceId, candidates.size(), getBlockPos());
+        LOG.debug("[Ctrl#{}] tryStartNewRecipe: no compatible recipe among {} candidates; waiting for I/O at pos={}", instanceId, candidates.size(), getBlockPos());
     }
 
     private void tickActiveRecipe() {

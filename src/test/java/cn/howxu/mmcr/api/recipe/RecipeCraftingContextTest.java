@@ -122,6 +122,32 @@ class RecipeCraftingContextTest {
     }
 
     @Test
+    void mixedShapeItemInputRuntimeUsesExplicitRequirements() {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 0, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(2));
+        MachineControllerBlockEntity controller = controllerWithComponents(input);
+        MachineRecipe recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "mixed_item_input_runtime"),
+                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                20,
+                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.GOLD_INGOT), 2)),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateInputs(recipe)).isTrue();
+        assertThat(context.commitInputs(recipe)).isTrue();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+    }
+
+    @Test
     void missingItemInputRecordsStructuredRequirementFailure() {
         bindItemComponents(Items.IRON_INGOT);
         ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 0, 0));
