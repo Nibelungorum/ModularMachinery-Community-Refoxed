@@ -54,6 +54,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private Boolean lastBroadcastFormed;
     private boolean lastBroadcastActive;
     private @Nullable String lastFailureUnloc;
+    private boolean redstonePaused;
     private @Nullable ActiveMachineRecipe pausedActive;
     private @Nullable RecipeCraftingContext pausedContext;
 
@@ -100,7 +101,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         this.lastFailureUnloc = key;
     }
 
-    public boolean isRedstonePaused() { return pausedActive != null; }
+    public boolean isRedstonePaused() { return redstonePaused; }
 
     public void applyClientState(String recipeName, boolean formed) {
         if (level == null || !level.isClientSide()) return;
@@ -124,7 +125,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (machine == null) bindDefaultMachine();
 
         // 1.21+ exposes the old strong-power query through SignalGetter's direct signal helper.
-        if (level.getDirectSignalTo(getBlockPos()) > 0) {
+        boolean powered = level.getDirectSignalTo(getBlockPos()) > 0;
+        redstonePaused = powered;
+        if (powered) {
             if (active != null) {
                 pausedActive = active;
                 pausedContext = context;
@@ -136,6 +139,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             setChanged();
             return;
         }
+        redstonePaused = false;
         if (active == null && pausedActive != null) {
             active = pausedActive;
             context = pausedContext;
@@ -233,6 +237,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         pausedActive = null;
         pausedContext = null;
         lastFailureUnloc = null;
+        redstonePaused = false;
         if (wasFormed) setFormed(false);
         if (dropped != null || hadActive) {
             LOG.info("[Ctrl#{}] resetMachine: pos={} dropped={} clearedActiveRecipe={} wasFormed={}", instanceId, getBlockPos(), dropped, activeRecipe, wasFormed);
@@ -303,10 +308,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
             LOG.info("[Ctrl#{}] tickActiveRecipe: recipe {} FINISHED after {} ticks (total {}) at pos={}; slot cleared",
                     instanceId, active.getRecipe().id(), active.getTick(), active.getTotalTick(), getBlockPos());
+            lastFailureUnloc = null;
             active = null;
             context = null;
             setActiveState(false);
         } else if (status == ActiveMachineRecipe.TickStatus.WAITING) {
+            lastFailureUnloc = context.getLastFailureUnloc();
             if (active.getRecipe().doesCancelRecipeOnPerTickFailure()) {
                 LOG.info("[Ctrl#{}] tickActiveRecipe: recipe {} canceled after per-tick failure at pos={}; already consumed inputs are voided",
                         instanceId, active.getRecipe().id(), getBlockPos());
@@ -314,6 +321,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 context = null;
                 setActiveState(false);
             }
+        } else {
+            lastFailureUnloc = null;
         }
         setChanged();
     }
@@ -368,6 +377,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         super.loadAdditional(input);
         pausedActive = null;
         pausedContext = null;
+        redstonePaused = false;
         if (!input.getBooleanOr("has_active", false)) {
             active = null;
             context = null;

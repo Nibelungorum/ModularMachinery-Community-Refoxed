@@ -157,42 +157,42 @@ public final class RecipeCraftingContext {
     public boolean commitInputs(MachineRecipe recipe) {
         int itemIdx = 0;
         int fluidIdx = 0;
+        List<ItemInputTransfer> itemTransfers = new ArrayList<>();
+        List<FluidInputTransfer> fluidTransfers = new ArrayList<>();
         for (MachineIngredient ingredient : recipe.inputs()) {
-            if (ingredient instanceof MachineIngredient.ItemIngredient item) {
-                ItemInputRoute route = itemInputRoutes.get(itemIdx++);
-                if (!canExtract(route.transfers())) {
-                    return false;
-                }
-                extract(route.transfers());
-            } else if (ingredient instanceof MachineIngredient.FluidIngredient fluid) {
-                FluidInputRoute route = fluidInputRoutes.get(fluidIdx++);
-                if (!canDrain(route.transfers())) {
-                    return false;
-                }
-                drain(route.transfers());
+            if (ingredient instanceof MachineIngredient.ItemIngredient) {
+                itemTransfers.addAll(itemInputRoutes.get(itemIdx++).transfers());
+            } else if (ingredient instanceof MachineIngredient.FluidIngredient) {
+                fluidTransfers.addAll(fluidInputRoutes.get(fluidIdx++).transfers());
             }
         }
+        if (!canExtract(itemTransfers) || !canDrain(fluidTransfers)) {
+            setFailure(FAILURE_MISSING_INPUT);
+            return false;
+        }
+        extract(itemTransfers);
+        drain(fluidTransfers);
         return true;
     }
 
     public boolean commitOutputs(MachineRecipe recipe) {
+        List<ItemOutputTransfer> itemTransfers = new ArrayList<>();
         List<ItemStack> outputs = recipe.outputs();
         for (int i = 0; i < outputs.size(); i++) {
-            ItemOutputRoute route = itemOutputRoutes.get(i);
-            if (!canInsert(route.transfers())) {
-                return false;
-            }
-            insert(route.transfers());
+            itemTransfers.addAll(itemOutputRoutes.get(i).transfers());
         }
 
+        List<FluidOutputTransfer> fluidTransfers = new ArrayList<>();
         List<FluidStack> fluidOutputs = recipe.fluidOutputs();
         for (int i = 0; i < fluidOutputs.size(); i++) {
-            FluidOutputRoute route = fluidOutputRoutes.get(i);
-            if (!canFill(route.transfers())) {
-                return false;
-            }
-            fill(route.transfers());
+            fluidTransfers.addAll(fluidOutputRoutes.get(i).transfers());
         }
+        if (!canInsert(itemTransfers) || !canFill(fluidTransfers)) {
+            setFailure(FAILURE_MISSING_OUTPUT);
+            return false;
+        }
+        insert(itemTransfers);
+        fill(fluidTransfers);
         return true;
     }
 
@@ -270,9 +270,10 @@ public final class RecipeCraftingContext {
     }
 
     private static boolean canExtract(List<ItemInputTransfer> transfers) {
+        List<ItemInputState> states = new ArrayList<>();
         for (ItemInputTransfer transfer : transfers) {
-            ItemStack extracted = transfer.handler().extractItem(transfer.slot(), transfer.amount(), true);
-            if (extracted.getCount() < transfer.amount() || !transfer.ingredient().item().test(extracted)) return false;
+            ItemInputState state = itemInputState(states, transfer);
+            if (state.extract(transfer.ingredient(), transfer.amount(), new ArrayList<>()) > 0) return false;
         }
         return true;
     }
@@ -284,8 +285,10 @@ public final class RecipeCraftingContext {
     }
 
     private static boolean canInsert(List<ItemOutputTransfer> transfers) {
+        List<ItemOutputState> states = new ArrayList<>();
         for (ItemOutputTransfer transfer : transfers) {
-            if (!transfer.handler().insertItem(transfer.slot(), transfer.stack(), true).isEmpty()) return false;
+            ItemOutputState state = itemOutputState(states, transfer);
+            if (!state.insert(transfer.stack(), new ArrayList<>()).isEmpty()) return false;
         }
         return true;
     }
@@ -297,8 +300,10 @@ public final class RecipeCraftingContext {
     }
 
     private static boolean canDrain(List<FluidInputTransfer> transfers) {
+        List<FluidInputState> states = new ArrayList<>();
         for (FluidInputTransfer transfer : transfers) {
-            if (transfer.handler().drain(transfer.stack(), IFluidHandler.FluidAction.SIMULATE).getAmount() < transfer.stack().getAmount()) return false;
+            FluidInputState state = fluidInputState(states, transfer);
+            if (state.drain(transfer.stack(), transfer.stack().getAmount(), new ArrayList<>()) > 0) return false;
         }
         return true;
     }
@@ -310,8 +315,10 @@ public final class RecipeCraftingContext {
     }
 
     private static boolean canFill(List<FluidOutputTransfer> transfers) {
+        List<FluidOutputState> states = new ArrayList<>();
         for (FluidOutputTransfer transfer : transfers) {
-            if (transfer.handler().fill(transfer.stack(), IFluidHandler.FluidAction.SIMULATE) < transfer.stack().getAmount()) return false;
+            FluidOutputState state = fluidOutputState(states, transfer);
+            if (state.fill(transfer.stack(), transfer.stack().getAmount(), new ArrayList<>()) > 0) return false;
         }
         return true;
     }
@@ -320,6 +327,44 @@ public final class RecipeCraftingContext {
         for (FluidOutputTransfer transfer : transfers) {
             transfer.handler().fill(transfer.stack(), IFluidHandler.FluidAction.EXECUTE);
         }
+    }
+
+    private static ItemInputState itemInputState(List<ItemInputState> states, ItemInputTransfer transfer) {
+        for (ItemInputState state : states) {
+            if (state.handler == transfer.handler() && state.slot == transfer.slot()) return state;
+        }
+        ItemInputState state = new ItemInputState(transfer.handler(), transfer.slot(), transfer.handler().getStackInSlot(transfer.slot()).copy());
+        states.add(state);
+        return state;
+    }
+
+    private static ItemOutputState itemOutputState(List<ItemOutputState> states, ItemOutputTransfer transfer) {
+        for (ItemOutputState state : states) {
+            if (state.handler == transfer.handler() && state.slot == transfer.slot()) return state;
+        }
+        ItemOutputState state = new ItemOutputState(transfer.handler(), transfer.slot(),
+                transfer.handler().getStackInSlot(transfer.slot()).copy(), transfer.handler().getSlotLimit(transfer.slot()));
+        states.add(state);
+        return state;
+    }
+
+    private static FluidInputState fluidInputState(List<FluidInputState> states, FluidInputTransfer transfer) {
+        for (FluidInputState state : states) {
+            if (state.handler == transfer.handler() && state.tank == transfer.tank()) return state;
+        }
+        FluidInputState state = new FluidInputState(transfer.handler(), transfer.tank(), transfer.handler().getFluidInTank(transfer.tank()).copy());
+        states.add(state);
+        return state;
+    }
+
+    private static FluidOutputState fluidOutputState(List<FluidOutputState> states, FluidOutputTransfer transfer) {
+        for (FluidOutputState state : states) {
+            if (state.handler == transfer.handler() && state.tank == transfer.tank()) return state;
+        }
+        FluidOutputState state = new FluidOutputState(transfer.handler(), transfer.tank(),
+                transfer.handler().getFluidInTank(transfer.tank()).copy(), transfer.handler().getTankCapacity(transfer.tank()));
+        states.add(state);
+        return state;
     }
 
     private record ItemInputRoute(List<ItemInputTransfer> transfers) {}
@@ -334,9 +379,9 @@ public final class RecipeCraftingContext {
 
     private record ItemOutputTransfer(IItemHandler handler, int slot, ItemStack stack) {}
 
-    private record FluidInputTransfer(IFluidHandler handler, FluidStack stack) {}
+    private record FluidInputTransfer(IFluidHandler handler, int tank, FluidStack stack) {}
 
-    private record FluidOutputTransfer(IFluidHandler handler, FluidStack stack) {}
+    private record FluidOutputTransfer(IFluidHandler handler, int tank, FluidStack stack) {}
 
     private static final class ItemInputState {
         private final IItemHandler handler;
@@ -394,20 +439,26 @@ public final class RecipeCraftingContext {
 
     private static final class FluidInputState {
         private final IFluidHandler handler;
+        private final int tank;
         private final FluidStack stack;
 
         private FluidInputState(IFluidHandler handler, int tank, FluidStack stack) {
             this.handler = handler;
+            this.tank = tank;
             this.stack = stack;
         }
 
         private int drain(MachineIngredient.FluidIngredient ingredient, int remaining, List<FluidInputTransfer> transfers) {
-            if (remaining <= 0 || !ingredient.fluid().test(stack)) return remaining;
+            return ingredient.fluid().test(stack) ? drain(stack, remaining, transfers) : remaining;
+        }
+
+        private int drain(FluidStack match, int remaining, List<FluidInputTransfer> transfers) {
+            if (remaining <= 0 || !FluidStack.isSameFluidSameComponents(stack, match)) return remaining;
             int drained = Math.min(remaining, stack.getAmount());
             if (drained <= 0) return remaining;
             FluidStack transfer = stack.copy();
             transfer.setAmount(drained);
-            transfers.add(new FluidInputTransfer(handler, transfer));
+            transfers.add(new FluidInputTransfer(handler, tank, transfer));
             stack.shrink(drained);
             return remaining - drained;
         }
@@ -415,11 +466,13 @@ public final class RecipeCraftingContext {
 
     private static final class FluidOutputState {
         private final IFluidHandler handler;
+        private final int tank;
         private FluidStack stack;
         private final int capacity;
 
         private FluidOutputState(IFluidHandler handler, int tank, FluidStack stack, int capacity) {
             this.handler = handler;
+            this.tank = tank;
             this.stack = stack;
             this.capacity = capacity;
         }
@@ -432,7 +485,7 @@ public final class RecipeCraftingContext {
             if (filled <= 0) return remaining;
             FluidStack transfer = input.copy();
             transfer.setAmount(filled);
-            transfers.add(new FluidOutputTransfer(handler, transfer));
+            transfers.add(new FluidOutputTransfer(handler, tank, transfer));
             if (stack.isEmpty()) {
                 stack = transfer.copy();
             } else {
