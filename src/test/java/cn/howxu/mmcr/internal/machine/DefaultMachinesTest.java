@@ -100,6 +100,35 @@ class DefaultMachinesTest {
     }
 
     @Test
+    void ensureRegistered_registers_default_reactor_once() {
+        DefaultMachines.ensureRegistered();
+        DefaultMachines.ensureRegistered();
+
+        var machine = MachineRegistry.getMachine(MMCR.id("reactor"));
+
+        assertThat(machine).isNotNull();
+        assertThat(machine.localizedName()).isEqualTo("反应堆");
+        assertThat(machine.controller().id()).isEqualTo(MMCR.id("reactor_controller"));
+        assertThat(machine.portRequirements().requirements())
+                .containsKeys(PortKinds.ITEM_INPUT.id(), PortKinds.ITEM_OUTPUT.id(), PortKinds.FLUID_INPUT.id(), PortKinds.FLUID_OUTPUT.id(), PortKinds.ENERGY_OUTPUT.id());
+        assertThat(machine.portRequirements().requirements().get(PortKinds.ITEM_INPUT.id()).min()).isEqualTo(1);
+        assertThat(machine.portRequirements().requirements().get(PortKinds.ITEM_OUTPUT.id()).min()).isEqualTo(1);
+        assertThat(machine.portRequirements().requirements().get(PortKinds.FLUID_INPUT.id()).min()).isEqualTo(1);
+        assertThat(machine.portRequirements().requirements().get(PortKinds.FLUID_OUTPUT.id()).min()).isEqualTo(1);
+        assertThat(machine.portRequirements().requirements().get(PortKinds.ENERGY_OUTPUT.id()).min()).isEqualTo(1);
+        assertThat(machine.pattern().get(BlockPos.ZERO))
+                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine).get()));
+        assertThat(machine.pattern().get(new BlockPos(0, 0, 0)).matches(ModBlocks.controllerFor(machine).get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(ModBlocks.BLOCKS.get("energy_output_hatch").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(net.minecraft.world.level.block.Blocks.BLUE_ICE.defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(0, -1, -6)).matches(net.minecraft.world.level.block.Blocks.REINFORCED_DEEPSLATE.defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(0, -1, 1)).matches(net.minecraft.world.level.block.Blocks.DEEPSLATE_BRICK_STAIRS.defaultBlockState())).isTrue();
+    }
+
+    @Test
     void default_cracker_only_matches_when_controller_faces_vertically() {
         Machine machine = DefaultMachines.cracker(
                 ModBlocks.BLOCKS.get("item_input_bus").get(),

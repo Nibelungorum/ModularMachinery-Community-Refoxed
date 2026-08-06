@@ -60,6 +60,7 @@ public final class TestBootstrap {
         bind(ModBlocks.CASING, Blocks.STONE);
         bind(ModBlocks.controllerFor(MMCR.id("blast_furnace")), Blocks.IRON_BLOCK);
         bind(ModBlocks.controllerFor(id("cracker")), Blocks.IRON_BLOCK);
+        bind(ModBlocks.controllerFor(id("reactor")), Blocks.IRON_BLOCK);
         bind(ModBlocks.controllerFor(id("test_cube")), Blocks.IRON_BLOCK);
         bind(ModBlocks.controllerFor(id("controller_tick")), Blocks.IRON_BLOCK);
         bind(ModBlocks.controllerFor(id("iron_compressor")), Blocks.IRON_BLOCK);

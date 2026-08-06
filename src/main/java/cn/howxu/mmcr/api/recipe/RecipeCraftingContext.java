@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
+import cn.howxu.mmcr.api.recipe.helper.EnergyRecipeIo;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
@@ -385,6 +386,10 @@ public final class RecipeCraftingContext {
         return liveComponents(EnergyHatchBlockEntity.class, IOType.INPUT, List.of());
     }
 
+    private List<EnergyHatchBlockEntity> liveEnergyOutputs() {
+        return liveComponents(EnergyHatchBlockEntity.class, IOType.OUTPUT, List.of());
+    }
+
     private static List<IEnergyStorage> energyStorages(List<EnergyHatchBlockEntity> hatches) {
         return hatches.stream()
                 .map(hatch -> hatch.getEnergyStorage(null))
@@ -408,8 +413,22 @@ public final class RecipeCraftingContext {
         return energyStorages(liveComponents(EnergyHatchBlockEntity.class, IOType.INPUT, requiredTags));
     }
 
+    public List<IEnergyStorage> taggedEnergyOutputs(List<String> requiredTags) {
+        return energyStorages(liveComponents(EnergyHatchBlockEntity.class, IOType.OUTPUT, requiredTags));
+    }
+
     public int taggedAvailableEnergy(List<String> requiredTags) {
         return availableEnergy(liveComponents(EnergyHatchBlockEntity.class, IOType.INPUT, requiredTags));
+    }
+
+    public int taggedAvailableOutputEnergy(List<String> requiredTags) {
+        long available = 0;
+        for (EnergyHatchBlockEntity hatch : liveComponents(EnergyHatchBlockEntity.class, IOType.OUTPUT, requiredTags)) {
+            IEnergyStorage storage = hatch.getEnergyStorage(null);
+            available += (long) storage.getMaxEnergyStored() - storage.getEnergyStored();
+            if (available >= Integer.MAX_VALUE) return Integer.MAX_VALUE;
+        }
+        return (int) available;
     }
 
     public List<String> energyComponentTraces(List<String> requiredTags) {
@@ -420,11 +439,68 @@ public final class RecipeCraftingContext {
         return componentTraces(traces);
     }
 
+    public List<String> energyOutputComponentTraces(List<String> requiredTags) {
+        List<EnergyHatchBlockEntity> matches = liveComponents(EnergyHatchBlockEntity.class, IOType.OUTPUT, requiredTags);
+        List<EnergyHatchBlockEntity> tagExcluded = excludedLiveComponents(EnergyHatchBlockEntity.class, IOType.OUTPUT, requiredTags);
+        List<BlockEntity> traces = new ArrayList<>(matches);
+        traces.addAll(tagExcluded);
+        return componentTraces(traces);
+    }
+
     public String energyComponentSummary() {
         return liveEnergyInputs().stream()
                 .map(hatch -> hatch.getBlockPos() + ":energy_input_hatch=" + hatch.getEnergyStorage(null).getEnergyStored())
                 .toList()
                 .toString();
+    }
+
+    public String energyOutputComponentSummary() {
+        return liveEnergyOutputs().stream()
+                .map(hatch -> hatch.getBlockPos()
+                        + ":energy_output_hatch=stored/max="
+                        + hatch.getEnergyStorage(null).getEnergyStored()
+                        + "/"
+                        + hatch.getEnergyStorage(null).getMaxEnergyStored())
+                .toList()
+                .toString();
+    }
+
+    public boolean simulateEnergyInput(int requirementIndex, EnergyRequirement energy) {
+        if (EnergyRecipeIo.canConsumeInputs(taggedEnergyStorages(energy.tags()), energy.fePerTick(), 1)) return true;
+        long available = taggedAvailableEnergy(energy.tags());
+        setRequirementFailure(FAILURE_MISSING_ENERGY, new RequirementFailure(
+                requirementIndex,
+                RequirementFailure.Kind.MISSING_ENERGY,
+                energy.fePerTick(),
+                available,
+                Math.max(0, (long) energy.fePerTick() - available),
+                energyComponentTraces(energy.tags()),
+                List.of()
+        ));
+        return false;
+    }
+
+    public boolean simulateEnergyOutput(int requirementIndex, EnergyRequirement energy) {
+        if (EnergyRecipeIo.canProduceOutputs(taggedEnergyOutputs(energy.tags()), energy.fePerTick(), 1)) return true;
+        long available = taggedAvailableOutputEnergy(energy.tags());
+        setRequirementFailure(FAILURE_MISSING_OUTPUT, new RequirementFailure(
+                requirementIndex,
+                RequirementFailure.Kind.MISSING_OUTPUT,
+                energy.fePerTick(),
+                available,
+                Math.max(0, (long) energy.fePerTick() - available),
+                energyOutputComponentTraces(energy.tags()),
+                List.of()
+        ));
+        return false;
+    }
+
+    public boolean collectEnergyInputRoute(int requirementIndex) {
+        return true;
+    }
+
+    public boolean collectEnergyOutputRoute(int requirementIndex) {
+        return true;
     }
 
     private static List<ItemInputRoute> emptyItemInputRoutes(int size) {

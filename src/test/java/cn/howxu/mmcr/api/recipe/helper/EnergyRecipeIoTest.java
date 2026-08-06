@@ -55,10 +55,69 @@ class EnergyRecipeIoTest {
         assertThat(second.getEnergyStored()).isEqualTo(500);
     }
 
+    @Test
+    void produceOutputsSingleHatchWithCapacityReceivesRequiredFe() {
+        EnergyStorage hatch = emptyStorage(1_000, 500);
+
+        boolean produced = EnergyRecipeIo.produceOutputs(List.of(hatch), 200, 1);
+
+        assertThat(produced).isTrue();
+        assertThat(hatch.getEnergyStored()).isEqualTo(200);
+    }
+
+    @Test
+    void produceOutputsMultipleHatchesCanSatisfyOneTickTogether() {
+        EnergyStorage first = emptyStorage(150, 150);
+        EnergyStorage second = emptyStorage(150, 150);
+
+        boolean produced = EnergyRecipeIo.produceOutputs(List.of(first, second), 200, 1);
+
+        assertThat(produced).isTrue();
+        assertThat(first.getEnergyStored()).isEqualTo(150);
+        assertThat(second.getEnergyStored()).isEqualTo(50);
+    }
+
+    @Test
+    void insufficientOutputCapacityFailsWithoutMutation() {
+        EnergyStorage first = emptyStorage(50, 50);
+        EnergyStorage second = emptyStorage(50, 50);
+
+        boolean produced = EnergyRecipeIo.produceOutputs(List.of(first, second), 200, 1);
+
+        assertThat(produced).isFalse();
+        assertThat(first.getEnergyStored()).isZero();
+        assertThat(second.getEnergyStored()).isZero();
+    }
+
+    @Test
+    void canProduceOutputsDoesNotMutateStorage() {
+        EnergyStorage hatch = emptyStorage(1_000, 500);
+
+        boolean canProduce = EnergyRecipeIo.canProduceOutputs(List.of(hatch), 200, 1);
+
+        assertThat(canProduce).isTrue();
+        assertThat(hatch.getEnergyStored()).isZero();
+    }
+
+    @Test
+    void produceOutputsMultiplierScalesRequiredEnergy() {
+        EnergyStorage first = emptyStorage(500, 500);
+        EnergyStorage second = emptyStorage(500, 500);
+
+        boolean produced = EnergyRecipeIo.produceOutputs(List.of(first, second), 200, 3);
+
+        assertThat(produced).isTrue();
+        assertThat(first.getEnergyStored() + second.getEnergyStored()).isEqualTo(600);
+    }
+
     private static EnergyStorage chargedStorage(int capacity, int maxExtract, int inserted) {
         EnergyStorage storage = new EnergyStorage(capacity, capacity, maxExtract);
         storage.receiveEnergy(inserted, false);
         assertThat(storage.getEnergyStored()).isEqualTo(inserted);
         return storage;
+    }
+
+    private static EnergyStorage emptyStorage(int capacity, int maxReceive) {
+        return new EnergyStorage(capacity, maxReceive, capacity);
     }
 }

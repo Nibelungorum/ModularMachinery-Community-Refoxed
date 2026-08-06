@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.recipe;
 
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.DynamicOps;
@@ -28,6 +29,7 @@ public sealed interface MachineIngredient {
         }
         if (ingredient instanceof EnergyIngredient energy) {
             return builder
+                    .add("io", ops.createString(energy.io().getKey()))
                     .add("fe_per_tick", ops.createInt(energy.fePerTick()))
                     .build(prefix);
         }
@@ -53,9 +55,17 @@ public sealed interface MachineIngredient {
                     .flatMap(fluid -> ops.get(input, "amount")
                             .flatMap(ops::getNumberValue)
                             .map(amount -> new FluidIngredient(fluid, amount.intValue())));
-            case "energy" -> ops.get(input, "fe_per_tick")
-                    .flatMap(ops::getNumberValue)
-                    .map(fePerTick -> new EnergyIngredient(fePerTick.intValue()));
+            case "energy" -> {
+                RecipeModifier.IOType io = ops.get(input, "io")
+                        .flatMap(ops::getStringValue)
+                        .map(RecipeModifier.IOType::byKey)
+                        .map(t -> t == null ? RecipeModifier.IOType.INPUT : t)
+                        .result()
+                        .orElse(RecipeModifier.IOType.INPUT);
+                yield ops.get(input, "fe_per_tick")
+                        .flatMap(ops::getNumberValue)
+                        .map(fePerTick -> new EnergyIngredient(io, fePerTick.intValue()));
+            }
             default -> DataResult.error(() -> "Unknown ingredient type: " + type);
         };
     }
@@ -72,7 +82,15 @@ public sealed interface MachineIngredient {
         }
     }
 
-    record EnergyIngredient(int fePerTick) implements MachineIngredient {
+    record EnergyIngredient(RecipeModifier.IOType io, int fePerTick) implements MachineIngredient {
+        public EnergyIngredient(int fePerTick) {
+            this(RecipeModifier.IOType.INPUT, fePerTick);
+        }
+
+        public EnergyIngredient {
+            if (io == null) io = RecipeModifier.IOType.INPUT;
+        }
+
         @Override public String type() {
             return "energy";
         }

@@ -49,6 +49,35 @@ class MachineIngredientCodecTest {
         assertThat(back).isEqualTo(ing);
     }
 
+    @Test void energyIngredient_default_io_is_input() {
+        var ing = new MachineIngredient.EnergyIngredient(100);
+
+        assertThat(ing.io()).isEqualTo(RecipeModifier.IOType.INPUT);
+        assertThat(ing.fePerTick()).isEqualTo(100);
+    }
+
+    @Test void energyIngredient_roundtrip_preserves_output_io() {
+        var ing = new MachineIngredient.EnergyIngredient(RecipeModifier.IOType.OUTPUT, 150);
+
+        var json = MachineIngredient.CODEC.encodeStart(jsonOps(), ing).getOrThrow();
+        var back = MachineIngredient.CODEC.parse(jsonOps(), json).getOrThrow();
+
+        assertThat(back).isEqualTo(ing);
+    }
+
+    @Test void energyIngredient_codec_defaults_missing_io_to_input() {
+        var json = new com.google.gson.JsonObject();
+        json.addProperty("type", "energy");
+        json.addProperty("fe_per_tick", 80);
+
+        var parsed = MachineIngredient.CODEC.parse(jsonOps(), json).getOrThrow();
+
+        assertThat(parsed).isInstanceOfSatisfying(MachineIngredient.EnergyIngredient.class, energy -> {
+            assertThat(energy.io()).isEqualTo(RecipeModifier.IOType.INPUT);
+            assertThat(energy.fePerTick()).isEqualTo(80);
+        });
+    }
+
     @Test void fluidIngredient_roundtrip_water() {
         var ing = new MachineIngredient.FluidIngredient(FluidIngredient.of(Fluids.WATER), 1000);
         var json = MachineIngredient.CODEC.encodeStart(jsonOps(), ing).getOrThrow();
@@ -88,6 +117,41 @@ class MachineIngredientCodecTest {
         var back = MachineRequirement.CODEC.parse(jsonOps(), json).getOrThrow();
 
         assertThat(back).isEqualTo(requirement);
+    }
+
+    @Test void energyRequirement_roundtrip_preserves_output_io_and_tags() {
+        var requirement = new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 120, List.of("top"));
+
+        var json = MachineRequirement.CODEC.encodeStart(jsonOps(), requirement).getOrThrow();
+        var back = MachineRequirement.CODEC.parse(jsonOps(), json).getOrThrow();
+
+        assertThat(back).isEqualTo(requirement);
+    }
+
+    @Test void energyRequirement_codec_defaults_missing_io_to_input() {
+        var json = new com.google.gson.JsonObject();
+        json.addProperty("type", "energy");
+        json.addProperty("fe_per_tick", 90);
+
+        var parsed = MachineRequirement.CODEC.parse(jsonOps(), json).getOrThrow();
+
+        assertThat(parsed).isInstanceOfSatisfying(EnergyRequirement.class, energy -> {
+            assertThat(energy.io()).isEqualTo(RecipeModifier.IOType.INPUT);
+            assertThat(energy.fePerTick()).isEqualTo(90);
+        });
+    }
+
+    @Test void machineRecipe_inputs_excludes_output_energy_and_energyOutputs_exposes_it() {
+        var recipe = new MachineRecipe(
+                net.minecraft.resources.Identifier.parse("mmcr:test_energy_output"),
+                net.minecraft.resources.Identifier.parse("mmcr:test_machine"),
+                20,
+                List.of(new MachineIngredient.EnergyIngredient(RecipeModifier.IOType.OUTPUT, 100)),
+                List.of()
+        );
+
+        assertThat(recipe.inputs()).isEmpty();
+        assertThat(recipe.energyOutputs()).containsExactly(100);
     }
 
     private static DynamicOps<JsonElement> jsonOps() {

@@ -15,6 +15,7 @@ public final class BuiltinMachines {
 
     private static final Identifier BLAST_FURNACE_ID = MMCR.id("blast_furnace");
     private static final Identifier CRACKER_ID = MMCR.id("cracker");
+    private static final Identifier REACTOR_ID = MMCR.id("reactor");
 
     private BuiltinMachines() {
     }
@@ -49,6 +50,19 @@ public final class BuiltinMachines {
                     true,
                     true);
             return new DynamicMachine(CRACKER_ID, "裂化器", new BlockArray(java.util.Map.of()), controller);
+        });
+        MachineDefinitions.addBuiltinSupplier(() -> {
+            MachineControllerSpec defaults = MachineControllerSpec.defaultsFor(REACTOR_ID);
+            MachineControllerSpec controller = new MachineControllerSpec(
+                    defaults.id(),
+                    defaults.frontTexture(),
+                    defaults.sideTexture(),
+                    defaults.topTexture(),
+                    defaults.bottomTexture(),
+                    false,
+                    false,
+                    false);
+            return new DynamicMachine(REACTOR_ID, "反应堆", new BlockArray(java.util.Map.of()), controller);
         });
     }
 }

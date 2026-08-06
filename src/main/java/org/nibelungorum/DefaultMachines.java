@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Block;
@@ -30,6 +31,7 @@ public final class DefaultMachines {
 
     private static final Identifier BLAST_FURNACE_ID = MMCR.id("blast_furnace");
     private static final Identifier CRACKER_ID = MMCR.id("cracker");
+    private static final Identifier REACTOR_ID = MMCR.id("reactor");
 
     private DefaultMachines() {
     }
@@ -51,6 +53,14 @@ public final class DefaultMachines {
             Block fluidOutput = ModBlocks.BLOCKS.get("fluid_output_hatch").get();
             Block energyInput = ModBlocks.BLOCKS.get("energy_input_hatch").get();
             MachineRegistry.register(cracker(itemInput, itemOutput, fluidOutput, energyInput));
+        }
+        if (MachineRegistry.getMachine(REACTOR_ID) == null) {
+            Block itemInput = ModBlocks.BLOCKS.get("item_input_bus").get();
+            Block itemOutput = ModBlocks.BLOCKS.get("item_output_bus").get();
+            Block fluidInput = ModBlocks.BLOCKS.get("fluid_input_hatch").get();
+            Block fluidOutput = ModBlocks.BLOCKS.get("fluid_output_hatch").get();
+            Block energyOutput = ModBlocks.BLOCKS.get("energy_output_hatch").get();
+            MachineRegistry.register(reactor(itemInput, itemOutput, fluidInput, fluidOutput, energyOutput));
         }
     }
 
@@ -135,5 +145,57 @@ public final class DefaultMachines {
         return definition == null
                 ? new DynamicMachine(CRACKER_ID, "裂化器", pattern, controllerSpec, portRequirements)
                 : new DynamicMachine(CRACKER_ID, "裂化器", pattern, controllerSpec, portRequirements);
+    }
+
+    public static Machine reactor(Block itemInput, Block itemOutput, Block fluidInput, Block fluidOutput, Block energyOutput) {
+        Block controller = ModBlocks.controllerFor(REACTOR_ID).get();
+        BlockPredicate optionalSlot = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(Blocks.BLUE_ICE),
+                new BlockPredicate.OfBlock(itemInput),
+                new BlockPredicate.OfBlock(itemOutput),
+                new BlockPredicate.OfBlock(fluidInput),
+                new BlockPredicate.OfBlock(fluidOutput),
+                new BlockPredicate.OfBlock(energyOutput)));
+
+        BlockArray pattern = BlockArray.builder()
+                .pattern("  AAAAA  ", "         ", "         ", "         ", "         ", "         ", "         ", "         ")
+                .pattern(" AAXXXAA ", "   DDD   ", "         ", "         ", "         ", "         ", "         ", "         ")
+                .pattern("AAXXXXXAA", "  EFFFE  ", "  EFFFE  ", "  EFFFE  ", "  JJJJJ  ", "         ", "         ", "         ")
+                .pattern("AXXXXXXXA", " DFGHGFD ", "  FGHGF  ", "  FGHGF  ", "  JXXXJ  ", "   KKK   ", "         ", "         ")
+                .pattern("AXXXXXXXA", " DFHXHFD ", "  FHXHF  ", "  FHXHF  ", "  JXXXJ  ", "   KLK   ", "    L    ", "    M    ")
+                .pattern("AXXXXXXXA", " DFGHGFD ", "  FGHGF  ", "  FGHGF  ", "  JXXXJ  ", "   KKK   ", "         ", "         ")
+                .pattern("AAXXXXXAA", "  EFFFE  ", "  EFFFE  ", "  EFFFE  ", "  JJJJJ  ", "         ", "         ", "         ")
+                .pattern(" AAXXXAA ", "   DID   ", "         ", "         ", "         ", "         ", "         ", "         ")
+                .pattern("  AAAAA  ", "         ", "         ", "         ", "         ", "         ", "         ", "         ")
+                .set('X', new BlockPredicate.OfBlock(Blocks.REINFORCED_DEEPSLATE))
+                .set('A', new BlockPredicate.OfBlock(Blocks.DEEPSLATE_BRICK_STAIRS))
+                .set('D', optionalSlot)
+                .set('E', new BlockPredicate.OfBlock(Blocks.POLISHED_DEEPSLATE))
+                .set('F', new BlockPredicate.OfBlock(Blocks.BLACK_STAINED_GLASS))
+                .set('G', block("oritech:uranium"))
+                .set('H', block("oritech:energite"))
+                .set('I', new BlockPredicate.OfBlock(controller))
+                .set('J', new BlockPredicate.OfBlock(Blocks.POLISHED_DEEPSLATE_STAIRS))
+                .set('K', new BlockPredicate.OfBlock(Blocks.DEEPSLATE_BRICK_SLAB))
+                .set('L', new BlockPredicate.OfBlock(Blocks.DEEPSLATE_TILES))
+                .set('M', block("minecraft:oxidized_lightning_rod"))
+                .controller('I')
+                .build();
+
+        PortRequirementSpec portRequirements = PortRequirementSpec.builder()
+                .min(PortKinds.FLUID_INPUT.id(), 1)
+                .min(PortKinds.FLUID_OUTPUT.id(), 1)
+                .min(PortKinds.ENERGY_OUTPUT.id(), 1)
+                .min(PortKinds.ITEM_OUTPUT.id(), 1)
+                .min(PortKinds.ITEM_INPUT.id(), 1)
+                .build();
+        Machine definition = MachineDefinitions.get(REACTOR_ID);
+        return definition == null
+                ? new DynamicMachine(REACTOR_ID, "反应堆", pattern, MachineControllerSpec.defaultsFor(REACTOR_ID), portRequirements)
+                : new DynamicMachine(REACTOR_ID, "反应堆", pattern, MachineControllerSpec.defaultsFor(REACTOR_ID), portRequirements);
+    }
+
+    private static BlockPredicate block(String id) {
+        return new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(id)));
     }
 }

@@ -50,6 +50,31 @@ public final class EnergyRecipeIo {
         return false;
     }
 
+    public static boolean produceOutputs(List<? extends IEnergyStorage> outputs, int producedFe, int multiplier) {
+        if (!canProduceOutputs(outputs, producedFe, multiplier)) return false;
+        int remaining = totalRequired(producedFe, multiplier);
+        for (IEnergyStorage output : outputs) {
+            if (output == null) continue;
+            remaining -= output.receiveEnergy(remaining, false);
+            if (remaining <= 0) return true;
+        }
+        return remaining <= 0;
+    }
+
+    public static boolean canProduceOutputs(List<? extends IEnergyStorage> outputs, int producedFe, int multiplier) {
+        int produced = totalRequired(producedFe, multiplier);
+        if (produced <= 0) return true;
+        if (outputs == null || outputs.isEmpty()) return false;
+
+        int available = 0;
+        for (IEnergyStorage output : outputs) {
+            if (output == null) continue;
+            available += output.receiveEnergy(produced - available, true);
+            if (available >= produced) return true;
+        }
+        return false;
+    }
+
     private static int totalRequired(int requiredFe, int multiplier) {
         if (requiredFe <= 0 || multiplier <= 0) return 0;
         long required = (long) requiredFe * multiplier;

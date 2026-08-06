@@ -45,7 +45,7 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
             return new FluidRequirement(RecipeModifier.IOType.INPUT, fluid.fluid(), fluid.amount(), FluidStack.EMPTY);
         }
         if (ingredient instanceof MachineIngredient.EnergyIngredient energy) {
-            return new EnergyRequirement(energy.fePerTick());
+            return new EnergyRequirement(energy.io(), energy.fePerTick());
         }
         throw new IllegalArgumentException("Unknown machine ingredient: " + ingredient);
     }
@@ -104,9 +104,18 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
         return switch (type) {
             case "item" -> decodeItem(ops, input);
             case "fluid" -> decodeFluid(ops, input);
-            case "energy" -> ops.get(input, "fe_per_tick")
-                    .flatMap(ops::getNumberValue)
-                    .map(fePerTick -> new EnergyRequirement(fePerTick.intValue()));
+            case "energy" -> {
+                RecipeModifier.IOType io = ops.get(input, "io")
+                        .flatMap(value -> ops.getStringValue(value))
+                        .map(RecipeModifier.IOType::byKey)
+                        .map(t -> t == null ? RecipeModifier.IOType.INPUT : t)
+                        .result()
+                        .orElse(RecipeModifier.IOType.INPUT);
+                List<String> tags = decodeTags(ops, input);
+                yield ops.get(input, "fe_per_tick")
+                        .flatMap(ops::getNumberValue)
+                        .<MachineRequirement>map(fePerTick -> new EnergyRequirement(io, fePerTick.intValue(), tags));
+            }
             default -> DataResult.error(() -> "Unknown requirement type: " + type);
         };
     }

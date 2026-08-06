@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
-import cn.howxu.mmcr.api.recipe.RequirementFailure;
 import cn.howxu.mmcr.api.recipe.helper.EnergyRecipeIo;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 
@@ -10,13 +9,22 @@ import java.util.List;
 /**
  * @author howxu <dev@howxu.cn>
  */
-public record EnergyRequirement(int fePerTick, List<String> tags) implements MachineRequirement {
+public record EnergyRequirement(RecipeModifier.IOType io, int fePerTick, List<String> tags) implements MachineRequirement {
 
     public EnergyRequirement(int fePerTick) {
-        this(fePerTick, List.of());
+        this(RecipeModifier.IOType.INPUT, fePerTick, List.of());
+    }
+
+    public EnergyRequirement(int fePerTick, List<String> tags) {
+        this(RecipeModifier.IOType.INPUT, fePerTick, tags);
+    }
+
+    public EnergyRequirement(RecipeModifier.IOType io, int fePerTick) {
+        this(io, fePerTick, List.of());
     }
 
     public EnergyRequirement {
+        if (io == null) io = RecipeModifier.IOType.INPUT;
         tags = tags == null ? List.of() : List.copyOf(tags);
     }
 
@@ -27,43 +35,30 @@ public record EnergyRequirement(int fePerTick, List<String> tags) implements Mac
 
     @Override
     public RecipeModifier.IOType io() {
-        return RecipeModifier.IOType.INPUT;
+        return io;
     }
 
     @Override
     public boolean simulate(RecipeCraftingContext context, int requirementIndex) {
-        if (EnergyRecipeIo.canConsumeInputs(context.taggedEnergyStorages(tags), fePerTick, 1)) return true;
-        long available = context.taggedAvailableEnergy(tags);
-        context.setRequirementFailure(RecipeCraftingContext.FAILURE_MISSING_ENERGY, new RequirementFailure(
-                requirementIndex,
-                RequirementFailure.Kind.MISSING_ENERGY,
-                fePerTick,
-                available,
-                Math.max(0, fePerTick - available),
-                context.energyComponentTraces(tags),
-                List.of()
-        ));
-        return false;
+        return io == RecipeModifier.IOType.INPUT
+                ? context.simulateEnergyInput(requirementIndex, this)
+                : context.simulateEnergyOutput(requirementIndex, this);
     }
 
     @Override
     public boolean commit(RecipeCraftingContext context, int requirementIndex) {
-        return true;
+        return io == RecipeModifier.IOType.INPUT
+                ? context.collectEnergyInputRoute(requirementIndex)
+                : context.collectEnergyOutputRoute(requirementIndex);
     }
 
     @Override
     public boolean ioTick(RecipeCraftingContext context, int requirementIndex) {
-        if (EnergyRecipeIo.consumeInputs(context.taggedEnergyStorages(tags), fePerTick, 1)) return true;
-        long available = context.taggedAvailableEnergy(tags);
-        context.setRequirementFailure(RecipeCraftingContext.FAILURE_MISSING_ENERGY, new RequirementFailure(
-                requirementIndex,
-                RequirementFailure.Kind.MISSING_ENERGY,
-                fePerTick,
-                available,
-                Math.max(0, fePerTick - available),
-                context.energyComponentTraces(tags),
-                List.of()
-        ));
-        return false;
+        if (io == RecipeModifier.IOType.INPUT) {
+            if (EnergyRecipeIo.consumeInputs(context.taggedEnergyStorages(tags), fePerTick, 1)) return true;
+            return context.simulateEnergyInput(requirementIndex, this);
+        }
+        if (EnergyRecipeIo.produceOutputs(context.taggedEnergyOutputs(tags), fePerTick, 1)) return true;
+        return context.simulateEnergyOutput(requirementIndex, this);
     }
 }

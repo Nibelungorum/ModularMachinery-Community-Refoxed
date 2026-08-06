@@ -170,7 +170,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                 inputs.add(new MachineIngredient.ItemIngredient(item.item(), item.count()));
             } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.INPUT) {
                 inputs.add(new MachineIngredient.FluidIngredient(fluid.fluid(), fluid.amount()));
-            } else if (requirement instanceof EnergyRequirement energy) {
+            } else if (requirement instanceof EnergyRequirement energy && energy.io() == RecipeModifier.IOType.INPUT) {
                 inputs.add(new MachineIngredient.EnergyIngredient(energy.fePerTick()));
             }
         }
@@ -204,6 +204,16 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                 outputs.add(new MachineOutput.ItemOutput(item.stack(), item.chance()));
             } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT) {
                 outputs.add(new MachineOutput.FluidOutput(fluid.stack(), fluid.chance()));
+            }
+        }
+        return List.copyOf(outputs);
+    }
+
+    public List<Integer> energyOutputs() {
+        List<Integer> outputs = new ArrayList<>();
+        for (MachineRequirement requirement : requirements) {
+            if (requirement instanceof EnergyRequirement energy && energy.io() == RecipeModifier.IOType.OUTPUT) {
+                outputs.add(energy.fePerTick());
             }
         }
         return List.copyOf(outputs);

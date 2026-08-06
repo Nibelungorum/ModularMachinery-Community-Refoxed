@@ -5,6 +5,8 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
@@ -89,11 +91,48 @@ class DefaultRecipesTest {
     }
 
     @Test
+    void ensureRegistered_publishes_builtin_reactor_recipe() {
+        DefaultMachines.ensureRegistered();
+        DefaultRecipes.ensureRegistered();
+
+        var machine = (DynamicMachine) MachineRegistry.getMachine(MMCR.id("reactor"));
+
+        assertThat(machine).isNotNull();
+        var recipes = RecipeRegistry.byMachine(machine);
+        assertThat(recipes).extracting(recipe -> recipe.id()).contains(MMCR.id("reactor_diamond_water"));
+
+        var recipe = RecipeRegistry.getRecipe(MMCR.id("reactor_diamond_water"));
+        assertThat(recipe.tickTime()).isEqualTo(200);
+        assertThat(recipe.inputs()).hasSize(2);
+        assertThat(recipe.inputs().get(0)).isInstanceOf(MachineIngredient.ItemIngredient.class);
+        assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(0)).item().items().toList().getFirst().value()).isEqualTo(Items.DIAMOND);
+        assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(0)).count()).isEqualTo(1);
+        assertThat(recipe.inputs().get(1)).isInstanceOf(MachineIngredient.FluidIngredient.class);
+        assertThat(((MachineIngredient.FluidIngredient) recipe.inputs().get(1)).fluid().fluids().getFirst().value()).isEqualTo(Fluids.WATER);
+        assertThat(((MachineIngredient.FluidIngredient) recipe.inputs().get(1)).amount()).isEqualTo(500);
+        assertThat(recipe.energyOutputs()).containsExactly(100);
+        var energyRequirement = (EnergyRequirement) recipe.requirements().stream()
+                .filter(r -> r instanceof EnergyRequirement)
+                .findFirst()
+                .orElseThrow();
+        assertThat(energyRequirement.io()).isEqualTo(RecipeModifier.IOType.OUTPUT);
+        assertThat(energyRequirement.fePerTick()).isEqualTo(100);
+        assertThat(recipe.outputs()).singleElement().satisfies(stack -> {
+            assertThat(stack.getItem()).isEqualTo(Items.COAL);
+            assertThat(stack.getCount()).isEqualTo(1);
+        });
+        assertThat(recipe.fluidOutputs()).singleElement().satisfies(stack -> {
+            assertThat(stack.getFluid()).isEqualTo(Fluids.LAVA);
+            assertThat(stack.getAmount()).isEqualTo(500);
+        });
+    }
+
+    @Test
     void ensureRegistered_is_idempotent() {
         DefaultMachines.ensureRegistered();
         DefaultRecipes.ensureRegistered();
         DefaultRecipes.ensureRegistered();
 
-        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(2);
+        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(3);
     }
 }

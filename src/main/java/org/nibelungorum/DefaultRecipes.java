@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.resources.Identifier;
@@ -31,6 +32,8 @@ public final class DefaultRecipes {
     private static final Identifier BLAST_FURNACE_IRON_NUGGET_ID = MMCR.id("blast_furnace_iron_to_nugget");
     private static final Identifier CRACKER_ID = MMCR.id("cracker");
     private static final Identifier CRACKER_COAL_LAPIS_ID = MMCR.id("cracker_coal_lapis");
+    private static final Identifier REACTOR_ID = MMCR.id("reactor");
+    private static final Identifier REACTOR_DIAMOND_WATER_ID = MMCR.id("reactor_diamond_water");
 
     private DefaultRecipes() {
     }
@@ -77,6 +80,28 @@ public final class DefaultRecipes {
         } else {
             LOG.info("ensureRegistered: built-in recipe {} already registered; skipping", CRACKER_COAL_LAPIS_ID);
         }
+
+        if (RecipeRegistry.getRecipe(REACTOR_DIAMOND_WATER_ID) == null) {
+            MachineRecipe recipe = new MachineRecipe(
+                    REACTOR_DIAMOND_WATER_ID,
+                    REACTOR_ID,
+                    200,
+                    List.of(
+                            new MachineIngredient.ItemIngredient(Ingredient.of(Items.DIAMOND), 1),
+                            new MachineIngredient.FluidIngredient(FluidIngredient.of(Fluids.WATER), 500),
+                            new MachineIngredient.EnergyIngredient(RecipeModifier.IOType.OUTPUT, 100)
+                    ),
+                    List.of(new ItemStack(Holder.direct(Items.COAL, DataComponentMap.EMPTY), 1)),
+                    List.of(),
+                    0,
+                    1,
+                    true,
+                    List.of(new FluidStack(boundFluid(Fluids.LAVA), 500))
+            );
+            register(recipe);
+        } else {
+            LOG.info("ensureRegistered: built-in recipe {} already registered; skipping", REACTOR_DIAMOND_WATER_ID);
+        }
     }
 
     private static Holder<Fluid> boundFluid(Fluid fluid) {
@@ -87,13 +112,16 @@ public final class DefaultRecipes {
 
     private static void register(MachineRecipe recipe) {
         RecipeRegistry.register(recipe);
-        int totalEnergy = recipe.inputs().stream()
+        long totalEnergyIn = recipe.inputs().stream()
                 .filter(i -> i instanceof MachineIngredient.EnergyIngredient)
-                .mapToInt(i -> ((MachineIngredient.EnergyIngredient) i).fePerTick() * recipe.tickTime())
+                .mapToLong(i -> (long) ((MachineIngredient.EnergyIngredient) i).fePerTick() * recipe.tickTime())
                 .sum();
-        LOG.info("ensureRegistered: registered built-in recipe id={} machine={} tickTime={}t ({}s) priority={} maxThreads={} modifiers={} totalEnergy={}FE",
+        long totalEnergyOut = recipe.energyOutputs().stream()
+                .mapToLong(fe -> (long) fe * recipe.tickTime())
+                .sum();
+        LOG.info("ensureRegistered: registered built-in recipe id={} machine={} tickTime={}t ({}s) priority={} maxThreads={} modifiers={} energyIn={}FE energyOut={}FE",
                 recipe.id(), recipe.machineId(), recipe.tickTime(), String.format("%.2f", recipe.tickTime() / 20.0),
-                recipe.priority(), recipe.maxThreads(), recipe.modifiers().size(), totalEnergy);
+                recipe.priority(), recipe.maxThreads(), recipe.modifiers().size(), totalEnergyIn, totalEnergyOut);
         LOG.info("  inputs  = [{}]", describeInputs(recipe));
         LOG.info("  outputs = [{}]", describeOutputs(recipe));
         LOG.info("  entry points = RecipeRegistry.byMachine({}) and /mmcr reload", recipe.machineId());
