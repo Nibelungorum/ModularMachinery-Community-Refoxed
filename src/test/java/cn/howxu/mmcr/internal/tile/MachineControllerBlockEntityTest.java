@@ -2,12 +2,19 @@ package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.energy.EnergyStorage;
@@ -19,8 +26,11 @@ import org.junit.jupiter.api.Test;
 import org.nibelungorum.DefaultMachines;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -90,6 +100,63 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.primaryOutputFluid().getAmount()).isEqualTo(250);
     }
 
+    @Test
+    void matching_structure_without_requirements_forms() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
+        DynamicMachine machine = new DynamicMachine(MMCR.id("no_requirement_machine"), "No Requirement", pattern);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, itemInputBus(controllerPos.offset(1, 0, 0)));
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
+
+        assertThat(formed).isTrue();
+        assertThat(controller.getFoundMachine()).isSameAs(machine);
+        assertThat(controller.getLastFormationFailure()).isNull();
+        assertThat(controller.isFormed()).isTrue();
+    }
+
+    @Test
+    void matching_structure_missing_required_port_does_not_form() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
+        DynamicMachine machine = new DynamicMachine(
+                MMCR.id("requires_energy_machine"),
+                "Requires Energy",
+                pattern,
+                cn.howxu.mmcr.api.machine.MachineControllerSpec.defaultsFor(MMCR.id("requires_energy_machine")),
+                PortRequirementSpec.builder().min(PortKinds.ENERGY_INPUT.id(), 1).build());
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, itemInputBus(controllerPos.offset(1, 0, 0)));
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
+
+        assertThat(formed).isFalse();
+        assertThat(controller.getFoundMachine()).isNull();
+        assertThat(controller.isFormed()).isFalse();
+        assertThat(controller.getComponents()).isEmpty();
+        assertThat(controller.getLastFormationFailure()).isNotNull();
+        assertThat(controller.getLastFormationFailure().portId()).isEqualTo(PortKinds.ENERGY_INPUT.id());
+    }
+
+    @Test
+    void matching_structure_with_required_port_forms() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("energy_input_hatch").get());
+        DynamicMachine machine = new DynamicMachine(
+                MMCR.id("requires_energy_machine"),
+                "Requires Energy",
+                pattern,
+                cn.howxu.mmcr.api.machine.MachineControllerSpec.defaultsFor(MMCR.id("requires_energy_machine")),
+                PortRequirementSpec.builder().min(PortKinds.ENERGY_INPUT.id(), 1).build());
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, energyHatch(controllerPos.offset(1, 0, 0)));
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
+
+        assertThat(formed).isTrue();
+        assertThat(controller.getFoundMachine()).isSameAs(machine);
+        assertThat(controller.getLastFormationFailure()).isNull();
+        assertThat(controller.isFormed()).isTrue();
+    }
+
     private static MachineControllerBlockEntity controllerBlockEntityWithoutRunningMinecraftConstructor() {
         try {
             Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
@@ -120,6 +187,21 @@ class MachineControllerBlockEntityTest {
             return hatch;
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate energy hatch", e);
+        }
+    }
+
+    private static ItemInputBusBlockEntity itemInputBus(BlockPos pos) {
+        try {
+            Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+            unsafeField.setAccessible(true);
+            sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+            ItemInputBusBlockEntity bus = (ItemInputBusBlockEntity) unsafe.allocateInstance(ItemInputBusBlockEntity.class);
+            setField(BlockEntity.class, bus, "type", null);
+            setField(BlockEntity.class, bus, "worldPosition", pos);
+            setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
+            return bus;
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("Unable to allocate item input bus", e);
         }
     }
 
@@ -194,6 +276,68 @@ class MachineControllerBlockEntityTest {
         }
         list.add(new ProcessingComponent(port, hatch, hatch.getBlockPos(), BlockPos.ZERO, (String) null));
         return controller;
+    }
+
+    private static BlockArray onePortPattern(Block portBlock) {
+        Map<BlockPos, BlockPredicate> blocks = new HashMap<>();
+        blocks.put(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(portBlock));
+        return new BlockArray(blocks);
+    }
+
+    private static MachineControllerBlockEntity controllerForFormation(
+            DynamicMachine machine,
+            BlockPos controllerPos,
+            IOPortBlockEntity port) throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        var controllerBlock = testControllerBlock(machine);
+        var controllerState = controllerBlock.defaultBlockState()
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FORMED, false)
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FACING, Direction.SOUTH);
+        setField(BlockEntity.class, controller, "worldPosition", controllerPos);
+        setField(BlockEntity.class, controller, "blockState", controllerState);
+        Map<BlockPos, Block> blocks = new HashMap<>();
+        blocks.put(controllerPos, controllerBlock);
+        blocks.put(port.getBlockPos(), blockForPort(port));
+        Level level = LevelStub.create(blocks, List.of(controller, port));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, port, "level", level);
+        return controller;
+    }
+
+    private static Block blockForPort(IOPortBlockEntity port) {
+        return cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get(port.kind().id()).get();
+    }
+
+    private static cn.howxu.mmcr.internal.block.MachineControllerBlock testControllerBlock(DynamicMachine machine) throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+        var block = (cn.howxu.mmcr.internal.block.MachineControllerBlock) unsafe.allocateInstance(cn.howxu.mmcr.internal.block.MachineControllerBlock.class);
+        setField(cn.howxu.mmcr.internal.block.MachineControllerBlock.class, block, "machineId", machine.registryName());
+        setField(
+                net.minecraft.world.level.block.state.BlockBehaviour.class,
+                block,
+                "properties",
+                net.minecraft.world.level.block.Blocks.IRON_BLOCK.properties());
+        var builder = new net.minecraft.world.level.block.state.StateDefinition.Builder<Block, net.minecraft.world.level.block.state.BlockState>(block);
+        builder.add(
+                cn.howxu.mmcr.internal.block.MachineControllerBlock.FACING,
+                cn.howxu.mmcr.internal.block.MachineControllerBlock.FORMED,
+                cn.howxu.mmcr.internal.block.MachineControllerBlock.ACTIVE);
+        var stateDefinition = builder.create(Block::defaultBlockState, net.minecraft.world.level.block.state.BlockState::new);
+        setField(Block.class, block, "stateDefinition", stateDefinition);
+        setField(Block.class, block, "defaultBlockState", stateDefinition.any()
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FACING, Direction.NORTH)
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FORMED, false)
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ACTIVE, false));
+        return block;
+    }
+
+    private static boolean invokeTryFormMachine(MachineControllerBlockEntity controller, DynamicMachine machine, Direction facing) throws Exception {
+        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("tryFormMachine", cn.howxu.mmcr.api.machine.Machine.class, Direction.class);
+        method.setAccessible(true);
+        return (boolean) method.invoke(controller, machine, facing);
     }
 
     private static void setField(Class<?> declaringClass, Object target, String name, Object value) throws ReflectiveOperationException {

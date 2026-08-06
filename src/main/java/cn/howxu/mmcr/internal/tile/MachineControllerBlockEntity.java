@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockArrayCache;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
@@ -55,6 +56,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private Boolean lastBroadcastFormed;
     private boolean lastBroadcastActive;
     private @Nullable String lastFailureUnloc;
+    private @Nullable PortRequirementSpec.Failure lastFormationFailure;
     private boolean redstonePaused;
     private @Nullable ActiveMachineRecipe pausedActive;
     private @Nullable RecipeCraftingContext pausedContext;
@@ -97,6 +99,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public ActiveMachineRecipe getActive() { return active; }
 
     public @Nullable String getLastFailureUnloc() { return lastFailureUnloc; }
+
+    public @Nullable PortRequirementSpec.Failure getLastFormationFailure() { return lastFormationFailure; }
 
     public void setLastFailureUnloc(@Nullable String key) {
         this.lastFailureUnloc = key;
@@ -239,8 +243,23 @@ public class MachineControllerBlockEntity extends BlockEntity {
         BlockArray rotatedPattern = BlockArrayCache.get(candidate.pattern(), facing);
         if (!StructureMatcher.matchesRotated(rotatedPattern, level, getBlockPos())) return false;
 
+        var failure = candidate.portRequirements().validate(countPorts(rotatedPattern));
+        if (failure.isPresent()) {
+            recordFormationFailure(candidate, failure.get());
+            return false;
+        }
+
+        lastFormationFailure = null;
         onStructureFormed(candidate, rotatedPattern, facing);
         return true;
+    }
+
+    private void recordFormationFailure(Machine candidate, PortRequirementSpec.Failure failure) {
+        if (failure.equals(lastFormationFailure)) return;
+        lastFormationFailure = failure;
+        String max = failure.requiredMax().isPresent() ? Integer.toString(failure.requiredMax().getAsInt()) : "unbounded";
+        LOG.info("[Ctrl#{}] formation rejected: pos={} machine={} port={} actual={} requiredMin={} requiredMax={} reason={}",
+                instanceId, getBlockPos(), candidate.registryName(), failure.portId(), failure.actual(), failure.requiredMin(), max, failure.reason());
     }
 
     private void onStructureFormed(Machine matchedMachine, BlockArray rotatedPattern, Direction facing) {
@@ -254,6 +273,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         LOG.info("[Ctrl#{}] onStructureFormed: pos={} machine={} facing={} components=itemIn:{} itemOut:{} fluidIn:{} fluidOut:{} energyIn:{} energyOut:{}",
                 instanceId, getBlockPos(), matchedMachine.registryName(), facing,
                 counts.itemInputs(), counts.itemOutputs(), counts.fluidInputs(), counts.fluidOutputs(), counts.energyInputs(), counts.energyOutputs());
+        lastFormationFailure = null;
         setChanged();
     }
 
@@ -269,6 +289,18 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (!(tile instanceof BlockEntity container)) continue;
             components.add(new ProcessingComponent(component, container, worldPos, relativePos, foundPattern.tagsAt(relativePos)));
         }
+    }
+
+    private PortRequirementSpec.PortCounts countPorts(BlockArray rotatedPattern) {
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        if (level == null || rotatedPattern == null) return PortRequirementSpec.PortCounts.empty();
+
+        for (BlockPos relativePos : rotatedPattern.pattern().keySet()) {
+            BlockPos worldPos = getBlockPos().offset(relativePos);
+            if (!(level.getBlockEntity(worldPos) instanceof IOPortBlockEntity port)) continue;
+            counts.merge(port.kind().id(), 1, Integer::sum);
+        }
+        return PortRequirementSpec.PortCounts.of(counts);
     }
 
     private ComponentCounts componentCounts() {
@@ -313,6 +345,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         pausedActive = null;
         pausedContext = null;
         lastFailureUnloc = null;
+        lastFormationFailure = null;
         redstonePaused = false;
         if (wasFormed) setFormed(false);
         if (dropped != null || hadActive) {

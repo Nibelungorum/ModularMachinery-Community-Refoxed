@@ -78,10 +78,17 @@ public final class LevelStub {
         return level;
     }
 
+    public static Level create(Map<BlockPos, Block> blocks, List<BlockEntity> blockEntities) {
+        Level level = create(blocks);
+        ((TestLevel) level).blockEntities = blockEntities.stream()
+                .collect(java.util.stream.Collectors.toMap(BlockEntity::getBlockPos, be -> be));
+        return level;
+    }
+
     private static Level createFromStates(Map<BlockPos, BlockState> blocks) {
         try {
             var level = (TestLevel) unsafe().allocateInstance(TestLevel.class);
-            level.blocks = Map.copyOf(blocks);
+            level.blocks = new HashMap<>(blocks);
             return level;
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Unable to create level stub", e);
@@ -108,6 +115,23 @@ public final class LevelStub {
 
         @Override public BlockEntity getBlockEntity(BlockPos pos) {
             return blockEntities.get(pos);
+        }
+
+        @Override public void blockEntityChanged(BlockPos pos) {}
+
+        @Override public boolean setBlock(BlockPos pos, BlockState state, int flags) {
+            blocks.put(pos, state);
+            BlockEntity blockEntity = blockEntities.get(pos);
+            if (blockEntity != null) {
+                try {
+                    Field field = BlockEntity.class.getDeclaredField("blockState");
+                    field.setAccessible(true);
+                    field.set(blockEntity, state);
+                } catch (ReflectiveOperationException e) {
+                    throw new IllegalStateException("Unable to update block entity state", e);
+                }
+            }
+            return true;
         }
 
         @Override public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) {}
