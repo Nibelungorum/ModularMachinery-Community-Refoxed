@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.command;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -17,6 +18,7 @@ public class ReloadCommand {
                         .executes(ctx -> {
                             DefaultMachines.ensureRegistered();
                             DefaultRecipes.ensureRegistered();
+                            MachineRegistry.rebuildCompiledCache();
                             ctx.getSource().sendSuccess(
                                     () -> net.minecraft.network.chat.Component.literal(
                                             "MMCR reload refreshed built-in machines; datapack recipes are read at runtime"), true);

@@ -1,6 +1,7 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.command.BuildCommand;
 import cn.howxu.mmcr.internal.command.ExportCommand;
@@ -85,6 +86,7 @@ public class MMCR {
 
     public static void registerRuntimeBuiltins() {
         DefaultRecipes.ensureRegistered();
+        MachineRegistry.rebuildCompiledCache();
     }
 
     static void registerGameTestMachineDefinitionsIfPresent() {

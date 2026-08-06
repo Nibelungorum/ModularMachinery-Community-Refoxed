@@ -5,8 +5,13 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockArrayCache;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
@@ -114,6 +119,58 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.getFoundMachine()).isSameAs(machine);
         assertThat(controller.getLastFormationFailure()).isNull();
         assertThat(controller.isFormed()).isTrue();
+    }
+
+    @Test
+    void matching_structure_caches_compiled_pattern_and_uses_candidate_component_positions() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray pattern = anyItemOrEnergyInputPattern();
+        DynamicMachine machine = new DynamicMachine(MMCR.id("compiled_controller_machine"), "Compiled Controller", pattern);
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, itemInputBus(controllerPos.offset(1, 0, 0)));
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
+
+        assertThat(formed).isTrue();
+        assertThat(compiledPattern(controller)).isSameAs(MachineRegistry.getCompiled(machine.registryName()));
+        assertThat(controller.getComponents()).hasSize(1);
+        assertThat(controller.getComponents().getFirst().getRelativePos()).isEqualTo(new BlockPos(1, 0, 0));
+    }
+
+    @Test
+    void structure_version_changes_when_structure_forms_and_resets() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray pattern = anyItemOrEnergyInputPattern();
+        DynamicMachine machine = new DynamicMachine(MMCR.id("versioned_controller_machine"), "Versioned Controller", pattern);
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, itemInputBus(controllerPos.offset(1, 0, 0)));
+        long initial = controller.getStructureVersion();
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
+        invokeResetMachine(controller);
+
+        assertThat(formed).isTrue();
+        assertThat(controller.getStructureVersion()).isEqualTo(initial + 2);
+    }
+
+    @Test
+    void stale_recipe_context_is_refreshed_after_structure_reforms() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray pattern = anyItemOrEnergyInputPattern();
+        DynamicMachine machine = new DynamicMachine(MMCR.id("restored_active_machine"), "Restored Active", pattern);
+        MachineRegistry.register(machine);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("restored_active_recipe"), machine.registryName(), 100, List.of(), List.of());
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, itemInputBus(controllerPos.offset(1, 0, 0)));
+        setField(MachineControllerBlockEntity.class, controller, "machine", machine);
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, 1);
+        setField(MachineControllerBlockEntity.class, controller, "active", active);
+        setField(MachineControllerBlockEntity.class, controller, "context", new RecipeCraftingContext(controller));
+
+        controller.serverTick();
+
+        assertThat(controller.isFormed()).isTrue();
+        assertThat(controller.getActive()).isSameAs(active);
+        assertThat(controller.getTickCounter()).isEqualTo(1);
     }
 
     @Test
@@ -252,7 +309,9 @@ class MachineControllerBlockEntityTest {
                 PortRequirementSpec.builder().min(PortKinds.ENERGY_INPUT.id(), 1).build());
         MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, energyHatch(portPos));
         setField(MachineControllerBlockEntity.class, controller, "machine", machine);
-        controller.serverTick();
+        for (int i = 0; i < Config.DEFAULT_MACHINE_CHECK_INTERVAL_TICKS; i++) {
+            controller.serverTick();
+        }
         assertThat(controller.isFormed()).isTrue();
 
         Level level = levelOf(controller);
@@ -672,6 +731,18 @@ class MachineControllerBlockEntityTest {
         Method method = MachineControllerBlockEntity.class.getDeclaredMethod("tryFormMachine", cn.howxu.mmcr.api.machine.Machine.class, Direction.class);
         method.setAccessible(true);
         return (boolean) method.invoke(controller, machine, facing);
+    }
+
+    private static void invokeResetMachine(MachineControllerBlockEntity controller) throws Exception {
+        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("resetMachine");
+        method.setAccessible(true);
+        method.invoke(controller);
+    }
+
+    private static CompiledMachinePattern compiledPattern(MachineControllerBlockEntity controller) throws Exception {
+        Field field = MachineControllerBlockEntity.class.getDeclaredField("foundCompiledPattern");
+        field.setAccessible(true);
+        return (CompiledMachinePattern) field.get(controller);
     }
 
     private static Level levelOf(BlockEntity blockEntity) throws Exception {

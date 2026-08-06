@@ -32,6 +32,7 @@ public final class RecipeCraftingContext {
     public static final String FAILURE_MISSING_ENERGY = "gui.mmcr.controller.failure.missing_energy";
 
     private final MachineControllerBlockEntity controller;
+    private final long structureVersion;
 
     private List<ItemInputRoute> itemInputRoutes = List.of();
     private List<ItemOutputRoute> itemOutputRoutes = List.of();
@@ -42,6 +43,11 @@ public final class RecipeCraftingContext {
 
     public RecipeCraftingContext(MachineControllerBlockEntity controller) {
         this.controller = controller;
+        this.structureVersion = controller.getStructureVersion();
+    }
+
+    public boolean isStructureVersionCurrent() {
+        return structureVersion == controller.getStructureVersion();
     }
 
     public RecipeFailureActions failureAction() {
