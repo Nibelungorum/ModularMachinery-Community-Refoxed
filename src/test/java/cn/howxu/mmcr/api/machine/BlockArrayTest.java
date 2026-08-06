@@ -1,15 +1,19 @@
 package cn.howxu.mmcr.api.machine;
 
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -223,5 +227,20 @@ class BlockArrayTest {
 
         BlockArray rotated = BlockArrayCache.get(arr, Direction.EAST);
         assertThat(rotated.tagsAt(new BlockPos(0, 0, -1))).contains("input_a");
+    }
+
+    @Test
+    void vertical_roll_uses_same_coordinate_transform_as_block_array() {
+        Identifier id = Identifier.fromNamespaceAndPath("mmcr", "compiled_vertical_replacement");
+        var replacement = new SingleBlockModifierReplacement(
+                "speed", new BlockPos(1, 0, 0), new BlockPredicate.Any(),
+                List.of(), "", ItemStack.EMPTY);
+        var machine = new DynamicMachine(id, "Compiled Vertical Replacement",
+                new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.Any())),
+                MachineControllerSpec.defaultsFor(id), PortRequirementSpec.none(), List.of(),
+                Map.of(new BlockPos(1, 0, 0), List.of(replacement)));
+
+        assertThat(machine.rotatedModifierReplacements(Direction.UP, Direction.EAST))
+                .containsKey(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.UP, Direction.EAST));
     }
 }

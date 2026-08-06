@@ -1,10 +1,12 @@
 package cn.howxu.mmcr.api.machine;
 
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -19,7 +21,8 @@ public record CompiledMachinePattern(
         Map<Direction, BoundingBox> boundingBoxes,
         Map<Direction, List<BlockPos>> componentPositions,
         Map<Direction, List<BlockPos>> portPositions,
-        List<CompiledDynamicPattern> dynamicPatterns
+        List<CompiledDynamicPattern> dynamicPatterns,
+        Map<Direction, Map<BlockPos, List<SingleBlockModifierReplacement>>> modifierReplacements
 ) {
 
     public CompiledMachinePattern {
@@ -29,6 +32,7 @@ public record CompiledMachinePattern(
         componentPositions = copyListEnumMap(componentPositions);
         portPositions = copyListEnumMap(portPositions);
         dynamicPatterns = List.copyOf(dynamicPatterns == null ? List.of() : dynamicPatterns);
+        modifierReplacements = copyModifierReplacementEnumMap(modifierReplacements);
     }
 
     public CompiledMachinePattern(
@@ -37,7 +41,17 @@ public record CompiledMachinePattern(
             Map<Direction, BoundingBox> boundingBoxes,
             Map<Direction, List<BlockPos>> componentPositions,
             Map<Direction, List<BlockPos>> portPositions) {
-        this(machine, rotatedPatterns, boundingBoxes, componentPositions, portPositions, List.of());
+        this(machine, rotatedPatterns, boundingBoxes, componentPositions, portPositions, List.of(), Map.of());
+    }
+
+    public CompiledMachinePattern(
+            Machine machine,
+            Map<Direction, BlockArray> rotatedPatterns,
+            Map<Direction, BoundingBox> boundingBoxes,
+            Map<Direction, List<BlockPos>> componentPositions,
+            Map<Direction, List<BlockPos>> portPositions,
+            List<CompiledDynamicPattern> dynamicPatterns) {
+        this(machine, rotatedPatterns, boundingBoxes, componentPositions, portPositions, dynamicPatterns, Map.of());
     }
 
     public BlockArray rotatedPattern(Direction facing) {
@@ -56,6 +70,16 @@ public record CompiledMachinePattern(
         return portPositions.getOrDefault(facing, List.of());
     }
 
+    public Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements(Direction facing) {
+        return modifierReplacements.getOrDefault(facing, Map.of());
+    }
+
+    public Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements(
+        Direction facing, Direction rollFacing) {
+        if (!facing.getAxis().isVertical()) return modifierReplacements(facing);
+        return ((DynamicMachine) machine).rotatedModifierReplacements(facing, rollFacing);
+    }
+
     private static <T> Map<Direction, T> copyEnumMap(Map<Direction, T> source) {
         EnumMap<Direction, T> copy = new EnumMap<>(Direction.class);
         if (source != null) copy.putAll(source);
@@ -67,6 +91,21 @@ public record CompiledMachinePattern(
         if (source != null) {
             for (var entry : source.entrySet()) {
                 copy.put(entry.getKey(), List.copyOf(entry.getValue()));
+            }
+        }
+        return Map.copyOf(copy);
+    }
+
+    private static Map<Direction, Map<BlockPos, List<SingleBlockModifierReplacement>>> copyModifierReplacementEnumMap(
+            Map<Direction, Map<BlockPos, List<SingleBlockModifierReplacement>>> source) {
+        EnumMap<Direction, Map<BlockPos, List<SingleBlockModifierReplacement>>> copy = new EnumMap<>(Direction.class);
+        if (source != null) {
+            for (var entry : source.entrySet()) {
+                LinkedHashMap<BlockPos, List<SingleBlockModifierReplacement>> positionCopy = new LinkedHashMap<>();
+                for (var positionEntry : entry.getValue().entrySet()) {
+                    positionCopy.put(positionEntry.getKey(), List.copyOf(positionEntry.getValue()));
+                }
+                copy.put(entry.getKey(), Map.copyOf(positionCopy));
             }
         }
         return Map.copyOf(copy);

@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.internal.block.IOPortBlock;
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -26,6 +27,7 @@ public final class MachinePatternCompiler {
         EnumMap<Direction, BoundingBox> boundingBoxes = new EnumMap<>(Direction.class);
         EnumMap<Direction, List<BlockPos>> componentPositions = new EnumMap<>(Direction.class);
         EnumMap<Direction, List<BlockPos>> portPositions = new EnumMap<>(Direction.class);
+        EnumMap<Direction, Map<BlockPos, List<SingleBlockModifierReplacement>>> modifierReplacements = new EnumMap<>(Direction.class);
 
         for (Direction facing : Direction.Plane.HORIZONTAL) {
             BlockArray rotated = BlockArrayCache.get(machine.pattern(), facing);
@@ -33,9 +35,11 @@ public final class MachinePatternCompiler {
             boundingBoxes.put(facing, boundingBox(rotated));
             componentPositions.put(facing, componentPositions(rotated));
             portPositions.put(facing, portPositions(rotated));
+            modifierReplacements.put(facing,
+                    ((DynamicMachine) machine).rotatedModifierReplacements(facing, Direction.SOUTH));
         }
 
-        return new CompiledMachinePattern(machine, rotatedPatterns, boundingBoxes, componentPositions, portPositions, dynamicPatterns(machine.dynamicPatterns()));
+        return new CompiledMachinePattern(machine, rotatedPatterns, boundingBoxes, componentPositions, portPositions, dynamicPatterns(machine.dynamicPatterns()), modifierReplacements);
     }
 
     public static Map<net.minecraft.resources.Identifier, CompiledMachinePattern> compileAll(Collection<Machine> machines) {

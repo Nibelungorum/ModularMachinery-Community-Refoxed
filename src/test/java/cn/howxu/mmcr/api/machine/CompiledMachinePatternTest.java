@@ -1,15 +1,18 @@
 package cn.howxu.mmcr.api.machine;
 
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,6 +59,24 @@ class CompiledMachinePatternTest {
         MachineRegistry.clearForTesting();
 
         assertThat(MachineRegistry.getCompiled(machine.registryName())).isNull();
+    }
+
+    @Test
+    void compiled_pattern_contains_rotated_replacements_for_horizontal_facing() {
+        Identifier id = Identifier.fromNamespaceAndPath("mmcr", "compiled_replacement");
+        var replacement = new SingleBlockModifierReplacement(
+                "speed", new BlockPos(-1, 0, 0), new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
+                List.of(), "", ItemStack.EMPTY);
+        var machine = new DynamicMachine(
+                id, "Compiled Replacement", new BlockArray(Map.of(
+                        BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE))),
+                MachineControllerSpec.defaultsFor(id), PortRequirementSpec.none(), List.of(),
+                Map.of(new BlockPos(-1, 0, 0), List.of(replacement)));
+
+        CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
+
+        assertThat(compiled.modifierReplacements(Direction.EAST))
+                .containsKey(new BlockPos(0, 0, 1));
     }
 
     private static BlockArray pattern() {
