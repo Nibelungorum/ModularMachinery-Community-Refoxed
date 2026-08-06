@@ -144,13 +144,14 @@
 
 **目标**：移植 MMCE 的 recipe modifier 概念，让结构内 modifier 方块、机器属性或脚本能影响 duration、input、output、chance 等数值。
 
+### 4.1 P3A：Recipe 内静态 modifier
+
+**目标**：先补齐 recipe 定义自身携带的静态 modifiers，全链覆盖 duration、input、output、chance，并保证原始 recipe 定义与运行时派生值边界清晰。
+
 | MMCE 来源 | MMCR 目标 | 移植方式 |
 |---|---|---|
 | `RecipeModifier` | `api.recipe.modifier.RecipeModifier` | 直译，补齐 operation 和 target |
 | `ModifierRegistry` | modifier registry 或 enum-backed dispatcher | 重映射 |
-| `SingleBlockModifierReplacement` | pattern position modifier | 延后到 selector/tag 后 |
-| `MultiBlockModifierReplacement` | structure-wide modifier | 延后到 Phase 5/6 |
-| `DynamicModifierReplacement` | runtime modifier hook | 延后，需事件/脚本设计 |
 | output chance | `MachineOutput` chance 字段或 wrapper | 重映射 |
 
 **验收**：
@@ -159,6 +160,27 @@
 - input item/fluid/energy、output item/fluid、chance、duration 各自有明确 target。
 - modifier 应用顺序与 MMCE 文档一致：add/subtract/multiply/divide 可预测。
 - codec roundtrip 保留原始 recipe 定义，派生值只通过 getter 或 runtime context 计算。
+
+### 4.2 P3B：Pattern position modifier
+
+**目标**：在 P3A 和 JEI 稳定后，再移植结构位置级 modifier 替换，避免提前绑定到不稳定的结构 metadata、selector tag 或旋转语义。
+
+| MMCE 来源 | MMCR 目标 | 移植方式 |
+|---|---|---|
+| `SingleBlockModifierReplacement` | pattern position modifier | 延后到 Phase 4 JEI 后、Phase 5 Parallel 前，前提是 selector/tag 与 matched pattern metadata 稳定 |
+
+**验收**：
+
+- modifier 方块只在 matched pattern 内生效，结构外同类方块不参与计算。
+- modifier 位置随机器朝向/旋转正确映射。
+- 与 selector tag 共存时不改变已有 component 路由语义。
+
+### 4.3 后置：Structure-wide / runtime modifier hook
+
+| MMCE 来源 | MMCR 目标 | 移植方式 |
+|---|---|---|
+| `MultiBlockModifierReplacement` | structure-wide modifier | 延后到 Phase 5/6 后，等 parallel/factory/smart interface 边界稳定后单独评估 |
+| `DynamicModifierReplacement` | runtime modifier hook | 延后到 Phase 7.1 Upgrade 系统，作为 upgrade modifier 的真实 runtime 来源实现，不提前空 hook |
 
 ## 5. Phase 4：JEI 集成
 
