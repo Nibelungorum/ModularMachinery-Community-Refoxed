@@ -1,8 +1,13 @@
 package cn.howxu.mmcr.api.machine;
 
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public record DynamicMachine(
         Identifier registryName,
@@ -10,22 +15,23 @@ public record DynamicMachine(
         BlockArray pattern,
         MachineControllerSpec controller,
         PortRequirementSpec portRequirements,
-        List<DynamicPatternSpec> dynamicPatterns
+        List<DynamicPatternSpec> dynamicPatterns,
+        Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements
 ) implements Machine {
     public DynamicMachine(Identifier registryName, String localizedName, BlockArray pattern) {
-        this(registryName, localizedName, pattern, MachineControllerSpec.defaultsFor(registryName), PortRequirementSpec.none(), List.of());
+        this(registryName, localizedName, pattern, MachineControllerSpec.defaultsFor(registryName), PortRequirementSpec.none(), List.of(), Map.of());
     }
 
     public DynamicMachine(Identifier registryName, String localizedName, BlockArray pattern, MachineControllerSpec controller) {
-        this(registryName, localizedName, pattern, controller, PortRequirementSpec.none(), List.of());
+        this(registryName, localizedName, pattern, controller, PortRequirementSpec.none(), List.of(), Map.of());
     }
 
     public DynamicMachine(Identifier registryName, String localizedName, BlockArray pattern, List<DynamicPatternSpec> dynamicPatterns) {
-        this(registryName, localizedName, pattern, MachineControllerSpec.defaultsFor(registryName), PortRequirementSpec.none(), dynamicPatterns);
+        this(registryName, localizedName, pattern, MachineControllerSpec.defaultsFor(registryName), PortRequirementSpec.none(), dynamicPatterns, Map.of());
     }
 
     public DynamicMachine(Identifier registryName, String localizedName, BlockArray pattern, MachineControllerSpec controller, PortRequirementSpec portRequirements) {
-        this(registryName, localizedName, pattern, controller, portRequirements, List.of());
+        this(registryName, localizedName, pattern, controller, portRequirements, List.of(), Map.of());
     }
 
     public DynamicMachine {
@@ -35,5 +41,62 @@ public record DynamicMachine(
         if (controller == null) throw new IllegalArgumentException("controller null");
         if (portRequirements == null) throw new IllegalArgumentException("portRequirements null");
         dynamicPatterns = List.copyOf(dynamicPatterns == null ? List.of() : dynamicPatterns);
+        modifierReplacements = copyModifierReplacements(modifierReplacements);
+    }
+
+    public DynamicMachine(
+            Identifier registryName,
+            String localizedName,
+            BlockArray pattern,
+            MachineControllerSpec controller,
+            PortRequirementSpec portRequirements,
+            List<DynamicPatternSpec> dynamicPatterns) {
+        this(registryName, localizedName, pattern, controller, portRequirements, dynamicPatterns, Map.of());
+    }
+
+    public List<SingleBlockModifierReplacement> modifierReplacementsAt(BlockPos pos) {
+        return modifierReplacements.getOrDefault(pos, List.of());
+    }
+
+    public Map<BlockPos, List<SingleBlockModifierReplacement>> rotatedModifierReplacements(
+            Direction facing, Direction rollFacing) {
+        Map<BlockPos, List<SingleBlockModifierReplacement>> rotated = new LinkedHashMap<>();
+        Direction normalizedRoll = facing.getAxis().isVertical() ? rollFacing : Direction.SOUTH;
+        for (var entry : modifierReplacements.entrySet()) {
+            BlockPos rotatedPos = BlockRotator.rotateSouthTo(entry.getKey(), facing, normalizedRoll);
+            List<SingleBlockModifierReplacement> replacements = entry.getValue().stream()
+                    .map(replacement -> replacement.copyAt(rotatedPos))
+                    .toList();
+            rotated.put(rotatedPos, replacements);
+        }
+        return Map.copyOf(rotated);
+    }
+
+    private static Map<BlockPos, List<SingleBlockModifierReplacement>> copyModifierReplacements(
+            Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
+        if (replacements == null || replacements.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<BlockPos, List<SingleBlockModifierReplacement>> copy = new LinkedHashMap<>();
+        for (var entry : replacements.entrySet()) {
+            BlockPos pos = entry.getKey();
+            if (pos == null) throw new IllegalArgumentException("modifierReplacements position null");
+            List<SingleBlockModifierReplacement> list = entry.getValue();
+            if (list == null) throw new IllegalArgumentException("modifierReplacements list null");
+            copy.put(pos, List.copyOf(list.stream()
+                    .map(replacement -> validateReplacement(pos, replacement))
+                    .toList()));
+        }
+        return Map.copyOf(copy);
+    }
+
+    private static SingleBlockModifierReplacement validateReplacement(
+            BlockPos pos, SingleBlockModifierReplacement replacement) {
+        if (replacement == null) throw new IllegalArgumentException("modifier replacement null");
+        if (replacement.getPos() == null) throw new IllegalArgumentException("modifier replacement position null");
+        if (replacement.getReplacement() == null) throw new IllegalArgumentException("modifier replacement predicate null");
+        if (!pos.equals(replacement.getPos())) throw new IllegalArgumentException("modifier replacement position mismatch");
+        return replacement;
     }
 }

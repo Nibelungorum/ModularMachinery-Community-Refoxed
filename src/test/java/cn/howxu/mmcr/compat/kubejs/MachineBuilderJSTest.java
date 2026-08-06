@@ -1,12 +1,27 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
+import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Blocks;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MachineBuilderJSTest {
+
+    @BeforeAll
+    static void bootstrapMinecraft() throws Exception {
+        TestBootstrap.bootstrap();
+    }
 
     @Test
     void controller_textures_sets_front_and_all_other_faces() {
@@ -63,5 +78,19 @@ class MachineBuilderJSTest {
 
         assertThat(machine.controller().allowVerticalFacing()).isTrue();
         assertThat(machine.controller().requireVerticalFacing()).isTrue();
+    }
+
+    @Test
+    void builder_passes_single_block_replacements_to_machine() {
+        var replacement = new SingleBlockModifierReplacement(
+                "speed", new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
+                List.of(), "", ItemStack.EMPTY);
+        var builder = new MachineBuilderJS("mmcr:builder_replacement")
+                .addModifier(replacement);
+
+        DynamicMachine machine = builder.createObject();
+
+        assertThat(machine.modifierReplacementsAt(new BlockPos(1, 0, 0)))
+                .containsExactly(replacement);
     }
 }

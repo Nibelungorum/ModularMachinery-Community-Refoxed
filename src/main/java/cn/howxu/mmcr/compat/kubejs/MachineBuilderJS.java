@@ -6,6 +6,8 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -13,8 +15,12 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class MachineBuilderJS extends BuilderBase<DynamicMachine> {
     public transient String localizedName = "Unknown Machine";
@@ -26,6 +32,7 @@ public class MachineBuilderJS extends BuilderBase<DynamicMachine> {
     public transient boolean allowVerticalFacing = false;
     public transient boolean fullyRotationallySymmetric = false;
     public transient boolean requireVerticalFacing = false;
+    public transient Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements = new LinkedHashMap<>();
 
     public MachineBuilderJS(Identifier id) {
         super(id);
@@ -70,7 +77,14 @@ public class MachineBuilderJS extends BuilderBase<DynamicMachine> {
 
     @Override
     public DynamicMachine createObject() {
-        return new DynamicMachine(id, localizedName, pattern, controllerSpec());
+        return new DynamicMachine(id, localizedName, pattern, controllerSpec(), PortRequirementSpec.none(), List.of(), modifierReplacements);
+    }
+
+    public MachineBuilderJS addModifier(SingleBlockModifierReplacement replacement) {
+        Objects.requireNonNull(replacement, "replacement");
+        BlockPos pos = Objects.requireNonNull(replacement.getPos(), "replacement.pos");
+        modifierReplacements.computeIfAbsent(pos, ignored -> new ArrayList<>()).add(replacement);
+        return this;
     }
 
     public MachineBuilderJS controllerTextures(String front, String otherFive) {
