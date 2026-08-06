@@ -89,6 +89,32 @@ class StructureMatcherTest {
     }
 
     @Test
+    void replacement_matches_all_horizontal_rotations_without_mutating_pattern_positions() {
+        BlockPos controllerPos = new BlockPos(8, 64, 8);
+        BlockPos rawPos = new BlockPos(1, 0, 0);
+        BlockArray pattern = new BlockArray(Map.of(
+                rawPos, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
+                new BlockPos(0, 1, 0), new BlockPredicate.OfBlock(Blocks.STONE)));
+        var replacement = new SingleBlockModifierReplacement(
+                "speed", rawPos, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
+                List.of(), "", ItemStack.EMPTY);
+        Map<BlockPos, List<SingleBlockModifierReplacement>> replacementMap = Map.of(rawPos, List.of(replacement));
+
+        for (Direction facing : Direction.Plane.HORIZONTAL) {
+            BlockPos worldPos = controllerPos.offset(BlockRotator.rotateSouthTo(rawPos, facing));
+            BlockPos stonePos = controllerPos.offset(BlockRotator.rotateSouthTo(new BlockPos(0, 1, 0), facing));
+            Level level = LevelStub.create(Map.of(
+                    controllerPos, Blocks.STONE,
+                    worldPos, Blocks.GOLD_BLOCK,
+                    stonePos, Blocks.STONE));
+            assertThat(StructureMatcher.matches(
+                    pattern, level, controllerPos, facing, replacementMap)).isTrue();
+        }
+
+        assertThat(pattern.pattern().keySet()).containsExactlyInAnyOrder(rawPos, new BlockPos(0, 1, 0));
+    }
+
+    @Test
     void replacement_at_another_position_does_not_match() {
         BlockPos expected = new BlockPos(1, 0, 0);
         BlockPos wrong = new BlockPos(2, 0, 0);

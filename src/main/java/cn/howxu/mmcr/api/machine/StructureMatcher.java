@@ -8,6 +8,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -20,8 +21,22 @@ public final class StructureMatcher {
     }
 
     public static boolean matches(BlockArray pattern, Level level, BlockPos ctrlPos, Direction ctrlFacing,
-                                  Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
-        return matchesRotated(BlockArrayCache.get(pattern, ctrlFacing), level, ctrlPos, replacements);
+                                   Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
+        return matchesRotated(BlockArrayCache.get(pattern, ctrlFacing), level, ctrlPos,
+                rotateReplacements(replacements, ctrlFacing));
+    }
+
+    private static Map<BlockPos, List<SingleBlockModifierReplacement>> rotateReplacements(
+            Map<BlockPos, List<SingleBlockModifierReplacement>> replacements, Direction facing) {
+        if (replacements == null || replacements.isEmpty()) return Map.of();
+        Map<BlockPos, List<SingleBlockModifierReplacement>> rotated = new LinkedHashMap<>();
+        for (var entry : replacements.entrySet()) {
+            BlockPos rotatedPos = BlockRotator.rotateSouthTo(entry.getKey(), facing);
+            rotated.put(rotatedPos, entry.getValue().stream()
+                    .map(replacement -> replacement.copyAt(rotatedPos))
+                    .toList());
+        }
+        return Map.copyOf(rotated);
     }
 
     public static boolean matchesCompiled(CompiledMachinePattern compiled, Direction facing, Level level, BlockPos ctrlPos) {

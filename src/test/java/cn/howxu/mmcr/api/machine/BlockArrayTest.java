@@ -232,15 +232,20 @@ class BlockArrayTest {
     @Test
     void vertical_roll_uses_same_coordinate_transform_as_block_array() {
         Identifier id = Identifier.fromNamespaceAndPath("mmcr", "compiled_vertical_replacement");
+        BlockPos rawPos = new BlockPos(1, 0, 0);
         var replacement = new SingleBlockModifierReplacement(
-                "speed", new BlockPos(1, 0, 0), new BlockPredicate.Any(),
+                "speed", rawPos, new BlockPredicate.Any(),
                 List.of(), "", ItemStack.EMPTY);
         var machine = new DynamicMachine(id, "Compiled Vertical Replacement",
                 new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.Any())),
                 MachineControllerSpec.defaultsFor(id), PortRequirementSpec.none(), List.of(),
-                Map.of(new BlockPos(1, 0, 0), List.of(replacement)));
+                Map.of(rawPos, List.of(replacement)));
 
-        assertThat(machine.rotatedModifierReplacements(Direction.UP, Direction.EAST))
-                .containsKey(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.UP, Direction.EAST));
+        for (Direction facing : List.of(Direction.UP, Direction.DOWN)) {
+            for (Direction rollFacing : Direction.Plane.HORIZONTAL) {
+                BlockPos expected = BlockRotator.rotateSouthTo(rawPos, facing, rollFacing);
+                assertThat(machine.rotatedModifierReplacements(facing, rollFacing)).containsKey(expected);
+            }
+        }
     }
 }

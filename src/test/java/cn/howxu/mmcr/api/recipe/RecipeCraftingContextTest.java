@@ -17,11 +17,17 @@ import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
+import com.google.gson.JsonElement;
+import com.mojang.serialization.DynamicOps;
+import com.mojang.serialization.JsonOps;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -668,6 +674,40 @@ class RecipeCraftingContextTest {
     }
 
     @Test
+    void selector_tag_still_limits_component_search_when_structure_modifier_changes_amount() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemInputBusBlockEntity wrongTag = itemInputBus(new BlockPos(1, 0, 0));
+        wrongTag.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(4));
+        ItemInputBusBlockEntity selected = itemInputBus(new BlockPos(2, 0, 0));
+        selected.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(2));
+        MachineControllerBlockEntity controller = controllerWithComponents(wrongTag, selected);
+        MachineComponent port = new MachineComponent(PortKinds.ITEM_INPUT, cn.howxu.mmcr.util.IOType.INPUT);
+        replaceComponents(controller, List.of(
+                new ProcessingComponent(port, wrongTag, wrongTag.getBlockPos(), BlockPos.ZERO, List.of("input_b")),
+                new ProcessingComponent(port, selected, selected.getBlockPos(), BlockPos.ZERO, List.of("input_a"))
+        ));
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "tagged_input_with_structure_modifier",
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY, List.of("input_a")))
+        );
+        RecipeModifier structureModifier = new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.INPUT,
+                2F, RecipeModifier.Operation.MULTIPLY, false);
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+        context.setStructureModifiers(List.of(structureModifier));
+
+        assertThat(((ItemRequirement) recipe.runtimeRequirements(context.structureModifiers()).getFirst()).count()).isEqualTo(4);
+        assertThat(context.simulateInputs(recipe)).isFalse();
+        assertThat(context.getLastRequirementFailure()).satisfies(failure -> {
+            assertThat(failure.required()).isEqualTo(4);
+            assertThat(failure.available()).isEqualTo(2);
+            assertThat(failure.searchedComponents()).anySatisfy(trace -> assertThat(trace).contains(selected.getBlockPos().toShortString()));
+            assertThat(failure.searchedComponents()).noneSatisfy(trace -> assertThat(trace).contains(wrongTag.getBlockPos().toShortString()));
+            assertThat(failure.matchedComponents()).anySatisfy(trace -> assertThat(trace).contains(selected.getBlockPos().toShortString()));
+            assertThat(failure.matchedComponents()).noneSatisfy(trace -> assertThat(trace).contains(wrongTag.getBlockPos().toShortString()));
+        });
+    }
+
+    @Test
     void itemRequirementWrongTagRecordsTagMismatchFailure() throws Exception {
         bindItemComponents(Items.IRON_INGOT);
         ItemInputBusBlockEntity tagged = itemInputBus(new BlockPos(1, 0, 0));
@@ -756,6 +796,61 @@ class RecipeCraftingContextTest {
         assertThat(context.commitInputs(recipe)).isTrue();
         assertThat(tagged.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
         assertThat(other.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(4);
+    }
+
+    @Test
+    void structure_modifiers_change_duration_output_count_and_clamped_chance_without_mutating_recipe() {
+        bindItemComponents(Items.IRON_NUGGET);
+        List<RecipeModifier> recipeModifiers = List.of(new RecipeModifier(
+                IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.OUTPUT, 1F,
+                RecipeModifier.Operation.ADD, false));
+        List<RecipeModifier> structureModifiers = List.of(
+                new RecipeModifier("duration", RecipeModifier.IOType.INPUT, 2F,
+                        RecipeModifier.Operation.MULTIPLY, false),
+                new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 2F,
+                        RecipeModifier.Operation.ADD, false),
+                new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 0.5F,
+                        RecipeModifier.Operation.MULTIPLY, true));
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "structure_duration_output_chance",
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                        Items.IRON_NUGGET.getDefaultInstance().copyWithCount(2), 1F, List.of())));
+        recipe = new MachineRecipe(recipe.id(), recipe.machineId(), 20, List.of(), List.of(),
+                recipeModifiers, 0, 1, false, List.of(), recipe.requirements());
+        RecipeCraftingContext context = new RecipeCraftingContext(controllerWithComponents());
+        context.setStructureModifiers(structureModifiers);
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, 1);
+
+        active.refreshTotalTick(context);
+        List<MachineOutput> outputs = recipe.runtimeMachineOutputs(structureModifiers);
+        List<cn.howxu.mmcr.api.recipe.requirement.MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
+        var encoded = MachineRecipe.CODEC.codec().encodeStart(jsonOps(), recipe).getOrThrow();
+        var decoded = MachineRecipe.CODEC.codec().parse(jsonOps(), encoded).getOrThrow();
+
+        assertThat(active.getTotalTick()).isEqualTo(40);
+        assertThat(outputs.getFirst()).isInstanceOfSatisfying(MachineOutput.ItemOutput.class, output -> {
+            assertThat(output.stack().getCount()).isEqualTo(5);
+            assertThat(output.chance()).isEqualTo(0.5F);
+        });
+        assertThat(requirements.getFirst()).isInstanceOfSatisfying(ItemRequirement.class, requirement -> {
+            assertThat(requirement.stack().getCount()).isEqualTo(5);
+            assertThat(requirement.chance()).isEqualTo(0.5F);
+        });
+        assertThat(recipe.modifiers()).containsExactlyElementsOf(recipeModifiers);
+        assertThat(recipe.requirements().getFirst()).isInstanceOfSatisfying(ItemRequirement.class, requirement -> {
+            assertThat(requirement.io()).isEqualTo(RecipeModifier.IOType.OUTPUT);
+            assertThat(requirement.stack().getItem()).isEqualTo(Items.IRON_NUGGET);
+            assertThat(requirement.stack().getCount()).isEqualTo(2);
+            assertThat(requirement.chance()).isEqualTo(1F);
+        });
+        assertThat(decoded.modifiers()).containsExactlyElementsOf(recipe.modifiers());
+        assertThat(decoded.requirements()).hasSameSizeAs(recipe.requirements());
+        assertThat(decoded.requirements().getFirst()).isInstanceOfSatisfying(ItemRequirement.class, requirement -> {
+            assertThat(requirement.io()).isEqualTo(RecipeModifier.IOType.OUTPUT);
+            assertThat(requirement.stack().getItem()).isEqualTo(Items.IRON_NUGGET);
+            assertThat(requirement.stack().getCount()).isEqualTo(2);
+            assertThat(requirement.chance()).isEqualTo(1F);
+        });
     }
 
     private static ItemInputBusBlockEntity itemInputBus(BlockPos pos) {
@@ -905,5 +1000,9 @@ class RecipeCraftingContextTest {
         Field field = declaringClass.getDeclaredField(name);
         field.setAccessible(true);
         field.set(target, value);
+    }
+
+    private static DynamicOps<JsonElement> jsonOps() {
+        return RegistryOps.create(JsonOps.INSTANCE, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
     }
 }

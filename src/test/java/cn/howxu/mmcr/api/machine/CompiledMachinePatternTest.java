@@ -64,19 +64,32 @@ class CompiledMachinePatternTest {
     @Test
     void compiled_pattern_contains_rotated_replacements_for_horizontal_facing() {
         Identifier id = Identifier.fromNamespaceAndPath("mmcr", "compiled_replacement");
+        BlockPos rawPos = new BlockPos(-1, 0, 0);
         var replacement = new SingleBlockModifierReplacement(
-                "speed", new BlockPos(-1, 0, 0), new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
+                "speed", rawPos, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
                 List.of(), "", ItemStack.EMPTY);
         var machine = new DynamicMachine(
                 id, "Compiled Replacement", new BlockArray(Map.of(
-                        BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE))),
+                        BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE),
+                        new BlockPos(0, 0, 1), new BlockPredicate.AnyOf(java.util.List.of(
+                                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()),
+                                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_output_bus").get()))))),
                 MachineControllerSpec.defaultsFor(id), PortRequirementSpec.none(), List.of(),
-                Map.of(new BlockPos(-1, 0, 0), List.of(replacement)));
+                Map.of(rawPos, List.of(replacement)));
 
         CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
 
-        assertThat(compiled.modifierReplacements(Direction.EAST))
-                .containsKey(new BlockPos(0, 0, 1));
+        for (Direction facing : Direction.Plane.HORIZONTAL) {
+            assertThat(compiled.modifierReplacements(facing))
+                    .containsKey(BlockRotator.rotateSouthTo(rawPos, facing));
+        }
+        assertThat(compiled.rotatedPattern(Direction.SOUTH).pattern()).hasSize(2);
+        assertThat(compiled.componentPositions(Direction.SOUTH)).containsExactly(new BlockPos(0, 0, 1));
+        assertThat(compiled.portPositions(Direction.SOUTH)).containsExactly(new BlockPos(0, 0, 1));
+        assertThat(compiled.boundingBox(Direction.SOUTH).minX()).isEqualTo(0);
+        assertThat(compiled.boundingBox(Direction.SOUTH).maxX()).isEqualTo(0);
+        assertThat(compiled.boundingBox(Direction.SOUTH).minZ()).isEqualTo(0);
+        assertThat(compiled.boundingBox(Direction.SOUTH).maxZ()).isEqualTo(1);
     }
 
     private static BlockArray pattern() {

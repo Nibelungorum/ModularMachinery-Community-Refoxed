@@ -290,7 +290,7 @@ public final class RecipeCraftingContext {
                 ? RequirementFailure.Kind.TAG_MISMATCH
                 : RequirementFailure.Kind.MISSING_INPUT;
         List<BlockEntity> traces = new ArrayList<>(searched);
-        traces.addAll(tagExcluded);
+        if (searched.isEmpty()) traces.addAll(tagExcluded);
         return new RequirementFailure(
                 requirementIndex,
                 kind,
@@ -311,7 +311,7 @@ public final class RecipeCraftingContext {
                 ? RequirementFailure.Kind.TAG_MISMATCH
                 : RequirementFailure.Kind.MISSING_OUTPUT;
         List<BlockEntity> traces = new ArrayList<>(searched);
-        traces.addAll(tagExcluded);
+        if (searched.isEmpty()) traces.addAll(tagExcluded);
         return new RequirementFailure(
                 requirementIndex,
                 kind,
