@@ -52,6 +52,10 @@ public final class RecipeRegistry {
         return priorityMap.values().stream().flatMap(TreeSet::stream).toList();
     }
 
+    public static List<MachineRecipe> recipes() {
+        return List.copyOf(RECIPES.values());
+    }
+
     public static int registeredRecipeCount() {
         return RECIPES.size();
     }

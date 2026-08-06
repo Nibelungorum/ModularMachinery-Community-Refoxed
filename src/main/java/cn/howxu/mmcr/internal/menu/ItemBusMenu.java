@@ -12,6 +12,10 @@ public class ItemBusMenu extends AbstractMachineMenu {
 
     public static final int COLS = 3;
     public static final int ROWS = 2;
+    public static final int BUS_SLOT_START = 0;
+    public static final int BUS_SLOT_COUNT = COLS * ROWS;
+    public static final int PLAYER_INVENTORY_SLOT_START = BUS_SLOT_COUNT;
+    public static final int PLAYER_INVENTORY_SLOT_COUNT = 36;
 
     private final ItemBusBlockEntity owner;
 

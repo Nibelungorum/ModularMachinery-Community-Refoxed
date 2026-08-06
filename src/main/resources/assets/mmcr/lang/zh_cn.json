@@ -1,0 +1,8 @@
+{
+  "jei.mmcr.machine_recipe": "机器配方",
+  "jei.mmcr.machine_recipe.duration": "耗时：%s tick（%s 秒）",
+  "jei.mmcr.machine_recipe.energy_in": "能量输入：%s FE/t",
+  "jei.mmcr.machine_recipe.energy_out": "能量输出：%s FE/t",
+  "jei.mmcr.transfer.fluid_energy_not_supported": "仅支持转移物品输入；流体和能量需要通过对应端口供应。",
+  "jei.mmcr.transfer.no_item_inputs": "该配方没有可转移的物品输入。"
+}
