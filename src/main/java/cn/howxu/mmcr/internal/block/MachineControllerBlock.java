@@ -61,10 +61,11 @@ public class MachineControllerBlock extends Block implements EntityBlock {
 
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext ctx) {
+        boolean verticalAllowed = isVerticalAllowed();
         Direction nearest = ctx.getNearestLookingDirection().getOpposite();
         Direction fallback = ctx.getHorizontalDirection().getOpposite();
-        Direction facing = isVerticalAllowed() ? nearest : fallback;
-        if (!isVerticalAllowed() && facing.getAxis().isVertical()) {
+        Direction facing = verticalAllowed ? nearest : fallback;
+        if (!verticalAllowed && facing.getAxis().isVertical()) {
             facing = fallback;
         }
         return defaultBlockState().setValue(FACING, facing);

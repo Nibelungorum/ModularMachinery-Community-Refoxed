@@ -206,6 +206,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void checkStructure() {
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
+        if (facing.getAxis().isVertical() && machine != null && !machine.controller().allowVerticalFacing()) {
+            resetMachine();
+            return;
+        }
         if (foundMachine != null && foundPattern != null && controllerFacing == facing) {
             if (StructureMatcher.matchesRotated(foundPattern, level, getBlockPos())) {
                 if (!isFormed()) setFormed(true);
