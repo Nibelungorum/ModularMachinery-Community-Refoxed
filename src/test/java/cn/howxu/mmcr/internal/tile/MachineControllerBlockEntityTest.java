@@ -456,6 +456,34 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.getLastFailureUnloc()).isNull();
     }
 
+    @Test
+    void recipeSearchExceptionDoesNotBreakControllerTick() throws Exception {
+        net.minecraft.world.item.Items.IRON_INGOT.builtInRegistryHolder().bindComponents(net.minecraft.core.component.DataComponentMap.EMPTY);
+        var machine = new DynamicMachine(MMCR.id("exception_machine"), "Exception Machine", onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_output_bus").get()));
+        MachineRegistry.register(machine);
+        RecipeRegistry.register(new MachineRecipe(
+                MMCR.id("exception_recipe"),
+                machine.registryName(),
+                20,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, net.minecraft.world.item.Items.IRON_INGOT.getDefaultInstance()))));
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, itemOutputBus(controllerPos.offset(1, 0, 0)));
+        setField(MachineControllerBlockEntity.class, controller, "machine", machine);
+
+        controller.serverTick();
+
+        assertThat(controller.isFormed()).isTrue();
+        assertThat(controller.getActive()).isNull();
+        assertThat(controller.getLastFailureUnloc()).isEqualTo(RecipeCraftingContext.FAILURE_SEARCH_EXCEPTION);
+    }
+
     private static MachineControllerBlockEntity controllerBlockEntityWithoutRunningMinecraftConstructor() {
         try {
             Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");

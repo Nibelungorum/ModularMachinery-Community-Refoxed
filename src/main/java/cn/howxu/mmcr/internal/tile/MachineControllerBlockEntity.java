@@ -492,7 +492,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
         Identifier machineId = foundMachine == null ? null : foundMachine.registryName();
         if (machineId == null) return false;
         List<MachineRecipe> candidates = recipesForMachine();
-        RecipeSearchResult result = new RecipeSearchTask(this, machineId, structureVersion, 1, candidates, contextPool()).compute();
+        RecipeSearchResult result;
+        try {
+            result = new RecipeSearchTask(this, machineId, structureVersion, 1, candidates, contextPool()).compute();
+        } catch (RuntimeException e) {
+            LOG.warn("[Ctrl#{}] tryStartNewRecipe: recipe search failed at pos={}; retrying later", instanceId, getBlockPos(), e);
+            recipeSearchRetryCounter++;
+            lastFailureUnloc = RecipeCraftingContext.FAILURE_SEARCH_EXCEPTION;
+            return false;
+        }
         if (result.success()) {
             return applySearchResult(result, candidates.size());
         }

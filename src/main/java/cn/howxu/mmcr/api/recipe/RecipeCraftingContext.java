@@ -31,6 +31,7 @@ public final class RecipeCraftingContext {
     public static final String FAILURE_MISSING_INPUT = "gui.mmcr.controller.failure.missing_input";
     public static final String FAILURE_MISSING_OUTPUT = "gui.mmcr.controller.failure.missing_output";
     public static final String FAILURE_MISSING_ENERGY = "gui.mmcr.controller.failure.missing_energy";
+    public static final String FAILURE_SEARCH_EXCEPTION = "gui.mmcr.controller.failure.recipe_search_exception";
 
     private MachineControllerBlockEntity controller;
 
