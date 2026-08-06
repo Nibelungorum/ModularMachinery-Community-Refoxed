@@ -14,6 +14,9 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * @author howxu <dev@howxu.cn>
+ */
 class SingleBlockModifierReplacementTest {
     @BeforeAll static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
