@@ -79,6 +79,12 @@ public final class ActiveMachineRecipe {
         this.totalTick = Math.max(0, totalTick);
     }
 
+    public void refreshTotalTick(RecipeCraftingContext context) {
+        this.totalTick = IntegrationTypeHelper.asInt(
+                IntegrationTypeHelper.applyDuration(
+                        context.effectiveModifiers(recipe), recipe.getRecipeTotalTickTime()));
+    }
+
     public int getMaxParallelism() {
         return maxParallelism;
     }
@@ -187,7 +193,7 @@ public final class ActiveMachineRecipe {
         }
         boolean started = context.startCrafting(recipe);
         if (started) {
-            this.totalTick = IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyDuration(recipe.modifiers(), recipe.getRecipeTotalTickTime()));
+            refreshTotalTick(context);
         }
         LOG.info("ActiveMachineRecipe#{} start(): recipe {} started={} totalTick={}", instanceId, recipe.id(), started, totalTick);
         return started;

@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -307,6 +308,27 @@ class MachineRecipeTest {
         assertThat(back.outputs().getFirst().getCount()).isEqualTo(1);
         assertThat(((cn.howxu.mmcr.api.recipe.requirement.ItemRequirement) back.runtimeRequirements().get(0)).count()).isEqualTo(6);
         assertThat(((cn.howxu.mmcr.api.recipe.requirement.ItemRequirement) back.runtimeRequirements().get(1)).stack().getCount()).isEqualTo(4);
+    }
+
+    @Test
+    void runtime_requirements_accept_structure_modifiers_without_mutating_raw_recipe() {
+        MachineRecipe recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "effective_modifiers"),
+                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                20,
+                List.of(new MachineIngredient.ItemIngredient(net.minecraft.world.item.crafting.Ingredient.of(Items.IRON_INGOT), 2)),
+                List.of(),
+                List.of(new RecipeModifier("item", RecipeModifier.IOType.INPUT, 1F,
+                        RecipeModifier.Operation.MULTIPLY, false)),
+                0,
+                1);
+        List<RecipeModifier> effective = List.of(
+                new RecipeModifier("item", RecipeModifier.IOType.INPUT, 2F,
+                        RecipeModifier.Operation.ADD, false));
+
+        assertThat(recipe.runtimeRequirements(effective).getFirst()).isInstanceOf(ItemRequirement.class);
+        assertThat(((ItemRequirement) recipe.runtimeRequirements(effective).getFirst()).count()).isEqualTo(4);
+        assertThat(((ItemRequirement) recipe.requirements().getFirst()).count()).isEqualTo(2);
     }
 
     private static Holder<Fluid> bindFluidComponents(Fluid fluid) {

@@ -220,44 +220,62 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     }
 
     public List<MachineRequirement> runtimeRequirements() {
-        if (modifiers.isEmpty()) return requirements;
+        return runtimeRequirements(List.of());
+    }
+
+    public List<MachineRequirement> runtimeRequirements(List<RecipeModifier> extraModifiers) {
+        List<RecipeModifier> effective = combineModifiers(extraModifiers);
+        if (effective.isEmpty()) return requirements;
         List<MachineRequirement> derived = new ArrayList<>(requirements.size());
         for (MachineRequirement requirement : requirements) {
-            derived.add(applyModifiers(requirement));
+            derived.add(applyModifiers(requirement, effective));
         }
         return List.copyOf(derived);
     }
 
     public List<MachineOutput> runtimeMachineOutputs() {
-        if (modifiers.isEmpty()) return machineOutputs();
+        return runtimeMachineOutputs(List.of());
+    }
+
+    public List<MachineOutput> runtimeMachineOutputs(List<RecipeModifier> extraModifiers) {
+        List<RecipeModifier> effective = combineModifiers(extraModifiers);
+        if (effective.isEmpty()) return machineOutputs();
         return machineOutputs().stream()
-                .map(output -> output.applyModifiers(modifiers))
+                .map(output -> output.applyModifiers(effective))
                 .toList();
     }
 
-    private MachineRequirement applyModifiers(MachineRequirement requirement) {
+    private List<RecipeModifier> combineModifiers(List<RecipeModifier> extraModifiers) {
+        if (extraModifiers == null || extraModifiers.isEmpty()) return modifiers;
+        ArrayList<RecipeModifier> combined = new ArrayList<>(modifiers.size() + extraModifiers.size());
+        combined.addAll(modifiers);
+        combined.addAll(extraModifiers);
+        return List.copyOf(combined);
+    }
+
+    private MachineRequirement applyModifiers(MachineRequirement requirement, List<RecipeModifier> effectiveModifiers) {
         if (requirement instanceof ItemRequirement item) {
             if (item.io() == RecipeModifier.IOType.INPUT) {
-                int count = IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyItemInput(modifiers, item.count()));
+                int count = IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyItemInput(effectiveModifiers, item.count()));
                 return new ItemRequirement(item.io(), item.item(), count, item.stack(), item.chance(), item.tags());
             }
             ItemStack stack = item.stack().copy();
-            stack.setCount(IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyItemOutput(modifiers, stack.getCount())));
-            float chance = IntegrationTypeHelper.applyItemOutputChance(modifiers, item.chance());
+            stack.setCount(IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyItemOutput(effectiveModifiers, stack.getCount())));
+            float chance = IntegrationTypeHelper.applyItemOutputChance(effectiveModifiers, item.chance());
             return new ItemRequirement(item.io(), item.item(), item.count(), stack, chance, item.tags());
         }
         if (requirement instanceof FluidRequirement fluid) {
             if (fluid.io() == RecipeModifier.IOType.INPUT) {
-                int amount = IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyFluidInput(modifiers, fluid.amount()));
+                int amount = IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyFluidInput(effectiveModifiers, fluid.amount()));
                 return new FluidRequirement(fluid.io(), fluid.fluid(), amount, fluid.stack(), fluid.chance(), fluid.tags());
             }
             FluidStack stack = fluid.stack().copy();
-            stack.setAmount(IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyFluidOutput(modifiers, stack.getAmount())));
-            float chance = IntegrationTypeHelper.applyFluidOutputChance(modifiers, fluid.chance());
+            stack.setAmount(IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyFluidOutput(effectiveModifiers, stack.getAmount())));
+            float chance = IntegrationTypeHelper.applyFluidOutputChance(effectiveModifiers, fluid.chance());
             return new FluidRequirement(fluid.io(), fluid.fluid(), fluid.amount(), stack, chance, fluid.tags());
         }
         if (requirement instanceof EnergyRequirement energy) {
-            int fePerTick = IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyEnergy(modifiers, energy.fePerTick()));
+            int fePerTick = IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyEnergy(effectiveModifiers, energy.fePerTick()));
             return new EnergyRequirement(fePerTick, energy.tags());
         }
         return requirement;

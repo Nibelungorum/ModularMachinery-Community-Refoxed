@@ -36,6 +36,7 @@ public final class RecipeCraftingContext {
 
     private MachineControllerBlockEntity controller;
     private long structureVersion;
+    private long modifierSnapshotVersion;
 
     private List<ItemInputRoute> itemInputRoutes = List.of();
     private List<ItemOutputRoute> itemOutputRoutes = List.of();
@@ -44,19 +45,23 @@ public final class RecipeCraftingContext {
     private @Nullable String lastFailureUnloc;
     private @Nullable RequirementFailure lastRequirementFailure;
     private @Nullable Identifier poolRecipeId;
+    private List<RecipeModifier> structureModifiers = List.of();
 
     public RecipeCraftingContext(MachineControllerBlockEntity controller) {
         this.controller = controller;
         this.structureVersion = controller.getStructureVersion();
+        this.modifierSnapshotVersion = controller.getModifierSnapshotVersion();
     }
 
     public boolean isStructureVersionCurrent() {
-        return structureVersion == controller.getStructureVersion();
+        return structureVersion == controller.getStructureVersion()
+                && modifierSnapshotVersion == controller.getModifierSnapshotVersion();
     }
 
     void resetFor(MachineControllerBlockEntity controller) {
         this.controller = controller;
         this.structureVersion = controller.getStructureVersion();
+        this.modifierSnapshotVersion = controller.getModifierSnapshotVersion();
         resetTransientState();
     }
 
@@ -67,6 +72,22 @@ public final class RecipeCraftingContext {
         fluidOutputRoutes = List.of();
         lastFailureUnloc = null;
         lastRequirementFailure = null;
+        structureModifiers = List.of();
+    }
+
+    public void setStructureModifiers(List<RecipeModifier> modifiers) {
+        structureModifiers = modifiers == null ? List.of() : List.copyOf(modifiers);
+    }
+
+    public List<RecipeModifier> structureModifiers() {
+        return structureModifiers;
+    }
+
+    public List<RecipeModifier> effectiveModifiers(MachineRecipe recipe) {
+        ArrayList<RecipeModifier> result = new ArrayList<>(recipe.modifiers().size() + structureModifiers.size());
+        result.addAll(recipe.modifiers());
+        result.addAll(structureModifiers);
+        return List.copyOf(result);
     }
 
     void setPoolRecipeId(Identifier recipeId) {
@@ -116,7 +137,7 @@ public final class RecipeCraftingContext {
     public boolean ioTick(MachineRecipe recipe) {
         lastFailureUnloc = null;
         lastRequirementFailure = null;
-        List<MachineRequirement> requirements = recipe.runtimeRequirements();
+        List<MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             if (!requirements.get(requirementIndex).ioTick(this, requirementIndex)) return false;
         }
@@ -126,7 +147,7 @@ public final class RecipeCraftingContext {
     public boolean simulateInputs(MachineRecipe recipe) {
         lastFailureUnloc = null;
         lastRequirementFailure = null;
-        List<MachineRequirement> requirements = recipe.runtimeRequirements();
+        List<MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
         itemInputRoutes = emptyItemInputRoutes(requirements.size());
         fluidInputRoutes = emptyFluidInputRoutes(requirements.size());
 
@@ -140,7 +161,7 @@ public final class RecipeCraftingContext {
     public boolean simulateOutputs(MachineRecipe recipe) {
         lastFailureUnloc = null;
         lastRequirementFailure = null;
-        List<MachineRequirement> requirements = recipe.runtimeRequirements();
+        List<MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
         itemOutputRoutes = emptyItemOutputRoutes(requirements.size());
         fluidOutputRoutes = emptyFluidOutputRoutes(requirements.size());
 
@@ -304,7 +325,7 @@ public final class RecipeCraftingContext {
     public boolean commitInputs(MachineRecipe recipe) {
         List<ItemInputTransfer> itemTransfers = new ArrayList<>();
         List<FluidInputTransfer> fluidTransfers = new ArrayList<>();
-        List<MachineRequirement> requirements = recipe.runtimeRequirements();
+        List<MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
         RequirementFailure itemFailure = firstItemInputFailure(requirements);
         if (itemFailure != null) {
             setFailure(FAILURE_MISSING_INPUT, itemFailure);
@@ -337,7 +358,7 @@ public final class RecipeCraftingContext {
     public boolean commitOutputs(MachineRecipe recipe) {
         List<ItemOutputTransfer> itemTransfers = new ArrayList<>();
         List<FluidOutputTransfer> fluidTransfers = new ArrayList<>();
-        List<MachineRequirement> requirements = recipe.runtimeRequirements();
+        List<MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
         RequirementFailure itemFailure = firstItemOutputFailure(requirements);
         if (itemFailure != null) {
             setFailure(FAILURE_MISSING_OUTPUT, itemFailure);

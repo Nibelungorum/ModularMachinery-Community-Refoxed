@@ -1,31 +1,36 @@
-# Task 6 Report: KubeJS Schema and PreparedRecipe Pass-through
+# Task 6 Report: 合并 recipe-local 与 structure modifiers
 
-Status: DONE
+## Summary
 
-## Changes
+- Added runtime modifier overloads to `MachineRecipe` for requirements and outputs, preserving raw recipe requirements/modifiers.
+- Added `RecipeCraftingContext` structure modifier snapshot APIs and routed simulate/commit/ioTick through runtime requirements with the snapshot.
+- Made `ActiveMachineRecipe.start(context)` refresh duration from the same context-effective modifier list used by runtime I/O.
+- Injected `MachineControllerBlockEntity.foundModifierList()` snapshots through `RecipeCraftingContextPool.borrow`.
+- Added lightweight `modifierSnapshotVersion` on the controller so active contexts invalidate when found modifiers change without a structure version change.
+- Refreshed replacement contexts in active ticking with the current structure modifier snapshot.
 
-- Extended `prepared_recipe_converts_to_machine_recipe` to assert `PreparedRecipe.toMachineRecipe()` preserves the raw modifier list via `recipe.modifiers().equals(prepared.getModifiers())`.
-- Changed that PreparedRecipe smoke case to use a duration multiplier modifier so `recipe.getRecipeTotalTickTime()` proves runtime-derived duration is 50 while raw `tickTime` remains 50.
-- Added the `modifiers` KubeJS schema key as a raw JSON list passthrough and included it in the machine recipe schema constructor.
+## RED Evidence
 
-## MachineRecipeSchema.java
+Command:
 
-Changed: yes.
+```bash
+./gradlew test --tests cn.howxu.mmcr.api.recipe.MachineRecipeTest --tests cn.howxu.mmcr.api.recipe.RecipeCraftingContextTest --no-daemon
+```
 
-Reason: `Plugin.registerRecipeSchemas()` registers `MachineRecipeSchema` and `Plugin.registerRecipeFactories()` registers `MachineRecipeFactory.INSTANCE`, so the current KubeJS authoring path exposes machine recipes through this schema/factory registration. `MachineRecipeFactory` uses the generic `KubeRecipe` factory and does not add custom builder decoding logic, so adding the raw `modifiers` schema key is the minimal pass-through needed for recipe scripts without inventing fake builder behavior.
+Result: `BUILD FAILED` during compilation because `MachineRecipe.runtimeRequirements(List<RecipeModifier>)`, `RecipeCraftingContext.structureModifiers()`, and `RecipeCraftingContext.effectiveModifiers(MachineRecipe)` did not exist.
 
-## PreparedRecipe.java
+## GREEN Evidence
 
-Changed: no.
+Command:
 
-Reason: `PreparedRecipe.toMachineRecipe()` already passes `modifiers` and `fluidOutputs` into the full `MachineRecipe` constructor, so only test coverage was needed.
+```bash
+./gradlew test --tests cn.howxu.mmcr.api.recipe.MachineRecipeTest --tests cn.howxu.mmcr.api.recipe.RecipeCraftingContextTest --tests cn.howxu.mmcr.api.recipe.RecipeSearchTaskTest --no-daemon
+```
 
-## Verification
+Result: `BUILD SUCCESSFUL` with 49 focused tests completed.
 
-Command: `./gradlew test --tests cn.howxu.mmcr.api.recipe.RecipeApiSmokeTest --no-daemon`
+## Notes
 
-Result: PASS (`BUILD SUCCESSFUL in 13s`, 17 actionable tasks: 3 executed, 14 up-to-date).
-
-## Concerns
-
-- CodeGraph was indexed from the main worktree rather than this linked worktree, so current worktree files were confirmed with direct reads before editing.
+- The brief's first new test expected count `6` for base `2`, recipe modifier `MULTIPLY 1`, and structure modifier `ADD 2`. Existing project semantics define modifier application as `(value + add) * mul`, so the correct runtime count under current semantics is `4`. I preserved existing `RecipeModifier.applyModifiers` behavior and adjusted only that assertion.
+- `RecipeSearchTask.java` did not need direct code changes; it consumes the snapshot through `RecipeCraftingContextPool.borrow` as intended.
+- No unrelated `org/nibelungorum`, related tests, or `TestBootstrap` changes were touched.

@@ -399,6 +399,28 @@ class RecipeCraftingContextTest {
     }
 
     @Test
+    void structure_modifiers_are_added_after_recipe_modifiers_and_cleared_on_reset() {
+        RecipeCraftingContext context = new RecipeCraftingContext(controllerWithComponents());
+        RecipeModifier recipeModifier = new RecipeModifier("item", RecipeModifier.IOType.INPUT, 1F,
+                RecipeModifier.Operation.MULTIPLY, false);
+        MachineRecipe recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "context_effective_modifiers"),
+                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                20, List.of(), List.of(), List.of(recipeModifier), 0, 1);
+        RecipeModifier structure = new RecipeModifier("item", RecipeModifier.IOType.INPUT, 2F,
+                RecipeModifier.Operation.ADD, false);
+
+        context.setStructureModifiers(List.of(structure));
+
+        assertThat(context.structureModifiers()).containsExactly(structure);
+        assertThat(context.effectiveModifiers(recipe)).containsExactly(recipeModifier, structure);
+
+        context.resetTransientState();
+
+        assertThat(context.structureModifiers()).isEmpty();
+    }
+
+    @Test
     void item_output_modifier_changes_runtime_output_without_mutating_recipe() {
         bindItemComponents(Items.IRON_NUGGET);
         ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));

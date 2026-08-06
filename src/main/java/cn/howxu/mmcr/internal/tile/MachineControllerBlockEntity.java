@@ -70,6 +70,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private final List<ProcessingComponent> components = new ArrayList<>();
     private final Map<String, List<RecipeModifier>> foundModifiers = new LinkedHashMap<>();
     private long structureVersion;
+    private long modifierSnapshotVersion;
     private int structureCheckCounter;
     private boolean structureDirty = true;
     private boolean clientActive;
@@ -114,10 +115,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public BlockArray getFoundPattern() { return foundPattern; }
 
     public Map<String, List<RecipeModifier>> getFoundModifiers() {
+        if (foundModifiers == null) return Map.of();
         return Map.copyOf(foundModifiers);
     }
 
     public List<RecipeModifier> foundModifierList() {
+        if (foundModifiers == null) return List.of();
         return foundModifiers.values().stream().flatMap(List::stream).toList();
     }
 
@@ -136,6 +139,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public ActiveMachineRecipe getActive() { return active; }
 
     public long getStructureVersion() { return structureVersion; }
+
+    public long getModifierSnapshotVersion() { return modifierSnapshotVersion; }
 
     public @Nullable String getLastFailureUnloc() { return lastFailureUnloc; }
 
@@ -497,16 +502,19 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void collectFoundModifiers(Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
+        List<RecipeModifier> before = foundModifierList();
         foundModifiers.clear();
-        if (level == null) return;
-        for (var entry : replacements.entrySet()) {
-            BlockState actual = level.getBlockState(getBlockPos().offset(entry.getKey()));
-            for (SingleBlockModifierReplacement replacement : entry.getValue()) {
-                if (replacement.getReplacement().matches(actual)) {
-                    foundModifiers.putIfAbsent(replacement.getModifierName(), replacement.getModifiers());
+        if (level != null) {
+            for (var entry : replacements.entrySet()) {
+                BlockState actual = level.getBlockState(getBlockPos().offset(entry.getKey()));
+                for (SingleBlockModifierReplacement replacement : entry.getValue()) {
+                    if (replacement.getReplacement().matches(actual)) {
+                        foundModifiers.putIfAbsent(replacement.getModifierName(), replacement.getModifiers());
+                    }
                 }
             }
         }
+        if (!before.equals(foundModifierList())) modifierSnapshotVersion++;
     }
 
     private void updateComponents() {
@@ -753,6 +761,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             LOG.info("[Ctrl#{}] tickActiveRecipe: recipe {} refreshed stale structure context at pos={}",
                     instanceId, active.getRecipe().id(), getBlockPos());
             context = new RecipeCraftingContext(this);
+            context.setStructureModifiers(foundModifierList());
         }
         ActiveMachineRecipe.TickStatus status = active.tick(context);
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {

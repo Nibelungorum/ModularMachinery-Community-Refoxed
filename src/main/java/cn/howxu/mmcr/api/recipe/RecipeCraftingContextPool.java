@@ -32,11 +32,13 @@ public final class RecipeCraftingContextPool {
             PooledContext pooled = bucket.removeFirst();
             if (pooled.reloadCounter == reloadCounter) {
                 pooled.context.resetFor(controller);
+                pooled.context.setStructureModifiers(controller.foundModifierList());
                 return pooled.context;
             }
         }
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
         context.setPoolRecipeId(recipeId);
+        context.setStructureModifiers(controller.foundModifierList());
         return context;
     }
 
