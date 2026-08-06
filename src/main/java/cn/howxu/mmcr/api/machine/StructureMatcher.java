@@ -1,11 +1,14 @@
 package cn.howxu.mmcr.api.machine;
 
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 public final class StructureMatcher {
@@ -13,27 +16,60 @@ public final class StructureMatcher {
     private StructureMatcher() {}
 
     public static boolean matches(BlockArray pattern, Level level, BlockPos ctrlPos, Direction ctrlFacing) {
-        return matchesRotated(BlockArrayCache.get(pattern, ctrlFacing), level, ctrlPos);
+        return matches(pattern, level, ctrlPos, ctrlFacing, Map.of());
+    }
+
+    public static boolean matches(BlockArray pattern, Level level, BlockPos ctrlPos, Direction ctrlFacing,
+                                  Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
+        return matchesRotated(BlockArrayCache.get(pattern, ctrlFacing), level, ctrlPos, replacements);
     }
 
     public static boolean matchesCompiled(CompiledMachinePattern compiled, Direction facing, Level level, BlockPos ctrlPos) {
+        return matchesCompiled(compiled, facing, Direction.SOUTH, level, ctrlPos);
+    }
+
+    public static boolean matchesCompiled(CompiledMachinePattern compiled, Direction facing, Direction rollFacing, Level level, BlockPos ctrlPos) {
         if (!isAreaLoaded(compiled, facing, level, ctrlPos)) return false;
-        return matchesRotated(compiled.rotatedPattern(facing), level, ctrlPos);
+        return matchesRotated(compiled.rotatedPattern(facing), level, ctrlPos,
+                compiled.modifierReplacements(facing, rollFacing));
     }
 
     public static boolean matchesRotated(BlockArray pattern, Level level, BlockPos ctrlPos) {
+        return matchesRotated(pattern, level, ctrlPos, Map.of());
+    }
+
+    public static boolean matchesRotated(BlockArray pattern, Level level, BlockPos ctrlPos,
+                                         Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
         if (pattern.isEmpty()) return false;
 
-        return firstMismatch(pattern, level, ctrlPos).isEmpty();
+        return firstMismatch(pattern, level, ctrlPos, replacements).isEmpty();
     }
 
     public static Optional<Mismatch> firstMismatch(BlockArray pattern, Level level, BlockPos ctrlPos) {
+        return firstMismatch(pattern, level, ctrlPos, Map.of());
+    }
+
+    public static Optional<Mismatch> firstMismatch(BlockArray pattern, Level level, BlockPos ctrlPos,
+                                                   Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
         for (var entry : pattern.pattern().entrySet()) {
             BlockPos worldPos = ctrlPos.offset(entry.getKey());
             BlockState actualState = level.getBlockState(worldPos);
-            if (!entry.getValue().matches(actualState)) return Optional.of(new Mismatch(entry.getKey(), worldPos, entry.getValue(), actualState));
+            if (!matchesEntry(entry.getValue(), actualState, replacements.getOrDefault(entry.getKey(), List.of()))) {
+                return Optional.of(new Mismatch(entry.getKey(), worldPos, entry.getValue(), actualState));
+            }
         }
         return Optional.empty();
+    }
+
+    private static boolean matchesEntry(
+            BlockPredicate expected,
+            BlockState actual,
+            List<SingleBlockModifierReplacement> replacements) {
+        if (expected.matches(actual)) return true;
+        for (SingleBlockModifierReplacement replacement : replacements) {
+            if (replacement.getReplacement().matches(actual)) return true;
+        }
+        return false;
     }
 
     public static boolean isAreaLoaded(CompiledMachinePattern compiled, Direction facing, Level level, BlockPos ctrlPos) {

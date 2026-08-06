@@ -1,14 +1,17 @@
 package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -66,5 +69,52 @@ class StructureMatcherTest {
 
         assertThat(StructureMatcher.isAreaLoaded(compiled, Direction.SOUTH, level, controllerPos)).isFalse();
         assertThat(StructureMatcher.matchesCompiled(compiled, Direction.SOUTH, level, controllerPos)).isFalse();
+    }
+
+    @Test
+    void replacement_allows_only_the_configured_position_to_match() {
+        BlockPos replacementPos = new BlockPos(1, 0, 0);
+        BlockArray pattern = new BlockArray(Map.of(
+                BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE),
+                replacementPos, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+        var replacement = new SingleBlockModifierReplacement(
+                "speed", replacementPos, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
+                List.of(), "", ItemStack.EMPTY);
+        var level = LevelStub.create(Map.of(
+                BlockPos.ZERO, Blocks.STONE,
+                replacementPos, Blocks.GOLD_BLOCK));
+
+        assertThat(StructureMatcher.matchesRotated(pattern, level, BlockPos.ZERO,
+                Map.of(replacementPos, List.of(replacement)))).isTrue();
+    }
+
+    @Test
+    void replacement_at_another_position_does_not_match() {
+        BlockPos expected = new BlockPos(1, 0, 0);
+        BlockPos wrong = new BlockPos(2, 0, 0);
+        BlockArray pattern = new BlockArray(Map.of(
+                BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE),
+                expected, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+        var replacement = new SingleBlockModifierReplacement(
+                "speed", wrong, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
+                List.of(), "", ItemStack.EMPTY);
+
+        assertThat(StructureMatcher.matchesRotated(pattern,
+                LevelStub.create(Map.of(BlockPos.ZERO, Blocks.STONE, expected, Blocks.GOLD_BLOCK)),
+                BlockPos.ZERO, Map.of(wrong, List.of(replacement)))).isFalse();
+    }
+
+    @Test
+    void multiple_replacements_at_one_position_use_any_matching_predicate() {
+        BlockPos pos = new BlockPos(1, 0, 0);
+        BlockArray pattern = new BlockArray(Map.of(pos, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+        var first = new SingleBlockModifierReplacement("first", pos,
+                new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), "", ItemStack.EMPTY);
+        var second = new SingleBlockModifierReplacement("second", pos,
+                new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK), List.of(), "", ItemStack.EMPTY);
+
+        assertThat(StructureMatcher.matchesRotated(pattern,
+                LevelStub.create(Map.of(pos, Blocks.DIAMOND_BLOCK)), BlockPos.ZERO,
+                Map.of(pos, List.of(first, second)))).isTrue();
     }
 }

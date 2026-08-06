@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.tile;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockArrayCache;
 import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
@@ -16,6 +17,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
@@ -367,11 +369,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private boolean tryFormMachine(Machine candidate, Direction facing, BlockArray rotatedPattern) {
         var compiled = compiledFor(candidate, rotatedPattern, facing);
+        var replacements = replacementsFor(candidate, compiled, facing, rotatedPattern);
         boolean matches = compiled == null
-                ? StructureMatcher.matchesRotated(rotatedPattern, level, getBlockPos())
-                : StructureMatcher.matchesCompiled(compiled, facing, level, getBlockPos());
+                ? StructureMatcher.matchesRotated(rotatedPattern, level, getBlockPos(), replacements)
+                : StructureMatcher.matchesCompiled(compiled, facing, getBlockState().getValue(MachineControllerBlock.ROLL_FACING), level, getBlockPos());
         if (!matches) {
-            recordStructureMismatch(candidate, facing, rotatedPattern);
+            recordStructureMismatch(candidate, facing, rotatedPattern, replacements);
             return false;
         }
 
@@ -387,8 +390,21 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return true;
     }
 
-    private void recordStructureMismatch(Machine candidate, Direction facing, BlockArray rotatedPattern) {
-        String diagnostic = structureMismatchDiagnostic(candidate, facing, rotatedPattern, level, getBlockPos());
+    private Map<BlockPos, List<SingleBlockModifierReplacement>> replacementsFor(
+            Machine candidate, CompiledMachinePattern compiled, Direction facing, BlockArray rotatedPattern) {
+        Direction rollFacing = getBlockState().getValue(MachineControllerBlock.ROLL_FACING);
+        if (compiled != null && compiled.rotatedPattern(facing) == rotatedPattern) {
+            return compiled.modifierReplacements(facing, rollFacing);
+        }
+        if (candidate instanceof DynamicMachine dynamic) {
+            return dynamic.rotatedModifierReplacements(facing, rollFacing);
+        }
+        return Map.of();
+    }
+
+    private void recordStructureMismatch(Machine candidate, Direction facing, BlockArray rotatedPattern,
+                                         Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
+        String diagnostic = structureMismatchDiagnostic(candidate, facing, rotatedPattern, level, getBlockPos(), replacements);
         if (diagnostic.equals(lastStructureMismatchDiagnostic)) return;
         lastStructureMismatchDiagnostic = diagnostic;
         LOG.info("[Ctrl#{}] formation rejected: {}", instanceId, diagnostic);
@@ -401,6 +417,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     static String structureMismatchDiagnostic(Machine candidate, Direction facing, BlockArray rotatedPattern, Level level, BlockPos ctrlPos) {
+        return structureMismatchDiagnostic(candidate, facing, rotatedPattern, level, ctrlPos, Map.of());
+    }
+
+    static String structureMismatchDiagnostic(Machine candidate, Direction facing, BlockArray rotatedPattern, Level level, BlockPos ctrlPos,
+                                              Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
         if (rotatedPattern.isEmpty()) {
             return "machine=" + candidate.registryName()
                     + " facing=" + facing.name()
@@ -408,7 +429,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     + " reason=emptyPattern";
         }
 
-        var mismatch = StructureMatcher.firstMismatch(rotatedPattern, level, ctrlPos);
+        var mismatch = StructureMatcher.firstMismatch(rotatedPattern, level, ctrlPos, replacements);
         if (mismatch.isPresent()) {
             StructureMatcher.Mismatch first = mismatch.get();
             BlockEntity actualBlockEntity = level.getBlockEntity(first.worldPos());
