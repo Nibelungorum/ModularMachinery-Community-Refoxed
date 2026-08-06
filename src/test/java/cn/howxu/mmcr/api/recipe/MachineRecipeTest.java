@@ -138,6 +138,24 @@ class MachineRecipeTest {
     }
 
     @Test
+    void registryReloadVersionOnlyChangesWhenRegistryClears() {
+        long before = RecipeRegistry.reloadVersion();
+        var machineId = Identifier.fromNamespaceAndPath("mmcr", "versioned_machine");
+
+        RecipeRegistry.register(new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "versioned_recipe"),
+                machineId,
+                20,
+                List.of(),
+                List.of()));
+        assertThat(RecipeRegistry.reloadVersion()).isEqualTo(before);
+
+        RecipeRegistry.clearAll();
+
+        assertThat(RecipeRegistry.reloadVersion()).isEqualTo(before + 1);
+    }
+
+    @Test
     void fluidOnlyRequirementRecipeAssemblesEmptyItemStack() {
         bindFluidComponents(Fluids.WATER);
         var recipe = new MachineRecipe(
