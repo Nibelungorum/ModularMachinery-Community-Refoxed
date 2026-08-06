@@ -144,6 +144,8 @@
 
 **目标**：移植 MMCE 的 recipe modifier 概念，让结构内 modifier 方块、机器属性或脚本能影响 duration、input、output、chance 等数值。
 
+### 4.1 P3A：Recipe 内静态 modifier
+
 **状态**：已完成 recipe-local static modifier runtime chain；P3B pattern position modifier 与 runtime hook 仍按后续阶段执行。
 
 | MMCE 来源 | MMCR 目标 | 移植方式 |
