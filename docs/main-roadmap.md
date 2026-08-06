@@ -148,6 +148,8 @@
 
 **目标**：先补齐 recipe 定义自身携带的静态 modifiers，全链覆盖 duration、input、output、chance，并保证原始 recipe 定义与运行时派生值边界清晰。
 
+**状态**：已完成 recipe-local static modifier runtime chain；P3B pattern position modifier 与 runtime hook 仍按后续阶段执行。
+
 | MMCE 来源 | MMCR 目标 | 移植方式 |
 |---|---|---|
 | `RecipeModifier` | `api.recipe.modifier.RecipeModifier` | 直译，补齐 operation 和 target |

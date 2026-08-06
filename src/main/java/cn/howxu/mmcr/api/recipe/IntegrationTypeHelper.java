@@ -43,6 +43,16 @@ public final class IntegrationTypeHelper {
         return RecipeModifier.applyModifiers(modifiers, TARGET_FLUID, RecipeModifier.IOType.OUTPUT, amount, false);
     }
 
+    public static float applyItemOutputChance(List<RecipeModifier> modifiers, float chance) {
+        if (modifiers == null || modifiers.isEmpty()) return MachineOutput.clampChance(chance);
+        return MachineOutput.clampChance(RecipeModifier.applyModifiers(modifiers, TARGET_ITEM, RecipeModifier.IOType.OUTPUT, chance, true));
+    }
+
+    public static float applyFluidOutputChance(List<RecipeModifier> modifiers, float chance) {
+        if (modifiers == null || modifiers.isEmpty()) return MachineOutput.clampChance(chance);
+        return MachineOutput.clampChance(RecipeModifier.applyModifiers(modifiers, TARGET_FLUID, RecipeModifier.IOType.OUTPUT, chance, true));
+    }
+
     public static float applyEnergy(List<RecipeModifier> modifiers, int fePerTick) {
         if (modifiers == null || modifiers.isEmpty()) return fePerTick;
         return RecipeModifier.applyModifiers(modifiers, TARGET_ENERGY, RecipeModifier.IOType.INPUT, fePerTick, false);

@@ -270,6 +270,158 @@ class RecipeCraftingContextTest {
     }
 
     @Test
+    void zero_chance_item_output_does_not_insert_at_finish() {
+        bindItemComponents(Items.IRON_NUGGET);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerWithComponents(output);
+        MachineRecipe recipe = explicitItemRecipe(
+                "zero_chance_item_output",
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_NUGGET.getDefaultInstance().copyWithCount(3), 0F, List.of()))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+    }
+
+    @Test
+    void zero_chance_item_output_does_not_require_output_capacity() {
+        bindItemComponents(Items.COBBLESTONE);
+        bindItemComponents(Items.IRON_NUGGET);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        for (int slot = 0; slot < output.getItemStackHandler(null).getSlots(); slot++) {
+            output.getItemStackHandler(null).setStackInSlot(slot, Items.COBBLESTONE.getDefaultInstance().copyWithCount(64));
+        }
+        MachineControllerBlockEntity controller = controllerWithComponents(output);
+        MachineRecipe recipe = explicitItemRecipe(
+                "zero_chance_item_output_full_bus",
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_NUGGET.getDefaultInstance().copyWithCount(3), 0F, List.of()))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getItem()).isEqualTo(Items.COBBLESTONE);
+    }
+
+    @Test
+    void hundred_percent_item_output_inserts_at_finish() {
+        bindItemComponents(Items.IRON_NUGGET);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerWithComponents(output);
+        MachineRecipe recipe = explicitItemRecipe(
+                "full_chance_item_output",
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_NUGGET.getDefaultInstance().copyWithCount(3), 1F, List.of()))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(3);
+    }
+
+    @Test
+    void zero_chance_fluid_output_does_not_insert_at_finish() {
+        bindFluidComponents(Fluids.WATER);
+        FluidOutputHatchBlockEntity output = fluidOutputHatch(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerWithComponents(output);
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "zero_chance_fluid_output",
+                List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new FluidStack(Fluids.WATER, 1000), 0F, List.of()))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(output.getFluidTank(null).getFluidAmount()).isZero();
+    }
+
+    @Test
+    void zero_chance_fluid_output_does_not_require_output_capacity() {
+        bindFluidComponents(Fluids.WATER);
+        bindFluidComponents(Fluids.LAVA);
+        FluidOutputHatchBlockEntity output = fluidOutputHatch(new BlockPos(1, 0, 0));
+        output.getFluidTank(null).setFluid(new FluidStack(Fluids.LAVA, output.getFluidTank(null).getCapacity()));
+        MachineControllerBlockEntity controller = controllerWithComponents(output);
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "zero_chance_fluid_output_full_hatch",
+                List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new FluidStack(Fluids.WATER, 1000), 0F, List.of()))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(output.getFluidTank(null).getFluid().getFluid()).isEqualTo(Fluids.LAVA);
+    }
+
+    @Test
+    void hundred_percent_fluid_output_inserts_at_finish() {
+        bindFluidComponents(Fluids.WATER);
+        FluidOutputHatchBlockEntity output = fluidOutputHatch(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerWithComponents(output);
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "full_chance_fluid_output",
+                List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new FluidStack(Fluids.WATER, 1000), 1F, List.of()))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(output.getFluidTank(null).getFluid()).satisfies(stack -> {
+            assertThat(stack.getFluid()).isEqualTo(Fluids.WATER);
+            assertThat(stack.getAmount()).isEqualTo(1000);
+        });
+    }
+
+    @Test
+    void item_input_modifier_changes_runtime_consumption_without_mutating_recipe() {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 0, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(4));
+        MachineControllerBlockEntity controller = controllerWithComponents(input);
+        MachineRecipe recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "modified_item_input"),
+                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                20,
+                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
+                List.of(),
+                List.of(new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.INPUT, 2F, RecipeModifier.Operation.MULTIPLY, false)),
+                0,
+                1
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateInputs(recipe)).isTrue();
+        assertThat(context.commitInputs(recipe)).isTrue();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(recipe.inputs().getFirst()).isEqualTo(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2));
+    }
+
+    @Test
+    void item_output_modifier_changes_runtime_output_without_mutating_recipe() {
+        bindItemComponents(Items.IRON_NUGGET);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerWithComponents(output);
+        MachineRecipe recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "modified_item_output"),
+                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                20,
+                List.of(),
+                List.of(Items.IRON_NUGGET.getDefaultInstance().copyWithCount(2)),
+                List.of(new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.OUTPUT, 3F, RecipeModifier.Operation.MULTIPLY, false)),
+                0,
+                1
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(6);
+        assertThat(recipe.outputs().getFirst().getCount()).isEqualTo(2);
+    }
+
+    @Test
     void commitInputsValidatesAllItemRoutesBeforeMutating() {
         bindItemComponents(Items.IRON_INGOT);
         ItemInputBusBlockEntity first = itemInputBus(new BlockPos(1, 0, 0));

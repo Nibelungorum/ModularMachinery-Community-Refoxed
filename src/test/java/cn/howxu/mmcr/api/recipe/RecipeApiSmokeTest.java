@@ -15,7 +15,9 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.Fluids;
@@ -118,6 +120,10 @@ class RecipeApiSmokeTest {
         return holder;
     }
 
+    private static void bindItemComponents(Item item) {
+        item.builtInRegistryHolder().bindComponents(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
+    }
+
     @Test
     void recipe_codec_optional_fields_have_defaults() {
         var recipe = new MachineRecipe(
@@ -142,6 +148,31 @@ class RecipeApiSmokeTest {
         );
         float result = RecipeModifier.applyModifiers(mods, "item", RecipeModifier.IOType.OUTPUT, 10F, false);
         assertThat(result).isEqualTo((10F + 2F) * 1.5F);
+    }
+
+    @Test
+    void recipe_modifier_applies_add_subtract_before_multiply_divide() {
+        var mods = List.of(
+                new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 4F, RecipeModifier.Operation.ADD, false),
+                new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 3F, RecipeModifier.Operation.SUBTRACT, false),
+                new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 6F, RecipeModifier.Operation.MULTIPLY, false),
+                new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 2F, RecipeModifier.Operation.DIVIDE, false)
+        );
+
+        float result = RecipeModifier.applyModifiers(mods, "item", RecipeModifier.IOType.OUTPUT, 10F, false);
+
+        assertThat(result).isEqualTo(((10F + 4F - 3F) * 6F) / 2F);
+    }
+
+    @Test
+    void recipe_modifier_ignores_zero_divide_modifier() {
+        var mods = List.of(
+                new RecipeModifier("duration", RecipeModifier.IOType.INPUT, 0F, RecipeModifier.Operation.DIVIDE, false)
+        );
+
+        float result = RecipeModifier.applyModifiers(mods, "duration", RecipeModifier.IOType.INPUT, 80F, false);
+
+        assertThat(result).isEqualTo(80F);
     }
 
     @Test
@@ -171,6 +202,59 @@ class RecipeApiSmokeTest {
                 new RecipeModifier(IntegrationTypeHelper.TARGET_DURATION, RecipeModifier.IOType.INPUT, 0.5F, RecipeModifier.Operation.MULTIPLY, false)
         );
         assertThat(IntegrationTypeHelper.applyDuration(mods, 200)).isEqualTo(100F);
+    }
+
+    @Test
+    void active_recipe_uses_derived_duration_but_recipe_tick_time_stays_raw() {
+        var recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "duration_runtime"),
+                Identifier.fromNamespaceAndPath("mmcr", "duration_machine"),
+                100,
+                List.of(),
+                List.of(),
+                List.of(new RecipeModifier(IntegrationTypeHelper.TARGET_DURATION, RecipeModifier.IOType.INPUT, 0.5F, RecipeModifier.Operation.MULTIPLY, false)),
+                0,
+                1
+        );
+
+        var active = new ActiveMachineRecipe(recipe);
+
+        assertThat(active.getTotalTick()).isEqualTo(50);
+        assertThat(recipe.getRecipeTotalTickTime()).isEqualTo(100);
+    }
+
+    @Test
+    void runtime_requirements_apply_all_supported_modifier_targets() {
+        bindFluidComponents(Fluids.WATER);
+        bindItemComponents(Items.IRON_NUGGET);
+        var recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "runtime_modifiers"),
+                Identifier.fromNamespaceAndPath("mmcr", "runtime_machine"),
+                100,
+                List.of(
+                        new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2),
+                        new MachineIngredient.FluidIngredient(net.neoforged.neoforge.fluids.crafting.FluidIngredient.of(Fluids.WATER), 250),
+                        new MachineIngredient.EnergyIngredient(40)
+                ),
+                List.of(Items.IRON_NUGGET.getDefaultInstance().copyWithCount(1)),
+                List.of(
+                        new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.INPUT, 2F, RecipeModifier.Operation.MULTIPLY, false),
+                        new RecipeModifier(IntegrationTypeHelper.TARGET_FLUID, RecipeModifier.IOType.INPUT, 2F, RecipeModifier.Operation.MULTIPLY, false),
+                        new RecipeModifier(IntegrationTypeHelper.TARGET_ENERGY, RecipeModifier.IOType.INPUT, 2F, RecipeModifier.Operation.MULTIPLY, false),
+                        new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.OUTPUT, 3F, RecipeModifier.Operation.MULTIPLY, false)
+                ),
+                0,
+                1
+        );
+
+        assertThat(recipe.runtimeRequirements()).satisfies(requirements -> {
+            assertThat(((cn.howxu.mmcr.api.recipe.requirement.ItemRequirement) requirements.get(0)).count()).isEqualTo(4);
+            assertThat(((cn.howxu.mmcr.api.recipe.requirement.FluidRequirement) requirements.get(1)).amount()).isEqualTo(500);
+            assertThat(((cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement) requirements.get(2)).fePerTick()).isEqualTo(80);
+            assertThat(((cn.howxu.mmcr.api.recipe.requirement.ItemRequirement) requirements.get(3)).stack().getCount()).isEqualTo(3);
+        });
+        assertThat(recipe.inputs()).contains(new MachineIngredient.EnergyIngredient(40));
+        assertThat(recipe.outputs().getFirst().getCount()).isEqualTo(1);
     }
 
     @Test
@@ -258,18 +342,20 @@ class RecipeApiSmokeTest {
                 50,
                 List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.DIAMOND), 1)),
                 List.of(),
-                List.of(new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 1F, RecipeModifier.Operation.ADD, false)),
+                List.of(new RecipeModifier(IntegrationTypeHelper.TARGET_DURATION, RecipeModifier.IOType.INPUT, 0.5F, RecipeModifier.Operation.MULTIPLY, false)),
                 3, 2
         );
-        var mr = prepared.toMachineRecipe();
-        assertThat(mr.id().toString()).isEqualTo("mmcr:from_prepared");
-        assertThat(mr.machineId().toString()).isEqualTo("mmcr:prep_machine");
-        assertThat(mr.tickTime()).isEqualTo(50);
-        assertThat(mr.priority()).isEqualTo(3);
-        assertThat(mr.maxThreads()).isEqualTo(2);
-        assertThat(mr.doesCancelRecipeOnPerTickFailure()).isFalse();
-        assertThat(mr.inputs()).hasSize(1);
-        assertThat(mr.outputs()).isEmpty();
+        var recipe = prepared.toMachineRecipe();
+        assertThat(recipe.id().toString()).isEqualTo("mmcr:from_prepared");
+        assertThat(recipe.machineId().toString()).isEqualTo("mmcr:prep_machine");
+        assertThat(recipe.tickTime()).isEqualTo(50);
+        assertThat(recipe.priority()).isEqualTo(3);
+        assertThat(recipe.maxThreads()).isEqualTo(2);
+        assertThat(recipe.doesCancelRecipeOnPerTickFailure()).isFalse();
+        assertThat(recipe.inputs()).hasSize(1);
+        assertThat(recipe.outputs()).isEmpty();
+        assertThat(recipe.modifiers()).isEqualTo(prepared.getModifiers());
+        assertThat(recipe.getRecipeTotalTickTime()).isEqualTo(50);
     }
 
     @Test

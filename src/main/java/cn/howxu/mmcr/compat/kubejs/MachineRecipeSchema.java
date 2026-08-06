@@ -41,10 +41,14 @@ public final class MachineRecipeSchema {
             new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false), "outputs", ComponentRole.OUTPUT)
                     .optional(List.of()).exclude();
 
+    public static final RecipeKey<List<JsonElement>> MODIFIERS =
+            new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false), "modifiers", ComponentRole.OTHER)
+                    .optional(List.of()).exclude();
+
     public static final RecipeKey<Boolean> CANCEL_IF_PER_TICK_FAILS =
             new RecipeKey<>(BooleanComponent.BOOLEAN, "cancelIfPerTickFails", ComponentRole.OTHER).optional(false);
 
-    public static final RecipeSchema SCHEMA = new RecipeSchema(MACHINE, TICK_TIME, INPUTS, ENERGY_PER_TICK, OUTPUTS, CANCEL_IF_PER_TICK_FAILS)
+    public static final RecipeSchema SCHEMA = new RecipeSchema(MACHINE, TICK_TIME, INPUTS, ENERGY_PER_TICK, OUTPUTS, MODIFIERS, CANCEL_IF_PER_TICK_FAILS)
             .factory(MachineRecipeFactory.INSTANCE);
 
     private MachineRecipeSchema() {

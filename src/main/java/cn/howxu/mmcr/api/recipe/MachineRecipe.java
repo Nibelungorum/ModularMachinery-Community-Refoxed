@@ -197,6 +197,62 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         return List.copyOf(outputs);
     }
 
+    public List<MachineOutput> machineOutputs() {
+        List<MachineOutput> outputs = new ArrayList<>();
+        for (MachineRequirement requirement : requirements) {
+            if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
+                outputs.add(new MachineOutput.ItemOutput(item.stack(), item.chance()));
+            } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT) {
+                outputs.add(new MachineOutput.FluidOutput(fluid.stack(), fluid.chance()));
+            }
+        }
+        return List.copyOf(outputs);
+    }
+
+    public List<MachineRequirement> runtimeRequirements() {
+        if (modifiers.isEmpty()) return requirements;
+        List<MachineRequirement> derived = new ArrayList<>(requirements.size());
+        for (MachineRequirement requirement : requirements) {
+            derived.add(applyModifiers(requirement));
+        }
+        return List.copyOf(derived);
+    }
+
+    public List<MachineOutput> runtimeMachineOutputs() {
+        if (modifiers.isEmpty()) return machineOutputs();
+        return machineOutputs().stream()
+                .map(output -> output.applyModifiers(modifiers))
+                .toList();
+    }
+
+    private MachineRequirement applyModifiers(MachineRequirement requirement) {
+        if (requirement instanceof ItemRequirement item) {
+            if (item.io() == RecipeModifier.IOType.INPUT) {
+                int count = IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyItemInput(modifiers, item.count()));
+                return new ItemRequirement(item.io(), item.item(), count, item.stack(), item.chance(), item.tags());
+            }
+            ItemStack stack = item.stack().copy();
+            stack.setCount(IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyItemOutput(modifiers, stack.getCount())));
+            float chance = IntegrationTypeHelper.applyItemOutputChance(modifiers, item.chance());
+            return new ItemRequirement(item.io(), item.item(), item.count(), stack, chance, item.tags());
+        }
+        if (requirement instanceof FluidRequirement fluid) {
+            if (fluid.io() == RecipeModifier.IOType.INPUT) {
+                int amount = IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyFluidInput(modifiers, fluid.amount()));
+                return new FluidRequirement(fluid.io(), fluid.fluid(), amount, fluid.stack(), fluid.chance(), fluid.tags());
+            }
+            FluidStack stack = fluid.stack().copy();
+            stack.setAmount(IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyFluidOutput(modifiers, stack.getAmount())));
+            float chance = IntegrationTypeHelper.applyFluidOutputChance(modifiers, fluid.chance());
+            return new FluidRequirement(fluid.io(), fluid.fluid(), fluid.amount(), stack, chance, fluid.tags());
+        }
+        if (requirement instanceof EnergyRequirement energy) {
+            int fePerTick = IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyEnergy(modifiers, energy.fePerTick()));
+            return new EnergyRequirement(fePerTick, energy.tags());
+        }
+        return requirement;
+    }
+
     public List<MachineRequirement> requirements() {
         return requirements;
     }
