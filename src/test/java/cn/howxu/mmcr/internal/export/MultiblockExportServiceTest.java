@@ -20,14 +20,22 @@ class MultiblockExportServiceTest {
     Path tempDir;
 
     @Test
-    void normalizeOffsetRotatesBackToCapturedFace() {
+    void normalizeOffsetRotatesBackToCapturedFaceForHorizontalFaces() {
         BlockPos worldOffset = new BlockPos(2, 1, -3);
 
-        for (Direction face : Direction.values()) {
+        for (Direction face : Direction.Plane.HORIZONTAL) {
             BlockPos normalized = MultiblockExportService.normalizeOffset(worldOffset, face);
 
             assertThat(BlockRotator.rotateSouthTo(normalized, face)).isEqualTo(worldOffset);
         }
+    }
+
+    @Test
+    void normalizeOffsetKeepsVerticalCapturesInWorldAxes() {
+        BlockPos worldOffset = new BlockPos(2, 1, -3);
+
+        assertThat(MultiblockExportService.normalizeOffset(worldOffset, Direction.UP)).isEqualTo(worldOffset);
+        assertThat(MultiblockExportService.normalizeOffset(worldOffset, Direction.DOWN)).isEqualTo(worldOffset);
     }
 
     @Test
@@ -76,10 +84,60 @@ class MultiblockExportServiceTest {
         ), Direction.UP);
 
         assertThat(java).contains("BlockArray pattern = BlockArray.builder()");
-        assertThat(java).contains(".pattern(\"CX\")");
-        assertThat(java).contains(".pattern(\"X \")");
+        assertThat(java).contains(".pattern(\"CX\", \"X \")");
         assertThat(java).contains(".set('C', new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"mmcr:blast_furnace_controller\"))))");
         assertThat(java).contains(".set('X', new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"mmcr:basic_casing\"))))");
+    }
+
+    @Test
+    void renderJavaExportsZSlicesInsteadOfYLayersForTallStructuresFacingUp() {
+        assertTallStructureExport(Direction.UP);
+    }
+
+    @Test
+    void renderJavaExportsZSlicesInsteadOfYLayersForTallStructuresFacingDown() {
+        assertTallStructureExport(Direction.DOWN);
+    }
+
+    private static void assertTallStructureExport(Direction controllerFace) {
+        Identifier a = Identifier.fromNamespaceAndPath("minecraft", "polished_andesite");
+        Identifier x = Identifier.fromNamespaceAndPath("minecraft", "polished_diorite");
+        Identifier b = Identifier.fromNamespaceAndPath("minecraft", "waxed_copper_block");
+        Identifier d = Identifier.fromNamespaceAndPath("minecraft", "blue_ice");
+        Identifier e = Identifier.fromNamespaceAndPath("minecraft", "crying_obsidian");
+
+        String[] yLayers = {
+                "AAA|AAA|AAA",
+                "XBX|B B|XBX",
+                "XBX|B B|XBX",
+                "XDX|DED|XDX"
+        };
+        List<MultiblockExportService.SnapshotEntry> entries = new java.util.ArrayList<>();
+        for (int y = 0; y < yLayers.length; y++) {
+            String[] rows = yLayers[y].split("\\|");
+            for (int z = 0; z < rows.length; z++) {
+                for (int xi = 0; xi < rows[z].length(); xi++) {
+                    char c = rows[z].charAt(xi);
+                    if (c == ' ') continue;
+                    Identifier id = switch (c) {
+                        case 'A' -> a;
+                        case 'X' -> x;
+                        case 'B' -> b;
+                        case 'D' -> d;
+                        case 'E' -> e;
+                        default -> throw new IllegalStateException("Unexpected symbol: " + c);
+                    };
+                    entries.add(new MultiblockExportService.SnapshotEntry(new BlockPos(xi - 1, y - 3, z - 1), id, false));
+                }
+            }
+        }
+
+        String java = MultiblockExportService.renderJava(entries, controllerFace);
+
+        assertThat(java).contains(".pattern(\"AAA\", \"XBX\", \"XBX\", \"XDX\")");
+        assertThat(java).contains(".pattern(\"AAA\", \"B B\", \"B B\", \"DED\")");
+        assertThat(java).contains(".pattern(\"AAA\", \"XBX\", \"XBX\", \"XDX\")");
+        assertThat(java).doesNotContain(".pattern(\"AAA\", \"AAA\", \"AAA\")");
     }
 
     @Test

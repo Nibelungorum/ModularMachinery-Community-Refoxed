@@ -36,6 +36,7 @@ public final class MultiblockExportService {
     }
 
     public static BlockPos normalizeOffset(BlockPos offset, Direction controllerFace) {
+        if (controllerFace.getAxis().isVertical()) return offset;
         return BlockRotator.normalizeFromFace(offset, controllerFace);
     }
 
