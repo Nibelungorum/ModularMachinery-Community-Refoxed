@@ -209,9 +209,16 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void checkStructure() {
+        lastFormationFailure = null;
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
         if (foundMachine != null && foundPattern != null && controllerFacing == facing) {
             if (StructureMatcher.matchesRotated(foundPattern, level, getBlockPos())) {
+                var failure = foundMachine.portRequirements().validate(countPorts(foundPattern));
+                if (failure.isPresent()) {
+                    recordFormationFailure(foundMachine, failure.get());
+                    resetMachine(false);
+                    return;
+                }
                 if (!isFormed()) setFormed(true);
                 updateComponents();
                 return;
@@ -227,7 +234,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             }
         }
         checkAllPatterns(facing);
-        if (!isFormed()) resetMachine();
+        if (!isFormed()) resetMachine(lastFormationFailure == null);
     }
 
     private void checkAllPatterns(Direction facing) {
@@ -329,6 +336,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private record ComponentCounts(int itemInputs, int itemOutputs, int fluidInputs, int fluidOutputs, int energyInputs, int energyOutputs) { }
 
     private void resetMachine() {
+        resetMachine(true);
+    }
+
+    private void resetMachine(boolean clearFormationFailure) {
         boolean wasFormed = isFormed();
         Identifier dropped = foundMachine == null ? null : foundMachine.registryName();
         boolean hadActive = active != null;
@@ -345,7 +356,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         pausedActive = null;
         pausedContext = null;
         lastFailureUnloc = null;
-        lastFormationFailure = null;
+        if (clearFormationFailure) lastFormationFailure = null;
         redstonePaused = false;
         if (wasFormed) setFormed(false);
         if (dropped != null || hadActive) {

@@ -193,6 +193,55 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.getLastFormationFailure()).isNull();
     }
 
+    @Test
+    void server_tick_keeps_formation_failure_observable_after_rejection() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
+        DynamicMachine machine = new DynamicMachine(
+                MMCR.id("server_tick_requires_energy_machine"),
+                "Requires Energy",
+                pattern,
+                cn.howxu.mmcr.api.machine.MachineControllerSpec.defaultsFor(MMCR.id("server_tick_requires_energy_machine")),
+                PortRequirementSpec.builder().min(PortKinds.ENERGY_INPUT.id(), 1).build());
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, itemInputBus(controllerPos.offset(1, 0, 0)));
+        setField(MachineControllerBlockEntity.class, controller, "machine", machine);
+
+        controller.serverTick();
+
+        assertThat(controller.isFormed()).isFalse();
+        assertThat(controller.getLastFormationFailure()).isNotNull();
+        assertThat(controller.getLastFormationFailure().portId()).isEqualTo(PortKinds.ENERGY_INPUT.id());
+    }
+
+    @Test
+    void cached_formed_structure_revalidates_required_ports() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockPos portPos = controllerPos.offset(1, 0, 0);
+        BlockArray pattern = anyItemOrEnergyInputPattern();
+        DynamicMachine machine = new DynamicMachine(
+                MMCR.id("cached_requires_energy_machine"),
+                "Requires Energy",
+                pattern,
+                cn.howxu.mmcr.api.machine.MachineControllerSpec.defaultsFor(MMCR.id("cached_requires_energy_machine")),
+                PortRequirementSpec.builder().min(PortKinds.ENERGY_INPUT.id(), 1).build());
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, energyHatch(portPos));
+        setField(MachineControllerBlockEntity.class, controller, "machine", machine);
+        controller.serverTick();
+        assertThat(controller.isFormed()).isTrue();
+
+        Level level = levelOf(controller);
+        ItemInputBusBlockEntity replacement = itemInputBus(portPos);
+        setField(BlockEntity.class, replacement, "level", level);
+        level.setBlock(portPos, blockForPort(replacement).defaultBlockState(), 3);
+        LevelStub.putBlockEntity(level, replacement);
+
+        controller.serverTick();
+
+        assertThat(controller.isFormed()).isFalse();
+        assertThat(controller.getLastFormationFailure()).isNotNull();
+        assertThat(controller.getLastFormationFailure().portId()).isEqualTo(PortKinds.ENERGY_INPUT.id());
+    }
+
     private static MachineControllerBlockEntity controllerBlockEntityWithoutRunningMinecraftConstructor() {
         try {
             Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
@@ -335,6 +384,14 @@ class MachineControllerBlockEntityTest {
         return new BlockArray(blocks);
     }
 
+    private static BlockArray anyItemOrEnergyInputPattern() {
+        Map<BlockPos, BlockPredicate> blocks = new HashMap<>();
+        blocks.put(new BlockPos(1, 0, 0), new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()),
+                new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("energy_input_hatch").get()))));
+        return new BlockArray(blocks);
+    }
+
     private static MachineControllerBlockEntity controllerForFormation(
             DynamicMachine machine,
             BlockPos controllerPos,
@@ -424,6 +481,12 @@ class MachineControllerBlockEntityTest {
         Method method = MachineControllerBlockEntity.class.getDeclaredMethod("tryFormMachine", cn.howxu.mmcr.api.machine.Machine.class, Direction.class);
         method.setAccessible(true);
         return (boolean) method.invoke(controller, machine, facing);
+    }
+
+    private static Level levelOf(BlockEntity blockEntity) throws Exception {
+        Field field = BlockEntity.class.getDeclaredField("level");
+        field.setAccessible(true);
+        return (Level) field.get(blockEntity);
     }
 
     private static void setField(Class<?> declaringClass, Object target, String name, Object value) throws ReflectiveOperationException {

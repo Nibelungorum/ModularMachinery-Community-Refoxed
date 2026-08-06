@@ -85,6 +85,10 @@ public final class LevelStub {
         return level;
     }
 
+    public static void putBlockEntity(Level level, BlockEntity blockEntity) {
+        ((TestLevel) level).blockEntities.put(blockEntity.getBlockPos(), blockEntity);
+    }
+
     private static Level createFromStates(Map<BlockPos, BlockState> blocks) {
         try {
             var level = (TestLevel) unsafe().allocateInstance(TestLevel.class);
