@@ -72,12 +72,12 @@ class MultiblockExportServiceTest {
                 new MultiblockExportService.SnapshotEntry(
                         BlockRotator.rotateSouthTo(new BlockPos(0, 0, 1), Direction.UP), casing, false),
                 new MultiblockExportService.SnapshotEntry(
-                        BlockRotator.rotateSouthTo(new BlockPos(-1, 0, -1), Direction.UP), casing, false)
+                        BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.UP), casing, false)
         ), Direction.UP);
 
         assertThat(java).contains("BlockArray pattern = BlockArray.builder()");
-        assertThat(java).contains(".pattern(\" C\")");
-        assertThat(java).contains(".pattern(\" X\")");
+        assertThat(java).contains(".pattern(\"CX\")");
+        assertThat(java).contains(".pattern(\"X \")");
         assertThat(java).contains(".set('C', new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"mmcr:blast_furnace_controller\"))))");
         assertThat(java).contains(".set('X', new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"mmcr:basic_casing\"))))");
     }
