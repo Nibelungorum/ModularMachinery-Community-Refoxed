@@ -11,6 +11,10 @@ public sealed interface Machine permits DynamicMachine {
 
     MachineControllerSpec controller();
 
+    default PortRequirementSpec portRequirements() {
+        return PortRequirementSpec.none();
+    }
+
     default RecipeFailureActions failureAction() {
         return RecipeFailureActions.getDefaultAction();
     }
