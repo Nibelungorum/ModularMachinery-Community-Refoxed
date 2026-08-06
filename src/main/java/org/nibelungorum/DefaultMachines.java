@@ -5,9 +5,12 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.PortKinds;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 
@@ -72,9 +75,14 @@ public final class DefaultMachines {
                 .set('I', ioPort)
                 .build();
 
+        PortRequirementSpec portRequirements = PortRequirementSpec.builder()
+                .min(PortKinds.ITEM_INPUT.id(), 1)
+                .min(PortKinds.ITEM_OUTPUT.id(), 1)
+                .min(PortKinds.ENERGY_INPUT.id(), 1)
+                .build();
         Machine definition = MachineDefinitions.get(BLAST_FURNACE_ID);
         return definition == null
-                ? new DynamicMachine(BLAST_FURNACE_ID, "高炉", pattern)
-                : new DynamicMachine(BLAST_FURNACE_ID, "高炉", pattern, definition.controller());
+                ? new DynamicMachine(BLAST_FURNACE_ID, "高炉", pattern, MachineControllerSpec.defaultsFor(BLAST_FURNACE_ID), portRequirements)
+                : new DynamicMachine(BLAST_FURNACE_ID, "高炉", pattern, definition.controller(), portRequirements);
     }
 }

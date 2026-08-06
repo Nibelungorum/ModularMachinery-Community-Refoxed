@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -43,6 +44,11 @@ class DefaultMachinesTest {
         assertThat(machine).isNotNull();
         assertThat(machine.localizedName()).isEqualTo("高炉");
         assertThat(machine.controller().id()).isEqualTo(MMCR.id("blast_furnace_controller"));
+        assertThat(machine.portRequirements().requirements())
+                .containsKeys(PortKinds.ITEM_INPUT.id(), PortKinds.ITEM_OUTPUT.id(), PortKinds.ENERGY_INPUT.id());
+        assertThat(machine.portRequirements().requirements().get(PortKinds.ITEM_INPUT.id()).min()).isEqualTo(1);
+        assertThat(machine.portRequirements().requirements().get(PortKinds.ITEM_OUTPUT.id()).min()).isEqualTo(1);
+        assertThat(machine.portRequirements().requirements().get(PortKinds.ENERGY_INPUT.id()).min()).isEqualTo(1);
         assertThat(machine.pattern().pattern()).hasSize(26);
         assertThat(machine.pattern().get(BlockPos.ZERO))
                 .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine).get()));
