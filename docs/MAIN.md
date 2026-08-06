@@ -118,6 +118,7 @@
   - `MachineBuilderJS` 支持 `event.create('mmcr:id').localizedName(...).pattern(string, keyMap)` 字符串式结构定义。
   - `MachineRecipeSchema` 用 Java `RecipeSchema` API 程序化注册 `mmcr:machine_recipe` 配方类型（零 JSON）。
 - Jade（`cn.howxu.mmcr.compat.jade.*`）：`JadePlugin` / `MachineControllerComponentProvider` / `MachineControllerDataProvider`——controller + 端口信息显示。
+- JEI（`cn.howxu.mmcr.compat.jei.*`）：`JeiPlugin` / `MachineRecipeCategory` / `MachineRecipeDisplay` / `MachineRecipeTransferHandler`，展示 machine recipes 的 item/fluid/energy/duration，并支持 item input bus 的物品输入转移；未安装 JEI 时不加载该 compat 入口。
 - Oritech / GeckoLib / Rhino：`runtimeOnly` 软依赖，**未启用任何代码路径**。
 
 ### 1.2 仍需收尾（当前未发布 PR / 已知 TODO）
@@ -126,7 +127,6 @@
 
 - P3A 已完成 recipe-local static modifier runtime chain；**P3B pattern position modifier 仍待做**。
 - P3A 已让 output chance 在 finish 时应用；**modifier 影响的 input chance 后续迭代**。
-- JEI 集成（recipe category、recipe transfer）尚未实现（§2.5）。
 - 平行 / 工厂 / 智能接口 / 升级 / 蓝图 / 自动组装 / AE2 等高级特性**全部 OUT**（详见 §2.6 – §2.9）。
 - 旧 `docs/superpowers/` 与 `docs/optimization/` 已合并到本文件 + MMCE.md，**已删除**。
 - 旧 `docs/scope.md` / `recipes-port.md` / `main-roadmap.md` 内容已并入本文件 + 既有 `architecture.md` / `api-mapping.md` / `kubejs-integration.md`，**已删除**。
@@ -187,7 +187,7 @@ src/main/java/
 | **阶段 2 Requirement / Component 正式层** | 路由 + 错误反馈稳定 | ✅ 完成 | §7 / §8 / §15 |
 | **阶段 3A Recipe Modifier 全链** | recipe-local static modifier runtime chain | ✅ 完成 | §9 |
 | **阶段 3B Pattern position modifier** | pattern 位置级 modifier replacement | ⬜ 未开始 | §9.2 / §9.4 |
-| **阶段 4 JEI 集成** | recipe category + transfer | ⬜ 未开始 | §23 / §24（功能） |
+| **阶段 4 JEI 集成** | recipe category + transfer | ✅ 完成 | §23 / §24（功能） |
 | **阶段 5 并行与工厂控制器** | parallel + factory 多线程 | ⬜ 未开始 | §13 / §15 |
 | **阶段 6 智能接口** | interface_number + 数值输入 | ⬜ 未开始 | §12 / §7 |
 | **阶段 7 升级 + 蓝图 + 预览 + 自动组装** | UX 体验层 | ⬜ 未开始 | §14 / §21 / §20 / §22 |
@@ -248,11 +248,11 @@ src/main/java/
 
 **验收门槛**：modifier 方块在结构内能影响 IO / 输出 / chance；旋转 / 镜像后位置映射正确。
 
-### 2.5 阶段 4：JEI 集成 ⬜
+### 2.5 阶段 4：JEI 集成 ✅
 
 **目标**：移植 MMCE 的 JEI 动态机器配方展示与基础配方转移。先做 recipe category，不做 3D 结构预览。
 
-**未开始任务**：
+**已完成任务**：
 
 | MMCE 来源 | MMCR 目标 | 移植方式 |
 |---|---|---|
@@ -261,6 +261,8 @@ src/main/java/
 | `RecipeLayoutHelper` / `RecipeLayoutPart` | recipe layout builder helpers | 重映射，按 JEI 29 slot API 写 |
 | `JEIComponentItem/Fluid/Energy` | item / fluid / energy display adapters | 直译简化 |
 | JEI mixin | 不移植 | 删除 |
+
+> 首期不做 3D 结构预览；fluid / energy recipe transfer 仅显示限制原因。
 
 **验收门槛**：
 - 每台 machine 至少有一个 JEI category 或按 machine 分组显示。
