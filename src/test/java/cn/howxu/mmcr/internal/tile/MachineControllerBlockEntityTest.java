@@ -7,6 +7,8 @@ import cn.howxu.mmcr.api.machine.BlockArrayCache;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
@@ -23,8 +25,11 @@ import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.energy.EnergyStorage;
@@ -40,6 +45,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -54,6 +60,7 @@ class MachineControllerBlockEntityTest {
 
     @AfterEach
     void cleanup() {
+        MachineDefinitions.clearForTesting();
         MachineRegistry.clearForTesting();
         RecipeRegistry.clearForTesting();
     }
@@ -365,6 +372,38 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void formed_controller_exposes_only_matching_position_modifiers() throws Exception {
+        var replacement = replacementAt(new BlockPos(1, 0, 0), Blocks.GOLD_BLOCK, "speed", 2F);
+        var machine = machineWithReplacements(replacement);
+        MachineDefinitions.register(machine);
+
+        MachineControllerBlockEntity controller = controllerFor(machine);
+        placeControllerAndReplacement(controller, machine, Blocks.GOLD_BLOCK);
+        tickUntilFormed(controller, machine);
+
+        assertThat(controller.getFoundModifiers()).containsKey("speed");
+        assertThat(controller.foundModifierList()).extracting(RecipeModifier::getModifier)
+                .containsExactly(2F);
+    }
+
+    @Test
+    void duplicate_modifier_name_is_applied_once_and_reset_clears_it() throws Exception {
+        var first = replacementAt(new BlockPos(1, 0, 0), Blocks.GOLD_BLOCK, "speed", 2F);
+        var second = replacementAt(new BlockPos(2, 0, 0), Blocks.DIAMOND_BLOCK, "speed", 4F);
+        var machine = machineWithReplacements(first, second);
+        MachineDefinitions.register(machine);
+
+        MachineControllerBlockEntity controller = controllerFor(machine);
+        placeControllerAndReplacement(controller, machine, Blocks.GOLD_BLOCK, Blocks.DIAMOND_BLOCK);
+        tickUntilFormed(controller, machine);
+
+        assertThat(controller.getFoundModifiers()).containsKey("speed");
+        breakStructureBlock(controller);
+
+        assertThat(controller.getFoundModifiers()).isEmpty();
+    }
+
+    @Test
     void vertical_non_symmetric_machine_uses_placed_roll_facing_only() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
@@ -656,6 +695,9 @@ class MachineControllerBlockEntityTest {
         Field componentsField = MachineControllerBlockEntity.class.getDeclaredField("components");
         componentsField.setAccessible(true);
         componentsField.set(controller, new ArrayList<>());
+        Field foundModifiersField = MachineControllerBlockEntity.class.getDeclaredField("foundModifiers");
+        foundModifiersField.setAccessible(true);
+        foundModifiersField.set(controller, new LinkedHashMap<>());
     }
 
     private static EnergyInputHatchBlockEntity energyHatch(BlockPos pos) {
@@ -797,6 +839,82 @@ class MachineControllerBlockEntityTest {
         blocks.put(new BlockPos(1, 0, 0), new BlockPredicate.AnyOf(List.of(
                 new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_output_bus").get()))));
         return new BlockArray(blocks);
+    }
+
+    private static SingleBlockModifierReplacement replacementAt(
+            BlockPos pos, Block block, String name, float value) {
+        return new SingleBlockModifierReplacement(
+                name, pos, new BlockPredicate.OfBlock(block),
+                List.of(new RecipeModifier("item", RecipeModifier.IOType.INPUT,
+                        value, RecipeModifier.Operation.ADD, false)),
+                "", ItemStack.EMPTY);
+    }
+
+    private static DynamicMachine machineWithReplacements(
+            SingleBlockModifierReplacement... replacements) {
+        Identifier id = MMCR.id("position_modifier_test");
+        Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
+        pattern.put(BlockPos.ZERO, new BlockPredicate.Any());
+        Map<BlockPos, List<SingleBlockModifierReplacement>> modifierMap = new LinkedHashMap<>();
+        for (SingleBlockModifierReplacement replacement : replacements) {
+            pattern.put(replacement.getPos(), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK));
+            modifierMap.computeIfAbsent(replacement.getPos(), ignored -> new ArrayList<>()).add(replacement);
+        }
+        return new DynamicMachine(id, "Position Modifier Test", new BlockArray(pattern),
+                MachineControllerSpec.defaultsFor(id), PortRequirementSpec.none(), List.of(), modifierMap);
+    }
+
+    private static MachineControllerBlockEntity controllerFor(DynamicMachine machine) throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        return controllerForFormation(machine, controllerPos, itemInputBus(controllerPos.offset(8, 0, 0)));
+    }
+
+    private static void placeControllerAndReplacement(
+            MachineControllerBlockEntity controller,
+            DynamicMachine machine,
+            Block... replacementBlocks) throws Exception {
+        Level level = levelOf(controller);
+        BlockPos controllerPos = controller.getBlockPos();
+        Map<BlockPos, Block> blocks = new LinkedHashMap<>();
+        blocks.put(controllerPos, controller.getBlockState().getBlock());
+        for (var entry : machine.pattern().pattern().entrySet()) {
+            if (entry.getKey().equals(BlockPos.ZERO)) continue;
+            if (entry.getValue() instanceof BlockPredicate.OfBlock of) {
+                blocks.put(controllerPos.offset(entry.getKey()), of.block());
+            }
+        }
+        int index = 0;
+        for (List<SingleBlockModifierReplacement> replacements : machine.modifierReplacements().values()) {
+            for (SingleBlockModifierReplacement replacement : replacements) {
+                blocks.put(controllerPos.offset(replacement.getPos()), replacementBlockFor(replacement, replacementBlocks[index++]));
+            }
+        }
+        for (var entry : blocks.entrySet()) {
+            level.setBlock(entry.getKey(), entry.getValue().defaultBlockState(), 3);
+        }
+        LevelStub.putBlockEntity(level, controller);
+    }
+
+    private static Block replacementBlockFor(SingleBlockModifierReplacement replacement, Block fallback) {
+        if (replacement.getReplacement().matches(fallback.defaultBlockState())) return fallback;
+        if (replacement.getReplacement() instanceof BlockPredicate.OfBlock of) return of.block();
+        return fallback;
+    }
+
+    private static void tickUntilFormed(
+            MachineControllerBlockEntity controller,
+            DynamicMachine machine) throws Exception {
+        for (int i = 0; i < 4 && !controller.isFormed(); i++) {
+            invokeTryFormMachine(controller, machine, Direction.SOUTH);
+        }
+        assertThat(controller.isFormed()).isTrue();
+    }
+
+    private static void breakStructureBlock(MachineControllerBlockEntity controller) throws Exception {
+        Level level = levelOf(controller);
+        level.setBlock(controller.getBlockPos().offset(1, 0, 0), Blocks.AIR.defaultBlockState(), 3);
+        controller.onStructureBlockChanged(controller.getBlockPos().offset(1, 0, 0));
+        invokeResetMachine(controller);
     }
 
     private static MachineControllerBlockEntity controllerForFormation(

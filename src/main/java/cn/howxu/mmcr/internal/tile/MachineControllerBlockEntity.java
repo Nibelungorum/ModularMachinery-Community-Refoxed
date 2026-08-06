@@ -17,6 +17,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
@@ -67,6 +68,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private ActiveMachineRecipe active;
     private RecipeCraftingContext context;
     private final List<ProcessingComponent> components = new ArrayList<>();
+    private final Map<String, List<RecipeModifier>> foundModifiers = new LinkedHashMap<>();
     private long structureVersion;
     private int structureCheckCounter;
     private boolean structureDirty = true;
@@ -109,6 +111,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public Machine getFoundMachine() { return foundMachine; }
     public BlockArray getFoundPattern() { return foundPattern; }
+
+    public Map<String, List<RecipeModifier>> getFoundModifiers() {
+        return Map.copyOf(foundModifiers);
+    }
+
+    public List<RecipeModifier> foundModifierList() {
+        return foundModifiers.values().stream().flatMap(List::stream).toList();
+    }
 
     public boolean isFormed() { return getBlockState().getValue(MachineControllerBlock.FORMED); }
     public void setFormed(boolean f) {
@@ -387,7 +397,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
         lastFormationFailure = null;
         lastStructureMismatchDiagnostic = null;
-        onStructureFormed(candidate, rotatedPattern, compiled, facing);
+        onStructureFormed(candidate, rotatedPattern, compiled, facing, replacements);
         return true;
     }
 
@@ -461,12 +471,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 instanceId, getBlockPos(), candidate.registryName(), failure.portId(), failure.actual(), failure.requiredMin(), max, failure.reason());
     }
 
-    private void onStructureFormed(Machine matchedMachine, BlockArray rotatedPattern, CompiledMachinePattern compiledPattern, Direction facing) {
+    private void onStructureFormed(Machine matchedMachine, BlockArray rotatedPattern, CompiledMachinePattern compiledPattern,
+                                   Direction facing, Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
         foundMachine = matchedMachine;
         foundPattern = rotatedPattern;
         foundCompiledPattern = compiledPattern;
         controllerFacing = facing;
         machine = matchedMachine;
+        collectFoundModifiers(replacements);
         FORMED_CONTROLLERS.add(this);
         structureVersion++;
         structureDirty = false;
@@ -480,6 +492,19 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 counts.itemInputs(), counts.itemOutputs(), counts.fluidInputs(), counts.fluidOutputs(), counts.energyInputs(), counts.energyOutputs());
         lastFormationFailure = null;
         setChanged();
+    }
+
+    private void collectFoundModifiers(Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
+        foundModifiers.clear();
+        if (level == null) return;
+        for (var entry : replacements.entrySet()) {
+            BlockState actual = level.getBlockState(getBlockPos().offset(entry.getKey()));
+            for (SingleBlockModifierReplacement replacement : entry.getValue()) {
+                if (replacement.getReplacement().matches(actual)) {
+                    foundModifiers.putIfAbsent(replacement.getModifierName(), replacement.getModifiers());
+                }
+            }
+        }
     }
 
     private void updateComponents() {
@@ -601,6 +626,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         foundPattern = null;
         foundCompiledPattern = null;
         controllerFacing = null;
+        foundModifiers.clear();
         FORMED_CONTROLLERS.remove(this);
         components.clear();
         structureDirty = true;
