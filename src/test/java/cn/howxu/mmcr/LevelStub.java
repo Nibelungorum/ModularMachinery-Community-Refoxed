@@ -47,8 +47,10 @@ import sun.misc.Unsafe;
 import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Predicate;
 
 public final class LevelStub {
@@ -85,6 +87,16 @@ public final class LevelStub {
         return level;
     }
 
+    public static Level createWithLoadedChunks(Map<BlockPos, Block> blocks, Set<Long> loadedChunks) {
+        Level level = create(blocks);
+        ((TestLevel) level).loadedChunks = new HashSet<>(loadedChunks);
+        return level;
+    }
+
+    public static long chunkKey(int chunkX, int chunkZ) {
+        return (((long) chunkX) << 32) ^ (chunkZ & 0xffffffffL);
+    }
+
     public static void putBlockEntity(Level level, BlockEntity blockEntity) {
         ((TestLevel) level).blockEntities.put(blockEntity.getBlockPos(), blockEntity);
     }
@@ -108,6 +120,7 @@ public final class LevelStub {
     private static final class TestLevel extends Level {
         private Map<BlockPos, BlockState> blocks;
         private Map<BlockPos, BlockEntity> blockEntities = Map.of();
+        private Set<Long> loadedChunks;
 
         private TestLevel() {
             super(null, Level.OVERWORLD, null, null, false, false, 0L, 0);
@@ -166,7 +179,9 @@ public final class LevelStub {
         @Override public <T> ScheduledTick<T> createTick(BlockPos pos, T value, int delay) { return null; }
         @Override public LevelTickAccess<Block> getBlockTicks() { return null; }
         @Override public LevelTickAccess<Fluid> getFluidTicks() { return null; }
-        @Override public boolean hasChunk(int chunkX, int chunkZ) { return true; }
+        @Override public boolean hasChunk(int chunkX, int chunkZ) {
+            return loadedChunks == null || loadedChunks.contains(chunkKey(chunkX, chunkZ));
+        }
         @Override public int getSeaLevel() { return 0; }
         @Override public FeatureFlagSet enabledFeatures() { return FeatureFlagSet.of(); }
         @Override public Holder<net.minecraft.world.level.biome.Biome> getUncachedNoiseBiome(int x, int y, int z) { return null; }

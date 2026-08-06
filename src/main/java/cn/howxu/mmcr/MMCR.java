@@ -1,11 +1,13 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.command.BuildCommand;
 import cn.howxu.mmcr.internal.command.ExportCommand;
 import cn.howxu.mmcr.internal.command.ReloadCommand;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
+import cn.howxu.mmcr.internal.event.StructureDirtyEvents;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockDetectorPickPayload;
 import cn.howxu.mmcr.registry.ModBlockEntities;
@@ -54,6 +56,11 @@ public class MMCR {
         CREATIVE_TABS.register(modBus);
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
         modBus.addListener(ModCapabilities::register);
+        NeoForge.EVENT_BUS.addListener(StructureDirtyEvents::onBlockPlaced);
+        NeoForge.EVENT_BUS.addListener(StructureDirtyEvents::onBlocksPlaced);
+        NeoForge.EVENT_BUS.addListener(StructureDirtyEvents::onFluidPlaced);
+        NeoForge.EVENT_BUS.addListener(StructureDirtyEvents::onBlockBroken);
+        NeoForge.EVENT_BUS.addListener(StructureDirtyEvents::onChunkUnloaded);
         NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent ev) -> {
             ReloadCommand.register(ev.getDispatcher());
             BuildCommand.register(ev.getDispatcher());
@@ -85,6 +92,7 @@ public class MMCR {
 
     public static void registerRuntimeBuiltins() {
         DefaultRecipes.ensureRegistered();
+        MachineRegistry.rebuildCompiledCache();
     }
 
     static void registerGameTestMachineDefinitionsIfPresent() {

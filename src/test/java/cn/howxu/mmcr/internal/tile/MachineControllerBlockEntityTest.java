@@ -5,12 +5,15 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockArrayCache;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.api.machine.PortRequirementSpec;
-import cn.howxu.mmcr.api.recipe.MachineComponent;
+import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -121,6 +124,58 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.getFoundMachine()).isSameAs(machine);
         assertThat(controller.getLastFormationFailure()).isNull();
         assertThat(controller.isFormed()).isTrue();
+    }
+
+    @Test
+    void matching_structure_caches_compiled_pattern_and_uses_candidate_component_positions() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray pattern = anyItemOrEnergyInputPattern();
+        DynamicMachine machine = new DynamicMachine(MMCR.id("compiled_controller_machine"), "Compiled Controller", pattern);
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, itemInputBus(controllerPos.offset(1, 0, 0)));
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
+
+        assertThat(formed).isTrue();
+        assertThat(compiledPattern(controller)).isSameAs(MachineRegistry.getCompiled(machine.registryName()));
+        assertThat(controller.getComponents()).hasSize(1);
+        assertThat(controller.getComponents().getFirst().getRelativePos()).isEqualTo(new BlockPos(1, 0, 0));
+    }
+
+    @Test
+    void structure_version_changes_when_structure_forms_and_resets() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray pattern = anyItemOrEnergyInputPattern();
+        DynamicMachine machine = new DynamicMachine(MMCR.id("versioned_controller_machine"), "Versioned Controller", pattern);
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, itemInputBus(controllerPos.offset(1, 0, 0)));
+        long initial = controller.getStructureVersion();
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
+        invokeResetMachine(controller);
+
+        assertThat(formed).isTrue();
+        assertThat(controller.getStructureVersion()).isEqualTo(initial + 2);
+    }
+
+    @Test
+    void stale_recipe_context_is_refreshed_after_structure_reforms() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray pattern = anyItemOrEnergyInputPattern();
+        DynamicMachine machine = new DynamicMachine(MMCR.id("restored_active_machine"), "Restored Active", pattern);
+        MachineRegistry.register(machine);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("restored_active_recipe"), machine.registryName(), 100, List.of(), List.of());
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, itemInputBus(controllerPos.offset(1, 0, 0)));
+        setField(MachineControllerBlockEntity.class, controller, "machine", machine);
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, 1);
+        setField(MachineControllerBlockEntity.class, controller, "active", active);
+        setField(MachineControllerBlockEntity.class, controller, "context", new RecipeCraftingContext(controller));
+
+        controller.serverTick();
+
+        assertThat(controller.isFormed()).isTrue();
+        assertThat(controller.getActive()).isSameAs(active);
+        assertThat(controller.getTickCounter()).isEqualTo(1);
     }
 
     @Test
@@ -259,7 +314,9 @@ class MachineControllerBlockEntityTest {
                 PortRequirementSpec.builder().min(PortKinds.ENERGY_INPUT.id(), 1).build());
         MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, energyHatch(portPos));
         setField(MachineControllerBlockEntity.class, controller, "machine", machine);
-        controller.serverTick();
+        for (int i = 0; i < Config.DEFAULT_MACHINE_CHECK_INTERVAL_TICKS; i++) {
+            controller.serverTick();
+        }
         assertThat(controller.isFormed()).isTrue();
 
         Level level = levelOf(controller);
@@ -459,7 +516,7 @@ class MachineControllerBlockEntityTest {
     @Test
     void recipeSearchExceptionDoesNotBreakControllerTick() throws Exception {
         net.minecraft.world.item.Items.IRON_INGOT.builtInRegistryHolder().bindComponents(net.minecraft.core.component.DataComponentMap.EMPTY);
-        var machine = new DynamicMachine(MMCR.id("exception_machine"), "Exception Machine", onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_output_bus").get()));
+        var machine = new DynamicMachine(MMCR.id("exception_machine"), "Exception Machine", anyItemOutputPattern());
         MachineRegistry.register(machine);
         RecipeRegistry.register(new MachineRecipe(
                 MMCR.id("exception_recipe"),
@@ -474,7 +531,9 @@ class MachineControllerBlockEntityTest {
                 List.of(),
                 List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, net.minecraft.world.item.Items.IRON_INGOT.getDefaultInstance()))));
         BlockPos controllerPos = new BlockPos(10, 4, 10);
-        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, itemOutputBus(controllerPos.offset(1, 0, 0)));
+        ItemOutputBusBlockEntity outputBus = itemOutputBus(controllerPos.offset(1, 0, 0));
+        setField(ItemBusBlockEntity.class, outputBus, "handler", null);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, outputBus);
         setField(MachineControllerBlockEntity.class, controller, "machine", machine);
 
         controller.serverTick();
@@ -482,6 +541,72 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.isFormed()).isTrue();
         assertThat(controller.getActive()).isNull();
         assertThat(controller.getLastFailureUnloc()).isEqualTo(RecipeCraftingContext.FAILURE_SEARCH_EXCEPTION);
+    }
+
+    @Test
+    void block_change_inside_compiled_bounds_marks_formed_structure_dirty() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockPos portPos = controllerPos.offset(1, 0, 0);
+        BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
+        DynamicMachine machine = new DynamicMachine(MMCR.id("dirty_bounds_machine"), "Dirty Bounds", pattern);
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, itemInputBus(portPos));
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        assertThat((boolean) fieldValue(MachineControllerBlockEntity.class, controller, "structureDirty")).isFalse();
+
+        controller.onStructureBlockChanged(portPos);
+
+        assertThat((boolean) fieldValue(MachineControllerBlockEntity.class, controller, "structureDirty")).isTrue();
+    }
+
+    @Test
+    void static_block_change_marker_marks_matching_formed_controller_dirty() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockPos portPos = controllerPos.offset(1, 0, 0);
+        BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
+        DynamicMachine machine = new DynamicMachine(MMCR.id("static_dirty_machine"), "Static Dirty", pattern);
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, itemInputBus(portPos));
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        assertThat((boolean) fieldValue(MachineControllerBlockEntity.class, controller, "structureDirty")).isFalse();
+
+        MachineControllerBlockEntity.markStructureDirty(levelOf(controller), portPos);
+
+        assertThat((boolean) fieldValue(MachineControllerBlockEntity.class, controller, "structureDirty")).isTrue();
+    }
+
+    @Test
+    void chunk_unload_inside_compiled_bounds_marks_dirty_and_pauses_active_recipe() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
+        DynamicMachine machine = new DynamicMachine(MMCR.id("chunk_dirty_machine"), "Chunk Dirty", pattern);
+        MachineRegistry.register(machine);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("chunk_dirty_recipe"), machine.registryName(), 100, List.of(), List.of());
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, itemInputBus(controllerPos.offset(1, 0, 0)));
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, 1);
+        setField(MachineControllerBlockEntity.class, controller, "active", active);
+        setField(MachineControllerBlockEntity.class, controller, "context", new RecipeCraftingContext(controller));
+
+        MachineControllerBlockEntity.markStructureChunkDirty(levelOf(controller), new net.minecraft.world.level.ChunkPos(controllerPos.getX() >> 4, controllerPos.getZ() >> 4));
+
+        assertThat((boolean) fieldValue(MachineControllerBlockEntity.class, controller, "structureDirty")).isTrue();
+        assertThat(controller.getActive()).isNull();
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "pausedActive")).isSameAs(active);
+    }
+
+    @Test
+    void block_change_outside_compiled_bounds_does_not_mark_formed_structure_dirty() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
+        DynamicMachine machine = new DynamicMachine(MMCR.id("clean_bounds_machine"), "Clean Bounds", pattern);
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, itemInputBus(controllerPos.offset(1, 0, 0)));
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+
+        controller.onStructureBlockChanged(controllerPos.offset(8, 0, 0));
+
+        assertThat((boolean) fieldValue(MachineControllerBlockEntity.class, controller, "structureDirty")).isFalse();
     }
 
     private static MachineControllerBlockEntity controllerBlockEntityWithoutRunningMinecraftConstructor() {
@@ -635,6 +760,13 @@ class MachineControllerBlockEntityTest {
         return new BlockArray(blocks);
     }
 
+    private static BlockArray anyItemOutputPattern() {
+        Map<BlockPos, BlockPredicate> blocks = new HashMap<>();
+        blocks.put(new BlockPos(1, 0, 0), new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_output_bus").get()))));
+        return new BlockArray(blocks);
+    }
+
     private static MachineControllerBlockEntity controllerForFormation(
             DynamicMachine machine,
             BlockPos controllerPos,
@@ -739,6 +871,18 @@ class MachineControllerBlockEntityTest {
         return (boolean) method.invoke(controller, machine, facing);
     }
 
+    private static void invokeResetMachine(MachineControllerBlockEntity controller) throws Exception {
+        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("resetMachine");
+        method.setAccessible(true);
+        method.invoke(controller);
+    }
+
+    private static CompiledMachinePattern compiledPattern(MachineControllerBlockEntity controller) throws Exception {
+        Field field = MachineControllerBlockEntity.class.getDeclaredField("foundCompiledPattern");
+        field.setAccessible(true);
+        return (CompiledMachinePattern) field.get(controller);
+    }
+
     private static Level levelOf(BlockEntity blockEntity) throws Exception {
         Field field = BlockEntity.class.getDeclaredField("level");
         field.setAccessible(true);
@@ -749,5 +893,11 @@ class MachineControllerBlockEntityTest {
         Field field = declaringClass.getDeclaredField(name);
         field.setAccessible(true);
         field.set(target, value);
+    }
+
+    private static Object fieldValue(Class<?> declaringClass, Object target, String name) throws ReflectiveOperationException {
+        Field field = declaringClass.getDeclaredField(name);
+        field.setAccessible(true);
+        return field.get(target);
     }
 }

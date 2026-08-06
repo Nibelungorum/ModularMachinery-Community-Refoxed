@@ -2,6 +2,8 @@ package cn.howxu.mmcr.api.machine;
 
 import net.minecraft.resources.Identifier;
 
+import java.util.List;
+
 public sealed interface Machine permits DynamicMachine {
     Identifier registryName();
 
@@ -17,5 +19,9 @@ public sealed interface Machine permits DynamicMachine {
 
     default RecipeFailureActions failureAction() {
         return RecipeFailureActions.getDefaultAction();
+    }
+
+    default List<DynamicPatternSpec> dynamicPatterns() {
+        return List.of();
     }
 }

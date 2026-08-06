@@ -34,6 +34,7 @@ public final class RecipeCraftingContext {
     public static final String FAILURE_SEARCH_EXCEPTION = "gui.mmcr.controller.failure.recipe_search_exception";
 
     private MachineControllerBlockEntity controller;
+    private long structureVersion;
 
     private List<ItemInputRoute> itemInputRoutes = List.of();
     private List<ItemOutputRoute> itemOutputRoutes = List.of();
@@ -45,10 +46,16 @@ public final class RecipeCraftingContext {
 
     public RecipeCraftingContext(MachineControllerBlockEntity controller) {
         this.controller = controller;
+        this.structureVersion = controller.getStructureVersion();
+    }
+
+    public boolean isStructureVersionCurrent() {
+        return structureVersion == controller.getStructureVersion();
     }
 
     void resetFor(MachineControllerBlockEntity controller) {
         this.controller = controller;
+        this.structureVersion = controller.getStructureVersion();
         resetTransientState();
     }
 

@@ -4,6 +4,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 
 import java.util.LinkedHashMap;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -25,9 +26,22 @@ public final class BlockArrayCache {
         return CACHE.computeIfAbsent(new Key(pattern, facing, normalizedRoll), BlockArrayCache::rotate);
     }
 
+    public static void buildCache(Collection<Machine> machines) {
+        CACHE.clear();
+        for (Machine machine : machines) {
+            for (Direction facing : Direction.Plane.HORIZONTAL) {
+                get(machine.pattern(), facing);
+            }
+        }
+    }
+
+    public static void clear() {
+        CACHE.clear();
+    }
+
     /** Test-only helper. Never call from production code. */
     public static void clearForTesting() {
-        CACHE.clear();
+        clear();
     }
 
     private static BlockArray rotate(Key key) {
