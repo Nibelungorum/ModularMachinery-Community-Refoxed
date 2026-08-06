@@ -342,18 +342,20 @@ class RecipeApiSmokeTest {
                 50,
                 List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.DIAMOND), 1)),
                 List.of(),
-                List.of(new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 1F, RecipeModifier.Operation.ADD, false)),
+                List.of(new RecipeModifier(IntegrationTypeHelper.TARGET_DURATION, RecipeModifier.IOType.INPUT, 0.5F, RecipeModifier.Operation.MULTIPLY, false)),
                 3, 2
         );
-        var mr = prepared.toMachineRecipe();
-        assertThat(mr.id().toString()).isEqualTo("mmcr:from_prepared");
-        assertThat(mr.machineId().toString()).isEqualTo("mmcr:prep_machine");
-        assertThat(mr.tickTime()).isEqualTo(50);
-        assertThat(mr.priority()).isEqualTo(3);
-        assertThat(mr.maxThreads()).isEqualTo(2);
-        assertThat(mr.doesCancelRecipeOnPerTickFailure()).isFalse();
-        assertThat(mr.inputs()).hasSize(1);
-        assertThat(mr.outputs()).isEmpty();
+        var recipe = prepared.toMachineRecipe();
+        assertThat(recipe.id().toString()).isEqualTo("mmcr:from_prepared");
+        assertThat(recipe.machineId().toString()).isEqualTo("mmcr:prep_machine");
+        assertThat(recipe.tickTime()).isEqualTo(50);
+        assertThat(recipe.priority()).isEqualTo(3);
+        assertThat(recipe.maxThreads()).isEqualTo(2);
+        assertThat(recipe.doesCancelRecipeOnPerTickFailure()).isFalse();
+        assertThat(recipe.inputs()).hasSize(1);
+        assertThat(recipe.outputs()).isEmpty();
+        assertThat(recipe.modifiers()).isEqualTo(prepared.getModifiers());
+        assertThat(recipe.getRecipeTotalTickTime()).isEqualTo(50);
     }
 
     @Test
