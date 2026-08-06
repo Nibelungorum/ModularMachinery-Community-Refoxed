@@ -197,6 +197,18 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         return List.copyOf(outputs);
     }
 
+    public List<MachineOutput> machineOutputs() {
+        List<MachineOutput> outputs = new ArrayList<>();
+        for (MachineRequirement requirement : requirements) {
+            if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
+                outputs.add(new MachineOutput.ItemOutput(item.stack(), item.chance()));
+            } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT) {
+                outputs.add(new MachineOutput.FluidOutput(fluid.stack(), fluid.chance()));
+            }
+        }
+        return List.copyOf(outputs);
+    }
+
     public List<MachineRequirement> requirements() {
         return requirements;
     }

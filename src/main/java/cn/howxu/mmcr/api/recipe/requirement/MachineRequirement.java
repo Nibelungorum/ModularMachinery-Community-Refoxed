@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.mojang.serialization.Codec;
@@ -71,7 +72,9 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
                         .add("count", ops.createInt(item.count()))
                         .build(prefix);
             }
-            return builder.add("stack", item.stack(), ItemStack.CODEC).build(prefix);
+            var itemBuilder = builder.add("stack", item.stack(), ItemStack.CODEC);
+            if (item.chance() != 1F) itemBuilder = itemBuilder.add("chance", ops.createFloat(item.chance()));
+            return itemBuilder.build(prefix);
         }
         if (requirement instanceof FluidRequirement fluid) {
             if (fluid.io() == RecipeModifier.IOType.INPUT) {
@@ -80,7 +83,9 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
                         .add("amount", ops.createInt(fluid.amount()))
                         .build(prefix);
             }
-            return builder.add("stack", fluid.stack(), FluidStack.CODEC).build(prefix);
+            var fluidBuilder = builder.add("stack", fluid.stack(), FluidStack.CODEC);
+            if (fluid.chance() != 1F) fluidBuilder = fluidBuilder.add("chance", ops.createFloat(fluid.chance()));
+            return fluidBuilder.build(prefix);
         }
         if (requirement instanceof EnergyRequirement energy) {
             return builder.add("fe_per_tick", ops.createInt(energy.fePerTick())).build(prefix);
@@ -112,7 +117,7 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
             if (io == RecipeModifier.IOType.OUTPUT) {
                 return ops.get(input, "stack")
                         .flatMap(value -> ItemStack.CODEC.parse(ops, value))
-                        .map(stack -> new ItemRequirement(io, null, 0, stack, tags));
+                        .map(stack -> new ItemRequirement(io, null, 0, stack, decodeChance(ops, input), tags));
             }
             return ops.get(input, "item")
                     .flatMap(value -> net.minecraft.world.item.crafting.Ingredient.CODEC.parse(ops, value))
@@ -128,7 +133,7 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
             if (io == RecipeModifier.IOType.OUTPUT) {
                 return ops.get(input, "stack")
                         .flatMap(value -> FluidStack.CODEC.parse(ops, value))
-                        .map(stack -> new FluidRequirement(io, null, 0, stack, tags));
+                        .map(stack -> new FluidRequirement(io, null, 0, stack, decodeChance(ops, input), tags));
             }
             return ops.get(input, "fluid")
                     .flatMap(value -> net.neoforged.neoforge.fluids.crafting.FluidIngredient.CODEC.parse(ops, value))
@@ -143,6 +148,14 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
                 .flatMap(value -> TAGS_CODEC.parse(ops, value))
                 .result()
                 .orElse(List.of());
+    }
+
+    private static <T> float decodeChance(DynamicOps<T> ops, T input) {
+        return ops.get(input, "chance")
+                .flatMap(ops::getNumberValue)
+                .map(Number::floatValue)
+                .result()
+                .orElse(1F);
     }
 
     private static <T> DataResult<RecipeModifier.IOType> decodeIo(DynamicOps<T> ops, T input) {

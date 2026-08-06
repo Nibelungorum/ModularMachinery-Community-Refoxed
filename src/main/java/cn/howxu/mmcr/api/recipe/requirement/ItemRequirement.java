@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.minecraft.world.item.ItemStack;
@@ -11,13 +12,19 @@ import java.util.List;
 /**
  * @author howxu <dev@howxu.cn>
  */
-public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient item, int count, ItemStack stack, List<String> tags) implements MachineRequirement {
+public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient item, int count, ItemStack stack, float chance, List<String> tags) implements MachineRequirement {
 
     public ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient item, int count, ItemStack stack) {
-        this(io, item, count, stack, List.of());
+        this(io, item, count, stack, 1F, List.of());
+    }
+
+    public ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient item, int count, ItemStack stack, List<String> tags) {
+        this(io, item, count, stack, 1F, tags);
     }
 
     public ItemRequirement {
+        stack = stack == null ? ItemStack.EMPTY : stack.copy();
+        chance = MachineOutput.clampChance(chance);
         tags = tags == null ? List.of() : List.copyOf(tags);
     }
 

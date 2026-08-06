@@ -214,6 +214,38 @@ class MachineRecipeTest {
         assertThat(recipe.requirements().getFirst().tags()).isEmpty();
     }
 
+    @Test
+    void output_requirement_chance_roundtrips() {
+        bindItemComponents(Items.IRON_NUGGET);
+        bindFluidComponents(Fluids.WATER);
+        var root = new JsonObject();
+        root.addProperty("id", "mmcr:chance_outputs");
+        root.addProperty("machine", "mmcr:machine");
+        root.addProperty("tick_time", 20);
+        root.add("requirements", requirements(
+                itemOutputRequirement(itemId(Items.IRON_NUGGET), 3, 0.25F),
+                fluidOutputRequirement("minecraft:water", 500, 0.75F)
+        ));
+
+        var recipe = MachineRecipe.CODEC.codec().parse(jsonOps(), root).getOrThrow();
+
+        assertThat(recipe.machineOutputs()).hasSize(2);
+        assertThat(recipe.machineOutputs().get(0)).isInstanceOfSatisfying(MachineOutput.ItemOutput.class, output -> {
+            assertThat(output.stack().getItem()).isEqualTo(Items.IRON_NUGGET);
+            assertThat(output.stack().getCount()).isEqualTo(3);
+            assertThat(output.chance()).isEqualTo(0.25F);
+        });
+        assertThat(recipe.machineOutputs().get(1)).isInstanceOfSatisfying(MachineOutput.FluidOutput.class, output -> {
+            assertThat(output.stack().getFluid()).isEqualTo(Fluids.WATER);
+            assertThat(output.stack().getAmount()).isEqualTo(500);
+            assertThat(output.chance()).isEqualTo(0.75F);
+        });
+
+        var encoded = MachineRecipe.CODEC.codec().encodeStart(jsonOps(), recipe).getOrThrow().getAsJsonObject();
+        assertThat(encoded.getAsJsonArray("requirements").get(0).getAsJsonObject().get("chance").getAsFloat()).isEqualTo(0.25F);
+        assertThat(encoded.getAsJsonArray("requirements").get(1).getAsJsonObject().get("chance").getAsFloat()).isEqualTo(0.75F);
+    }
+
     private static Holder<Fluid> bindFluidComponents(Fluid fluid) {
         var holder = fluid.builtInRegistryHolder();
         holder.bindComponents(DataComponentMap.EMPTY);
@@ -277,6 +309,24 @@ class MachineRecipeTest {
         stack.addProperty("count", count);
         requirement.add("stack", stack);
         return requirement;
+    }
+
+    private static JsonObject itemOutputRequirement(String itemId, int count, float chance) {
+        var output = itemOutputRequirement(itemId, count);
+        output.addProperty("chance", chance);
+        return output;
+    }
+
+    private static JsonObject fluidOutputRequirement(String fluidId, int amount, float chance) {
+        var output = new JsonObject();
+        output.addProperty("type", "fluid");
+        output.addProperty("io", "output");
+        var stack = new JsonObject();
+        stack.addProperty("id", fluidId);
+        stack.addProperty("amount", amount);
+        output.add("stack", stack);
+        output.addProperty("chance", chance);
+        return output;
     }
 
     private static JsonObject energyRequirement(int fePerTick) {
