@@ -247,6 +247,41 @@ class MachineRecipeTest {
     }
 
     @Test
+    void machine_output_codec_roundtrips_item_output_and_defaults_missing_chance() {
+        bindItemComponents(Items.IRON_NUGGET);
+        var output = new MachineOutput.ItemOutput(Items.IRON_NUGGET.getDefaultInstance().copyWithCount(4), 0.25F);
+
+        var encoded = MachineOutput.CODEC.encodeStart(jsonOps(), output).getOrThrow().getAsJsonObject();
+        var back = MachineOutput.CODEC.parse(jsonOps(), encoded).getOrThrow();
+
+        assertThat(back).isInstanceOfSatisfying(MachineOutput.ItemOutput.class, decoded -> {
+            assertThat(decoded.stack().getItem()).isEqualTo(Items.IRON_NUGGET);
+            assertThat(decoded.stack().getCount()).isEqualTo(4);
+            assertThat(decoded.chance()).isEqualTo(0.25F);
+        });
+        encoded.remove("chance");
+        assertThat(MachineOutput.CODEC.parse(jsonOps(), encoded).getOrThrow().chance()).isEqualTo(1F);
+    }
+
+    @Test
+    void machine_output_codec_roundtrips_fluid_output_and_clamps_chance() {
+        bindFluidComponents(Fluids.WATER);
+        var overChance = new MachineOutput.FluidOutput(new FluidStack(Fluids.WATER, 500), 2F);
+
+        var encoded = MachineOutput.CODEC.encodeStart(jsonOps(), overChance).getOrThrow().getAsJsonObject();
+        var back = MachineOutput.CODEC.parse(jsonOps(), encoded).getOrThrow();
+
+        assertThat(back).isInstanceOfSatisfying(MachineOutput.FluidOutput.class, decoded -> {
+            assertThat(decoded.stack().getFluid()).isEqualTo(Fluids.WATER);
+            assertThat(decoded.stack().getAmount()).isEqualTo(500);
+            assertThat(decoded.chance()).isEqualTo(1F);
+        });
+
+        encoded.addProperty("chance", -1F);
+        assertThat(MachineOutput.CODEC.parse(jsonOps(), encoded).getOrThrow().chance()).isEqualTo(0F);
+    }
+
+    @Test
     void codec_preserves_raw_values_when_runtime_modifiers_change_derived_values() {
         bindItemComponents(Items.IRON_NUGGET);
         var recipe = new MachineRecipe(

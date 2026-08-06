@@ -95,6 +95,8 @@ runs {
 
 configurations {
     runtimeClasspath.extendsFrom localRuntime
+    testCompileOnly.extendsFrom compileOnly
+    testRuntimeOnly.extendsFrom compileOnly
     gametestImplementation.extendsFrom implementation, api
     gametestCompileOnly.extendsFrom compileOnly
     gametestRuntimeOnly.extendsFrom runtimeOnly, localRuntime

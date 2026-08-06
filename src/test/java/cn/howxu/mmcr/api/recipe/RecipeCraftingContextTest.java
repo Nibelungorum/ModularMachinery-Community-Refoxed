@@ -302,6 +302,41 @@ class RecipeCraftingContextTest {
     }
 
     @Test
+    void zero_chance_fluid_output_does_not_insert_at_finish() {
+        bindFluidComponents(Fluids.WATER);
+        FluidOutputHatchBlockEntity output = fluidOutputHatch(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerWithComponents(output);
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "zero_chance_fluid_output",
+                List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new FluidStack(Fluids.WATER, 1000), 0F, List.of()))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(output.getFluidTank(null).getFluidAmount()).isZero();
+    }
+
+    @Test
+    void hundred_percent_fluid_output_inserts_at_finish() {
+        bindFluidComponents(Fluids.WATER);
+        FluidOutputHatchBlockEntity output = fluidOutputHatch(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerWithComponents(output);
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "full_chance_fluid_output",
+                List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new FluidStack(Fluids.WATER, 1000), 1F, List.of()))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(output.getFluidTank(null).getFluid()).satisfies(stack -> {
+            assertThat(stack.getFluid()).isEqualTo(Fluids.WATER);
+            assertThat(stack.getAmount()).isEqualTo(1000);
+        });
+    }
+
+    @Test
     void item_input_modifier_changes_runtime_consumption_without_mutating_recipe() {
         bindItemComponents(Items.IRON_INGOT);
         ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 0, 0));
