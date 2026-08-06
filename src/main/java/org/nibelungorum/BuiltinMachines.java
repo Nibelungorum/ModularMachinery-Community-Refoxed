@@ -14,7 +14,6 @@ import net.minecraft.resources.Identifier;
 public final class BuiltinMachines {
 
     private static final Identifier BLAST_FURNACE_ID = MMCR.id("blast_furnace");
-    private static final Identifier ALLOY_FURNACE_ID = MMCR.id("alloy_furnace");
     private static final Identifier CRACKER_ID = MMCR.id("cracker");
     private static final Identifier REACTOR_ID = MMCR.id("reactor");
 
@@ -38,19 +37,6 @@ public final class BuiltinMachines {
                     false,
                     false);
             return new DynamicMachine(BLAST_FURNACE_ID, "高炉", new BlockArray(java.util.Map.of()), controller);
-        });
-        MachineDefinitions.addBuiltinSupplier(() -> {
-            MachineControllerSpec defaults = MachineControllerSpec.defaultsFor(ALLOY_FURNACE_ID);
-            MachineControllerSpec controller = new MachineControllerSpec(
-                    defaults.id(),
-                    defaults.frontTexture(),
-                    defaults.sideTexture(),
-                    defaults.topTexture(),
-                    defaults.bottomTexture(),
-                    false,
-                    false,
-                    false);
-            return new DynamicMachine(ALLOY_FURNACE_ID, "合金炉", new BlockArray(java.util.Map.of()), controller);
         });
         MachineDefinitions.addBuiltinSupplier(() -> {
             MachineControllerSpec defaults = MachineControllerSpec.defaultsFor(CRACKER_ID);

@@ -70,34 +70,6 @@ class DefaultMachinesTest {
     }
 
     @Test
-    void ensureRegistered_registers_default_alloy_furnace_once() {
-        DefaultMachines.ensureRegistered();
-        DefaultMachines.ensureRegistered();
-
-        var machine = MachineRegistry.getMachine(MMCR.id("alloy_furnace"));
-
-        assertThat(machine).isNotNull();
-        assertThat(machine.localizedName()).isEqualTo("合金炉");
-        assertThat(machine.controller().id()).isEqualTo(MMCR.id("alloy_furnace_controller"));
-        assertThat(machine.portRequirements().requirements())
-                .containsKeys(PortKinds.ITEM_INPUT.id(), PortKinds.ITEM_OUTPUT.id(), PortKinds.ENERGY_INPUT.id());
-        assertThat(machine.portRequirements().requirements().get(PortKinds.ITEM_INPUT.id()).min()).isEqualTo(1);
-        assertThat(machine.portRequirements().requirements().get(PortKinds.ITEM_OUTPUT.id()).min()).isEqualTo(1);
-        assertThat(machine.portRequirements().requirements().get(PortKinds.ENERGY_INPUT.id()).min()).isEqualTo(1);
-        assertThat(machine.pattern().pattern()).hasSize(26);
-        assertThat(machine.pattern().get(BlockPos.ZERO))
-                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine).get()));
-        assertThat(machine.pattern().get(new BlockPos(-1, -1, -2)))
-                .isEqualTo(new BlockPredicate.OfBlock(net.minecraft.world.level.block.Blocks.BRICKS));
-        assertThat(machine.pattern().get(new BlockPos(0, -1, -1)))
-                .isEqualTo(new BlockPredicate.OfBlock(net.minecraft.world.level.block.Blocks.BLAST_FURNACE));
-        assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState())).isFalse();
-    }
-
-    @Test
     void ensureRegistered_registers_default_cracker_once() {
         DefaultMachines.ensureRegistered();
         DefaultMachines.ensureRegistered();
