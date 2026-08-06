@@ -157,6 +157,42 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.isFormed()).isTrue();
     }
 
+    @Test
+    void built_in_blast_furnace_rejects_three_arbitrary_ports() throws Exception {
+        DefaultMachines.ensureRegistered();
+        DynamicMachine machine = (DynamicMachine) MachineRegistry.getMachine(MMCR.id("blast_furnace"));
+        BlockPos controllerPos = new BlockPos(20, 4, 20);
+        MachineControllerBlockEntity controller = controllerForDefaultBlastFurnace(
+                machine,
+                controllerPos,
+                itemInputBus(controllerPos.offset(0, 0, -2)),
+                itemInputBus(controllerPos.offset(-1, 0, -1)),
+                itemInputBus(controllerPos.offset(1, 0, -1)));
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
+
+        assertThat(formed).isFalse();
+        assertThat(controller.getLastFormationFailure()).isNotNull();
+    }
+
+    @Test
+    void built_in_blast_furnace_forms_with_required_ports() throws Exception {
+        DefaultMachines.ensureRegistered();
+        DynamicMachine machine = (DynamicMachine) MachineRegistry.getMachine(MMCR.id("blast_furnace"));
+        BlockPos controllerPos = new BlockPos(20, 4, 20);
+        MachineControllerBlockEntity controller = controllerForDefaultBlastFurnace(
+                machine,
+                controllerPos,
+                itemInputBus(controllerPos.offset(0, 0, -2)),
+                itemOutputBus(controllerPos.offset(-1, 0, -1)),
+                energyHatch(controllerPos.offset(1, 0, -1)));
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
+
+        assertThat(formed).isTrue();
+        assertThat(controller.getLastFormationFailure()).isNull();
+    }
+
     private static MachineControllerBlockEntity controllerBlockEntityWithoutRunningMinecraftConstructor() {
         try {
             Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
@@ -202,6 +238,21 @@ class MachineControllerBlockEntityTest {
             return bus;
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate item input bus", e);
+        }
+    }
+
+    private static ItemOutputBusBlockEntity itemOutputBus(BlockPos pos) {
+        try {
+            Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+            unsafeField.setAccessible(true);
+            sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+            ItemOutputBusBlockEntity bus = (ItemOutputBusBlockEntity) unsafe.allocateInstance(ItemOutputBusBlockEntity.class);
+            setField(BlockEntity.class, bus, "type", null);
+            setField(BlockEntity.class, bus, "worldPosition", pos);
+            setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
+            return bus;
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("Unable to allocate item output bus", e);
         }
     }
 
@@ -302,6 +353,41 @@ class MachineControllerBlockEntityTest {
         Level level = LevelStub.create(blocks, List.of(controller, port));
         setField(BlockEntity.class, controller, "level", level);
         setField(BlockEntity.class, port, "level", level);
+        return controller;
+    }
+
+    private static MachineControllerBlockEntity controllerForDefaultBlastFurnace(
+            DynamicMachine machine,
+            BlockPos controllerPos,
+            IOPortBlockEntity first,
+            IOPortBlockEntity second,
+            IOPortBlockEntity third) throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        var controllerBlock = testControllerBlock(machine);
+        var controllerState = controllerBlock.defaultBlockState()
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FORMED, false)
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FACING, Direction.SOUTH);
+        setField(BlockEntity.class, controller, "worldPosition", controllerPos);
+        setField(BlockEntity.class, controller, "blockState", controllerState);
+
+        Map<BlockPos, Block> blocks = new HashMap<>();
+        for (var entry : machine.pattern().pattern().entrySet()) {
+            blocks.put(controllerPos.offset(entry.getKey()), switch (entry.getValue()) {
+                case BlockPredicate.OfBlock of -> of.block();
+                case BlockPredicate.AnyOf ignored -> cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get();
+                default -> cn.howxu.mmcr.registry.ModBlocks.CASING.get();
+            });
+        }
+        blocks.put(first.getBlockPos(), blockForPort(first));
+        blocks.put(second.getBlockPos(), blockForPort(second));
+        blocks.put(third.getBlockPos(), blockForPort(third));
+
+        Level level = LevelStub.create(blocks, List.of(controller, first, second, third));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, first, "level", level);
+        setField(BlockEntity.class, second, "level", level);
+        setField(BlockEntity.class, third, "level", level);
         return controller;
     }
 
