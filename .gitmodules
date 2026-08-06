@@ -16,7 +16,3 @@
 	path = reference/pipez
 	url = https://github.com/henkelmax/pipez
 	branch = 26.1
-[submodule "reference/gtceu"]
-	path = reference/gtceu
-	url = https://github.com/GregTechCEu/GregTech-Modern
-	branch = 1.21
