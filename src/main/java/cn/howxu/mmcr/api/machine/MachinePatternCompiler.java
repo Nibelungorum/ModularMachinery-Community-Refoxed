@@ -36,7 +36,9 @@ public final class MachinePatternCompiler {
             componentPositions.put(facing, componentPositions(rotated));
             portPositions.put(facing, portPositions(rotated));
             modifierReplacements.put(facing,
-                    ((DynamicMachine) machine).rotatedModifierReplacements(facing, Direction.SOUTH));
+                    machine instanceof DynamicMachine dynamic
+                            ? dynamic.rotatedModifierReplacements(facing, Direction.SOUTH)
+                            : Map.of());
         }
 
         return new CompiledMachinePattern(machine, rotatedPatterns, boundingBoxes, componentPositions, portPositions, dynamicPatterns(machine.dynamicPatterns()), modifierReplacements);

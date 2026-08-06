@@ -48,18 +48,55 @@ class MachineRegistryTest {
 
     @Test
     void dynamic_machine_exposes_immutable_replacement_map() {
+        BlockPos position = new BlockPos(1, 0, 0);
         var replacement = new SingleBlockModifierReplacement(
-                "speed", new BlockPos(1, 0, 0), new BlockPredicate.Any(),
+                "speed", position, new BlockPredicate.Any(),
                 List.of(), "", ItemStack.EMPTY);
         var machine = new DynamicMachine(
                 Identifier.fromNamespaceAndPath("mmcr", "replacement_machine"),
-                "Replacement Machine", new BlockArray(Map.of()),
+                "Replacement Machine", new BlockArray(Map.of(position, new BlockPredicate.Any())),
                 MachineControllerSpec.defaultsFor(Identifier.fromNamespaceAndPath("mmcr", "replacement_machine")),
                 PortRequirementSpec.none(), List.of(),
-                Map.of(new BlockPos(1, 0, 0), List.of(replacement)));
+                Map.of(position, List.of(replacement)));
 
-        assertThat(machine.modifierReplacementsAt(new BlockPos(1, 0, 0))).containsExactly(replacement);
+        assertThat(machine.modifierReplacementsAt(position)).hasSize(1);
         assertThatThrownBy(() -> machine.modifierReplacements().put(BlockPos.ZERO, List.of(replacement)))
                 .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void dynamic_machine_rejects_replacement_outside_pattern() {
+        BlockPos position = new BlockPos(1, 0, 0);
+        var replacement = new SingleBlockModifierReplacement(
+                "speed", position, new BlockPredicate.Any(),
+                List.of(), "", ItemStack.EMPTY);
+        Identifier id = Identifier.fromNamespaceAndPath("mmcr", "outside_replacement_machine");
+
+        assertThatThrownBy(() -> new DynamicMachine(
+                id, "Outside Replacement Machine", new BlockArray(Map.of()),
+                MachineControllerSpec.defaultsFor(id), PortRequirementSpec.none(), List.of(),
+                Map.of(position, List.of(replacement))))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void dynamic_machine_deep_copies_replacement_metadata() {
+        BlockPos position = new BlockPos(1, 0, 0);
+        var replacement = new SingleBlockModifierReplacement(
+                "speed", position, new BlockPredicate.Any(),
+                List.of(), "", ItemStack.EMPTY);
+        Identifier id = Identifier.fromNamespaceAndPath("mmcr", "copied_replacement_machine");
+        var machine = new DynamicMachine(
+                id, "Copied Replacement Machine",
+                new BlockArray(Map.of(position, new BlockPredicate.Any())),
+                MachineControllerSpec.defaultsFor(id), PortRequirementSpec.none(), List.of(),
+                Map.of(position, List.of(replacement)));
+
+        replacement.setPos(new BlockPos(2, 0, 0));
+
+        assertThat(machine.modifierReplacementsAt(position)).singleElement()
+                .isNotSameAs(replacement)
+                .extracting(SingleBlockModifierReplacement::getPos)
+                .isEqualTo(position);
     }
 }

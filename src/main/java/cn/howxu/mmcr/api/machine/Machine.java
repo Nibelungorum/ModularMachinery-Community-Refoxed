@@ -4,7 +4,7 @@ import net.minecraft.resources.Identifier;
 
 import java.util.List;
 
-public sealed interface Machine permits DynamicMachine {
+public interface Machine {
     Identifier registryName();
 
     String localizedName();

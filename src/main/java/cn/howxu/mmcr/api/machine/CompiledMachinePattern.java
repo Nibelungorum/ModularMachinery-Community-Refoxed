@@ -77,7 +77,9 @@ public record CompiledMachinePattern(
     public Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements(
         Direction facing, Direction rollFacing) {
         if (!facing.getAxis().isVertical()) return modifierReplacements(facing);
-        return ((DynamicMachine) machine).rotatedModifierReplacements(facing, rollFacing);
+        return machine instanceof DynamicMachine dynamic
+                ? dynamic.rotatedModifierReplacements(facing, rollFacing)
+                : Map.of();
     }
 
     private static <T> Map<Direction, T> copyEnumMap(Map<Direction, T> source) {

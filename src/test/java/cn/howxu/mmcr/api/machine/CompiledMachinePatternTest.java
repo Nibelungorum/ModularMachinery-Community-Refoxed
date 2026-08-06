@@ -71,6 +71,7 @@ class CompiledMachinePatternTest {
         var machine = new DynamicMachine(
                 id, "Compiled Replacement", new BlockArray(Map.of(
                         BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE),
+                        rawPos, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
                         new BlockPos(0, 0, 1), new BlockPredicate.AnyOf(java.util.List.of(
                                 new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()),
                                 new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_output_bus").get()))))),
@@ -83,13 +84,24 @@ class CompiledMachinePatternTest {
             assertThat(compiled.modifierReplacements(facing))
                     .containsKey(BlockRotator.rotateSouthTo(rawPos, facing));
         }
-        assertThat(compiled.rotatedPattern(Direction.SOUTH).pattern()).hasSize(2);
+        assertThat(compiled.rotatedPattern(Direction.SOUTH).pattern()).hasSize(3);
         assertThat(compiled.componentPositions(Direction.SOUTH)).containsExactly(new BlockPos(0, 0, 1));
         assertThat(compiled.portPositions(Direction.SOUTH)).containsExactly(new BlockPos(0, 0, 1));
-        assertThat(compiled.boundingBox(Direction.SOUTH).minX()).isEqualTo(0);
+        assertThat(compiled.boundingBox(Direction.SOUTH).minX()).isEqualTo(-1);
         assertThat(compiled.boundingBox(Direction.SOUTH).maxX()).isEqualTo(0);
         assertThat(compiled.boundingBox(Direction.SOUTH).minZ()).isEqualTo(0);
         assertThat(compiled.boundingBox(Direction.SOUTH).maxZ()).isEqualTo(1);
+    }
+
+    @Test
+    void compiler_supports_non_dynamic_machine_without_replacements() {
+        Identifier id = Identifier.fromNamespaceAndPath("mmcr", "plain_machine");
+        Machine machine = new PlainMachine(id, "Plain Machine", pattern(), MachineControllerSpec.defaultsFor(id));
+
+        CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
+
+        assertThat(compiled.modifierReplacements(Direction.SOUTH)).isEmpty();
+        assertThat(compiled.modifierReplacements(Direction.UP, Direction.NORTH)).isEmpty();
     }
 
     private static BlockArray pattern() {
@@ -100,5 +112,13 @@ class CompiledMachinePatternTest {
                         new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()),
                         new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_output_bus").get())))))
                 .tagged(new BlockPos(0, 0, 1), "port:item_input_bus");
+    }
+
+    private record PlainMachine(
+            Identifier registryName,
+            String localizedName,
+            BlockArray pattern,
+            MachineControllerSpec controller
+    ) implements Machine {
     }
 }

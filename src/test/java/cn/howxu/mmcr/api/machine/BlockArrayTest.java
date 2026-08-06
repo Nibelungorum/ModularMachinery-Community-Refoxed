@@ -237,7 +237,7 @@ class BlockArrayTest {
                 "speed", rawPos, new BlockPredicate.Any(),
                 List.of(), "", ItemStack.EMPTY);
         var machine = new DynamicMachine(id, "Compiled Vertical Replacement",
-                new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.Any())),
+                new BlockArray(Map.of(rawPos, new BlockPredicate.Any())),
                 MachineControllerSpec.defaultsFor(id), PortRequirementSpec.none(), List.of(),
                 Map.of(rawPos, List.of(replacement)));
 

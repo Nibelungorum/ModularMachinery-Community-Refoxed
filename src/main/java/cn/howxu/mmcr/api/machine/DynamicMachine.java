@@ -41,7 +41,7 @@ public record DynamicMachine(
         if (controller == null) throw new IllegalArgumentException("controller null");
         if (portRequirements == null) throw new IllegalArgumentException("portRequirements null");
         dynamicPatterns = List.copyOf(dynamicPatterns == null ? List.of() : dynamicPatterns);
-        modifierReplacements = copyModifierReplacements(modifierReplacements);
+        modifierReplacements = copyModifierReplacements(pattern, modifierReplacements);
     }
 
     public DynamicMachine(
@@ -73,7 +73,7 @@ public record DynamicMachine(
     }
 
     private static Map<BlockPos, List<SingleBlockModifierReplacement>> copyModifierReplacements(
-            Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
+            BlockArray pattern, Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
         if (replacements == null || replacements.isEmpty()) {
             return Map.of();
         }
@@ -82,10 +82,13 @@ public record DynamicMachine(
         for (var entry : replacements.entrySet()) {
             BlockPos pos = entry.getKey();
             if (pos == null) throw new IllegalArgumentException("modifierReplacements position null");
+            if (!pattern.pattern().containsKey(pos)) {
+                throw new IllegalArgumentException("modifier replacement position outside pattern: " + pos);
+            }
             List<SingleBlockModifierReplacement> list = entry.getValue();
             if (list == null) throw new IllegalArgumentException("modifierReplacements list null");
             copy.put(pos, List.copyOf(list.stream()
-                    .map(replacement -> validateReplacement(pos, replacement))
+                    .map(replacement -> validateReplacement(pos, replacement).copyAt(pos))
                     .toList()));
         }
         return java.util.Collections.unmodifiableMap(copy);

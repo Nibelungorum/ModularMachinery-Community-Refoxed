@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -86,11 +87,13 @@ class MachineBuilderJSTest {
                 "speed", new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
                 List.of(), "", ItemStack.EMPTY);
         var builder = new MachineBuilderJS("mmcr:builder_replacement")
+                .pattern("_I", Map.of("I", Blocks.IRON_BLOCK))
                 .addModifier(replacement);
 
         DynamicMachine machine = builder.createObject();
 
-        assertThat(machine.modifierReplacementsAt(new BlockPos(1, 0, 0)))
-                .containsExactly(replacement);
+        assertThat(machine.modifierReplacementsAt(new BlockPos(1, 0, 0))).singleElement()
+                .extracting(SingleBlockModifierReplacement::getModifierName)
+                .isEqualTo("speed");
     }
 }

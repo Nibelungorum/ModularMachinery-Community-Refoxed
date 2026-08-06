@@ -239,7 +239,7 @@ src/main/java/
 
 **已完成**：
 
-- `SingleBlockModifierReplacement` 落到 `BlockArray` 附加 per-position metadata，并保留旧构造器可编译。
+- `DynamicMachine` 旁路保存 per-position `SingleBlockModifierReplacement`，base `BlockArray` 语义保持不变，并保留旧构造器可编译。
 - modifier 方块只在 matched pattern 内生效；结构外同类方块不进入 machine replacement map。
 - modifier 位置随 horizontal facing、vertical facing 和 roll-facing 通过 `BlockRotator` 同一公式映射。
 - 结构匹配、first mismatch、compiled path 与 vertical fallback path 使用一致的 replacement 判断。
