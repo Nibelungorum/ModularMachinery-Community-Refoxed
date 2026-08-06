@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
@@ -752,6 +753,38 @@ class MachineControllerBlockEntityTest {
         assertThat((boolean) fieldValue(MachineControllerBlockEntity.class, controller, "structureDirty")).isFalse();
     }
 
+    @Test
+    void modifier_only_refresh_updates_active_total_tick() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        DynamicMachine machine = machineWithReplacements(new SingleBlockModifierReplacement(
+                "duration_half",
+                new BlockPos(1, 0, 0),
+                new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
+                List.of(new RecipeModifier(IntegrationTypeHelper.TARGET_DURATION, RecipeModifier.IOType.INPUT,
+                        0.5F, RecipeModifier.Operation.MULTIPLY, false)),
+                "", ItemStack.EMPTY));
+        MachineRegistry.register(machine);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("duration_refresh_recipe"), machine.registryName(), 100, List.of(), List.of());
+        MachineControllerBlockEntity controller = controllerFor(machine);
+        Level level = levelOf(controller);
+        placeControllerAndReplacement(controller, machine, Blocks.IRON_BLOCK);
+        level.setBlock(controllerPos.offset(1, 0, 0), Blocks.IRON_BLOCK.defaultBlockState(), 3);
+        tickUntilFormed(controller, machine);
+        assertThat(controller.foundModifierList()).isEmpty();
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, 1);
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+        context.setStructureModifiers(controller.foundModifierList());
+        setField(MachineControllerBlockEntity.class, controller, "active", active);
+        setField(MachineControllerBlockEntity.class, controller, "context", context);
+        assertThat(active.getTotalTick()).isEqualTo(100);
+
+        level.setBlock(controllerPos.offset(1, 0, 0), Blocks.GOLD_BLOCK.defaultBlockState(), 3);
+        invokeCollectFoundModifiers(controller, machine.modifierReplacements());
+        invokeTickActiveRecipe(controller);
+
+        assertThat(active.getTotalTick()).isEqualTo(50);
+    }
+
     private static MachineControllerBlockEntity controllerBlockEntityWithoutRunningMinecraftConstructor() {
         try {
             Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
@@ -1111,6 +1144,14 @@ class MachineControllerBlockEntityTest {
         Method method = MachineControllerBlockEntity.class.getDeclaredMethod("tickActiveRecipe");
         method.setAccessible(true);
         method.invoke(controller);
+    }
+
+    private static void invokeCollectFoundModifiers(
+            MachineControllerBlockEntity controller,
+            Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) throws Exception {
+        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("collectFoundModifiers", Map.class);
+        method.setAccessible(true);
+        method.invoke(controller, replacements);
     }
 
     private static CompiledMachinePattern compiledPattern(MachineControllerBlockEntity controller) throws Exception {

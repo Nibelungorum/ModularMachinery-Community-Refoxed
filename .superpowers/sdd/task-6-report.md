@@ -44,3 +44,6 @@ Command:
 ```
 
 Result: `BUILD SUCCESSFUL` after adding regression coverage for modifier-only snapshot refresh preserving the active `RecipeCraftingContext` instance.
+P3B Task 6 review fix - modifier-only active duration refresh
+- Command: `./gradlew test --tests cn.howxu.mmcr.api.recipe.MachineRecipeTest --tests cn.howxu.mmcr.api.recipe.RecipeCraftingContextTest --tests cn.howxu.mmcr.api.recipe.RecipeSearchTaskTest --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest --no-daemon`
+- Result: PASS (`BUILD SUCCESSFUL in 13s`, 83 tests completed)

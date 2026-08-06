@@ -762,6 +762,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     instanceId, active.getRecipe().id(), getBlockPos());
             if (context.isStructureVersionOnlyCurrent()) {
                 context.refreshModifierSnapshot(foundModifierList());
+                active.refreshTotalTick(context);
             } else {
                 context = new RecipeCraftingContext(this);
                 context.setStructureModifiers(foundModifierList());
