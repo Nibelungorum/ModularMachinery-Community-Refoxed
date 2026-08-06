@@ -270,6 +270,38 @@ class RecipeCraftingContextTest {
     }
 
     @Test
+    void zero_chance_item_output_does_not_insert_at_finish() {
+        bindItemComponents(Items.IRON_NUGGET);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerWithComponents(output);
+        MachineRecipe recipe = explicitItemRecipe(
+                "zero_chance_item_output",
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_NUGGET.getDefaultInstance().copyWithCount(3), 0F, List.of()))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+    }
+
+    @Test
+    void hundred_percent_item_output_inserts_at_finish() {
+        bindItemComponents(Items.IRON_NUGGET);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerWithComponents(output);
+        MachineRecipe recipe = explicitItemRecipe(
+                "full_chance_item_output",
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_NUGGET.getDefaultInstance().copyWithCount(3), 1F, List.of()))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(3);
+    }
+
+    @Test
     void item_input_modifier_changes_runtime_consumption_without_mutating_recipe() {
         bindItemComponents(Items.IRON_INGOT);
         ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 0, 0));

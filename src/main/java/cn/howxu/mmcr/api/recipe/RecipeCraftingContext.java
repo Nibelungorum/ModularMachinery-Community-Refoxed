@@ -352,9 +352,11 @@ public final class RecipeCraftingContext {
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
+                if (!shouldProduce(item.chance())) continue;
                 ItemOutputRoute route = itemOutputRoutes.get(requirementIndex);
                 itemTransfers.addAll(route.transfers());
             } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT) {
+                if (!shouldProduce(fluid.chance())) continue;
                 FluidOutputRoute route = fluidOutputRoutes.get(requirementIndex);
                 fluidTransfers.addAll(route.transfers());
             }
@@ -362,6 +364,13 @@ public final class RecipeCraftingContext {
         insert(itemTransfers);
         fill(fluidTransfers);
         return true;
+    }
+
+    private boolean shouldProduce(float chance) {
+        if (chance >= 1F) return true;
+        if (chance <= 0F) return false;
+        var level = controller.getLevel();
+        return (level == null ? Math.random() : level.getRandom().nextFloat()) < chance;
     }
 
     public List<FluidHatchBlockEntity> fluidOutputs() {
