@@ -23,6 +23,7 @@ public class MachineBuilderJS extends BuilderBase<DynamicMachine> {
     public transient Identifier controllerSideTexture;
     public transient Identifier controllerTopTexture;
     public transient Identifier controllerBottomTexture;
+    public transient boolean allowVerticalFacing = false;
 
     public MachineBuilderJS(Identifier id) {
         super(id);
@@ -126,6 +127,15 @@ public class MachineBuilderJS extends BuilderBase<DynamicMachine> {
         return this;
     }
 
+    public MachineBuilderJS allowVerticalFacing() {
+        return allowVerticalFacing(true);
+    }
+
+    public MachineBuilderJS allowVerticalFacing(boolean allow) {
+        this.allowVerticalFacing = allow;
+        return this;
+    }
+
     public void registerObject() {
         var machine = createObject();
         MachineDefinitions.register(machine);
@@ -154,6 +164,7 @@ public class MachineBuilderJS extends BuilderBase<DynamicMachine> {
                 controllerFrontTexture != null ? controllerFrontTexture : defaults.frontTexture(),
                 controllerSideTexture != null ? controllerSideTexture : defaults.sideTexture(),
                 controllerTopTexture != null ? controllerTopTexture : defaults.topTexture(),
-                controllerBottomTexture != null ? controllerBottomTexture : defaults.bottomTexture());
+                controllerBottomTexture != null ? controllerBottomTexture : defaults.bottomTexture(),
+                allowVerticalFacing);
     }
 }

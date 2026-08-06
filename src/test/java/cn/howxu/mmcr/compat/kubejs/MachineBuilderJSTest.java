@@ -19,7 +19,8 @@ class MachineBuilderJSTest {
                 MMCR.id("block/arc_front"),
                 MMCR.id("block/arc_side"),
                 MMCR.id("block/arc_side"),
-                MMCR.id("block/arc_side")));
+                MMCR.id("block/arc_side"),
+                false));
     }
 
     @Test
@@ -34,5 +35,14 @@ class MachineBuilderJSTest {
         assertThat(machine.controller().sideTexture()).isEqualTo(MMCR.id("block/arc_side"));
         assertThat(machine.controller().topTexture()).isEqualTo(MMCR.id("block/arc_top"));
         assertThat(machine.controller().bottomTexture()).isEqualTo(MMCR.id("block/arc_bottom"));
+    }
+
+    @Test
+    void allow_vertical_facing_sets_controller_spec_flag() {
+        var machine = new MachineBuilderJS(MMCR.id("arc_furnace"))
+                .allowVerticalFacing()
+                .createObject();
+
+        assertThat(machine.controller().allowVerticalFacing()).isTrue();
     }
 }
