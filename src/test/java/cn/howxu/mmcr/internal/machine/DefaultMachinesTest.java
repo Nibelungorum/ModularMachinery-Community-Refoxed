@@ -74,7 +74,7 @@ class DefaultMachinesTest {
         DefaultMachines.ensureRegistered();
         DefaultMachines.ensureRegistered();
 
-        var machine = MachineRegistry.getMachine(MMCR.id("alloy_furnace"));
+        var machine = (cn.howxu.mmcr.api.machine.DynamicMachine) MachineRegistry.getMachine(MMCR.id("alloy_furnace"));
 
         assertThat(machine).isNotNull();
         assertThat(machine.localizedName()).isEqualTo("合金炉");
@@ -95,6 +95,35 @@ class DefaultMachinesTest {
         assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState())).isFalse();
+
+        var mPosUp = new BlockPos(0, -1, -1);
+        var mPosDown = new BlockPos(0, 1, -1);
+        assertThat(machine.modifierReplacementsAt(mPosUp))
+                .extracting(cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement::getModifierName)
+                .containsExactly("alloy_furnace_diamond_speedup", "alloy_furnace_gold_doubling");
+        assertThat(machine.modifierReplacementsAt(mPosDown))
+                .extracting(cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement::getModifierName)
+                .containsExactly("alloy_furnace_diamond_speedup", "alloy_furnace_gold_doubling");
+
+        var diamondUp = machine.modifierReplacementsAt(mPosUp).get(0);
+        assertThat(diamondUp.getReplacement())
+                .isEqualTo(new BlockPredicate.OfBlock(net.minecraft.world.level.block.Blocks.DIAMOND_BLOCK));
+        assertThat(diamondUp.getModifiers()).singleElement().satisfies(mod -> {
+            assertThat(mod.getTarget()).isEqualTo("duration");
+            assertThat(mod.getIOTarget()).isEqualTo(cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.INPUT);
+            assertThat(mod.getOperation()).isEqualTo(cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.Operation.MULTIPLY);
+            assertThat(mod.getModifier()).isEqualTo(0.5F);
+        });
+
+        var goldDown = machine.modifierReplacementsAt(mPosDown).get(1);
+        assertThat(goldDown.getReplacement())
+                .isEqualTo(new BlockPredicate.OfBlock(net.minecraft.world.level.block.Blocks.GOLD_BLOCK));
+        assertThat(goldDown.getModifiers()).singleElement().satisfies(mod -> {
+            assertThat(mod.getTarget()).isEqualTo("item");
+            assertThat(mod.getIOTarget()).isEqualTo(cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.OUTPUT);
+            assertThat(mod.getOperation()).isEqualTo(cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.Operation.MULTIPLY);
+            assertThat(mod.getModifier()).isEqualTo(2.0F);
+        });
     }
 
     @Test

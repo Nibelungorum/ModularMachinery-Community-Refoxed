@@ -9,14 +9,24 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Block;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 默认内建机器。当前仅高炉(blast_furnace):沿 Z 轴三块 3×3 层并排。
@@ -135,9 +145,59 @@ public final class DefaultMachines {
                 .min(PortKinds.ENERGY_INPUT.id(), 1)
                 .build();
         Machine definition = MachineDefinitions.get(ALLOY_FURNACE_ID);
-        return definition == null
-                ? new DynamicMachine(ALLOY_FURNACE_ID, "合金炉", pattern, MachineControllerSpec.defaultsFor(ALLOY_FURNACE_ID), portRequirements)
-                : new DynamicMachine(ALLOY_FURNACE_ID, "合金炉", pattern, MachineControllerSpec.defaultsFor(ALLOY_FURNACE_ID), portRequirements);
+        return new DynamicMachine(
+                ALLOY_FURNACE_ID,
+                "合金炉",
+                pattern,
+                MachineControllerSpec.defaultsFor(ALLOY_FURNACE_ID),
+                portRequirements,
+                List.of(),
+                alloyFurnaceModifiers());
+    }
+
+    /**
+     * 合金炉 M 位置允许两种 modifier 方块：
+     * <ul>
+     *     <li>钻石块 → 配方时间 × 0.5</li>
+     *     <li>金块 → 产物数量 × 2</li>
+     * </ul>
+     * 原方块（高炉）仍为默认可选方块，不挂载 modifier。
+     */
+    private static Map<BlockPos, List<SingleBlockModifierReplacement>> alloyFurnaceModifiers() {
+        BlockPos[] mPositions = {
+                new BlockPos(0, -1, -1),
+                new BlockPos(0, 1, -1),
+        };
+        Map<BlockPos, List<SingleBlockModifierReplacement>> map = new LinkedHashMap<>();
+        for (BlockPos pos : mPositions) {
+            List<SingleBlockModifierReplacement> replacements = new ArrayList<>(2);
+            replacements.add(new SingleBlockModifierReplacement(
+                    "alloy_furnace_diamond_speedup",
+                    pos,
+                    new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK),
+                    List.of(new RecipeModifier(
+                            "duration",
+                            RecipeModifier.IOType.INPUT,
+                            0.5F,
+                            RecipeModifier.Operation.MULTIPLY,
+                            false)),
+                    "钻石块：配方时间折半",
+                    new ItemStack(Holder.direct(Items.DIAMOND_BLOCK, DataComponentMap.EMPTY))));
+            replacements.add(new SingleBlockModifierReplacement(
+                    "alloy_furnace_gold_doubling",
+                    pos,
+                    new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
+                    List.of(new RecipeModifier(
+                            "item",
+                            RecipeModifier.IOType.OUTPUT,
+                            2.0F,
+                            RecipeModifier.Operation.MULTIPLY,
+                            false)),
+                    "金块：产物数量翻倍",
+                    new ItemStack(Holder.direct(Items.GOLD_BLOCK, DataComponentMap.EMPTY))));
+            map.put(pos, replacements);
+        }
+        return map;
     }
 
     public static Machine cracker(Block itemInput, Block itemOutput, Block fluidOutput, Block energyInput) {
