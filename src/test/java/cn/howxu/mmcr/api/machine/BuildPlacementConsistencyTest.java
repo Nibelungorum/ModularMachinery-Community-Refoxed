@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,6 +43,19 @@ class BuildPlacementConsistencyTest {
         Machine machine = fixture();
         MachineRegistry.register(machine);
         for (Direction ctrlFacing : Direction.Plane.HORIZONTAL) {
+            BlockPos controller = new BlockPos(50, 4, 50);
+            Map<BlockPos, BlockState> world = buildPlacement(machine, controller, ctrlFacing);
+            assertThat(StructureMatcher.matches(machine.pattern(), levelFor(world), controller, ctrlFacing))
+                    .as("结构 facing=%s 应该 round-trip 成 form", ctrlFacing)
+                    .isTrue();
+        }
+    }
+
+    @Test
+    void struct_round_trip_in_each_vertical_facing_when_transform_is_used() {
+        Machine machine = fixture();
+        MachineRegistry.register(machine);
+        for (Direction ctrlFacing : List.of(Direction.UP, Direction.DOWN)) {
             BlockPos controller = new BlockPos(50, 4, 50);
             Map<BlockPos, BlockState> world = buildPlacement(machine, controller, ctrlFacing);
             assertThat(StructureMatcher.matches(machine.pattern(), levelFor(world), controller, ctrlFacing))
@@ -80,13 +94,13 @@ class BuildPlacementConsistencyTest {
     private static Map<BlockPos, BlockState> buildPlacement(Machine machine, BlockPos controller, Direction ctrlFacing) {
         Map<BlockPos, BlockState> written = new LinkedHashMap<>();
         BlockState ctrlBase = ModBlocks.controllerFor(machine).get().defaultBlockState();
-        BlockState ctrlFinal = ctrlBase.hasProperty(BlockStateProperties.HORIZONTAL_FACING)
-                ? ctrlBase.setValue(BlockStateProperties.HORIZONTAL_FACING, ctrlFacing)
+        BlockState ctrlFinal = ctrlBase.hasProperty(BlockStateProperties.FACING)
+                ? ctrlBase.setValue(BlockStateProperties.FACING, ctrlFacing)
                 : ctrlBase;
         written.put(controller, ctrlFinal);
         for (var entry : machine.pattern().pattern().entrySet()) {
             if (entry.getKey().equals(BlockPos.ZERO)) continue;
-            BlockPos world = controller.offset(BlockRotator.rotateYCCWSouthUntil(entry.getKey(), ctrlFacing));
+            BlockPos world = controller.offset(BlockRotator.rotateSouthTo(entry.getKey(), ctrlFacing));
             written.put(world, resolve(entry.getValue()));
         }
         return written;

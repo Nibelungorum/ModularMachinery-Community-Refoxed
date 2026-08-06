@@ -31,4 +31,30 @@ public final class BlockRotator {
         }
         return r;
     }
+
+    public static BlockPos rotateSouthTo(BlockPos pos, Direction target) {
+        return switch (target) {
+            case NORTH, SOUTH, EAST, WEST -> rotateYCCWSouthUntil(pos, target);
+            case UP -> new BlockPos(pos.getX(), pos.getZ(), -pos.getY());
+            case DOWN -> new BlockPos(pos.getX(), -pos.getZ(), pos.getY());
+        };
+    }
+
+    public static BlockPos normalizeFromFace(BlockPos offset, Direction sourceFace) {
+        return switch (sourceFace) {
+            case NORTH, SOUTH, EAST, WEST -> normalizeHorizontal(offset, sourceFace);
+            case UP -> new BlockPos(offset.getX(), -offset.getZ(), offset.getY());
+            case DOWN -> new BlockPos(offset.getX(), offset.getZ(), -offset.getY());
+        };
+    }
+
+    private static BlockPos normalizeHorizontal(BlockPos offset, Direction sourceFace) {
+        Direction current = sourceFace;
+        BlockPos normalized = offset;
+        while (current != Direction.SOUTH) {
+            current = current.getCounterClockWise();
+            normalized = rotateYCCW(normalized);
+        }
+        return normalized;
+    }
 }
