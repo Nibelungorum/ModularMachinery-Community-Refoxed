@@ -276,9 +276,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 structureDirty = true;
                 return;
             }
+            var replacements = replacementsFor(foundMachine, foundCompiledPattern, facing, foundPattern);
             boolean stillMatches = foundCompiledPattern == null
-                    ? StructureMatcher.matchesRotated(foundPattern, level, getBlockPos())
-                    : StructureMatcher.matchesCompiled(foundCompiledPattern, facing, level, getBlockPos());
+                    ? StructureMatcher.matchesRotated(foundPattern, level, getBlockPos(), replacements)
+                    : StructureMatcher.matchesCompiled(foundCompiledPattern, facing, getBlockState().getValue(MachineControllerBlock.ROLL_FACING), level, getBlockPos());
             if (stillMatches) {
                 resumePausedRecipeAfterStructureCheck();
                 var failure = foundMachine.portRequirements().validate(countPorts(foundPattern, foundCompiledPattern, facing));
@@ -292,7 +293,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 return;
             }
             LOG.info("[Ctrl#{}] checkStructure: cached pattern no longer matches → reset; {}",
-                    instanceId, structureMismatchDiagnostic(foundMachine, facing, foundPattern, level, getBlockPos()));
+                    instanceId, structureMismatchDiagnostic(foundMachine, facing, foundPattern, level, getBlockPos(), replacements));
             resetMachine();
             return;
         }

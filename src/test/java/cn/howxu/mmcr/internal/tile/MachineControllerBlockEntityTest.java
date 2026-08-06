@@ -17,6 +17,7 @@ import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -330,6 +331,37 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.isFormed()).isFalse();
         assertThat(controller.getLastFormationFailure()).isNotNull();
         assertThat(controller.getLastFormationFailure().portId()).isEqualTo(PortKinds.ENERGY_INPUT.id());
+    }
+
+    @Test
+    void cached_formed_dynamic_replacement_structure_stays_formed_after_recheck() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockPos replacementPos = controllerPos.offset(1, 0, 0);
+        BlockPos relativeReplacementPos = new BlockPos(1, 0, 0);
+        BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
+        var replacement = new SingleBlockModifierReplacement(
+                "cached_replacement",
+                relativeReplacementPos,
+                new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("energy_input_hatch").get()),
+                List.of(),
+                "",
+                net.minecraft.world.item.ItemStack.EMPTY);
+        DynamicMachine machine = new DynamicMachine(
+                MMCR.id("cached_replacement_machine"),
+                "Cached Replacement",
+                pattern,
+                cn.howxu.mmcr.api.machine.MachineControllerSpec.defaultsFor(MMCR.id("cached_replacement_machine")),
+                PortRequirementSpec.none(),
+                List.of(),
+                Map.of(relativeReplacementPos, List.of(replacement)));
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, energyHatch(replacementPos));
+        setField(MachineControllerBlockEntity.class, controller, "machine", machine);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+
+        controller.serverTick();
+
+        assertThat(controller.isFormed()).isTrue();
+        assertThat(controller.getFoundMachine()).isSameAs(machine);
     }
 
     @Test
