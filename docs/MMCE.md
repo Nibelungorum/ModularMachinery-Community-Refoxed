@@ -1,54 +1,35 @@
-# ModularMachinery: Community Edition (MMCE) — 功能全景拆解
+# ModularMachinery: Community Edition (MMCE) — 项目分析与 API 变动
 
-> 本文档对 `reference/mmce` 下的 **ModularMachinery: Community Edition (Version 2.3.2, MC 1.12.2, Forge 14.21+)** 进行系统性拆解，包括其每一项功能、模块、类、对外接口、扩展点与配方/机器/组件/事件机制。
+> 本文档是 MMCR（ModularMachinery-Community-Refoxed）项目的**参考基线**，由三部分组成：
 >
-> 编写人：KasumiNova、各类社区贡献者与原作者 HellFirePvP / wiiv / youyihj / ikexing。
+> 1. **§1–§10 MMCE 1.12.2 功能全景**：原 `reference/mmce`（Version 2.3.2, MC 1.12.2, Forge 14.21+）的逐项拆解。编写人：KasumiNova、各类社区贡献者与原作者 HellFirePvP / wiiv / youyihj / ikexing。维护状态：原项目已停更，但内容代表 MMCE 的最终版本。
+> 2. **§11 KasumiNova 扩展层可移植性分析**：MMCE 后期由 `github.kasuminova.mmce.*` 引入的高级扩展层。
+> 3. **§12 MMCE 1.12.2 → MMCR 26.1.2 NeoForge API 变动**：跨大版本（1.12.2 → 1.21.1，Forge 14.21+ → NeoForge 26.1.2）的关键 API 差异。详细映射见 [`api-mapping.md`](./api-mapping.md)。
 >
-> 维护状态：原项目已停更，但内容代表 MMCE 的最终版本。
+> 整体阅读建议：先看 §1.0 摘要决定是否需要深入；逐阶段实现时按需回查对应章节。
 
 ---
 
-## 0. 索引
+## 0. 目录
 
 | 章节 | 内容 |
 |------|------|
-| 1.  项目基本盘 | 版本、依赖、构建、模块坐标 |
-| 2.  包结构总览 | 顶级包与各包职责 |
-| 3.  Mod 入口与生命周期 | `ModularMachinery` / `CommonProxy` / `ClientProxy` |
-| 4.  核心多方块机器系统 | `DynamicMachine` / `AbstractMachine` / `MachineRegistry` / `MachineLoader` / `MachineComponent` |
-| 5.  结构匹配 | `BlockArray` / `TaggedPositionBlockArray` / `BlockArrayCache` / `DynamicPattern` |
-| 6.  配方系统 | `MachineRecipe` / `RecipeRegistry` / `RecipeLoader` / `RecipeAdapter` / `RecipeCraftingContext` |
-| 7.  内置 ResourceType（需求类型） | 10 种 requirement 类型 + ModularMagic 10 种魔法类型 |
-| 8.  内置 ComponentType（组件类型） | 8 种 component 类型 + ModularMagic 10 种魔法组件 |
-| 9.  修饰符 / Modifier | `RecipeModifier` / `SingleBlockModifierReplacement` / `MultiBlockModifierReplacement` / `ModifierRegistry` |
-| 10. 方块 (Block) 矩阵 | 控制器 / 外壳 / 总线 / 仓 / 升级 / 智能接口 / 并行 / 工厂 / ME 系列 |
-| 11. TileEntity 矩阵 | 控制器 / 总线 / 仓 / 接口 / 升级 / 智能接口 / 并行 / 工厂 / ME 系列 |
-| 12. 智能接口（SmartInterface） | `SmartInterfaceType` / `SmartInterfaceData` / `TileSmartInterface` |
-| 13. 并行 / 工厂控制器 | `TileParallelController` / `TileFactoryController` / `FactoryRecipeThread` |
-| 14. 升级系统（Upgrade） | `MachineUpgrade` / `DynamicMachineUpgrade` / `UpgradeType` / `RegistryUpgrade` |
-| 15. 并发与执行 | `TaskExecutor` / `RecipeSearchTask` / `FactoryRecipeSearchTask` / `RecipeCraftingContextPool` / `Sync` / `TimeRecorder` |
-| 16. 事件系统 | `MachineEvent` / `RecipeEvent` / `FactoryRecipeEvent` / `Phase` / 客户端事件 |
-| 17. 网络数据包 | 15 个 `PktXxx` |
-| 18. 命令 | 5 个命令 |
-| 19. GUI 与客户端 | 容器 / 屏幕 / 自定义 Widget / 滚动条 / 多线标签 / 按钮 / 纹理叠层 |
-| 20. 结构预览渲染 | `WorldSceneRenderer` / `FBOWorldSceneRenderer` / `ImmediateWorldSceneRenderer` / `ShaderManager` |
-| 21. 蓝图 / 工具 / 投影 | `ItemBlueprint` / `ItemConstructTool` / `MachineProjector`（youyihj） |
-| 22. 自动组装（ikx） | `MachineAssembly` / `AssemblyEventHandler` / `AssemblyConfig` |
-| 23. CraftTweaker 集成 | `MachineBuilder` / `MachineModifier` / `RecipePrimer` / `RecipeAdapterBuilder` / `RecipeBuilder` / `BlockArrayBuilder` / `MachineUpgradeBuilder` / `DynamicMachineUpgradeBuilder` / `MMEvents` / `MultiBlockModifierBuilder` |
-| 24. JEI 集成 | `CategoryDynamicRecipe` / `DynamicRecipeWrapper` / `RecipeLayoutPart` / `RecipeLayoutHelper` / `CategoryStructurePreview` / `StructurePreviewWrapper` |
-| 25. TheOneProbe 集成 | `MMInfoProvider` |
-| 26. AE2 / ME 集成 | `MEItemInputBus` / `MEItemOutputBus` / `MEFluidInputBus` / `MEFluidOutputBus` / `MEGasInputBus` / `MEGasOutputBus` / `MEPatternProvider` / `MEPatternMirrorImage` |
-| 27. ModularMagic（kport） | 魔法需求 / 提供器 / JEI 渲染 |
-| 28. Flux Networks 集成 | `MMEnergyHandler` |
-| 29. GT CEu 集成 | `ModIntegrationGTCEU` / `MachineComponentProxy` 机制 |
-| 30. GeckoLib 模型 | `MachineControllerModel` / `BloomGeoModelRenderer` / `MachineControllerRenderer` |
-| 31. Mixin 补丁 | 4 个 mixin 包 |
-| 32. 配置（Config） | 所有配置项 |
-| 33. 资源 / 默认机器 | `default_machinery` / `default_recipes` / `default_variables` / `lang` |
-| 34. 公共工具类 | `ItemUtils` / `BlockArray` / `HybridFluidUtils` / `OredictCache` / `ResultChance` |
-| 35. 其它易忽略点 | 性能报告 / 安全系统 / 自定义数据 / 翻译 |
+| §1   | 项目基本盘（版本、依赖、构建、模块坐标） |
+| §2   | 包结构总览（顶级包与各包职责） |
+| §3   | Mod 入口与生命周期（`ModularMachinery` / `CommonProxy` / `ClientProxy`） |
+| §4   | 核心多方块机器系统（`DynamicMachine` / `AbstractMachine` / `MachineRegistry` / `MachineLoader` / `MachineComponent`） |
+| §5   | 结构匹配（`BlockArray` / `TaggedPositionBlockArray` / `BlockArrayCache` / `DynamicPattern`） |
+| §6   | 配方系统（`MachineRecipe` / `RecipeRegistry` / `RecipeLoader` / `RecipeAdapter` / `RecipeCraftingContext`） |
+| §7   | 内置 ResourceType（需求类型） |
+| §8   | 内置 ComponentType（组件类型） |
+| §9   | 修饰符 / Modifier（`RecipeModifier` / `SingleBlockModifierReplacement` / `MultiBlockModifierReplacement` / `ModifierRegistry`） |
+| §10  | 方块 / TileEntity 矩阵 |
+| §11  | KasumiNova 扩展层可移植性分析 |
+| §12  | API 变动（1.12.2 → 26.1.2 NeoForge） |
 
 ---
+
+# 第 1–10 章：MMCE 1.12.2 功能全景
 
 ## 1. 项目基本盘
 
@@ -99,7 +80,7 @@ hellfirepvp.modularmachinery                ── 原 HellFirePvP 主干
    .common.tiles[.base]                      ── 全部 TileEntity
    .common.util[.nbt]                        ── 工具类
 
-github.kasuminova.mmce                      ── KasumiNova 全部新增
+github.kasuminova.mmce                      ── KasumiNova 全部新增（§11 单独分析）
    .client.{gui,model,renderer,resource,util,world,preivew}
    .common.{block.appeng, capability, concurrent, container[.handler],
              event.{client,machine,recipe}, handler, helper,
@@ -132,276 +113,119 @@ com.cleanroommc.client                      ── 移植 cleanroommc 的预览�
 
 ## 3. Mod 入口与生命周期
 
-### `ModularMachinery`（根 Mod）
+### 3.1 `ModularMachinery`（根 Mod）
 
 `reference/mmce/src/main/java/hellfirepvp/modularmachinery/ModularMachinery.java`
 
 - `@Mod(modid = "modularmachinery", name = "Modular Machinery: Community Edition", version = Tags.VERSION, dependencies = "...", acceptedMinecraftVersions = "[1.12, 1.13)", acceptableRemoteVersions = "[2.1.0, 2.4.0)")`
 - 公共常量：
   - `MODID = "modularmachinery"`
-  - `NET_CHANNEL = SimpleNetworkWrapper`，**注册 15 个网络包**（详见 §17）。
-  - `EXECUTE_MANAGER = new TaskExecutor()`（详见 §15）。
-  - `EVENT_BUS = new EventBus()` 私有总线，机器事件系统使用。
-  - `CLIENT_PROXY / COMMON_PROXY` 字符串。
+  - `NET_CHANNEL = SimpleNetworkWrapper`，**注册 15 个网络包**（详见 §10.4）。
+  - `EXECUTE_MANAGER = new TaskExecutor()`。
+  - `EVENT_BUS = new EventBus()` 私有总线。
 - `static { FluidRegistry.enableUniversalBucket(); }`
-- 注册构造器 `MinecraftForge.EVENT_BUS.register(RegistrationEvent.class)`（kport）。
-- 生命周期：
-  - `preInit`：注册网络包、加载 ModData、调用 `proxy.preInit()`。
-  - `init`：调用 `proxy.init()`。
-  - `postInit`：调用 `proxy.postInit()`（注册机器、RecipeAdapter、RecipeEvent）。
-  - `loadComplete`：调用 `proxy.loadComplete()`（异步构建 `BlockArrayCache`）。
-  - `onServerStart`：注册 5 个命令（`/mm syntax`、`/mm hand`、`/mm blueprint`、`/mm performance`，若安装 ZenUtils 还注册 `/mm reload`）。
-- `isRunningInDevEnvironment()`：通过 `Launch.blackboard.get("fml.deobfuscatedEnvironment")` 判定。
+- 生命周期：`preInit`（注册网络包 + 加载 ModData）→ `init` → `postInit`（注册机器 / RecipeAdapter / RecipeEvent）→ `loadComplete`（异步构建 `BlockArrayCache`）→ `onServerStart`（注册 5 个命令）。
 
-### `CommonProxy`（服务端 + 客户端）
+### 3.2 `CommonProxy` / `ClientProxy`
 
-- `static ModDataHolder dataHolder`：机器 / 配方 / 变量目录管理。
-- `static CreativeTabs creativeTabModularMachinery`：图标为 `BlocksMM.blockController`。
-- `static InternalRegistryPrimer registryPrimer`：内部注册器缓冲。
-- `preInit`：
-  - 注册 GUI Handler（自身）。
-  - `MachineRegistry.preloadMachines()`（JSON 预解析）。
-  - 注册 `EXECUTE_MANAGER` / `AssemblyEventHandler` / `EventHandler` / `UpgradeEventHandler` / `MMWorldEventListener`。
-  - 调用 `ModularMagicItems.initItems()` / `ModularMagicComponents.initComponents()` / `ModularMagicRequirements.initRequirements()`。
-  - 若 Astral Sorcery 在，注册 `StarlightEventHandler`。
-  - `TaskExecutor.init()`：开启并行线程池。
-- `init`：
-  - `FuelItemHelper.initialize()`：扫描所有燃料物品。
-  - `IntegrationTypeHelper.filterModIdComponents()` / `filterModIdRequirementTypes()`：按 mod 依赖过滤。
-  - 若有 TOP，注册 `ModIntegrationTOP.registerProviders()`。
-  - 若有 GTCEu，初始化 `ModIntegrationGTCEU`。
-- `postInit`：
-  - AE2 在 → `ModIntegrationAE2.registerUpgrade()`。
-  - `MachineRegistry.registerMachines(loadMachines(null))` + 注册 CraftTweaker 等待的机器。
-  - `MachineModifier.loadAll()`、`MMEvents.registryAll()`。
-  - `RecipeAdapterRegistry.registerDynamicMachineAdapters()`。
-  - `RecipeRegistry.getRegistry().loadRecipeRegistry(null, true)`。
-  - 处理 `FactoryRecipeThread.WAIT_FOR_ADD` 队列。
-- `loadComplete`：`CompletableFuture.runAsync(() -> BlockArrayCache.buildCache(MachineRegistry.getLoadedMachines()))`，准备结构预编译缓存。
-- 实现 `IGuiHandler.getServerGuiElement(...)` / `getClientGuiElement(...)`：通过 `GuiType` 枚举派发至容器 / GUI。
-
-### `ClientProxy`
-
-`reference/mmce/src/main/java/hellfirepvp/modularmachinery/client/ClientProxy.java`
-
-- 额外注册：
-  - `ModIntegrationJEI` 注册（同时是 Plugin）。
-  - `ModIntegrationCrafttweaker` 的客户端钩子（`CommandCTReloadClient`）。
-  - TOP 客户端支持。
-  - ModularMagic 客户端：`kport.modularmagic.client.gui` GUI 屏幕注册。
-  - `kport.modularmagic.client.renderer` 渲染器注册（虹 / 灵气 / 魔力 / 星座等）。
-  - `youyihj.mmce.common.item.MachineProjector` 物品方块颜色。
-  - `BLOCK_MODEL_HIDER`（隐藏结构匹配时的冗余方块）。
-  - `BloomGeoModelRenderer`、`ControllerModelRenderManager`（GeckoLib 模型）。
-  - `ClientScheduler`：自定义客户端调度（定时任务）。
-- 注册 `RenderGlobal` 钩子，让 `MachineControllerRenderer` 渲染 GeckoLib 模型。
-- 客户端 `ModularMachinery.log` 在 `preInit` 设置。
+- `CommonProxy` 持有 `ModDataHolder`（机器 / 配方 / 变量目录管理）、`CreativeTabs`、`InternalRegistryPrimer`。
+- 阶段职责与 MMCR `MMCR.java` 主类一一对应（见 [`architecture.md` §3.1](./architecture.md#31-mod-入口)）。
+- `ClientProxy` 额外注册：JEI、TOP 客户端、ModularMagic 客户端、GeckoLib 控制器模型、Bloom 渲染、`BLOCK_MODEL_HIDER`、`ClientScheduler`。
 
 ---
 
 ## 4. 核心多方块机器系统
 
-### 4.1 `AbstractMachine`
+### 4.1 `AbstractMachine` / `DynamicMachine` / `MachineRegistry`
 
-`hellfirepvp.modularmachinery.common.machine.AbstractMachine`
+```
+AbstractMachine                                 抽象：registryName、local 化名、definedColor、
+                                                maxParallelism、internalParallelism、maxThreads、
+                                                requiresBlueprint、parallelizable、hasFactory、
+                                                factoryOnly、failureAction
+DynamicMachine extends AbstractMachine          modifiers / multiBlockModifiers / dynamicPatterns /
+                                                coreThreadPreset / smartInterfaces /
+                                                machineEventHandlers / pattern / hideComponentsWhenFormed
+MachineRegistry                                 单例：WAIT_FOR_LOAD_MACHINERY + LOADED_MACHINERY
+MachineLoader                                   GSON 两阶段反序列化
+```
 
-- 字段：registryName、包内 local 化名 / prefix、definedColor、`maxParallelism` / `internalParallelism`、`maxThreads`、`requiresBlueprint`、`parallelizable`、`hasFactory`、`factoryOnly`、`failureAction`（`RecipeFailureActions`）。
-- 字段值：默认 `maxParallelism = Config.maxMachineParallelism`、`definedColor = Config.machineColor`、`parallelizable = Config.machineParallelizeEnabledByDefault`、`hasFactory = Config.enableFactoryControllerByDefault`。
-- 复制 / 合并由 `DynamicMachine#mergeFrom(another)` 实现。
+- 默认值：`maxParallelism = Config.maxMachineParallelism`、`definedColor = Config.machineColor`、`parallelizable = Config.machineParallelizeEnabledByDefault`、`hasFactory = Config.enableFactoryControllerByDefault`。
+- `MachineRegistry.getAllRegisteredMachinery()` 在 ZenScript 中可访问。
+- `DynamicMachine.MachineDeserializer` 是自定义 GSON 反序列化器，配合 `MachineLoader` 两阶段加载。
 
-### 4.2 `DynamicMachine`
+### 4.2 `MachineComponent` / `IOType` / `MachineCombinationComponent`
 
-`hellfirepvp.modularmachinery.common.machine.DynamicMachine`
-
-- 内部字段：
-  - `Map<BlockPos, List<SingleBlockModifierReplacement>> modifiers`（机器结构替换规则）。
-  - `List<MultiBlockModifierReplacement> multiBlockModifiers`（多方块替换规则）。
-  - `Map<String, DynamicPattern> dynamicPatterns`（动态可变结构，例如 mega 工厂）。
-  - `Map<String, FactoryRecipeThread> coreThreadPreset`（核心线程预设）。
-  - `Map<String, SmartInterfaceType> smartInterfaces`（智能接口类型）。
-  - `Map<Class<?>, List<IEventHandler<MachineEvent>>> machineEventHandlers`（机器事件）。
-  - `TaggedPositionBlockArray pattern`（结构数组）。
-  - `boolean hideComponentsWhenFormed`、`AxisAlignedBB controllerBoundingBox`。
-- `DynamicMachine.MachineDeserializer`：自定义 GSON 反序列化器，配合 `MachineLoader` 两阶段加载。
-- `ModifierReplacementMap`（内部静态）：支持 `rotateYCCW()`。
-- 工厂兜底：`createContext(ActiveMachineRecipe, TileMultiblockMachineController)`：从 `RecipeCraftingContextPool` 借出上下文。
-
-### 4.3 `MachineRegistry`
-
-`hellfirepvp.modularmachinery.common.machine.MachineRegistry`
-
-- 单例 Singleton，`mods.modularmachinery.MachineRegistry`（ZenScript 中可访问）。
-- 内部两张表：
-  - `WAIT_FOR_LOAD_MACHINERY = Map<ResourceLocation, Tuple<DynamicMachine, JSONString>>`（预扫描后等待加载）。
-  - `LOADED_MACHINERY = Map<ResourceLocation, DynamicMachine>`（已加载）。
-- 阶段：
-  - `preloadMachines()`：`MachineLoader.discoverDirectory(...)` → `MachineLoader.registerMachines(...)`（并发解析）。
-  - `loadMachines(sender)`：先 `prepareContext(variables)`，再 `MachineLoader.loadMachines(...)`（并发）。
-  - `registerMachines(machines)` / `reloadMachine(machines)`。
-- 提供 `getAllRegisteredMachinery()`（ZenScript）。
-- `getRegistry()` / `getMachine(name)` / `getLoadedMachines()`。
-
-### 4.4 `MachineLoader`
-
-`hellfirepvp.modularmachinery.common.machine.MachineLoader`
-
-- 静态 GSON `GSON` + `PRELOAD_GSON`（两阶段）。
-- `VARIABLE_CONTEXT`：当前变量上下文（物品 / 流体 / OEM 字典）。
-- `FileType` 枚举：`VARIABLES`（`*.var.json`）/ `MACHINE`（`*.json`）。
-- `discoverDirectory(File)`：递归扫描。
-- `registerMachines(files)`：并行 `PRELOAD_GSON` 解析。
-- `loadMachines(registeredMachineList)`：合并 `preloadMachine.mergeFrom(loadedMachine)`。
-- `prepareContext(variables)`：解析 `*.var.json` 注入 `VARIABLE_CONTEXT`。
-
-### 4.5 `AbstractMachinePreDeserializer` / `DynamicPattern` / `MachineComponent`
-
-- `AbstractMachinePreDeserializer`（`MachineRegistry` 同包）：第一阶段反序列化，只解析最基础字段，确保第二阶段引用正确。
-- `MachineComponent<T>`：
-  - 三种内置子类型：`ItemBus` / `FluidHatch` / `EnergyHatch`。
-  - `isAsyncSupported()`：默认 true。
-  - 实现 `MachineCombinationComponent`（多种类组件）。
+- `MachineComponent<T>`：三种内置子类型 `ItemBus` / `FluidHatch` / `EnergyHatch`，`isAsyncSupported()` 默认 true。
 - `IOType { INPUT, OUTPUT }`：`getByString(String)`。
+- 实现 `MachineCombinationComponent` 支持多种类组件。
 
 ---
 
 ## 5. 结构匹配
 
-### 5.1 `BlockArray`
+### 5.1 `BlockArray` / `TaggedPositionBlockArray` / `BlockArrayCache`
 
-`hellfirepvp.modularmachinery.common.util.BlockArray`
+```
+BlockArray                  Map<BlockPos, BlockInformation>，matches(World, BlockPos, ...)
+BlockInformation            可序列化 / GSON / NBT / 旋转 / 镜像
+BlockArrayCache             按 EnumFacing 缓存预旋转版本
+BlockCompatHelper           检查 IC2 / GregTech 等 mod 方块兼容
+IBlockStateDescriptor       变量替换
+TaggedPositionBlockArray    BlockArray + ComponentSelectorTag（按标签查找组件）
+```
 
-- 机器结构匹配的核心数据结构；`Map<BlockPos, BlockInformation>`。
-- `BlockInformation`：可序列化、能被 GSON 解析、能被 NBT 解析、能被旋转 / 镜像。
-- 支持 `matches(World, BlockPos, ...)`：对每个位置与 `IBlockState` 比较。
-- `BlockArrayCache`：根据 `EnumFacing` 缓存预旋转版本（避免每 tick 重新旋转）。
-- `BlockCompatHelper`：检查 IC2 / GregTech 等 mod 的方块兼容。
-- `IBlockStateDescriptor` / `BlockInformationVariable`：变量替换。
+### 5.2 `DynamicPattern`
 
-### 5.2 `TaggedPositionBlockArray`
+`github.kasuminova.mmce.common.util.DynamicPattern`（MMCE 创新点：可伸缩结构）：
 
-`hellfirepvp.modularmachinery.common.machine.TaggedPositionBlockArray`
-
-- 在 `BlockArray` 之上加上 `ComponentSelectorTag`（多方块 tag 标记），用于按标签查找组件。
-- 配合 `DynamicPattern` 用于「动态结构」（如 mega 工厂可堆叠复制）。
-
-### 5.3 `DynamicPattern`
-
-`github.kasuminova.mmce.common.util.DynamicPattern`
-
-- MMCE 创新点：可伸缩的结构（如巨型多方块沿某一方向堆叠 1..N 段）。
-- 字段：
-  - `name, minSize, maxSize, faces`（合法的堆叠方向）。
-  - `pattern` + `patternEnd`（覆盖末段不同形态）。
-  - `structureSizeOffsetStart`（起始偏移）、`structureSizeOffset`（每段步进）。
-- `matches(TileMultiblockMachineController, oldState, ctrlFace)` → `MatchResult(size, facing)`。
-- `addPatternToBlockArray(BlockArray, maxSize, ...)`：把动态结构展开注入到 `BlockArray` 中供结构检查。
+- 字段：`name, minSize, maxSize, faces`、`pattern` + `patternEnd`、`structureSizeOffsetStart`、`structureSizeOffset`。
+- `matches(TileMultiblockMachineController, oldState, ctrlFace) → MatchResult(size, facing)`。
+- `addPatternToBlockArray(BlockArray, maxSize, ...)`：把动态结构展开注入到 `BlockArray`。
 - `Status`（record）：NBT 序列化（patternName、facing、size）。
 
-### 5.4 `PlayerStructureSelectionHelper`
-
-`hellfirepvp.modularmachinery.common.selection.PlayerStructureSelectionHelper`
+### 5.3 `PlayerStructureSelectionHelper`
 
 - 维护玩家用 `ItemConstructTool` 选择的方块集合。
-- `toggleInSelection(...)` / `purgeSelection(...)`。
-- `finalizeSelection(...)`：在控制器处右键确认 → 发送 `PktSyncSelection` 同步到客户端。
-- `sendSelection(...)`：通过 `PktSyncSelection` 显示边框。
-
-### 5.5 `ModIntegrationJEI.getCategoryStringFor(machine)`：将机器映射到 JEI 类别字符串。
+- `toggleInSelection` / `purgeSelection` / `finalizeSelection` / `sendSelection`。
+- 通过 `PktSyncSelection` 显示边框。
 
 ---
 
 ## 6. 配方系统
 
-### 6.1 `MachineRecipe`
+### 6.1 `MachineRecipe` / `PreparedRecipe` / `RecipeRegistry`
 
-`hellfirepvp.modularmachinery.common.crafting.MachineRecipe`
+```
+MachineRecipe                recipeFilePath / registryName / owningMachine / tickTime /
+                             configuredPriority / voidPerTickFailure / parallelized /
+                             List<ComponentRequirement> / recipeEventHandlers /
+                             tooltipList / threadName / maxThreads / loadJEI
+PreparedRecipe (CT 端)       getFilePath / getRecipeRegistryName / getAssociatedMachineName /
+                             getParentMachineName / getTotalProcessingTickTime / getPriority /
+                             voidPerTickFailure / getComponents / getRecipeEventHandlers /
+                             getTooltipList / isParallelized / getMaxThreads / getThreadName /
+                             loadNeedAfterInitActions / getLoadJEI
+RecipeRegistry               单例：registerModifiedMachineRecipe /
+                             registerRecipeAdapterEarly / registerDynamicMachineAdapter /
+                             loadRecipeRegistry / getRecipesFor
+```
 
-- 字段：
-  - `recipeFilePath` / `registryName` / `owningMachine` / `tickTime` / `configuredPriority` / `voidPerTickFailure` / `parallelized`。
-  - `List<ComponentRequirement<?, ?>> recipeRequirements`。
-  - `Map<Class<?>, List<IEventHandler<RecipeEvent>>> recipeEventHandlers`。
-  - `List<String> tooltipList`。
-  - `String threadName` / `int maxThreads`（绑定到 `FactoryRecipeThread`）。
-  - `boolean loadJEI`（是否在 JEI 中显示）。
-- 构造器三个：`基础 6 参数`、`带 eventHandlers + tooltipList`、`从 PreparedRecipe`。
-- `mergeAdapter(RecipeAdapterBuilder)`：在 RecipeAdapter 注入时合并得到 `parallelized` 等。
-- `copy(registryNameChange, newOwningMachineIdentifier, modifiers)`：被 `DynamicMachineRecipeAdapter` 使用。
-- `addRequirement(requirement)` / `getCraftingRequirements()` / `compareTo(MachineRecipe)`。
+- `MachineRecipe.mergeAdapter(RecipeAdapterBuilder)`、`copy(registryNameChange, newOwningMachineIdentifier, modifiers)`。
 - `MachineRecipeContainer`：可把一个机器的所有配方按多个「sub machine name」展开。
 
-### 6.2 `PreparedRecipe`
+### 6.2 `RecipeAdapter` / `RecipeAdapterRegistry`
 
-`hellfirepvp.modularmachinery.common.crafting.PreparedRecipe`
+- 抽象 `RecipeAdapter`：提供 `createRecipesFor(owningMachineName, modifiers, additionalRequirements, eventHandlers, recipeTooltips)` 与 `createRecipeShell(...)`。
+- 内置 12 个 adapter：minecraft:furnace、ic2:compressor/macerator、nuclearcraft:*、tconstruct:smeltery_*、thaumcraft:infusion_matrix、thermalexpansion:insolator(_fluid)。
+- `DynamicMachineRecipeAdapter`：把一台已有机器 `originalMachine` 的所有配方当作模板，复制到另一台机器上。
 
-- 接口：`getFilePath() / getRecipeRegistryName() / getAssociatedMachineName() / getParentMachineName() / getTotalProcessingTickTime() / getPriority() / voidPerTickFailure() / getComponents() / getRecipeEventHandlers() / getTooltipList() / isParallelized() / getMaxThreads() / getThreadName() / loadNeedAfterInitActions() / getLoadJEI()`。
-- 由 `RecipePrimer` 实现（CraftTweaker 端）。
+### 6.3 `RecipeCraftingContext` / `ActiveMachineRecipe` / `RecipeCraftingContextPool`
 
-### 6.3 `RecipeRegistry`
-
-`hellfirepvp.modularmachinery.common.crafting.RecipeRegistry`
-
-- 单例：自身注册到 `InternalRegistryPrimer`。
-- `registerModifiedMachineRecipe` / `registerRecipeAdapterEarly` / `registerDynamicMachineAdapter`。
-- `loadRecipeRegistry(sender, ...)`：扫描磁盘 recipes 目录、加载 JSON + 调用 AdapterRegistry。
-- `getRecipesFor(machine)`：返回该机器的全部 `MachineRecipe`。
-- `getRegistry()`。
-
-### 6.4 `RecipeAdapter`
-
-`hellfirepvp.modularmachinery.common.crafting.adapter.RecipeAdapter`
-
-- 抽象类：`registryName` + `int incId`（自增 ID 用于一台机器复制多个配方）。
-- `createRecipesFor(owningMachineName, modifiers, additionalRequirements, eventHandlers, recipeTooltips)`。
-- `createRecipeShell(uniqueRecipeName, owningMachineName, tickTime, priority, voidPerTickFailure)`：生成 `MachineRecipe` 模板。
-- `resetIncId()`。
-- 实现类（详见 §6.6 与 §27）。
-
-### 6.5 `RecipeAdapterRegistry`
-
-`hellfirepvp.modularmachinery.common.crafting.adapter.RecipeAdapterRegistry`
-
-- 维护 `Map<ResourceLocation, RecipeAdapter>`，由 `RegistryRecipeAdapters.initialize()` 加载。
-- `registerAdapter(adapter)` / `getAdapter(name)` / `getAdapterValue(name)` / `registerDynamicMachineAdapters()`。
-
-### 6.6 内置 Adapter 列表（全部 `RegistryRecipeAdapters.initialize()` 注册）
-
-| RegistryName | 类 | 依赖 mod |
-|---|---|---|
-| `minecraft:furnace` | `AdapterMinecraftFurnace` | vanilla |
-| `ic2:compressor` | `AdapterIC2Compressor` | IC2 |
-| `ic2:macerator` | `AdapterIC2Macerator` | IC2 |
-| `nuclearcraft:alloy_furnace` | `AdapterNCOAlloyFurnace` | Nuclearcraft Overhauled |
-| `nuclearcraft:infuser` | `AdapterNCOInfuser` | NCO |
-| `nuclearcraft:chemical_reactor` | `AdapterNCOChemicalReactor` | NCO |
-| `nuclearcraft:melter` | `AdapterNCOMelter` | NCO |
-| `tconstruct:smeltery_melting` | `AdapterSmelteryMeltingRecipe` | Tinkers' Construct |
-| `tconstruct:smeltery_alloy` | `AdapterSmelteryAlloyRecipe` | Tinkers' Construct |
-| `thaumcraft:infusion_matrix` | `AdapterTC6InfusionMatrix` | Thaumcraft |
-| `thermalexpansion:insolator` | `InsolatorRecipeAdapter(false)` | TE |
-| `thermalexpansion:insolator_fluid` | `InsolatorRecipeAdapter(true)` | TE |
-
-### 6.7 `DynamicMachineRecipeAdapter`
-
-- 把一台已有机器 `originalMachine` 的所有配方当作模板，复制到另一台机器上，每个配方都附 `RecipeModifier`。
-- 用于 `DynamicMachineRecipeAdapter` 的 `RecipeAdapterBuilder`。
-
-### 6.8 `RecipeCraftingContext`
-
-`hellfirepvp.modularmachinery.common.crafting.helper.RecipeCraftingContext`
-
-- 一次配方执行的完整状态：`Map<MachineComponentType, ProcessingComponent>`、`ModifierList`、`CraftingCheckResult`、`IOInventory` 取还记录。
-- `checkStartResult(...)` / `checkPreStartResult(...)`。
-- `finalizeStart()` / `finalizeTick()` / `finalizeFinish()`。
+- `RecipeCraftingContext`：一次配方执行的完整状态——`Map<MachineComponentType, ProcessingComponent>`、`ModifierList`、`CraftingCheckResult`、IOInventory 取还记录。
+- 提供 `checkStartResult` / `checkPreStartResult` / `finalizeStart` / `finalizeTick` / `finalizeFinish`。
 - `ComponentOutputRestrictor`：限制输出。
-- `CraftCheck` / `CraftingStatus`。
-- `ProcessingComponent` 包含 component + container + tag。
-- `RecipeCraftingContextPool`：对象池（与 `FactoryRecipeThread` 配合）。
-
-### 6.9 `ActiveMachineRecipe`
-
-`hellfirepvp.modularmachinery.common.crafting.ActiveMachineRecipe`
-
-- 工厂执行中的配方上下文：`recipe`、`parallelism`、`remainingTick`、`restTime`。
+- `RecipeCraftingContextPool` 对象池（与 `FactoryRecipeThread` 配合）。
 
 ---
 
@@ -411,41 +235,27 @@ com.cleanroommc.client                      ── 移植 cleanroommc 的预览�
 
 | KEY | 类 | 资源 | 备注 |
 |---|---|---|---|
-| `modularmachinery:item` | `RequirementTypeItem` | `ItemStack` | 支持 `item@meta`、`ore:`、特殊 `any:fuel`（按燃烧时间合计）、`chance`、`nbt`、`nbt-display` |
+| `modularmachinery:item` | `RequirementTypeItem` | `ItemStack` | 支持 `item@meta`、`ore:`、`any:fuel`、`chance`、`nbt`、`nbt-display` |
 | `modularmachinery:item_durability` | `RequirementTypeItemDurability` | `ItemStack` | 按耐久消耗 |
 | `modularmachinery:ingredient_array_input` | `RequirementTypeIngredientArray` | 多选一 | 多物品候选 |
 | `modularmachinery:fluid` | `RequirementTypeFluid` | `FluidStack` | 总消耗 |
 | `modularmachinery:fluid_pertick` | `RequirementTypeFluidPerTick` | `FluidStack` | 每 Tick 消耗 |
-| `modularmachinery:gas` | `RequirementTypeGas` | `GasStack` | Mekanism 气体总消耗 |
-| `modularmachinery:gas_pertick` | `RequirementTypeGasPerTick` | `GasStack` | Mekanism 气体每 Tick 消耗 |
+| `modularmachinery:gas` | `RequirementTypeGas` | `GasStack` | Mekanism |
+| `modularmachinery:gas_pertick` | `RequirementTypeGasPerTick` | `GasStack` | Mekanism |
 | `modularmachinery:energy` | `RequirementTypeEnergy` | `long` | FE 总消耗 |
 | `modularmachinery:duration` | `RequirementDuration` | n/a | 仅作为 RecipeModifier 目标 |
 | `modularmachinery:interface_number_input` | `RequirementTypeInterfaceNumInput` | `float` | 智能接口数值 |
 
-### 7.1 ModularMagic 资源类型（kport，`kport.modularmagic.common.crafting.requirement.types`）
+### 7.1 ModularMagic 资源类型（kport）
 
-| KEY | 对应资源 / mod | 备注 |
-|---|---|---|
-| `modularmagic:aspect` | Astral Sorcery Aspect | `RequirementAspect` |
-| `modularmagic:constellation` | Astral Sorcery Constellation | `RequirementConstellation` |
-| `modularmagic:starlight` | Astral Sorcery 星光 | `RequirementStarlight` |
-| `modularmagic:aura` | Nature's Aura 灵气 | `RequirementAura` |
-| `modularmagic:grid` | Botania 神秘源汇 | `RequirementGrid` |
-| `modularmagic:mana` | Botania 魔力 | `RequirementMana` |
-| `modularmagic:rainbow` | Botania 彩虹 | `RequirementRainbow` |
-| `modularmagic:lifeessence` | Blood Magic 生命精华 | `RequirementLifeEssence` |
-| `modularmagic:will` | Blood Magic 意志 | `RequirementWill` |
-| `modularmagic:impetus` | Thaumcraft 阻抗 | `RequirementImpetus` |
-
-每种魔法需求都有 `requiresModid()` 软依赖检查。
+10 种魔法类型，对应 Astral Sorcery / Botania / Blood Magic / Nature's Aura / Thaumcraft。每种都有 `requiresModid()` 软依赖检查。
 
 ### 7.2 一些细节
 
-- `RequirementItem` 支持 `chance`（0..1）和 `nbt` / `nbt-display`（分别匹配实际 NBT 和 JEI 显示 NBT）。
+- `RequirementItem` 支持 `chance` 和 `nbt` / `nbt-display`。
 - `RequirementFluid` / `RequirementFluidPerTick` 支持 `chance`。
-- `RequirementGas` / `RequirementGasPerTick` 仅在 Mekanism 加载时启用。
 - `RequirementEnergy` 支持守恒型（perTotal）与消耗型（perTick）。
-- `RequirementInterfaceNumInput` 允许配方通过 `internalInterfaceNumber` 匹配 `SmartInterface` 的实际数值。
+- `RequirementInterfaceNumInput` 允许配方通过 `internalInterfaceNumber` 匹配 `SmartInterface` 数值。
 
 ---
 
@@ -464,19 +274,17 @@ com.cleanroommc.client                      ── 移植 cleanroommc 的预览�
 | `modularmachinery:parallel_controller` | `ComponentParallelController` | 并行控制器 |
 | `modularmachinery:upgrade` | `ComponentUpgradeBus` | 升级仓 |
 
+每种都对应一个 `MachineComponent<XxxProvider>`、`TileXxxProvider`、`BlockXxxProvider[Input/Output]`。
+
 ### 8.1 ModularMagic 组件类型
 
-`kport.modularmagic.common.crafting.component`：
-
-`ComponentAspect`, `ComponentAura`, `ComponentConstellation`, `ComponentGrid`, `ComponentImpetus`, `ComponentLifeEssence`, `ComponentMana`, `ComponentRainbow`, `ComponentStarlight`, `ComponentWill`。
-
-每种都对应一个 `MachineComponent<XxxProvider>`、`TileXxxProvider`、`BlockXxxProvider[Input/Output]`。
+`kport.modularmagic.common.crafting.component`：`ComponentAspect` / `ComponentAura` / `ComponentConstellation` / `ComponentGrid` / `ComponentImpetus` / `ComponentLifeEssence` / `ComponentMana` / `ComponentRainbow` / `ComponentStarlight` / `ComponentWill`。
 
 ### 8.2 容器与组件的 Flex 机制
 
-- 同一 `ComponentType` 可由多个不同方块提供：例如 `item` 可由普通 item bus、MEItemBus、SmartInterface 的某个挡板提供。
+- 同一 `ComponentType` 可由多个不同方块提供（普通 item bus、MEItemBus、SmartInterface 等）。
 - `TileMultiblockMachineController` 内部用 `Map<Long, Map<TileEntity, ProcessingComponent<?>>>` 收纳同 `groupId` 的组件。
-- `MachineGroupInput` 接口：实现该接口的 Tile，可将其内部 buffer 视作「组输入」。
+- `MachineGroupInput` 接口：实现该接口的 Tile 可将其内部 buffer 视作「组输入」。
 
 ---
 
@@ -484,1153 +292,530 @@ com.cleanroommc.client                      ── 移植 cleanroommc 的预览�
 
 ### 9.1 `RecipeModifier`
 
-`hellfirepvp.modularmachinery.common.modifier.RecipeModifier`
+```
+RecipeModifier
+  ├─ target            RequirementType<?, ?>（可为 null）
+  ├─ ioTarget          INPUT / OUTPUT
+  ├─ modifier          float
+  ├─ operation         OPERATION_ADD=0 / OPERATION_MULTIPLY=1
+  └─ chance            bool
+```
 
-- 字段：`target`（`RequirementType<?, ?>`，可为 null）、`ioTarget` (`INPUT/OUTPUT`)、`modifier`（float）、`operation`（`OPERATION_ADD=0` / `OPERATION_MULTIPLY=1`）、`chance`（是否影响概率）。
-- `IO_INPUT = "input"` / `IO_OUTPUT = "output"`。
 - `applyValueToApplier(applier, mod)` / `applyModifiers(context, in, value, isChance)`。
-- `applyModifiers(modifiers, ...)` 静态多重重载：把整组 modifier 应用到 `value` 上，先 `add` 后 `mul`。
+- `applyModifiers(modifiers, ...)` 静态多重重载：把整组 modifier 应用到 value 上，先 add 后 mul。
 - `serialize()` / `deserialize()`：NBT 持久化。
-- `multiply(value)` / `add(value)`：链式组合。
 - `ModifierApplier` 内部结构：分别记录 `inputAdd/outputAdd/inputMul/outputMul`。
 - `Deserializer`（Gson）：JSON 形态 `{io, target, multiplier, operation, affectChance}`。
 
-### 9.2 `SingleBlockModifierReplacement`
+### 9.2 `SingleBlockModifierReplacement` / `MultiBlockModifierReplacement` / `DynamicModifierReplacement`
 
-`hellfirepvp.modularmachinery.common.modifier.SingleBlockModifierReplacement`
-
-- 替换单个方块（位置 ↔ `BlockInformation` 列表）。
-- 用于机器结构中「可替换此位置的方块」。
-
-### 9.3 `MultiBlockModifierReplacement`
-
-`hellfirepvp.modularmachinery.common.modifier.MultiBlockModifierReplacement`
-
-- 替换整个多方块结构（按主 anchor）。
-- `MultiBlockModifierBuilder`（CraftTweaker 端）：`addModifier(blockInfo)`。
+- `SingleBlockModifierReplacement`：替换单个方块（位置 ↔ `BlockInformation` 列表）。
+- `MultiBlockModifierReplacement`：替换整个多方块结构（按主 anchor）。
+- `DynamicModifierReplacement`：机器层 `dynamicPattern` / `coreThread` 也能被 modifier 替换。
 - `ModifierRegistry`：`AbstractModifierReplacement` 注册器。
 
-### 9.4 `DynamicModifierReplacement`
-
-- 机器层 `dynamicPattern` / `coreThread` 也能被 modifier 替换。
-
 ---
 
-## 10. 方块 (Block) 矩阵
+## 10. 方块 / TileEntity / 网络 / 命令矩阵
 
-| 方块 | 类 | 别名 / 备注 |
+### 10.1 方块矩阵
+
+| 方块 | 别名 / 备注 |
+|---|---|
+| 控制器 / 工厂控制器 | `BlockController` / `BlockFactoryController`（继承 `BlockController`，天然 Geckolib 模型） |
+| 外壳 | `BlockCasing` 6 种 `CasingType` |
+| 物品输入 / 输出总线 | `BlockInputBus` / `BlockOutputBus`，9 等级 |
+| 流体输入 / 输出仓 | `BlockFluidInputHatch` / `BlockFluidOutputHatch`，6 等级 |
+| 能源输入 / 输出仓 | `BlockEnergyInputHatch` / `BlockEnergyOutputHatch`，4 等级 |
+| 升级仓 | `BlockUpgradeBus`，4 等级 |
+| 智能接口 | `BlockSmartInterface` |
+| 并行控制器 | `BlockParallelController`，5 等级 4/16/64/256/512 |
+| ME 系列 | `BlockMEItemInputBus` / `BlockMEItemOutputBus` / `BlockMEFluidInputBus` / `BlockMEFluidOutputBus` / `BlockMEGasInputBus` / `BlockMEGasOutputBus` / `BlockMEPatternProvider` / `BlockMEPatternMirrorImage` |
+| ModularMagic | 10 种 provider / 输入输出组合 |
+
+### 10.2 TileEntity 矩阵
+
+| Tile | 父类 | 简介 |
 |---|---|---|
-| 控制器 | `BlockController` | 状态有 `FACING` / `ACTIVE` / `FORMED` |
-| 工厂控制器 | `BlockFactoryController` | 继承 `BlockController`；天然 Geckolib 模型 |
-| 外壳 | `BlockCasing` | 6 种 `CasingType`：PLAIN, VENT, FIREBOX, GEARBOX, REINFORCED, CIRCUITRY |
-| 物品输入总线 | `BlockInputBus` | 9 个分级：tiny, small, normal, reinforced, big, huge, ludicrous, insane, mega；同 `ItemBusType` 枚举 |
-| 物品输出总线 | `BlockOutputBus` | 同上 |
-| 流体输入仓 | `BlockFluidInputHatch` | tiny / small / normal / huge / reinforced / vacuum |
-| 流体输出仓 | `BlockFluidOutputHatch` | tiny / small / normal / huge / reinforced / ludicrous |
-| 能源输入仓 | `BlockEnergyInputHatch` | tiny / small / normal / huge |
-| 能源输出仓 | `BlockEnergyOutputHatch` | tiny / small / normal / huge |
-| 升级仓 | `BlockUpgradeBus` | normal / reinforced / elite / super |
-| 智能接口 | `BlockSmartInterface` | `SmartInterfaceTypeEnum.NUMBER` |
-| 并行控制器 | `BlockParallelController` | 5 个等级 `ParallelControllerData`：NORMAL(4), REINFORCED(16), ELITE(64), SUPER(256), ULTIMATE(512) |
-| ME 物品输入总线 | `BlockMEItemInputBus` | AE2 + AE2 Extended Life + AE2 Fluid Crafting Rework 兼容 |
-| ME 物品输出总线 | `BlockMEItemOutputBus` | 同上 |
-| ME 流体输入仓 | `BlockMEFluidInputBus` | AE2 Fluids |
-| ME 流体输出仓 | `BlockMEFluidOutputBus` | AE2 Fluids |
-| ME 气体输入仓 | `BlockMEGasInputBus` | Mekanism Energistics |
-| ME 气体输出仓 | `BlockMEGasOutputBus` | 同上 |
-| ME Pattern Provider | `BlockMEPatternProvider` | 自定义 ME 模式提供器（极强） |
-| ME Pattern Mirror Image | `BlockMEPatternMirrorImage` | 镜像模式提供器（用于跨网络合成） |
-
-### 10.1 ModularMagic 方块
-
-`kport.modularmagic.common.block`：
-
-- `BlockAspectProvider`（星辉 aspect）：统一方块 + variants `INPUT`/`OUTPUT`。
-- `BlockAuraProviderInput/Output`（灵气）。
-- `BlockConstellationProvider`（星座）。
-- `BlockGridProviderInput/Output`（神秘源汇）。
-- `BlockImpetusProvider`（阻抗）。
-- `BlockLifeEssenceProviderInput/Output`（生命精华）。
-- `BlockManaProviderInput/Output`（魔力）。
-- `BlockRainbowProvider`（彩虹）。
-- `BlockStarlightProviderInput/Output`（星光）。
-- `BlockWillProviderInput/Output`（意志）。
-
-### 10.2 工具类
-
-- `BlockMachineComponent` / `BlockStatedMachineComponent` / `BlockMEMachineComponent` / `BlockCustomName` / `BlockDynamicColor` / `BlockVariants` / `BlockBus` / `BlockEnergyHatch` / `BlockFluidHatch`。
-- `BlockParallelController` 4 等级；`ItemBlockCustomName`、`ItemBlockMachineComponent`、`ItemBlockMachineComponentCustomName`、`ItemBlockMEMachineComponent`、`ItemBlockController`。
-
----
-
-## 11. TileEntity 矩阵
-
-| TileEntity | 父类 | 简介 |
-|---|---|---|
-| `TileMachineController` | `TileMultiblockMachineController` | 单线程机器控制器 |
-| `TileFactoryController` | `TileMultiblockMachineController` | 多线程（FactoryRecipeThread） |
+| `TileMachineController` / `TileFactoryController` | `TileMultiblockMachineController` | 单线程 / 多线程 |
 | `TileItemInputBus` / `TileItemOutputBus` | `TileItemBus` | 物品总线 |
 | `TileFluidInputHatch` / `TileFluidOutputHatch` | `TileFluidTank` | 流体仓 |
 | `TileEnergyInputHatch` / `TileEnergyOutputHatch` | `TileEnergyHatch` | FE 仓 |
 | `TileUpgradeBus` | `TileColorableMachineComponent` | 升级仓 |
-| `TileSmartInterface` | `TileMultiblockMachineController` 的辅助 Tile | 数值接口 |
+| `TileSmartInterface` | `TileMultiblockMachineController` 辅助 | 数值接口 |
 | `TileParallelController` | `TileColorableMachineComponent` | 并行 |
-| `MEItemInputBus` / `MEItemOutputBus` | `MEItemBus` → `MEMachineComponent` | ME 物品 |
-| `MEFluidInputBus` / `MEFluidOutputBus` | `MEFluidBus` → `MEMachineComponent` | ME 流体 |
-| `MEGasInputBus` / `MEGasOutputBus` | `MEGasBus` → `MEMachineComponent` | ME 气体 |
-| `MEPatternProvider` | `MEMachineComponent` | 自研 ME 模式提供器 |
-| `MEPatternMirrorImage` | `MEMachineComponent` | 镜像模式 |
-| `TileEntitySynchronized` | base | 同步 NBT + 客户端 RPC |
-| `TileEntityRestrictedTick` | base | 受控 tick 防卡顿 |
-| `TileColorableMachineComponent` | inherits sync + 可染色 | 公共基础设施 |
-| `MachineComponentTile` / `MachineComponentTileNotifiable` | base | 组件 Tile 抽象 |
-| `TileFluidTank` / `TileInventory` / `TileItemBus` / `TileEnergyHatch` | sync base | 各自专用 |
+| ME 系列 | `MEMachineComponent` | AE2 / Mekanism Energistics 集成 |
+| ModularMagic | 各 provider | 魔法合成 |
 
-### 11.1 ModularMagic TileEntity
-
-| Tile | mod 资源 |
-|---|---|
-| `TileAspectProvider` | Astral Sorcery |
-| `TileConstellationProvider` | Astral Sorcery |
-| `TileStarlightInput` / `TileStarlightOutput` | Astral Sorcery |
-| `TileAuraProvider` | Nature's Aura |
-| `TileGridProvider` | Botania |
-| `TileManaProvider` | Botania |
-| `TileRainbowProvider` | Botania |
-| `TileLifeEssenceProvider` | Blood Magic |
-| `TileWillProvider` | Blood Magic |
-| `TileImpetusComponent` | Thaumcraft |
-
-每个 Tile 都有对应的 `MachineComponentXxxProvider`（提供 `MachineComponent` 包装）。
-
-### 11.2 关键基础设施
+### 10.3 关键基础设施
 
 - `ComponentRestriction`（`machine`）：约束按位置 / 朝向选择组件。
 - `ComponentSelectorTag`：被 `TaggedPositionBlockArray` 使用。
 - `SelectiveUpdateTileEntity`：只同步少量字段。
-- `ColorableMachineTile`：可染色（机器定义颜色）。
+- `ColorableMachineTile`：可染色。
 - `MachineGroupInput`：多物品仓共享同一组 input。
 - `GTEnergyContainer`：GTCeu 兼容的能量能力。
 
----
+### 10.4 网络数据包
 
-## 12. 智能接口（SmartInterface）
+总共注册 15 个 `PktXxx`（在 `ModularMachinery.preInit` 注册）。客户端发：13 个（`PktCopyToClipboard` / `PktSyncSelection` / `PktSmartInterfaceUpdate` / `PktGroupInputConfig` / `PktInteractFluidTankGui` / `PktParallelControllerUpdate` / `PktAutoAssemblyRequest` / `PktMEPatternProviderAction` / `PktMEPatternProviderHandlerItems` / `PktMEInputBusInvAction` / `PktMEInputBusRecipeTransfer` / `PktMEOutputBusStackSizeChange` / `PktSwitchGuiMEOutputBus`）。服务端发：2 个（`PktPerformanceReport` / `PktAssemblyReport`），加 kport 的 `StarlightMessage`。
 
-### 12.1 `SmartInterfaceType`
+### 10.5 命令
 
-`hellfirepvp.modularmachinery.common.util.SmartInterfaceType`
+`/mm syntax` / `/mm hand` / `/mm blueprint` / `/mm performance` / `/mm reload`（ZenUtils 在场时）。`kport.modularmagic` 与 `ink.ikx.mmce` 通过 Forge 事件而非独立命令。
 
-- 字段：`type`, `defaultValue`, `headerInfo`, `valueInfo`, `footerInfo`, `notEqualMessage`, `jeiTooltip`, `jeiTooltipArgsCount`, `priority`。
-- 创建：`SmartInterfaceType.create(type, defaultValue)`（ZenScript）。
-- `setHeaderInfo(...)` / `setValueInfo(...)` / `setFooterInfo(...)` / `setNotEqualMessage(...)` / `setPriority(...)` / `setJeiTooltip(tooltip, argsCount)`。
-- `compareTo`：按 `priority` 倒序。
+### 10.6 蓝图 / 工具 / 投影
 
-### 12.2 `SmartInterfaceData`
+- `ItemBlueprint`：绑定特定机器的物品，记录机器 registryName + 几何缓存。
+- `ItemConstructTool`：创造模式工具，选择多个方块 → 选中 → 点击控制器生成 Blueprint。
+- `ItemDebugStruct`：调试用，配合 `ItemMachineProjector` 投影当前结构。
+- `ItemModularium`：装饰物品，可染色。
+- `MachineProjector`（youyihj）：在世界中按方向投出当前机器结构。
 
-`hellfirepvp.modularmachinery.common.util.SmartInterfaceData`
+### 10.7 自动组装（ikx）
 
-- 字段：`pos, parent, type, value`。
-- NBT 序列化（`serialize()` / `deserialize()`）。
-- 通过 `PktSmartInterfaceUpdate` 与服务器同步玩家修改。
-
-### 12.3 `TileSmartInterface`
-
-- 主机 `pos` / `parent` / `type` / `value`。
-- `readCustomNBT` / `writeCustomNBT`。
-- 接收 `PktSmartInterfaceUpdate` 更新值。
-- 触发 `SmartInterfaceUpdateEvent`。
-- 默认情况下承担 `interface_number` 组件。
-
-### 12.4 工作流
-
-1. 玩家在 GUI 里调整 `SmartInterface` 数值。
-2. 客户端发送 `PktSmartInterfaceUpdate`。
-3. 服务器更新 `SmartInterfaceData.value`。
-4. 触发 `SmartInterfaceUpdateEvent`（可被 CraftTweaker 拦截）。
-5. 配方检查时 `RequirementInterfaceNumInput` 比对 `SmartInterfaceData.value`。
-
----
-
-## 13. 并行 / 工厂控制器
-
-### 13.1 `TileParallelController`
-
-- 字段：`maxParallelism` / `parallelism`（受 NBT 控制）。
-- `ParallelControllerProvider`（内部 `MachineComponent`）将并行数提供给结构。
-- `ParallelControllerData` 枚举：NORMAL(4) / REINFORCED(16) / ELITE(64) / SUPER(256) / ULTIMATE(512)。**可被配置文件覆盖**。
-- GUI：`GuiContainerParallelController`。
-- 网络：`PktParallelControllerUpdate`（设置并行数）。
-
-### 13.2 `TileFactoryController`
-
-- 继承 `TileMultiblockMachineController`。
-- 通过 `FactoryRecipeThread` 提供多线程执行。
-- `FactoryRecipeThread` 字段：`threadName`, `maxThreads`, `parallelism`, `recipeList` 等。
-- 线程运行 `RecipeSearchTask` / `FactoryRecipeSearchTask`：
-  - `RecipeSearchTask.computeTask()`：从 `recipeList` 找到第一条成功 check 的配方。
-  - `FactoryRecipeSearchTask`：工厂版本，能产出多个 `ActiveMachineRecipe`。
-- 一台机器可包含多个 `FactoryRecipeThread`，`DynamicMachine.addCoreThread(...)` 预配置。
-
-### 13.3 `MachineRecipeThread`
-
-`hellfirepvp.modularmachinery.common.machine.MachineRecipeThread`
-
-- 普通机器（非工厂）单线程引擎。
-- `ComputedRecipeThread` 也使用 `RecipeSearchTask`。
-
----
-
-## 14. 升级系统（Upgrade）
-
-### 14.1 类
-
-- `MachineUpgrade`（抽象）：含 `UpgradeType`，提供 `copy(ItemStack)`、`getDescriptions()`、`getBusGUIDescriptions()`、`addEventHandler(Class, UpgradeEventHandlerCT)`、`getEventHandlers(Class)`、`setParentBus(...)`、`increment/decrementStackSize`。
-- `DynamicMachineUpgrade`：可应用动态机器 modifier。
-- `SimpleMachineUpgrade` / `SimpleDynamicMachineUpgrade`：CraftTweaker 端默认实现。
-- `UpgradeType`：
-  - `name`, `localizedName`, `level`, `maxStackSize`。
-  - `compatibleMachines` / `incompatibleMachines`（互斥集合）。
-  - `isCompatible(machine)`。
-
-### 14.2 注册
-
-- `RegistryUpgrade`（`github.kasuminova.mmce.common.upgrade.registry`）：注册用户的 `UpgradeType`。
-- `UpgradeInfo`：升级卡描述 + 物品栈。
-
-### 14.3 流程
-
-1. 在 `TileUpgradeBus` 中放入物品，机器结构判定后绑定每个 `MachineUpgrade`。
-2. 控制器 Tick 时调用各 `MachineUpgrade` 关联的 `UpgradeEventHandler` / `UpgradeMachineEventHandler`。
-3. `MachineUpgrade` 可访问 `TileUpgradeBus` 自身 (`getParentBus()`)，可监听 `MachineEvent` / `RecipeEvent`。
-
----
-
-## 15. 并发与执行
-
-### 15.1 `TaskExecutor`
-
-`github.kasuminova.mmce.common.concurrent.TaskExecutor`
-
-- MMCE 创新点：fork/join 风格执行器。
-- `ThreadFactory`：`CustomForkJoinWorkerThreadFactory` / `CustomThreadFactory`。
-- `THREAD_COUNT`：根据 `Runtime.availableProcessors()` 计算。
-- 通过 `ModularMachinery.NET_CHANNEL` 触发：`MinecraftForge.EVENT_BUS.register(ModularMachinery.EXECUTE_MANAGER)`。
-- `ActionExecutor` / `ExecuteGroup` / `TimeRecordingAction` / `TimeRecordingTask` / `SequentialTaskExecutor` / `Queues` / `ReadWriteLockProvider` 提供基础原语。
-
-### 15.2 `RecipeSearchTask`
-
-`github.kasuminova.mmce.common.concurrent.RecipeSearchTask`
-
-- `extends TimeRecordingTask<RecipeCraftingContext>`。
-- `computeTask()`：遍历所有 `MachineRecipe`，对每个创建 `ActiveMachineRecipe` + `RecipeCraftingContext`，调用 `controller.onCheck(context)`。
-
-### 15.3 `FactoryRecipeSearchTask`
-
-- 工厂版本：搜索多个有效配方并按优先级并行执行。
-
-### 15.4 `RecipeCraftingContextPool`
-
-- `Sync`（`github.kasuminova.mmce.common.concurrent.Sync`）：上下文锁。
-- `borrowCtx` / `returnCtx`：上下文对象池。
-
-### 15.5 `TimeRecorder`
-
-`github.kasuminova.mmce.common.util.TimeRecorder`
-
-- 记录平均 Tick 时间（`usedTimeAvg`）、配方研究时间、tick 占用时间。
-- 暴露给 `/mm performance` 命令。
-
-### 15.6 `MMWorldEventListener`
-
-`github.kasuminova.mmce.common.world.MMWorldEventListener`
-
-- 全局世界事件：`onBlockNeighborChangeNotify` / `MachineComponentManager` 增删组件。
-- `MachineComponentManager`：缓存结构中所有 `TileEntity` → `Component` 映射。
-
-### 15.7 `InfItemFluidHandler`
-
-- 通用的「物品 + 流体 + 气体」复合 inventory（实现 `IItemHandlerModifiable`、`IFluidHandler`、`IExtendedGasHandler`）。
-
-### 15.8 `OredictCache` / `HashedItemStack` / `PatternItemFilter`
-
-- 用于 Oredict 匹配加速、AE2 模式物品过滤。
-
----
-
-## 16. 事件系统
-
-### 16.1 `MachineEvent`
-
-`github.kasuminova.mmce.common.event.machine.MachineEvent`
-
-- 继承 `net.minecraftforge.fml.common.eventhandler.Event`。
-- 字段：`controller`（`TileMultiblockMachineController`）。
-- `postEvent()` 三段：
-  1. `postEventToComponents()`：广播给所有 `MachineComponentTileNotifiable`。
-  2. `UpgradeMachineEventHandler.onMachineEvent(this)`。
-  3. 调用 `postCrTEvent()` → 触发 `DynamicMachine` 中注册的 `IEventHandler<MachineEvent>`。
-- `isCancelable()` 默认 true。
-
-#### 16.1.1 机器事件
-
-| 事件 | 时机 |
-|---|---|
-| `MachineStructureFormedEvent` | 结构成形触发 |
-| `MachineStructureUpdateEvent` | 结构状态更新（任何 tick） |
-| `MachineTickEvent` | 控制器 Tick（带 `Phase` `START` / `END`） |
-| `SmartInterfaceUpdateEvent` | 智能接口数值变更 |
-
-### 16.2 `RecipeEvent`
-
-`github.kasuminova.mmce.common.event.recipe.RecipeEvent`
-
-- 继承 `MachineEvent`，字段：`activeRecipe`, `context`, `recipeThread`。
-- `postCrTEvent()` 还会触发 `MachineRecipe.getRecipeEventHandlers()`。
-
-#### 16.2.1 配方事件
-
-| 事件 | 时机 |
-|---|---|
-| `RecipeCheckEvent` | `recipe` check 阶段（START / END） |
-| `RecipeStartEvent` | 配方开始 |
-| `RecipeFinishEvent` | 配方完成 |
-| `RecipeFailureEvent` | 配方失败 |
-| `RecipeTickEvent` | 配方 Tick（START / END） |
-| `FactoryRecipeStartEvent` / `FactoryRecipeFinishEvent` / `FactoryRecipeFailureEvent` / `FactoryRecipeTickEvent` | 工厂版本 |
-| `ResultChanceCreateEvent` | 配方输出抽样 chance（可被替换） |
-
-### 16.3 客户端事件
-
-`github.kasuminova.mmce.common.event.client`：
-
-- `ControllerGUIRenderEvent`（GUI 渲染钩子）。
-- `ControllerModelGetEvent`（模型钩子）。
-- `ControllerModelAnimationEvent`（GeckoLib 动画钩子）。
-
-### 16.4 Forge 事件
-
-- Forge `WorldTickEvent` / `BlockEvent` / `PlayerInteractEvent` 等常规钩子通过 `EventHandler`、`UpgradeEventHandler`、`ClientHandler` 等处理。
-
-### 16.5 `Phase`
-
-- `START` / `END`，用于所有带阶段的 Event。
-
----
-
-## 17. 网络数据包
-
-总共注册 15 个 `PktXxx`（在 `ModularMachinery.preInit` 注册）。
-
-### 17.1 客户端发布（C → S）
-
-| ID | 类 | 用途 |
-|---|---|---|
-| – | `PktCopyToClipboard` | GUI 复制 |
-| – | `PktSyncSelection` | 蓝图工具选择方块同步 |
-| – | `PktSmartInterfaceUpdate` | 智能接口数值更新 |
-| – | `PktGroupInputConfig` | 物品组输入共享配置 |
-| – | `PktInteractFluidTankGui` | 流体仓 GUI 操作 |
-| – | `PktParallelControllerUpdate` | 并行数更新 |
-| – | `PktAutoAssemblyRequest` | 一键组装请求 |
-| – | `PktMEPatternProviderAction` | Pattern Provider 操作 |
-| – | `PktMEPatternProviderHandlerItems` | Pattern Provider 持有的物品推送给客户端 |
-| – | `PktMEInputBusInvAction` | MEItemInputBus 容器操作 |
-| – | `PktMEInputBusRecipeTransfer` | JEI → MEItemInputBus 传输 |
-| – | `PktMEOutputBusStackSizeChange` | MEItemOutputBus 改变堆叠大小 |
-| – | `PktSwitchGuiMEOutputBus` | 切换 MEItemOutputBus GUI 模式 |
-
-### 17.2 服务端响应（S → C）
-
-| ID | 类 | 用途 |
-|---|---|---|
-| – | `PktPerformanceReport` | `/mm performance` 报告 |
-| – | `PktAssemblyReport` | 自动组装结果报告 |
-| – | `StarlightMessage`（kport） | Astral Sorcery 兼容，星辉 |
-
----
-
-## 18. 命令
-
-`hellfirepvp.modularmachinery.common.command`：
-
-| 命令 | 描述 |
-|---|---|
-| `/mm syntax` (`CommandSyntax`) | 输出机器 JSON 语法 |
-| `/mm hand` (`CommandHand`) | 给出玩家手中物品的处理建议 |
-| `/mm blueprint` (`CommandGetBluePrint`) | 输出当前控制器对应的 Blueprint 物品 |
-| `/mm performance` (`CommandPerformanceReport`) | 输出控制器 Tick 性能报告 |
-| `/mm reload` (`CommandCTReload`) | ZenUtils 在场时注册：重启 CraftTweaker + 机器载回 |
-
-`kport.modularmagic` 与 `ink.ikx.mmce` 也通过 Forge 事件而非独立命令。
-
----
-
-## 19. GUI 与客户端
-
-### 19.1 `GuiContainerBase` / `GuiContainerDynamic`
-
-- 自定义 GUI 基类。
-
-### 19.2 客户端 GUI
-
-| GUI | 用途 |
-|---|---|
-| `GuiMachineController` | 主控制器 |
-| `GuiFactoryController` | 工厂控制器 |
-| `GuiContainerItemBus` | 物品总线 |
-| `GuiContainerFluidHatch` | 流体仓 |
-| `GuiContainerEnergyHatch` | 能源仓 |
-| `GuiContainerUpgradeBus` | 升级仓 |
-| `GuiContainerSmartInterface` | 智能接口 |
-| `GuiContainerParallelController` | 并行控制器 |
-| `GuiContainerGroupInputConfig` | 物品组输入设置 |
-| `GuiScreenBlueprint` | 蓝图 |
-| `GuiMEItemInputBus` / `GuiMEItemOutputBus` / `GuiMEItemOutputBusStackSize` | ME 物品 |
-| `GuiMEFluidInputBus` / `GuiMEFluidOutputBus` | ME 流体 |
-| `GuiMEGasInputBus` / `GuiMEGasOutputBus` | ME 气体 |
-| `GuiMEPatternProvider` | 自研 Pattern Provider |
-| `GuiBlueprintScreenJEI` | Blueprint 在 JEI 中的嵌入页 |
-| `GuiScreenDynamic` | 通用基础 |
-
-### 19.3 自定义 Widget
-
-`github.kasuminova.mmce.client.gui.widget`：
-
-- `base.WidgetController` / `Widget` / `MouseEventHandler` / `RenderEventHandler`。
-- `Button`、`Button4State`、`Button5State`、`ButtonElements`。
-- `MultiLineLabel`、`HorizontalLine`、`Scrollbar`、`TextureOverlay`。
-
-### 19.4 widget 实现
-
-`...client.gui.widget.impl`：
-
-- `preview` 包：`MachineStructurePreviewPanel`、`UpgradeIngredientList`、`StructurePreviewTitle`、`WorldSceneRendererWidget` 等。
-- `patternprovider` 包：`PatternProviderIngredientList` 等。
-
-### 19.5 Container
-
-- `ContainerController` / `ContainerFactoryController` / `ContainerBase` / `ContainerItemBus` / `ContainerFluidHatch` / `ContainerEnergyHatch` / `ContainerUpgradeBus` / `ContainerSmartInterface` / `ContainerParallelController` / `ContainerGroupInputConfig`。
-- ME 系列：`ContainerMEItemInputBus`、`ContainerMEItemOutputBus`、`ContainerMEItemOutputBusStackSize`、`ContainerMEFluidInputBus`、`ContainerMEFluidOutputBus`、`ContainerMEGasInputBus`、`ContainerMEGasOutputBus`、`ContainerMEPatternProvider`。
-
-### 19.6 客户端工具
-
-- `hellfirepvp.modularmachinery.client.util.DynamicMachineRenderContext`：渲染上下文。
-- `hellfirepvp.modularmachinery.client.ClientScheduler`：自定义调度器。
-
----
-
-## 20. 结构预览渲染
-
-### 20.1 `WorldSceneRenderer`（com.cleanroommc）
-
-`com.cleanroommc.client.preview.renderer.scene.WorldSceneRenderer`
-
-- 基于 OpenGL 的假世界（DummyWorld）渲染器：把多方块结构当作一个 3D 场景绘制。
-- 支持 `EntityCamera` / `Quat` / `Vector3` / `ShapeUtils` / `RenderUtils` / `RayTraceUtils` / `LRMap` / `LRVertexBuffer`。
-- 调用 `TrackedDummyWorld` / `DummyWorld` / `DummyChunkProvider` / `DummySaveHandler` / `LRDummyWorld` 作为底层世界。
-
-### 20.2 `FBOWorldSceneRenderer` / `ImmediateWorldSceneRenderer`
-
-- `FBOWorldSceneRenderer` 渲染到 FBO（用于 GUI 嵌入）。
-- `ImmediateWorldSceneRenderer` 直接渲染（用于 In-World Preview）。
-
-### 20.3 `ShaderManager`
-
-`com.cleanroommc.client.shader.ShaderManager`
-
-- 加载 OptiFine 兼容的 Shader Pack（Bloom 效果）。
-
-### 20.4 Mixin 钩子
-
-- `MixinRenderGlobal.hookTESRComplete(...)`（`github.kasuminova.mmce.mixin.minecraft`）→ 调用 `ControllerModelRenderManager.INSTANCE.draw()` 让 GeckoLib 模型在主世界中显示。
-
----
-
-## 21. 蓝图 / 工具 / 投影
-
-### 21.1 `ItemBlueprint`
-
-`hellfirepvp.modularmachinery.common.item.ItemBlueprint`
-
-- 一个绑定特定机器的物品，记录机器 registryName + 几何缓存。
-- `setAssociatedMachine(stack, machine)` / `getAssociatedMachine(stack)`。
-- 玩家手持可右键控制器 → GUI 中显示 `MachineStructurePreviewPanel`。
-
-### 21.2 `ItemConstructTool`
-
-- 创造模式工具：选择多个方块 → `PlayerStructureSelectionHelper` 选中 → 点击控制器生成 Blueprint。
-
-### 21.3 `ItemDebugStruct`
-
-- 调试用，使用 `ItemMachineProjector` 投影当前结构。
-
-### 21.4 `ItemModularium`
-
-- 装饰物品，可染色（`ItemDynamicColor`）。
-
-### 21.5 `MachineProjector`（youyihj）
-
-`youyihj.mmce.common.item.MachineProjector`
-
-- 在世界中按方向投出当前机器结构（用于测试）。
-
-### 21.6 `StructurePreviewHelper`（youyihj）
-
-- 简易的预览辅助类。
-
----
-
-## 22. 自动组装（ikx）
-
-### 22.1 `AssemblyConfig`
-
-`ink.ikx.mmce.common.assembly.AssemblyConfig`（`ModuleDataHolder` 上一段）
-
-- `assemblyBefore` / `assemblyCreative` / `assemblyItemBlocks` / `assemblyFluidBlocks` / `replaceCheck` / `assemblyWaitTime` 等开关。
-
-### 22.2 `MachineAssembly`
-
-`ink.ikx.mmce.common.assembly.MachineAssembly`
-
-- 步骤：
-  1. 玩家拿着 Blueprint + 大量材料 → 在控制器上右键 → `PktAutoAssemblyRequest` → 服务端构造 `MachineAssembly`。
-  2. `buildIngredients(consumeInventory)`：从玩家背包挑选对应物品 / 流体。
-  3. `assembly(consumeInventory)`：逐 tick 把方块放到对应位置；`replaceCheck` 防止破坏植物 / 流动液体。
-  4. `assemblyCreative()`：创造模式直接放置。
-- `checkAllItems(...)` 实时扫描玩家库存，缺失时返回 `PktAssemblyReport` 提示。
-
-### 22.3 `AssemblyEventHandler`
-
-`ink.ikx.mmce.core.AssemblyEventHandler`
-
-- 监听 `PlayerInteractEvent.RightClickBlock` → 触发组装。
+- `AssemblyConfig`：配置开关。
+- `MachineAssembly`：玩家拿着 Blueprint + 大量材料 → 在控制器上右键 → `PktAutoAssemblyRequest` → 服务端构造 `MachineAssembly`，逐 tick 把方块放到对应位置。
+- `AssemblyEventHandler`：监听 `PlayerInteractEvent.RightClickBlock` 触发组装。
 - `MachineAssemblyManager`：管理「同时进行的多个组装」。
-
-### 22.4 `StructureIngredient`
-
-`ink.ikx.mmce.common.utils.StructureIngredient`
-
-- 拆分结构为 `ItemIngredient`（每方块 1 个选项链）和 `FluidIngredient`（流体方块）。
+- `StructureIngredient`：拆分结构为 `ItemIngredient`（每方块 1 个选项链）和 `FluidIngredient`（流体方块）。
 
 ---
 
-## 23. CraftTweaker 集成
+# 第 11 章：KasumiNova 扩展层可移植性分析
 
-### 23.1 全局 API
+> 范围：原 `reference/mmce/src/main/java/github/kasuminova/mmce/**`，即 MMCE 中 KasumiNova 新增的扩展层。原 `hellfirepvp.modularmachinery.*` 主干、`ink.ikx.mmce.*` 自动组装、`youyihj.mmce.*` 投影器、`kport.modularmagic.*` 魔法模块不在本章主范围。
+>
+> 目标：列出哪些内容适合移植到当前 MMCR NeoForge 26.1.2，哪些需要重写，哪些应删除或延后。
 
-`@ZenClass("mods.modularmachinery.MachineRegistry")`：`MachineRegistry` 静态方法。
-`@ZenClass("mods.modularmachinery.MachineController")`：`MachineController.getControllerAt(IWorld, IBlockPos)`。
+## 11.1 结论摘要
 
-### 23.2 `MachineBuilder`
+`github.kasuminova.mmce.*` 不是一个单独的小兼容包，而是 MMCE 后期核心增强层，覆盖动态 GUI、结构预览、ME/AE2 总线、GTCEu 代理、升级系统、机器事件、配方搜索优化、网络包和 mixin 补丁。它包含大量 1.12.2 Forge、旧 AE2、旧 JEI、旧渲染管线、反射和 mixin 依赖，不能整体搬运。
 
-`@ZenClass("mods.modularmachinery.MachineBuilder")`
+MMCR 已有 NeoForge 版本的机器定义、结构匹配、controller、item/fluid/energy port、recipe context、modifier、KubeJS、Jade、基础菜单等模块。因此移植策略为：
 
-- 构造：`MachineBuilder.createBuilder(registryName, localizedName)` / `createBuilder(...)` 多重载。
-- `getBuilder(registryName)` 取已注册。
-- 方法：
-  - `addBlock(...)` / `addBlock(blockInfo)`。
-  - `setLocalizedName(...)` / `setPrefix(...)`。
-  - `setRequiresBlueprint(...)` / `setFailureAction(...)` / `setDefinedColor(color)`。
-  - `setHasFactory(...)` / `setFactoryOnly(...)` / `setFactoryMaxThreads(...)` / `setFactoryRecipeThreadMaxParallelism(...)`。
-  - `setMaxParallelism(int)` / `setInternalParallelism(int)` / `setMaxThreads(int)`。
-  - `addCoreThread(FactoryRecipeThread)` / `setMachineGeoModel(...)`。
-  - `setSmartInterfaceType(...)` / `addDynamicPattern(...)`。
-  - `addModifier(...)` / `addMultiBlockModifier(...)`。
-  - `register()` / `getPattern()` / `getMachine()`。
+- **优先移植语义，不搬 API**：保留 MMCE 的 feature 设计和数据流，落地到 `cn.howxu.mmcr.*` 的 NeoForge API。
+- **先移植服务端核心**：事件、recipe search/context pool、upgrade、special block proxy 这类不强依赖旧客户端的内容优先级更高。
+- **客户端体验分阶段做**：动态 GUI、结构预览、模型渲染能提升体验，但依赖新版渲染/JEI/菜单体系，必须重写。
+- **第三方联动后置**：AE2/ME、GTCEu、Mekanism gas 类内容只在核心闭环稳定后作为独立 compat 阶段处理。
+- **1.12.2 mixin 默认不移植**：只有新版 API 无法覆盖时，再为具体兼容点写新的 NeoForge/Mixin 补丁。
 
-### 23.3 `MachineModifier`
+## 11.2 MMCR 当前基线对照
 
-`@ZenClass("mods.modularmachinery.MachineModifier")`
-
-- 静态方法：`addSmartInterfaceType` / `setMaxParallelism` / `setInternalParallelism` / `setMaxThreads` / `addCoreThread` / `setMachineGeoModel` / `setMachinePrefix`。
-- 累计到 `WAIT_FOR_MODIFY` 队列，待 `postInit` 由 `MachineModifier.loadAll()` 执行。
-
-### 23.4 `RecipePrimer`
-
-`@ZenClass("mods.modularmachinery.RecipePrimer")`
-
-- 构造：`RecipePrimer.create(machineName, registryName, tickTime, priority)` / `createRecipe(machineName, registryName, tickTime, priority, voidPerTickFailure)`。
-- 工具方法：
-  - `addItemInput(IItemStack, ...)` / `addItemOutput(...)` / `addFluidInput(...)` / `addFluidOutput(...)` / `addGas(...)` / `addEnergy(...)`（含 perTick 变体）。
-  - `addIngredientArray(...)`（多选一）。
-  - `addAspectInput(...)` / `addStarlight(...)` / `addAura(...)` / `addMana(...)` / `addLifeEssence(...)` / `addRequirement(...)`。
-  - `setParallelized(...)` / `setParallelizeUnaffected(...)` / `setChance(...)` / `addTooltip(...)`。
-  - `setRecipeEventHandler(RecipeEvent, function)` / `setFactoryRecipeThread(...)`。
-  - `addModifier(RecipeModifier)`。
-  - `setMaxThreads(int)` / `setThreadName(String)` / `setLoadJEI(boolean)`。
-  - `build()` / `register()`。
-
-### 23.5 `RecipeBuilder`
-
-- `RecipeBuilder.newBuilder(machineName, registryName, tickTime, priority)`。
-- 立刻构造的语法糖，返回 `RecipePrimer`。
-
-### 23.6 `RecipeAdapterBuilder`
-
-- `RecipeAdapterBuilder.create(machineName, parentMachineName)`。
-- 把 `parentMachine` 的所有配方复制到 `machineName`（带 `RecipeModifier`）。
-- `addModifier(...)`。
-
-### 23.7 `RecipeModifierBuilder`
-
-- `RecipeModifierBuilder.newBuilder()` / `setRequirementType(...)` / `setIOType(...)` / `setOperation(...)` / `setValue(...)` / `isAffectChance(...)` / `build()`。
-
-### 23.8 `BlockArrayBuilder`
-
-- JSON 风格的 `BlockArray` 构造器（链式 `addBlock` / `addAir` / `addRotations` / `build`）。
-
-### 23.9 `IngredientArrayBuilder` / `IngredientArrayPrimer`
-
-- 包装 `RequirementIngredientArray`。
-
-### 23.10 `StatedMachineComponentBuilder`
-
-- 构造 `ComponentSelectorTag` + `BlockArray.BlockInformation`。
-
-### 23.11 `MachineUpgradeBuilder` / `DynamicMachineUpgradeBuilder`
-
-- `MachineUpgradeBuilder.create(upgradeTypeName, ...)`。
-- `setMaxStackSize` / `setLevel` / `setLocalizedName` / `setCompatibleMachines(...)` / `setIncompatibleMachines(...)`。
-- `onMachineEvent(eventClass, function)` / `onRecipeEvent(eventClass, function)`：注册 `UpgradeEventHandlerCT`。
-- `build()` → `SimpleMachineUpgrade` 或 `SimpleDynamicMachineUpgrade`。
-
-### 23.12 `MMEvents`
-
-`@ZenClass("mods.modularmachinery.MMEvents")`
-
-- `onControllerConstruct(eventClass, function)`。
-- `onControllerTick(eventClass, phase, function)` / `onMachineStructureFormed(...)` / `onMachineStructureUpdate(...)`。
-- `onRecipeStart(...)` / `onRecipeTick(...)` / `onRecipeFinish(...)` / `onRecipeFailure(...)` / `onRecipeCheck(...)`。
-- `onSmartInterfaceUpdate(...)`。
-- `registryAll()` 在 `postInit` 时统一挂载。
-
-### 23.13 `MultiBlockModifierBuilder`
-
-- 构建 `MultiBlockModifierReplacement`。
-
-### 23.14 `IFunction` / `AdvancedItemCheckerCT` / `AdvancedBlockCheckerCT` / `AdvancedItemModifierCT`
-
-- 高级匹配函数（per-item / per-block）与 modifier 包装。
-
-### 23.15 `GeoMachineModel`
-
-`@ZenClass("mods.modularmachinery.GeoMachineModel")`
-
-- 客户端注册 GeckoLib 模型。
-
-### 23.16 `UpgradeEventHandlerCT` / `UpgradeEventHandlerWrapper`
-
-- 把 CraftTweaker function 包装为 `UpgradeEventHandlerCT`。
-
-### 23.17 工具类
-
-- `CommandCTReload` / `CommandCTReloadClient`：ZenUtils 协作的重载命令。
-- `BlockArrayGenerator` / `MachineGenerator` / `RecipeGenerator`：JSON 生成器基类。
-
----
-
-## 24. JEI 集成
-
-### 24.1 主入口
-
-`hellfirepvp.modularmachinery.common.integration.ModIntegrationJEI`
-
-- 实现 `IModPlugin`（JEI 7+ 风格）。
-- `registerCategories(...)`：每台机器一个 `CategoryDynamicRecipe` + 一个 `CategoryStructurePreview`。
-- `registerRecipes(...)`：遍历 `MachineRegistry.getLoadedMachines()` → `getAvailableRecipes()`。
-- 提供 `getCategoryStringFor(machine)`。
-- 提供 `jeiHelpers` 静态引用。
-
-### 24.2 `CategoryDynamicRecipe`
-
-`hellfirepvp.modularmachinery.common.integration.recipe.CategoryDynamicRecipe`
-
-- 构造时调用 `buildRecipeComponents()`：收集所有 requirement 的 `RecipeLayoutPart`。
-- `setRecipe(IRecipeLayoutBuilder, MachineRecipe, IFocusGroup)`：把每个 requirement 映射到合适的 slot。
-- `drawExtras(...)` / `getTooltip(...)` 渲染额外信息（如 modifier 缩放后值）。
-
-### 24.3 `DynamicRecipeWrapper`
-
-- 把 `MachineRecipe` 包装成 JEI 可识别的对象。
-
-### 24.4 `RecipeLayoutPart`
-
-- 内部类：
-  - `RecipeLayoutPart.Energy(Point)`：能量槽。
-  - `RecipeLayoutPart.Item(Point)`：物品槽（带 `IngredientItemStackRenderer`；自动布局）。
-
-### 24.5 `RecipeLayoutHelper`
-
-- 提供 `PART_INVENTORY_CELL` 等 IDrawable 静态资源。
-
-### 24.6 `IngredientItemStack` / `IngredientItemStackRenderer`
-
-- 自定义 JEI 物品渲染（显示 NBT / chance）。
-
-### 24.7 `HybridFluid` / `HybridFluidRenderer` / `HybridStackHelper`
-
-- 给 TE / botania 等 mod 提供「混合流体」JEI 显示。
-
-### 24.8 `CategoryStructurePreview` / `StructurePreviewWrapper`
-
-- 在 JEI 中渲染一个可点击的 3D 预览图，连接到 `GuiBlueprintScreenJEI`。
-- `StructurePreviewWrapper.getWrapper(layout)` / `getRecipeLayouts(gui)`：静态辅助。
-
-### 24.9 JEI 事件
-
-- `RecipeTransferToGuiHandler` 钩子：将 JEI 物品拖到总线槽。
-- `MixinRecipesGui` / `MixinRecipeLayout`（详见 §31）：调整 JEI GUI 的渲染上下文。
-
-### 24.10 ModularMagic JEI
-
-`kport.modularmagic.common.integration.jei`：
-
-- `JeiPlugin` 注册 `LayoutXxx` 与 `JEIComponentXxx` 与 `Renderer`（Aspect / Starlight / Aura / Mana / LifeEssence / Will / Impetus / Rainbow / Grid / Constellation）。
-- `LayoutStarlight` / `LayoutMana` 等定义 JEI 槽位布局。
-- `AspectRenderer` / `AuraRenderer` / `ConstellationRenderer` / `DemonWillRenderer` / `GridRenderer` / `ImpetusRender` / `LifeEssenceRenderer` / `ManaRenderer` / `RainbowRenderer` / `StarlightRenderer`：自定义渲染。
-
----
-
-## 25. TheOneProbe 集成
-
-`hellfirepvp.modularmachinery.common.integration.theoneprobe.MMInfoProvider`：
-
-- 实现 `IProbeInfoProvider`。
-- 处理 `IMachineController` / `TileMultiblockMachineController`：显示配方进度、配方名、剩余时间、线程状态、所有者。
-- 处理 `TileSmartInterface` / `TileParallelController` / `TileUpgradeBus` / `TileEnergyHatch` / `TileFluidTank` / `TileItemBus`。
-- 处理 `MEItemInputBus` / `MEItemOutputBus` / `MEFluidInputBus` / `MEFluidOutputBus` / `MEGasInputBus` / `MEGasOutputBus` / `MEPatternProvider`：显示当前存储 / 状态。
-- 处理 `TileAuraProvider` / `TileAspectProvider` 等 ModularMagic Tile。
-
----
-
-## 26. AE2 / ME 集成
-
-### 26.1 基础
-
-- 依赖：`ae2-extended-life`、`ae2-fluid-crafting-rework`、`mekanism-energistics`、`nae2`。
-- `MEMachineComponent`：
-  - 实现 `IAEAppEngInventory` / `IUpgradeableHost` / `IConfigManagerHost` / `SelectiveUpdateTileEntity` / `MachineComponentTile` / `ColorableMachineTile` / `MachineGroupInput`。
-  - 通过 `CreateModIntegrationAE2.securityCheck(...)` 兼容 AE2 安全系统。
-- `MachineCombinationComponent`：组合多种 `MachineComponent`（如 Pattern Provider 多面）。
-- `BlockMEMachineComponent`：Me 风格方块基类。
-
-### 26.2 物品总线
-
-- `MEItemInputBus`：
-  - 在 `tickingRequest()` 中调用 `extractStackFromAE()`。
-  - 通过 `MEItemInputBus.getConfigInventory()` 暴露配置 Inventory。
-  - 支持 `SettingsTransfer` 接口（GUI 共享设置）。
-- `MEItemOutputBus`：
-  - 同样支持 `tickingRequest`。
-  - 拥有「max stack size」动态设定（点击 GUI 切换 1/16/64/256/2k）。
-
-### 26.3 流体总线
-
-- `MEFluidInputBus` / `MEFluidOutputBus` 继承 `MEFluidBus`：
-  - `TANK_SLOT_AMOUNT = 9`、`TANK_DEFAULT_CAPACITY = 8000`mB。
-  - 通过 `AEFluidInventoryUpgradeable` 存储。
-  - 容量卡片安装后容量按 `4^(N+1) * 8000/4` 缩放。
-  - `changedSlots`：脏槽记录。
-- `use` 容量升级时 `updateTankCapacity()`。
-
-### 26.4 气体总线
-
-- `MEGasInputBus` / `MEGasOutputBus` 继承 `MEGasBus`（`MEFluidBus` 类似），使用 `MultiGasTank` 包装 Mekanism 气体。
-- 与 `mekeng` 兼容。
-
-### 26.5 `MEPatternProvider`
-
-`github.kasuminova.mmce.common.tile.MEPatternProvider`
-
-- 自研 AE2 模式提供器：
-  - 4 行 9 列 = 36 个样板槽。
-  - 多面共享：`getCombinationComponents()` 提供 4 个 `MachineComponent<InfItemFluidHandler>`（共享同一内部 Item/Fluid inventory）。
-  - 有独立的 `subItemHandler` / `subFluidHandler`（用作模式样板共享总线）。
-  - 多线程安全：`handler.setOnItemChanged` / `setOnFluidChanged` 触发 `markChunkDirty()`。
-  - `SecurityPermissions.BUILD` 检查（与 AE2 安全系统联动）。
-- 网络：
-  - `PktMEPatternProviderHandlerItems`：登录同步内容。
-  - `PktMEPatternProviderAction`：跟踪样板操作。
-- `MEItemInputBus.getNextStack()` 也可从中提取。
-- `PatternItemFilter` 过滤同步用。
-
-### 26.6 `MEPatternMirrorImage`
-
-- 镜像模式：把别的 Pattern Provider 的样板反射到本机（用于跨网络）。
-
-### 26.7 Mixin
-
-- `ae2/MixinContainerInterfaceTerminal` / `MixinDualityInterface`：调整 AE2 接口面板的行为（看到 PM 后能处理 Pattern Provider）。
-- `ae2.nae2/MixinContainerPatternMultiTool`：NAE2 调整。
-
----
-
-## 27. ModularMagic（kport）
-
-### 27.1 总览
-
-`kport.modularmagic` 是 MMCE 内的「魔法合成支持模块」，集中提供 Botania / Blood Magic / Astral Sorcery / Nature's Aura / Thaumcraft / Botania 特殊合成的支持。
-
-### 27.2 物品
-
-`ModularMagicItems.initItems()`：
-
-- 提供 `ItemAspect` / `ItemAura` / `ItemConstellation` / `ItemMana` / `ItemLifeEssence` / `ItemImpetus` / `ItemStarlight` / `ItemRainbow` / `ItemWill` / `ItemGrid` 等虚拟物品（仅在 JEI 中使用）。
-
-### 27.3 组件
-
-`ModularMagicComponents.initComponents()`（10 个 ComponentType 注册）。
-
-### 27.4 需求类型
-
-`ModularMagicRequirements.initRequirements()`（10 个 RequirementType 注册）。
-
-### 27.5 CraftTweaker
-
-`MagicPrimer`:
-
-- `MagicPrimer.createStarlight(...)` / `createAura(...)` / `createMana(...)` / `createAspect(...)` / `createLifeEssence(...)` / `createImpetus(...)` / `createWill(...)` / `createRainbow(...)` / `createGrid(...)` / `createConstellation(...)`。
-- 提供 `addStarlightInput(...)` 等链式 API 给 `RecipePrimer` 复用。
-
-### 27.6 JEI 集成
-
-- `LayoutXxx` 类 + `JEIComponentXxx` + `XxxRenderer`（详见 §24.10）。
-- `Aura` / `Constellation` / `DemonWill` / `Grid` / `Impetus` / `LifeEssence` / `Mana` / `Rainbow` / `Starlight` JEI ingredient。
-- `AuraHelper` / `AspectHelper` / `ConstellationHelper` / `DemonWillHelper` / `GridHelper` / `ImpetusHelper` / `LifeEssenceHelper` / `ManaHelper` / `RainbowHelper` / `StarlightHelper`：调用相应 mod API。
-
-### 27.7 网络
-
-- `StarlightMessage` / `StarlightMessageHandler`：当 Astral Sorcery 在场时注册。
-
-### 27.8 事件
-
-- `RegistrationEvent`：负责 `initItems / initComponents / initRequirements`。
-- `StarlightEventHandler`：监听 Astral Sorcery 事件。
-
----
-
-## 28. Flux Networks 集成
-
-`hellfirepvp.modularmachinery.common.integration.fluxnetworks`
-
-- `ModIntegrationFluxNetworks.preInit()` 注册事件。
-- `MMEnergyHandler`（与 `MMWorldEventListener` 协同）：当 Flux Networks 在场时，让 FE 仓可被任意网络读取。
-- 受 `Config.enableFluxNetworksIntegration` 控制。
-
----
-
-## 29. GT CEu 集成
-
-`github.kasuminova.mmce.common.integration.gregtech`
-
-- `ModIntegrationGTCEU.initialize()`。
-- `MachineComponentProxy` / `MachineComponentProxyRegistry` / `SpecialItemBlockProxy` / `SpecialItemBlockProxyRegistry`：
-  - 允许把 GTCu 多方块元件（如某些方块 / 机器）作为机器的组件代理。
-- `componentproxy` / `handlerproxy` / `patternproxy` 子包分别处理 Component / IItemHandler / Pattern 三个维度。
-- `GTEnergyContainer`：EU 适配。
-
----
-
-## 30. GeckoLib 模型
-
-### 30.1 系统
-
-- `MachineControllerModel`（`github.kasuminova.mmce.client.model`）：从 Lumenized + GeckoLib 加载。
-- `DynamicMachineModelRegistry.INSTANCE`：
-  - `registerMachineDefaultModel(machine, model)`。
-  - `getMachineModel(name)`。
-- `GeoModelRenderTask` / `BloomGeoModelRenderer`：渲染（带 Bloom）。
-- `MachineControllerRenderer`：自定义 TileEntityRenderer。
-- `ControllerModelRenderManager`：管理所有 `MachineControllerRenderer` 实例。
-- `BloomGeoModelRenderer` 在 `MixinRenderGlobal` 的 `hookTESRComplete` 钩子中调用。
-
-### 30.2 Lumenized 集成
-
-- 注释 `dependencies = "after:lumenized"`。
-- `ShaderManager` 通过 `isOptifineShaderPackLoaded()` 决定是否开启 Bloom。
-
-### 30.3 Animatable
-
-- `TileMultiblockMachineController` 实现 `software.bernie.geckolib3.core.IAnimatable`（`@Optional.Interface`）。
-
----
-
-## 31. Mixin 补丁
-
-| Mixin JSON | 包 | 目标 |
+| 能力 | 当前实现位置 | 对 `github.kasuminova.mmce` 移植的意义 |
 |---|---|---|
-| `mixins.mmce_minecraft.json` | `github.kasuminova.mmce.mixin.minecraft` | `MixinRenderGlobal` (`RenderGlobal.renderEntities` 钩子)、`MixinTileEntityRendererDispatcher` |
-| `mixins.mmce_ae2.json` | `github.kasuminova.mmce.mixin.ae2` | `MixinContainerInterfaceTerminal` / `MixinContainerInterfaceTerminal$AccessorInvTracker` / `MixinDualityInterface` |
-| `mixins.mmce_jei_hacky.json` | `github.kasuminova.mmce.mixin.jei` | `MixinRecipeLayout` (`GlStateManager.translate` 钩子)、`MixinRecipesGui` / `MixinRecipesGui$AccessorRecipeLayout` / `MixinRecipesGui$AccessorStructurePreviewWrapper` |
-| `mixins.mmce_nae2.json` | `github.kasuminova.mmce.mixin.ae2.nae2` | `MixinContainerPatternMultiTool` |
+| 机器定义 | `api.machine.Machine` / `DynamicMachine` / `BlockArray` / `StructureMatcher` / `MachinePatternCompiler` | 可承接动态结构、modifier replacement、preview 数据源 |
+| 控制器运行时 | `internal.tile.MachineControllerBlockEntity` | 可承接 recipe event、recipe search、running status、parallel/upgrade 后续接入 |
+| Item/Fluid/Energy 端口 | `internal.tile.*BusBlockEntity` / `*HatchBlockEntity` / `IOPortBlockEntity` | 可承接 component 路由与 selector tag |
+| Recipe 层 | `api.recipe.*` / `RecipeCraftingContext` / `RecipeSearchTask` / `RecipeCraftingContextPool` | 已经有 MMCE 同名语义，应继续对齐 |
+| Modifier 层 | `api.recipe.modifier.*` | 可承接 upgrade 与结构替换类逻辑 |
+| 网络 | `internal.network.*Payload`（`PktMachineStatePayload` / `PktMultiblockDetectorPickPayload`） | 旧 `IMessage` 网络包必须重写为 NeoForge payload |
+| 菜单/屏幕 | `internal.menu.*` / `client/gui/*` | 动态 GUI 可重映射到新版 `AbstractContainerMenu` / Screen |
+| Compat | `compat.kubejs` / `compat.jade` | MMCE 的 CraftTweaker/TOP 语义已映射到 KubeJS/Jade |
 
-`EarlyMixinLoader`（manifest 指定 `FMLCorePlugin = "github.kasuminova.mmce.mixin.MMCEEarlyMixinLoader"`）负责注册以上 mixin。
+## 11.3 可移植性分级
+
+### A 类：建议优先移植或继续对齐
+
+这类内容主要是服务端逻辑、数据结构或公共语义，较少绑定 1.12.2 客户端 API。
+
+| MMCE 模块 | 代表类/包 | 移植方式 | 说明 |
+|---|---|---|---|
+| 配方搜索任务 | `common.concurrent.RecipeSearchTask` / `FactoryRecipeSearchTask` | 重映射 | 当前已有 `api.recipe.RecipeSearchTask`，应比对 MMCE 的搜索失败原因、并行搜索、缓存边界，补齐语义 |
+| 上下文池 | `common.concurrent.RecipeCraftingContextPool` | 直译简化 | 当前已有同名类；可移植对象复用策略，但需避免跨 tick 保存过期 BE/capability |
+| 同步/计时工具 | `common.concurrent.Sync` / `common.util.TimeRecorder` | 按需重写 | `Sync` 意图可保留；`TimeRecorder` 可用于后续性能报告，不应先引入复杂 UI/网络 |
+| 机器/配方事件 | `common.event.recipe.*` / `common.event.client.*` / `Phase` | 重映射 | RecipeStart/Tick/ResultChance 等事件适合映射到 NeoForge EventBus 或 MMCR 私有事件总线 |
+| Helper/Checker | `common.helper.AdvancedBlockChecker` / `AdvancedItemChecker` / `IBlockStatePredicate` / `IDynamicPatternInfo` | 重映射 | 与结构匹配、KubeJS builder、modifier replacement 关系密切 |
+| Pattern 特殊代理 | `common.machine.pattern.SpecialItemBlockProxy` / `SpecialItemBlockProxyRegistry` | 重映射 | 适合支持「物品代表方块」「虚拟结构匹配」「第三方 block proxy」 |
+| 常用工具 | `common.util.HashedItemStack` / `PatternItemFilter` | 直译/重写 | `HashedItemStack` 需要适配 `DataComponentPatch`；`PatternItemFilter` 可用于 blueprint/preview/auto assembly |
+| 升级数据模型 | `common.upgrade.*` / `common.upgrade.registry.*` | 重映射 | 升级系统是 MMCE 核心增强之一；方块、GUI、脚本 API 需分阶段 |
+
+### B 类：可移植，但必须重写适配层
+
+这类内容有明确功能价值，但直接绑定旧 Minecraft/Forge/AE2/JEI/渲染 API。
+
+| MMCE 模块 | 代表类/包 | 移植方式 | 说明 |
+|---|---|---|---|
+| 动态 GUI 基础 | `client.gui.GuiContainerDynamic` / `GuiScreenDynamic` / `client.gui.widget.base.*` | 重写 | 旧 `GuiContainer`、LWJGL Mouse、Forge 1.12 tooltip API 不可用。可以保留 Widget tree、layout、event bubbling 思路 |
+| 通用 Widget | `client.gui.widget.*` / `client.gui.widget.container.*` | 重写 | 按新版 `AbstractWidget`、PoseStack / GuiGraphics 实现 |
+| 虚拟槽 / JEI 槽 | `client.gui.widget.slot.*` | 重写 | 新 JEI 29 slot API 差异大，只保留 item/fluid/gas virtual slot 的概念 |
+| 结构预览 GUI | `client.gui.widget.impl.preview.*` / `client.preivew.PreviewPanels` | 重写 | 价值高，但依赖世界渲染、假世界、层切换、ingredient list。建议先做 2D/文本预览，再做 3D |
+| 客户端模型/渲染 | `client.model.*` / `client.renderer.*` / `client.resource.GeoModelExternalLoader` | 重写/部分删除 | 旧 GeckoLib / Lumenized / Bloom 渲染不应直搬 |
+| BlockModelHider | `client.world.BlockModelHider` | 重写 | 用于结构预览/投影时隐藏重叠模型；新版需要走客户端 render hooks |
+| 网络包 | `common.network.Pkt*` | 重写 | 每个旧包都要映射到 NeoForge custom payload |
+| TOP / Jade 信息 | `common.integration.theoneprobe.MachineryHatchInfoProvider` | 重映射 | 当前已有 Jade compat（`compat.jade.*`），可把 MMCE hatch/controller 展示内容迁移为 Jade provider |
+| GTCEu 代理 | `common.integration.gregtech.*` | 重写 compat | 概念可移植：GT energy/fluid/item hatch 作为 MMCR component proxy |
+| AE2/ME 集成入口 | `common.integration.ModIntegrationAE2` | 重写 compat | 只保留「注册 AE2 相关升级/组件/菜单」的阶段入口 |
+
+### C 类：只保留设计参考，暂不移植
+
+这类内容价值存在，但依赖功能链太长，或当前项目已有更合适替代。
+
+| MMCE 模块 | 处理方式 | 原因 |
+|---|---|---|
+| ME Item/Fluid/Gas Bus | 延后 | 依赖新版 AE2、菜单、网络、pattern provider、fluid/gas 生态；应作为独立 AE2 compat 里程碑 |
+| ME Pattern Provider | 延后 | 功能复杂，且新版 AE2 pattern/container API 完全不同 |
+| Gas 相关虚拟槽/总线 | 延后/视 Mekanism 而定 | 当前核心只有 item/fluid/energy；gas 应归入 Mekanism 阶段 |
+| 性能报告 UI/命令 | 延后 | 先保留计时工具，不做完整报告链路 |
+| 旧 AEBase GUI | 删除/参考 | AE2 客户端类版本差异过大 |
+| 旧 mixin | 默认删除 | 1.12.2 目标、方法名、渲染管线、JEI/AE2 内部结构都不适用 |
+
+## 11.4 分包详细分析
+
+### 11.4.1 `common.concurrent`
+
+**功能价值**：MMCE 用这一层解决 recipe 搜索、工厂配方搜索、上下文复用和任务执行。当前 MMCR 已经有 `RecipeSearchTask` 和 `RecipeCraftingContextPool`，说明这一块已经进入移植轨道。
+
+**建议移植内容**：
+- 搜索结果应包含失败原因，而不是只有成功/失败布尔值。
+- 搜索过程应只做模拟，不提交 IO。
+- context pool 可以复用临时列表、需求匹配状态、组件过滤结果。
+- 工厂/并行相关搜索先不引入线程，只保留同步可测试版本。
+
+**不要直搬**：
+- 不要在异步线程读写 Level、BlockEntity、Capability。
+- 不要照搬 1.12.2 的 `TaskExecutor` 生命周期到 NeoForge server tick。
+
+### 11.4.2 `common.event`
+
+**功能价值**：MMCE 的事件层让脚本/扩展能介入 recipe start、tick、result chance、controller GUI/model render。
+
+**建议移植内容**：
+- `RecipeEvent` 基类：携带 machine、controller pos、recipe、context、phase。
+- `RecipeTickEvent`：允许观察进度，不建议首期允许取消或改 IO。
+- `FactoryRecipeStartEvent` / `FactoryRecipeEvent`：等 factory controller 实现后再迁移。
+- `ResultChanceCreateEvent`：等 output chance/modifier 完整后再迁移。
+- `ControllerGUIRenderEvent` / `ControllerModelGetEvent` / `ControllerModelAnimationEvent`：客户端渲染阶段再做。
+
+**落地建议**：先做私有 Java event API，再桥接 KubeJS；不要让 KubeJS 类型污染核心 API。
+
+### 11.4.3 `common.helper`
+
+**功能价值**：动态结构、复杂匹配和 controller 抽象的基础。
+
+**建议移植内容**：
+- `IBlockStatePredicate`：映射为新版 `BlockState` / `LevelReader` / `BlockPos` predicate。
+- `AdvancedBlockChecker`：支持 tag、方块属性、方向、block entity 条件。
+- `AdvancedItemChecker`：适配新版 `ItemStack` DataComponent，替代 1.12 NBT 判断。
+- `IDynamicPatternInfo`：用于未来动态结构、upgrade replacement、preview。
+- `MachineController` / `IMachineController`：不要新增平行控制器抽象；应合并到当前 `MachineControllerBlockEntity` 对外接口。
+
+### 11.4.4 `common.machine.pattern`
+
+**功能价值**：SpecialItemBlockProxy 解决「结构里某些方块/物品不是普通 block state」。
+
+**建议移植内容**：
+- 建立 `PatternProxyRegistry`，按 `ResourceLocation` 注册 proxy。
+- proxy 输入应使用新版 `ItemStack` / `BlockState` / `HolderLookup.Provider`。
+- 只让结构匹配和导出使用 proxy，不要让 runtime recipe IO 直接依赖 proxy。
+
+**优先级**：中期。当前已有 pattern export 和 multiblock detector 时，这一块能增强脚本表达力。
+
+### 11.4.5 `common.upgrade`
+
+**功能价值**：升级系统是 MMCE 相比原 Modular Machinery 的重要扩展。
+
+**建议拆分迁移**：
+
+| 子阶段 | 内容 | 目标形态 |
+|---|---|---|
+| 1 | 数据模型 | `UpgradeType` / `MachineUpgrade` / `UpgradeInfo` 映射到 `api.upgrade` |
+| 2 | 注册 | 用 NeoForge `DeferredRegister` / 普通 registry 管理 upgrade 定义 |
+| 3 | 应用点 | controller 成型后扫描 upgrade bus 或 pattern replacement |
+| 4 | Modifier 接入 | upgrade 产生 `RecipeModifier`，影响 duration / input / output / chance |
+| 5 | GUI/Jade | 展示已安装升级、可用升级、冲突原因 |
+
+### 11.4.6 `common.integration.theoneprobe`
+
+**功能价值**：展示 controller/hatch 信息。当前项目已有 Jade compat，因此这块很适合早期吸收。
+
+**建议移植内容**：
+- controller：结构是否成型、机器 id、active recipe、进度、缺失原因。
+- hatch/bus：IO 类型、方向、容量、当前存量。
+- upgrade/parallel/smart interface 信息等到对应功能实现后再加入。
+
+**处理方式**：不要移植 TOP API，直接映射到 `compat.jade`。
+
+### 11.4.7 `common.integration.gregtech`
+
+**功能价值**：通过 proxy 让 GTCEu 的 energy/fluid/item hatch 作为 MMCE 组件参与 recipe。
+
+**建议移植内容**：
+- `MachineComponentProxy` 思路：第三方 BE 不继承 MMCR 接口，也能被包装成 `ProcessingComponent`。
+- `GTItemBusProxy` / `GTFluidHatchProxy` / `GTEnergyHatchProxy` 的职责划分。
+- `GTBlockMachineProxy` 作为 pattern proxy 的思路。
+
+**不要直搬**：所有 GTCEu 1.12 API、类名、capability 判断都需要换成当前目标版本 API。未确认 GTCEu 版本前不要写实现。
+
+### 11.4.8 `common.integration.ModIntegrationAE2` 与 ME 系列
+
+**可移植目标**：
+- ME item input/output bus 映射为 AE2 storage/network 交互组件。
+- ME fluid bus 视新版 AE2/附属是否支持 fluid API 决定。
+- ME pattern provider 映射为自动把 pattern 输入/输出转换为 MMCR recipe 或 recipe transfer。
+- ME bus GUI 使用新版 AE2/NeoForge menu/screen 重写。
+
+**阶段建议**：后期单独开 `AE2 compat` spec，不与核心 runtime 混做。
+
+### 11.4.9 `client.gui` 与 `client.gui.widget`
+
+**功能价值**：MMCE 的动态 GUI 系统解决复杂 controller、结构预览、ME bus、pattern provider 的 UI 组合问题。
+
+**建议保留的设计**：
+- `WidgetController` 统一 update / render / input / tooltip 生命周期。
+- `WidgetGui` 记录 GUI origin / size。
+- container widget 支持 row / column / scrolling / selectable。
+- preview widget 与 ingredient list 分离。
+- virtual slot 只负责展示/交互，不直接持有真实 inventory。
+
+**必须重写的部分**：
+- 鼠标输入从 LWJGL / `Mouse.getEventX()` 改为新版 Screen 回调参数。
+- 渲染从旧 GL state / `drawTexturedModalRect` 改为 `GuiGraphics`。
+- tooltip 从旧 `drawHoveringText` 改为新版 tooltip API。
+- slot / JEI 交互按 JEI 29 API 重写。
+
+### 11.4.10 `client.model` / `client.renderer` / `client.resource` / `client.world`
+
+**功能价值**：动态 controller 模型、GeckoLib 外部模型、Bloom 渲染、结构预览隐藏方块。
+
+**当前建议**：
+- 短期不移植 GeckoLib / Bloom 相关实现。
+- 可保留「机器定义可指定 controller model/texture」的数据入口，但落地到 vanilla model JSON 或 datagen。
+- 结构预览阶段再考虑假世界渲染和 block model hiding。
+- 如果未来引入 GeckoLib，需要重新评估依赖和客户端/服务端边界。
+
+### 11.4.11 `mixin`
+
+**现状**：MMCE 有 early/late loader，并根据是否存在 JEI、AE2、NAE2 加载不同 mixin。具体 mixin 目标是 1.12.2 的 `RenderGlobal` / `TileEntityRendererDispatcher` / JEI `RecipesGui` / `RecipeLayout` / AE2 interface terminal / pattern multi tool 等。
+
+**处理结论**：默认不移植。
+
+**原因**：
+- 目标类和方法签名基本全部过期。
+- NeoForge 与 JEI / AE2 新版通常提供更正式的扩展点。
+- 过早引入 mixin 会增加维护成本和启动风险。
+
+**例外**：当新版 AE2 / JEI 没有公开 API 支持某个必要行为时，为该行为单独写新 mixin，并在文档里记录目标类、原因和替代方案。
+
+## 11.5 按优先级排列的可移植清单
+
+### P0：已经在当前项目中部分存在，应继续对齐 MMCE
+
+| 功能 | MMCE 来源 | 当前目标 | 验收点 |
+|---|---|---|---|
+| Recipe search 语义 | `common.concurrent.RecipeSearchTask` | `api.recipe.RecipeSearchTask` | 成功/失败原因明确，模拟和提交分离 |
+| Context pool | `common.concurrent.RecipeCraftingContextPool` | `api.recipe.RecipeCraftingContextPool` | 不复用失效 BE/capability，测试覆盖 roundtrip |
+| Requirement/component 路由 | helper + machine component 相关语义 | `api.recipe.helper.*` / `ProcessingComponent` | pattern 内端口参与 IO，pattern 外端口不参与 |
+| Modifier replacement | `client.util.UpgradeIngredient` / upgrade replacement 相关 | `api.recipe.modifier.*` | single/multi replacement 能转成统一 modifier 或 pattern metadata |
+| Jade 展示 | TOP provider | `compat.jade.*` | 控制器和 hatch/bus 信息可读 |
+
+### P1：核心闭环稳定后建议做
+
+| 功能 | MMCE 来源 | 当前目标 | 验收点 |
+|---|---|---|---|
+| Recipe lifecycle events | `common.event.recipe.*` | `api.event` 或 internal event bus + KubeJS bridge | recipe start/tick/complete/fail 可观察 |
+| Advanced checker | `common.helper.Advanced*Checker` | `api.machine` predicate/checker | block state、tag、item data component 匹配稳定 |
+| Special block/item proxy | `common.machine.pattern.*` | pattern proxy registry | 导出/匹配能表达非普通方块条件 |
+| Upgrade 数据模型 | `common.upgrade.*` | `api.upgrade.*` | upgrade 能声明类型、冲突、描述和 modifier 输出 |
+| 性能计时基础 | `TimeRecorder` | internal profiling utility | 不带 UI，仅日志或 debug 命令可读 |
+
+### P2：作为独立功能阶段
+
+| 功能 | MMCE 来源 | 当前目标 | 验收点 |
+|---|---|---|---|
+| 动态 GUI / Widget | `client.gui.widget.*` | 轻量 NeoForge widget 层 | controller/upgrade/preview UI 能复用组件 |
+| 结构预览 | `client.gui.widget.impl.preview.*` / `client.world.*` | 2D 后 3D preview | 可展示结构层、缺失块、材料清单 |
+| JEI 虚拟槽和 recipe transfer | `client.gui.widget.slot.*` / `mixin.jei.*` | JEI 29 category/transfer | 不使用旧 mixin，slot 显示与转移正确 |
+| Parallel/factory search | `FactoryRecipeSearchTask` / `TaskExecutor` | server-safe scheduler | 异步不触碰 world，commit 回主线程 |
+| Upgrade bus GUI | upgrade + GUI | `UpgradeBusBlockEntity/Menu/Screen` | 安装、卸载、冲突提示、Jade 展示完整 |
+
+### P3：第三方 compat 后期做
+
+| 功能 | MMCE 来源 | 当前目标 | 验收点 |
+|---|---|---|---|
+| AE2 ME item bus | `MEItemInputBus` / `MEItemOutputBus` | `compat.ae2` | 能从 AE2 网络输入/输出 item |
+| AE2 ME fluid bus | `MEFluidInputBus` / `MEFluidOutputBus` | `compat.ae2` | 取决于新版 AE2 fluid 支持 |
+| ME pattern provider | `MEPatternProvider` | `compat.ae2.pattern` | pattern 与 MMCR recipe/transfer 对接 |
+| GTCEu component proxy | `common.integration.gregtech.*` | `compat.gtceu` | GT hatch 能作为 MMCR component |
+| Gas / Mekanism | `MEGas*` / `SlotGasVirtual*` | `compat.mekanism` | gas requirement/component 完整后再做 |
+
+## 11.6 不建议移植清单
+
+| 内容 | 原因 |
+|---|---|
+| `MMCEEarlyMixinLoader` / `MMCELateMixinLoader` 原样实现 | 1.12.2 Forge/MixinBooter 生命周期不适用于 NeoForge |
+| `mixin.minecraft.*` 原目标 | 新版渲染管线已变，不能按旧 RenderGlobal/TESR patch 搬 |
+| `mixin.jei.*` 原目标 | JEI 29 API 和内部结构不同，优先用公开 API |
+| `mixin.ae2.*` / `mixin.ae2.nae2.*` 原目标 | 旧 AE2/NAE2 类和行为不适用 |
+| `AEBaseGuiContainerDynamic` 原样 | 绑定旧 AE2 GUI 基类 |
+| 旧 `GuiME*` 原样 | 绑定旧 AE2 fluid slot、reflection、buttonList/guiSlots |
+| GeckoLib / Lumenized / Bloom 旧实现 | 当前首期不引入第三方渲染库；旧 API 不适用 |
+| 旧网络包 `IMessage` / `SimpleNetworkWrapper` | 必须用 NeoForge custom payload |
+| 旧 CraftTweaker / ZenScript 思路 | 当前项目以 KubeJS / Java API / datapack JSON 为入口 |
+
+## 11.7 推荐落地顺序
+
+### 阶段 1：核心语义补齐
+
+1. 对照 MMCE `RecipeSearchTask`，补齐当前 recipe search 的失败原因、模拟边界和 context 生命周期。
+2. 引入 recipe lifecycle event 的 Java API 雏形，不立刻暴露 KubeJS 可变能力。
+3. 完善 advanced checker / predicate，用于结构匹配、导出和后续 pattern proxy。
+4. 把 Jade provider 补成 controller + port 可诊断面板。
+
+### 阶段 2：Upgrade 与 Pattern 扩展
+
+1. 建立 `api.upgrade` 数据模型，不写 GUI。
+2. 将 upgrade 输出统一映射为 `RecipeModifier` 或 pattern metadata。
+3. 添加 pattern proxy registry，支持特殊 item/block 表达。
+4. 在 controller 成型后计算 upgrade / effective modifier，并纳入 recipe context。
+
+### 阶段 3：客户端可用性
+
+1. 先做轻量动态 widget，不完整复制 MMCE widget 包。
+2. 做 controller / port / upgrade 的统一 screen 组件。
+3. 做结构材料清单和分层 2D preview。
+4. 最后评估 3D preview、block model hiding 和自定义渲染。
+
+### 阶段 4：第三方联动
+
+1. JEI category/transfer，避免 mixin。
+2. AE2 item bus，再评估 fluid/pattern provider。
+3. GTCEu proxy。
+4. Mekanism gas。
+
+## 11.8 迁移时的命名建议
+
+不要把 `github.kasuminova.mmce` 包名原样搬到主源码。建议按当前项目结构归档：
+
+| MMCE 包 | MMCR 目标包建议 |
+|---|---|
+| `github.kasuminova.mmce.common.concurrent` | `cn.howxu.mmcr.api.recipe` 或 `cn.howxu.mmcr.internal.recipe` |
+| `github.kasuminova.mmce.common.event` | `cn.howxu.mmcr.api.event` / `cn.howxu.mmcr.internal.event` |
+| `github.kasuminova.mmce.common.helper` | `cn.howxu.mmcr.api.machine` / `cn.howxu.mmcr.internal.machine` |
+| `github.kasuminova.mmce.common.upgrade` | `cn.howxu.mmcr.api.upgrade` / `cn.howxu.mmcr.internal.upgrade` |
+| `github.kasuminova.mmce.common.integration.gregtech` | `cn.howxu.mmcr.compat.gtceu` |
+| `github.kasuminova.mmce.common.integration.ModIntegrationAE2` | `cn.howxu.mmcr.compat.ae2` |
+| `github.kasuminova.mmce.client.gui.widget` | `cn.howxu.mmcr.client.gui.widget` |
+| `github.kasuminova.mmce.client.renderer/model/world` | `cn.howxu.mmcr.client.render` / `client.preview` |
+
+## 11.9 验收标准
+
+每个被迁移的功能都应满足：
+
+- 不引入 1.12.2 Forge / 旧 Minecraft 类名、反射字段名、旧 JEI/AE2 API。
+- 核心 API 不硬依赖 KubeJS、JEI、Jade、AE2、GTCEu、Mekanism。
+- 服务端逻辑不引用客户端类。
+- capability 访问遵循 NeoForge 当前 API。
+- 网络同步使用 NeoForge payload，并有明确 client/server 方向。
+- recipe IO 坚持 simulate → commit，不在搜索阶段修改库存、流体或能量。
+- 可选 compat 未安装时，主 mod 可正常启动。
+
+## 11.10 最小推荐 TODO
+
+1. **MMCE recipe event/search 对齐**：补齐 `RecipeSearchTask`、失败原因、事件雏形。
+2. **MMCE upgrade model port**：只做数据模型和 modifier 接入，不做 GUI/方块。
+3. **Pattern proxy + advanced checker**：让结构匹配表达力接近 MMCE，为后续 preview/upgrade/third-party proxy 铺路。
+
+这三个都完成后，再进入动态 GUI、结构预览、AE2/GTCEu 兼容会更稳。
 
 ---
 
-## 32. 配置（Config）
+# 第 12 章：API 变动（1.12.2 → 26.1.2 NeoForge）
 
-`hellfirepvp.modularmachinery.common.data.Config`
+> **详细映射见 [`api-mapping.md`](./api-mapping.md)**（Item / Energy / Fluid / Capability / Recipe 完整对照表）。本章只列关键差异与影响范围。
 
-通用：
-- `enableFluxNetworksIntegration = true`
-- `enableSterlingBonus`（保留字段）
-- `enableFullDataSync`（控制器 NBT 全量同步）
-- `enableSecuritySystem`（是否启用机器所有者校验）
-- `enableBloomEffect`
-- `parallelizeRecipeThreads`
-- `machineParallelizeEnabledByDefault` / `recipeParallelizeEnabledByDefault`
-- `maxMachineParallelism`
-- `enableFactoryControllerByDefault`
-- `defaultFactoryMaxThread`
-- `machineColor`（默认机器颜色）
-- `totalTimeMultiplier` / `itemInputTimeMultiplier` / `itemOutputTimeMultiplier` / `fluidInputTimeMultiplier` / `fluidOutputTimeMultiplier`
-- `clientWorldCleanCacheIntervalSeconds`
-- `meshCacheMaxSize`
-- `recipeDurationMultiply` / `recipeEnergyConsumptionMultiply`
-- `machineBoundingBoxDefaultEnable`
+## 12.1 跨大版本核心变化
 
-控制器（`TileMultiblockMachineController.loadFromConfig`）：
-- `structure-check-delay`（默认 30 tick）
-- `delayed-structure-check`（默认 true）
-- `max-structure-check-delay`（默认 100 tick）
-- `clean-custom-data-on-structure-check-failed`
+| 维度 | MMCE 1.12.2 | MMCR 26.1.2 |
+|---|---|---|
+| Minecraft | 1.12.2 | 1.21.1 |
+| Mod 平台 | Forge 14.21+ | NeoForge 26.1.2 |
+| 渲染 | LWJGL2 / `drawTexturedModalRect` / 旧 GL state | LWJGL3 / `GuiGraphics` / `PoseStack` |
+| 数据序列化 | 自写 GSON 双阶段 + NBT | `MapCodec` / `Codec` + `DataComponentMap` / `CompoundTag` |
+| 配方发现 | 自写 `RecipeRegistry` + JSON 扫盘 | `Recipe<?>` / `RecipeType<?>` / `RecipeManager` + `data/<ns>/recipe/*.json` |
+| 注册 | `GameRegistry.register` + `IForgeRegistryEntry` | `DeferredRegister<T>` + `IEventBus.register()` |
+| Tag | `OreDictionary` | `TagKey<T>` / `HolderSet<T>` / `Holder<T>` |
+| Capability | `CapabilityManager.INSTANCE.register` + `CapabilityToken` | `RegisterCapabilitiesEvent` + `BlockCapability` + `Capabilities.X.BLOCK` |
+| 能量 | `IEnergyStorage`（Forge Energy / FE） | `IEnergyStorage`（**API 与 1.12.2 完全一致**） |
+| 流体 | `Fluid`（密度 / 粘度 / 亮度全在 Fluid 子类） | `Fluid` + `FluidType`（密度 / 粘度 / 亮度迁移到 FluidType） |
+| 物品 | `ItemStack` + `NBTTagCompound` | `ItemStack` + `DataComponentMap`（NBT 大部分场景被替换） |
+| 命名 | `World` / `Entity` / `IBlockState` | `Level` / `Entity` / `BlockState`（API 形态高度相似但命名不同） |
+| `BlockPos` | `BlockPos` | `BlockPos`（**record**，API 兼容） |
 
-并行（`ParallelControllerData.loadFromConfig`）：
-- 每个等级最大并行数（默认 4 / 16 / 64 / 256 / 512，可由配置文件覆盖）。
+## 12.2 关键 API 速查表（首期必背）
 
-`RecipeFailureActions.loadFromConfig`：`default-failure-actions`（reset / still / decrease）。
+| API | 用途 | 出处 |
+|---|---|---|
+| `DeferredRegister.createBlocks(ns)` | Block 注册 | KubeJS `KubeJSMenus` |
+| `DeferredRegister.create(BuiltInRegistries.RECIPE_TYPE, ns)` | RecipeType 注册 | KubeJS `KubeJSRecipeSerializers` |
+| `RegisterCapabilitiesEvent.registerBlockEntity(cap, beType, fn)` | 给 BlockEntity 挂能力 | KubeJS `KubeJSModEventHandler:129` |
+| `Capabilities.ItemHandler.BLOCK` / `FluidHandler.BLOCK` / `EnergyStorage.BLOCK` | 能力 token | NeoForge |
+| `ItemStackHandler` | 物品容器实现 | NeoForge（同 1.12.2） |
+| `EnergyStorage(capacity, maxReceive, maxExtract)` | 能量容器实现 | NeoForge（同 1.12.2） |
+| `FluidStack(Fluid, int)` / `FluidStack(Fluid, int, DataComponentPatch)` | 流体实例 | NeoForge |
+| `FluidType.Properties.create()...` | 流体属性构建 | NeoForge |
+| `Ingredient.CODEC` / `FluidIngredient.CODEC` | 物品 / 流体 ingredient 序列化 | NeoForge |
+| `Recipe<T>` / `RecipeSerializer<T>` | 配方接口 | NeoForge |
+| `MapCodec<T>` / `Codec<T>` / `RecordCodecBuilder` | 数据序列化 | Mojang + NeoForge |
+| `DataComponentType<T>` | 物品数据组件 | NeoForge |
 
-`DataLoadProfiler`：状态行 / 进度。
+## 12.3 受影响最大的子系统
 
-`ModDataHolder`：所有 JSON 机器 / 配方 / 变量路径。
+### 12.3.1 注册（§4.1 / §10.1）
 
----
+MMCE 的 `GameRegistry.register` + `IForgeRegistryEntry` 整套不能直搬。MMCR 用 `DeferredRegister`，所有方块、物品、BE、配方类型、菜单、DataComponent、Creative Tab 通过 `modBus` 注册。
 
-## 33. 资源 / 默认机器
+MMCE 的 `InternalRegistryPrimer`（机器 / 配方 / 变量 / 修饰符的内部注册缓冲）**整包删**——这些对象在 MMCR 由 `MachineRegistry` / `RecipeRegistry` / `ModifierRegistry` 直接管理，不需要额外中间层。
 
-### 33.1 默认机器（`assets/modularmachinery/default_machinery/`）
+### 12.3.2 配方（§6）
 
-- `alloy_furnace.json`（合金炉）
-- `assembly_line.json`（装配线）
-- `iron_centrifuge.json`（铁离心机）
-- `power_transformer.json`（能量变压器）
+MMCE 的 `MachineRecipe` 是 22.2K 巨型类 + 自写 GSON 解析 + 自维护 `RecipeRegistry`。MMCR 的 `MachineRecipe` 改为 `record implements Recipe<RecipeInput>`，序列化用 `MapCodec` / `StreamCodec`，注册走 `DeferredRegister.create(BuiltInRegistries.RECIPE_TYPE, ns)`。
 
-### 33.2 默认配方（`default_recipes/`）
+MMCE 17 个 `RecipeAdapter`（ic2 / nco / tc6 / tconstruct / te5）**整体 OUT**——首期零第三方 mod 深度依赖，配方完全由 datapack JSON / KubeJS / Java API 三入口注册。
 
-- `alloy_smelter/`（含 `alloy_smelter_diamond.json`、`alloy_smelter_furnaces.adapter.json`、`alloy_smelter_modularium.json`）
-- `centrifuge/`（含 `centrifuge_centrifuge_blaze_powder.json`、`..._grass.json`、`..._magma_cream.json`、`..._wool.json`、`centrifuge_wash_glowstone.json`、`centrifuge_wash_redstone.json`）
-- `power_transformer_energy_transform.json`
+### 12.3.3 流体（§7.1）
 
-### 33.3 默认变量（`default_variables/`）
+**最大认知差**。MMCE 自写 `BlockFluidBase` 写 `setDensity(...)` 的写法整个迁移。MMCR 不实现流体方块——只消费别人注册的流体（如 `minecraft:water`），流出 `FluidStack`。
 
-- `casings.var.json`：定义 `casing_firebox/casing_plain/casing_reinforced` 等变量。
+### 12.3.4 物品数据（§7.0）
 
-### 33.4 资源包语言
+**第二大认知差**。MMCE 大量 `NBTTagCompound` 自定义 key 写法需要逐个映射。MMCR 策略：先用 `DataComponentMap` 当纯 NBT 用（`CompoundTag` 数据组件），后续再分拆。
 
-- `en_US.lang` / `zh_CN.lang`（双重翻译）。
+### 12.3.5 网络（§10.4）
 
-### 33.5 完整方块 / 物品 JSON
+15 个 `PktXxx`（基于 `SimpleNetworkWrapper` / `IMessage`）**逐个 OUT**。MMCR 用 NeoForge `CustomPacketPayload`，首期只 2 个包：
+- `PktMachineStatePayload`：机器状态同步。
+- `PktMultiblockDetectorPickPayload`：multiblock detector 工具的客户端 → 服务端。
 
-- `blockstates/`：控制器 / 外壳 / 各种 buses / hatches / upgrades / smart interface / parallel / factory / ME 系列 / ModularMagic 系列。
-- `models/block/` / `models/item/`。
-- `textures/blocks/`, `textures/items/`, `textures/gui/`。
-- `recipes/`：modularium 锭、casing 系列、energy/fluid/item 输入输出仓的合成表。
+### 12.3.6 渲染 / 预览（§10.6 / §11.4.10）
 
-### 33.6 Logo
+MMCE 的 GeckoLib 控制器模型、Lumenized Bloom、`WorldSceneRenderer`、cleanroommc 移植预览代码**整包 OUT**。MMCR 用 vanilla 模型 JSON + NeoForge 原生渲染。
 
-- `textures/logo.png`（9.3 KB）。
+### 12.3.7 事件（§9 / §11.4.2）
 
----
+MMCE 的私有 `EventBus` + 12 个 `RecipeEvent`（含 factory / chance）需要重映射到 NeoForge `IEventBus`。MMCR 首期只暴露 Recipe / Machine lifecycle event 的最小集，详细设计见 [`architecture.md` §6](./architecture.md#6-模块边界-package-layout) 和 §11.4.2。
 
-## 34. 公共工具类
+## 12.4 不变的部分（好消息）
 
-- `ItemUtils`（23.6K）：物品 / 伤害 / NBT 匹配、`ItemStackIterable`。
-- `BlockArray`（26.9K）：JSON / NBT 序列化 + 旋转。
-- `BlockArrayCache`（4.4K）：按 `EnumFacing` 缓存。
-- `BlockInformationVariable`（3.2K）：变量替换。
-- `BlockCompatHelper`（6.2K）：跨 mod 兼容。
-- `IBlockStateDescriptor`（3.9K）：状态描述。
-- `FuelItemHelper`（3.0K）：燃料扫描。
-- `HybridFluidUtils` / `HybridTank` / `HybridGasTank`：跨 mod 流体 / 气体。
-- `IEnergyHandler` / `IEnergyHandlerAsync` / `IEnergyHandlerImpl`：异步 FE。
-- `IOInventory`（7.2K）：可限制 IO 槽。
-- `IItemHandlerImpl`（12.4K）：自定义物品 inventory。
-- `InventoryUpdateListener`：inventory 变更监听。
-- `PriorityProvider`：优先级计算。
-- `RedstoneHelper`：红石信号。
-- `ResultChance`：chance 计算。
-- `SmartInterfaceData` / `SmartInterfaceType`：接口数据 + 类型。
-- `MultiFluidTank` / `MultiGasTank`：多流体仓。
-- `Sides`：方块 6 面枚举操作。
-- `TimeRecorder`（2.0K）：性能统计。
-- `OredictCache` / `HashedItemStack`：加速匹配。
-- `PatternItemFilter`：AE 模式匹配。
-- `InfItemFluidHandler`：combo inventory。
-- `AEFluidInventoryUpgradeable`：AE fluid 容器。
-- `CapabilityUpgrade` / `CapabilityUpgradeProvider`：升级能力。
-- `BlockPos2ValueMap`：高效 BlockPos → 列表 map。
-- `BlockModelHider`（`github.kasuminova.mmce.client.world`）：隐藏结构匹配时的多余方块。
+- **能量（FE）API 完全兼容**：`receiveEnergy` / `extractEnergy` / `getEnergyStored` / `getMaxEnergyStored` / `canReceive` / `canExtract` 在两个版本中签名一致。
+- **`BlockPos` 基本兼容**：26.1.2 改为 record，但 `getX/getY/getZ` / `offset` / `immutable` 行为不变。
+- **`ItemStackHandler` 同款**：`setSize` / `setStackInSlot` / `getSlots` / `getStackInSlot` API 一字未改。
+- **`IItemHandler` / `IItemHandlerModifiable` / `IFluidHandler`**：能力接口形态一致，只是走 `BlockCapability` token。
+
+## 12.5 永久删除（参考 §10 / §11.6）
+
+| 内容 | 原因 |
+|---|---|
+| `CommonProxy` / `ClientProxy` | 1.12.2 Forge lifecycle 概念，NeoForge mod bus / client event 替代 |
+| `GameRegistry` / `InternalRegistryPrimer` | 用 `DeferredRegister` |
+| 双阶段 GSON loader / `MachineLoader.discoverDirectory` / 变量 JSON | 用 Codec / datapack / KubeJS / Java API |
+| CraftTweaker / ZenScript 集成 | KubeJS 替代 |
+| 旧 `SimpleNetworkWrapper` 15 个 packet | 按当前功能用 NeoForge `CustomPacketPayload` 重映射 |
+| GeckoLib / Lumenized / Bloom controller renderer | 不引入第三方渲染库 |
+| MMCE 针对 AE2 / JEI / GeckoLib 的旧 mixin | 不移植；遇到 NeoForge/API 限制时重新写最小 mixin |
+| Recipe Adapter 旧外部机器桥接（IC2 / NCO / TC6 / TConstruct / TE5） | 不引入第三方 mod 深度依赖 |
+| 蓝图 / 投影器 / 自动组装 | 首期不实现；蓝图用 `/mmcr reload` + 重进世界代替 |
 
 ---
 
-## 35. 其它易忽略点
-
-### 35.1 安全系统
-
-- `enableSecuritySystem` 配置启用后：
-  - `TileMultiblockMachineController` 写入 `owner`（`GameProfile`）。
-  - `onBlockActivated` 检查非所有者被拒。
-  - `getOwnerName()` / `getOwnerUUIDString()` 暴露给 JEI / TOP。
-- AE2 安全系统通过 `ModIntegrationAE2.securityCheck(player, proxy)` 联动。
-
-### 35.2 自定义数据
-
-- `customData`：`NBTTagCompound`，结构成功时不被清除，可用于 CraftTweaker / 升级。
-- `cleanCustomDataOnStructureCheckFailed` 配置。
-
-### 35.3 全数据同步
-
-- `enableFullDataSync`：在配方启动 / 完成时把全 NBT 推送到客户端。
-
-### 35.4 性能监控
-
-- `TimeRecorder` 在每次 `doControllerTick` 后写入耗时。
-- `MMInfoProvider` 在 TOP 中也会显示。
-- `/mm performance` 命令输出汇总。
-
-### 35.5 控制器组件管理
-
-- `MachineComponentManager` 缓存一个 `Map<Long, Map<TileEntity, ProcessingComponent<?>>>`。
-- `MMWorldEventListener` 监听 `BlockEvent.NeighborNotify` / `TickEvent`，增量更新缓存。
-
-### 35.6 额外网络
-
-- `StarlightMessage`（kport）：Astral Sorcery 兼容。
-- `ThreadingHelper` / `CustomThreadFactory`（kasuminova）：定制的 Worker Thread。
-
-### 35.7 自定义数据包字段
-
-- `dataWatcher` 字段用于快速同步（颜色、激活状态、workMode 等）。
-- `WorkMode` 枚举（`MACHINE` / `BUS` / `BIOPROCESS` 等）。
-
-### 35.8 翻译
-
-- `en_US.lang` 28K / `zh_CN.lang` 26.8K，原生中文支持。
-
-### 35.9 Hard-coded 升级等级
-
-- `level`：浮点数，用在 `RequirementType.register` 时筛选。
-
-### 35.10 模块耦合图（简化）
-
-```
-                            Mod Entry
-                                │
-                ┌───────────────┼───────────────┐
-                │               │               │
-        CommonProxy       Network Channel    EventBus
-                │               │               │
-   ┌────────┬───┴────┬───────────┼───────────────┬──┐
-   │        │        │           │               │  │
-Registries  │  MachineRegistry  │            Event │
-   │        │     ├→ MachineLoader  │         ↑  │
-   │        │     ├→ DynamicMachine    │ Machine↑  │
-   │        │     ├→ MachineComponent   │ Event ↓  │
-   │        │     │        │           │ (CraftTweaker)
-   │        │     │        ▼           │   ↑   │
-   │        │     │  TileEntity....    │  Modifier  │
-   │        │     │  (Buses/Hatches)   │   ↑   │
-   │  ┌─────┴──────┴─┐                 │   │   │
-   │  │ JEI/TOP/AE2  │   Integration ──┘   │   │
-   │  └──────────────┘                     │   │
-   │  ┌──────────────┐                     │   │
-   │  │ ModularMagic │                     │   │
-   │  └──────────────┘                     │   │
-   │  ┌──────────────┐                     │   │
-   │  │ ikx Assembly │                     │   │
-   │  └──────────────┘                     │   │
-   │  ┌──────────────┐                     │   │
-   │  │ GeckoLib     │                     │   │
-   │  └──────────────┘                     │   │
-   ▼                                        ▼   ▼
-Lib / Tools / Config / Mixin
-```
-
-### 35.11 退出 / 维护
-
-- README 注明："This project is scheduled for archiving in the near future. For reference to future alternative projects, please see [PrototypeMachinery](https://github.com/NovaEngineering-Source/PrototypeMachinery)."
-
-### 35.12 彩蛋
-
-- `MC 1.12.2` 上的 `universal bucket` 静态启用。
-- `acceptableRemoteVersions = [2.1.0, 2.4.0)` 限制版本区间。
-- `doAction` / `Action` / `SequentialTaskExecutor` 借鉴了 Lux 等框架。
-
----
-
-## 36. 总结：MMCE 相对原版 HellFirePvP ModularMachinery 的关键扩展
-
-1. **并行支持**：
-   - `TileParallelController` + `ParallelControllerData`。
-   - Recipe / Machine 层级 `parallelized` / `parallelism` / `maxParallelism` / `internalParallelism`。
-   - `parallelizeRecipeThreads` 全局开关。
-2. **工厂控制器**：
-   - `TileFactoryController` + `FactoryRecipeThread` + `FactoryRecipeSearchTask`。
-   - `RecipeCraftingContextPool` 对象池。
-   - 多个 `FactoryRecipeThread` 可由 `coreThread` 预设。
-3. **智能接口**：
-   - `SmartInterfaceType` / `SmartInterfaceData` / `TileSmartInterface` / `SmartInterfaceUpdateEvent`。
-   - `interface_number_input` 配方需求。
-4. **升级系统**：
-   - `MachineUpgrade` / `DynamicMachineUpgrade` / `UpgradeType` / `RegistryUpgrade`。
-   - `UpgradeEventHandlerCT` 可挂 CraftTweaker 函数。
-5. **自动组装（ikx）**：
-   - `MachineAssembly` + `AssemblyEventHandler` + `AssemblyConfig`。
-   - `PktAutoAssemblyRequest` / `PktAssemblyReport`。
-6. **ME 集成强化**：
-   - 自研 `MEPatternProvider` / `MEPatternMirrorImage`。
-   - `MEItemInputBus` / `MEItemOutputBus` / `MEFluidInputBus` / `MEFluidOutputBus` / `MEGasInputBus` / `MEGasOutputBus`。
-   - `MachineCombinationComponent`。
-7. **ModularMagic（kport）**：Botania / Blood Magic / Astral Sorcery / Nature's Aura / Thaumcraft 集成。
-8. **大型动态结构**：
-   - `DynamicPattern` + `DynamicMachine` + `BlockArrayCache`。
-   - `MultiBlockModifierReplacement`。
-9. **GTCEu 集成**：
-   - `MachineComponentProxy` / `SpecialItemBlockProxy` 机制。
-10. **CraftTweaker 完善**：
-    - `MachineBuilder` / `MachineModifier` / `RecipePrimer` / `RecipeAdapterBuilder` / `MachineUpgradeBuilder` / `DynamicMachineUpgradeBuilder` / `MultiBlockModifierBuilder` / `MMEvents` / `GeoMachineModel` / `MagicPrimer` / `CommandCTReload` / `IngredientArrayPrimer` …
-    - 各类 `MagicPrimer` 使添加魔法资源直接链式。
-11. **JEI 强化**：
-    - `CategoryDynamicRecipe` / `DynamicRecipeWrapper` / `RecipeLayoutPart` / `RecipeLayoutHelper` / `CategoryStructurePreview` / `StructurePreviewWrapper`。
-    - 自定义 Mixin 让 Blueprint 在 JEI 内可交互。
-12. **可视化升级**：
-    - GeckoLib + Lumenized 渲染 + Bloom：`BloomGeoModelRenderer` / `MachineControllerRenderer` / `ControllerModelRenderManager`。
-    - `MachineControllerModel` / `DynamicMachineModelRegistry` / `GeoMachineModel`。
-13. **安全系统**：
-    - `enableSecuritySystem` / `owner` GameProfile 校验。
-    - `AE2SecurityCheck` 联动。
-14. **性能系统**：
-    - `TimeRecorder` / `usedTimeAvg` / `/mm performance` 命令 / `PktPerformanceReport`。
-15. **Blueprint 工具**：
-    - `ItemBlueprint` / `ItemConstructTool` / `ItemDebugStruct` / `MachineProjector`。
-    - `PlayerStructureSelectionHelper` 选择 → 同步 → 输入控制器。
-16. **Mixin 化 AE2 / JEI / RenderGlobal**：
-    - 4 个 mixin 包。
-17. **数据粒度**：
-    - `cleanCustomDataOnStructureCheckFailed`、`enableFullDataSync`、`delayed-structure-check`、`max-structure-check-delay` 等精细开关。
-18. **Gson 两阶段反序列化**：
-    - `PRELOAD_GSON` + `GSON` + `MachineLoader.preload/load`。
-    - 让配方可以引用后续加载的机器。
-
----
-
-## 37. 结语
-
-MMCE 是在原 ModularMachinery 之上的一次大规模扩展：
-- 保留 JSON/Core 引擎；
-- 新增了并行 / 工厂 / 智能接口 / 升级 / 自动组装 / ME Pattern / ModularMagic / GeckoLib 渲染 / 性能监控 / 安全系统 / 完整 CraftTweaker 等多个体系；
-- 使用 Mixin 兼容 JEI / AE2 / RenderGlobal；
-- 几乎覆盖了 1.12.2 主流科技/魔法 mod 的多方块合成需求。
-
-写完本份文档后，无论是想重制到更新版本（如 1.18+ / 1.20+），还是想搬迁 / 移植到 KubeJS / PrototypeMachinery，都有完整的索引可以使用。
+> 本文档与 [`api-mapping.md`](./api-mapping.md)（逐项 NeoForge API 对照）、[`architecture.md`](./architecture.md)（MMCR 包结构与翻译策略）、[`kubejs-integration.md`](./kubejs-integration.md)（KubeJS 桥接层设计）共同组成项目文档体系。规划与进度见 [`MAIN.md`](./MAIN.md)。
