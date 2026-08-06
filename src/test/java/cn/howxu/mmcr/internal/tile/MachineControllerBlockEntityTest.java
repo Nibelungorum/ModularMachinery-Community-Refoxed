@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.tile;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.BlockArrayCache;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
@@ -138,6 +139,31 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void structure_mismatch_diagnostic_includes_expected_and_actual_block_details() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
+        DynamicMachine machine = new DynamicMachine(MMCR.id("diagnostic_machine"), "Diagnostic", pattern);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, energyHatch(controllerPos.offset(1, 0, 0)));
+
+        String diagnostic = MachineControllerBlockEntity.structureMismatchDiagnostic(
+                machine,
+                Direction.SOUTH,
+                BlockArrayCache.get(machine.pattern(), Direction.SOUTH),
+                levelOf(controller),
+                controllerPos);
+
+        assertThat(diagnostic)
+                .contains("machine=mmcr:diagnostic_machine")
+                .contains("facing=SOUTH")
+                .contains("controllerPos=BlockPos{x=10, y=4, z=10}")
+                .contains("relativePos=BlockPos{x=1, y=0, z=0}")
+                .contains("worldPos=BlockPos{x=11, y=4, z=10}")
+                .contains("expected=OfBlock")
+                .contains("actualState=Block")
+                .contains("actualBlockEntity=EnergyInputHatchBlockEntity");
+    }
+
+    @Test
     void matching_structure_with_required_port_forms() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("energy_input_hatch").get());
@@ -240,6 +266,158 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.isFormed()).isFalse();
         assertThat(controller.getLastFormationFailure()).isNotNull();
         assertThat(controller.getLastFormationFailure().portId()).isEqualTo(PortKinds.ENERGY_INPUT.id());
+    }
+
+    @Test
+    void vertical_non_symmetric_machine_uses_placed_roll_facing_only() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
+        var defaults = cn.howxu.mmcr.api.machine.MachineControllerSpec.defaultsFor(MMCR.id("vertical_non_symmetric_machine"));
+        DynamicMachine machine = new DynamicMachine(
+                MMCR.id("vertical_non_symmetric_machine"),
+                "Vertical Non Symmetric",
+                pattern,
+                new cn.howxu.mmcr.api.machine.MachineControllerSpec(
+                        defaults.id(),
+                        defaults.frontTexture(),
+                        defaults.sideTexture(),
+                        defaults.topTexture(),
+                        defaults.bottomTexture(),
+                        true,
+                        false));
+        MachineControllerBlockEntity controller = controllerForFormation(
+                machine,
+                controllerPos,
+                Direction.UP,
+                Direction.SOUTH,
+                itemInputBus(controllerPos.offset(1, 0, 0)));
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.UP);
+
+        assertThat(formed).isTrue();
+        assertThat(controller.getFoundPattern().pattern()).containsKey(new BlockPos(1, 0, 0));
+    }
+
+    @Test
+    void vertical_non_symmetric_machine_rejects_other_rolls() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
+        var defaults = cn.howxu.mmcr.api.machine.MachineControllerSpec.defaultsFor(MMCR.id("vertical_non_symmetric_reject_machine"));
+        DynamicMachine machine = new DynamicMachine(
+                MMCR.id("vertical_non_symmetric_reject_machine"),
+                "Vertical Non Symmetric Reject",
+                pattern,
+                new cn.howxu.mmcr.api.machine.MachineControllerSpec(
+                        defaults.id(),
+                        defaults.frontTexture(),
+                        defaults.sideTexture(),
+                        defaults.topTexture(),
+                        defaults.bottomTexture(),
+                        true,
+                        false));
+        MachineControllerBlockEntity controller = controllerForFormation(
+                machine,
+                controllerPos,
+                Direction.UP,
+                Direction.NORTH,
+                itemInputBus(controllerPos.offset(1, 0, 0)));
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.UP);
+
+        assertThat(formed).isFalse();
+        assertThat(controller.getFoundMachine()).isNull();
+    }
+
+    @Test
+    void vertical_symmetric_machine_tries_all_rolls_and_caches_matching_pattern() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
+        var defaults = cn.howxu.mmcr.api.machine.MachineControllerSpec.defaultsFor(MMCR.id("vertical_symmetric_machine"));
+        DynamicMachine machine = new DynamicMachine(
+                MMCR.id("vertical_symmetric_machine"),
+                "Vertical Symmetric",
+                pattern,
+                new cn.howxu.mmcr.api.machine.MachineControllerSpec(
+                        defaults.id(),
+                        defaults.frontTexture(),
+                        defaults.sideTexture(),
+                        defaults.topTexture(),
+                        defaults.bottomTexture(),
+                        true,
+                        true));
+        MachineControllerBlockEntity controller = controllerForFormation(
+                machine,
+                controllerPos,
+                Direction.UP,
+                Direction.NORTH,
+                itemInputBus(controllerPos.offset(0, 0, 1)));
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.UP);
+
+        assertThat(formed).isTrue();
+        assertThat(controller.getFoundPattern().pattern()).containsKey(new BlockPos(0, 0, 1));
+    }
+
+    @Test
+    void require_vertical_machine_rejects_matching_horizontal_structure() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
+        var defaults = cn.howxu.mmcr.api.machine.MachineControllerSpec.defaultsFor(MMCR.id("requires_vertical_machine"));
+        DynamicMachine machine = new DynamicMachine(
+                MMCR.id("requires_vertical_machine"),
+                "Requires Vertical",
+                pattern,
+                new cn.howxu.mmcr.api.machine.MachineControllerSpec(
+                        defaults.id(),
+                        defaults.frontTexture(),
+                        defaults.sideTexture(),
+                        defaults.topTexture(),
+                        defaults.bottomTexture(),
+                        true,
+                        false,
+                        true));
+        MachineControllerBlockEntity controller = controllerForFormation(
+                machine,
+                controllerPos,
+                Direction.SOUTH,
+                Direction.NORTH,
+                itemInputBus(controllerPos.offset(1, 0, 0)));
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
+
+        assertThat(formed).isFalse();
+        assertThat(controller.getFoundMachine()).isNull();
+    }
+
+    @Test
+    void state_bound_machine_does_not_scan_other_registered_machines_after_mismatch() throws Exception {
+        var defaults = cn.howxu.mmcr.api.machine.MachineControllerSpec.defaultsFor(MMCR.id("bound_machine"));
+        DynamicMachine boundMachine = new DynamicMachine(
+                MMCR.id("bound_machine"),
+                "Bound Machine",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()),
+                new cn.howxu.mmcr.api.machine.MachineControllerSpec(
+                        MMCR.id("bound_machine_controller"),
+                        defaults.frontTexture(),
+                        defaults.sideTexture(),
+                        defaults.topTexture(),
+                        defaults.bottomTexture(),
+                        defaults.allowVerticalFacing(),
+                        defaults.fullyRotationallySymmetric()),
+                PortRequirementSpec.none());
+        DynamicMachine otherMachine = new DynamicMachine(
+                MMCR.id("other_machine"),
+                "Other Machine",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("energy_input_hatch").get()));
+        MachineRegistry.register(boundMachine);
+        MachineRegistry.register(otherMachine);
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        MachineControllerBlockEntity controller = controllerForFormation(boundMachine, controllerPos, energyHatch(controllerPos.offset(1, 0, 0)));
+
+        controller.serverTick();
+
+        assertThat(controller.isFormed()).isFalse();
+        assertThat(controller.getFoundMachine()).isNull();
     }
 
     private static MachineControllerBlockEntity controllerBlockEntityWithoutRunningMinecraftConstructor() {
@@ -396,12 +574,22 @@ class MachineControllerBlockEntityTest {
             DynamicMachine machine,
             BlockPos controllerPos,
             IOPortBlockEntity port) throws Exception {
+        return controllerForFormation(machine, controllerPos, Direction.SOUTH, Direction.NORTH, port);
+    }
+
+    private static MachineControllerBlockEntity controllerForFormation(
+            DynamicMachine machine,
+            BlockPos controllerPos,
+            Direction facing,
+            Direction rollFacing,
+            IOPortBlockEntity port) throws Exception {
         MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
         initializeComponents(controller);
         var controllerBlock = testControllerBlock(machine);
         var controllerState = controllerBlock.defaultBlockState()
                 .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FORMED, false)
-                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FACING, Direction.SOUTH);
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FACING, facing)
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ROLL_FACING, rollFacing);
         setField(BlockEntity.class, controller, "worldPosition", controllerPos);
         setField(BlockEntity.class, controller, "blockState", controllerState);
         Map<BlockPos, Block> blocks = new HashMap<>();
@@ -424,7 +612,8 @@ class MachineControllerBlockEntityTest {
         var controllerBlock = testControllerBlock(machine);
         var controllerState = controllerBlock.defaultBlockState()
                 .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FORMED, false)
-                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FACING, Direction.SOUTH);
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FACING, Direction.SOUTH)
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ROLL_FACING, Direction.NORTH);
         setField(BlockEntity.class, controller, "worldPosition", controllerPos);
         setField(BlockEntity.class, controller, "blockState", controllerState);
 
@@ -466,12 +655,14 @@ class MachineControllerBlockEntityTest {
         var builder = new net.minecraft.world.level.block.state.StateDefinition.Builder<Block, net.minecraft.world.level.block.state.BlockState>(block);
         builder.add(
                 cn.howxu.mmcr.internal.block.MachineControllerBlock.FACING,
+                cn.howxu.mmcr.internal.block.MachineControllerBlock.ROLL_FACING,
                 cn.howxu.mmcr.internal.block.MachineControllerBlock.FORMED,
                 cn.howxu.mmcr.internal.block.MachineControllerBlock.ACTIVE);
         var stateDefinition = builder.create(Block::defaultBlockState, net.minecraft.world.level.block.state.BlockState::new);
         setField(Block.class, block, "stateDefinition", stateDefinition);
         setField(Block.class, block, "defaultBlockState", stateDefinition.any()
                 .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FACING, Direction.NORTH)
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ROLL_FACING, Direction.NORTH)
                 .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FORMED, false)
                 .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ACTIVE, false));
         return block;

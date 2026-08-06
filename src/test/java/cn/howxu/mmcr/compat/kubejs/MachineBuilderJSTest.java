@@ -45,4 +45,23 @@ class MachineBuilderJSTest {
 
         assertThat(machine.controller().allowVerticalFacing()).isTrue();
     }
+
+    @Test
+    void full_rotational_symmetry_sets_controller_spec_flag() {
+        var machine = new MachineBuilderJS(MMCR.id("arc_furnace"))
+                .fullyRotationallySymmetric()
+                .createObject();
+
+        assertThat(machine.controller().fullyRotationallySymmetric()).isTrue();
+    }
+
+    @Test
+    void require_vertical_facing_sets_controller_spec_flags() {
+        var machine = new MachineBuilderJS(MMCR.id("arc_furnace"))
+                .requireVerticalFacing()
+                .createObject();
+
+        assertThat(machine.controller().allowVerticalFacing()).isTrue();
+        assertThat(machine.controller().requireVerticalFacing()).isTrue();
+    }
 }

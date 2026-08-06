@@ -31,6 +31,7 @@ import net.minecraft.world.phys.BlockHitResult;
 public class MachineControllerBlock extends Block implements EntityBlock {
 
     public static final EnumProperty<Direction> FACING = BlockStateProperties.FACING;
+    public static final EnumProperty<Direction> ROLL_FACING = EnumProperty.create("roll_facing", Direction.class, Direction.Plane.HORIZONTAL);
     public static final BooleanProperty FORMED = BooleanProperty.create("formed");
     public static final BooleanProperty ACTIVE = BooleanProperty.create("active");
 
@@ -46,6 +47,7 @@ public class MachineControllerBlock extends Block implements EntityBlock {
         this.machineId = machineId;
         registerDefaultState(stateDefinition.any()
                 .setValue(FACING, Direction.NORTH)
+                .setValue(ROLL_FACING, Direction.NORTH)
                 .setValue(FORMED, false)
                 .setValue(ACTIVE, false));
     }
@@ -56,19 +58,38 @@ public class MachineControllerBlock extends Block implements EntityBlock {
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> b) {
-        b.add(FACING, FORMED, ACTIVE);
+        b.add(FACING, ROLL_FACING, FORMED, ACTIVE);
     }
 
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext ctx) {
-        boolean verticalAllowed = isVerticalAllowed();
-        Direction nearest = ctx.getNearestLookingDirection().getOpposite();
-        Direction fallback = ctx.getHorizontalDirection().getOpposite();
-        Direction facing = verticalAllowed ? nearest : fallback;
-        if (!verticalAllowed && facing.getAxis().isVertical()) {
-            facing = fallback;
-        }
-        return defaultBlockState().setValue(FACING, facing);
+        Direction horizontalFacing = ctx.getHorizontalDirection().getOpposite();
+        return defaultBlockState()
+                .setValue(FACING, facingForPlacement(
+                        ctx.getClickedFace(),
+                        ctx.getClickLocation().y,
+                        ctx.getPlayer() == null ? ctx.getClickedPos().getY() : ctx.getPlayer().getY(),
+                        horizontalFacing,
+                        isVerticalAllowed()))
+                .setValue(ROLL_FACING, horizontalFacing);
+    }
+
+    static Direction facingForPlacement(Direction clickedFace, double clickY, double playerY, Direction horizontalFallback, boolean verticalAllowed) {
+        if (!verticalAllowed || !clickedFace.getAxis().isVertical()) return facingForPlacement(clickedFace, horizontalFallback, false);
+        return isClearlyVerticalPlacement(clickedFace, clickY, playerY) ? clickedFace : horizontalFallback;
+    }
+
+    static Direction facingForPlacement(Direction clickedFace, Direction horizontalFallback, boolean verticalAllowed) {
+        if (verticalAllowed) return clickedFace;
+        return clickedFace.getAxis().isVertical() ? horizontalFallback : clickedFace;
+    }
+
+    Direction facingForPlacement(Direction clickedFace, Direction horizontalFallback) {
+        return facingForPlacement(clickedFace, horizontalFallback, isVerticalAllowed());
+    }
+
+    private static boolean isClearlyVerticalPlacement(Direction clickedFace, double clickY, double playerY) {
+        return clickedFace == Direction.UP ? clickY < playerY : clickY > playerY + 2.0d;
     }
 
     private boolean isVerticalAllowed() {

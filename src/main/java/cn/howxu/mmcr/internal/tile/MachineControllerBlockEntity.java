@@ -22,6 +22,7 @@ import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
@@ -57,6 +58,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private boolean lastBroadcastActive;
     private @Nullable String lastFailureUnloc;
     private @Nullable PortRequirementSpec.Failure lastFormationFailure;
+    private @Nullable String lastStructureMismatchDiagnostic;
     private boolean redstonePaused;
     private @Nullable ActiveMachineRecipe pausedActive;
     private @Nullable RecipeCraftingContext pausedContext;
@@ -227,13 +229,19 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 updateComponents();
                 return;
             }
-            LOG.info("[Ctrl#{}] checkStructure: cached pattern for {} no longer matches → reset", instanceId, foundMachine.registryName());
+            LOG.info("[Ctrl#{}] checkStructure: cached pattern no longer matches → reset; {}",
+                    instanceId, structureMismatchDiagnostic(foundMachine, facing, foundPattern, level, getBlockPos()));
             resetMachine();
             return;
         }
 
         if (machine != null) {
             if (tryFormMachine(machine, facing)) {
+                return;
+            }
+            Identifier stateMachineId = machineIdFromState(getBlockState());
+            if (machine.registryName().equals(stateMachineId) || machine.controller().id().equals(stateMachineId)) {
+                resetMachine(lastFormationFailure == null);
                 return;
             }
         }
@@ -251,9 +259,37 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private boolean tryFormMachine(Machine candidate, Direction facing) {
+        if (!facing.getAxis().isVertical() && candidate.controller().requireVerticalFacing()) return false;
         if (facing.getAxis().isVertical() && !candidate.controller().allowVerticalFacing()) return false;
-        BlockArray rotatedPattern = BlockArrayCache.get(candidate.pattern(), facing);
-        if (!StructureMatcher.matchesRotated(rotatedPattern, level, getBlockPos())) return false;
+
+        for (BlockArray rotatedPattern : candidatePatterns(candidate, facing)) {
+            if (tryFormMachine(candidate, facing, rotatedPattern)) return true;
+        }
+        return false;
+    }
+
+    private List<BlockArray> candidatePatterns(Machine candidate, Direction facing) {
+        if (!facing.getAxis().isVertical()) {
+            return List.of(BlockArrayCache.get(candidate.pattern(), facing));
+        }
+
+        Direction rollFacing = getBlockState().getValue(MachineControllerBlock.ROLL_FACING);
+        if (!candidate.controller().fullyRotationallySymmetric()) {
+            return List.of(BlockArrayCache.get(candidate.pattern(), facing, rollFacing));
+        }
+
+        List<BlockArray> patterns = new ArrayList<>(4);
+        for (Direction candidateRoll : Direction.Plane.HORIZONTAL) {
+            patterns.add(BlockArrayCache.get(candidate.pattern(), facing, candidateRoll));
+        }
+        return patterns;
+    }
+
+    private boolean tryFormMachine(Machine candidate, Direction facing, BlockArray rotatedPattern) {
+        if (!StructureMatcher.matchesRotated(rotatedPattern, level, getBlockPos())) {
+            recordStructureMismatch(candidate, facing, rotatedPattern);
+            return false;
+        }
 
         var failure = candidate.portRequirements().validate(countPorts(rotatedPattern));
         if (failure.isPresent()) {
@@ -262,13 +298,55 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
 
         lastFormationFailure = null;
+        lastStructureMismatchDiagnostic = null;
         onStructureFormed(candidate, rotatedPattern, facing);
         return true;
+    }
+
+    private void recordStructureMismatch(Machine candidate, Direction facing, BlockArray rotatedPattern) {
+        String diagnostic = structureMismatchDiagnostic(candidate, facing, rotatedPattern, level, getBlockPos());
+        if (diagnostic.equals(lastStructureMismatchDiagnostic)) return;
+        lastStructureMismatchDiagnostic = diagnostic;
+        LOG.info("[Ctrl#{}] formation rejected: {}", instanceId, diagnostic);
+    }
+
+    static String structureMismatchDiagnostic(Machine candidate, Direction facing, BlockArray rotatedPattern, Level level, BlockPos ctrlPos) {
+        if (rotatedPattern.isEmpty()) {
+            return "machine=" + candidate.registryName()
+                    + " facing=" + facing.name()
+                    + " controllerPos=" + ctrlPos
+                    + " reason=emptyPattern";
+        }
+
+        for (var entry : rotatedPattern.pattern().entrySet()) {
+            BlockPos relativePos = entry.getKey();
+            BlockPos worldPos = ctrlPos.offset(relativePos);
+            BlockState actualState = level.getBlockState(worldPos);
+            if (entry.getValue().matches(actualState)) continue;
+
+            BlockEntity actualBlockEntity = level.getBlockEntity(worldPos);
+            return "machine=" + candidate.registryName()
+                    + " facing=" + facing.name()
+                    + " controllerPos=" + ctrlPos
+                    + " reason=blockMismatch"
+                    + " relativePos=" + relativePos
+                    + " worldPos=" + worldPos
+                    + " expected=" + entry.getValue()
+                    + " actualState=" + actualState
+                    + " actualBlock=" + actualState.getBlock().builtInRegistryHolder().key().identifier()
+                    + " actualBlockEntity=" + (actualBlockEntity == null ? "none" : actualBlockEntity.getClass().getSimpleName());
+        }
+
+        return "machine=" + candidate.registryName()
+                + " facing=" + facing.name()
+                + " controllerPos=" + ctrlPos
+                + " reason=unknownMismatch";
     }
 
     private void recordFormationFailure(Machine candidate, PortRequirementSpec.Failure failure) {
         if (failure.equals(lastFormationFailure)) return;
         lastFormationFailure = failure;
+        lastStructureMismatchDiagnostic = null;
         String max = failure.requiredMax().isPresent() ? Integer.toString(failure.requiredMax().getAsInt()) : "unbounded";
         LOG.info("[Ctrl#{}] formation rejected: pos={} machine={} port={} actual={} requiredMin={} requiredMax={} reason={}",
                 instanceId, getBlockPos(), candidate.registryName(), failure.portId(), failure.actual(), failure.requiredMin(), max, failure.reason());
@@ -466,6 +544,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
     void bindDefaultMachine(Identifier machineId) {
         DefaultMachines.ensureRegistered();
         Machine resolved = cn.howxu.mmcr.api.machine.MachineRegistry.getMachine(machineId);
+        if (resolved == null) {
+            for (Machine candidate : cn.howxu.mmcr.api.machine.MachineRegistry.getAll().values()) {
+                if (candidate.controller().id().equals(machineId)) {
+                    resolved = candidate;
+                    break;
+                }
+            }
+        }
         LOG.info("[Ctrl#{}] bindDefaultMachine: resolving state-bound machineId={} → resolved={}", instanceId, machineId, resolved == null ? null : resolved.registryName());
         setMachine(resolved);
     }

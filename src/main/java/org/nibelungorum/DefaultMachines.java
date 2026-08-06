@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Block;
 
 import java.util.List;
@@ -28,6 +29,7 @@ import java.util.List;
 public final class DefaultMachines {
 
     private static final Identifier BLAST_FURNACE_ID = MMCR.id("blast_furnace");
+    private static final Identifier CRACKER_ID = MMCR.id("cracker");
 
     private DefaultMachines() {
     }
@@ -42,6 +44,13 @@ public final class DefaultMachines {
             Block energyInput = ModBlocks.BLOCKS.get("energy_input_hatch").get();
             Block energyOutput = ModBlocks.BLOCKS.get("energy_output_hatch").get();
             MachineRegistry.register(blastFurnace(casing, itemInput, itemOutput, fluidInput, fluidOutput, energyInput, energyOutput));
+        }
+        if (MachineRegistry.getMachine(CRACKER_ID) == null) {
+            Block itemInput = ModBlocks.BLOCKS.get("item_input_bus").get();
+            Block itemOutput = ModBlocks.BLOCKS.get("item_output_bus").get();
+            Block fluidOutput = ModBlocks.BLOCKS.get("fluid_output_hatch").get();
+            Block energyInput = ModBlocks.BLOCKS.get("energy_input_hatch").get();
+            MachineRegistry.register(cracker(itemInput, itemOutput, fluidOutput, energyInput));
         }
     }
 
@@ -83,6 +92,48 @@ public final class DefaultMachines {
         Machine definition = MachineDefinitions.get(BLAST_FURNACE_ID);
         return definition == null
                 ? new DynamicMachine(BLAST_FURNACE_ID, "高炉", pattern, MachineControllerSpec.defaultsFor(BLAST_FURNACE_ID), portRequirements)
-                : new DynamicMachine(BLAST_FURNACE_ID, "高炉", pattern, definition.controller(), portRequirements);
+                : new DynamicMachine(BLAST_FURNACE_ID, "高炉", pattern, MachineControllerSpec.defaultsFor(BLAST_FURNACE_ID), portRequirements);
+    }
+
+    public static Machine cracker(Block itemInput, Block itemOutput, Block fluidOutput, Block energyInput) {
+        Block controller = ModBlocks.controllerFor(CRACKER_ID).get();
+        BlockPredicate port = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(itemInput),
+                new BlockPredicate.OfBlock(itemOutput),
+                new BlockPredicate.OfBlock(fluidOutput),
+                new BlockPredicate.OfBlock(energyInput),
+                new BlockPredicate.OfBlock(Blocks.WEATHERED_COPPER)));
+
+        BlockArray pattern = BlockArray.builder()
+                .pattern("AAA", "XBX", "XBX", "XDX")
+                .pattern("AAA", "B B", "B B", "DED")
+                .pattern("AAA", "XBX", "XBX", "XDX")
+                .set('X', new BlockPredicate.OfBlock(Blocks.POLISHED_DIORITE))
+                .set('A', new BlockPredicate.OfBlock(Blocks.POLISHED_ANDESITE))
+                .set('B', port)
+                .set('D', new BlockPredicate.OfBlock(Blocks.BLUE_ICE))
+                .set('E', new BlockPredicate.OfBlock(controller))
+                .controller('E')
+                .build();
+
+        PortRequirementSpec portRequirements = PortRequirementSpec.builder()
+                .min(PortKinds.ITEM_INPUT.id(), 1)
+                .min(PortKinds.FLUID_OUTPUT.id(), 1)
+                .min(PortKinds.ENERGY_INPUT.id(), 1)
+                .min(PortKinds.ITEM_OUTPUT.id(), 1)
+                .build();
+        MachineControllerSpec controllerSpec = new MachineControllerSpec(
+                MachineControllerSpec.defaultsFor(CRACKER_ID).id(),
+                MachineControllerSpec.defaultsFor(CRACKER_ID).frontTexture(),
+                MachineControllerSpec.defaultsFor(CRACKER_ID).sideTexture(),
+                MachineControllerSpec.defaultsFor(CRACKER_ID).topTexture(),
+                MachineControllerSpec.defaultsFor(CRACKER_ID).bottomTexture(),
+                true,
+                true,
+                true);
+        Machine definition = MachineDefinitions.get(CRACKER_ID);
+        return definition == null
+                ? new DynamicMachine(CRACKER_ID, "裂化器", pattern, controllerSpec, portRequirements)
+                : new DynamicMachine(CRACKER_ID, "裂化器", pattern, controllerSpec, portRequirements);
     }
 }

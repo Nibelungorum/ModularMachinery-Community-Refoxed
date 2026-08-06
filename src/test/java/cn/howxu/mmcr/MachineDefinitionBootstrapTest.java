@@ -34,4 +34,12 @@ class MachineDefinitionBootstrapTest {
         assertThat(MachineDefinitions.get(MMCR.id("controller_tick"))).isNull();
         assertThat(MachineDefinitions.get(MMCR.id("iron_compressor"))).isNull();
     }
+
+    @Test
+    void builtin_cracker_definition_allows_vertical_controller_placement() {
+        BuiltinMachines.register();
+        MachineDefinitions.bootstrapBuiltins();
+
+        assertThat(MachineDefinitions.get(MMCR.id("cracker")).controller().allowVerticalFacing()).isTrue();
+    }
 }

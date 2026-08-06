@@ -26,4 +26,50 @@ class MachineControllerBlockTest {
         assertThat(MachineControllerBlock.FACING).isEqualTo(BlockStateProperties.FACING);
         assertThat(MachineControllerBlock.FACING.getPossibleValues()).contains(Direction.UP);
     }
+
+    @Test
+    void cracker_controller_definition_allows_vertical_placement() {
+        assertThat(cn.howxu.mmcr.api.machine.MachineDefinitions.get(MMCR.id("cracker")).controller().allowVerticalFacing()).isTrue();
+    }
+
+    @Test
+    void cracker_controller_definition_is_fully_rotationally_symmetric() {
+        assertThat(cn.howxu.mmcr.api.machine.MachineDefinitions.get(MMCR.id("cracker")).controller().fullyRotationallySymmetric()).isTrue();
+    }
+
+    @Test
+    void cracker_controller_definition_requires_vertical_placement() {
+        assertThat(cn.howxu.mmcr.api.machine.MachineDefinitions.get(MMCR.id("cracker")).controller().requireVerticalFacing()).isTrue();
+    }
+
+    @Test
+    void blast_furnace_controller_definition_is_horizontal_only() {
+        assertThat(cn.howxu.mmcr.api.machine.MachineDefinitions.get(MMCR.id("blast_furnace")).controller().allowVerticalFacing()).isFalse();
+    }
+
+    @Test
+    void vertical_allowed_controller_uses_clicked_face_for_placement() {
+        assertThat(MachineControllerBlock.facingForPlacement(Direction.UP, 1.0d, 0, Direction.NORTH, true)).isEqualTo(Direction.NORTH);
+        assertThat(MachineControllerBlock.facingForPlacement(Direction.UP, 1.0d, 1, Direction.NORTH, true)).isEqualTo(Direction.NORTH);
+        assertThat(MachineControllerBlock.facingForPlacement(Direction.UP, 2.0d, 1, Direction.NORTH, true)).isEqualTo(Direction.NORTH);
+        assertThat(MachineControllerBlock.facingForPlacement(Direction.UP, 0.0d, 1, Direction.NORTH, true)).isEqualTo(Direction.UP);
+        assertThat(MachineControllerBlock.facingForPlacement(Direction.DOWN, 4.0d, 1, Direction.NORTH, true)).isEqualTo(Direction.DOWN);
+    }
+
+    @Test
+    void controller_has_separate_roll_facing_property_for_vertical_placement() {
+        assertThat(MachineControllerBlock.ROLL_FACING.getName()).isEqualTo("roll_facing");
+        assertThat(MachineControllerBlock.ROLL_FACING.getPossibleValues()).containsExactlyInAnyOrder(
+                Direction.NORTH,
+                Direction.SOUTH,
+                Direction.WEST,
+                Direction.EAST);
+    }
+
+    @Test
+    void horizontal_only_controller_falls_back_when_clicked_face_is_vertical() {
+        assertThat(MachineControllerBlock.facingForPlacement(Direction.UP, Direction.NORTH, false)).isEqualTo(Direction.NORTH);
+        assertThat(MachineControllerBlock.facingForPlacement(Direction.DOWN, Direction.SOUTH, false)).isEqualTo(Direction.SOUTH);
+        assertThat(MachineControllerBlock.facingForPlacement(Direction.EAST, Direction.NORTH, false)).isEqualTo(Direction.EAST);
+    }
 }

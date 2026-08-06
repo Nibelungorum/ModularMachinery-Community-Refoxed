@@ -77,20 +77,34 @@ class BlockRotatorTest {
     }
 
     @Test
-    void rotateSouthTo_maps_south_axis_to_vertical_faces_with_fixed_roll() {
+    void rotateSouthTo_keeps_vertical_templates_vertical_for_up_and_down_controller() {
         assertThat(BlockRotator.rotateSouthTo(new BlockPos(0, 0, 1), Direction.UP))
-                .isEqualTo(new BlockPos(0, 1, 0));
+                .isEqualTo(new BlockPos(0, 0, 1));
         assertThat(BlockRotator.rotateSouthTo(new BlockPos(0, 1, 0), Direction.UP))
-                .isEqualTo(new BlockPos(0, 0, -1));
+                .isEqualTo(new BlockPos(0, 1, 0));
         assertThat(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.UP))
                 .isEqualTo(new BlockPos(1, 0, 0));
+        assertThat(BlockRotator.rotateSouthTo(new BlockPos(0, -1, 1), Direction.UP))
+                .isEqualTo(new BlockPos(0, -1, 1));
 
         assertThat(BlockRotator.rotateSouthTo(new BlockPos(0, 0, 1), Direction.DOWN))
-                .isEqualTo(new BlockPos(0, -1, 0));
+                .isEqualTo(new BlockPos(0, 0, -1));
         assertThat(BlockRotator.rotateSouthTo(new BlockPos(0, 1, 0), Direction.DOWN))
-                .isEqualTo(new BlockPos(0, 0, 1));
+                .isEqualTo(new BlockPos(0, 1, 0));
         assertThat(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.DOWN))
+                .isEqualTo(new BlockPos(-1, 0, 0));
+    }
+
+    @Test
+    void rotateSouthTo_uses_roll_facing_for_up_controller() {
+        assertThat(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.UP, Direction.SOUTH))
                 .isEqualTo(new BlockPos(1, 0, 0));
+        assertThat(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.UP, Direction.EAST))
+                .isEqualTo(new BlockPos(0, 0, -1));
+        assertThat(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.UP, Direction.NORTH))
+                .isEqualTo(new BlockPos(-1, 0, 0));
+        assertThat(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.UP, Direction.WEST))
+                .isEqualTo(new BlockPos(0, 0, 1));
     }
 
     @Test

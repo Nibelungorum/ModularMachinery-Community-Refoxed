@@ -115,6 +115,7 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
         private final LinkedHashMap<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
         private final Map<Character, BlockPredicate> symbols = new LinkedHashMap<>();
         private List<List<String>> slices = List.of();
+        private char controllerSymbol = 'C';
         private int width = -1;
         private int height = -1;
 
@@ -160,6 +161,14 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
             return this;
         }
 
+        public Builder controller(char symbol) {
+            if (symbol == ' ') {
+                throw new IllegalArgumentException("Controller symbol must not be air");
+            }
+            controllerSymbol = symbol;
+            return this;
+        }
+
         public BlockArray build() {
             entries.clear();
             if (slices.isEmpty()) {
@@ -181,7 +190,7 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
                         BlockPredicate predicate = symbols.get(c);
                         if (predicate == null) continue; // 空格 / 未注册字符 = 空气,跳过
                         BlockPos pos = new BlockPos(x, y, z);
-                        if (c == 'C') controller = pos;
+                        if (c == controllerSymbol) controller = pos;
                         entries.put(pos, predicate);
                     }
                 }

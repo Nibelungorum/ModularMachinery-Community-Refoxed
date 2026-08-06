@@ -6,6 +6,8 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -55,11 +57,43 @@ class DefaultRecipesTest {
     }
 
     @Test
+    void ensureRegistered_publishes_builtin_cracker_coal_lapis_recipe() {
+        DefaultMachines.ensureRegistered();
+        DefaultRecipes.ensureRegistered();
+
+        var machine = (DynamicMachine) MachineRegistry.getMachine(MMCR.id("cracker"));
+
+        assertThat(machine).isNotNull();
+        var recipes = RecipeRegistry.byMachine(machine);
+        assertThat(recipes).extracting(recipe -> recipe.id()).contains(MMCR.id("cracker_coal_lapis"));
+
+        var recipe = RecipeRegistry.getRecipe(MMCR.id("cracker_coal_lapis"));
+        assertThat(recipe.tickTime()).isEqualTo(160);
+        assertThat(recipe.inputs()).hasSize(3);
+        assertThat(recipe.inputs().get(0)).isInstanceOf(MachineIngredient.ItemIngredient.class);
+        assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(0)).item().items().toList().getFirst().value()).isEqualTo(Items.COAL);
+        assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(0)).count()).isEqualTo(8);
+        assertThat(recipe.inputs().get(1)).isInstanceOf(MachineIngredient.ItemIngredient.class);
+        assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(1)).item().items().toList().getFirst().value()).isEqualTo(Items.LAPIS_LAZULI);
+        assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(1)).count()).isEqualTo(1);
+        assertThat(recipe.inputs().get(2)).isInstanceOf(MachineIngredient.EnergyIngredient.class);
+        assertThat(((MachineIngredient.EnergyIngredient) recipe.inputs().get(2)).fePerTick()).isEqualTo(100);
+        assertThat(recipe.outputs()).singleElement().satisfies(stack -> {
+            assertThat(stack.getItem()).isEqualTo(Items.REDSTONE);
+            assertThat(stack.getCount()).isEqualTo(4);
+        });
+        assertThat(recipe.fluidOutputs()).singleElement().satisfies(stack -> {
+            assertThat(stack.getFluid()).isEqualTo(Fluids.WATER);
+            assertThat(stack.getAmount()).isEqualTo(500);
+        });
+    }
+
+    @Test
     void ensureRegistered_is_idempotent() {
         DefaultMachines.ensureRegistered();
         DefaultRecipes.ensureRegistered();
         DefaultRecipes.ensureRegistered();
 
-        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(1);
+        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(2);
     }
 }

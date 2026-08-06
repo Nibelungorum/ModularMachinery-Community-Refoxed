@@ -21,31 +21,49 @@ final class MachineControllerVariants {
     }
 
     static PropertyDispatch<VariantMutator> full() {
-        PropertyDispatch.C3<VariantMutator, Direction, Boolean, Boolean> dispatch =
+        PropertyDispatch.C4<VariantMutator, Direction, Direction, Boolean, Boolean> dispatch =
                 PropertyDispatch.modify(
                         MachineControllerBlock.FACING,
+                        MachineControllerBlock.ROLL_FACING,
                         MachineControllerBlock.FORMED,
                         MachineControllerBlock.ACTIVE);
 
         for (Direction facing : Direction.values()) {
-            VariantMutator rotation = rotationFor(facing);
-            for (boolean formed : BOOLEANS) {
-                for (boolean active : BOOLEANS) {
-                    dispatch.select(facing, formed, active, rotation);
+            for (Direction rollFacing : Direction.Plane.HORIZONTAL) {
+                VariantMutator rotation = rotationFor(facing, rollFacing);
+                for (boolean formed : BOOLEANS) {
+                    for (boolean active : BOOLEANS) {
+                        dispatch.select(facing, rollFacing, formed, active, rotation);
+                    }
                 }
             }
         }
         return dispatch;
     }
 
-    private static VariantMutator rotationFor(Direction facing) {
+    static int propertyCount() {
+        return 4;
+    }
+
+    static VariantMutator rotationFor(Direction facing, Direction rollFacing) {
         return switch (facing) {
             case NORTH -> v -> v;
             case EAST -> VariantMutator.Y_ROT.withValue(Quadrant.R90);
             case SOUTH -> VariantMutator.Y_ROT.withValue(Quadrant.R180);
             case WEST -> VariantMutator.Y_ROT.withValue(Quadrant.R270);
-            case UP -> VariantMutator.X_ROT.withValue(Quadrant.R270);
-            case DOWN -> VariantMutator.X_ROT.withValue(Quadrant.R90);
+            case UP -> verticalRotation(Quadrant.R270, rollFacing);
+            case DOWN -> verticalRotation(Quadrant.R90, rollFacing);
         };
+    }
+
+    private static VariantMutator verticalRotation(Quadrant xRotation, Direction rollFacing) {
+        VariantMutator yRotation = switch (rollFacing) {
+            case NORTH -> v -> v;
+            case EAST -> VariantMutator.Y_ROT.withValue(Quadrant.R90);
+            case SOUTH -> VariantMutator.Y_ROT.withValue(Quadrant.R180);
+            case WEST -> VariantMutator.Y_ROT.withValue(Quadrant.R270);
+            default -> throw new IllegalArgumentException("rollFacing must be horizontal: " + rollFacing);
+        };
+        return v -> yRotation.apply(VariantMutator.X_ROT.withValue(xRotation).apply(v));
     }
 }

@@ -35,16 +35,29 @@ public final class BlockRotator {
     public static BlockPos rotateSouthTo(BlockPos pos, Direction target) {
         return switch (target) {
             case NORTH, SOUTH, EAST, WEST -> rotateYCCWSouthUntil(pos, target);
-            case UP -> new BlockPos(pos.getX(), pos.getZ(), -pos.getY());
-            case DOWN -> new BlockPos(pos.getX(), -pos.getZ(), pos.getY());
+            case UP -> pos;
+            case DOWN -> new BlockPos(-pos.getX(), pos.getY(), -pos.getZ());
         };
+    }
+
+    public static BlockPos rotateSouthTo(BlockPos pos, Direction target, Direction rollFacing) {
+        BlockPos rotated = rotateSouthTo(pos, target);
+        if (!target.getAxis().isVertical()) return rotated;
+
+        Direction current = Direction.SOUTH;
+        BlockPos rolled = rotated;
+        while (current != rollFacing) {
+            current = current.getCounterClockWise();
+            rolled = rotateYCCW(rolled);
+        }
+        return rolled;
     }
 
     public static BlockPos normalizeFromFace(BlockPos offset, Direction sourceFace) {
         return switch (sourceFace) {
             case NORTH, SOUTH, EAST, WEST -> normalizeHorizontal(offset, sourceFace);
-            case UP -> new BlockPos(offset.getX(), -offset.getZ(), offset.getY());
-            case DOWN -> new BlockPos(offset.getX(), offset.getZ(), -offset.getY());
+            case UP -> offset;
+            case DOWN -> new BlockPos(-offset.getX(), offset.getY(), -offset.getZ());
         };
     }
 

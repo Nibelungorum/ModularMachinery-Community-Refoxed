@@ -84,7 +84,8 @@ class MultiblockExportServiceTest {
         ), Direction.UP);
 
         assertThat(java).contains("BlockArray pattern = BlockArray.builder()");
-        assertThat(java).contains(".pattern(\"CX\", \"X \")");
+        assertThat(java).contains(".pattern(\"CX\")");
+        assertThat(java).contains(".pattern(\"X \")");
         assertThat(java).contains(".set('C', new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"mmcr:blast_furnace_controller\"))))");
         assertThat(java).contains(".set('X', new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"mmcr:basic_casing\"))))");
     }

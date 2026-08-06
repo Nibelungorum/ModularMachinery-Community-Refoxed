@@ -9,7 +9,30 @@ public record MachineControllerSpec(
         Identifier sideTexture,
         Identifier topTexture,
         Identifier bottomTexture,
-        boolean allowVerticalFacing) {
+        boolean allowVerticalFacing,
+        boolean fullyRotationallySymmetric,
+        boolean requireVerticalFacing) {
+
+    public MachineControllerSpec(
+            Identifier id,
+            Identifier frontTexture,
+            Identifier sideTexture,
+            Identifier topTexture,
+            Identifier bottomTexture,
+            boolean allowVerticalFacing) {
+        this(id, frontTexture, sideTexture, topTexture, bottomTexture, allowVerticalFacing, false, false);
+    }
+
+    public MachineControllerSpec(
+            Identifier id,
+            Identifier frontTexture,
+            Identifier sideTexture,
+            Identifier topTexture,
+            Identifier bottomTexture,
+            boolean allowVerticalFacing,
+            boolean fullyRotationallySymmetric) {
+        this(id, frontTexture, sideTexture, topTexture, bottomTexture, allowVerticalFacing, fullyRotationallySymmetric, false);
+    }
 
     public MachineControllerSpec {
         if (id == null) throw new IllegalArgumentException("id null");
@@ -31,6 +54,8 @@ public record MachineControllerSpec(
                 basicCasing,
                 basicCasing,
                 basicCasing,
+                false,
+                false,
                 false);
     }
 }

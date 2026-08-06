@@ -40,6 +40,8 @@ public class ControllerTickGameTest {
     }
 
     public void scansRegisteredMachineWhenDefaultBindingIsEmpty(GameTestHelper helper) {
+        MachineRegistry.clearForTesting();
+
         for (int x = 0; x < 3; x++) for (int z = 0; z < 3; z++)
             helper.setBlock(new BlockPos(x, 1, z), ModBlocks.CASING.get().defaultBlockState());
         helper.setBlock(new BlockPos(0, 1, 0), Blocks.COBBLESTONE.defaultBlockState());

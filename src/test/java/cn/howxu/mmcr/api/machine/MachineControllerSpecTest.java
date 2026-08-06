@@ -20,6 +20,8 @@ class MachineControllerSpecTest {
         assertThat(spec.topTexture()).isEqualTo(MMCR.id("block/basic_casing"));
         assertThat(spec.bottomTexture()).isEqualTo(MMCR.id("block/basic_casing"));
         assertThat(spec.allowVerticalFacing()).isFalse();
+        assertThat(spec.fullyRotationallySymmetric()).isFalse();
+        assertThat(spec.requireVerticalFacing()).isFalse();
     }
 
     @Test
@@ -49,5 +51,28 @@ class MachineControllerSpecTest {
         MachineControllerSpec spec = new MachineControllerSpec(id, texture, texture, texture, texture, true);
 
         assertThat(spec.allowVerticalFacing()).isTrue();
+        assertThat(spec.fullyRotationallySymmetric()).isFalse();
+    }
+
+    @Test
+    void spec_can_opt_into_full_rotational_symmetry() {
+        Identifier id = MMCR.id("cracker_controller");
+        Identifier texture = MMCR.id("block/basic_controller");
+
+        MachineControllerSpec spec = new MachineControllerSpec(id, texture, texture, texture, texture, true, true);
+
+        assertThat(spec.allowVerticalFacing()).isTrue();
+        assertThat(spec.fullyRotationallySymmetric()).isTrue();
+        assertThat(spec.requireVerticalFacing()).isFalse();
+    }
+
+    @Test
+    void spec_can_require_vertical_facing() {
+        Identifier id = MMCR.id("cracker_controller");
+        Identifier texture = MMCR.id("block/basic_controller");
+
+        MachineControllerSpec spec = new MachineControllerSpec(id, texture, texture, texture, texture, true, true, true);
+
+        assertThat(spec.requireVerticalFacing()).isTrue();
     }
 }

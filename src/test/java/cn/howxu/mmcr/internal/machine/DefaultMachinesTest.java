@@ -70,6 +70,58 @@ class DefaultMachinesTest {
     }
 
     @Test
+    void ensureRegistered_registers_default_cracker_once() {
+        DefaultMachines.ensureRegistered();
+        DefaultMachines.ensureRegistered();
+
+        var machine = MachineRegistry.getMachine(MMCR.id("cracker"));
+
+        assertThat(machine).isNotNull();
+        assertThat(machine.localizedName()).isEqualTo("裂化器");
+        assertThat(machine.controller().id()).isEqualTo(MMCR.id("cracker_controller"));
+        assertThat(machine.controller().allowVerticalFacing()).isTrue();
+        assertThat(machine.portRequirements().requirements())
+                .containsKeys(PortKinds.ITEM_INPUT.id(), PortKinds.ITEM_OUTPUT.id(), PortKinds.FLUID_OUTPUT.id(), PortKinds.ENERGY_INPUT.id());
+        assertThat(machine.portRequirements().requirements().get(PortKinds.ITEM_INPUT.id()).min()).isEqualTo(1);
+        assertThat(machine.portRequirements().requirements().get(PortKinds.ITEM_OUTPUT.id()).min()).isEqualTo(1);
+        assertThat(machine.portRequirements().requirements().get(PortKinds.FLUID_OUTPUT.id()).min()).isEqualTo(1);
+        assertThat(machine.portRequirements().requirements().get(PortKinds.ENERGY_INPUT.id()).min()).isEqualTo(1);
+        assertThat(machine.pattern().get(BlockPos.ZERO))
+                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine).get()));
+        assertThat(machine.pattern().get(new BlockPos(0, -2, 0))).isNull();
+        assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(crackerPortPredicateState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(net.minecraft.world.level.block.Blocks.WEATHERED_COPPER.defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(0, -3, -1)).matches(net.minecraft.world.level.block.Blocks.POLISHED_ANDESITE.defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(1, 0, 0)).matches(net.minecraft.world.level.block.Blocks.BLUE_ICE.defaultBlockState())).isTrue();
+    }
+
+    @Test
+    void default_cracker_only_matches_when_controller_faces_vertically() {
+        Machine machine = DefaultMachines.cracker(
+                ModBlocks.BLOCKS.get("item_input_bus").get(),
+                ModBlocks.BLOCKS.get("item_output_bus").get(),
+                ModBlocks.BLOCKS.get("fluid_output_hatch").get(),
+                ModBlocks.BLOCKS.get("energy_input_hatch").get());
+        BlockPos controller = new BlockPos(10, 4, 10);
+        Map<BlockPos, Block> blocks = new HashMap<>();
+        for (var entry : machine.pattern().pattern().entrySet()) {
+            blocks.put(controller.offset(cn.howxu.mmcr.api.machine.BlockRotator.rotateSouthTo(entry.getKey(), Direction.UP)), switch (entry.getValue()) {
+                case BlockPredicate.OfBlock of -> of.block();
+                case BlockPredicate.AnyOf ignored -> ModBlocks.BLOCKS.get("item_input_bus").get();
+                default -> ModBlocks.CASING.get();
+            });
+        }
+
+        assertThat(StructureMatcher.matches(machine.pattern(), LevelStub.create(blocks), controller, Direction.UP))
+                .isTrue();
+        assertThat(machine.controller().requireVerticalFacing()).isTrue();
+    }
+
+    @Test
     void default_blast_furnace_raw_pattern_faces_south() {
         Machine machine = DefaultMachines.blastFurnace(
                 ModBlocks.CASING.get(),
@@ -105,5 +157,9 @@ class DefaultMachinesTest {
                 new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("fluid_output_hatch").get()),
                 new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("energy_input_hatch").get()),
                 new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("energy_output_hatch").get())));
+    }
+
+    private static net.minecraft.world.level.block.state.BlockState crackerPortPredicateState() {
+        return ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState();
     }
 }

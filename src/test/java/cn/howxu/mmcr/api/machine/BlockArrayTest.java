@@ -109,6 +109,27 @@ class BlockArrayTest {
         assertThat(arr.get(new BlockPos(0, 0, -1))).isNull();
     }
 
+    @Test void builder_allows_explicit_controller_symbol() {
+        var casing = new BlockPredicate.OfBlock(Blocks.STONE);
+        var controller = new BlockPredicate.OfBlock(Blocks.DIRT);
+
+        var arr = BlockArray.builder()
+                .pattern("AAA", "XBX", "XBX", "XDX")
+                .pattern("AAA", "B B", "B B", "DED")
+                .pattern("AAA", "XBX", "XBX", "XDX")
+                .set('A', casing)
+                .set('B', casing)
+                .set('D', casing)
+                .set('E', controller)
+                .controller('E')
+                .build();
+
+        assertThat(arr.get(BlockPos.ZERO)).isEqualTo(controller);
+        assertThat(arr.get(new BlockPos(0, 0, 0))).isEqualTo(controller);
+        assertThat(arr.get(new BlockPos(0, -3, -1))).isEqualTo(casing);
+        assertThat(arr.get(new BlockPos(0, -2, 0))).isNull();
+    }
+
     @Test void builder_rejects_pattern_slices_with_inconsistent_row_widths() {
         assertThatThrownBy(() -> BlockArray.builder()
                 .pattern("XX", "XXX"))

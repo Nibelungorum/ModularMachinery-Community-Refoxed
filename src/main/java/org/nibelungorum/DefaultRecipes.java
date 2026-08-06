@@ -10,6 +10,9 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.material.Fluid;
+import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,29 +29,63 @@ public final class DefaultRecipes {
 
     private static final Identifier BLAST_FURNACE_ID = MMCR.id("blast_furnace");
     private static final Identifier BLAST_FURNACE_IRON_NUGGET_ID = MMCR.id("blast_furnace_iron_to_nugget");
+    private static final Identifier CRACKER_ID = MMCR.id("cracker");
+    private static final Identifier CRACKER_COAL_LAPIS_ID = MMCR.id("cracker_coal_lapis");
 
     private DefaultRecipes() {
     }
 
     public static void ensureRegistered() {
-        if (RecipeRegistry.getRecipe(BLAST_FURNACE_IRON_NUGGET_ID) != null) {
+        if (RecipeRegistry.getRecipe(BLAST_FURNACE_IRON_NUGGET_ID) == null) {
+            MachineRecipe recipe = new MachineRecipe(
+                    BLAST_FURNACE_IRON_NUGGET_ID,
+                    BLAST_FURNACE_ID,
+                    200,
+                    List.of(
+                            new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1),
+                            new MachineIngredient.EnergyIngredient(1)
+                    ),
+                    List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)),
+                    List.of(),
+                    0,
+                    1,
+                    true
+            );
+            register(recipe);
+        } else {
             LOG.info("ensureRegistered: built-in recipe {} already registered; skipping", BLAST_FURNACE_IRON_NUGGET_ID);
-            return;
         }
-        MachineRecipe recipe = new MachineRecipe(
-                BLAST_FURNACE_IRON_NUGGET_ID,
-                BLAST_FURNACE_ID,
-                200,
-                List.of(
-                        new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1),
-                        new MachineIngredient.EnergyIngredient(1)
-                ),
-                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)),
-                List.of(),
-                0,
-                1,
-                true
-        );
+
+        if (RecipeRegistry.getRecipe(CRACKER_COAL_LAPIS_ID) == null) {
+            MachineRecipe recipe = new MachineRecipe(
+                    CRACKER_COAL_LAPIS_ID,
+                    CRACKER_ID,
+                    160,
+                    List.of(
+                            new MachineIngredient.ItemIngredient(Ingredient.of(Items.COAL), 8),
+                            new MachineIngredient.ItemIngredient(Ingredient.of(Items.LAPIS_LAZULI), 1),
+                            new MachineIngredient.EnergyIngredient(100)
+                    ),
+                    List.of(new ItemStack(Holder.direct(Items.REDSTONE, DataComponentMap.EMPTY), 4)),
+                    List.of(),
+                    0,
+                    1,
+                    true,
+                    List.of(new FluidStack(boundFluid(Fluids.WATER), 500))
+            );
+            register(recipe);
+        } else {
+            LOG.info("ensureRegistered: built-in recipe {} already registered; skipping", CRACKER_COAL_LAPIS_ID);
+        }
+    }
+
+    private static Holder<Fluid> boundFluid(Fluid fluid) {
+        var holder = fluid.builtInRegistryHolder();
+        holder.bindComponents(DataComponentMap.EMPTY);
+        return holder;
+    }
+
+    private static void register(MachineRecipe recipe) {
         RecipeRegistry.register(recipe);
         int totalEnergy = recipe.inputs().stream()
                 .filter(i -> i instanceof MachineIngredient.EnergyIngredient)

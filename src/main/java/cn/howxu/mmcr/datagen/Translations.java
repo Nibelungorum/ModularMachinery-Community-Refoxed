@@ -9,6 +9,7 @@ public final class Translations {
             Map.entry("en_us", Map.ofEntries(
                     Map.entry("itemGroup.mmcr",                    "Modular Machinery Community"),
                     Map.entry("block.mmcr.blast_furnace_controller", "Blast Furnace Controller"),
+                    Map.entry("block.mmcr.cracker_controller",       "Cracker Controller"),
                     Map.entry("block.mmcr.basic_casing",            "Basic Machine Casing"),
                     Map.entry("block.mmcr.item_input_bus",         "Item Input Bus"),
                     Map.entry("block.mmcr.item_output_bus",        "Item Output Bus"),
@@ -20,6 +21,7 @@ public final class Translations {
                     Map.entry("block.mmcr.debug_infinite_water_source",  "Debug Infinite Water Source"),
                     Map.entry("block.mmcr.debug_infinite_lava_source",   "Debug Infinite Lava Source"),
                     Map.entry("item.mmcr.blast_furnace_controller",  "Blast Furnace Controller"),
+                    Map.entry("item.mmcr.cracker_controller",        "Cracker Controller"),
                     Map.entry("item.mmcr.basic_casing",             "Basic Machine Casing"),
                     Map.entry("item.mmcr.item_input_bus",          "Item Input Bus"),
                     Map.entry("item.mmcr.item_output_bus",         "Item Output Bus"),
@@ -75,6 +77,7 @@ public final class Translations {
             Map.entry("zh_cn", Map.ofEntries(
                     Map.entry("itemGroup.mmcr",                    "模块化机械社区版"),
                     Map.entry("block.mmcr.blast_furnace_controller", "高炉控制器"),
+                    Map.entry("block.mmcr.cracker_controller",       "裂化器控制器"),
                     Map.entry("block.mmcr.basic_casing",            "基础机器外壳"),
                     Map.entry("block.mmcr.item_input_bus",         "物品输入总线"),
                     Map.entry("block.mmcr.item_output_bus",        "物品输出总线"),
@@ -86,6 +89,7 @@ public final class Translations {
                     Map.entry("block.mmcr.debug_infinite_water_source",  "调试-无限水源头"),
                     Map.entry("block.mmcr.debug_infinite_lava_source",   "调试-无限岩浆源"),
                     Map.entry("item.mmcr.blast_furnace_controller",  "高炉控制器"),
+                    Map.entry("item.mmcr.cracker_controller",        "裂化器控制器"),
                     Map.entry("item.mmcr.basic_casing",             "基础机器外壳"),
                     Map.entry("item.mmcr.item_input_bus",          "物品输入总线"),
                     Map.entry("item.mmcr.item_output_bus",         "物品输出总线"),
