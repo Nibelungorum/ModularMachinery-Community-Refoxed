@@ -246,6 +246,34 @@ class MachineRecipeTest {
         assertThat(encoded.getAsJsonArray("requirements").get(1).getAsJsonObject().get("chance").getAsFloat()).isEqualTo(0.75F);
     }
 
+    @Test
+    void codec_preserves_raw_values_when_runtime_modifiers_change_derived_values() {
+        bindItemComponents(Items.IRON_NUGGET);
+        var recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "raw_preserved"),
+                Identifier.fromNamespaceAndPath("mmcr", "machine"),
+                100,
+                List.of(new MachineIngredient.ItemIngredient(net.minecraft.world.item.crafting.Ingredient.of(Items.IRON_INGOT), 2)),
+                List.of(Items.IRON_NUGGET.getDefaultInstance().copyWithCount(1)),
+                List.of(
+                        new RecipeModifier(IntegrationTypeHelper.TARGET_DURATION, RecipeModifier.IOType.INPUT, 0.5F, RecipeModifier.Operation.MULTIPLY, false),
+                        new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.INPUT, 3F, RecipeModifier.Operation.MULTIPLY, false),
+                        new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.OUTPUT, 4F, RecipeModifier.Operation.MULTIPLY, false)
+                ),
+                0,
+                1
+        );
+
+        var encoded = MachineRecipe.CODEC.codec().encodeStart(jsonOps(), recipe).getOrThrow().getAsJsonObject();
+        var back = MachineRecipe.CODEC.codec().parse(jsonOps(), encoded).getOrThrow();
+
+        assertThat(encoded.get("tick_time").getAsInt()).isEqualTo(100);
+        assertThat(back.inputs().getFirst()).isEqualTo(recipe.inputs().getFirst());
+        assertThat(back.outputs().getFirst().getCount()).isEqualTo(1);
+        assertThat(((cn.howxu.mmcr.api.recipe.requirement.ItemRequirement) back.runtimeRequirements().get(0)).count()).isEqualTo(6);
+        assertThat(((cn.howxu.mmcr.api.recipe.requirement.ItemRequirement) back.runtimeRequirements().get(1)).stack().getCount()).isEqualTo(4);
+    }
+
     private static Holder<Fluid> bindFluidComponents(Fluid fluid) {
         var holder = fluid.builtInRegistryHolder();
         holder.bindComponents(DataComponentMap.EMPTY);

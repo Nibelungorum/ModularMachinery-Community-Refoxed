@@ -205,6 +205,25 @@ class RecipeApiSmokeTest {
     }
 
     @Test
+    void active_recipe_uses_derived_duration_but_recipe_tick_time_stays_raw() {
+        var recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "duration_runtime"),
+                Identifier.fromNamespaceAndPath("mmcr", "duration_machine"),
+                100,
+                List.of(),
+                List.of(),
+                List.of(new RecipeModifier(IntegrationTypeHelper.TARGET_DURATION, RecipeModifier.IOType.INPUT, 0.5F, RecipeModifier.Operation.MULTIPLY, false)),
+                0,
+                1
+        );
+
+        var active = new ActiveMachineRecipe(recipe);
+
+        assertThat(active.getTotalTick()).isEqualTo(50);
+        assertThat(recipe.getRecipeTotalTickTime()).isEqualTo(100);
+    }
+
+    @Test
     void runtime_requirements_apply_all_supported_modifier_targets() {
         bindFluidComponents(Fluids.WATER);
         bindItemComponents(Items.IRON_NUGGET);
