@@ -24,25 +24,32 @@ public record MachineRecipeLayout(
     public static final int WIDTH = 150;
     public static final int HEIGHT = 78;
 
+    private static final int ITEM_INPUTS_PER_ROW = 4;
+    private static final int ITEM_OUTPUTS_PER_ROW = 1;
+    private static final int FLUID_PER_ROW = 1;
+    private static final int ENERGY_PER_ROW = 1;
+
     public static MachineRecipeLayout forDisplay(MachineRecipeDisplay display) {
         return new MachineRecipeLayout(
                 WIDTH,
                 HEIGHT,
-                line(display.itemInputs().size(), Kind.ITEM, Role.INPUT, 8, 18),
-                line(display.itemOutputs().size(), Kind.ITEM, Role.OUTPUT, 124, 18),
-                line(display.fluidInputs().size(), Kind.FLUID, Role.INPUT, 32, 18),
-                line(display.fluidOutputs().size(), Kind.FLUID, Role.OUTPUT, 100, 18),
-                line(display.energyInputs().size(), Kind.ENERGY, Role.INPUT, 56, 18),
-                line(display.energyOutputs().size(), Kind.ENERGY, Role.OUTPUT, 78, 18),
+                grid(display.itemInputs().size(), Kind.ITEM, Role.INPUT, 8, 18, ITEM_INPUTS_PER_ROW),
+                grid(display.itemOutputs().size(), Kind.ITEM, Role.OUTPUT, 124, 18, ITEM_OUTPUTS_PER_ROW),
+                grid(display.fluidInputs().size(), Kind.FLUID, Role.INPUT, 82, 18, FLUID_PER_ROW),
+                grid(display.fluidOutputs().size(), Kind.FLUID, Role.OUTPUT, 102, 18, FLUID_PER_ROW),
+                grid(display.energyInputs().size(), Kind.ENERGY, Role.INPUT, 56, 18, ENERGY_PER_ROW),
+                grid(display.energyOutputs().size(), Kind.ENERGY, Role.OUTPUT, 78, 18, ENERGY_PER_ROW),
                 8,
                 60
         );
     }
 
-    private static List<SlotPlan> line(int count, Kind kind, Role role, int x, int y) {
+    private static List<SlotPlan> grid(int count, Kind kind, Role role, int x, int y, int maxPerRow) {
         List<SlotPlan> slots = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            slots.add(new SlotPlan(kind, role, i, x, y + i * 18));
+            int row = i / maxPerRow;
+            int col = i % maxPerRow;
+            slots.add(new SlotPlan(kind, role, i, x + col * 18, y + row * 18));
         }
         return List.copyOf(slots);
     }

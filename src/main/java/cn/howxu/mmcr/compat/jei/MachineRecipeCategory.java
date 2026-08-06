@@ -5,7 +5,6 @@ import mezz.jei.api.gui.drawable.IDrawable;
 import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
 import mezz.jei.api.helpers.IGuiHelper;
 import mezz.jei.api.recipe.IFocusGroup;
-import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.api.recipe.types.IRecipeType;
 import net.minecraft.client.Minecraft;
@@ -63,8 +62,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             builder.addInputSlot(slot.x(), slot.y())
                     .setStandardSlotBackground()
                     .add(recipe.itemInputs().get(slot.index()));
-            builder.addInvisibleIngredients(RecipeIngredientRole.INPUT)
-                    .add(recipe.itemInputs().get(slot.index()));
         }
         for (MachineRecipeLayout.SlotPlan slot : layout.itemOutputs()) {
             builder.addOutputSlot(slot.x(), slot.y())
@@ -82,7 +79,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         for (MachineRecipeLayout.SlotPlan slot : layout.fluidOutputs()) {
             var stack = recipe.fluidOutputs().get(slot.index());
             builder.addOutputSlot(slot.x(), slot.y())
-                    .setStandardSlotBackground()
+                    .setOutputSlotBackground()
                     .setFluidRenderer(Math.max(FLUID_SLOT_CAPACITY, stack.getAmount()), true, 16, 16)
                     .add(stack.getFluid(), stack.getAmount(), stack.getComponentsPatch());
         }
