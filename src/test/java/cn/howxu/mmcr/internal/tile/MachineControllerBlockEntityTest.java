@@ -398,7 +398,50 @@ class MachineControllerBlockEntityTest {
         tickUntilFormed(controller, machine);
 
         assertThat(controller.getFoundModifiers()).containsKey("speed");
+        assertThat(controller.getFoundModifiers().get("speed"))
+                .extracting(RecipeModifier::getModifier)
+                .containsExactly(2F);
         breakStructureBlock(controller);
+
+        assertThat(controller.getFoundModifiers()).isEmpty();
+    }
+
+    @Test
+    void cached_formed_recheck_refreshes_matching_replacement_modifiers() throws Exception {
+        var first = replacementAt(new BlockPos(1, 0, 0), Blocks.GOLD_BLOCK, "speed", 2F);
+        var second = replacementAt(new BlockPos(1, 0, 0), Blocks.DIAMOND_BLOCK, "speed", 4F);
+        var machine = machineWithReplacements(first, second);
+        MachineDefinitions.register(machine);
+
+        MachineControllerBlockEntity controller = controllerFor(machine);
+        Level level = levelOf(controller);
+        BlockPos replacementPos = controller.getBlockPos().offset(1, 0, 0);
+        placeControllerAndReplacement(controller, machine, Blocks.GOLD_BLOCK, Blocks.GOLD_BLOCK);
+        level.setBlock(replacementPos, Blocks.GOLD_BLOCK.defaultBlockState(), 3);
+        tickUntilFormed(controller, machine);
+        level.setBlock(replacementPos, Blocks.DIAMOND_BLOCK.defaultBlockState(), 3);
+
+        invokeCheckStructure(controller);
+
+        assertThat(controller.isFormed()).isTrue();
+        assertThat(controller.getFoundModifiers().get("speed"))
+                .extracting(RecipeModifier::getModifier)
+                .containsExactly(4F);
+    }
+
+    @Test
+    void set_machine_clears_matched_modifier_snapshot() throws Exception {
+        var replacement = replacementAt(new BlockPos(1, 0, 0), Blocks.GOLD_BLOCK, "speed", 2F);
+        var machine = machineWithReplacements(replacement);
+        var other = new DynamicMachine(MMCR.id("replacement_target_machine"), "Replacement Target", onePortPattern(Blocks.IRON_BLOCK));
+        MachineDefinitions.register(machine);
+
+        MachineControllerBlockEntity controller = controllerFor(machine);
+        placeControllerAndReplacement(controller, machine, Blocks.GOLD_BLOCK);
+        tickUntilFormed(controller, machine);
+        assertThat(controller.getFoundModifiers()).containsKey("speed");
+
+        controller.setMachine(other);
 
         assertThat(controller.getFoundModifiers()).isEmpty();
     }
@@ -685,7 +728,9 @@ class MachineControllerBlockEntityTest {
             Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
             unsafeField.setAccessible(true);
             sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
-            return (MachineControllerBlockEntity) unsafe.allocateInstance(MachineControllerBlockEntity.class);
+            MachineControllerBlockEntity controller = (MachineControllerBlockEntity) unsafe.allocateInstance(MachineControllerBlockEntity.class);
+            initializeComponents(controller);
+            return controller;
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate MachineControllerBlockEntity for binding test", e);
         }
@@ -876,7 +921,7 @@ class MachineControllerBlockEntityTest {
         Level level = levelOf(controller);
         BlockPos controllerPos = controller.getBlockPos();
         Map<BlockPos, Block> blocks = new LinkedHashMap<>();
-        blocks.put(controllerPos, controller.getBlockState().getBlock());
+        level.setBlock(controllerPos, controller.getBlockState(), 3);
         for (var entry : machine.pattern().pattern().entrySet()) {
             if (entry.getKey().equals(BlockPos.ZERO)) continue;
             if (entry.getValue() instanceof BlockPredicate.OfBlock of) {
@@ -1023,6 +1068,12 @@ class MachineControllerBlockEntityTest {
 
     private static void invokeResetMachine(MachineControllerBlockEntity controller) throws Exception {
         Method method = MachineControllerBlockEntity.class.getDeclaredMethod("resetMachine");
+        method.setAccessible(true);
+        method.invoke(controller);
+    }
+
+    private static void invokeCheckStructure(MachineControllerBlockEntity controller) throws Exception {
+        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("checkStructure");
         method.setAccessible(true);
         method.invoke(controller);
     }

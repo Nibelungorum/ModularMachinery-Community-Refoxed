@@ -69,7 +69,7 @@ public record DynamicMachine(
                     .toList();
             rotated.put(rotatedPos, replacements);
         }
-        return Map.copyOf(rotated);
+        return java.util.Collections.unmodifiableMap(rotated);
     }
 
     private static Map<BlockPos, List<SingleBlockModifierReplacement>> copyModifierReplacements(
@@ -88,7 +88,7 @@ public record DynamicMachine(
                     .map(replacement -> validateReplacement(pos, replacement))
                     .toList()));
         }
-        return Map.copyOf(copy);
+        return java.util.Collections.unmodifiableMap(copy);
     }
 
     private static SingleBlockModifierReplacement validateReplacement(

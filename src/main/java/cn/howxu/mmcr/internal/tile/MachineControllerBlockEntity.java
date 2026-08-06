@@ -104,6 +104,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public Machine getMachine() { return machine; }
     public void setMachine(Machine m) {
         Identifier before = this.machine == null ? null : this.machine.registryName();
+        foundModifiers.clear();
         this.machine = m;
         LOG.info("[Ctrl#{}] setMachine: {} → {} at pos={}", instanceId, before, m == null ? null : m.registryName(), getBlockPos());
         setChanged();
@@ -287,10 +288,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 return;
             }
             var replacements = replacementsFor(foundMachine, foundCompiledPattern, facing, foundPattern);
-            boolean stillMatches = foundCompiledPattern == null
+            boolean stillMatches = foundCompiledPattern == null || !replacements.isEmpty()
                     ? StructureMatcher.matchesRotated(foundPattern, level, getBlockPos(), replacements)
                     : StructureMatcher.matchesCompiled(foundCompiledPattern, facing, getBlockState().getValue(MachineControllerBlock.ROLL_FACING), level, getBlockPos());
             if (stillMatches) {
+                collectFoundModifiers(replacements);
                 resumePausedRecipeAfterStructureCheck();
                 var failure = foundMachine.portRequirements().validate(countPorts(foundPattern, foundCompiledPattern, facing));
                 if (failure.isPresent()) {
