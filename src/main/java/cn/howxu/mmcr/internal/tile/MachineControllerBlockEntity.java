@@ -105,7 +105,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public Machine getMachine() { return machine; }
     public void setMachine(Machine m) {
         Identifier before = this.machine == null ? null : this.machine.registryName();
-        foundModifiers.clear();
+        clearFoundModifiers();
         this.machine = m;
         LOG.info("[Ctrl#{}] setMachine: {} → {} at pos={}", instanceId, before, m == null ? null : m.registryName(), getBlockPos());
         setChanged();
@@ -116,7 +116,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public Map<String, List<RecipeModifier>> getFoundModifiers() {
         if (foundModifiers == null) return Map.of();
-        return Map.copyOf(foundModifiers);
+        Map<String, List<RecipeModifier>> snapshot = new LinkedHashMap<>();
+        for (var entry : foundModifiers.entrySet()) {
+            snapshot.put(entry.getKey(), List.copyOf(entry.getValue()));
+        }
+        return Map.copyOf(snapshot);
     }
 
     public List<RecipeModifier> foundModifierList() {
@@ -515,6 +519,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
             }
         }
         if (!before.equals(foundModifierList())) modifierSnapshotVersion++;
+    }
+
+    private void clearFoundModifiers() {
+        if (foundModifiers.isEmpty()) return;
+        foundModifiers.clear();
+        modifierSnapshotVersion++;
     }
 
     private void updateComponents() {

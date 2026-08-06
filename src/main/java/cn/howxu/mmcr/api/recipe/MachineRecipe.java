@@ -223,6 +223,10 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         return runtimeRequirements(List.of());
     }
 
+    /**
+     * Returns derived requirements after applying this recipe's own modifiers and the supplied extra modifiers.
+     * The argument must contain only structure/runtime modifiers; recipe-local modifiers are added here.
+     */
     public List<MachineRequirement> runtimeRequirements(List<RecipeModifier> extraModifiers) {
         List<RecipeModifier> effective = combineModifiers(extraModifiers);
         if (effective.isEmpty()) return requirements;
@@ -237,6 +241,10 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         return runtimeMachineOutputs(List.of());
     }
 
+    /**
+     * Returns derived outputs after applying this recipe's own modifiers and the supplied extra modifiers.
+     * The argument must contain only structure/runtime modifiers; recipe-local modifiers are added here.
+     */
     public List<MachineOutput> runtimeMachineOutputs(List<RecipeModifier> extraModifiers) {
         List<RecipeModifier> effective = combineModifiers(extraModifiers);
         if (effective.isEmpty()) return machineOutputs();
