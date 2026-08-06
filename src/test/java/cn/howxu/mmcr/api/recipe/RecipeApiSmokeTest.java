@@ -145,6 +145,31 @@ class RecipeApiSmokeTest {
     }
 
     @Test
+    void recipe_modifier_applies_add_subtract_before_multiply_divide() {
+        var mods = List.of(
+                new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 4F, RecipeModifier.Operation.ADD, false),
+                new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 3F, RecipeModifier.Operation.SUBTRACT, false),
+                new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 6F, RecipeModifier.Operation.MULTIPLY, false),
+                new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 2F, RecipeModifier.Operation.DIVIDE, false)
+        );
+
+        float result = RecipeModifier.applyModifiers(mods, "item", RecipeModifier.IOType.OUTPUT, 10F, false);
+
+        assertThat(result).isEqualTo(((10F + 4F - 3F) * 6F) / 2F);
+    }
+
+    @Test
+    void recipe_modifier_ignores_zero_divide_modifier() {
+        var mods = List.of(
+                new RecipeModifier("duration", RecipeModifier.IOType.INPUT, 0F, RecipeModifier.Operation.DIVIDE, false)
+        );
+
+        float result = RecipeModifier.applyModifiers(mods, "duration", RecipeModifier.IOType.INPUT, 80F, false);
+
+        assertThat(result).isEqualTo(80F);
+    }
+
+    @Test
     void recipe_modifier_filters_by_target_and_io() {
         var mods = List.of(
                 new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 5F, RecipeModifier.Operation.ADD, false),

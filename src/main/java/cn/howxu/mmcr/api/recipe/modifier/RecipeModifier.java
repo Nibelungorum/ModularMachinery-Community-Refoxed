@@ -35,7 +35,9 @@ public final class RecipeModifier {
 
     public enum Operation {
         ADD(0),
-        MULTIPLY(1);
+        MULTIPLY(1),
+        SUBTRACT(2),
+        DIVIDE(3);
 
         private final int id;
 
@@ -51,6 +53,8 @@ public final class RecipeModifier {
             return switch (id) {
                 case 0 -> ADD;
                 case 1 -> MULTIPLY;
+                case 2 -> SUBTRACT;
+                case 3 -> DIVIDE;
                 default -> throw new IllegalArgumentException("Unknown modifier operation: " + id);
             };
         }
@@ -131,15 +135,23 @@ public final class RecipeModifier {
         float add = 0F;
         float mul = 1F;
         for (RecipeModifier mod : modifiers) {
-            if (mod.target != null && !mod.target.isEmpty() && !mod.target.equals(target)) continue;
-            if (ioType != null && mod.ioTarget != ioType) continue;
-            if (mod.affectsChance != isChance) continue;
+            if (!mod.matches(target, ioType, isChance)) continue;
             switch (mod.operation) {
                 case ADD -> add += mod.modifier;
+                case SUBTRACT -> add -= mod.modifier;
                 case MULTIPLY -> mul *= mod.modifier;
+                case DIVIDE -> {
+                    if (mod.modifier != 0F) mul /= mod.modifier;
+                }
             }
         }
         return (value + add) * mul;
+    }
+
+    private boolean matches(String target, IOType ioType, boolean isChance) {
+        if (this.target != null && !this.target.isEmpty() && !this.target.equals(target)) return false;
+        if (ioType != null && this.ioTarget != ioType) return false;
+        return this.affectsChance == isChance;
     }
 
     public CompoundTag serializeNbt() {
@@ -198,17 +210,23 @@ public final class RecipeModifier {
     }
 
     public static void applyValueToApplier(ModifierApplier applier, RecipeModifier mod) {
-        if (mod.operation == Operation.ADD) {
-            if (mod.ioTarget == IOType.OUTPUT) {
-                applier.outputAdd += mod.modifier;
-            } else {
-                applier.inputAdd += mod.modifier;
+        switch (mod.operation) {
+            case ADD -> {
+                if (mod.ioTarget == IOType.OUTPUT) applier.outputAdd += mod.modifier;
+                else applier.inputAdd += mod.modifier;
             }
-        } else if (mod.operation == Operation.MULTIPLY) {
-            if (mod.ioTarget == IOType.OUTPUT) {
-                applier.outputMul *= mod.modifier;
-            } else {
-                applier.inputMul *= mod.modifier;
+            case SUBTRACT -> {
+                if (mod.ioTarget == IOType.OUTPUT) applier.outputAdd -= mod.modifier;
+                else applier.inputAdd -= mod.modifier;
+            }
+            case MULTIPLY -> {
+                if (mod.ioTarget == IOType.OUTPUT) applier.outputMul *= mod.modifier;
+                else applier.inputMul *= mod.modifier;
+            }
+            case DIVIDE -> {
+                if (mod.modifier == 0F) return;
+                if (mod.ioTarget == IOType.OUTPUT) applier.outputMul /= mod.modifier;
+                else applier.inputMul /= mod.modifier;
             }
         }
     }
