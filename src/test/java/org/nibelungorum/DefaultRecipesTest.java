@@ -59,6 +59,34 @@ class DefaultRecipesTest {
     }
 
     @Test
+    void ensureRegistered_publishes_builtin_alloy_furnace_netherite_recipe() {
+        DefaultMachines.ensureRegistered();
+        DefaultRecipes.ensureRegistered();
+
+        var machine = (DynamicMachine) MachineRegistry.getMachine(MMCR.id("alloy_furnace"));
+
+        assertThat(machine).isNotNull();
+        var recipes = RecipeRegistry.byMachine(machine);
+        assertThat(recipes).extracting(recipe -> recipe.id()).contains(MMCR.id("alloy_furnace_netherite"));
+
+        var recipe = RecipeRegistry.getRecipe(MMCR.id("alloy_furnace_netherite"));
+        assertThat(recipe.tickTime()).isEqualTo(100);
+        assertThat(recipe.inputs()).hasSize(3);
+        assertThat(recipe.inputs().get(0)).isInstanceOf(MachineIngredient.ItemIngredient.class);
+        assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(0)).item().items().toList().getFirst().value()).isEqualTo(Items.ANCIENT_DEBRIS);
+        assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(0)).count()).isEqualTo(1);
+        assertThat(recipe.inputs().get(1)).isInstanceOf(MachineIngredient.ItemIngredient.class);
+        assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(1)).item().items().toList().getFirst().value()).isEqualTo(Items.GOLD_INGOT);
+        assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(1)).count()).isEqualTo(1);
+        assertThat(recipe.inputs().get(2)).isInstanceOf(MachineIngredient.EnergyIngredient.class);
+        assertThat(((MachineIngredient.EnergyIngredient) recipe.inputs().get(2)).fePerTick()).isEqualTo(5);
+        assertThat(recipe.outputs()).singleElement().satisfies(stack -> {
+            assertThat(stack.getItem()).isEqualTo(Items.NETHERITE_INGOT);
+            assertThat(stack.getCount()).isEqualTo(1);
+        });
+    }
+
+    @Test
     void ensureRegistered_publishes_builtin_cracker_coal_lapis_recipe() {
         DefaultMachines.ensureRegistered();
         DefaultRecipes.ensureRegistered();
@@ -133,6 +161,6 @@ class DefaultRecipesTest {
         DefaultRecipes.ensureRegistered();
         DefaultRecipes.ensureRegistered();
 
-        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(3);
+        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(4);
     }
 }

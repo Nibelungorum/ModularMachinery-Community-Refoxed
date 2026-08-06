@@ -59,6 +59,7 @@ public final class TestBootstrap {
         Bootstrap.bootStrap();
         bind(ModBlocks.CASING, Blocks.STONE);
         bind(ModBlocks.controllerFor(MMCR.id("blast_furnace")), Blocks.IRON_BLOCK);
+        bind(ModBlocks.controllerFor(id("alloy_furnace")), Blocks.IRON_BLOCK);
         bind(ModBlocks.controllerFor(id("cracker")), Blocks.IRON_BLOCK);
         bind(ModBlocks.controllerFor(id("reactor")), Blocks.IRON_BLOCK);
         bind(ModBlocks.controllerFor(id("test_cube")), Blocks.IRON_BLOCK);
