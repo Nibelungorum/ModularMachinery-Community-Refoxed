@@ -62,4 +62,54 @@ class BlockRotatorTest {
         assertThat(BlockRotator.rotateYCCWSouthUntil(new BlockPos(1, 0, 0), Direction.WEST))
                 .isEqualTo(new BlockPos(0, 0, 1));
     }
+
+    @Test
+    void rotateSouthTo_preserves_existing_horizontal_behavior() {
+        BlockPos left = new BlockPos(-1, 0, 0);
+        BlockPos front = new BlockPos(0, 0, 1);
+
+        for (Direction facing : Direction.Plane.HORIZONTAL) {
+            assertThat(BlockRotator.rotateSouthTo(left, facing))
+                    .isEqualTo(BlockRotator.rotateYCCWSouthUntil(left, facing));
+            assertThat(BlockRotator.rotateSouthTo(front, facing))
+                    .isEqualTo(BlockRotator.rotateYCCWSouthUntil(front, facing));
+        }
+    }
+
+    @Test
+    void rotateSouthTo_maps_south_axis_to_vertical_faces_with_fixed_roll() {
+        assertThat(BlockRotator.rotateSouthTo(new BlockPos(0, 0, 1), Direction.UP))
+                .isEqualTo(new BlockPos(0, 1, 0));
+        assertThat(BlockRotator.rotateSouthTo(new BlockPos(0, 1, 0), Direction.UP))
+                .isEqualTo(new BlockPos(0, 0, -1));
+        assertThat(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.UP))
+                .isEqualTo(new BlockPos(1, 0, 0));
+
+        assertThat(BlockRotator.rotateSouthTo(new BlockPos(0, 0, 1), Direction.DOWN))
+                .isEqualTo(new BlockPos(0, -1, 0));
+        assertThat(BlockRotator.rotateSouthTo(new BlockPos(0, 1, 0), Direction.DOWN))
+                .isEqualTo(new BlockPos(0, 0, 1));
+        assertThat(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.DOWN))
+                .isEqualTo(new BlockPos(1, 0, 0));
+    }
+
+    @Test
+    void normalizeFromFace_reverses_rotateSouthTo_for_all_faces() {
+        BlockPos[] samples = {
+                new BlockPos(0, 0, 0),
+                new BlockPos(1, 0, 0),
+                new BlockPos(0, 1, 0),
+                new BlockPos(0, 0, 1),
+                new BlockPos(-2, 3, 4)
+        };
+
+        for (Direction facing : Direction.values()) {
+            for (BlockPos sample : samples) {
+                BlockPos rotated = BlockRotator.rotateSouthTo(sample, facing);
+                assertThat(BlockRotator.normalizeFromFace(rotated, facing))
+                        .as("face=%s sample=%s", facing, sample)
+                        .isEqualTo(sample);
+            }
+        }
+    }
 }

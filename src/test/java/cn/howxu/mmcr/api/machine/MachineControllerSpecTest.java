@@ -19,6 +19,7 @@ class MachineControllerSpecTest {
         assertThat(spec.sideTexture()).isEqualTo(MMCR.id("block/basic_casing"));
         assertThat(spec.topTexture()).isEqualTo(MMCR.id("block/basic_casing"));
         assertThat(spec.bottomTexture()).isEqualTo(MMCR.id("block/basic_casing"));
+        assertThat(spec.allowVerticalFacing()).isFalse();
     }
 
     @Test
@@ -35,8 +36,18 @@ class MachineControllerSpecTest {
         Identifier texture = MMCR.id("block/basic_controller");
 
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
-                () -> new MachineControllerSpec(null, texture, texture, texture, texture));
+                () -> new MachineControllerSpec(null, texture, texture, texture, texture, false));
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
-                () -> new MachineControllerSpec(id, null, texture, texture, texture));
+                () -> new MachineControllerSpec(id, null, texture, texture, texture, false));
+    }
+
+    @Test
+    void spec_can_opt_into_vertical_controller_facing() {
+        Identifier id = MMCR.id("blast_furnace_controller");
+        Identifier texture = MMCR.id("block/basic_controller");
+
+        MachineControllerSpec spec = new MachineControllerSpec(id, texture, texture, texture, texture, true);
+
+        assertThat(spec.allowVerticalFacing()).isTrue();
     }
 }

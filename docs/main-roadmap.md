@@ -17,6 +17,7 @@
 - Mod 入口、DeferredRegister、基础配置、创造栏、方块/物品/BE 注册。
 - `Machine` / `DynamicMachine` / `MachineRegistry` / `BlockArray` / `BlockPredicate` / `StructureMatcher`。
 - 控制器方块与 BE：机器绑定、结构匹配、成型状态、active recipe 基础状态。
+- 多方块结构支持机器级 opt-in 的 UP/DOWN 控制器朝向检测；默认机器仍保持水平四向，导出格式保持 `BlockArray.builder()`。
 - 基础 IO 端口：item input/output bus、fluid input/output hatch、energy input/output hatch。
 - 基础 capability：NeoForge item/fluid/energy capability 暴露。
 - 基础菜单和屏幕：控制器、item bus、fluid hatch、energy hatch 的简单 GUI。

@@ -92,12 +92,12 @@ public final class BuildCommand {
      */
     private static void placeMachine(ServerLevel level, Machine machine, BlockPos controller, Direction ctrlFacing) {
         BlockState controllerState = ModBlocks.controllerFor(machine).get().defaultBlockState()
-                .setValue(BlockStateProperties.HORIZONTAL_FACING, ctrlFacing);
+                .setValue(BlockStateProperties.FACING, ctrlFacing);
         setBlock(level, controller, controllerState);
 
         for (var entry : machine.pattern().pattern().entrySet()) {
             if (entry.getKey().equals(BlockPos.ZERO)) continue;
-            BlockPos world = controller.offset(BlockRotator.rotateYCCWSouthUntil(entry.getKey(), ctrlFacing));
+            BlockPos world = controller.offset(BlockRotator.rotateSouthTo(entry.getKey(), ctrlFacing));
             BlockState state = resolveBlockState(entry.getValue());
             if (state == null) continue;
             setBlock(level, world, state);

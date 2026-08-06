@@ -8,7 +8,8 @@ public record MachineControllerSpec(
         Identifier frontTexture,
         Identifier sideTexture,
         Identifier topTexture,
-        Identifier bottomTexture) {
+        Identifier bottomTexture,
+        boolean allowVerticalFacing) {
 
     public MachineControllerSpec {
         if (id == null) throw new IllegalArgumentException("id null");
@@ -29,6 +30,7 @@ public record MachineControllerSpec(
                 basicController,
                 basicCasing,
                 basicCasing,
-                basicCasing);
+                basicCasing,
+                false);
     }
 }

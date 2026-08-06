@@ -30,7 +30,7 @@ import net.minecraft.world.phys.BlockHitResult;
 
 public class MachineControllerBlock extends Block implements EntityBlock {
 
-    public static final EnumProperty<Direction> FACING = BlockStateProperties.HORIZONTAL_FACING;
+    public static final EnumProperty<Direction> FACING = BlockStateProperties.FACING;
     public static final BooleanProperty FORMED = BooleanProperty.create("formed");
     public static final BooleanProperty ACTIVE = BooleanProperty.create("active");
 
@@ -61,7 +61,19 @@ public class MachineControllerBlock extends Block implements EntityBlock {
 
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext ctx) {
-        return defaultBlockState().setValue(FACING, ctx.getHorizontalDirection().getOpposite());
+        boolean verticalAllowed = isVerticalAllowed();
+        Direction nearest = ctx.getNearestLookingDirection().getOpposite();
+        Direction fallback = ctx.getHorizontalDirection().getOpposite();
+        Direction facing = verticalAllowed ? nearest : fallback;
+        if (!verticalAllowed && facing.getAxis().isVertical()) {
+            facing = fallback;
+        }
+        return defaultBlockState().setValue(FACING, facing);
+    }
+
+    private boolean isVerticalAllowed() {
+        Machine machine = MachineDefinitions.get(machineId);
+        return machine != null && machine.controller().allowVerticalFacing();
     }
 
     @Override

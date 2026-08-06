@@ -211,6 +211,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private void checkStructure() {
         lastFormationFailure = null;
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
+        if (facing.getAxis().isVertical() && machine != null && !machine.controller().allowVerticalFacing()) {
+            resetMachine();
+            return;
+        }
         if (foundMachine != null && foundPattern != null && controllerFacing == facing) {
             if (StructureMatcher.matchesRotated(foundPattern, level, getBlockPos())) {
                 var failure = foundMachine.portRequirements().validate(countPorts(foundPattern));
@@ -247,6 +251,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private boolean tryFormMachine(Machine candidate, Direction facing) {
+        if (facing.getAxis().isVertical() && !candidate.controller().allowVerticalFacing()) return false;
         BlockArray rotatedPattern = BlockArrayCache.get(candidate.pattern(), facing);
         if (!StructureMatcher.matchesRotated(rotatedPattern, level, getBlockPos())) return false;
 
