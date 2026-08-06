@@ -23,10 +23,10 @@ class MultiblockExportServiceTest {
     void normalizeOffsetRotatesBackToCapturedFace() {
         BlockPos worldOffset = new BlockPos(2, 1, -3);
 
-        for (Direction face : Direction.Plane.HORIZONTAL) {
+        for (Direction face : Direction.values()) {
             BlockPos normalized = MultiblockExportService.normalizeOffset(worldOffset, face);
 
-            assertThat(BlockRotator.rotateYCCWSouthUntil(normalized, face)).isEqualTo(worldOffset);
+            assertThat(BlockRotator.rotateSouthTo(normalized, face)).isEqualTo(worldOffset);
         }
     }
 
@@ -60,6 +60,26 @@ class MultiblockExportServiceTest {
         assertThat(java).contains(".set('X', new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"mmcr:basic_casing\"))))");
         assertThat(java).doesNotContain("minecraft:air");
         assertThat(java).contains(".build();");
+    }
+
+    @Test
+    void renderJavaKeepsCurrentFormatForUpFacingCapture() {
+        Identifier casing = Identifier.fromNamespaceAndPath("mmcr", "basic_casing");
+        Identifier controller = Identifier.fromNamespaceAndPath("mmcr", "blast_furnace_controller");
+
+        String java = MultiblockExportService.renderJava(List.of(
+                new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, controller, false),
+                new MultiblockExportService.SnapshotEntry(
+                        BlockRotator.rotateSouthTo(new BlockPos(0, 0, 1), Direction.UP), casing, false),
+                new MultiblockExportService.SnapshotEntry(
+                        BlockRotator.rotateSouthTo(new BlockPos(-1, 0, -1), Direction.UP), casing, false)
+        ), Direction.UP);
+
+        assertThat(java).contains("BlockArray pattern = BlockArray.builder()");
+        assertThat(java).contains(".pattern(\" C\")");
+        assertThat(java).contains(".pattern(\" X\")");
+        assertThat(java).contains(".set('C', new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"mmcr:blast_furnace_controller\"))))");
+        assertThat(java).contains(".set('X', new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"mmcr:basic_casing\"))))");
     }
 
     @Test

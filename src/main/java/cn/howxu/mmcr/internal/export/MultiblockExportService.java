@@ -36,13 +36,7 @@ public final class MultiblockExportService {
     }
 
     public static BlockPos normalizeOffset(BlockPos offset, Direction controllerFace) {
-        Direction current = controllerFace;
-        BlockPos normalized = offset;
-        while (current != Direction.SOUTH) {
-            current = current.getCounterClockWise();
-            normalized = BlockRotator.rotateYCCW(normalized);
-        }
-        return normalized;
+        return BlockRotator.normalizeFromFace(offset, controllerFace);
     }
 
     public static String renderJava(List<SnapshotEntry> entries, Direction controllerFace) {
