@@ -270,6 +270,53 @@ class RecipeCraftingContextTest {
     }
 
     @Test
+    void item_input_modifier_changes_runtime_consumption_without_mutating_recipe() {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 0, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(4));
+        MachineControllerBlockEntity controller = controllerWithComponents(input);
+        MachineRecipe recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "modified_item_input"),
+                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                20,
+                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
+                List.of(),
+                List.of(new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.INPUT, 2F, RecipeModifier.Operation.MULTIPLY, false)),
+                0,
+                1
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateInputs(recipe)).isTrue();
+        assertThat(context.commitInputs(recipe)).isTrue();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(recipe.inputs().getFirst()).isEqualTo(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2));
+    }
+
+    @Test
+    void item_output_modifier_changes_runtime_output_without_mutating_recipe() {
+        bindItemComponents(Items.IRON_NUGGET);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerWithComponents(output);
+        MachineRecipe recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "modified_item_output"),
+                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                20,
+                List.of(),
+                List.of(Items.IRON_NUGGET.getDefaultInstance().copyWithCount(2)),
+                List.of(new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.OUTPUT, 3F, RecipeModifier.Operation.MULTIPLY, false)),
+                0,
+                1
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(6);
+        assertThat(recipe.outputs().getFirst().getCount()).isEqualTo(2);
+    }
+
+    @Test
     void commitInputsValidatesAllItemRoutesBeforeMutating() {
         bindItemComponents(Items.IRON_INGOT);
         ItemInputBusBlockEntity first = itemInputBus(new BlockPos(1, 0, 0));

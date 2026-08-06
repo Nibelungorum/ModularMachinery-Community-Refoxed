@@ -115,7 +115,7 @@ public final class RecipeCraftingContext {
     public boolean ioTick(MachineRecipe recipe) {
         lastFailureUnloc = null;
         lastRequirementFailure = null;
-        List<MachineRequirement> requirements = recipe.requirements();
+        List<MachineRequirement> requirements = recipe.runtimeRequirements();
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             if (!requirements.get(requirementIndex).ioTick(this, requirementIndex)) return false;
         }
@@ -125,7 +125,7 @@ public final class RecipeCraftingContext {
     public boolean simulateInputs(MachineRecipe recipe) {
         lastFailureUnloc = null;
         lastRequirementFailure = null;
-        List<MachineRequirement> requirements = recipe.requirements();
+        List<MachineRequirement> requirements = recipe.runtimeRequirements();
         itemInputRoutes = emptyItemInputRoutes(requirements.size());
         fluidInputRoutes = emptyFluidInputRoutes(requirements.size());
 
@@ -139,7 +139,7 @@ public final class RecipeCraftingContext {
     public boolean simulateOutputs(MachineRecipe recipe) {
         lastFailureUnloc = null;
         lastRequirementFailure = null;
-        List<MachineRequirement> requirements = recipe.requirements();
+        List<MachineRequirement> requirements = recipe.runtimeRequirements();
         itemOutputRoutes = emptyItemOutputRoutes(requirements.size());
         fluidOutputRoutes = emptyFluidOutputRoutes(requirements.size());
 
@@ -301,7 +301,7 @@ public final class RecipeCraftingContext {
     public boolean commitInputs(MachineRecipe recipe) {
         List<ItemInputTransfer> itemTransfers = new ArrayList<>();
         List<FluidInputTransfer> fluidTransfers = new ArrayList<>();
-        List<MachineRequirement> requirements = recipe.requirements();
+        List<MachineRequirement> requirements = recipe.runtimeRequirements();
         RequirementFailure itemFailure = firstItemInputFailure(requirements);
         if (itemFailure != null) {
             setFailure(FAILURE_MISSING_INPUT, itemFailure);
@@ -334,7 +334,7 @@ public final class RecipeCraftingContext {
     public boolean commitOutputs(MachineRecipe recipe) {
         List<ItemOutputTransfer> itemTransfers = new ArrayList<>();
         List<FluidOutputTransfer> fluidTransfers = new ArrayList<>();
-        List<MachineRequirement> requirements = recipe.requirements();
+        List<MachineRequirement> requirements = recipe.runtimeRequirements();
         RequirementFailure itemFailure = firstItemOutputFailure(requirements);
         if (itemFailure != null) {
             setFailure(FAILURE_MISSING_OUTPUT, itemFailure);

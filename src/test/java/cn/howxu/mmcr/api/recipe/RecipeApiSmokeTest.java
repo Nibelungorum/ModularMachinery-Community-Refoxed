@@ -15,7 +15,9 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.Fluids;
@@ -118,6 +120,10 @@ class RecipeApiSmokeTest {
         return holder;
     }
 
+    private static void bindItemComponents(Item item) {
+        item.builtInRegistryHolder().bindComponents(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
+    }
+
     @Test
     void recipe_codec_optional_fields_have_defaults() {
         var recipe = new MachineRecipe(
@@ -196,6 +202,40 @@ class RecipeApiSmokeTest {
                 new RecipeModifier(IntegrationTypeHelper.TARGET_DURATION, RecipeModifier.IOType.INPUT, 0.5F, RecipeModifier.Operation.MULTIPLY, false)
         );
         assertThat(IntegrationTypeHelper.applyDuration(mods, 200)).isEqualTo(100F);
+    }
+
+    @Test
+    void runtime_requirements_apply_all_supported_modifier_targets() {
+        bindFluidComponents(Fluids.WATER);
+        bindItemComponents(Items.IRON_NUGGET);
+        var recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "runtime_modifiers"),
+                Identifier.fromNamespaceAndPath("mmcr", "runtime_machine"),
+                100,
+                List.of(
+                        new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2),
+                        new MachineIngredient.FluidIngredient(net.neoforged.neoforge.fluids.crafting.FluidIngredient.of(Fluids.WATER), 250),
+                        new MachineIngredient.EnergyIngredient(40)
+                ),
+                List.of(Items.IRON_NUGGET.getDefaultInstance().copyWithCount(1)),
+                List.of(
+                        new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.INPUT, 2F, RecipeModifier.Operation.MULTIPLY, false),
+                        new RecipeModifier(IntegrationTypeHelper.TARGET_FLUID, RecipeModifier.IOType.INPUT, 2F, RecipeModifier.Operation.MULTIPLY, false),
+                        new RecipeModifier(IntegrationTypeHelper.TARGET_ENERGY, RecipeModifier.IOType.INPUT, 2F, RecipeModifier.Operation.MULTIPLY, false),
+                        new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.OUTPUT, 3F, RecipeModifier.Operation.MULTIPLY, false)
+                ),
+                0,
+                1
+        );
+
+        assertThat(recipe.runtimeRequirements()).satisfies(requirements -> {
+            assertThat(((cn.howxu.mmcr.api.recipe.requirement.ItemRequirement) requirements.get(0)).count()).isEqualTo(4);
+            assertThat(((cn.howxu.mmcr.api.recipe.requirement.FluidRequirement) requirements.get(1)).amount()).isEqualTo(500);
+            assertThat(((cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement) requirements.get(2)).fePerTick()).isEqualTo(80);
+            assertThat(((cn.howxu.mmcr.api.recipe.requirement.ItemRequirement) requirements.get(3)).stack().getCount()).isEqualTo(3);
+        });
+        assertThat(recipe.inputs()).contains(new MachineIngredient.EnergyIngredient(40));
+        assertThat(recipe.outputs().getFirst().getCount()).isEqualTo(1);
     }
 
     @Test
