@@ -9,7 +9,12 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
@@ -21,6 +26,7 @@ import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.energy.EnergyStorage;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
+import net.neoforged.neoforge.items.ItemStackHandler;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -45,6 +51,7 @@ class MachineControllerBlockEntityTest {
     @AfterEach
     void cleanup() {
         MachineRegistry.clearForTesting();
+        RecipeRegistry.clearForTesting();
     }
 
     @Test
@@ -420,6 +427,63 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.getFoundMachine()).isNull();
     }
 
+    @Test
+    void failedRecipeSearchUsesRetryDelayBeforeScanningAgain() throws Exception {
+        var machine = new DynamicMachine(MMCR.id("retry_machine"), "Retry Machine", onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()));
+        MachineRegistry.register(machine);
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("retry_recipe"),
+                machine.registryName(),
+                20,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, net.minecraft.world.item.crafting.Ingredient.of(net.minecraft.world.item.Items.IRON_INGOT), 1, net.minecraft.world.item.ItemStack.EMPTY)));
+        RecipeRegistry.register(recipe);
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, itemInputBus(controllerPos.offset(1, 0, 0)));
+        setField(MachineControllerBlockEntity.class, controller, "machine", machine);
+        controller.serverTick();
+        assertThat(controller.getLastFailureUnloc()).isEqualTo(RecipeCraftingContext.FAILURE_MISSING_INPUT);
+        controller.setLastFailureUnloc(null);
+
+        controller.serverTick();
+
+        assertThat(controller.getLastFailureUnloc()).isNull();
+    }
+
+    @Test
+    void recipeSearchExceptionDoesNotBreakControllerTick() throws Exception {
+        net.minecraft.world.item.Items.IRON_INGOT.builtInRegistryHolder().bindComponents(net.minecraft.core.component.DataComponentMap.EMPTY);
+        var machine = new DynamicMachine(MMCR.id("exception_machine"), "Exception Machine", onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_output_bus").get()));
+        MachineRegistry.register(machine);
+        RecipeRegistry.register(new MachineRecipe(
+                MMCR.id("exception_recipe"),
+                machine.registryName(),
+                20,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, net.minecraft.world.item.Items.IRON_INGOT.getDefaultInstance()))));
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, itemOutputBus(controllerPos.offset(1, 0, 0)));
+        setField(MachineControllerBlockEntity.class, controller, "machine", machine);
+
+        controller.serverTick();
+
+        assertThat(controller.isFormed()).isTrue();
+        assertThat(controller.getActive()).isNull();
+        assertThat(controller.getLastFailureUnloc()).isEqualTo(RecipeCraftingContext.FAILURE_SEARCH_EXCEPTION);
+    }
+
     private static MachineControllerBlockEntity controllerBlockEntityWithoutRunningMinecraftConstructor() {
         try {
             Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
@@ -462,6 +526,7 @@ class MachineControllerBlockEntityTest {
             setField(BlockEntity.class, bus, "type", null);
             setField(BlockEntity.class, bus, "worldPosition", pos);
             setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
+            setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
             return bus;
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate item input bus", e);

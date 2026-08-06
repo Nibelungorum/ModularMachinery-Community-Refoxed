@@ -15,6 +15,7 @@ public final class RecipeRegistry {
 
     private static final Map<Identifier, MachineRecipe> RECIPES = new LinkedHashMap<>();
     private static final Map<Identifier, TreeMap<Integer, TreeSet<MachineRecipe>>> BY_MACHINE = new LinkedHashMap<>();
+    private static long reloadVersion;
 
     private RecipeRegistry() {
     }
@@ -55,9 +56,14 @@ public final class RecipeRegistry {
         return RECIPES.size();
     }
 
+    public static long reloadVersion() {
+        return reloadVersion;
+    }
+
     public static void clearAll() {
         RECIPES.clear();
         BY_MACHINE.clear();
+        reloadVersion++;
     }
 
     public static void clearForTesting() {

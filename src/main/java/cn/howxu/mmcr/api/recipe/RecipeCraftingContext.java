@@ -20,6 +20,7 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.IItemHandlerModifiable;
+import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -30,8 +31,9 @@ public final class RecipeCraftingContext {
     public static final String FAILURE_MISSING_INPUT = "gui.mmcr.controller.failure.missing_input";
     public static final String FAILURE_MISSING_OUTPUT = "gui.mmcr.controller.failure.missing_output";
     public static final String FAILURE_MISSING_ENERGY = "gui.mmcr.controller.failure.missing_energy";
+    public static final String FAILURE_SEARCH_EXCEPTION = "gui.mmcr.controller.failure.recipe_search_exception";
 
-    private final MachineControllerBlockEntity controller;
+    private MachineControllerBlockEntity controller;
 
     private List<ItemInputRoute> itemInputRoutes = List.of();
     private List<ItemOutputRoute> itemOutputRoutes = List.of();
@@ -39,9 +41,32 @@ public final class RecipeCraftingContext {
     private List<FluidOutputRoute> fluidOutputRoutes = List.of();
     private @Nullable String lastFailureUnloc;
     private @Nullable RequirementFailure lastRequirementFailure;
+    private @Nullable Identifier poolRecipeId;
 
     public RecipeCraftingContext(MachineControllerBlockEntity controller) {
         this.controller = controller;
+    }
+
+    void resetFor(MachineControllerBlockEntity controller) {
+        this.controller = controller;
+        resetTransientState();
+    }
+
+    void resetTransientState() {
+        itemInputRoutes = List.of();
+        itemOutputRoutes = List.of();
+        fluidInputRoutes = List.of();
+        fluidOutputRoutes = List.of();
+        lastFailureUnloc = null;
+        lastRequirementFailure = null;
+    }
+
+    void setPoolRecipeId(Identifier recipeId) {
+        this.poolRecipeId = recipeId;
+    }
+
+    @Nullable Identifier poolRecipeId() {
+        return poolRecipeId;
     }
 
     public RecipeFailureActions failureAction() {

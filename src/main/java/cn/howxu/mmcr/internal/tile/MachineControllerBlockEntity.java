@@ -10,7 +10,10 @@ import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
+import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
+import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
@@ -62,6 +65,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private boolean redstonePaused;
     private @Nullable ActiveMachineRecipe pausedActive;
     private @Nullable RecipeCraftingContext pausedContext;
+    private RecipeCraftingContextPool contextPool = RecipeCraftingContextPool.global();
+    private int recipeSearchRetryCounter;
+    private long recipeSearchAttemptCounter;
+    private long structureVersion;
+    private long cachedCandidatesReloadVersion = Long.MIN_VALUE;
+    private int cachedDatapackRecipeCount = -1;
+    private @Nullable Identifier cachedCandidatesMachineId;
+    private List<MachineRecipe> cachedCandidates = List.of();
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
@@ -353,12 +364,17 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void onStructureFormed(Machine matchedMachine, BlockArray rotatedPattern, Direction facing) {
+        Identifier before = foundMachine == null ? null : foundMachine.registryName();
         foundMachine = matchedMachine;
         foundPattern = rotatedPattern;
         controllerFacing = facing;
         machine = matchedMachine;
         if (!isFormed()) setFormed(true);
         updateComponents();
+        if (!matchedMachine.registryName().equals(before)) {
+            structureVersion++;
+            clearCandidateCache();
+        }
         ComponentCounts counts = componentCounts();
         LOG.info("[Ctrl#{}] onStructureFormed: pos={} machine={} facing={} components=itemIn:{} itemOut:{} fluidIn:{} fluidOut:{} energyIn:{} energyOut:{}",
                 instanceId, getBlockPos(), matchedMachine.registryName(), facing,
@@ -368,6 +384,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void updateComponents() {
+        int previousSize = components.size();
         components.clear();
         if (level == null || foundMachine == null || foundPattern == null) return;
 
@@ -379,6 +396,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (!(tile instanceof BlockEntity container)) continue;
             components.add(new ProcessingComponent(component, container, worldPos, relativePos, foundPattern.tagsAt(relativePos)));
         }
+        if (components.size() != previousSize) structureVersion++;
     }
 
     private PortRequirementSpec.PortCounts countPorts(BlockArray rotatedPattern) {
@@ -432,15 +450,19 @@ public class MachineControllerBlockEntity extends BlockEntity {
         controllerFacing = null;
         components.clear();
         if (active != null) {
+            returnContext(context);
             active = null;
             context = null;
             setActiveState(false);
         }
         pausedActive = null;
+        returnContext(pausedContext);
         pausedContext = null;
         lastFailureUnloc = null;
         if (clearFormationFailure) lastFormationFailure = null;
         redstonePaused = false;
+        structureVersion++;
+        clearCandidateCache();
         if (wasFormed) setFormed(false);
         if (dropped != null || hadActive) {
             LOG.info("[Ctrl#{}] resetMachine: pos={} dropped={} clearedActiveRecipe={} wasFormed={}", instanceId, getBlockPos(), dropped, activeRecipe, wasFormed);
@@ -465,44 +487,80 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private boolean tryStartNewRecipe() {
+        if (!shouldSearchRecipe()) return false;
+        recipeSearchAttemptCounter++;
+        Identifier machineId = foundMachine == null ? null : foundMachine.registryName();
+        if (machineId == null) return false;
         List<MachineRecipe> candidates = recipesForMachine();
-        int index = 0;
-        RecipeCraftingContext lastTried = null;
-        for (MachineRecipe recipe : candidates) {
-            index++;
-            RecipeCraftingContext candidate = new RecipeCraftingContext(this);
-            lastTried = candidate;
-            boolean inputsOk = candidate.simulateInputs(recipe);
-            if (!inputsOk) {
-                continue;
-            }
-            boolean outputsOk = candidate.simulateOutputs(recipe);
-            if (!outputsOk) {
-                continue;
-            }
-            ActiveMachineRecipe next = new ActiveMachineRecipe(recipe, 1);
-            active = next;
-            context = candidate;
-            if (!next.start(context)) {
-                active = null;
-                context = null;
-                LOG.info("[Ctrl#{}] tryStartNewRecipe: recipe={} refused during start; waiting for I/O at pos={}",
-                        instanceId, recipe.id(), getBlockPos());
-                continue;
-            }
-            setActiveState(true);
-            lastFailureUnloc = null;
-            LOG.info("[Ctrl#{}] tryStartNewRecipe: START recipe={} tickTime={} priority={} maxParallel={} (chosen {}/{} candidates)",
-                    instanceId, recipe.id(), recipe.tickTime(), recipe.priority(), next.getMaxParallelism(), index, candidates.size());
-            setChanged();
-            return true;
+        RecipeSearchResult result;
+        try {
+            result = new RecipeSearchTask(this, machineId, structureVersion, 1, candidates, contextPool()).compute();
+        } catch (RuntimeException e) {
+            LOG.warn("[Ctrl#{}] tryStartNewRecipe: recipe search failed at pos={}; retrying later", instanceId, getBlockPos(), e);
+            recipeSearchRetryCounter++;
+            lastFailureUnloc = RecipeCraftingContext.FAILURE_SEARCH_EXCEPTION;
+            return false;
         }
-        if (lastTried != null && lastTried.getLastFailureUnloc() != null) {
-            lastFailureUnloc = lastTried.getLastFailureUnloc();
-        } else {
-            lastFailureUnloc = null;
+        if (result.success()) {
+            return applySearchResult(result, candidates.size());
         }
+        recipeSearchRetryCounter++;
+        lastFailureUnloc = result.failureUnloc();
         return false;
+    }
+
+    private boolean shouldSearchRecipe() {
+        if (recipeSearchRetryCounter <= 0) return true;
+        long ticks = recipeSearchAttemptCounter;
+        if (level != null) {
+            try {
+                ticks = level.getGameTime();
+            } catch (NullPointerException ignored) {
+                ticks = recipeSearchAttemptCounter;
+            }
+        }
+        return ticks % nextRecipeSearchDelay() == 0;
+    }
+
+    private int nextRecipeSearchDelay() {
+        if (recipeSearchRetryCounter <= 0) return 1;
+        return Math.min(100, 5 + recipeSearchRetryCounter * 5);
+    }
+
+    private boolean applySearchResult(RecipeSearchResult result, int candidateCount) {
+        if (!isSearchResultCurrent(result)) {
+            returnContext(result.context());
+            return false;
+        }
+        ActiveMachineRecipe next = result.activeRecipe();
+        RecipeCraftingContext nextContext = result.context();
+        active = next;
+        context = nextContext;
+        if (!next.start(nextContext)) {
+            active = null;
+            context = null;
+            returnContext(nextContext);
+            recipeSearchRetryCounter++;
+            lastFailureUnloc = nextContext.getLastFailureUnloc();
+            LOG.info("[Ctrl#{}] tryStartNewRecipe: recipe={} refused during start; waiting for I/O at pos={}",
+                    instanceId, next.getRecipe().id(), getBlockPos());
+            return false;
+        }
+        setActiveState(true);
+        recipeSearchRetryCounter = 0;
+        lastFailureUnloc = null;
+        LOG.info("[Ctrl#{}] tryStartNewRecipe: START recipe={} tickTime={} priority={} maxParallel={} ({} candidates)",
+                instanceId, next.getRecipe().id(), next.getRecipe().tickTime(), next.getRecipe().priority(), next.getMaxParallelism(), candidateCount);
+        setChanged();
+        return true;
+    }
+
+    private boolean isSearchResultCurrent(RecipeSearchResult result) {
+        return isFormed()
+                && foundMachine != null
+                && foundMachine.registryName().equals(result.machineId())
+                && structureVersion == result.structureVersion()
+                && active == null;
     }
 
     private void tickActiveRecipe() {
@@ -512,6 +570,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             LOG.info("[Ctrl#{}] tickActiveRecipe: recipe {} FINISHED after {} ticks (total {}) at pos={}; slot cleared",
                     instanceId, active.getRecipe().id(), active.getTick(), active.getTotalTick(), getBlockPos());
             lastFailureUnloc = null;
+            returnContext(context);
             active = null;
             context = null;
             setActiveState(false);
@@ -520,6 +579,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (active.getRecipe().doesCancelRecipeOnPerTickFailure()) {
                 LOG.info("[Ctrl#{}] tickActiveRecipe: recipe {} canceled after per-tick failure at pos={}; already consumed inputs are voided",
                         instanceId, active.getRecipe().id(), getBlockPos());
+                returnContext(context);
                 active = null;
                 context = null;
                 setActiveState(false);
@@ -557,6 +617,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private List<MachineRecipe> recipesForMachine() {
+        Identifier machineId = machine == null ? null : machine.registryName();
+        if (machineId == null) return List.of();
+        int datapackCount = datapackRecipeCount();
+        long reloadVersion = RecipeRegistry.reloadVersion();
+        if (machineId.equals(cachedCandidatesMachineId)
+                && cachedCandidatesReloadVersion == reloadVersion
+                && cachedDatapackRecipeCount == datapackCount) {
+            return cachedCandidates;
+        }
         Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>();
         for (MachineRecipe recipe : RecipeRegistry.byMachine(machine)) {
             recipes.put(recipe.id(), recipe);
@@ -569,7 +638,40 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 }
             }
         }
-        return new ArrayList<>(recipes.values());
+        cachedCandidatesMachineId = machineId;
+        cachedCandidatesReloadVersion = reloadVersion;
+        cachedDatapackRecipeCount = datapackCount;
+        cachedCandidates = List.copyOf(recipes.values());
+        return cachedCandidates;
+    }
+
+    private int datapackRecipeCount() {
+        if (!(level instanceof ServerLevel sl)) return 0;
+        int count = 0;
+        for (RecipeHolder<?> holder : sl.recipeAccess().getRecipes()) {
+            if (holder.value() instanceof MachineRecipe recipe
+                    && machine != null
+                    && recipe.machineId().equals(machine.registryName())) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private void clearCandidateCache() {
+        cachedCandidatesMachineId = null;
+        cachedCandidatesReloadVersion = Long.MIN_VALUE;
+        cachedDatapackRecipeCount = -1;
+        cachedCandidates = List.of();
+    }
+
+    private void returnContext(@Nullable RecipeCraftingContext returnedContext) {
+        contextPool().returnContext(returnedContext);
+    }
+
+    private RecipeCraftingContextPool contextPool() {
+        if (contextPool == null) contextPool = RecipeCraftingContextPool.global();
+        return contextPool;
     }
 
     @Override
