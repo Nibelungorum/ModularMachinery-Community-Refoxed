@@ -145,6 +145,8 @@ public final class RecipeCraftingContext {
 
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
+            if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT && item.chance() <= 0F) continue;
+            if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT && fluid.chance() <= 0F) continue;
             if (requirement.io() == RecipeModifier.IOType.OUTPUT && !requirement.simulate(this, requirementIndex)) return false;
         }
         return true;
@@ -347,6 +349,8 @@ public final class RecipeCraftingContext {
         }
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
+            if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT && item.chance() <= 0F) continue;
+            if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT && fluid.chance() <= 0F) continue;
             if (requirement.io() == RecipeModifier.IOType.OUTPUT && !requirement.commit(this, requirementIndex)) return false;
         }
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
@@ -472,6 +476,7 @@ public final class RecipeCraftingContext {
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
             if (!(requirement instanceof ItemRequirement item) || item.io() != RecipeModifier.IOType.OUTPUT) continue;
+            if (item.chance() <= 0F) continue;
             ItemOutputRoute route = requirementIndex < itemOutputRoutes.size() ? itemOutputRoutes.get(requirementIndex) : null;
             if (route == null) return new RequirementFailure(requirementIndex, RequirementFailure.Kind.MISSING_OUTPUT, item.stack().getCount(), 0);
             int available = 0;
@@ -512,6 +517,7 @@ public final class RecipeCraftingContext {
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
             if (!(requirement instanceof FluidRequirement fluid) || fluid.io() != RecipeModifier.IOType.OUTPUT) continue;
+            if (fluid.chance() <= 0F) continue;
             FluidOutputRoute route = requirementIndex < fluidOutputRoutes.size() ? fluidOutputRoutes.get(requirementIndex) : null;
             if (route == null) return new RequirementFailure(requirementIndex, RequirementFailure.Kind.MISSING_OUTPUT, fluid.stack().getAmount(), 0);
             int available = 0;

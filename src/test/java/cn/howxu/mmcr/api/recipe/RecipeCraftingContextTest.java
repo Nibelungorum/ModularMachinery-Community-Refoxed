@@ -286,6 +286,26 @@ class RecipeCraftingContextTest {
     }
 
     @Test
+    void zero_chance_item_output_does_not_require_output_capacity() {
+        bindItemComponents(Items.COBBLESTONE);
+        bindItemComponents(Items.IRON_NUGGET);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        for (int slot = 0; slot < output.getItemStackHandler(null).getSlots(); slot++) {
+            output.getItemStackHandler(null).setStackInSlot(slot, Items.COBBLESTONE.getDefaultInstance().copyWithCount(64));
+        }
+        MachineControllerBlockEntity controller = controllerWithComponents(output);
+        MachineRecipe recipe = explicitItemRecipe(
+                "zero_chance_item_output_full_bus",
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_NUGGET.getDefaultInstance().copyWithCount(3), 0F, List.of()))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getItem()).isEqualTo(Items.COBBLESTONE);
+    }
+
+    @Test
     void hundred_percent_item_output_inserts_at_finish() {
         bindItemComponents(Items.IRON_NUGGET);
         ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
@@ -315,6 +335,24 @@ class RecipeCraftingContextTest {
         assertThat(context.simulateOutputs(recipe)).isTrue();
         assertThat(context.commitOutputs(recipe)).isTrue();
         assertThat(output.getFluidTank(null).getFluidAmount()).isZero();
+    }
+
+    @Test
+    void zero_chance_fluid_output_does_not_require_output_capacity() {
+        bindFluidComponents(Fluids.WATER);
+        bindFluidComponents(Fluids.LAVA);
+        FluidOutputHatchBlockEntity output = fluidOutputHatch(new BlockPos(1, 0, 0));
+        output.getFluidTank(null).setFluid(new FluidStack(Fluids.LAVA, output.getFluidTank(null).getCapacity()));
+        MachineControllerBlockEntity controller = controllerWithComponents(output);
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "zero_chance_fluid_output_full_hatch",
+                List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new FluidStack(Fluids.WATER, 1000), 0F, List.of()))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(output.getFluidTank(null).getFluid().getFluid()).isEqualTo(Fluids.LAVA);
     }
 
     @Test
