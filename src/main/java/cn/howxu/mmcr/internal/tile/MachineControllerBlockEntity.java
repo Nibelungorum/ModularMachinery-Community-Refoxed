@@ -236,6 +236,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private boolean tryFormMachine(Machine candidate, Direction facing) {
+        if (facing.getAxis().isVertical() && !candidate.controller().allowVerticalFacing()) return false;
         BlockArray rotatedPattern = BlockArrayCache.get(candidate.pattern(), facing);
         if (!StructureMatcher.matchesRotated(rotatedPattern, level, getBlockPos())) return false;
 

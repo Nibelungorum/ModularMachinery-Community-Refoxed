@@ -27,7 +27,7 @@ final class MachineControllerVariants {
                         MachineControllerBlock.FORMED,
                         MachineControllerBlock.ACTIVE);
 
-        for (Direction facing : Direction.Plane.HORIZONTAL) {
+        for (Direction facing : Direction.values()) {
             VariantMutator rotation = rotationFor(facing);
             for (boolean formed : BOOLEANS) {
                 for (boolean active : BOOLEANS) {
@@ -44,7 +44,8 @@ final class MachineControllerVariants {
             case EAST -> VariantMutator.Y_ROT.withValue(Quadrant.R90);
             case SOUTH -> VariantMutator.Y_ROT.withValue(Quadrant.R180);
             case WEST -> VariantMutator.Y_ROT.withValue(Quadrant.R270);
-            default -> v -> v;
+            case UP -> VariantMutator.X_ROT.withValue(Quadrant.R270);
+            case DOWN -> VariantMutator.X_ROT.withValue(Quadrant.R90);
         };
     }
 }
