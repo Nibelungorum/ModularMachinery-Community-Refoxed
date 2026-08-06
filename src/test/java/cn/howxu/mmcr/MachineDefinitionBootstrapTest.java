@@ -30,6 +30,7 @@ class MachineDefinitionBootstrapTest {
         MachineDefinitions.bootstrapBuiltins();
 
         assertThat(MachineDefinitions.get(MMCR.id("blast_furnace"))).isNotNull();
+        assertThat(MachineDefinitions.get(MMCR.id("alloy_furnace"))).isNotNull();
         assertThat(MachineDefinitions.get(MMCR.id("test_cube"))).isNull();
         assertThat(MachineDefinitions.get(MMCR.id("controller_tick"))).isNull();
         assertThat(MachineDefinitions.get(MMCR.id("iron_compressor"))).isNull();

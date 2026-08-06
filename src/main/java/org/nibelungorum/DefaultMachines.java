@@ -30,6 +30,7 @@ import java.util.List;
 public final class DefaultMachines {
 
     private static final Identifier BLAST_FURNACE_ID = MMCR.id("blast_furnace");
+    private static final Identifier ALLOY_FURNACE_ID = MMCR.id("alloy_furnace");
     private static final Identifier CRACKER_ID = MMCR.id("cracker");
     private static final Identifier REACTOR_ID = MMCR.id("reactor");
 
@@ -46,6 +47,12 @@ public final class DefaultMachines {
             Block energyInput = ModBlocks.BLOCKS.get("energy_input_hatch").get();
             Block energyOutput = ModBlocks.BLOCKS.get("energy_output_hatch").get();
             MachineRegistry.register(blastFurnace(casing, itemInput, itemOutput, fluidInput, fluidOutput, energyInput, energyOutput));
+        }
+        if (MachineRegistry.getMachine(ALLOY_FURNACE_ID) == null) {
+            Block itemInput = ModBlocks.BLOCKS.get("item_input_bus").get();
+            Block itemOutput = ModBlocks.BLOCKS.get("item_output_bus").get();
+            Block energyInput = ModBlocks.BLOCKS.get("energy_input_hatch").get();
+            MachineRegistry.register(alloyFurnace(itemInput, itemOutput, energyInput));
         }
         if (MachineRegistry.getMachine(CRACKER_ID) == null) {
             Block itemInput = ModBlocks.BLOCKS.get("item_input_bus").get();
@@ -103,6 +110,34 @@ public final class DefaultMachines {
         return definition == null
                 ? new DynamicMachine(BLAST_FURNACE_ID, "高炉", pattern, MachineControllerSpec.defaultsFor(BLAST_FURNACE_ID), portRequirements)
                 : new DynamicMachine(BLAST_FURNACE_ID, "高炉", pattern, MachineControllerSpec.defaultsFor(BLAST_FURNACE_ID), portRequirements);
+    }
+
+    public static Machine alloyFurnace(Block itemInput, Block itemOutput, Block energyInput) {
+        Block controller = ModBlocks.controllerFor(ALLOY_FURNACE_ID).get();
+        BlockPredicate ioPort = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(itemInput),
+                new BlockPredicate.OfBlock(itemOutput),
+                new BlockPredicate.OfBlock(energyInput)));
+
+        BlockArray pattern = BlockArray.builder()
+                .pattern("XXX", "XIX", "XXX")
+                .pattern("XMX", "I I", "XMX")
+                .pattern("XXX", "XCX", "XXX")
+                .set('X', new BlockPredicate.OfBlock(Blocks.BRICKS))
+                .set('C', new BlockPredicate.OfBlock(controller))
+                .set('I', ioPort)
+                .set('M', new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE))
+                .build();
+
+        PortRequirementSpec portRequirements = PortRequirementSpec.builder()
+                .min(PortKinds.ITEM_INPUT.id(), 1)
+                .min(PortKinds.ITEM_OUTPUT.id(), 1)
+                .min(PortKinds.ENERGY_INPUT.id(), 1)
+                .build();
+        Machine definition = MachineDefinitions.get(ALLOY_FURNACE_ID);
+        return definition == null
+                ? new DynamicMachine(ALLOY_FURNACE_ID, "合金炉", pattern, MachineControllerSpec.defaultsFor(ALLOY_FURNACE_ID), portRequirements)
+                : new DynamicMachine(ALLOY_FURNACE_ID, "合金炉", pattern, MachineControllerSpec.defaultsFor(ALLOY_FURNACE_ID), portRequirements);
     }
 
     public static Machine cracker(Block itemInput, Block itemOutput, Block fluidOutput, Block energyInput) {

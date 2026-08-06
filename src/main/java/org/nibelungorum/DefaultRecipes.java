@@ -30,6 +30,8 @@ public final class DefaultRecipes {
 
     private static final Identifier BLAST_FURNACE_ID = MMCR.id("blast_furnace");
     private static final Identifier BLAST_FURNACE_IRON_NUGGET_ID = MMCR.id("blast_furnace_iron_to_nugget");
+    private static final Identifier ALLOY_FURNACE_ID = MMCR.id("alloy_furnace");
+    private static final Identifier ALLOY_FURNACE_NETHERITE_ID = MMCR.id("alloy_furnace_netherite");
     private static final Identifier CRACKER_ID = MMCR.id("cracker");
     private static final Identifier CRACKER_COAL_LAPIS_ID = MMCR.id("cracker_coal_lapis");
     private static final Identifier REACTOR_ID = MMCR.id("reactor");
@@ -57,6 +59,27 @@ public final class DefaultRecipes {
             register(recipe);
         } else {
             LOG.info("ensureRegistered: built-in recipe {} already registered; skipping", BLAST_FURNACE_IRON_NUGGET_ID);
+        }
+
+        if (RecipeRegistry.getRecipe(ALLOY_FURNACE_NETHERITE_ID) == null) {
+            MachineRecipe recipe = new MachineRecipe(
+                    ALLOY_FURNACE_NETHERITE_ID,
+                    ALLOY_FURNACE_ID,
+                    100,
+                    List.of(
+                            new MachineIngredient.ItemIngredient(Ingredient.of(Items.ANCIENT_DEBRIS), 1),
+                            new MachineIngredient.ItemIngredient(Ingredient.of(Items.GOLD_INGOT), 1),
+                            new MachineIngredient.EnergyIngredient(5)
+                    ),
+                    List.of(new ItemStack(Holder.direct(Items.NETHERITE_INGOT, DataComponentMap.EMPTY), 1)),
+                    List.of(),
+                    0,
+                    1,
+                    true
+            );
+            register(recipe);
+        } else {
+            LOG.info("ensureRegistered: built-in recipe {} already registered; skipping", ALLOY_FURNACE_NETHERITE_ID);
         }
 
         if (RecipeRegistry.getRecipe(CRACKER_COAL_LAPIS_ID) == null) {
