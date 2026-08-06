@@ -34,3 +34,13 @@ Result: `BUILD SUCCESSFUL` with 49 focused tests completed.
 - The brief's first new test expected count `6` for base `2`, recipe modifier `MULTIPLY 1`, and structure modifier `ADD 2`. Existing project semantics define modifier application as `(value + add) * mul`, so the correct runtime count under current semantics is `4`. I preserved existing `RecipeModifier.applyModifiers` behavior and adjusted only that assertion.
 - `RecipeSearchTask.java` did not need direct code changes; it consumes the snapshot through `RecipeCraftingContextPool.borrow` as intended.
 - No unrelated `org/nibelungorum`, related tests, or `TestBootstrap` changes were touched.
+
+## P3B Task 6 Review Fix
+
+Command:
+
+```bash
+./gradlew test --tests cn.howxu.mmcr.api.recipe.MachineRecipeTest --tests cn.howxu.mmcr.api.recipe.RecipeCraftingContextTest --tests cn.howxu.mmcr.api.recipe.RecipeSearchTaskTest --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest --no-daemon
+```
+
+Result: `BUILD SUCCESSFUL` after adding regression coverage for modifier-only snapshot refresh preserving the active `RecipeCraftingContext` instance.

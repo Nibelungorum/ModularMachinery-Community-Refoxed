@@ -760,8 +760,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (!context.isStructureVersionCurrent()) {
             LOG.info("[Ctrl#{}] tickActiveRecipe: recipe {} refreshed stale structure context at pos={}",
                     instanceId, active.getRecipe().id(), getBlockPos());
-            context = new RecipeCraftingContext(this);
-            context.setStructureModifiers(foundModifierList());
+            if (context.isStructureVersionOnlyCurrent()) {
+                context.refreshModifierSnapshot(foundModifierList());
+            } else {
+                context = new RecipeCraftingContext(this);
+                context.setStructureModifiers(foundModifierList());
+            }
         }
         ActiveMachineRecipe.TickStatus status = active.tick(context);
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {

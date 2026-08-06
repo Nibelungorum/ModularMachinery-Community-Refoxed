@@ -430,6 +430,35 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void modifier_only_snapshot_refresh_keeps_active_recipe_context() throws Exception {
+        var first = replacementAt(new BlockPos(1, 0, 0), Blocks.GOLD_BLOCK, "speed", 2F);
+        var second = replacementAt(new BlockPos(1, 0, 0), Blocks.DIAMOND_BLOCK, "speed", 4F);
+        var machine = machineWithReplacements(first, second);
+        MachineDefinitions.register(machine);
+
+        MachineControllerBlockEntity controller = controllerFor(machine);
+        Level level = levelOf(controller);
+        BlockPos replacementPos = controller.getBlockPos().offset(1, 0, 0);
+        placeControllerAndReplacement(controller, machine, Blocks.GOLD_BLOCK, Blocks.GOLD_BLOCK);
+        level.setBlock(replacementPos, Blocks.GOLD_BLOCK.defaultBlockState(), 3);
+        tickUntilFormed(controller, machine);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("modifier_refresh_active_recipe"), machine.registryName(), 100, List.of(), List.of());
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, 1);
+        RecipeCraftingContext activeContext = new RecipeCraftingContext(controller);
+        activeContext.setStructureModifiers(controller.foundModifierList());
+        setField(MachineControllerBlockEntity.class, controller, "active", active);
+        setField(MachineControllerBlockEntity.class, controller, "context", activeContext);
+
+        level.setBlock(replacementPos, Blocks.DIAMOND_BLOCK.defaultBlockState(), 3);
+        invokeCheckStructure(controller);
+        invokeTickActiveRecipe(controller);
+
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "context")).isSameAs(activeContext);
+        assertThat(activeContext.isStructureVersionCurrent()).isTrue();
+        assertThat(controller.getTickCounter()).isEqualTo(1);
+    }
+
+    @Test
     void set_machine_clears_matched_modifier_snapshot() throws Exception {
         var replacement = replacementAt(new BlockPos(1, 0, 0), Blocks.GOLD_BLOCK, "speed", 2F);
         var machine = machineWithReplacements(replacement);
@@ -1074,6 +1103,12 @@ class MachineControllerBlockEntityTest {
 
     private static void invokeCheckStructure(MachineControllerBlockEntity controller) throws Exception {
         Method method = MachineControllerBlockEntity.class.getDeclaredMethod("checkStructure");
+        method.setAccessible(true);
+        method.invoke(controller);
+    }
+
+    private static void invokeTickActiveRecipe(MachineControllerBlockEntity controller) throws Exception {
+        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("tickActiveRecipe");
         method.setAccessible(true);
         method.invoke(controller);
     }

@@ -58,6 +58,15 @@ public final class RecipeCraftingContext {
                 && modifierSnapshotVersion == controller.getModifierSnapshotVersion();
     }
 
+    public boolean isStructureVersionOnlyCurrent() {
+        return structureVersion == controller.getStructureVersion();
+    }
+
+    public void refreshModifierSnapshot(List<RecipeModifier> modifiers) {
+        this.modifierSnapshotVersion = controller.getModifierSnapshotVersion();
+        setStructureModifiers(modifiers);
+    }
+
     void resetFor(MachineControllerBlockEntity controller) {
         this.controller = controller;
         this.structureVersion = controller.getStructureVersion();
