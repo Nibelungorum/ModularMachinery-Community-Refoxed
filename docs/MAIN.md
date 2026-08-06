@@ -21,7 +21,7 @@
 ## 1. 当前基线（2026-08-06）
 
 > 数据来源：直接盘点 `src/main/java/cn/howxu/mmcr/**` 源码 + 引用 `reference/mmce` 对照 + Git log。
-> Git 分支：`dev/neo/26.1.2` 最新提交 `4d0e6c2 release: stage 3 in`。
+> Git 分支：`dev/neo/26.1.2` 阶段 3B implementation baseline `386b210 test(stage3b): cover rotated position modifiers`。
 
 ### 1.1 已基本落地（按 MMCR 模块）
 
@@ -124,7 +124,7 @@
 
 > 本节列出未关闭的悬置项；每项都已登记在 §2 对应阶段。
 
-- P3A 已完成 recipe-local static modifier runtime chain；**P3B pattern position modifier 仍待做**。
+- P3B pattern position modifier 已完成：支持 single-block replacement metadata、结构内位置匹配、朝向 / 旋转位置映射，以及 runtime modifier snapshot 与 recipe 运行链合并。
 - P3A 已让 output chance 在 finish 时应用；**modifier 影响的 input chance 后续迭代**。
 - JEI 集成（recipe category、recipe transfer）尚未实现（§2.5）。
 - 平行 / 工厂 / 智能接口 / 升级 / 蓝图 / 自动组装 / AE2 等高级特性**全部 OUT**（详见 §2.6 – §2.9）。
@@ -186,7 +186,7 @@ src/main/java/
 | **阶段 1 核心运行时闭环** | 控制器成型 → 走结构内组件 → recipe start / tick / finish | ✅ 完成 | §4–§6 / §8 |
 | **阶段 2 Requirement / Component 正式层** | 路由 + 错误反馈稳定 | ✅ 完成 | §7 / §8 / §15 |
 | **阶段 3A Recipe Modifier 全链** | recipe-local static modifier runtime chain | ✅ 完成 | §9 |
-| **阶段 3B Pattern position modifier** | pattern 位置级 modifier replacement | ⬜ 未开始 | §9.2 / §9.4 |
+| **阶段 3B Pattern position modifier** | pattern 位置级 modifier replacement | ✅ 完成 | §9.2 / §9.4 |
 | **阶段 4 JEI 集成** | recipe category + transfer | ⬜ 未开始 | §23 / §24（功能） |
 | **阶段 5 并行与工厂控制器** | parallel + factory 多线程 | ⬜ 未开始 | §13 / §15 |
 | **阶段 6 智能接口** | interface_number + 数值输入 | ⬜ 未开始 | §12 / §7 |
@@ -233,20 +233,22 @@ src/main/java/
 
 **验收门槛**：测试覆盖 raw serialization、modifier output edge case；JEI 集成前的最终值稳定。
 
-### 2.4 阶段 3B：Pattern position modifier ⬜
+### 2.4 阶段 3B：Pattern position modifier ✅
 
-**目标**：在 3A + JEI 稳定后移植结构位置级 modifier 替换。
+**目标**：在阶段 3A recipe modifier runtime chain 上移植结构位置级 modifier 替换；本阶段不依赖 JEI，JEI 仍作为阶段 4 的展示 / transfer 体验补完。
 
-**未开始任务**：
+**已完成**：
 
-- `SingleBlockModifierReplacement` 落到 `BlockArray` 附加 per-position metadata。
-- modifier 方块只在 matched pattern 内生效；结构外同类方块不参与计算。
-- modifier 位置随机器朝向 / 旋转正确映射。
-- 与 selector tag 共存时不改变已有 component 路由语义。
+- `SingleBlockModifierReplacement` 落到 `BlockArray` 附加 per-position metadata，并保留旧构造器可编译。
+- modifier 方块只在 matched pattern 内生效；结构外同类方块不进入 machine replacement map。
+- modifier 位置随 horizontal facing、vertical facing 和 roll-facing 通过 `BlockRotator` 同一公式映射。
+- 结构匹配、first mismatch、compiled path 与 vertical fallback path 使用一致的 replacement 判断。
+- runtime recipe search、active duration、ioTick、simulate、commit 共享合并后的 effective modifier list，且 modifier snapshot 不向调用方泄漏可变引用。
+- 与 selector tag 共存时不改变已有 component route / requirement tag 语义。
 
-**依赖**：阶段 4 JEI（避免提前绑定到不稳定的结构 metadata / selector tag / 旋转语义）。
+**后续边界**：`MultiBlockModifierReplacement` 保持未接入；JEI recipe category / transfer 仍在阶段 4 单独实现。
 
-**验收门槛**：modifier 方块在结构内能影响 IO / 输出 / chance；旋转 / 镜像后位置映射正确。
+**验收门槛**：modifier 方块在结构内能影响 IO / 输出 / chance / duration；旋转 / 镜像后位置映射正确；JEI 暂未实现但不阻塞本阶段 runtime 验收。
 
 ### 2.5 阶段 4：JEI 集成 ⬜
 
@@ -381,12 +383,11 @@ src/main/java/
 
 ### 2.10 推荐实施顺序
 
-1. **阶段 4 JEI**：补 recipe category + transfer，让玩家能看见 / 操作现有阶段 1-3A 的成果。
-2. **阶段 3B Pattern position modifier**：在 JEI 稳定后做结构位置级 modifier 替换。
-3. **阶段 5 Parallel**：先 parallel controller，再 factory controller。
-4. **阶段 6 Smart Interface**：补 `interface_number`。
-5. **阶段 7 UX**：upgrade / blueprint / preview / auto assembly / projector 拆开做。
-6. **阶段 8 第三方**：AE2 优先；其次 Mekanism / Jade / GTCeu / ModularMagic，按实际需求逐个移植。
+1. **阶段 4 JEI**：补 recipe category + transfer，让玩家能看见 / 操作现有阶段 1-3B 的成果。
+2. **阶段 5 Parallel**：先 parallel controller，再 factory controller。
+3. **阶段 6 Smart Interface**：补 `interface_number`。
+4. **阶段 7 UX**：upgrade / blueprint / preview / auto assembly / projector 拆开做。
+5. **阶段 8 第三方**：AE2 优先；其次 Mekanism / Jade / GTCeu / ModularMagic，按实际需求逐个移植。
 
 ---
 
@@ -481,7 +482,21 @@ MAIN.md ──────────── 总规划（你看这里）
 
 > 详细 diff 见 `git log --oneline dev/neo/26.1.2`。
 
-- `4d0e6c2` release: stage 3 in（**当前 HEAD**）
+- `386b210` test(stage3b): cover rotated position modifiers（**阶段 3B implementation baseline**）
+- `edfd455` fix(recipe): clarify modifier snapshots
+- `1d2192e` fix(recipe): refresh active duration after modifier changes
+- `6d94b23` fix(recipe): keep active context routes on modifier refresh
+- `2e41a94` feat(recipe): apply structure position modifiers at runtime
+- `d06758e` fix(machine): refresh matched modifiers during formed checks
+- `249faaa` feat(machine): collect matched position modifiers
+- `e9199f7` fix(machine): preserve replacement matches after formation
+- `b13d516` feat(machine): match single block replacements
+- `363a11b` feat(machine): compile position modifier rotations
+- `e40a68c` feat(machine): expose position modifier replacements
+- `a8a82ed` test(modifier): document single block replacement test
+- `a0f47c7` feat(modifier): add single block replacement metadata
+- 阶段 3B 最终验证（2026-08-06）：`./gradlew compileJava --no-daemon` → `BUILD SUCCESSFUL in 5s`；`./gradlew test --no-daemon` → `BUILD SUCCESSFUL in 9s`；`./gradlew check --no-daemon` → `BUILD SUCCESSFUL in 9s`。
+- `4d0e6c2` release: stage 3 in
 - `f6ff6aa` Merge: work/p3a-recipe-modifier-chain → dev/neo/26.1.2
 - `50f95a0` fix(recipe): skip impossible zero chance outputs
 - `7a2f380` feat(recipe): expose modifiers through recipe authoring
