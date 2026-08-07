@@ -9,6 +9,7 @@ import cn.howxu.mmcr.internal.command.ReloadCommand;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.event.StructureDirtyEvents;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
+import cn.howxu.mmcr.internal.network.PktControllerSpecsPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockDetectorPickPayload;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -29,6 +30,7 @@ import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import org.slf4j.Logger;
@@ -61,6 +63,16 @@ public class MMCR {
         NeoForge.EVENT_BUS.addListener(StructureDirtyEvents::onFluidPlaced);
         NeoForge.EVENT_BUS.addListener(StructureDirtyEvents::onBlockBroken);
         NeoForge.EVENT_BUS.addListener(StructureDirtyEvents::onChunkUnloaded);
+        NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedInEvent event) -> {
+            if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+                cn.howxu.mmcr.internal.network.ControllerSpecSync.sendTo(player);
+            }
+        });
+        NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerChangedDimensionEvent event) -> {
+            if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+                cn.howxu.mmcr.internal.network.ControllerSpecSync.sendTo(player);
+            }
+        });
         NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent ev) -> {
             ReloadCommand.register(ev.getDispatcher());
             BuildCommand.register(ev.getDispatcher());
@@ -71,6 +83,10 @@ public class MMCR {
                     PktMachineStatePayload.TYPE,
                     PktMachineStatePayload.STREAM_CODEC,
                     PktMachineStatePayload::handle)
+                    .playToClient(
+                            PktControllerSpecsPayload.TYPE,
+                            PktControllerSpecsPayload.STREAM_CODEC,
+                            PktControllerSpecsPayload::handle)
                     .playToServer(
                             PktMultiblockDetectorPickPayload.TYPE,
                             PktMultiblockDetectorPickPayload.STREAM_CODEC,

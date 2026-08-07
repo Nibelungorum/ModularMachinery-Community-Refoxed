@@ -1,8 +1,6 @@
 package cn.howxu.mmcr.datagen;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.machine.MachineControllerSpec;
-import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
@@ -24,8 +22,6 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -53,29 +49,15 @@ public final class ModelGen extends ModelProvider {
 
     @Override
     protected void registerModels(BlockModelGenerators blockModels, ItemModelGenerators itemModels) {
-        Map<String, MachineControllerSpec> controllers = new HashMap<>();
-        MachineDefinitions.all().forEach(machine ->
-                controllers.put(machine.controller().id().getPath(), machine.controller()));
-
         ModBlocks.BLOCKS.forEach((name, blockHolder) -> {
             Block block = blockHolder.get();
-            MachineControllerSpec controller = controllers.get(name);
-
-            if (controller != null || block instanceof MachineControllerBlock) {
-                final MachineControllerSpec spec = controller != null
-                        ? controller
-                        : MachineControllerSpec.defaultsFor(((MachineControllerBlock) block).machineId());
-                TextureMapping mapping = new TextureMapping()
-                        .put(BG_ALL, new Material(spec.sideTexture()))
-                        .put(OV_TOP, new Material(spec.topTexture()))
-                        .put(OV_SIDE, new Material(spec.sideTexture()))
-                        .put(OV_FRONT, new Material(spec.frontTexture()));
-                Identifier modelId = CONTROLLER_OVERLAY.create(block, mapping, blockModels.modelOutput);
+            if (block instanceof MachineControllerBlock) {
+                Identifier modelId = MMCR.id("block/machine_controller_overlay");
                 blockModels.blockStateOutput.accept(MultiVariantGenerator
                         .dispatch(block, BlockModelGenerators.plainVariant(modelId))
                         .with(MachineControllerVariants.full()));
                 blockModels.registerSimpleItemModel(block.asItem(),
-                        ModelLocationUtils.getModelLocation(block));
+                        modelId);
             } else if (isIoPort(name)) {
                 TextureMapping mapping = new TextureMapping()
                         .put(BG_ALL, new Material(MMCR.id("block/basic_casing")))
