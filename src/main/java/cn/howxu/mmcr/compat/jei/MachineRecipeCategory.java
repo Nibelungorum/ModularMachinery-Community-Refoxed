@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.jei;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.registry.ModBlocks;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
@@ -13,8 +14,11 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.Ingredient;
 import org.jspecify.annotations.Nullable;
 
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -65,14 +69,24 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     public void setRecipe(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe, IFocusGroup focuses) {
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
         for (MachineRecipeLayout.SlotPlan slot : layout.itemInputs()) {
+            Ingredient ingredient = recipe.itemInputs().get(slot.index());
+            int count = recipe.itemInputCounts().get(slot.index());
+            List<ItemStack> stacks = itemStacks(ingredient, count);
+            MMCR.LOG.info("JEI input slot recipe={} machine={} index={} position=({}, {}) requestedCount={} ingredient={} candidateCount={} stacks={}",
+                    recipe.recipeId(), recipe.machineId(), slot.index(), slot.x(), slot.y(), count, ingredient,
+                    stacks.size(), stacks.stream().map(MachineRecipeCategory::describeStack).toList());
             builder.addInputSlot(slot.x(), slot.y())
                     .setStandardSlotBackground()
-                    .add(recipe.itemInputs().get(slot.index()));
+                    .addItemStacks(stacks);
         }
         for (MachineRecipeLayout.SlotPlan slot : layout.itemOutputs()) {
+            ItemStack rawStack = recipe.itemOutputs().get(slot.index());
+            ItemStack stack = normalizeOutputStack(rawStack);
+            MMCR.LOG.info("JEI output slot recipe={} machine={} index={} position=({}, {}) rawStack={} jeiStack={}",
+                    recipe.recipeId(), recipe.machineId(), slot.index(), slot.x(), slot.y(), describeStack(rawStack), describeStack(stack));
             builder.addOutputSlot(slot.x(), slot.y())
                     .setOutputSlotBackground()
-                    .add(recipe.itemOutputs().get(slot.index()));
+                    .add(stack);
         }
         for (MachineRecipeLayout.SlotPlan slot : layout.fluidInputs()) {
             int amount = recipe.fluidInputAmounts().get(slot.index());
@@ -121,5 +135,23 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     private static String seconds(int ticks) {
         return String.format(Locale.ROOT, "%.1f", ticks / 20.0F);
+    }
+
+    static List<ItemStack> itemStacks(Ingredient ingredient, int count) {
+        return ingredient.items()
+                .map(item -> item.value().getDefaultInstance().copyWithCount(count))
+                .toList();
+    }
+
+    private static String describeStack(ItemStack stack) {
+        return "{item=" + stack.getItem() + ", count=" + stack.getCount()
+                + ", empty=" + stack.isEmpty() + ", components=" + stack.getComponents() + "}";
+    }
+
+    private static ItemStack normalizeOutputStack(ItemStack stack) {
+        if (stack.isComponentsPatchEmpty()) {
+            return new ItemStack(stack.getItem(), stack.getCount());
+        }
+        return stack;
     }
 }

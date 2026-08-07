@@ -36,7 +36,7 @@ class MachineRecipeDisplayTest {
                 MMCR.id("blast_furnace"),
                 120,
                 List.of(
-                        new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2),
+                        new MachineIngredient.ItemIngredient(Ingredient.of(Items.COAL), 8),
                         new MachineIngredient.FluidIngredient(FluidIngredient.of(Fluids.WATER), 250),
                         new MachineIngredient.EnergyIngredient(40)
                 ),
@@ -54,8 +54,11 @@ class MachineRecipeDisplayTest {
         assertThat(display.machineId()).isEqualTo(MMCR.id("blast_furnace"));
         assertThat(display.durationTicks()).isEqualTo(120);
         assertThat(display.itemInputs()).hasSize(1);
-        assertThat(display.itemInputCounts()).containsExactly(2);
-        assertThat(display.itemOutputs()).extracting(ItemStack::getCount).containsExactly(4);
+        assertThat(display.itemInputCounts()).containsExactly(8);
+        assertThat(display.itemOutputs()).singleElement().satisfies(output -> {
+            assertThat(output.is(Items.IRON_NUGGET)).isTrue();
+            assertThat(output.getCount()).isEqualTo(4);
+        });
         assertThat(display.fluidInputs()).hasSize(1);
         assertThat(display.fluidInputAmounts()).containsExactly(250);
         assertThat(display.fluidOutputs()).hasSize(1);
