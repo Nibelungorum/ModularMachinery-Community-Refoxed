@@ -5,9 +5,9 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
-import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
@@ -81,18 +81,14 @@ public final class TestBootstrap {
         bind(ModBlocks.BLOCKS.get("fluid_output_hatch"), Blocks.BARREL);
         bind(ModBlocks.BLOCKS.get("energy_input_hatch"), Blocks.COPPER_BLOCK);
         bind(ModBlocks.BLOCKS.get("energy_output_hatch"), Blocks.COPPER_BLOCK);
+        restoreMachineDefinitions();
         registerRuntimeBuiltins();
         initialized = true;
     }
 
     public static void restoreMachineDefinitions() {
+        MachineDefinitions.clearForTesting();
         BuiltinMachines.register();
-        MachineDefinitions.addBuiltinSupplier(() ->
-                new DynamicMachine(id("test_cube"), "Test", new BlockArray(Map.of())));
-        MachineDefinitions.addBuiltinSupplier(() ->
-                new DynamicMachine(id("controller_tick"), "Controller Tick", new BlockArray(Map.of())));
-        MachineDefinitions.addBuiltinSupplier(() ->
-                new DynamicMachine(id("iron_compressor"), "Iron Compressor", new BlockArray(Map.of())));
         MachineDefinitions.bootstrapBuiltins();
     }
 
@@ -114,21 +110,19 @@ public final class TestBootstrap {
         Item.BY_BLOCK.put(block, item);
     }
 
+    private static MachineControllerBlock controllerBlock(Identifier machineId) {
+        MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
+        blocks.unfreeze(true);
+        MachineControllerBlock block = new MachineControllerBlock(machineId, Blocks.IRON_BLOCK.properties());
+        Registry.register(BuiltInRegistries.BLOCK, MachineControllerSpec.defaultsFor(machineId).id(), block);
+        blocks.freeze();
+        return block;
+    }
+
     private static void bind(Object deferredHolder, Object value) throws Exception {
         Field holder = deferredHolder.getClass().getSuperclass().getDeclaredField("holder");
         holder.setAccessible(true);
         holder.set(deferredHolder, Holder.direct(value));
-    }
-
-    private static MachineControllerBlock controllerBlock(Identifier machineId) throws Exception {
-        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
-        unsafeField.setAccessible(true);
-        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
-        MachineControllerBlock block = (MachineControllerBlock) unsafe.allocateInstance(MachineControllerBlock.class);
-        Field machineIdField = MachineControllerBlock.class.getDeclaredField("machineId");
-        machineIdField.setAccessible(true);
-        machineIdField.set(block, machineId);
-        return block;
     }
 
     @SuppressWarnings("unchecked")

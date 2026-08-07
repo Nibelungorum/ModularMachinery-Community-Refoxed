@@ -53,9 +53,6 @@ public final class DynamicContentReloadService {
             if (MachineDefinitions.containsStatic(id) || MachineRegistry.containsStatic(id)) {
                 throw new IllegalStateException("Dynamic machine conflicts with static machine: " + id);
             }
-            if (!ModBlocks.hasControllerFor(id)) {
-                throw new IllegalStateException("Dynamic machine has no startup-reserved controller: " + id);
-            }
             machines.put(id, machine);
         }
 

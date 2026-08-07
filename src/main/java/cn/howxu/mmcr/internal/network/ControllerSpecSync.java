@@ -33,6 +33,7 @@ public final class ControllerSpecSync {
     }
 
     public static void sendToAll(MinecraftServer server) {
+        if (server == null) return;
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             sendTo(player);
         }

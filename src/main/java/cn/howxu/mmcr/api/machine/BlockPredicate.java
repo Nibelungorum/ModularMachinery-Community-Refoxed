@@ -19,7 +19,7 @@ public sealed interface BlockPredicate {
     }
 
     record OfBlock(Block block) implements BlockPredicate {
-        @Override public boolean matches(BlockState state) { return state.is(block); }
+        @Override public boolean matches(BlockState state) { return state.getBlock() == block; }
     }
 
     record OfBlockState(BlockState state) implements BlockPredicate {

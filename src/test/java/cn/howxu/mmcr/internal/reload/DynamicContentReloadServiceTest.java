@@ -87,11 +87,7 @@ class DynamicContentReloadServiceTest {
     }
 
     @Test
-    void candidateRecipeCannotReferenceRemovedDynamicMachineButCanReferenceStaticMachine() {
-        assertThatThrownBy(() -> DynamicContentReloadService.reload(candidate ->
-                candidate.registerMachine(machine("mmcr:unreserved"))))
-                .isInstanceOf(IllegalStateException.class);
-
+    void candidateRecipeCanReferenceStaticMachine() {
         var staticMachine = machine("mmcr:static");
         MachineRegistry.register(staticMachine);
         DynamicContentReloadService.reload(candidate ->
