@@ -43,9 +43,9 @@ class DefaultRecipesTest {
 
         assertThat(machine).isNotNull();
         var recipes = RecipeRegistry.byMachine(machine);
-        assertThat(recipes).hasSize(1);
+        assertThat(recipes).hasSize(10);
 
-        var recipe = recipes.getFirst();
+        var recipe = RecipeRegistry.getRecipe(MMCR.id("blast_furnace_iron_to_nugget"));
         assertThat(recipe.id()).isEqualTo(MMCR.id("blast_furnace_iron_to_nugget"));
         assertThat(recipe.tickTime()).isEqualTo(200);
         assertThat(recipe.inputs()).hasSize(2);
@@ -161,6 +161,14 @@ class DefaultRecipesTest {
         DefaultRecipes.ensureRegistered();
         DefaultRecipes.ensureRegistered();
 
-        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(4);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("blast_furnace"))).hasSize(10);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("alloy_furnace"))).hasSize(10);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker"))).hasSize(10);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("reactor"))).hasSize(10);
+        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(40);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker")))
+                .anySatisfy(recipe -> assertThat(recipe.fluidOutputs()).isNotEmpty());
+        assertThat(RecipeRegistry.recipes())
+                .anySatisfy(recipe -> assertThat(recipe.outputs()).hasSizeGreaterThan(1));
     }
 }

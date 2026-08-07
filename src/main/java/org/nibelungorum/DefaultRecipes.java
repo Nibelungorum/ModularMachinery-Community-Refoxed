@@ -22,109 +22,82 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * 默认内建配方注册入口。当前仅高炉内置:1 铁锭 → 1 铁粒,200 tick 消耗 200 FE。
+ * 默认内建配方注册入口。
  */
 public final class DefaultRecipes {
 
     private static final Logger LOG = LoggerFactory.getLogger(DefaultRecipes.class);
 
     private static final Identifier BLAST_FURNACE_ID = MMCR.id("blast_furnace");
-    private static final Identifier BLAST_FURNACE_IRON_NUGGET_ID = MMCR.id("blast_furnace_iron_to_nugget");
     private static final Identifier ALLOY_FURNACE_ID = MMCR.id("alloy_furnace");
     private static final Identifier ALLOY_FURNACE_NETHERITE_ID = MMCR.id("alloy_furnace_netherite");
     private static final Identifier CRACKER_ID = MMCR.id("cracker");
-    private static final Identifier CRACKER_COAL_LAPIS_ID = MMCR.id("cracker_coal_lapis");
     private static final Identifier REACTOR_ID = MMCR.id("reactor");
-    private static final Identifier REACTOR_DIAMOND_WATER_ID = MMCR.id("reactor_diamond_water");
 
     private DefaultRecipes() {
     }
 
     public static void ensureRegistered() {
-        if (RecipeRegistry.getRecipe(BLAST_FURNACE_IRON_NUGGET_ID) == null) {
-            MachineRecipe recipe = new MachineRecipe(
-                    BLAST_FURNACE_IRON_NUGGET_ID,
-                    BLAST_FURNACE_ID,
-                    200,
-                    List.of(
-                            new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1),
-                            new MachineIngredient.EnergyIngredient(1)
-                    ),
-                    List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)),
-                    List.of(),
-                    0,
-                    1,
-                    true
-            );
-            register(recipe);
-        } else {
-            LOG.info("ensureRegistered: built-in recipe {} already registered; skipping", BLAST_FURNACE_IRON_NUGGET_ID);
+        for (Definition definition : definitions()) {
+            if (RecipeRegistry.getRecipe(definition.id()) == null) {
+                register(new MachineRecipe(definition.id(), definition.machineId(), definition.ticks(), definition.inputs(),
+                        definition.outputs(), List.of(), 0, 1, true, definition.fluidOutputs()));
+            } else {
+                LOG.info("ensureRegistered: built-in recipe {} already registered; skipping", definition.id());
+            }
         }
+    }
 
-        if (RecipeRegistry.getRecipe(ALLOY_FURNACE_NETHERITE_ID) == null) {
-            MachineRecipe recipe = new MachineRecipe(
-                    ALLOY_FURNACE_NETHERITE_ID,
-                    ALLOY_FURNACE_ID,
-                    100,
-                    List.of(
-                            new MachineIngredient.ItemIngredient(Ingredient.of(Items.ANCIENT_DEBRIS), 1),
-                            new MachineIngredient.ItemIngredient(Ingredient.of(Items.GOLD_INGOT), 1),
-                            new MachineIngredient.EnergyIngredient(5)
-                    ),
-                    List.of(new ItemStack(Holder.direct(Items.NETHERITE_INGOT, DataComponentMap.EMPTY), 1)),
-                    List.of(),
-                    0,
-                    1,
-                    true
-            );
-            register(recipe);
-        } else {
-            LOG.info("ensureRegistered: built-in recipe {} already registered; skipping", ALLOY_FURNACE_NETHERITE_ID);
-        }
+    private static List<Definition> definitions() {
+        return List.of(
+                standardDefinitions(BLAST_FURNACE_ID, "blast_furnace", new Definition(MMCR.id("blast_furnace_iron_to_nugget"), BLAST_FURNACE_ID, 200, List.of(itemInput(Items.IRON_INGOT, 1), energyInput(1)), List.of(item(Items.IRON_NUGGET, 1)), List.of())),
+                standardDefinitions(ALLOY_FURNACE_ID, "alloy_furnace", new Definition(ALLOY_FURNACE_NETHERITE_ID, ALLOY_FURNACE_ID, 100, List.of(itemInput(Items.ANCIENT_DEBRIS, 1), itemInput(Items.GOLD_INGOT, 1), energyInput(5)), List.of(item(Items.NETHERITE_INGOT, 1)), List.of())),
+                standardDefinitions(CRACKER_ID, "cracker", new Definition(MMCR.id("cracker_coal_lapis"), CRACKER_ID, 160, List.of(itemInput(Items.COAL, 8), itemInput(Items.LAPIS_LAZULI, 1), energyInput(100)), List.of(item(Items.REDSTONE, 4)), List.of(fluidOutput(Fluids.WATER, 500)))),
+                standardDefinitions(REACTOR_ID, "reactor", new Definition(MMCR.id("reactor_diamond_water"), REACTOR_ID, 200, List.of(itemInput(Items.DIAMOND, 1), fluidInput(Fluids.WATER, 500), energyOutput(100)), List.of(item(Items.COAL, 1)), List.of(fluidOutput(Fluids.LAVA, 500))))
+        ).stream().flatMap(List::stream).toList();
+    }
 
-        if (RecipeRegistry.getRecipe(CRACKER_COAL_LAPIS_ID) == null) {
-            MachineRecipe recipe = new MachineRecipe(
-                    CRACKER_COAL_LAPIS_ID,
-                    CRACKER_ID,
-                    160,
-                    List.of(
-                            new MachineIngredient.ItemIngredient(Ingredient.of(Items.COAL), 8),
-                            new MachineIngredient.ItemIngredient(Ingredient.of(Items.LAPIS_LAZULI), 1),
-                            new MachineIngredient.EnergyIngredient(100)
-                    ),
-                    List.of(new ItemStack(Holder.direct(Items.REDSTONE, DataComponentMap.EMPTY), 4)),
-                    List.of(),
-                    0,
-                    1,
-                    true,
-                    List.of(new FluidStack(boundFluid(Fluids.WATER), 500))
-            );
-            register(recipe);
-        } else {
-            LOG.info("ensureRegistered: built-in recipe {} already registered; skipping", CRACKER_COAL_LAPIS_ID);
-        }
+    private static List<Definition> standardDefinitions(Identifier machineId, String prefix, Definition first) {
+        return List.of(
+                first,
+                new Definition(MMCR.id(prefix + "_copper_to_nugget"), machineId, 200, List.of(itemInput(Items.COPPER_INGOT, 1), energyInput(2)), List.of(item(Items.COPPER_NUGGET, 1)), List.of()),
+                new Definition(MMCR.id(prefix + "_gold_to_nugget"), machineId, 200, List.of(itemInput(Items.GOLD_INGOT, 1), energyInput(3)), List.of(item(Items.GOLD_NUGGET, 1)), List.of()),
+                new Definition(MMCR.id(prefix + "_multi_item"), machineId, 200, List.of(itemInput(Items.IRON_INGOT, 1), itemInput(Items.GOLD_INGOT, 1), itemInput(Items.COPPER_INGOT, 1), energyInput(4)), List.of(item(Items.DIAMOND, 1)), List.of()),
+                new Definition(MMCR.id(prefix + "_multi_output"), machineId, 200, List.of(itemInput(Items.IRON_INGOT, 1), energyInput(5)), List.of(item(Items.IRON_NUGGET, 1), item(Items.GOLD_NUGGET, 1), item(Items.COPPER_NUGGET, 1)), List.of()),
+                new Definition(MMCR.id(prefix + "_water_input"), machineId, 200, List.of(fluidInput(Fluids.WATER, 250), energyInput(6)), List.of(item(Items.CLAY_BALL, 1)), List.of()),
+                new Definition(MMCR.id(prefix + "_lava_output"), machineId, 200, List.of(itemInput(Items.COAL, 1), energyInput(7)), List.of(item(Items.REDSTONE, 1)), List.of(fluidOutput(Fluids.LAVA, 250))),
+                new Definition(MMCR.id(prefix + "_water_to_lava"), machineId, 200, List.of(fluidInput(Fluids.WATER, 500), energyInput(8)), List.of(item(Items.COAL, 1)), List.of(fluidOutput(Fluids.LAVA, 500))),
+                new Definition(MMCR.id(prefix + "_mixed_input"), machineId, 200, List.of(fluidInput(Fluids.WATER, 250), itemInput(Items.IRON_INGOT, 1), itemInput(Items.GOLD_INGOT, 1), energyInput(9)), List.of(item(Items.EMERALD, 1)), List.of()),
+                new Definition(MMCR.id(prefix + "_mixed_output"), machineId, 200, List.of(fluidInput(Fluids.WATER, 250), itemInput(Items.DIAMOND, 1), energyOutput(100)), List.of(item(Items.IRON_NUGGET, 1), item(Items.GOLD_NUGGET, 1)), List.of(fluidOutput(Fluids.LAVA, 125)))
+        );
+    }
 
-        if (RecipeRegistry.getRecipe(REACTOR_DIAMOND_WATER_ID) == null) {
-            MachineRecipe recipe = new MachineRecipe(
-                    REACTOR_DIAMOND_WATER_ID,
-                    REACTOR_ID,
-                    200,
-                    List.of(
-                            new MachineIngredient.ItemIngredient(Ingredient.of(Items.DIAMOND), 1),
-                            new MachineIngredient.FluidIngredient(FluidIngredient.of(Fluids.WATER), 500),
-                            new MachineIngredient.EnergyIngredient(RecipeModifier.IOType.OUTPUT, 100)
-                    ),
-                    List.of(new ItemStack(Holder.direct(Items.COAL, DataComponentMap.EMPTY), 1)),
-                    List.of(),
-                    0,
-                    1,
-                    true,
-                    List.of(new FluidStack(boundFluid(Fluids.LAVA), 500))
-            );
-            register(recipe);
-        } else {
-            LOG.info("ensureRegistered: built-in recipe {} already registered; skipping", REACTOR_DIAMOND_WATER_ID);
-        }
+    private static ItemStack item(net.minecraft.world.item.Item item, int count) {
+        return new ItemStack(Holder.direct(item, DataComponentMap.EMPTY), count);
+    }
+
+    private static MachineIngredient itemInput(net.minecraft.world.item.Item item, int count) {
+        return new MachineIngredient.ItemIngredient(Ingredient.of(item), count);
+    }
+
+    private static MachineIngredient fluidInput(Fluid fluid, int amount) {
+        return new MachineIngredient.FluidIngredient(FluidIngredient.of(fluid), amount);
+    }
+
+    private static MachineIngredient energyInput(int fePerTick) {
+        return new MachineIngredient.EnergyIngredient(fePerTick);
+    }
+
+    private static MachineIngredient energyOutput(int fePerTick) {
+        return new MachineIngredient.EnergyIngredient(RecipeModifier.IOType.OUTPUT, fePerTick);
+    }
+
+    private static FluidStack fluidOutput(Fluid fluid, int amount) {
+        return new FluidStack(boundFluid(fluid), amount);
+    }
+
+    private record Definition(Identifier id, Identifier machineId, int ticks, List<MachineIngredient> inputs,
+                              List<ItemStack> outputs, List<FluidStack> fluidOutputs) {
     }
 
     private static Holder<Fluid> boundFluid(Fluid fluid) {
