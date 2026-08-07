@@ -52,3 +52,15 @@
 
 - Test bootstrap now registers/binds all built-in port blocks for unit tests so variant `BlockState` carries `IOPortBlock.kind()`. This is test-only but broader than the original fixture, because variant storage cannot be verified through vanilla placeholder blocks.
 - Existing unrelated modification to `.superpowers/sdd/task-1-report.md` was present and intentionally not included in this task commit.
+
+## Review Fix Follow-Up
+
+- Moved variant block entity holder binding into `TestBootstrap.bindPortBlocks()` so every test using the shared bootstrap gets matching real `IOPortBlock` and `BlockEntityType` holders.
+- Removed the duplicate variant block entity binding helper from `IOPortSizeTest`.
+- Reduced duplicate `kindFromState(...)` calls in concrete item/fluid/energy input/output constructors by resolving the kind once and passing it through a private constructor overload.
+- Added a small `kindFromState(...)` fallback guard for mismatched IO direction or storage family. A stronger constructor mismatch fallback was not kept because Minecraft validates the exact block entity type against the provided `BlockState` before that can safely recover.
+
+## Review Fix Verification
+
+- `rtk gradlew test --tests cn.howxu.mmcr.internal.tile.IOPortSizeTest --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest --no-daemon` → `BUILD SUCCESSFUL in 11s`; `17 actionable tasks: 2 executed, 15 up-to-date`.
+- `rtk gradlew compileJava --no-daemon` → `BUILD SUCCESSFUL in 6s`; `14 actionable tasks: 14 up-to-date`.

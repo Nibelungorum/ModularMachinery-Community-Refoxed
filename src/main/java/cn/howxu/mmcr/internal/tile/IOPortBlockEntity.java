@@ -18,11 +18,25 @@ public abstract class IOPortBlockEntity extends BlockEntity implements MachineCo
     }
 
     protected static IOPortKind kindFromState(BlockState state, IOPortKind fallback) {
-        return state.getBlock() instanceof IOPortBlock portBlock ? portBlock.kind() : fallback;
+        if (!(state.getBlock() instanceof IOPortBlock portBlock)) {
+            return fallback;
+        }
+        IOPortKind kind = portBlock.kind();
+        if (kind.ioType() != fallback.ioType()
+                || kind.itemBusSize().isPresent() != fallback.itemBusSize().isPresent()
+                || kind.fluidHatchSize().isPresent() != fallback.fluidHatchSize().isPresent()
+                || kind.energyHatchSize().isPresent() != fallback.energyHatchSize().isPresent()) {
+            return fallback;
+        }
+        return kind;
     }
 
     protected static BlockEntityType<?> typeFromState(BlockState state, IOPortKind fallback) {
-        return ModBlockEntities.BES.get(kindFromState(state, fallback).id()).get();
+        return typeForKind(kindFromState(state, fallback));
+    }
+
+    protected static BlockEntityType<?> typeForKind(IOPortKind kind) {
+        return ModBlockEntities.BES.get(kind.id()).get();
     }
 
     public abstract IOType ioType();

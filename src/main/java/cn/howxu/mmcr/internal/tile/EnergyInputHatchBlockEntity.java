@@ -11,8 +11,12 @@ public class EnergyInputHatchBlockEntity extends EnergyHatchBlockEntity {
     private final IOPortKind kind;
 
     public EnergyInputHatchBlockEntity(BlockPos pos, BlockState state) {
-        super(typeFromState(state, PortKinds.ENERGY_INPUT), pos, state, kindFromState(state, PortKinds.ENERGY_INPUT));
-        this.kind = kindFromState(state, PortKinds.ENERGY_INPUT);
+        this(pos, state, kindFromState(state, PortKinds.ENERGY_INPUT));
+    }
+
+    private EnergyInputHatchBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
+        super(typeForKind(kind), pos, state, kind);
+        this.kind = kind;
     }
 
     @Override

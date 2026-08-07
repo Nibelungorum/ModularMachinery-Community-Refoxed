@@ -11,8 +11,12 @@ public class FluidInputHatchBlockEntity extends FluidHatchBlockEntity {
     private final IOPortKind kind;
 
     public FluidInputHatchBlockEntity(BlockPos pos, BlockState state) {
-        super(typeFromState(state, PortKinds.FLUID_INPUT), pos, state, kindFromState(state, PortKinds.FLUID_INPUT));
-        this.kind = kindFromState(state, PortKinds.FLUID_INPUT);
+        this(pos, state, kindFromState(state, PortKinds.FLUID_INPUT));
+    }
+
+    private FluidInputHatchBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
+        super(typeForKind(kind), pos, state, kind);
+        this.kind = kind;
     }
 
     @Override

@@ -4,11 +4,7 @@ import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
-import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Registry;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.energy.EnergyStorage;
 import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
@@ -23,40 +19,6 @@ class IOPortSizeTest {
     @BeforeAll
     static void setup() throws Exception {
         TestBootstrap.bootstrap();
-        bindVariantBlockEntities();
-    }
-
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    private static void bindVariantBlockEntities() throws Exception {
-        MappedRegistry registry = (MappedRegistry) BuiltInRegistries.BLOCK_ENTITY_TYPE;
-        registry.unfreeze(true);
-        for (var kind : PortKinds.all()) {
-            String id = kind.id();
-            if (!BuiltInRegistries.BLOCK_ENTITY_TYPE.containsKey(Identifier.fromNamespaceAndPath("mmcr", id))) {
-                Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, Identifier.fromNamespaceAndPath("mmcr", id),
-                        new net.minecraft.world.level.block.entity.BlockEntityType(
-                                (net.minecraft.world.level.block.entity.BlockEntityType.BlockEntitySupplier) kind.entityFactory(),
-                                ModBlocks.BLOCKS.get(id).get()));
-            }
-            var value = BuiltInRegistries.BLOCK_ENTITY_TYPE.getValue(Identifier.fromNamespaceAndPath("mmcr", id));
-            bind(ModBlockEntities.BES.get(id), value);
-        }
-        registry.freeze();
-    }
-
-    private static void bind(Object deferredHolder, Object value) throws Exception {
-        Class<?> type = deferredHolder.getClass();
-        java.lang.reflect.Field holder = null;
-        while (type != null && holder == null) {
-            try {
-                holder = type.getDeclaredField("holder");
-            } catch (NoSuchFieldException ignored) {
-                type = type.getSuperclass();
-            }
-        }
-        if (holder == null) throw new NoSuchFieldException("holder");
-        holder.setAccessible(true);
-        holder.set(deferredHolder, net.minecraft.core.Holder.direct(value));
     }
 
     @Test

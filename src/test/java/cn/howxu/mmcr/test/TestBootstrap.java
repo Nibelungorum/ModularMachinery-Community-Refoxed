@@ -21,6 +21,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import org.nibelungorum.BuiltinMachines;
 
@@ -118,7 +119,16 @@ public final class TestBootstrap {
     }
 
     private static void bind(Object deferredHolder, Object value) throws Exception {
-        Field holder = deferredHolder.getClass().getSuperclass().getDeclaredField("holder");
+        Class<?> type = deferredHolder.getClass();
+        Field holder = null;
+        while (type != null && holder == null) {
+            try {
+                holder = type.getDeclaredField("holder");
+            } catch (NoSuchFieldException ignored) {
+                type = type.getSuperclass();
+            }
+        }
+        if (holder == null) throw new NoSuchFieldException("holder");
         holder.setAccessible(true);
         holder.set(deferredHolder, Holder.direct(value));
     }
@@ -143,14 +153,23 @@ public final class TestBootstrap {
 
     private static void bindPortBlocks() throws Exception {
         MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
+        MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
         blocks.unfreeze(true);
+        blockEntities.unfreeze(true);
         for (var kind : PortKinds.all()) {
             Block block = new IOPortBlock(kind, () -> ModBlockEntities.BES.get(kind.id()).get(), Blocks.IRON_BLOCK.properties());
             if (!BuiltInRegistries.BLOCK.containsKey(MMCR.id(kind.id()))) {
                 Registry.register(BuiltInRegistries.BLOCK, MMCR.id(kind.id()), block);
             }
             bind(ModBlocks.BLOCKS.get(kind.id()), block);
+
+            if (!BuiltInRegistries.BLOCK_ENTITY_TYPE.containsKey(MMCR.id(kind.id()))) {
+                Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id(kind.id()),
+                        new BlockEntityType<>(kind.entityFactory(), block));
+            }
+            bind(ModBlockEntities.BES.get(kind.id()), BuiltInRegistries.BLOCK_ENTITY_TYPE.getValue(MMCR.id(kind.id())));
         }
+        blockEntities.freeze();
         blocks.freeze();
     }
 

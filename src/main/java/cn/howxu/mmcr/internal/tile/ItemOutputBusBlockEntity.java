@@ -11,8 +11,12 @@ public class ItemOutputBusBlockEntity extends ItemBusBlockEntity {
     private final IOPortKind kind;
 
     public ItemOutputBusBlockEntity(BlockPos pos, BlockState state) {
-        super(typeFromState(state, PortKinds.ITEM_OUTPUT), pos, state, kindFromState(state, PortKinds.ITEM_OUTPUT));
-        this.kind = kindFromState(state, PortKinds.ITEM_OUTPUT);
+        this(pos, state, kindFromState(state, PortKinds.ITEM_OUTPUT));
+    }
+
+    private ItemOutputBusBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
+        super(typeForKind(kind), pos, state, kind);
+        this.kind = kind;
     }
 
     @Override
