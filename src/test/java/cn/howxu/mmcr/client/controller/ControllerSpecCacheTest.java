@@ -43,6 +43,21 @@ class ControllerSpecCacheTest {
         assertThat(invocations).hasValue(1);
     }
 
+    @Test
+    void modelKeyChangesWhenAcceptedSnapshotChanges() {
+        Identifier id = Identifier.parse("mmcr:model");
+        ControllerModelCache.clear();
+        ControllerSpecCache.replaceSnapshot(Map.of(id, testSpec(id)));
+        var first = ControllerModelCache.modelFor(id);
+
+        ControllerSpecCache.replaceSnapshot(Map.of(id, new MachineControllerSpec(
+                testSpec(id).id(), Identifier.parse("mmcr:block/changed"), testSpec(id).sideTexture(),
+                testSpec(id).topTexture(), testSpec(id).bottomTexture(), false)));
+
+        assertThat(ControllerModelCache.modelFor(id)).isNotSameAs(first);
+        assertThat(ControllerModelCache.size()).isEqualTo(1);
+    }
+
     private static MachineControllerSpec testSpec(Identifier machineId) {
         return new MachineControllerSpec(
                 Identifier.fromNamespaceAndPath(machineId.getNamespace(), machineId.getPath() + "_controller"),
