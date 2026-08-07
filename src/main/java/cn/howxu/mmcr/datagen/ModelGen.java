@@ -86,15 +86,13 @@ public final class ModelGen extends ModelProvider {
     }
 
     private static String overlayTextureFor(String blockName) {
-        return switch (blockName) {
-            case "item_input_bus" -> "overlay_inputbus_normal";
-            case "item_output_bus" -> "overlay_outputbus_normal";
-            case "fluid_input_hatch" -> "overlay_fluidinputhatch_normal";
-            case "fluid_output_hatch" -> "overlay_fluidoutputhatch_normal";
-            case "energy_input_hatch" -> "overlay_energyinputhatch_normal";
-            case "energy_output_hatch" -> "overlay_energyoutputhatch_normal";
-            default -> throw new IllegalArgumentException("No overlay texture for I/O port: " + blockName);
-        };
+        if (blockName.startsWith("item_input_bus")) return "overlay_inputbus_normal";
+        if (blockName.startsWith("item_output_bus")) return "overlay_outputbus_normal";
+        if (blockName.startsWith("fluid_input_hatch")) return "overlay_fluidinputhatch_normal";
+        if (blockName.startsWith("fluid_output_hatch")) return "overlay_fluidoutputhatch_normal";
+        if (blockName.startsWith("energy_input_hatch")) return "overlay_energyinputhatch_normal";
+        if (blockName.startsWith("energy_output_hatch")) return "overlay_energyoutputhatch_normal";
+        throw new IllegalArgumentException("No overlay texture for I/O port: " + blockName);
     }
 
     @Override

@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "mmcr:block/energy_output_hatch_small"
+    }
+  }
+}

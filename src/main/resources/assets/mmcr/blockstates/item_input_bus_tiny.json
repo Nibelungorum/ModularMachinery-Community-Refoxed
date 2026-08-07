@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "mmcr:block/item_input_bus_tiny"
+    }
+  }
+}
