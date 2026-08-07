@@ -1,38 +1,38 @@
-# Task 3 Report: Default Machine Recipe Coverage
+# Task 3 Report: Parallel Controller Block And Registration
 
-## Scope
+Status: DONE
 
-- Modified `src/main/java/org/nibelungorum/DefaultRecipes.java`.
-- Modified `src/test/java/org/nibelungorum/DefaultRecipesTest.java`.
-- Modified `src/test/java/cn/howxu/mmcr/BuiltinRecipeBootstrapTest.java`.
-- Did not modify, restore, or rewrite `.gitignore`.
+Modified files:
+- `src/main/java/cn/howxu/mmcr/internal/block/ParallelControllerBlock.java`
+- `src/main/java/cn/howxu/mmcr/internal/tile/ParallelControllerBlockEntity.java`
+- `src/main/java/cn/howxu/mmcr/api/recipe/helper/ProcessingComponent.java`
+- `src/main/java/cn/howxu/mmcr/internal/tile/MachineControllerBlockEntity.java`
+- `src/main/java/cn/howxu/mmcr/registry/ModBlocks.java`
+- `src/main/java/cn/howxu/mmcr/registry/ModBlockEntities.java`
+- `src/main/java/cn/howxu/mmcr/datagen/Translations.java`
+- `src/main/java/cn/howxu/mmcr/datagen/ModelGen.java`
+- `src/test/java/cn/howxu/mmcr/registry/ParallelControllerRegistrationTest.java`
+- `src/test/java/cn/howxu/mmcr/internal/tile/MachineControllerBlockEntityTest.java`
+- `src/test/java/cn/howxu/mmcr/datagen/TranslationsTest.java`
+- `src/test/java/cn/howxu/mmcr/test/TestBootstrap.java`
 
-## Implementation
+Implementation summary:
+- Added `ParallelControllerBlock` and `ParallelControllerBlockEntity` with tier storage and max parallelism exposure.
+- Registered one block and one block entity for every `ParallelTier` id: `parallel_controller_4`, `parallel_controller_16`, `parallel_controller_64`, `parallel_controller_256`, `parallel_controller_512`.
+- Added block item coverage through existing `ModItems` block item registration.
+- Added `ProcessingComponent` constructor preserving component metadata and optional `ComponentType`.
+- Added `MachineControllerBlockEntity.getMaxParallelism()` and wired it into `RecipeSearchTask` construction.
+- Updated formed structure component scanning to include `ParallelControllerBlockEntity` instances in the server-side component snapshot.
+- Added English and Chinese block/item translations for every parallel controller tier.
+- Added datagen model handling for parallel controllers using `basic_casing` as the closest existing casing style.
+- Extended test bootstrap to bind parallel controller blocks, items, and block entity types in the lightweight unit-test registry environment.
 
-- Replaced the four ad hoc registrations with declarative `Definition` entries.
-- Registered ten definitions for each of `blast_furnace`, `alloy_furnace`, `cracker`, and `reactor`.
-- `ensureRegistered()` checks `RecipeRegistry.getRecipe(id) == null` before every registration, preserving externally registered recipes and repeat-call idempotence.
-- All recipes use vanilla items and fluids; registrations use priority `0`, max threads `1`, and cancel-on-per-tick-failure `true`.
-- Preserved the existing semantics of `alloy_furnace_netherite`, `cracker_coal_lapis`, and `reactor_diamond_water` as required by the legacy callers and tests.
+Verification commands and results:
+- `./gradlew test --tests cn.howxu.mmcr.registry.ParallelControllerRegistrationTest --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest --tests cn.howxu.mmcr.datagen.TranslationsTest --no-daemon`
+- Result: PASS (`BUILD SUCCESSFUL in 14s`, 17 actionable tasks: 3 executed, 14 up-to-date)
 
-## Compatibility Note
+Commit hash:
+- Pending at report creation time; updated after commit.
 
-The brief simultaneously assigns each legacy ID to the `iron_to_nugget` scenario and requires its pre-existing semantics to remain unchanged. These requirements conflict for the three legacy IDs. This implementation gives precedence to preserving their established semantics while retaining exactly ten recipes per machine; the remaining nine entries per machine follow the shared scenario matrix.
-
-## Test-First Evidence
-
-1. Added recipe-count and coverage assertions.
-2. Ran `rtk gradlew test --tests org.nibelungorum.DefaultRecipesTest --no-daemon` before implementation.
-3. Result: `BUILD FAILED`, 6 tests completed, 2 failures at the new ten-recipe assertions in `ensureRegistered_publishes_builtin_blast_furnace_iron_to_nugget_recipe` and `ensureRegistered_is_idempotent`.
-
-## Final Verification
-
-| Command | Result |
-| --- | --- |
-| `rtk gradlew test --tests org.nibelungorum.DefaultRecipesTest --tests cn.howxu.mmcr.BuiltinRecipeBootstrapTest --no-daemon` | `BUILD SUCCESSFUL`; 7 tests completed, 0 failures. |
-| `rtk gradlew compileJava --no-daemon` | `BUILD SUCCESSFUL`. |
-| `rtk git diff --check` | Exit 0; no whitespace errors. |
-
-## Worktree Note
-
-`reference/gtceu/` was already an untracked, unrelated directory. It is excluded from the task commit.
+Concerns:
+- Existing deprecation warnings remain in test/build output for NeoForge energy/fluid/item legacy APIs; they are pre-existing around current hatch/context code and not introduced by this task.

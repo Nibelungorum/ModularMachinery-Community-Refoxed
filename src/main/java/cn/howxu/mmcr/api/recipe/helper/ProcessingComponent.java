@@ -23,12 +23,16 @@ public final class ProcessingComponent {
     }
 
     public ProcessingComponent(MachineComponent component, BlockEntity container, BlockPos pos, BlockPos relativePos, List<String> tags) {
+        this(component, container, pos, relativePos, tags, null);
+    }
+
+    public ProcessingComponent(MachineComponent component, BlockEntity container, BlockPos pos, BlockPos relativePos, List<String> tags, @Nullable ComponentType type) {
         this.component = component;
         this.container = container;
         this.pos = pos;
         this.relativePos = relativePos;
         this.tags = tags == null ? List.of() : List.copyOf(tags);
-        this.type = null;
+        this.type = type;
     }
 
     public ProcessingComponent(@Nullable ComponentType type, @Nullable String tag, BlockPos pos) {

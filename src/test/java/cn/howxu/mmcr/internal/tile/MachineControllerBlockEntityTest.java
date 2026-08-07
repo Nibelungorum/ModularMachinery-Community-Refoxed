@@ -15,6 +15,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
@@ -23,6 +24,7 @@ import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
@@ -85,6 +87,63 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.totalCapacityEnergy()).isZero();
         assertThat(controller.primaryFluid()).isEqualTo(FluidStack.EMPTY);
         assertThat(controller.primaryOutputFluid()).isEqualTo(FluidStack.EMPTY);
+    }
+
+    @Test
+    void max_parallelism_uses_parallel_controller_only_for_parallelizable_machines() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        var parallelMachine = new DynamicMachine(
+                MMCR.id("parallel_test_machine"),
+                "Parallel Test",
+                onePortPattern(Blocks.IRON_BLOCK),
+                MachineControllerSpec.defaultsFor(MMCR.id("parallel_test_machine")),
+                PortRequirementSpec.none(),
+                List.of(),
+                Map.of(),
+                64,
+                true,
+                false,
+                1);
+        var nonParallelMachine = new DynamicMachine(
+                MMCR.id("non_parallel_test_machine"),
+                "Non Parallel Test",
+                onePortPattern(Blocks.IRON_BLOCK));
+
+        assertThat(controller.getMaxParallelism()).isEqualTo(1);
+
+        setField(MachineControllerBlockEntity.class, controller, "machine", parallelMachine);
+        addParallelComponent(controller, ParallelTier.X16);
+        assertThat(controller.getMaxParallelism()).isEqualTo(16);
+
+        setField(MachineControllerBlockEntity.class, controller, "machine", nonParallelMachine);
+        assertThat(controller.getMaxParallelism()).isEqualTo(1);
+    }
+
+    @Test
+    void formed_parallel_controller_is_discovered_from_structure_snapshot() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        var machine = new DynamicMachine(
+                MMCR.id("formed_parallel_test_machine"),
+                "Formed Parallel Test",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get()),
+                MachineControllerSpec.defaultsFor(MMCR.id("formed_parallel_test_machine")),
+                PortRequirementSpec.none(),
+                List.of(),
+                Map.of(),
+                64,
+                true,
+                false,
+                1);
+        MachineControllerBlockEntity controller = controllerForParallelFormation(
+                machine,
+                controllerPos,
+                parallelController(ParallelTier.X16, controllerPos.offset(1, 0, 0)));
+
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+
+        assertThat(controller.getComponents()).hasSize(1);
+        assertThat(controller.getComponents().getFirst().getContainer()).isInstanceOf(ParallelControllerBlockEntity.class);
+        assertThat(controller.getMaxParallelism()).isEqualTo(16);
     }
 
     @Test
@@ -929,6 +988,30 @@ class MachineControllerBlockEntityTest {
         }
     }
 
+    private static void addParallelComponent(MachineControllerBlockEntity controller, ParallelTier tier) throws Exception {
+        ParallelControllerBlockEntity parallel = parallelController(tier, new BlockPos(1, 0, 0));
+        Field componentsField = MachineControllerBlockEntity.class.getDeclaredField("components");
+        componentsField.setAccessible(true);
+        List<ProcessingComponent> list = (List<ProcessingComponent>) componentsField.get(controller);
+        list.add(new ProcessingComponent(null, parallel, parallel.getBlockPos(), BlockPos.ZERO, List.of(), null));
+    }
+
+    private static ParallelControllerBlockEntity parallelController(ParallelTier tier, BlockPos pos) {
+        try {
+            Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+            unsafeField.setAccessible(true);
+            sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+            ParallelControllerBlockEntity entity = (ParallelControllerBlockEntity) unsafe.allocateInstance(ParallelControllerBlockEntity.class);
+            setField(BlockEntity.class, entity, "type", null);
+            setField(BlockEntity.class, entity, "worldPosition", pos);
+            setField(BlockEntity.class, entity, "blockState", Blocks.IRON_BLOCK.defaultBlockState());
+            setField(ParallelControllerBlockEntity.class, entity, "tier", tier);
+            return entity;
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("Unable to allocate parallel controller", e);
+        }
+    }
+
     private static MachineControllerBlockEntity controllerWithEnergyHatches(EnergyInputHatchBlockEntity... hatches) throws Exception {
         MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
         initializeComponents(controller);
@@ -1091,6 +1174,28 @@ class MachineControllerBlockEntityTest {
         Level level = LevelStub.create(blocks, List.of(controller, port));
         setField(BlockEntity.class, controller, "level", level);
         setField(BlockEntity.class, port, "level", level);
+        return controller;
+    }
+
+    private static MachineControllerBlockEntity controllerForParallelFormation(
+            DynamicMachine machine,
+            BlockPos controllerPos,
+            ParallelControllerBlockEntity parallel) throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        var controllerBlock = testControllerBlock(machine);
+        var controllerState = controllerBlock.defaultBlockState()
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FORMED, false)
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FACING, Direction.SOUTH)
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ROLL_FACING, Direction.NORTH);
+        setField(BlockEntity.class, controller, "worldPosition", controllerPos);
+        setField(BlockEntity.class, controller, "blockState", controllerState);
+        Map<BlockPos, Block> blocks = new HashMap<>();
+        blocks.put(controllerPos, controllerBlock);
+        blocks.put(parallel.getBlockPos(), cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get());
+        Level level = LevelStub.create(blocks, List.of(controller, parallel));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, parallel, "level", level);
         return controller;
     }
 

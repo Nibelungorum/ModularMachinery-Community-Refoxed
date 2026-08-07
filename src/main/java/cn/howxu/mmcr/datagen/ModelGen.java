@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.datagen;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
@@ -67,6 +68,9 @@ public final class ModelGen extends ModelProvider {
                         .dispatch(block, BlockModelGenerators.plainVariant(modelId)));
                 blockModels.registerSimpleItemModel(block.asItem(),
                         ModelLocationUtils.getModelLocation(block));
+            } else if (isParallelController(name)) {
+                blockModels.createTrivialBlock(block, TexturedModel.CUBE.updateTexture(
+                        m -> m.put(TextureSlot.ALL, new Material(MMCR.id("block/basic_casing")))));
             } else {
                 blockModels.createTrivialBlock(block, TexturedModel.CUBE.updateTexture(
                         m -> m.put(TextureSlot.ALL, textureFor(name))));
@@ -83,6 +87,13 @@ public final class ModelGen extends ModelProvider {
 
     private static boolean isIoPort(String blockName) {
         return PortKinds.all().stream().anyMatch(kind -> kind.id().equals(blockName));
+    }
+
+    private static boolean isParallelController(String blockName) {
+        for (ParallelTier tier : ParallelTier.values()) {
+            if (tier.idSuffix().equals(blockName)) return true;
+        }
+        return false;
     }
 
     private static String overlayTextureFor(String blockName) {

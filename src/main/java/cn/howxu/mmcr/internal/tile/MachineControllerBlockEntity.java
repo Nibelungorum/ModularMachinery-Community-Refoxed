@@ -242,6 +242,17 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return FluidStack.EMPTY;
     }
 
+    public int getMaxParallelism() {
+        if (machine == null || !machine.parallelizable()) return 1;
+        int max = 1;
+        for (ProcessingComponent component : components) {
+            if (component.getContainer() instanceof ParallelControllerBlockEntity parallel) {
+                max = Math.max(max, parallel.maxParallelism());
+            }
+        }
+        return Math.min(max, machine.maxParallelism());
+    }
+
     public void serverTick() {
         if (level == null || level.isClientSide()) return;
         boolean activeBefore = active != null;
@@ -536,6 +547,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
         for (BlockPos relativePos : componentPositions()) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
+            if (level.getBlockEntity(worldPos) instanceof ParallelControllerBlockEntity parallel) {
+                components.add(new ProcessingComponent(null, parallel, worldPos, relativePos, foundPattern.tagsAt(relativePos), null));
+                continue;
+            }
             if (!(level.getBlockEntity(worldPos) instanceof MachineComponentTile tile)) continue;
 
             var component = tile.provideComponent();
@@ -700,7 +715,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         List<MachineRecipe> candidates = recipesForMachine();
         RecipeSearchResult result;
         try {
-            result = new RecipeSearchTask(this, machineId, structureVersion, 1, candidates, contextPool()).compute();
+            result = new RecipeSearchTask(this, machineId, structureVersion, getMaxParallelism(), candidates, contextPool()).compute();
         } catch (RuntimeException e) {
             LOG.warn("[Ctrl#{}] tryStartNewRecipe: recipe search failed at pos={}; retrying later", instanceId, getBlockPos(), e);
             clearPendingConflictStart();

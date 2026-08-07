@@ -3,9 +3,11 @@ package cn.howxu.mmcr.registry;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.tile.DebugInfiniteEnergySourceBlockEntity;
 import cn.howxu.mmcr.internal.tile.DebugInfiniteFluidSourceBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -39,6 +41,7 @@ public final class ModBlockEntities {
                     (BlockEntityType.BlockEntitySupplier) kind.entityFactory(),
                     ModBlocks.BLOCKS.get(name).get())));
         });
+        for (ParallelTier tier : ParallelTier.values()) registerParallelController(tier);
         registerDebugBe("debug_infinite_energy_source", (pos, state) ->
                 new DebugInfiniteEnergySourceBlockEntity(pos, state));
         Map<Fluid, String> debugFluidBe = Map.of(
@@ -52,6 +55,13 @@ public final class ModBlockEntities {
         String name = MachineControllerSpec.defaultsFor(machineId).id().getPath();
         BES.put(name, register(name, () -> new BlockEntityType<>(
                 MachineControllerBlockEntity::new, ModBlocks.controllerFor(machineId).get())));
+    }
+
+    private static void registerParallelController(ParallelTier tier) {
+        String name = tier.idSuffix();
+        BES.put(name, register(name, () -> new BlockEntityType<>(
+                (pos, state) -> new ParallelControllerBlockEntity(tier, pos, state),
+                ModBlocks.BLOCKS.get(name).get())));
     }
 
     public static DeferredHolder<BlockEntityType<?>, BlockEntityType<?>> controllerFor(Identifier machineId) {
