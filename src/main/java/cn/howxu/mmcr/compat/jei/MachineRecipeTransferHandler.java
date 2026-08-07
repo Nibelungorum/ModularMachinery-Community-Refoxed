@@ -23,20 +23,10 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
 
     private final IRecipeTransferHandlerHelper helper;
     private final IRecipeType<MachineRecipeDisplay> recipeType;
-    private final IRecipeTransferHandler<ItemBusMenu, MachineRecipeDisplay> basicHandler;
 
     public MachineRecipeTransferHandler(IRecipeTransferHandlerHelper helper, IRecipeType<MachineRecipeDisplay> recipeType) {
         this.helper = helper;
         this.recipeType = recipeType;
-        this.basicHandler = helper.createUnregisteredRecipeTransferHandler(
-                helper.createBasicRecipeTransferInfo(
-                        ItemBusMenu.class,
-                        ModUIs.ITEM_BUS.get(),
-                        recipeType,
-                        ItemBusMenu.BUS_SLOT_START,
-                        ItemBusMenu.BUS_SLOT_COUNT,
-                        ItemBusMenu.PLAYER_INVENTORY_SLOT_START,
-                        ItemBusMenu.PLAYER_INVENTORY_SLOT_COUNT));
     }
 
     @Override
@@ -62,6 +52,18 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
         if (recipe.itemInputs().isEmpty()) {
             return helper.createUserErrorWithTooltip(Component.translatable("jei.mmcr.transfer.no_item_inputs"));
         }
-        return basicHandler.transferRecipe(container, recipe, recipeSlots, player, maxTransfer, doTransfer);
+        if (recipe.itemInputs().size() > container.busSlotCount()) {
+            return helper.createUserErrorWithTooltip(Component.translatable("jei.mmcr.transfer.not_enough_slots"));
+        }
+        IRecipeTransferHandler<ItemBusMenu, MachineRecipeDisplay> handler = helper.createUnregisteredRecipeTransferHandler(
+                helper.createBasicRecipeTransferInfo(
+                        ItemBusMenu.class,
+                        ModUIs.ITEM_BUS.get(),
+                        recipeType,
+                        ItemBusMenu.BUS_SLOT_START,
+                        container.busSlotCount(),
+                        container.playerInventorySlotStart(),
+                        ItemBusMenu.PLAYER_INVENTORY_SLOT_COUNT));
+        return handler.transferRecipe(container, recipe, recipeSlots, player, maxTransfer, doTransfer);
     }
 }

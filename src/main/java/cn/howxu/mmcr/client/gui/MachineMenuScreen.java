@@ -68,13 +68,18 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     public MachineMenuScreen(AbstractContainerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title,
                 menu instanceof MachineControllerMenu ? 176 : 176,
-                menu instanceof MachineControllerMenu ? 213 : 166);
+                imageHeightFor(menu));
         boolean fluidMenu = menu instanceof FluidHatchMenu;
         boolean energyMenu = menu instanceof EnergyHatchMenu;
         boolean itemBusMenu = menu instanceof ItemBusMenu;
         this.titleLabelX = titleX(titleLabelX, fluidMenu, energyMenu, itemBusMenu);
         this.titleLabelY = titleY(titleLabelY, fluidMenu || energyMenu, itemBusMenu);
         this.inventoryLabelY = hiddenInventoryLabelY();
+    }
+
+    static int imageHeightFor(AbstractContainerMenu menu) {
+        if (menu instanceof ItemBusMenu itemBus) return itemBus.imageHeight();
+        return menu instanceof MachineControllerMenu ? 213 : 166;
     }
 
     static int titleX(int baseX) {

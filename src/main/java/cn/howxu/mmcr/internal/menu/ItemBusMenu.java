@@ -2,53 +2,111 @@ package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
 
 public class ItemBusMenu extends AbstractMachineMenu {
 
-    public static final int COLS = 3;
-    public static final int ROWS = 2;
+    public static final int COLS = 4;
+    public static final int BASE_IMAGE_HEIGHT = 166;
+    public static final int SLOT_SIZE = 18;
     public static final int BUS_SLOT_START = 0;
-    public static final int BUS_SLOT_COUNT = COLS * ROWS;
-    public static final int PLAYER_INVENTORY_SLOT_START = BUS_SLOT_COUNT;
+    public static final int DEFAULT_BUS_SLOT_COUNT = 6;
     public static final int PLAYER_INVENTORY_SLOT_COUNT = 36;
 
     private final ItemBusBlockEntity owner;
+    private final Level level;
+    private final BlockPos pos;
+    private final int busSlotCount;
+    private final int busRows;
 
     /** 服务端:带 BE 引用,槽位直接绑定到 BE 的 ItemStackHandler。 */
     public ItemBusMenu(int containerId, Inventory playerInv, ItemBusBlockEntity owner) {
         super(ModUIs.ITEM_BUS.get(), containerId);
         this.owner = owner;
+        this.level = playerInv.player == null ? null : playerInv.player.level();
+        this.pos = owner == null ? BlockPos.ZERO : owner.getBlockPos();
+        this.busSlotCount = slotCount(owner);
+        this.busRows = rowsForSlots(busSlotCount);
         addBusSlots(owner);
-        addPlayerSlots(playerInv);
+        addPlayerSlots(playerInv, playerInventoryYOffset());
     }
 
     /** 客户端:BE 为 null;槽位数据由服务端通过数据包同步。 */
     public ItemBusMenu(int containerId, Inventory playerInv) {
-        this(containerId, playerInv, null);
+        this(containerId, playerInv, (ItemBusBlockEntity) null);
     }
 
-    public static ItemBusMenu clientOpen(int containerId, Inventory playerInv) {
-        return new ItemBusMenu(containerId, playerInv);
+    public ItemBusMenu(int containerId, Inventory playerInv, BlockPos pos) {
+        super(ModUIs.ITEM_BUS.get(), containerId);
+        this.owner = null;
+        this.level = playerInv.player == null ? null : playerInv.player.level();
+        this.pos = pos;
+        ItemBusBlockEntity resolved = resolvedOwner();
+        this.busSlotCount = slotCount(resolved);
+        this.busRows = rowsForSlots(busSlotCount);
+        addBusSlots(resolved);
+        addPlayerSlots(playerInv, playerInventoryYOffset());
+    }
+
+    public static ItemBusMenu clientOpen(int containerId, Inventory playerInv, FriendlyByteBuf buf) {
+        return new ItemBusMenu(containerId, playerInv, buf.readBlockPos());
     }
 
     public ItemBusBlockEntity owner() {
         return owner;
     }
 
+    public int busSlotCount() { return busSlotCount; }
+
+    public int busRows() { return busRows; }
+
+    public int playerInventorySlotStart() { return playerInventorySlotStart(busSlotCount); }
+
+    public int imageHeight() { return imageHeightForSlots(busSlotCount); }
+
+    public static int rowsForSlots(int slots) {
+        return Math.max(1, (slots + COLS - 1) / COLS);
+    }
+
+    public static int imageHeightForSlots(int slots) {
+        return BASE_IMAGE_HEIGHT + Math.max(0, rowsForSlots(slots) - 2) * SLOT_SIZE;
+    }
+
+    public static int playerInventorySlotStart(int busSlots) {
+        return BUS_SLOT_START + busSlots;
+    }
+
     private void addBusSlots(ItemBusBlockEntity owner) {
-        SimpleContainer clientContainer = owner == null ? new SimpleContainer(COLS * ROWS) : null;
-        for (int row = 0; row < ROWS; row++) {
-            for (int col = 0; col < COLS; col++) {
-                int index = row * COLS + col;
-                if (owner == null) addSlot(new Slot(clientContainer, index, 61 + col * 18, 18 + row * 18));
-                else addSlot(new DirectionalItemSlot(owner.getItemStackHandler(null), index, 61 + col * 18, 18 + row * 18, owner.ioType()));
-            }
+        SimpleContainer clientContainer = owner == null ? new SimpleContainer(busSlotCount) : null;
+        for (int index = 0; index < busSlotCount; index++) {
+            int row = index / COLS;
+            int col = index % COLS;
+            if (owner == null) addSlot(new Slot(clientContainer, index, 52 + col * SLOT_SIZE, 18 + row * SLOT_SIZE));
+            else addSlot(new DirectionalItemSlot(owner.getItemStackHandler(null), index, 52 + col * SLOT_SIZE, 18 + row * SLOT_SIZE, owner.ioType()));
         }
+    }
+
+    private int playerInventoryYOffset() {
+        return Math.max(0, busRows - 2) * SLOT_SIZE;
+    }
+
+    private ItemBusBlockEntity resolvedOwner() {
+        if (owner != null) return owner;
+        if (level == null) return null;
+        BlockEntity be = level.getBlockEntity(pos);
+        return be instanceof ItemBusBlockEntity bus ? bus : null;
+    }
+
+    private static int slotCount(ItemBusBlockEntity owner) {
+        return owner == null ? DEFAULT_BUS_SLOT_COUNT : owner.getItemStackHandler(null).getSlots();
     }
 
     @Override
@@ -60,7 +118,7 @@ public class ItemBusMenu extends AbstractMachineMenu {
         ItemStack stack = slot.getItem();
         result = stack.copy();
 
-        int busSlots = COLS * ROWS;
+        int busSlots = busSlotCount;
         if (index < busSlots) {
             if (!slot.mayPickup(player)) return ItemStack.EMPTY;
             if (!moveItemStackTo(stack, busSlots, slots.size(), true)) return ItemStack.EMPTY;

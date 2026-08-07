@@ -28,30 +28,51 @@ class ItemBusMenuTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
-        bind(ModUIs.ITEM_BUS, new MenuType<>(ItemBusMenu::clientOpen, FeatureFlags.VANILLA_SET));
+        bind(ModUIs.ITEM_BUS, new MenuType<>((containerId, playerInventory) -> new ItemBusMenu(containerId, playerInventory), FeatureFlags.VANILLA_SET));
     }
 
     @Test
     void client_menu_includes_item_bus_slots_before_player_inventory() {
         ItemBusMenu clientMenu = new ItemBusMenu(1, emptyInventory());
 
-        assertThat(clientMenu.slots).hasSize(ItemBusMenu.COLS * ItemBusMenu.ROWS + 36);
+        assertThat(clientMenu.slots).hasSize(clientMenu.busSlotCount() + 36);
     }
 
     @Test
-    void item_bus_menu_uses_two_rows_of_three_slots() {
+    void item_bus_menu_uses_two_rows_of_four_slots_by_default() {
         ItemBusMenu clientMenu = new ItemBusMenu(1, emptyInventory());
 
-        assertThat(ItemBusMenu.COLS).isEqualTo(3);
-        assertThat(ItemBusMenu.ROWS).isEqualTo(2);
-        assertThat(clientMenu.slots.subList(0, ItemBusMenu.COLS * ItemBusMenu.ROWS)).hasSize(6);
+        assertThat(ItemBusMenu.COLS).isEqualTo(4);
+        assertThat(clientMenu.busRows()).isEqualTo(2);
+        assertThat(clientMenu.slots.subList(0, clientMenu.busSlotCount())).hasSize(6);
     }
 
     @Test
-    void item_bus_slots_start_one_pixel_further_left() {
+    void bus_rows_scale_from_slot_count() {
+        assertThat(ItemBusMenu.rowsForSlots(1)).isEqualTo(1);
+        assertThat(ItemBusMenu.rowsForSlots(6)).isEqualTo(2);
+        assertThat(ItemBusMenu.rowsForSlots(9)).isEqualTo(3);
+        assertThat(ItemBusMenu.rowsForSlots(32)).isEqualTo(8);
+    }
+
+    @Test
+    void image_height_scales_for_large_buses() {
+        assertThat(ItemBusMenu.imageHeightForSlots(6)).isEqualTo(166);
+        assertThat(ItemBusMenu.imageHeightForSlots(32)).isGreaterThan(166);
+    }
+
+    @Test
+    void player_inventory_starts_after_actual_bus_slots() {
+        assertThat(ItemBusMenu.playerInventorySlotStart(1)).isEqualTo(1);
+        assertThat(ItemBusMenu.playerInventorySlotStart(6)).isEqualTo(6);
+        assertThat(ItemBusMenu.playerInventorySlotStart(32)).isEqualTo(32);
+    }
+
+    @Test
+    void item_bus_slots_center_four_column_layout() {
         ItemBusMenu clientMenu = new ItemBusMenu(1, emptyInventory());
 
-        assertThat(clientMenu.slots.getFirst().x).isEqualTo(61);
+        assertThat(clientMenu.slots.getFirst().x).isEqualTo(52);
     }
 
     @Test
