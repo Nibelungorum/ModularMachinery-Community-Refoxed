@@ -23,7 +23,6 @@ import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
 
 /**
  * JEI category for MMCR machine recipes.
@@ -120,12 +119,8 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 .toList();
     }
 
-    static Optional<ItemStack> firstItemStack(Ingredient ingredient, int count) {
-        return firstItemStack(itemStacks(ingredient, count));
-    }
-
-    static Optional<ItemStack> firstItemStack(List<ItemStack> stacks) {
-        return stacks.stream().findFirst();
+    static Component overflowEntry(int amount, Component displayName) {
+        return Component.translatable("jei.mmcr.machine_recipe.overflow_entry", amount, displayName);
     }
 
     private static void addRegion(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe,
@@ -179,20 +174,27 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         for (MachineRecipeLayout.EntryPlan entry : hiddenEntries) {
             if (entry.kind() == MachineRecipeLayout.Kind.ITEM) {
                 if (input) {
-                    firstItemStack(recipe.itemInputs().get(entry.index()), recipe.itemInputCounts().get(entry.index()))
-                            .ifPresent(stack -> tooltip.add(Component.translatable("jei.mmcr.machine_recipe.overflow_entry", stack.getCount(), stack.getHoverName())));
+                    int amount = recipe.itemInputCounts().get(entry.index());
+                    Component displayName = itemStacks(recipe.itemInputs().get(entry.index()), amount).stream()
+                            .findFirst()
+                            .map(ItemStack::getHoverName)
+                            .orElse(Component.empty());
+                    tooltip.add(overflowEntry(amount, displayName));
                 } else {
                     ItemStack stack = recipe.itemOutputs().get(entry.index());
-                    tooltip.add(Component.translatable("jei.mmcr.machine_recipe.overflow_entry", stack.getCount(), stack.getHoverName()));
+                    tooltip.add(overflowEntry(stack.getCount(), stack.getHoverName()));
                 }
             } else {
                 if (input) {
-                    var fluid = recipe.fluidInputs().get(entry.index()).fluids().stream().findFirst().orElseThrow().value();
                     int amount = recipe.fluidInputAmounts().get(entry.index());
-                    tooltip.add(Component.translatable("jei.mmcr.machine_recipe.overflow_entry", amount, new FluidStack(fluid, amount).getHoverName()));
+                    Component displayName = recipe.fluidInputs().get(entry.index()).fluids().stream()
+                            .findFirst()
+                            .map(fluid -> new FluidStack(fluid.value(), amount).getHoverName())
+                            .orElse(Component.empty());
+                    tooltip.add(overflowEntry(amount, displayName));
                 } else {
                     var fluidStack = recipe.fluidOutputs().get(entry.index());
-                    tooltip.add(Component.translatable("jei.mmcr.machine_recipe.overflow_entry", fluidStack.getAmount(), fluidStack.getHoverName()));
+                    tooltip.add(overflowEntry(fluidStack.getAmount(), fluidStack.getHoverName()));
                 }
             }
         }

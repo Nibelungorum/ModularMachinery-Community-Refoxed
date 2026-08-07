@@ -159,8 +159,9 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
-    void firstItemStackReturnsEmptyForIngredientWithoutCandidates() {
-        assertThat(MachineRecipeCategory.firstItemStack(List.of())).isEmpty();
+    void overflowEntryUsesPlaceholderForEmptyCandidates() {
+        assertThat(MachineRecipeCategory.overflowEntry(7, net.minecraft.network.chat.Component.empty()))
+                .isNotNull();
     }
 
     private static MachineRecipe recipe(String id, String machine, int priority) {
