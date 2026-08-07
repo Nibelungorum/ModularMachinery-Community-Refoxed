@@ -99,4 +99,22 @@ class MachineRegistryTest {
                 .extracting(SingleBlockModifierReplacement::getPos)
                 .isEqualTo(position);
     }
+
+    @Test
+    void replacingDynamicMachinesRebuildsMergedCompiledCache() {
+        var staticMachine = new DynamicMachine(Identifier.parse("mmcr:static"), "Static", new BlockArray(Map.of()));
+        var dynamicMachine = new DynamicMachine(Identifier.parse("mmcr:dynamic"), "Dynamic", new BlockArray(Map.of()));
+        MachineRegistry.register(staticMachine);
+
+        MachineRegistry.replaceDynamic(Map.of(dynamicMachine.registryName(), dynamicMachine));
+
+        assertThat(MachineRegistry.getCompiled(staticMachine.registryName())).isNotNull();
+        assertThat(MachineRegistry.getCompiled(dynamicMachine.registryName())).isNotNull();
+
+        MachineRegistry.replaceDynamic(Map.of());
+
+        assertThat(MachineRegistry.getMachine(staticMachine.registryName())).isSameAs(staticMachine);
+        assertThat(MachineRegistry.getMachine(dynamicMachine.registryName())).isNull();
+        assertThat(MachineRegistry.getCompiled(dynamicMachine.registryName())).isNull();
+    }
 }
