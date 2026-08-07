@@ -3,8 +3,11 @@ package cn.howxu.mmcr.compat.jei;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.client.gui.MachineMenuScreen;
+import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.registry.ModBlocks;
 import mezz.jei.api.IModPlugin;
+import mezz.jei.api.gui.handlers.IGuiClickableArea;
+import mezz.jei.api.gui.handlers.IGuiContainerHandler;
 import mezz.jei.api.registration.IGuiHandlerRegistration;
 import mezz.jei.api.registration.IRecipeCatalystRegistration;
 import mezz.jei.api.registration.IRecipeCategoryRegistration;
@@ -14,6 +17,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
+import java.util.Collection;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -72,9 +76,15 @@ public final class JeiPlugin implements IModPlugin {
 
     @Override
     public void registerGuiHandlers(IGuiHandlerRegistration registration) {
-        registration.addRecipeClickArea(MachineMenuScreen.class, 8, 24, 160, 24,
-                MachineDefinitions.all().stream()
-                        .map(machine -> JeiMachineRecipeTypes.forMachine(machine.registryName()))
-                        .toArray(mezz.jei.api.recipe.types.IRecipeType[]::new));
+        registration.addGuiContainerHandler(MachineMenuScreen.class, new IGuiContainerHandler<>() {
+            @Override
+            public Collection<IGuiClickableArea> getGuiClickableAreas(MachineMenuScreen screen, double mouseX, double mouseY) {
+                if (!(screen.getMenu() instanceof MachineControllerMenu menu)) return List.of();
+                Identifier machineId = menu.machineId();
+                if (machineId == null) return List.of();
+                return List.of(IGuiClickableArea.createBasic(8, 24, 160, 24,
+                        JeiMachineRecipeTypes.forMachine(machineId)));
+            }
+        });
     }
 }
