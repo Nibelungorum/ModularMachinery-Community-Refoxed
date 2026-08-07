@@ -1,0 +1,8 @@
+{
+  "jei.mmcr.machine_recipe": "Machine Recipe",
+  "jei.mmcr.machine_recipe.duration": "Duration: %s t (%s s)",
+  "jei.mmcr.machine_recipe.energy_in": "Energy Input: %s FE/t",
+  "jei.mmcr.machine_recipe.energy_out": "Energy Output: %s FE/t",
+  "jei.mmcr.transfer.fluid_energy_not_supported": "Only item inputs can be transferred. Fluids and energy must be supplied by hatches.",
+  "jei.mmcr.transfer.no_item_inputs": "This recipe has no item inputs to transfer."
+}
