@@ -71,6 +71,7 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
             int totalTick,
             int parallelism,
             int maxParallelism,
+            boolean factorySupported,
             int factoryLanes,
             int itemInputs,
             int itemOutputs,
@@ -90,6 +91,7 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
                     tag.getIntOr("totalTick", 0),
                     tag.getIntOr("parallelism", 1),
                     tag.getIntOr("maxParallelism", 1),
+                    tag.getBooleanOr("factorySupported", false),
                     tag.getIntOr("factoryLanes", 0),
                     tag.getIntOr("itemInputs", 0),
                     tag.getIntOr("itemOutputs", 0),
@@ -119,7 +121,7 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
         }
 
         boolean shouldShowFactoryLanes() {
-            return factoryLanes > 0;
+            return factorySupported || factoryLanes > 0;
         }
     }
 }

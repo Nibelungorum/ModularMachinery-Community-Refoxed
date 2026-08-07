@@ -36,6 +36,7 @@ public enum MachineControllerDataProvider implements IServerDataProvider<BlockAc
         data.putBoolean("active", active != null);
         data.putInt("parallelism", active == null ? 1 : active.getParallelism());
         data.putInt("maxParallelism", active == null ? controller.getMaxParallelism() : active.getMaxParallelism());
+        data.putBoolean("factorySupported", machine != null && machine.hasFactory());
         data.putInt("factoryLanes", factory == null ? 0 : factory.activeLaneCount());
         if (active != null && active.getRecipe() != null) {
             data.putString("activeRecipe", active.getRecipe().id().toString());

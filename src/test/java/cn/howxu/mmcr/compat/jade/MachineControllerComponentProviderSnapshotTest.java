@@ -52,9 +52,23 @@ class MachineControllerComponentProviderSnapshotTest {
 
         assertThat(snapshot.parallelism()).isEqualTo(1);
         assertThat(snapshot.maxParallelism()).isEqualTo(1);
+        assertThat(snapshot.factorySupported()).isFalse();
         assertThat(snapshot.factoryLanes()).isZero();
         assertThat(snapshot.shouldShowParallelism()).isFalse();
         assertThat(snapshot.shouldShowFactoryLanes()).isFalse();
+    }
+
+    @Test
+    void shows_factory_lanes_when_factory_supported_without_active_lanes() {
+        CompoundTag tag = new CompoundTag();
+        tag.putBoolean("factorySupported", true);
+        tag.putInt("factoryLanes", 0);
+
+        MachineControllerComponentProvider.Snapshot snapshot = MachineControllerComponentProvider.Snapshot.from(tag);
+
+        assertThat(snapshot.factorySupported()).isTrue();
+        assertThat(snapshot.factoryLanes()).isZero();
+        assertThat(snapshot.shouldShowFactoryLanes()).isTrue();
     }
 
     @Test
