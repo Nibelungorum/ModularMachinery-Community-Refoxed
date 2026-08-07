@@ -54,13 +54,13 @@ class MachineRecipeLayoutTest {
                 .extracting(slot -> slot.entry().kind(), slot -> slot.entry().index(),
                         MachineRecipeLayout.SlotPlan::x, MachineRecipeLayout.SlotPlan::y)
                 .containsExactly(
-                        tuple(MachineRecipeLayout.Kind.FLUID, 0, 8, 3), tuple(MachineRecipeLayout.Kind.FLUID, 1, 26, 3),
-                        tuple(MachineRecipeLayout.Kind.ITEM, 0, 44, 3), tuple(MachineRecipeLayout.Kind.ITEM, 1, 8, 21),
-                        tuple(MachineRecipeLayout.Kind.ITEM, 2, 26, 21));
+                        tuple(MachineRecipeLayout.Kind.FLUID, 0, 8, 8), tuple(MachineRecipeLayout.Kind.FLUID, 1, 26, 8),
+                        tuple(MachineRecipeLayout.Kind.ITEM, 0, 44, 8), tuple(MachineRecipeLayout.Kind.ITEM, 1, 8, 26),
+                        tuple(MachineRecipeLayout.Kind.ITEM, 2, 26, 26));
         assertThat(layout.width()).isEqualTo(150);
         assertThat(layout.height()).isEqualTo(150);
         assertThat(layout.durationTextX()).isEqualTo(8);
-        assertThat(layout.durationTextY()).isEqualTo(132);
+        assertThat(layout.durationTextY()).isEqualTo(48);
         assertThat(layout.outputs().slots()).allSatisfy(slot -> assertThat(slot.x()).isGreaterThan(90));
     }
 
@@ -83,11 +83,11 @@ class MachineRecipeLayoutTest {
 
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(MachineRecipeDisplay.from(recipe));
 
-        assertThat(layout.inputs().slots()).hasSize(20);
+        assertThat(layout.inputs().slots()).hasSize(17);
         assertThat(layout.inputs().slots()).allSatisfy(slot -> assertThat(slot.entry()).isNotNull());
-        assertThat(layout.inputs().overflowSlot()).isEqualTo(new MachineRecipeLayout.OverflowSlotPlan(44, 111));
+        assertThat(layout.inputs().overflowSlot()).isEqualTo(new MachineRecipeLayout.OverflowSlotPlan(44, 98));
         assertThat(layout.inputs().hiddenEntries())
-                .contains(new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.ITEM, 20));
+                .contains(new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.ITEM, 17));
         assertThat(layout.hasInputOverflow()).isTrue();
     }
 
@@ -110,9 +110,9 @@ class MachineRecipeLayoutTest {
 
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(MachineRecipeDisplay.from(recipe));
 
-        assertThat(layout.inputs().slots()).hasSize(20);
-        assertThat(layout.inputs().overflowSlot()).isEqualTo(new MachineRecipeLayout.OverflowSlotPlan(44, 111));
-        assertThat(layout.inputs().hiddenEntries()).hasSize(5);
+        assertThat(layout.inputs().slots()).hasSize(17);
+        assertThat(layout.inputs().overflowSlot()).isEqualTo(new MachineRecipeLayout.OverflowSlotPlan(44, 98));
+        assertThat(layout.inputs().hiddenEntries()).hasSize(8);
     }
 
     @Test
@@ -136,13 +136,17 @@ class MachineRecipeLayoutTest {
 
         assertThat(layout.inputs().slots())
                 .extracting(MachineRecipeLayout.SlotPlan::entry, MachineRecipeLayout.SlotPlan::x, MachineRecipeLayout.SlotPlan::y)
-                .containsExactly(tuple(new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.ITEM, 0), 8, 3));
+                .containsExactly(tuple(new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.ITEM, 0), 8, 8));
         assertThat(layout.hasInputOverflow()).isFalse();
-        assertThat(layout.outputs().slots()).hasSize(20);
-        assertThat(layout.outputs().overflowSlot()).isEqualTo(new MachineRecipeLayout.OverflowSlotPlan(127, 111));
+        assertThat(layout.outputs().slots()).hasSize(17);
+        assertThat(layout.outputs().overflowSlot()).isEqualTo(new MachineRecipeLayout.OverflowSlotPlan(127, 98));
         assertThat(layout.outputs().hiddenEntries())
-                .contains(new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.FLUID, 20));
+                .contains(new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.FLUID, 17));
         assertThat(layout.hasOutputOverflow()).isTrue();
+        assertThat(layout.outputs().slots().subList(15, 17))
+                .extracting(MachineRecipeLayout.SlotPlan::x, MachineRecipeLayout.SlotPlan::y)
+                .containsExactly(tuple(91, 98), tuple(109, 98));
+        assertThat(layout.durationTextY()).isEqualTo(120);
     }
 
     @Test
@@ -169,12 +173,12 @@ class MachineRecipeLayoutTest {
 
         assertThat(layout.outputs().slots())
                 .extracting(MachineRecipeLayout.SlotPlan::x, MachineRecipeLayout.SlotPlan::y)
-                .containsExactly(tuple(91, 3), tuple(109, 3), tuple(127, 3), tuple(127, 21));
+                .containsExactly(tuple(91, 8), tuple(109, 8), tuple(127, 8), tuple(127, 26));
     }
 
     @Test
-    void recipeArrowStartsTwoPixelsAfterTheThirdInputSlot() {
+    void recipeArrowStartsTwoPixelsAfterTheThirdInputSlotAndMovesWithSlots() {
         assertThat(MachineRecipeCategory.RECIPE_ARROW_X).isEqualTo(64);
-        assertThat(MachineRecipeCategory.RECIPE_ARROW_Y).isEqualTo(3);
+        assertThat(MachineRecipeCategory.RECIPE_ARROW_Y).isEqualTo(8);
     }
 }

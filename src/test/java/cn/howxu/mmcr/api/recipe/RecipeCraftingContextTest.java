@@ -191,7 +191,7 @@ class RecipeCraftingContextTest {
     }
 
     @Test
-    void commitOutputsFailsWhenDuplicateOutputsExceedCombinedRoom() {
+    void simulateOutputsFailsWhenDuplicateOutputsExceedCombinedRoom() {
         bindItemComponents(Items.COBBLESTONE);
         bindItemComponents(Items.IRON_INGOT);
         ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
@@ -211,8 +211,8 @@ class RecipeCraftingContextTest {
         );
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
-        assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isFalse();
+        assertThat(context.simulateOutputs(recipe)).isFalse();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
     }
 
     @Test
@@ -234,6 +234,33 @@ class RecipeCraftingContextTest {
         assertThat(context.commitOutputs(recipe)).isTrue();
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(15);
         assertThat(output.getItemStackHandler(null).getStackInSlot(1).isEmpty()).isTrue();
+    }
+
+    @Test
+    void commitOutputsPlansDifferentItemsAcrossSharedOutputBusSlots() {
+        bindItemComponents(Items.IRON_NUGGET);
+        bindItemComponents(Items.GOLD_NUGGET);
+        bindItemComponents(Items.COPPER_NUGGET);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerWithComponents(output);
+        MachineRecipe recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "multi_distinct_item_outputs"),
+                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                20,
+                List.of(),
+                List.of(
+                        Items.IRON_NUGGET.getDefaultInstance(),
+                        Items.GOLD_NUGGET.getDefaultInstance(),
+                        Items.COPPER_NUGGET.getDefaultInstance()
+                )
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getItem()).isEqualTo(Items.IRON_NUGGET);
+        assertThat(output.getItemStackHandler(null).getStackInSlot(1).getItem()).isEqualTo(Items.GOLD_NUGGET);
+        assertThat(output.getItemStackHandler(null).getStackInSlot(2).getItem()).isEqualTo(Items.COPPER_NUGGET);
     }
 
     @Test

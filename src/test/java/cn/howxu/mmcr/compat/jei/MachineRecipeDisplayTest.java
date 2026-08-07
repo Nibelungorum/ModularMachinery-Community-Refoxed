@@ -147,21 +147,24 @@ class MachineRecipeDisplayTest {
         assertThat(MachineRecipeLayout.forDisplay(display).inputs().slots())
                 .extracting(slot -> slot.entry().kind())
                 .startsWith(MachineRecipeLayout.Kind.FLUID, MachineRecipeLayout.Kind.FLUID);
-        assertThat(MachineRecipeLayout.forDisplay(overflow).inputs().slots()).hasSize(21);
+        assertThat(MachineRecipeLayout.forDisplay(overflow).inputs().slots()).hasSize(20);
     }
 
     @Test
     void translationsIncludeOverflowTooltips() {
         assertThat(Translations.ALL.get("en_us"))
-                .containsKeys("jei.mmcr.machine_recipe.overflow", "jei.mmcr.machine_recipe.overflow_entry");
+                .containsKeys("jei.mmcr.machine_recipe.input_overflow", "jei.mmcr.machine_recipe.output_overflow",
+                        "jei.mmcr.machine_recipe.overflow_entry");
         assertThat(Translations.ALL.get("zh_cn"))
-                .containsKeys("jei.mmcr.machine_recipe.overflow", "jei.mmcr.machine_recipe.overflow_entry");
+                .containsEntry("jei.mmcr.machine_recipe.output_overflow", "其余产物：")
+                .containsKeys("jei.mmcr.machine_recipe.input_overflow", "jei.mmcr.machine_recipe.overflow_entry");
     }
 
     @Test
-    void overflowEntryUsesPlaceholderForEmptyCandidates() {
-        assertThat(MachineRecipeCategory.overflowEntry(7, net.minecraft.network.chat.Component.empty()))
-                .isNotNull();
+    void outputOverflowNameFallsBackToItemDescriptionWhenHoverNameIsEmpty() {
+        ItemStack stack = new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 3);
+
+        assertThat(MachineRecipeCategory.outputStackName(stack).getString()).isNotEmpty();
     }
 
     private static MachineRecipe recipe(String id, String machine, int priority) {

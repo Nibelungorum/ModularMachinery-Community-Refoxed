@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.compat.jei;
 
-import cn.howxu.mmcr.MMCR;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -24,9 +23,11 @@ public record MachineRecipeLayout(
     public static final int HEIGHT = 150;
 
     private static final int COLUMNS = 3;
-    private static final int ROWS = 7;
+    private static final int ROWS = 6;
     private static final int MAX_VISIBLE = COLUMNS * ROWS;
     private static final int SLOT_SIZE = 18;
+    private static final int SLOT_START_Y = 8;
+    private static final int TEXT_OFFSET_Y = 4;
 
     public static MachineRecipeLayout forDisplay(MachineRecipeDisplay display) {
         return new MachineRecipeLayout(
@@ -35,8 +36,18 @@ public record MachineRecipeLayout(
                 region(display.fluidInputs().size(), display.itemInputs().size(), 8),
                 region(display.fluidOutputs().size(), display.itemOutputs().size(), 91, true),
                 8,
-                132
+                durationTextY(display)
         );
+    }
+
+    private static int durationTextY(MachineRecipeDisplay display) {
+        int inputRows = visibleRows(display.fluidInputs().size() + display.itemInputs().size());
+        int outputRows = visibleRows(display.fluidOutputs().size() + display.itemOutputs().size());
+        return SLOT_START_Y + Math.max(inputRows, outputRows) * SLOT_SIZE + TEXT_OFFSET_Y;
+    }
+
+    private static int visibleRows(int entryCount) {
+        return Math.min(ROWS, (entryCount + COLUMNS - 1) / COLUMNS);
     }
 
     private static RegionPlan region(int fluidCount, int itemCount, int startX) {
@@ -59,27 +70,16 @@ public record MachineRecipeLayout(
             EntryPlan entry = entries.get(cell);
             int column = cell % COLUMNS;
             int row = cell / COLUMNS;
-            if (rightAlign) {
+            if (rightAlign && !(overflowing && row == (MAX_VISIBLE - 1) / COLUMNS)) {
                 int entriesInRow = Math.min(COLUMNS, visibleCount - row * COLUMNS);
                 column += COLUMNS - entriesInRow;
             }
-            slots.add(new SlotPlan(entry, startX + column * SLOT_SIZE, 3 + row * SLOT_SIZE));
+            slots.add(new SlotPlan(entry, startX + column * SLOT_SIZE, SLOT_START_Y + row * SLOT_SIZE));
         }
         List<EntryPlan> hiddenEntries = overflowing
                 ? entries.subList(MAX_VISIBLE - 1, entries.size())
                 : List.of();
         OverflowSlotPlan overflowSlot = overflowing ? overflowSlot(startX, rightAlign) : null;
-        if (MMCR.LOG.isDebugEnabled()) {
-            MMCR.LOG.debug("JEI machine recipe layout region: fluidCount={}, itemCount={}, totalEntries={}, maxVisible={}, visibleSlots={}, hiddenEntries={}, overflowSlot={}, startX={}, rightAlign={}",
-                    fluidCount, itemCount, entries.size(), MAX_VISIBLE, slots.size(), hiddenEntries.size(), overflowSlot, startX, rightAlign);
-            for (int i = 0; i < slots.size(); i++) {
-                SlotPlan slot = slots.get(i);
-                MMCR.LOG.debug("JEI machine recipe layout slot: slotIndex={}, entry={}, x={}, y={}", i, slot.entry(), slot.x(), slot.y());
-            }
-            for (int i = 0; i < hiddenEntries.size(); i++) {
-                MMCR.LOG.debug("JEI machine recipe layout hidden entry: hiddenIndex={}, entry={}", i, hiddenEntries.get(i));
-            }
-        }
         return new RegionPlan(List.copyOf(slots), overflowSlot, List.copyOf(hiddenEntries));
     }
 
@@ -89,7 +89,7 @@ public record MachineRecipeLayout(
         if (rightAlign) {
             column += COLUMNS - Math.min(COLUMNS, MAX_VISIBLE - row * COLUMNS);
         }
-        return new OverflowSlotPlan(startX + column * SLOT_SIZE, 3 + row * SLOT_SIZE);
+        return new OverflowSlotPlan(startX + column * SLOT_SIZE, SLOT_START_Y + row * SLOT_SIZE);
     }
 
     public boolean hasInputOverflow() {

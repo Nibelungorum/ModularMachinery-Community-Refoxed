@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.compat.jei;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.compat.jei.MachineRecipeLayout.OverflowSlotPlan;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -34,8 +33,9 @@ import java.util.Locale;
 public final class MachineRecipeCategory implements IRecipeCategory<MachineRecipeDisplay> {
 
     private static final int FLUID_SLOT_CAPACITY = 1000;
+    private static final int OVERFLOW_TEXT_OFFSET_X = 5;
     static final int RECIPE_ARROW_X = 64;
-    static final int RECIPE_ARROW_Y = 3;
+    static final int RECIPE_ARROW_Y = 8;
 
     private final Machine machine;
     private final IRecipeType<MachineRecipeDisplay> recipeType;
@@ -77,13 +77,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     @Override
     public void setRecipe(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe, IFocusGroup focuses) {
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
-        if (MMCR.LOG.isDebugEnabled()) {
-            MMCR.LOG.debug("JEI set machine recipe layout: recipeId={}, machineId={}, itemInputs={}, fluidInputs={}, itemOutputs={}, fluidOutputs={}, energyInputs={}, energyOutputs={}, inputSlots={}, inputHidden={}, outputSlots={}, outputHidden={}",
-                    recipe.recipeId(), recipe.machineId(), recipe.itemInputs().size(), recipe.fluidInputs().size(),
-                    recipe.itemOutputs().size(), recipe.fluidOutputs().size(), recipe.energyInputs().size(), recipe.energyOutputs().size(),
-                    layout.inputs().slots().size(), layout.inputs().hiddenEntries().size(),
-                    layout.outputs().slots().size(), layout.outputs().hiddenEntries().size());
-        }
         addRegion(builder, recipe, layout.inputs(), true);
         addRegion(builder, recipe, layout.outputs(), false);
         builder.moveRecipeTransferButton(132, 130);
@@ -97,11 +90,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     @Override
     public void draw(MachineRecipeDisplay recipe, IRecipeSlotsView recipeSlotsView, GuiGraphicsExtractor guiGraphics, double mouseX, double mouseY) {
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
-        if (MMCR.LOG.isDebugEnabled() && (layout.hasInputOverflow() || layout.hasOutputOverflow())) {
-            MMCR.LOG.debug("JEI draw machine recipe overflow markers: recipeId={}, machineId={}, mouseX={}, mouseY={}, jeiSlotViews={}, inputHidden={}, outputHidden={}",
-                    recipe.recipeId(), recipe.machineId(), mouseX, mouseY, recipeSlotsView.getSlotViews().size(),
-                    layout.inputs().hiddenEntries().size(), layout.outputs().hiddenEntries().size());
-        }
         guiGraphics.text(Minecraft.getInstance().font,
                 Component.translatable("jei.mmcr.machine_recipe.duration", recipe.durationTicks(), seconds(recipe.durationTicks())),
                 layout.durationTextX(), layout.durationTextY(), 0xFF404040, false);
@@ -152,12 +140,16 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         return Component.translatable("jei.mmcr.machine_recipe.overflow_entry", amount, displayName);
     }
 
+    static Component outputStackName(ItemStack stack) {
+        Component hoverName = stack.getHoverName();
+        if (!hoverName.getString().isEmpty()) {
+            return hoverName;
+        }
+        return Component.translatable(stack.getItem().getDescriptionId());
+    }
+
     private static void addRegion(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe,
             MachineRecipeLayout.RegionPlan region, boolean input) {
-        if (MMCR.LOG.isDebugEnabled()) {
-            MMCR.LOG.debug("JEI add machine recipe {} region: recipeId={}, slots={}, overflowSlot={}, hiddenEntries={}",
-                    input ? "input" : "output", recipe.recipeId(), region.slots().size(), region.overflowSlot(), region.hiddenEntries().size());
-        }
         for (MachineRecipeLayout.SlotPlan slot : region.slots()) {
             addEntry(builder, recipe, slot, input);
         }
@@ -165,10 +157,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     private static void addEntry(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe,
             MachineRecipeLayout.SlotPlan slot, boolean input) {
-        if (MMCR.LOG.isDebugEnabled()) {
-            MMCR.LOG.debug("JEI add machine recipe entry slot: recipeId={}, region={}, entry={}, x={}, y={}",
-                    recipe.recipeId(), input ? "input" : "output", slot.entry(), slot.x(), slot.y());
-        }
         IRecipeSlotBuilder jeiSlot = input ? builder.addInputSlot(slot.x(), slot.y()) : builder.addOutputSlot(slot.x(), slot.y());
         jeiSlot.setStandardSlotBackground();
         switch (slot.entry().kind()) {
@@ -201,11 +189,9 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     private static void appendOverflowTooltip(ITooltipBuilder tooltip,
             MachineRecipeDisplay recipe, List<MachineRecipeLayout.EntryPlan> hiddenEntries, boolean input) {
-        if (MMCR.LOG.isDebugEnabled()) {
-            MMCR.LOG.debug("JEI append machine recipe overflow tooltip: recipeId={}, region={}, hiddenEntries={}",
-                    recipe.recipeId(), input ? "input" : "output", hiddenEntries.size());
-        }
-        tooltip.add(Component.translatable("jei.mmcr.machine_recipe.overflow"));
+        tooltip.add(Component.translatable(input
+                ? "jei.mmcr.machine_recipe.input_overflow"
+                : "jei.mmcr.machine_recipe.output_overflow"));
         for (MachineRecipeLayout.EntryPlan entry : hiddenEntries) {
             if (entry.kind() == MachineRecipeLayout.Kind.ITEM) {
                 if (input) {
@@ -214,12 +200,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                             .findFirst()
                             .map(ItemStack::getHoverName)
                             .orElse(Component.empty());
-                    logOverflowTooltipEntry(recipe, input, entry, amount, displayName);
                     tooltip.add(overflowEntry(amount, displayName));
                 } else {
                     ItemStack stack = recipe.itemOutputs().get(entry.index());
-                    logOverflowTooltipEntry(recipe, input, entry, stack.getCount(), stack.getHoverName());
-                    tooltip.add(overflowEntry(stack.getCount(), stack.getHoverName()));
+                    tooltip.add(overflowEntry(stack.getCount(), outputStackName(stack)));
                 }
             } else {
                 if (input) {
@@ -228,22 +212,12 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                             .findFirst()
                             .map(fluid -> new FluidStack(fluid.value(), amount).getHoverName())
                             .orElse(Component.empty());
-                    logOverflowTooltipEntry(recipe, input, entry, amount, displayName);
                     tooltip.add(overflowEntry(amount, displayName));
                 } else {
                     var fluidStack = recipe.fluidOutputs().get(entry.index());
-                    logOverflowTooltipEntry(recipe, input, entry, fluidStack.getAmount(), fluidStack.getHoverName());
                     tooltip.add(overflowEntry(fluidStack.getAmount(), fluidStack.getHoverName()));
                 }
             }
-        }
-    }
-
-    private static void logOverflowTooltipEntry(MachineRecipeDisplay recipe, boolean input,
-            MachineRecipeLayout.EntryPlan entry, int amount, Component displayName) {
-        if (MMCR.LOG.isDebugEnabled()) {
-            MMCR.LOG.debug("JEI overflow tooltip entry: recipeId={}, region={}, entry={}, amount={}, displayName={}",
-                    recipe.recipeId(), input ? "input" : "output", entry, amount, displayName.getString());
         }
     }
 
@@ -251,7 +225,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             GuiGraphicsExtractor guiGraphics, IDrawable slotBackground) {
         if (slot != null) {
             slotBackground.draw(guiGraphics, slot.x() - 1, slot.y() - 1);
-            guiGraphics.text(Minecraft.getInstance().font, "...", slot.x(), slot.y() + 4, 0xFF404040, false);
+            guiGraphics.text(Minecraft.getInstance().font, "...", slot.x() + OVERFLOW_TEXT_OFFSET_X, slot.y() + 4, 0xFF404040, false);
         }
     }
 
