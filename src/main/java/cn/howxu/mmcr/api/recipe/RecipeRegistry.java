@@ -13,7 +13,8 @@ import java.util.TreeSet;
 
 public final class RecipeRegistry {
 
-    private static final Map<Identifier, MachineRecipe> RECIPES = new LinkedHashMap<>();
+    private static final Map<Identifier, MachineRecipe> STATIC_RECIPES = new LinkedHashMap<>();
+    private static final Map<Identifier, MachineRecipe> DYNAMIC_RECIPES = new LinkedHashMap<>();
     private static final Map<Identifier, TreeMap<Integer, TreeSet<MachineRecipe>>> BY_MACHINE = new LinkedHashMap<>();
     private static long reloadVersion;
 
@@ -27,17 +28,17 @@ public final class RecipeRegistry {
         if (recipe.id() == null) {
             throw new IllegalArgumentException("Recipe id null");
         }
-        RECIPES.put(recipe.id(), recipe);
-        TreeMap<Integer, TreeSet<MachineRecipe>> priorityMap = BY_MACHINE.computeIfAbsent(
-                recipe.machineId(), k -> new TreeMap<>());
-        TreeSet<MachineRecipe> set = priorityMap.computeIfAbsent(
-                recipe.priority(), p -> new TreeSet<>(Comparator.comparing(MachineRecipe::id)));
-        set.add(recipe);
+        if (STATIC_RECIPES.containsKey(recipe.id())) {
+            throw new IllegalStateException("Recipe already registered: " + recipe.id());
+        }
+        STATIC_RECIPES.put(recipe.id(), recipe);
+        rebuildIndex();
     }
 
     public static MachineRecipe getRecipe(Identifier id) {
         if (id == null) return null;
-        return RECIPES.get(id);
+        MachineRecipe recipe = STATIC_RECIPES.get(id);
+        return recipe != null ? recipe : DYNAMIC_RECIPES.get(id);
     }
 
     public static List<MachineRecipe> byMachine(Machine machine) {
@@ -53,19 +54,58 @@ public final class RecipeRegistry {
     }
 
     public static List<MachineRecipe> recipes() {
-        return List.copyOf(RECIPES.values());
+        return List.copyOf(mergedRecipes().values());
     }
 
     public static int registeredRecipeCount() {
-        return RECIPES.size();
+        return STATIC_RECIPES.size() + DYNAMIC_RECIPES.size();
     }
 
     public static long reloadVersion() {
         return reloadVersion;
     }
 
+    public static boolean containsStatic(Identifier id) {
+        return STATIC_RECIPES.containsKey(id);
+    }
+
+    public static void replaceDynamic(Map<Identifier, MachineRecipe> recipes) {
+        Map<Identifier, MachineRecipe> replacement = new LinkedHashMap<>();
+        for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
+            if (STATIC_RECIPES.containsKey(entry.getKey())) {
+                throw new IllegalStateException("Dynamic recipe conflicts with static recipe: " + entry.getKey());
+            }
+            replacement.put(entry.getKey(), entry.getValue());
+        }
+        DYNAMIC_RECIPES.clear();
+        DYNAMIC_RECIPES.putAll(replacement);
+        rebuildIndex();
+        reloadVersion++;
+    }
+
+    public static Map<Identifier, MachineRecipe> dynamicSnapshot() {
+        return Map.copyOf(DYNAMIC_RECIPES);
+    }
+
+    private static Map<Identifier, MachineRecipe> mergedRecipes() {
+        Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>(STATIC_RECIPES);
+        recipes.putAll(DYNAMIC_RECIPES);
+        return recipes;
+    }
+
+    private static void rebuildIndex() {
+        BY_MACHINE.clear();
+        for (MachineRecipe recipe : mergedRecipes().values()) {
+            TreeMap<Integer, TreeSet<MachineRecipe>> priorities = BY_MACHINE.computeIfAbsent(
+                    recipe.machineId(), ignored -> new TreeMap<>());
+            priorities.computeIfAbsent(recipe.priority(), ignored ->
+                    new TreeSet<>(Comparator.comparing(MachineRecipe::id))).add(recipe);
+        }
+    }
+
     public static void clearAll() {
-        RECIPES.clear();
+        STATIC_RECIPES.clear();
+        DYNAMIC_RECIPES.clear();
         BY_MACHINE.clear();
         reloadVersion++;
     }
