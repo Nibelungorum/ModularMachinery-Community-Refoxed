@@ -49,6 +49,7 @@
 - 机器绑定 / 结构匹配 / 成型状态 / active recipe 基础状态。
 - **多方向控制器**：机器级 opt-in 启用 UP/DOWN 控制器朝向（默认水平四向），并能记录竖直结构的成型态。Controller 在结构重置时同步清空 components / active recipe / context。
 - 端口要求 spec（`PortRequirementSpec` / `MachineControllerSpec`）：机器定义可声明成型所需的端口集合与朝向，控制器在成型时校验。
+- **阶段 5 并行 / 工厂基线**：`ParallelTier` 注册 4/16/64/256/512x 并行控制器，机器与配方都必须显式 opt-in 才会选择并行度；runtime IO 按 active parallelism 成倍 simulate / commit。Factory controller 采用 snapshot-only scheduler 安全调度，实际 world / BE 提交仍回到 server tick；Jade 诊断区分 max available parallelism、当前 active parallelism 与 factory active lane count。
 
 #### 1.1.4 IO 端口（item / fluid / energy）
 
@@ -117,7 +118,7 @@
 - KubeJS（`cn.howxu.mmcr.compat.kubejs.*`）：KubeJS **compileOnly** 依赖（不强制绑定）。`Plugin` / `MachineBuilderJS` / `MachineRecipeBuilderJS` / `MachineRecipeFactory` / `MachineRecipeSchema`。
   - `MachineBuilderJS` 支持 `event.create('mmcr:id').localizedName(...).pattern(string, keyMap)` 字符串式结构定义。
   - `MachineRecipeSchema` 用 Java `RecipeSchema` API 程序化注册 `mmcr:machine_recipe` 配方类型（零 JSON）。
-- Jade（`cn.howxu.mmcr.compat.jade.*`）：`JadePlugin` / `MachineControllerComponentProvider` / `MachineControllerDataProvider`——controller + 端口信息显示。
+- Jade（`cn.howxu.mmcr.compat.jade.*`）：`JadePlugin` / `MachineControllerComponentProvider` / `MachineControllerDataProvider`——controller + 端口信息显示，并显示并行上限 / 当前并行度 / 工厂活跃 lane 诊断。
 - JEI（`cn.howxu.mmcr.compat.jei.*`）：`JeiPlugin` / `MachineRecipeCategory` / `MachineRecipeDisplay` / `MachineRecipeTransferHandler`，展示 machine recipes 的 item/fluid/energy/duration，并支持 item input bus 的物品输入转移；未安装 JEI 时不加载该 compat 入口。
 - Oritech / GeckoLib / Rhino：`runtimeOnly` 软依赖，**未启用任何代码路径**。
 
@@ -127,7 +128,7 @@
 
 - P3B pattern position modifier 已完成：支持 single-block replacement metadata、结构内位置匹配、朝向 / 旋转位置映射，以及 runtime modifier snapshot 与 recipe 运行链合并。
 - P3A 已让 output chance 在 finish 时应用；**modifier 影响的 input chance 后续迭代**。
-- 平行 / 工厂 / 智能接口 / 升级 / 蓝图 / 自动组装 / AE2 等高级特性**全部 OUT**（详见 §2.6 – §2.9）。
+- 智能接口 / 升级 / 蓝图 / 自动组装 / AE2 等高级特性**仍 OUT**（详见 §2.7 – §2.9）；平行 / 工厂控制器已完成阶段 5 基线，built-ins 保守保持 non-parallel，供 KubeJS / Java 机器定义显式 opt-in。
 - 旧 `docs/superpowers/` 与 `docs/optimization/` 已合并到本文件 + MMCE.md，**已删除**。
 - 旧 `docs/scope.md` / `recipes-port.md` / `main-roadmap.md` 内容已并入本文件 + 既有 `architecture.md` / `api-mapping.md` / `kubejs-integration.md`，**已删除**。
 
@@ -188,7 +189,7 @@ src/main/java/
 | **阶段 3A Recipe Modifier 全链** | recipe-local static modifier runtime chain | ✅ 完成 | §9 |
 | **阶段 3B Pattern position modifier** | pattern 位置级 modifier replacement | ✅ 完成 | §9.2 / §9.4 |
 | **阶段 4 JEI 集成** | recipe category + transfer | ✅ 完成 | §23 / §24（功能） |
-| **阶段 5 并行与工厂控制器** | parallel + factory 多线程 | ⬜ 未开始 | §13 / §15 |
+| **阶段 5 并行与工厂控制器** | parallel + factory 多线程 | ✅ 完成 | §13 / §15 |
 | **阶段 6 智能接口** | interface_number + 数值输入 | ⬜ 未开始 | §12 / §7 |
 | **阶段 7 升级 + 蓝图 + 预览 + 自动组装** | UX 体验层 | ⬜ 未开始 | §14 / §21 / §20 / §22 |
 | **阶段 8 第三方联动** | AE2 / Mekanism / GTCeu / ModularMagic / Jade（深化） | ⬜ 未开始（按需） | §26–§29 |
@@ -272,11 +273,11 @@ src/main/java/
 - JEI recipe transfer 能把物品输入移动到 item input bus；fluid / energy transfer 不做或只显示原因。
 - 未安装 JEI 时 MMCR 可正常加载。
 
-### 2.6 阶段 5：并行与工厂控制器 ⬜
+### 2.6 阶段 5：并行与工厂控制器 ✅
 
 **目标**：移植 MMCE 的并行执行能力——先可验证的单控制器并行，再做 factory 多线程。
 
-**未开始任务**：
+**已完成任务**：
 
 #### 2.6.1 Parallel Controller
 
@@ -288,14 +289,18 @@ src/main/java/
 | parallel levels 4/16/64/256/512 | `ParallelTier` | 直译 |
 | recipe `parallelized` | `MachineRecipe.parallelized` | 直译 |
 
+**实现说明**：机器定义、配方定义和结构内 parallel controller 必须同时允许并行，active recipe 才会选择 >1 的 parallelism；无 parallel controller 或 recipe 未 opt-in 时恒为 1。内建机器没有可靠 pattern 支撑 parallel / factory 组件，因此默认全部保持 non-parallel，作为保守 baseline；整合包作者可通过 KubeJS / Java definitions 自行开启。
+
 #### 2.6.2 Factory Controller / 多线程
 
 | MMCE 来源 | MMCR 目标 | 移植方式 |
 |---|---|---|
-| `TileFactoryController` | `FactoryControllerBlockEntity` | 延后到 parallel 稳定后 |
+| `TileFactoryController` | `FactoryControllerBlockEntity` | 直译简化 |
 | `FactoryRecipeThread` | factory recipe scheduler | 重映射 |
 | `TaskExecutor` | Java executor 或 server tick task queue | 重映射，**不能破坏 MC 主线程安全** |
-| `RecipeCraftingContextPool` | context pool | 延后，只有性能需要时做 |
+| `RecipeCraftingContextPool` | context pool | 沿用既有池化，避免跨 tick 复用过期 BE |
+
+**实现说明**：MMCE async 优化策略已按 NeoForge 主线程安全边界重映射为 snapshot-only scheduling；scheduler 可以并行评估不可变候选快照，但所有真实 world / BE IO 提交都在 server tick 上执行，避免异步线程读写世界状态。
 
 **验收门槛**：
 - 无 parallel controller 时 parallelism 恒为 1。

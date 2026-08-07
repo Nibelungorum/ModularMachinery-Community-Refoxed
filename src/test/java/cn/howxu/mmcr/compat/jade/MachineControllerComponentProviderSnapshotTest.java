@@ -30,15 +30,31 @@ class MachineControllerComponentProviderSnapshotTest {
         tag.putString("activeRecipe", "mmcr:test_recipe");
         tag.putInt("tick", 25);
         tag.putInt("totalTick", 100);
-        tag.putInt("parallelism", 2);
-        tag.putInt("maxParallelism", 4);
+        tag.putInt("parallelism", 4);
+        tag.putInt("maxParallelism", 16);
+        tag.putInt("factoryLanes", 2);
 
         MachineControllerComponentProvider.Snapshot snapshot = MachineControllerComponentProvider.Snapshot.from(tag);
 
         assertThat(snapshot.status()).isEqualTo("working");
         assertThat(snapshot.hasProgress()).isTrue();
         assertThat(snapshot.progressPercent()).isEqualTo(25);
+        assertThat(snapshot.parallelism()).isEqualTo(4);
+        assertThat(snapshot.maxParallelism()).isEqualTo(16);
         assertThat(snapshot.shouldShowParallelism()).isTrue();
+        assertThat(snapshot.factoryLanes()).isEqualTo(2);
+        assertThat(snapshot.shouldShowFactoryLanes()).isTrue();
+    }
+
+    @Test
+    void keeps_backward_safe_parallel_and_factory_defaults() {
+        MachineControllerComponentProvider.Snapshot snapshot = MachineControllerComponentProvider.Snapshot.from(new CompoundTag());
+
+        assertThat(snapshot.parallelism()).isEqualTo(1);
+        assertThat(snapshot.maxParallelism()).isEqualTo(1);
+        assertThat(snapshot.factoryLanes()).isZero();
+        assertThat(snapshot.shouldShowParallelism()).isFalse();
+        assertThat(snapshot.shouldShowFactoryLanes()).isFalse();
     }
 
     @Test

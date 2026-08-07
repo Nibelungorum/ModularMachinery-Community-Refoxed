@@ -45,6 +45,10 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
             tooltip.add(row("parallelism", Component.translatable("jade.mmcr.machine_controller.parallelism.value",
                     snapshot.parallelism(), snapshot.maxParallelism())));
         }
+        if (snapshot.shouldShowFactoryLanes()) {
+            tooltip.add(row("factory_lanes", Component.translatable("jade.mmcr.machine_controller.factory_lanes.value",
+                    snapshot.factoryLanes())));
+        }
         tooltip.add(row("components", Component.translatable("jade.mmcr.machine_controller.components.value",
                 snapshot.itemInputs(), snapshot.itemOutputs(),
                 snapshot.fluidInputs(), snapshot.fluidOutputs(),
@@ -67,6 +71,7 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
             int totalTick,
             int parallelism,
             int maxParallelism,
+            int factoryLanes,
             int itemInputs,
             int itemOutputs,
             int fluidInputs,
@@ -85,6 +90,7 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
                     tag.getIntOr("totalTick", 0),
                     tag.getIntOr("parallelism", 1),
                     tag.getIntOr("maxParallelism", 1),
+                    tag.getIntOr("factoryLanes", 0),
                     tag.getIntOr("itemInputs", 0),
                     tag.getIntOr("itemOutputs", 0),
                     tag.getIntOr("fluidInputs", 0),
@@ -110,6 +116,10 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
 
         boolean shouldShowParallelism() {
             return parallelism > 1 || maxParallelism > 1;
+        }
+
+        boolean shouldShowFactoryLanes() {
+            return factoryLanes > 0;
         }
     }
 }

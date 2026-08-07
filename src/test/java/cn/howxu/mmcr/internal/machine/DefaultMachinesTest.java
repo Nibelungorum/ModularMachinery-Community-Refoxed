@@ -42,6 +42,9 @@ class DefaultMachinesTest {
         var machine = MachineRegistry.getMachine(MMCR.id("blast_furnace"));
 
         assertThat(machine).isNotNull();
+        assertThat(machine.parallelizable()).isFalse();
+        assertThat(machine.maxParallelism()).isEqualTo(1);
+        assertThat(machine.hasFactory()).isFalse();
         assertThat(machine.localizedName()).isEqualTo("高炉");
         assertThat(machine.controller().id()).isEqualTo(MMCR.id("blast_furnace_controller"));
         assertThat(machine.portRequirements().requirements())
@@ -134,6 +137,9 @@ class DefaultMachinesTest {
         var machine = MachineRegistry.getMachine(MMCR.id("cracker"));
 
         assertThat(machine).isNotNull();
+        assertThat(machine.parallelizable()).isFalse();
+        assertThat(machine.maxParallelism()).isEqualTo(1);
+        assertThat(machine.hasFactory()).isFalse();
         assertThat(machine.localizedName()).isEqualTo("裂化器");
         assertThat(machine.controller().id()).isEqualTo(MMCR.id("cracker_controller"));
         assertThat(machine.controller().allowVerticalFacing()).isTrue();
