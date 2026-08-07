@@ -162,13 +162,53 @@ class DefaultRecipesTest {
         DefaultRecipes.ensureRegistered();
 
         assertThat(RecipeRegistry.byMachineId(MMCR.id("blast_furnace"))).hasSize(10);
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("alloy_furnace"))).hasSize(10);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("alloy_furnace"))).hasSize(12);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker"))).hasSize(10);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("reactor"))).hasSize(10);
-        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(40);
+        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(42);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker")))
                 .anySatisfy(recipe -> assertThat(recipe.fluidOutputs()).isNotEmpty());
         assertThat(RecipeRegistry.recipes())
                 .anySatisfy(recipe -> assertThat(recipe.outputs()).hasSizeGreaterThan(1));
+    }
+
+    @Test
+    void default_recipes_include_three_input_and_three_output_ui_examples() {
+        DefaultMachines.ensureRegistered();
+        DefaultRecipes.ensureRegistered();
+
+        assertThat(RecipeRegistry.getRecipe(MMCR.id("blast_furnace_multi_item")).inputs())
+                .filteredOn(MachineIngredient.ItemIngredient.class::isInstance)
+                .hasSize(3);
+        assertThat(RecipeRegistry.getRecipe(MMCR.id("blast_furnace_multi_output")).outputs())
+                .hasSize(3);
+    }
+
+    @Test
+    void alloy_furnace_has_large_recipe_for_jei_overflow_display() {
+        DefaultMachines.ensureRegistered();
+        DefaultRecipes.ensureRegistered();
+
+        var recipe = RecipeRegistry.getRecipe(MMCR.id("alloy_furnace_jei_large"));
+
+        assertThat(recipe).isNotNull();
+        assertThat(recipe.inputs())
+                .filteredOn(MachineIngredient.ItemIngredient.class::isInstance)
+                .hasSizeGreaterThan(20);
+        assertThat(recipe.outputs()).hasSizeGreaterThan(20);
+    }
+
+    @Test
+    void alloy_furnace_has_25x25_recipe_for_jei_overflow_display() {
+        DefaultMachines.ensureRegistered();
+        DefaultRecipes.ensureRegistered();
+
+        var recipe = RecipeRegistry.getRecipe(MMCR.id("alloy_furnace_jei_25x25"));
+
+        assertThat(recipe).isNotNull();
+        assertThat(recipe.inputs())
+                .filteredOn(MachineIngredient.ItemIngredient.class::isInstance)
+                .hasSize(25);
+        assertThat(recipe.outputs()).hasSize(25);
     }
 }

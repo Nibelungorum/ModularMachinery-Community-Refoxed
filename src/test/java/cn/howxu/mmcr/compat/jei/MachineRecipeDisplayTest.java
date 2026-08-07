@@ -147,7 +147,7 @@ class MachineRecipeDisplayTest {
         assertThat(MachineRecipeLayout.forDisplay(display).inputs().slots())
                 .extracting(slot -> slot.entry().kind())
                 .startsWith(MachineRecipeLayout.Kind.FLUID, MachineRecipeLayout.Kind.FLUID);
-        assertThat(MachineRecipeLayout.forDisplay(overflow).inputs().slots()).hasSize(32);
+        assertThat(MachineRecipeLayout.forDisplay(overflow).inputs().slots()).hasSize(21);
     }
 
     @Test

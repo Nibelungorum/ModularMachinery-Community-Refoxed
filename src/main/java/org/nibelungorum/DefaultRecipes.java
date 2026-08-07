@@ -51,10 +51,60 @@ public final class DefaultRecipes {
     private static List<Definition> definitions() {
         return List.of(
                 standardDefinitions(BLAST_FURNACE_ID, "blast_furnace", new Definition(MMCR.id("blast_furnace_iron_to_nugget"), BLAST_FURNACE_ID, 200, List.of(itemInput(Items.IRON_INGOT, 1), energyInput(1)), List.of(item(Items.IRON_NUGGET, 1)), List.of())),
-                standardDefinitions(ALLOY_FURNACE_ID, "alloy_furnace", new Definition(ALLOY_FURNACE_NETHERITE_ID, ALLOY_FURNACE_ID, 100, List.of(itemInput(Items.ANCIENT_DEBRIS, 1), itemInput(Items.GOLD_INGOT, 1), energyInput(5)), List.of(item(Items.NETHERITE_INGOT, 1)), List.of())),
+                alloyFurnaceDefinitions(),
                 standardDefinitions(CRACKER_ID, "cracker", new Definition(MMCR.id("cracker_coal_lapis"), CRACKER_ID, 160, List.of(itemInput(Items.COAL, 8), itemInput(Items.LAPIS_LAZULI, 1), energyInput(100)), List.of(item(Items.REDSTONE, 4)), List.of(fluidOutput(Fluids.WATER, 500)))),
                 standardDefinitions(REACTOR_ID, "reactor", new Definition(MMCR.id("reactor_diamond_water"), REACTOR_ID, 200, List.of(itemInput(Items.DIAMOND, 1), fluidInput(Fluids.WATER, 500), energyOutput(100)), List.of(item(Items.COAL, 1)), List.of(fluidOutput(Fluids.LAVA, 500))))
         ).stream().flatMap(List::stream).toList();
+    }
+
+    private static List<Definition> alloyFurnaceDefinitions() {
+        List<Definition> definitions = new java.util.ArrayList<>(standardDefinitions(ALLOY_FURNACE_ID, "alloy_furnace",
+                new Definition(ALLOY_FURNACE_NETHERITE_ID, ALLOY_FURNACE_ID, 100, List.of(itemInput(Items.ANCIENT_DEBRIS, 1), itemInput(Items.GOLD_INGOT, 1), energyInput(5)), List.of(item(Items.NETHERITE_INGOT, 1)), List.of())));
+        definitions.add(new Definition(MMCR.id("alloy_furnace_jei_large"), ALLOY_FURNACE_ID, 400,
+                largeItemInputs(), largeItemOutputs(), List.of()));
+        definitions.add(new Definition(MMCR.id("alloy_furnace_jei_25x25"), ALLOY_FURNACE_ID, 500,
+                twentyFiveItemInputs(), twentyFiveItemOutputs(), List.of()));
+        return List.copyOf(definitions);
+    }
+
+    private static List<MachineIngredient> largeItemInputs() {
+        return java.util.stream.Stream.of(
+                Items.IRON_INGOT, Items.GOLD_INGOT, Items.COPPER_INGOT, Items.REDSTONE, Items.LAPIS_LAZULI,
+                Items.COAL, Items.DIAMOND, Items.EMERALD, Items.QUARTZ, Items.AMETHYST_SHARD,
+                Items.NETHERITE_SCRAP, Items.IRON_NUGGET, Items.GOLD_NUGGET, Items.COPPER_BLOCK, Items.IRON_BLOCK,
+                Items.GOLD_BLOCK, Items.REDSTONE_BLOCK, Items.LAPIS_BLOCK, Items.DIAMOND_BLOCK, Items.EMERALD_BLOCK,
+                Items.QUARTZ_BLOCK
+        ).map(item -> itemInput(item, 1)).toList();
+    }
+
+    private static List<ItemStack> largeItemOutputs() {
+        return java.util.stream.Stream.of(
+                Items.IRON_NUGGET, Items.GOLD_NUGGET, Items.COPPER_NUGGET, Items.REDSTONE, Items.LAPIS_LAZULI,
+                Items.COAL, Items.DIAMOND, Items.EMERALD, Items.QUARTZ, Items.AMETHYST_SHARD,
+                Items.NETHERITE_SCRAP, Items.IRON_INGOT, Items.GOLD_INGOT, Items.COPPER_INGOT, Items.IRON_BLOCK,
+                Items.GOLD_BLOCK, Items.COPPER_BLOCK, Items.REDSTONE_BLOCK, Items.LAPIS_BLOCK, Items.DIAMOND_BLOCK,
+                Items.EMERALD_BLOCK
+        ).map(item -> item(item, 1)).toList();
+    }
+
+    private static List<MachineIngredient> twentyFiveItemInputs() {
+        return java.util.stream.Stream.of(
+                Items.IRON_INGOT, Items.GOLD_INGOT, Items.COPPER_INGOT, Items.REDSTONE, Items.LAPIS_LAZULI,
+                Items.COAL, Items.DIAMOND, Items.EMERALD, Items.QUARTZ, Items.AMETHYST_SHARD,
+                Items.NETHERITE_SCRAP, Items.IRON_NUGGET, Items.GOLD_NUGGET, Items.COPPER_BLOCK, Items.IRON_BLOCK,
+                Items.GOLD_BLOCK, Items.REDSTONE_BLOCK, Items.LAPIS_BLOCK, Items.DIAMOND_BLOCK, Items.EMERALD_BLOCK,
+                Items.QUARTZ_BLOCK, Items.COAL_BLOCK, Items.RAW_IRON, Items.RAW_GOLD, Items.RAW_COPPER
+        ).map(item -> itemInput(item, 1)).toList();
+    }
+
+    private static List<ItemStack> twentyFiveItemOutputs() {
+        return java.util.stream.Stream.of(
+                Items.RAW_COPPER, Items.RAW_GOLD, Items.RAW_IRON, Items.COAL_BLOCK, Items.QUARTZ_BLOCK,
+                Items.EMERALD_BLOCK, Items.DIAMOND_BLOCK, Items.LAPIS_BLOCK, Items.REDSTONE_BLOCK, Items.GOLD_BLOCK,
+                Items.IRON_BLOCK, Items.COPPER_BLOCK, Items.GOLD_NUGGET, Items.IRON_NUGGET, Items.NETHERITE_SCRAP,
+                Items.AMETHYST_SHARD, Items.QUARTZ, Items.EMERALD, Items.DIAMOND, Items.COAL,
+                Items.LAPIS_LAZULI, Items.REDSTONE, Items.COPPER_INGOT, Items.GOLD_INGOT, Items.IRON_INGOT
+        ).map(item -> item(item, 1)).toList();
     }
 
     private static List<Definition> standardDefinitions(Identifier machineId, String prefix, Definition first) {

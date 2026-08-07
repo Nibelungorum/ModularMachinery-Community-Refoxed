@@ -49,6 +49,11 @@ repositories {
         // JitPack
         url = 'https://www.jitpack.io'
     }
+
+    maven {
+        name = "HowXu.public"
+        url = uri("https://maven.howxu.cn/")
+    }
 }
 
 base {
@@ -114,9 +119,11 @@ dependencies {
 
     // KubeJS 8.0.1
     // implementation("dev.latvian.mods:kubejs-neoforge:${kubejs_version}")
-    compileOnly "curse.maven:kubejs-238086:8219059"
+    // compileOnly "curse.maven:kubejs-238086:8219059"
     // interfaceInjectionData("dev.latvian.mods:kubejs-neoforge:${kubejs_version}")
     // runtimeOnly("dev.latvian.mods:kubejs-neoforge:${kubejs_version}")
+    // from howxu maven
+    implementation("dev.latvian.mods:kubejs-neoforge:26.1.2-8.0.4-mmcr")
 
     // Mek
     // runtimeOnly "com.github.mekanism:Mekanism:26.1.2-10.8.0.homebaked"
