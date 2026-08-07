@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.resources.Identifier;
 
 import java.util.LinkedHashMap;
@@ -51,6 +52,9 @@ public final class DynamicContentReloadService {
             }
             if (MachineDefinitions.containsStatic(id) || MachineRegistry.containsStatic(id)) {
                 throw new IllegalStateException("Dynamic machine conflicts with static machine: " + id);
+            }
+            if (!ModBlocks.hasControllerFor(id)) {
+                throw new IllegalStateException("Dynamic machine has no startup-reserved controller: " + id);
             }
             machines.put(id, machine);
         }

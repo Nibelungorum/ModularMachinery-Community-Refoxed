@@ -16,6 +16,7 @@ public final class ReloadCommand {
                         .requires(src -> src.permissions().hasPermission(net.minecraft.server.permissions.Permissions.COMMANDS_ADMIN))
                         .executes(ctx -> {
                             var result = DynamicContentReloadService.reload(candidate -> {});
+                            cn.howxu.mmcr.internal.network.ControllerSpecSync.sendToAll(ctx.getSource().getServer());
                             ctx.getSource().sendSuccess(() -> net.minecraft.network.chat.Component.literal(
                                     "MMCR reload: machines +%d ~%d -%d, recipes +%d ~%d -%d".formatted(
                                             result.addedMachines().size(), result.updatedMachines().size(),

@@ -30,6 +30,7 @@ import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import org.slf4j.Logger;
@@ -62,6 +63,16 @@ public class MMCR {
         NeoForge.EVENT_BUS.addListener(StructureDirtyEvents::onFluidPlaced);
         NeoForge.EVENT_BUS.addListener(StructureDirtyEvents::onBlockBroken);
         NeoForge.EVENT_BUS.addListener(StructureDirtyEvents::onChunkUnloaded);
+        NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedInEvent event) -> {
+            if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+                cn.howxu.mmcr.internal.network.ControllerSpecSync.sendTo(player);
+            }
+        });
+        NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerChangedDimensionEvent event) -> {
+            if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+                cn.howxu.mmcr.internal.network.ControllerSpecSync.sendTo(player);
+            }
+        });
         NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent ev) -> {
             ReloadCommand.register(ev.getDispatcher());
             BuildCommand.register(ev.getDispatcher());

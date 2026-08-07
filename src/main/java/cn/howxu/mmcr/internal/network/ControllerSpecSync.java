@@ -1,0 +1,40 @@
+package cn.howxu.mmcr.internal.network;
+
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.registry.ModBlocks;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
+import net.neoforged.neoforge.network.PacketDistributor;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * @author howxu <dev@howxu.cn>
+ */
+public final class ControllerSpecSync {
+    private ControllerSpecSync() {
+    }
+
+    public static Map<Identifier, MachineControllerSpec> createSnapshot() {
+        Map<Identifier, MachineControllerSpec> snapshot = new LinkedHashMap<>();
+        MachineRegistry.getAll().forEach((id, machine) -> {
+            if (ModBlocks.hasControllerFor(id)) {
+                snapshot.put(id, machine.controller());
+            }
+        });
+        return Map.copyOf(snapshot);
+    }
+
+    public static void sendTo(ServerPlayer player) {
+        PacketDistributor.sendToPlayer(player, new PktControllerSpecsPayload(createSnapshot()));
+    }
+
+    public static void sendToAll(MinecraftServer server) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            sendTo(player);
+        }
+    }
+}

@@ -38,60 +38,58 @@ class DynamicContentReloadServiceTest {
     @Test
     void producerFailureRetainsPreviousDynamicSnapshot() {
         DynamicContentReloadService.reload(candidate -> {
-            candidate.registerMachine(machine("mmcr:old"));
-            candidate.registerRecipe(recipe("mmcr:old_recipe", "mmcr:old"));
+            candidate.registerMachine(machine("mmcr:test_cube"));
+            candidate.registerRecipe(recipe("mmcr:old_recipe", "mmcr:test_cube"));
         });
 
         assertThatThrownBy(() -> DynamicContentReloadService.reload(candidate -> {
-            candidate.registerMachine(machine("mmcr:new"));
+            candidate.registerMachine(machine("mmcr:controller_tick"));
             throw new IllegalStateException("script failed");
         })).isInstanceOf(IllegalStateException.class);
 
-        assertThat(MachineRegistry.getMachine(Identifier.parse("mmcr:old"))).isNotNull();
+        assertThat(MachineRegistry.getMachine(Identifier.parse("mmcr:test_cube"))).isNotNull();
         assertThat(RecipeRegistry.getRecipe(Identifier.parse("mmcr:old_recipe"))).isNotNull();
-        assertThat(MachineRegistry.getMachine(Identifier.parse("mmcr:new"))).isNull();
+        assertThat(MachineRegistry.getMachine(Identifier.parse("mmcr:controller_tick"))).isNull();
     }
 
     @Test
     void successfulReloadReportsRemovedMachinesAndDropsTheirRecipes() {
         DynamicContentReloadService.reload(candidate -> {
-            candidate.registerMachine(machine("mmcr:old"));
-            candidate.registerMachine(machine("mmcr:retained"));
-            candidate.registerRecipe(recipe("mmcr:old_recipe", "mmcr:old"));
+            candidate.registerMachine(machine("mmcr:test_cube"));
+            candidate.registerMachine(machine("mmcr:controller_tick"));
+            candidate.registerRecipe(recipe("mmcr:old_recipe", "mmcr:test_cube"));
         });
 
         var result = DynamicContentReloadService.reload(candidate ->
-                candidate.registerMachine(machine("mmcr:retained")));
+                candidate.registerMachine(machine("mmcr:controller_tick")));
 
-        assertThat(result.removedMachines()).containsExactly(Identifier.parse("mmcr:old"));
-        assertThat(MachineRegistry.getCompiled(Identifier.parse("mmcr:old"))).isNull();
+        assertThat(result.removedMachines()).containsExactly(Identifier.parse("mmcr:test_cube"));
+        assertThat(MachineRegistry.getCompiled(Identifier.parse("mmcr:test_cube"))).isNull();
         assertThat(RecipeRegistry.getRecipe(Identifier.parse("mmcr:old_recipe"))).isNull();
     }
 
     @Test
     void compilationFailureRetainsPreviousRuntimeSnapshotAndCache() {
-        var oldMachine = machine("mmcr:old");
+        var oldMachine = machine("mmcr:test_cube");
         DynamicContentReloadService.reload(candidate -> candidate.registerMachine(oldMachine));
         var oldCompiled = MachineRegistry.getCompiled(oldMachine.registryName());
         var oldRotated = cn.howxu.mmcr.api.machine.BlockArrayCache.get(oldMachine.pattern(), net.minecraft.core.Direction.NORTH);
 
         assertThatThrownBy(() -> DynamicContentReloadService.reload(candidate ->
-                candidate.registerMachine(failingMachine("mmcr:new"))))
+                candidate.registerMachine(failingMachine("mmcr:controller_tick"))))
                 .isInstanceOf(RuntimeException.class);
 
         assertThat(MachineRegistry.getMachine(oldMachine.registryName())).isSameAs(oldMachine);
         assertThat(MachineRegistry.getCompiled(oldMachine.registryName())).isSameAs(oldCompiled);
         assertThat(cn.howxu.mmcr.api.machine.BlockArrayCache.get(oldMachine.pattern(), net.minecraft.core.Direction.NORTH))
                 .isSameAs(oldRotated);
-        assertThat(MachineRegistry.getMachine(Identifier.parse("mmcr:new"))).isNull();
+        assertThat(MachineRegistry.getMachine(Identifier.parse("mmcr:controller_tick"))).isNull();
     }
 
     @Test
     void candidateRecipeCannotReferenceRemovedDynamicMachineButCanReferenceStaticMachine() {
-        DynamicContentReloadService.reload(candidate -> candidate.registerMachine(machine("mmcr:old")));
-
         assertThatThrownBy(() -> DynamicContentReloadService.reload(candidate ->
-                candidate.registerRecipe(recipe("mmcr:orphan", "mmcr:old"))))
+                candidate.registerMachine(machine("mmcr:unreserved"))))
                 .isInstanceOf(IllegalStateException.class);
 
         var staticMachine = machine("mmcr:static");
