@@ -23,6 +23,10 @@ public final class MachinePatternCompiler {
     }
 
     public static CompiledMachinePattern compile(Machine machine) {
+        return compile(machine, null);
+    }
+
+    static CompiledMachinePattern compile(Machine machine, Map<BlockArrayCache.Key, BlockArray> cache) {
         EnumMap<Direction, BlockArray> rotatedPatterns = new EnumMap<>(Direction.class);
         EnumMap<Direction, BoundingBox> boundingBoxes = new EnumMap<>(Direction.class);
         EnumMap<Direction, List<BlockPos>> componentPositions = new EnumMap<>(Direction.class);
@@ -30,7 +34,8 @@ public final class MachinePatternCompiler {
         EnumMap<Direction, Map<BlockPos, List<SingleBlockModifierReplacement>>> modifierReplacements = new EnumMap<>(Direction.class);
 
         for (Direction facing : Direction.Plane.HORIZONTAL) {
-            BlockArray rotated = BlockArrayCache.get(machine.pattern(), facing);
+            BlockArray rotated = cache == null ? BlockArrayCache.get(machine.pattern(), facing)
+                    : BlockArrayCache.get(cache, machine.pattern(), facing);
             rotatedPatterns.put(facing, rotated);
             boundingBoxes.put(facing, boundingBox(rotated));
             componentPositions.put(facing, componentPositions(rotated));
@@ -41,7 +46,8 @@ public final class MachinePatternCompiler {
                             : Map.of());
         }
 
-        return new CompiledMachinePattern(machine, rotatedPatterns, boundingBoxes, componentPositions, portPositions, dynamicPatterns(machine.dynamicPatterns()), modifierReplacements);
+        return new CompiledMachinePattern(machine, rotatedPatterns, boundingBoxes, componentPositions, portPositions,
+                dynamicPatterns(machine.dynamicPatterns(), cache), modifierReplacements);
     }
 
     public static Map<net.minecraft.resources.Identifier, CompiledMachinePattern> compileAll(Collection<Machine> machines) {
@@ -103,13 +109,15 @@ public final class MachinePatternCompiler {
         };
     }
 
-    private static List<CompiledDynamicPattern> dynamicPatterns(List<DynamicPatternSpec> specs) {
+    private static List<CompiledDynamicPattern> dynamicPatterns(List<DynamicPatternSpec> specs,
+                                                                 Map<BlockArrayCache.Key, BlockArray> cache) {
         ArrayList<CompiledDynamicPattern> compiled = new ArrayList<>();
-        for (DynamicPatternSpec spec : specs) compiled.add(dynamicPattern(spec));
+        for (DynamicPatternSpec spec : specs) compiled.add(dynamicPattern(spec, cache));
         return List.copyOf(compiled);
     }
 
-    private static CompiledDynamicPattern dynamicPattern(DynamicPatternSpec spec) {
+    private static CompiledDynamicPattern dynamicPattern(DynamicPatternSpec spec,
+                                                         Map<BlockArrayCache.Key, BlockArray> cache) {
         EnumMap<Direction, BlockArray> startPatterns = new EnumMap<>(Direction.class);
         EnumMap<Direction, BlockArray> endPatterns = new EnumMap<>(Direction.class);
         EnumMap<Direction, BlockPos> offsetStarts = new EnumMap<>(Direction.class);
@@ -117,8 +125,12 @@ public final class MachinePatternCompiler {
         EnumMap<Direction, List<Direction>> allowedFaces = new EnumMap<>(Direction.class);
 
         for (Direction facing : Direction.Plane.HORIZONTAL) {
-            startPatterns.put(facing, BlockArrayCache.get(spec.startPattern(), facing));
-            if (spec.endPattern() != null) endPatterns.put(facing, BlockArrayCache.get(spec.endPattern(), facing));
+            startPatterns.put(facing, cache == null ? BlockArrayCache.get(spec.startPattern(), facing)
+                    : BlockArrayCache.get(cache, spec.startPattern(), facing));
+            if (spec.endPattern() != null) {
+                endPatterns.put(facing, cache == null ? BlockArrayCache.get(spec.endPattern(), facing)
+                        : BlockArrayCache.get(cache, spec.endPattern(), facing));
+            }
             offsetStarts.put(facing, BlockRotator.rotateSouthTo(spec.offsetStart(), facing));
             structureSizeOffsets.put(facing, BlockRotator.rotateSouthTo(spec.structureSizeOffset(), facing));
             allowedFaces.put(facing, rotatedFaces(spec.allowedFaces(), facing));

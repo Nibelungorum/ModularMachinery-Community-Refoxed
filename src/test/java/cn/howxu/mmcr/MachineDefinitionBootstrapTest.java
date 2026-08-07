@@ -5,8 +5,15 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.nibelungorum.BuiltinMachines;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.Machine;
+import net.minecraft.resources.Identifier;
+
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MachineDefinitionBootstrapTest {
 
@@ -42,5 +49,24 @@ class MachineDefinitionBootstrapTest {
         MachineDefinitions.bootstrapBuiltins();
 
         assertThat(MachineDefinitions.get(MMCR.id("cracker")).controller().allowVerticalFacing()).isTrue();
+    }
+
+    @Test
+    void dynamicDefinitionsMergeWithStaticAndRejectStaticIds() {
+        var staticId = Identifier.parse("mmcr:static_machine");
+        var dynamicId = Identifier.parse("mmcr:dynamic_machine");
+        MachineDefinitions.register(new DynamicMachine(staticId, "Static", new BlockArray(Map.of())));
+
+        MachineDefinitions.replaceDynamic(Map.of(dynamicId,
+                new DynamicMachine(dynamicId, "Dynamic", new BlockArray(Map.of()))));
+
+        assertThat(MachineDefinitions.get(staticId)).isNotNull();
+        assertThat(MachineDefinitions.get(dynamicId)).isNotNull();
+        assertThat(MachineDefinitions.all()).extracting(Machine::registryName)
+                .containsExactly(staticId, dynamicId);
+        assertThatThrownBy(() -> MachineDefinitions.replaceDynamic(Map.of(staticId,
+                new DynamicMachine(staticId, "Conflict", new BlockArray(Map.of())))))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(MachineDefinitions.get(dynamicId)).isNotNull();
     }
 }

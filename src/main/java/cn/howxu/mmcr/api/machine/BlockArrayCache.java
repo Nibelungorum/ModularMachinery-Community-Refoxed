@@ -7,11 +7,10 @@ import java.util.LinkedHashMap;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 public final class BlockArrayCache {
 
-    private static final Map<Key, BlockArray> CACHE = new ConcurrentHashMap<>();
+    private static volatile Map<Key, BlockArray> CACHE = Map.of();
 
     private BlockArrayCache() {
     }
@@ -20,23 +19,49 @@ public final class BlockArrayCache {
         return get(pattern, facing, Direction.SOUTH);
     }
 
-    public static BlockArray get(BlockArray pattern, Direction facing, Direction rollFacing) {
+    public static synchronized BlockArray get(BlockArray pattern, Direction facing, Direction rollFacing) {
         if (pattern.isEmpty()) return pattern;
         Direction normalizedRoll = facing.getAxis().isVertical() ? rollFacing : Direction.SOUTH;
-        return CACHE.computeIfAbsent(new Key(pattern, facing, normalizedRoll), BlockArrayCache::rotate);
+        Key key = new Key(pattern, facing, normalizedRoll);
+        BlockArray cached = CACHE.get(key);
+        if (cached != null) return cached;
+        BlockArray rotated = rotate(key);
+        Map<Key, BlockArray> replacement = new LinkedHashMap<>(CACHE);
+        replacement.put(key, rotated);
+        CACHE = Map.copyOf(replacement);
+        return rotated;
     }
 
     public static void buildCache(Collection<Machine> machines) {
-        CACHE.clear();
+        CACHE = buildCacheSnapshot(machines);
+    }
+
+    static Map<Key, BlockArray> buildCacheSnapshot(Collection<Machine> machines) {
+        Map<Key, BlockArray> replacement = new LinkedHashMap<>();
         for (Machine machine : machines) {
             for (Direction facing : Direction.Plane.HORIZONTAL) {
-                get(machine.pattern(), facing);
+                add(replacement, machine.pattern(), facing);
+                for (DynamicPatternSpec dynamicPattern : machine.dynamicPatterns()) {
+                    add(replacement, dynamicPattern.startPattern(), facing);
+                    if (dynamicPattern.endPattern() != null) add(replacement, dynamicPattern.endPattern(), facing);
+                }
             }
         }
+        return Map.copyOf(replacement);
+    }
+
+    static void installCache(Map<Key, BlockArray> cache) {
+        CACHE = Map.copyOf(cache);
+    }
+
+    static BlockArray get(Map<Key, BlockArray> cache, BlockArray pattern, Direction facing) {
+        Key key = new Key(pattern, facing, Direction.SOUTH);
+        BlockArray cached = cache.get(key);
+        return cached != null ? cached : rotate(key);
     }
 
     public static void clear() {
-        CACHE.clear();
+        CACHE = Map.of();
     }
 
     /** Test-only helper. Never call from production code. */
@@ -56,6 +81,11 @@ public final class BlockArrayCache {
         return new BlockArray(Map.copyOf(rotated), Map.copyOf(rotatedTags));
     }
 
-    private record Key(BlockArray pattern, Direction facing, Direction rollFacing) {
+    private static void add(Map<Key, BlockArray> cache, BlockArray pattern, Direction facing) {
+        Key key = new Key(pattern, facing, Direction.SOUTH);
+        cache.put(key, rotate(key));
+    }
+
+    record Key(BlockArray pattern, Direction facing, Direction rollFacing) {
     }
 }
