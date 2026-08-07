@@ -192,7 +192,7 @@ public final class ActiveMachineRecipe {
             LOG.debug("ActiveMachineRecipe#{} start(): no recipe attached → refused", instanceId);
             return false;
         }
-        boolean started = context.startCrafting(recipe);
+        boolean started = context.startCrafting(recipe, parallelism);
         if (started) {
             refreshTotalTick(context);
         }
@@ -213,13 +213,13 @@ public final class ActiveMachineRecipe {
         int beforeTick = getTick();
         int nextTick = Math.min(beforeTick + 1, total);
         if (nextTick >= total) {
-            if (!context.simulateOutputs(recipe)) {
+            if (!context.simulateOutputs(recipe, parallelism)) {
                 LOG.info("ActiveMachineRecipe#{} tick(): recipe {} outputs unavailable before completion → WAITING at tick {}",
                         instanceId, recipe.id(), beforeTick);
                 return TickStatus.WAITING;
             }
         }
-        if (!context.ioTick(recipe)) {
+        if (!context.ioTick(recipe, parallelism)) {
             doFailureAction(context.failureAction());
             LOG.info("ActiveMachineRecipe#{} tick(): recipe {} ioTick refused at tick {} → WAITING", instanceId, recipe.id(), beforeTick);
             return TickStatus.WAITING;
@@ -232,7 +232,7 @@ public final class ActiveMachineRecipe {
 
         LOG.info("ActiveMachineRecipe#{} tick(): recipe {} reached completion tick {} of {}; entering final commit phase", instanceId, recipe.id(), nextTick, total);
 
-        boolean outputsOk = context.finishCrafting(recipe);
+        boolean outputsOk = context.finishCrafting(recipe, parallelism);
         if (!outputsOk) {
             int restored = Math.max(0, total - 1);
             LOG.info("ActiveMachineRecipe#{} tick(): recipe {} finish failed → rollback tick {} → {} (WAITING)",

@@ -42,22 +42,41 @@ public final class RecipeSearchTask {
         for (int recipeIndex = 0; recipeIndex < ordered.size(); recipeIndex++) {
             MachineRecipe recipe = ordered.get(recipeIndex);
             ActiveMachineRecipe activeRecipe = new ActiveMachineRecipe(recipe, maxParallelism);
-            RecipeCraftingContext context = contextPool.borrow(activeRecipe, controller);
-            if (context.simulateInputs(recipe) && context.simulateOutputs(recipe)) {
-                boolean conflictProne = hasMoreSpecificPendingInputCandidate(recipe, recipeIndex, ordered);
-                return RecipeSearchResult.success(activeRecipe, context, machineId, structureVersion, conflictProne);
+            RecipeCraftingContext context = null;
+            for (int parallelism : candidateParallelism(recipe)) {
+                context = contextPool.borrow(activeRecipe, controller);
+                if (context.simulateInputs(recipe, parallelism) && context.simulateOutputs(recipe, parallelism)) {
+                    activeRecipe.setMaxParallelism(maxParallelism);
+                    activeRecipe.setParallelism(parallelism);
+                    boolean conflictProne = hasMoreSpecificPendingInputCandidate(recipe, recipeIndex, ordered);
+                    return RecipeSearchResult.success(activeRecipe, context, machineId, structureVersion, conflictProne);
+                }
+
+                float validity = validity(context.getLastFailureUnloc(), context.getLastRequirementFailure());
+                if (validity > bestValidity) {
+                    bestValidity = validity;
+                    bestFailureUnloc = context.getLastFailureUnloc();
+                    bestFailure = context.getLastRequirementFailure();
+                }
+                contextPool.returnContext(context);
+                context = null;
             }
 
-            float validity = validity(context.getLastFailureUnloc(), context.getLastRequirementFailure());
-            if (validity > bestValidity) {
-                bestValidity = validity;
-                bestFailureUnloc = context.getLastFailureUnloc();
-                bestFailure = context.getLastRequirementFailure();
+            if (context != null) {
+                contextPool.returnContext(context);
             }
-            contextPool.returnContext(context);
         }
 
         return RecipeSearchResult.failure(machineId, structureVersion, bestFailureUnloc, bestFailure, bestValidity);
+    }
+
+    private List<Integer> candidateParallelism(MachineRecipe recipe) {
+        if (!recipe.isParallelized()) return List.of(1);
+        List<Integer> candidates = new java.util.ArrayList<>();
+        for (int tier : new int[]{512, 256, 64, 16, 4, 1}) {
+            if (tier <= maxParallelism) candidates.add(tier);
+        }
+        return candidates;
     }
 
     private List<MachineRecipe> orderedCandidates() {

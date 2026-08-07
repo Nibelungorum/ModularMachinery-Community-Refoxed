@@ -146,9 +146,16 @@ public final class RecipeCraftingContext {
     }
 
     public boolean ioTick(MachineRecipe recipe) {
+        return ioTick(recipe, 1);
+    }
+
+    public boolean ioTick(MachineRecipe recipe, int parallelism) {
+        return ioTick(scaledRequirements(recipe, parallelism));
+    }
+
+    private boolean ioTick(List<MachineRequirement> requirements) {
         lastFailureUnloc = null;
         lastRequirementFailure = null;
-        List<MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             if (!requirements.get(requirementIndex).ioTick(this, requirementIndex)) return false;
         }
@@ -156,9 +163,16 @@ public final class RecipeCraftingContext {
     }
 
     public boolean simulateInputs(MachineRecipe recipe) {
+        return simulateInputs(recipe, 1);
+    }
+
+    public boolean simulateInputs(MachineRecipe recipe, int parallelism) {
+        return simulateInputs(scaledRequirements(recipe, parallelism));
+    }
+
+    private boolean simulateInputs(List<MachineRequirement> requirements) {
         lastFailureUnloc = null;
         lastRequirementFailure = null;
-        List<MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
         itemInputRoutes = emptyItemInputRoutes(requirements.size());
         fluidInputRoutes = emptyFluidInputRoutes(requirements.size());
 
@@ -170,9 +184,16 @@ public final class RecipeCraftingContext {
     }
 
     public boolean simulateOutputs(MachineRecipe recipe) {
+        return simulateOutputs(recipe, 1);
+    }
+
+    public boolean simulateOutputs(MachineRecipe recipe, int parallelism) {
+        return simulateOutputs(scaledRequirements(recipe, parallelism));
+    }
+
+    private boolean simulateOutputs(List<MachineRequirement> requirements) {
         lastFailureUnloc = null;
         lastRequirementFailure = null;
-        List<MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
         itemOutputRoutes = emptyItemOutputRoutes(requirements.size());
         fluidOutputRoutes = emptyFluidOutputRoutes(requirements.size());
         simulatedItemOutputStates = allItemOutputStates();
@@ -189,6 +210,40 @@ public final class RecipeCraftingContext {
         } finally {
             simulatedItemOutputStates = null;
             simulatedFluidOutputStates = null;
+        }
+    }
+
+    private List<MachineRequirement> scaledRequirements(MachineRecipe recipe, int parallelism) {
+        List<MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
+        if (parallelism <= 1) return requirements;
+        try {
+            List<MachineRequirement> scaled = new ArrayList<>(requirements.size());
+            for (MachineRequirement requirement : requirements) {
+                if (requirement instanceof ItemRequirement item) {
+                    if (item.io() == RecipeModifier.IOType.INPUT) {
+                        scaled.add(new ItemRequirement(item.io(), item.item(), Math.multiplyExact(item.count(), parallelism), item.stack(), item.chance(), item.tags()));
+                    } else {
+                        ItemStack stack = item.stack().copy();
+                        stack.setCount(Math.multiplyExact(stack.getCount(), parallelism));
+                        scaled.add(new ItemRequirement(item.io(), item.item(), item.count(), stack, item.chance(), item.tags()));
+                    }
+                } else if (requirement instanceof FluidRequirement fluid) {
+                    if (fluid.io() == RecipeModifier.IOType.INPUT) {
+                        scaled.add(new FluidRequirement(fluid.io(), fluid.fluid(), Math.multiplyExact(fluid.amount(), parallelism), fluid.stack(), fluid.chance(), fluid.tags()));
+                    } else {
+                        FluidStack stack = fluid.stack().copy();
+                        stack.setAmount(Math.multiplyExact(stack.getAmount(), parallelism));
+                        scaled.add(new FluidRequirement(fluid.io(), fluid.fluid(), fluid.amount(), stack, fluid.chance(), fluid.tags()));
+                    }
+                } else if (requirement instanceof EnergyRequirement energy) {
+                    scaled.add(new EnergyRequirement(energy.io(), Math.multiplyExact(energy.fePerTick(), parallelism), energy.tags()));
+                } else {
+                    scaled.add(requirement);
+                }
+            }
+            return List.copyOf(scaled);
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException("Parallel requirement overflow: " + recipe.id(), e);
         }
     }
 
@@ -333,17 +388,28 @@ public final class RecipeCraftingContext {
     }
 
     public boolean startCrafting(MachineRecipe recipe) {
-        return commitInputs(recipe);
+        return startCrafting(recipe, 1);
+    }
+
+    public boolean startCrafting(MachineRecipe recipe, int parallelism) {
+        List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism);
+        if (!simulateOutputs(requirements)) return false;
+        return commitInputs(requirements);
     }
 
     public boolean finishCrafting(MachineRecipe recipe) {
-        return commitOutputs(recipe);
+        return finishCrafting(recipe, 1);
+    }
+
+    public boolean finishCrafting(MachineRecipe recipe, int parallelism) {
+        return commitOutputs(scaledRequirements(recipe, parallelism));
     }
 
     public boolean commitInputs(MachineRecipe recipe) {
-        List<ItemInputTransfer> itemTransfers = new ArrayList<>();
-        List<FluidInputTransfer> fluidTransfers = new ArrayList<>();
-        List<MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
+        return commitInputs(recipe.runtimeRequirements(structureModifiers));
+    }
+
+    private boolean commitInputs(List<MachineRequirement> requirements) {
         RequirementFailure itemFailure = firstItemInputFailure(requirements);
         if (itemFailure != null) {
             setFailure(FAILURE_MISSING_INPUT, itemFailure);
@@ -354,6 +420,8 @@ public final class RecipeCraftingContext {
             setFailure(FAILURE_MISSING_INPUT, fluidFailure);
             return false;
         }
+        List<ItemInputTransfer> itemTransfers = new ArrayList<>();
+        List<FluidInputTransfer> fluidTransfers = new ArrayList<>();
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
             if (requirement.io() == RecipeModifier.IOType.INPUT && !requirement.commit(this, requirementIndex)) return false;
@@ -374,9 +442,12 @@ public final class RecipeCraftingContext {
     }
 
     public boolean commitOutputs(MachineRecipe recipe) {
+        return commitOutputs(recipe.runtimeRequirements(structureModifiers));
+    }
+
+    private boolean commitOutputs(List<MachineRequirement> requirements) {
         List<ItemOutputTransfer> itemTransfers = new ArrayList<>();
         List<FluidOutputTransfer> fluidTransfers = new ArrayList<>();
-        List<MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
         RequirementFailure itemFailure = firstItemOutputFailure(requirements);
         if (itemFailure != null) {
             setFailure(FAILURE_MISSING_OUTPUT, itemFailure);
