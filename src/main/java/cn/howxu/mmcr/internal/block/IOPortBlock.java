@@ -65,10 +65,14 @@ public class IOPortBlock extends Block implements EntityBlock {
     }
 
     static PortMenuKind menuKindFor(String id) {
-        if (id.startsWith("item_input_bus") || id.startsWith("item_output_bus")) return PortMenuKind.ITEM;
-        if (id.startsWith("fluid_input_hatch") || id.startsWith("fluid_output_hatch")) return PortMenuKind.FLUID;
-        if (id.startsWith("energy_input_hatch") || id.startsWith("energy_output_hatch")) return PortMenuKind.ENERGY;
+        if (matchesPortId(id, "item_input_bus") || matchesPortId(id, "item_output_bus")) return PortMenuKind.ITEM;
+        if (matchesPortId(id, "fluid_input_hatch") || matchesPortId(id, "fluid_output_hatch")) return PortMenuKind.FLUID;
+        if (matchesPortId(id, "energy_input_hatch") || matchesPortId(id, "energy_output_hatch")) return PortMenuKind.ENERGY;
         return PortMenuKind.NONE;
+    }
+
+    private static boolean matchesPortId(String id, String baseId) {
+        return id.equals(baseId) || id.startsWith(baseId + "_");
     }
 
     private static AbstractContainerMenu openServerMenu(String kind, int containerId,

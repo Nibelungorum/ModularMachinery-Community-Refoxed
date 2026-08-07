@@ -41,3 +41,17 @@
 
 - `compileJava` emits many existing deprecation/removal warnings from NeoForge capability APIs; not introduced by this task.
 - One parallel Gradle invocation showed a transient test compilation failure while `compileJava` ran concurrently; sequential final verification passed.
+
+## Review Fix: IO Port Menu Prefix Boundaries
+
+- Tightened menu kind matching so an id routes only when it exactly equals a base port id or starts with that base id followed by `_`.
+- Added focused tests proving the six normal base ids still route to ITEM, FLUID, and ENERGY menu kinds.
+- Added focused tests proving near-prefix ids `item_input_busbar`, `fluid_output_hatchery`, and `energy_input_hatchling` return `NONE`.
+
+## Review Fix Commands Run And Results
+
+- `rtk gradlew test --tests cn.howxu.mmcr.internal.block.IOPortBlockTest --no-daemon` after adding review regression tests -> `BUILD FAILED`; `near_prefix_port_ids_do_not_route_to_menus()` failed as expected before tightening matching.
+- `rtk gradlew test --tests cn.howxu.mmcr.internal.block.IOPortBlockTest --no-daemon` after implementation, run in parallel with `compileJava` -> `BUILD FAILED` at `compileTestJava` with missing main-class symbols, matching the previously observed concurrent Gradle interference.
+- `rtk gradlew compileJava --no-daemon` in that parallel run -> `BUILD SUCCESSFUL` with existing deprecation/removal warnings.
+- Final sequential `rtk gradlew test --tests cn.howxu.mmcr.internal.block.IOPortBlockTest --no-daemon` -> `BUILD SUCCESSFUL` in 7s; 17 actionable tasks: 1 executed, 16 up-to-date.
+- Final sequential `rtk gradlew compileJava --no-daemon` -> `BUILD SUCCESSFUL` in 6s; 14 actionable tasks: 14 up-to-date.
