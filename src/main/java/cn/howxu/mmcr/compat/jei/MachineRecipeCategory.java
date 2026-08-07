@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.compat.jei;
 
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.registry.ModBlocks;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.drawable.IDrawable;
 import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
@@ -24,20 +26,24 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     private static final int FLUID_SLOT_CAPACITY = 1000;
 
+    private final Machine machine;
+    private final IRecipeType<MachineRecipeDisplay> recipeType;
     private final IDrawable icon;
 
-    public MachineRecipeCategory(IGuiHelper guiHelper) {
-        this.icon = guiHelper.getSlotDrawable();
+    public MachineRecipeCategory(IGuiHelper guiHelper, Machine machine) {
+        this.machine = machine;
+        this.recipeType = JeiMachineRecipeTypes.forMachine(machine.registryName());
+        this.icon = guiHelper.createDrawableItemLike(ModBlocks.controllerFor(machine).get());
     }
 
     @Override
     public IRecipeType<MachineRecipeDisplay> getRecipeType() {
-        return JeiMachineRecipeTypes.MACHINE_RECIPE;
+        return recipeType;
     }
 
     @Override
     public Component getTitle() {
-        return Component.translatable("jei.mmcr.machine_recipe");
+        return Component.translatable(machine.localizedName());
     }
 
     @Override
@@ -80,7 +86,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             var stack = recipe.fluidOutputs().get(slot.index());
             builder.addOutputSlot(slot.x(), slot.y())
                     .setOutputSlotBackground()
-                    .setFluidRenderer(Math.max(FLUID_SLOT_CAPACITY, stack.getAmount()), true, 16, 16)
+                    .setFluidRenderer(1, false, 16, 16)
                     .add(stack.getFluid(), stack.getAmount(), stack.getComponentsPatch());
         }
         builder.moveRecipeTransferButton(132, 58);

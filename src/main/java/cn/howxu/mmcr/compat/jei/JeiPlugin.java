@@ -13,6 +13,10 @@ import mezz.jei.api.registration.IRecipeTransferRegistration;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 /**
  * JEI plugin entrypoint for MMCR.
  *
@@ -28,31 +32,49 @@ public final class JeiPlugin implements IModPlugin {
 
     @Override
     public void registerCategories(IRecipeCategoryRegistration registration) {
-        registration.addRecipeCategories(new MachineRecipeCategory(registration.getJeiHelpers().getGuiHelper()));
+        var guiHelper = registration.getJeiHelpers().getGuiHelper();
+        MachineDefinitions.all().forEach(machine ->
+                registration.addRecipeCategories(new MachineRecipeCategory(guiHelper, machine)));
     }
 
     @Override
     public void registerRecipes(IRecipeRegistration registration) {
-        registration.addRecipes(JeiMachineRecipeTypes.MACHINE_RECIPE, MachineRecipeDisplays.all());
+        var displaysByMachine = MachineRecipeDisplays.byMachine();
+        Set<Identifier> machineIds = MachineDefinitions.all().stream()
+                .map(machine -> machine.registryName())
+                .collect(Collectors.toSet());
+        displaysByMachine.forEach((machineId, displays) -> {
+            if (!machineIds.contains(machineId)) {
+                displays.forEach(display -> MMCR.LOG.warn("Skipping JEI recipe {} for unknown machine {}", display.recipeId(), machineId));
+            }
+        });
+        MachineDefinitions.all().forEach(machine -> registration.addRecipes(
+                JeiMachineRecipeTypes.forMachine(machine.registryName()),
+                displaysByMachine.getOrDefault(machine.registryName(), List.of())));
     }
 
     @Override
     public void registerRecipeCatalysts(IRecipeCatalystRegistration registration) {
         MachineDefinitions.all().forEach(machine ->
                 registration.addCraftingStation(
-                        JeiMachineRecipeTypes.MACHINE_RECIPE,
+                        JeiMachineRecipeTypes.forMachine(machine.registryName()),
                         new ItemStack(ModBlocks.controllerFor(machine).get())));
     }
 
     @Override
     public void registerRecipeTransferHandlers(IRecipeTransferRegistration registration) {
-        registration.addRecipeTransferHandler(
-                new MachineRecipeTransferHandler(registration.getTransferHelper()),
-                JeiMachineRecipeTypes.MACHINE_RECIPE);
+        var helper = registration.getTransferHelper();
+        MachineDefinitions.all().forEach(machine -> {
+            var type = JeiMachineRecipeTypes.forMachine(machine.registryName());
+            registration.addRecipeTransferHandler(new MachineRecipeTransferHandler(helper, type), type);
+        });
     }
 
     @Override
     public void registerGuiHandlers(IGuiHandlerRegistration registration) {
-        registration.addRecipeClickArea(MachineMenuScreen.class, 8, 24, 160, 24, JeiMachineRecipeTypes.MACHINE_RECIPE);
+        registration.addRecipeClickArea(MachineMenuScreen.class, 8, 24, 160, 24,
+                MachineDefinitions.all().stream()
+                        .map(machine -> JeiMachineRecipeTypes.forMachine(machine.registryName()))
+                        .toArray(mezz.jei.api.recipe.types.IRecipeType[]::new));
     }
 }

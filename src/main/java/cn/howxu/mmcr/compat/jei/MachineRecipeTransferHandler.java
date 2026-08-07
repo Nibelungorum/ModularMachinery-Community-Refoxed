@@ -22,15 +22,17 @@ import java.util.Optional;
 public final class MachineRecipeTransferHandler implements IRecipeTransferHandler<ItemBusMenu, MachineRecipeDisplay> {
 
     private final IRecipeTransferHandlerHelper helper;
+    private final IRecipeType<MachineRecipeDisplay> recipeType;
     private final IRecipeTransferHandler<ItemBusMenu, MachineRecipeDisplay> basicHandler;
 
-    public MachineRecipeTransferHandler(IRecipeTransferHandlerHelper helper) {
+    public MachineRecipeTransferHandler(IRecipeTransferHandlerHelper helper, IRecipeType<MachineRecipeDisplay> recipeType) {
         this.helper = helper;
+        this.recipeType = recipeType;
         this.basicHandler = helper.createUnregisteredRecipeTransferHandler(
                 helper.createBasicRecipeTransferInfo(
                         ItemBusMenu.class,
                         ModUIs.ITEM_BUS.get(),
-                        JeiMachineRecipeTypes.MACHINE_RECIPE,
+                        recipeType,
                         ItemBusMenu.BUS_SLOT_START,
                         ItemBusMenu.BUS_SLOT_COUNT,
                         ItemBusMenu.PLAYER_INVENTORY_SLOT_START,
@@ -49,7 +51,7 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
 
     @Override
     public IRecipeType<MachineRecipeDisplay> getRecipeType() {
-        return JeiMachineRecipeTypes.MACHINE_RECIPE;
+        return recipeType;
     }
 
     @Override
