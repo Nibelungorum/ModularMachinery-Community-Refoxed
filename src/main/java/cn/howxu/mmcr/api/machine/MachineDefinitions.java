@@ -23,7 +23,8 @@ import java.util.function.Supplier;
  */
 public final class MachineDefinitions {
 
-    private static final Map<Identifier, Machine> DEFINITIONS = new LinkedHashMap<>();
+    private static final Map<Identifier, Machine> STATIC_DEFINITIONS = new LinkedHashMap<>();
+    private static final Map<Identifier, Machine> DYNAMIC_DEFINITIONS = new LinkedHashMap<>();
     private static final List<Supplier<Machine>> BUILTIN_SUPPLIERS = new CopyOnWriteArrayList<>();
 
     private MachineDefinitions() {
@@ -31,10 +32,10 @@ public final class MachineDefinitions {
 
     /** Register a single machine definition; intended for runtime scripts (e.g. KubeJS). */
     public static void register(Machine machine) {
-        if (DEFINITIONS.containsKey(machine.registryName())) {
+        if (STATIC_DEFINITIONS.containsKey(machine.registryName())) {
             throw new IllegalStateException("Machine definition already registered: " + machine.registryName());
         }
-        DEFINITIONS.put(machine.registryName(), machine);
+        STATIC_DEFINITIONS.put(machine.registryName(), machine);
     }
 
     /**
@@ -66,16 +67,44 @@ public final class MachineDefinitions {
     }
 
     public static Machine get(Identifier id) {
-        return DEFINITIONS.get(id);
+        Machine machine = STATIC_DEFINITIONS.get(id);
+        return machine != null ? machine : DYNAMIC_DEFINITIONS.get(id);
     }
 
     public static Collection<Machine> all() {
-        return Collections.unmodifiableCollection(DEFINITIONS.values());
+        return Collections.unmodifiableCollection(mergedDefinitions().values());
+    }
+
+    public static boolean containsStatic(Identifier id) {
+        return STATIC_DEFINITIONS.containsKey(id);
+    }
+
+    public static void replaceDynamic(Map<Identifier, Machine> machines) {
+        Map<Identifier, Machine> replacement = new LinkedHashMap<>();
+        for (Map.Entry<Identifier, Machine> entry : machines.entrySet()) {
+            if (STATIC_DEFINITIONS.containsKey(entry.getKey())) {
+                throw new IllegalStateException("Dynamic machine conflicts with static definition: " + entry.getKey());
+            }
+            replacement.put(entry.getKey(), entry.getValue());
+        }
+        DYNAMIC_DEFINITIONS.clear();
+        DYNAMIC_DEFINITIONS.putAll(replacement);
+    }
+
+    public static Map<Identifier, Machine> dynamicSnapshot() {
+        return Map.copyOf(DYNAMIC_DEFINITIONS);
+    }
+
+    private static Map<Identifier, Machine> mergedDefinitions() {
+        Map<Identifier, Machine> definitions = new LinkedHashMap<>(STATIC_DEFINITIONS);
+        definitions.putAll(DYNAMIC_DEFINITIONS);
+        return definitions;
     }
 
     /** Test-only helper. Never call from production code. */
     public static void clearForTesting() {
-        DEFINITIONS.clear();
+        STATIC_DEFINITIONS.clear();
+        DYNAMIC_DEFINITIONS.clear();
         BUILTIN_SUPPLIERS.clear();
     }
 }
