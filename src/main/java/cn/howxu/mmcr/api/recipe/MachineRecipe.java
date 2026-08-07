@@ -293,6 +293,32 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         return requirements;
     }
 
+    public int inputRequirementCount() {
+        int count = 0;
+        for (MachineRequirement requirement : requirements) {
+            if (requirement.io() == RecipeModifier.IOType.INPUT) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    public boolean hasOverlappingInputs(MachineRecipe other) {
+        if (other == null) return false;
+        for (MachineRequirement requirement : requirements) {
+            if (!(requirement instanceof ItemRequirement item) || item.io() != RecipeModifier.IOType.INPUT) continue;
+            for (MachineRequirement otherRequirement : other.requirements) {
+                if (!(otherRequirement instanceof ItemRequirement otherItem) || otherItem.io() != RecipeModifier.IOType.INPUT) continue;
+                if (ingredientsOverlap(item, otherItem)) return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean ingredientsOverlap(ItemRequirement left, ItemRequirement right) {
+        return left.item().items().anyMatch(leftItem -> right.item().items().anyMatch(rightItem -> leftItem.equals(rightItem)));
+    }
+
     public List<RecipeModifier> modifiers() {
         return modifiers;
     }

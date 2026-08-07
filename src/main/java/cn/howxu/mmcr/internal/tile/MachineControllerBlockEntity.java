@@ -58,6 +58,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private static final String OUTPUT_DEBUG = "MMCR recipe output debug";
     private static final AtomicInteger INSTANCE_COUNTER = new AtomicInteger();
     private static final Set<MachineControllerBlockEntity> FORMED_CONTROLLERS = ConcurrentHashMap.newKeySet();
+    private static final int CONFLICT_RECIPE_START_DELAY_TICKS = 20;
 
     private final int instanceId = INSTANCE_COUNTER.incrementAndGet();
 
@@ -90,6 +91,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private int cachedDatapackRecipeCount = -1;
     private @Nullable Identifier cachedCandidatesMachineId;
     private List<MachineRecipe> cachedCandidates = List.of();
+    private @Nullable Identifier pendingConflictRecipeId;
+    private long pendingConflictStartTick = Long.MIN_VALUE;
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
@@ -683,6 +686,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             context = null;
             setActiveState(false);
         }
+        clearPendingConflictStart();
         pausedActive = null;
         returnContext(pausedContext);
         pausedContext = null;
@@ -725,6 +729,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             result = new RecipeSearchTask(this, machineId, structureVersion, 1, candidates, contextPool()).compute();
         } catch (RuntimeException e) {
             LOG.warn("[Ctrl#{}] tryStartNewRecipe: recipe search failed at pos={}; retrying later", instanceId, getBlockPos(), e);
+            clearPendingConflictStart();
             recipeSearchRetryCounter++;
             lastFailureUnloc = RecipeCraftingContext.FAILURE_SEARCH_EXCEPTION;
             return false;
@@ -732,6 +737,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (result.success()) {
             return applySearchResult(result, candidates.size());
         }
+        clearPendingConflictStart();
         recipeSearchRetryCounter++;
         lastFailureUnloc = result.failureUnloc();
         return false;
@@ -762,12 +768,17 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         ActiveMachineRecipe next = result.activeRecipe();
         RecipeCraftingContext nextContext = result.context();
+        if (shouldDelayConflictProneStart(result, currentGameTime())) {
+            returnContext(nextContext);
+            return false;
+        }
         active = next;
         context = nextContext;
         if (!next.start(nextContext)) {
             active = null;
             context = null;
             returnContext(nextContext);
+            clearPendingConflictStart();
             recipeSearchRetryCounter++;
             lastFailureUnloc = nextContext.getLastFailureUnloc();
             LOG.info("[Ctrl#{}] tryStartNewRecipe: recipe={} refused during start; waiting for I/O at pos={}",
@@ -775,12 +786,41 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return false;
         }
         setActiveState(true);
+        clearPendingConflictStart();
         recipeSearchRetryCounter = 0;
         lastFailureUnloc = null;
         LOG.info("[Ctrl#{}] tryStartNewRecipe: START recipe={} tickTime={} priority={} maxParallel={} ({} candidates)",
                 instanceId, next.getRecipe().id(), next.getRecipe().tickTime(), next.getRecipe().priority(), next.getMaxParallelism(), candidateCount);
         setChanged();
         return true;
+    }
+
+    private boolean shouldDelayConflictProneStart(RecipeSearchResult result, long gameTime) {
+        if (!result.hasMoreSpecificPendingInputCandidate()) {
+            clearPendingConflictStart();
+            return false;
+        }
+        Identifier recipeId = result.activeRecipe().getRecipe().id();
+        if (!recipeId.equals(pendingConflictRecipeId)) {
+            pendingConflictRecipeId = recipeId;
+            pendingConflictStartTick = gameTime;
+            return true;
+        }
+        return gameTime - pendingConflictStartTick < CONFLICT_RECIPE_START_DELAY_TICKS;
+    }
+
+    private void clearPendingConflictStart() {
+        pendingConflictRecipeId = null;
+        pendingConflictStartTick = Long.MIN_VALUE;
+    }
+
+    private long currentGameTime() {
+        if (level == null) return recipeSearchAttemptCounter;
+        try {
+            return level.getGameTime();
+        } catch (NullPointerException ignored) {
+            return recipeSearchAttemptCounter;
+        }
     }
 
     private boolean isSearchResultCurrent(RecipeSearchResult result) {

@@ -1,11 +1,14 @@
-package cn.howxu.mmcr.api.recipe;
+package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.api.recipe.MachineComponent;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
+import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
+import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
-import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
-import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
@@ -27,75 +30,20 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class RecipeSearchTaskTest {
+/**
+ * @author howxu <dev@howxu.cn>
+ */
+class MachineControllerBlockEntityRecipeDelayTest {
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
-        bindItemComponents(Items.IRON_INGOT);
         bindItemComponents(Items.GOLD_INGOT);
         bindItemComponents(Items.NETHERITE_SCRAP);
     }
 
     @Test
-    void computeReturnsFirstStartableRecipeAndKeepsContextForActiveRecipe() throws Exception {
-        Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
-        ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
-        bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(2));
-        MachineControllerBlockEntity controller = controllerWithComponents(bus);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
-        MachineRecipe blocked = inputRecipe("blocked", machineId, Items.GOLD_INGOT, 1);
-        MachineRecipe startable = inputRecipe("startable", machineId, Items.IRON_INGOT, 2);
-
-        RecipeSearchResult result = new RecipeSearchTask(controller, machineId, 11, 1, List.of(blocked, startable), pool).compute();
-
-        assertThat(result.success()).isTrue();
-        assertThat(result.activeRecipe().getRecipe()).isEqualTo(startable);
-        assertThat(result.context()).isNotNull();
-        assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
-    }
-
-    @Test
-    void computeKeepsHighestValidityFailureWithStableTieBreak() throws Exception {
-        Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
-        ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
-        bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance());
-        MachineControllerBlockEntity controller = controllerWithComponents(bus);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
-        MachineRecipe noMatchingComponent = inputRecipe("gold", machineId, Items.GOLD_INGOT, 1);
-        MachineRecipe closerFailure = inputRecipe("iron", machineId, Items.IRON_INGOT, 3);
-
-        RecipeSearchResult result = new RecipeSearchTask(controller, machineId, 12, 1, List.of(noMatchingComponent, closerFailure), pool).compute();
-
-        assertThat(result.success()).isFalse();
-        assertThat(result.failureUnloc()).isEqualTo(RecipeCraftingContext.FAILURE_MISSING_INPUT);
-        assertThat(result.requirementFailure()).satisfies(failure -> {
-            assertThat(failure.required()).isEqualTo(3);
-            assertThat(failure.available()).isEqualTo(1);
-        });
-    }
-
-    @Test
-    void computePrefersMoreSpecificStartableRecipeWhenPriorityMatches() throws Exception {
-        Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
-        ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
-        bus.getItemStackHandler(null).setStackInSlot(0, Items.GOLD_INGOT.getDefaultInstance());
-        bus.getItemStackHandler(null).setStackInSlot(1, Items.NETHERITE_SCRAP.getDefaultInstance());
-        MachineControllerBlockEntity controller = controllerWithComponents(bus);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
-        MachineRecipe single = inputRecipe("aaa_single_gold", machineId, Items.GOLD_INGOT, 1);
-        MachineRecipe multi = inputRecipe("zzz_gold_scrap", machineId,
-                List.of(itemInput(Items.GOLD_INGOT, 1), itemInput(Items.NETHERITE_SCRAP, 1)));
-
-        RecipeSearchResult result = new RecipeSearchTask(controller, machineId, 13, 1, List.of(single, multi), pool).compute();
-
-        assertThat(result.success()).isTrue();
-        assertThat(result.activeRecipe().getRecipe()).isEqualTo(multi);
-        assertThat(result.hasMoreSpecificPendingInputCandidate()).isFalse();
-    }
-
-    @Test
-    void computeMarksSingleInputRecipeAsConflictProneWhenMoreSpecificOverlapIsMissingInput() throws Exception {
+    void conflictProneSingleInputRecipeDoesNotStartUntilDelayElapses() throws Exception {
         Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
         ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
         bus.getItemStackHandler(null).setStackInSlot(0, Items.GOLD_INGOT.getDefaultInstance());
@@ -105,11 +53,43 @@ class RecipeSearchTaskTest {
         MachineRecipe multi = inputRecipe("gold_scrap", machineId,
                 List.of(itemInput(Items.GOLD_INGOT, 1), itemInput(Items.NETHERITE_SCRAP, 1)));
 
-        RecipeSearchResult result = new RecipeSearchTask(controller, machineId, 14, 1, List.of(single, multi), pool).compute();
+        RecipeSearchResult result = new RecipeSearchTask(controller, machineId, 21, 1, List.of(single, multi), pool).compute();
 
         assertThat(result.success()).isTrue();
         assertThat(result.activeRecipe().getRecipe()).isEqualTo(single);
         assertThat(result.hasMoreSpecificPendingInputCandidate()).isTrue();
+
+        boolean startedBeforeDelay = invokeShouldDelay(controller, result, 0);
+        boolean stillDelayed = invokeShouldDelay(controller, result, 19);
+        boolean mayStartAfterDelay = invokeShouldDelay(controller, result, 20);
+
+        assertThat(startedBeforeDelay).isTrue();
+        assertThat(stillDelayed).isTrue();
+        assertThat(mayStartAfterDelay).isFalse();
+    }
+
+    @Test
+    void nonConflictRecipeStartsImmediately() throws Exception {
+        Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
+        ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
+        bus.getItemStackHandler(null).setStackInSlot(0, Items.GOLD_INGOT.getDefaultInstance());
+        MachineControllerBlockEntity controller = controllerWithComponents(bus);
+        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        MachineRecipe single = inputRecipe("single_gold", machineId, Items.GOLD_INGOT, 1);
+
+        RecipeSearchResult result = new RecipeSearchTask(controller, machineId, 22, 1, List.of(single), pool).compute();
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.hasMoreSpecificPendingInputCandidate()).isFalse();
+        assertThat(invokeShouldDelay(controller, result, 0)).isFalse();
+    }
+
+    private static boolean invokeShouldDelay(MachineControllerBlockEntity controller,
+                                             RecipeSearchResult result,
+                                             long gameTime) throws Exception {
+        var method = MachineControllerBlockEntity.class.getDeclaredMethod("shouldDelayConflictProneStart", RecipeSearchResult.class, long.class);
+        method.setAccessible(true);
+        return (boolean) method.invoke(controller, result, gameTime);
     }
 
     private static MachineRecipe inputRecipe(String path, Identifier machineId, Item item, int count) {
@@ -143,7 +123,7 @@ class RecipeSearchTaskTest {
         setField(BlockEntity.class, bus, "type", null);
         setField(BlockEntity.class, bus, "worldPosition", pos);
         setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
-        setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
+        setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
         return bus;
     }
 

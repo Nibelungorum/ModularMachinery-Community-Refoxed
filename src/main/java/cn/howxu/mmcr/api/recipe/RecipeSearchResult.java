@@ -16,7 +16,8 @@ public record RecipeSearchResult(
         @Nullable RecipeCraftingContext context,
         @Nullable String failureUnloc,
         @Nullable RequirementFailure requirementFailure,
-        float validity) {
+        float validity,
+        boolean hasMoreSpecificPendingInputCandidate) {
 
     public RecipeSearchResult {
         Objects.requireNonNull(machineId, "machineId");
@@ -31,8 +32,16 @@ public record RecipeSearchResult(
         }
     }
 
+    public static RecipeSearchResult success(ActiveMachineRecipe activeRecipe,
+                                             RecipeCraftingContext context,
+                                             Identifier machineId,
+                                             long structureVersion,
+                                             boolean hasMoreSpecificPendingInputCandidate) {
+        return new RecipeSearchResult(true, machineId, structureVersion, activeRecipe, context, null, null, 1.0F, hasMoreSpecificPendingInputCandidate);
+    }
+
     public static RecipeSearchResult success(ActiveMachineRecipe activeRecipe, RecipeCraftingContext context, Identifier machineId, long structureVersion) {
-        return new RecipeSearchResult(true, machineId, structureVersion, activeRecipe, context, null, null, 1.0F);
+        return success(activeRecipe, context, machineId, structureVersion, false);
     }
 
     public static RecipeSearchResult failure(Identifier machineId,
@@ -40,6 +49,6 @@ public record RecipeSearchResult(
                                              @Nullable String failureUnloc,
                                              @Nullable RequirementFailure requirementFailure,
                                              float validity) {
-        return new RecipeSearchResult(false, machineId, structureVersion, null, null, failureUnloc, requirementFailure, validity);
+        return new RecipeSearchResult(false, machineId, structureVersion, null, null, failureUnloc, requirementFailure, validity, false);
     }
 }

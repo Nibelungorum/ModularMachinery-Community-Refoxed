@@ -4,6 +4,7 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -36,12 +37,15 @@ public final class RecipeSearchTask {
         @Nullable String bestFailureUnloc = null;
         @Nullable RequirementFailure bestFailure = null;
         float bestValidity = 0.0F;
+        List<MachineRecipe> ordered = orderedCandidates();
 
-        for (MachineRecipe recipe : candidates) {
+        for (int recipeIndex = 0; recipeIndex < ordered.size(); recipeIndex++) {
+            MachineRecipe recipe = ordered.get(recipeIndex);
             ActiveMachineRecipe activeRecipe = new ActiveMachineRecipe(recipe, maxParallelism);
             RecipeCraftingContext context = contextPool.borrow(activeRecipe, controller);
             if (context.simulateInputs(recipe) && context.simulateOutputs(recipe)) {
-                return RecipeSearchResult.success(activeRecipe, context, machineId, structureVersion);
+                boolean conflictProne = hasMoreSpecificPendingInputCandidate(recipe, recipeIndex, ordered);
+                return RecipeSearchResult.success(activeRecipe, context, machineId, structureVersion, conflictProne);
             }
 
             float validity = validity(context.getLastFailureUnloc(), context.getLastRequirementFailure());
@@ -54,6 +58,35 @@ public final class RecipeSearchTask {
         }
 
         return RecipeSearchResult.failure(machineId, structureVersion, bestFailureUnloc, bestFailure, bestValidity);
+    }
+
+    private List<MachineRecipe> orderedCandidates() {
+        return candidates.stream()
+                .sorted(Comparator.comparingInt(MachineRecipe::priority)
+                        .thenComparing(Comparator.comparingInt(MachineRecipe::inputRequirementCount).reversed())
+                        .thenComparing(MachineRecipe::id))
+                .toList();
+    }
+
+    private boolean hasMoreSpecificPendingInputCandidate(MachineRecipe selectedRecipe,
+                                                         int selectedRecipeIndex,
+                                                         List<MachineRecipe> ordered) {
+        for (int i = 0; i < selectedRecipeIndex; i++) {
+            MachineRecipe earlier = ordered.get(i);
+            if (earlier.priority() != selectedRecipe.priority()) continue;
+            if (earlier.inputRequirementCount() <= selectedRecipe.inputRequirementCount()) continue;
+            if (!earlier.hasOverlappingInputs(selectedRecipe)) continue;
+            ActiveMachineRecipe activeRecipe = new ActiveMachineRecipe(earlier, maxParallelism);
+            RecipeCraftingContext context = contextPool.borrow(activeRecipe, controller);
+            boolean missingInputs = !context.simulateInputs(earlier);
+            String failureUnloc = context.getLastFailureUnloc();
+            boolean outputAvailable = context.simulateOutputs(earlier);
+            contextPool.returnContext(context);
+            if (missingInputs && outputAvailable && RecipeCraftingContext.FAILURE_MISSING_INPUT.equals(failureUnloc)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static float validity(@Nullable String failureUnloc, @Nullable RequirementFailure failure) {
