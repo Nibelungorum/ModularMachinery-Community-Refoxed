@@ -899,6 +899,34 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void chunk_unload_stops_factory_lanes_when_single_active_slot_is_empty() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        var factoryMachine = new DynamicMachine(
+                MMCR.id("chunk_unload_factory_stop_machine"),
+                "Chunk Unload Factory Stop",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("factory_controller").get()),
+                MachineControllerSpec.defaultsFor(MMCR.id("chunk_unload_factory_stop_machine")),
+                PortRequirementSpec.none(),
+                List.of(),
+                Map.of(),
+                1,
+                false,
+                true,
+                4);
+        MachineRegistry.register(factoryMachine);
+        FactoryControllerBlockEntity factory = factoryController(controllerPos.offset(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerForFactoryFormation(factoryMachine, controllerPos, factory);
+        assertThat(invokeTryFormMachine(controller, factoryMachine, Direction.SOUTH)).isTrue();
+        addFactoryLane(factory);
+        assertThat(controller.getActive()).isNull();
+
+        MachineControllerBlockEntity.markStructureChunkDirty(levelOf(controller), new net.minecraft.world.level.ChunkPos(controllerPos.getX() >> 4, controllerPos.getZ() >> 4));
+
+        assertThat((boolean) fieldValue(MachineControllerBlockEntity.class, controller, "structureDirty")).isTrue();
+        assertThat(factory.activeLaneCount()).isZero();
+    }
+
+    @Test
     void block_change_outside_compiled_bounds_does_not_mark_formed_structure_dirty() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());

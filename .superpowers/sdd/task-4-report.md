@@ -32,3 +32,28 @@ DONE
 
 - None for Task 4 scope.
 - Existing unrelated modified files remain in the worktree and were not touched or committed: `.superpowers/sdd/task-1-report.md`, `.superpowers/sdd/task-3-report.md`.
+
+## Important Review Fix: Stop Factory Lanes On Unload
+
+### Status
+
+DONE
+
+### Modified Files
+
+- `src/main/java/cn/howxu/mmcr/api/machine/MachinePatternCompiler.java`
+- `src/main/java/cn/howxu/mmcr/internal/tile/MachineControllerBlockEntity.java`
+- `src/test/java/cn/howxu/mmcr/internal/tile/MachineControllerBlockEntityTest.java`
+
+### Verification
+
+- `./gradlew test --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest --tests cn.howxu.mmcr.internal.recipe.FactoryRecipeSchedulerTest --tests cn.howxu.mmcr.registry.FactoryControllerRegistrationTest --no-daemon`
+- Result: PASS / `BUILD SUCCESSFUL in 7s`
+
+### Commit
+
+- Pending until commit is created.
+
+### Concerns
+
+- Existing unrelated modified files remain in the worktree and were not touched or committed: `.superpowers/sdd/task-1-report.md`, `.superpowers/sdd/task-3-report.md`.

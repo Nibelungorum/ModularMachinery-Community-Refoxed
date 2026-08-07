@@ -624,8 +624,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void pauseActiveForUnloadedStructure() {
-        if (active == null) return;
         stopFactoryController();
+        if (active == null) return;
         pausedActive = active;
         pausedContext = context;
         active = null;
