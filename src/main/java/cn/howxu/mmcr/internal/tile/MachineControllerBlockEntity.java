@@ -786,7 +786,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return false;
         }
         setActiveState(true);
-        clearPendingConflictStart();
         recipeSearchRetryCounter = 0;
         lastFailureUnloc = null;
         LOG.info("[Ctrl#{}] tryStartNewRecipe: START recipe={} tickTime={} priority={} maxParallel={} ({} candidates)",

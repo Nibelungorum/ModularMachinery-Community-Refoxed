@@ -1,11 +1,16 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -19,6 +24,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.items.ItemStackHandler;
 import org.junit.jupiter.api.BeforeAll;
@@ -84,12 +91,45 @@ class MachineControllerBlockEntityRecipeDelayTest {
         assertThat(invokeShouldDelay(controller, result, 0)).isFalse();
     }
 
+    @Test
+    void repeatedConflictProneRecipeStartsImmediatelyAfterInitialDelayHasElapsed() throws Exception {
+        Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
+        MachineRecipe recipe = inputRecipe("single_gold", machineId, List.of());
+        RecipeSearchResult firstResult = startableConflictResult(machineId, recipe, 31);
+        MachineControllerBlockEntity controller = formedController(machineId);
+
+        assertThat(invokeShouldDelay(controller, firstResult, 0)).isTrue();
+        setField(MachineControllerBlockEntity.class, controller, "recipeSearchAttemptCounter", 20L);
+        assertThat(invokeApplySearchResult(controller, firstResult, 1)).isTrue();
+        setField(MachineControllerBlockEntity.class, controller, "active", null);
+        setField(MachineControllerBlockEntity.class, controller, "context", null);
+
+        RecipeSearchResult secondResult = startableConflictResult(machineId, recipe, 31);
+
+        assertThat(invokeShouldDelay(controller, secondResult, 21)).isFalse();
+    }
+
     private static boolean invokeShouldDelay(MachineControllerBlockEntity controller,
                                              RecipeSearchResult result,
                                              long gameTime) throws Exception {
         var method = MachineControllerBlockEntity.class.getDeclaredMethod("shouldDelayConflictProneStart", RecipeSearchResult.class, long.class);
         method.setAccessible(true);
         return (boolean) method.invoke(controller, result, gameTime);
+    }
+
+    private static boolean invokeApplySearchResult(MachineControllerBlockEntity controller,
+                                                   RecipeSearchResult result,
+                                                   int candidateCount) throws Exception {
+        var method = MachineControllerBlockEntity.class.getDeclaredMethod("applySearchResult", RecipeSearchResult.class, int.class);
+        method.setAccessible(true);
+        return (boolean) method.invoke(controller, result, candidateCount);
+    }
+
+    private static RecipeSearchResult startableConflictResult(Identifier machineId, MachineRecipe recipe, long structureVersion) throws Exception {
+        MachineControllerBlockEntity contextController = formedController(machineId);
+        ActiveMachineRecipe activeRecipe = new ActiveMachineRecipe(recipe, 1);
+        RecipeCraftingContext context = new RecipeCraftingContext(contextController);
+        return RecipeSearchResult.success(activeRecipe, context, machineId, structureVersion, true);
     }
 
     private static MachineRecipe inputRecipe(String path, Identifier machineId, Item item, int count) {
@@ -125,6 +165,43 @@ class MachineControllerBlockEntityRecipeDelayTest {
         setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
         setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
         return bus;
+    }
+
+    private static MachineControllerBlockEntity formedController(Identifier machineId) throws Exception {
+        MachineControllerBlockEntity controller = controllerWithComponents();
+        DynamicMachine machine = new DynamicMachine(machineId, "Machine", new BlockArray(java.util.Map.of()));
+        setField(MachineControllerBlockEntity.class, controller, "foundMachine", machine);
+        setField(MachineControllerBlockEntity.class, controller, "machine", machine);
+        setField(MachineControllerBlockEntity.class, controller, "structureVersion", 31L);
+        MachineControllerBlock controllerBlock = testControllerBlock(machineId);
+        setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
+        setField(BlockEntity.class, controller, "blockState", controllerBlock.defaultBlockState()
+                .setValue(MachineControllerBlock.FORMED, true)
+                .setValue(MachineControllerBlock.FACING, net.minecraft.core.Direction.NORTH)
+                .setValue(MachineControllerBlock.ROLL_FACING, net.minecraft.core.Direction.NORTH)
+                .setValue(MachineControllerBlock.ACTIVE, false));
+        var level = LevelStub.create(java.util.Map.of(BlockPos.ZERO, controllerBlock), List.of(controller));
+        setField(BlockEntity.class, controller, "level", level);
+        return controller;
+    }
+
+    private static MachineControllerBlock testControllerBlock(Identifier machineId) throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+        MachineControllerBlock block = (MachineControllerBlock) unsafe.allocateInstance(MachineControllerBlock.class);
+        setField(MachineControllerBlock.class, block, "machineId", machineId);
+        setField(net.minecraft.world.level.block.state.BlockBehaviour.class, block, "properties", Blocks.IRON_BLOCK.properties());
+        var builder = new net.minecraft.world.level.block.state.StateDefinition.Builder<Block, net.minecraft.world.level.block.state.BlockState>(block);
+        builder.add(MachineControllerBlock.FACING, MachineControllerBlock.ROLL_FACING, MachineControllerBlock.FORMED, MachineControllerBlock.ACTIVE);
+        var stateDefinition = builder.create(Block::defaultBlockState, net.minecraft.world.level.block.state.BlockState::new);
+        setField(Block.class, block, "stateDefinition", stateDefinition);
+        setField(Block.class, block, "defaultBlockState", stateDefinition.any()
+                .setValue(MachineControllerBlock.FACING, net.minecraft.core.Direction.NORTH)
+                .setValue(MachineControllerBlock.ROLL_FACING, net.minecraft.core.Direction.NORTH)
+                .setValue(MachineControllerBlock.FORMED, false)
+                .setValue(MachineControllerBlock.ACTIVE, false));
+        return block;
     }
 
     private static MachineControllerBlockEntity controllerWithComponents(BlockEntity... ports) throws Exception {
