@@ -44,3 +44,5 @@ repo/
 logs/
 
 src/generated
+docs/
+.superpowers/

@@ -87,6 +87,8 @@ public final class Translations {
                     Map.entry("jei.mmcr.machine_recipe.duration", "Duration: %s t %s s"),
                     Map.entry("jei.mmcr.machine_recipe.energy_in", "Energy Input: %s FE/t"),
                     Map.entry("jei.mmcr.machine_recipe.energy_out", "Energy Output: %s FE/t"),
+                    Map.entry("jei.mmcr.machine_recipe.overflow", "Additional ingredients:"),
+                    Map.entry("jei.mmcr.machine_recipe.overflow_entry", "%s x %s"),
                     Map.entry("jei.mmcr.transfer.fluid_energy_not_supported", "Only item inputs can be transferred. Fluids and energy must be supplied by hatches."),
                     Map.entry("jei.mmcr.transfer.no_item_inputs", "This recipe has no item inputs to transfer."))),
             Map.entry("zh_cn", Map.ofEntries(
@@ -166,6 +168,8 @@ public final class Translations {
                     Map.entry("jade.mmcr.machine_controller.parallelism.value", "%s / %s"),
                     Map.entry("jade.mmcr.machine_controller.components", "组件"),
                     Map.entry("jade.mmcr.machine_controller.components.value", "物品 %s/%s,流体 %s/%s,能量 %s/%s"),
+                    Map.entry("jei.mmcr.machine_recipe.overflow", "其余材料："),
+                    Map.entry("jei.mmcr.machine_recipe.overflow_entry", "%s x %s"),
                     Map.entry("jei.mmcr.machine_recipe", "机器配方"),
                     Map.entry("jei.mmcr.machine_recipe.duration", "耗时：%s tick %s 秒"),
                     Map.entry("jei.mmcr.machine_recipe.energy_in", "能量输入：%s FE/t"),

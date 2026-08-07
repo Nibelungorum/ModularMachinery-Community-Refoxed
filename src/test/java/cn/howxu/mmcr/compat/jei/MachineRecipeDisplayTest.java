@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.datagen.Translations;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
@@ -104,6 +105,57 @@ class MachineRecipeDisplayTest {
         assertThat(MachineRecipeDisplays.byMachine().get(MMCR.id("blast_furnace")))
                 .extracting(MachineRecipeDisplay::recipeId)
                 .containsExactly(MMCR.id("high"), MMCR.id("low"));
+    }
+
+    @Test
+    void layoutPlacesFluidsBeforeItemsAndCapsOverflow() {
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(new MachineRecipe(
+                MMCR.id("jei_layout"),
+                MMCR.id("blast_furnace"),
+                20,
+                List.of(
+                        new MachineIngredient.FluidIngredient(FluidIngredient.of(Fluids.WATER), 100),
+                        new MachineIngredient.FluidIngredient(FluidIngredient.of(Fluids.LAVA), 200),
+                        new MachineIngredient.ItemIngredient(Ingredient.of(Items.COAL), 1),
+                        new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2),
+                        new MachineIngredient.ItemIngredient(Ingredient.of(Items.GOLD_INGOT), 3)
+                ),
+                List.of(
+                        new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1),
+                        new ItemStack(Holder.direct(Items.GOLD_NUGGET, DataComponentMap.EMPTY), 2)
+                ),
+                List.of(),
+                0,
+                1,
+                true,
+                List.of(new FluidStack(Fluids.WATER.builtInRegistryHolder(), 100))
+        ));
+        MachineRecipeDisplay overflow = MachineRecipeDisplay.from(new MachineRecipe(
+                MMCR.id("jei_overflow"),
+                MMCR.id("blast_furnace"),
+                20,
+                java.util.stream.IntStream.range(0, 33)
+                        .<MachineIngredient>mapToObj(index -> new MachineIngredient.ItemIngredient(Ingredient.of(Items.COAL), 1))
+                        .toList(),
+                List.of(),
+                List.of(),
+                0,
+                1
+        ));
+
+        assertThat(MachineRecipeLayout.forDisplay(display).inputs().slots()).hasSize(5);
+        assertThat(MachineRecipeLayout.forDisplay(display).inputs().slots())
+                .extracting(slot -> slot.entry().kind())
+                .startsWith(MachineRecipeLayout.Kind.FLUID, MachineRecipeLayout.Kind.FLUID);
+        assertThat(MachineRecipeLayout.forDisplay(overflow).inputs().slots()).hasSize(32);
+    }
+
+    @Test
+    void translationsIncludeOverflowTooltips() {
+        assertThat(Translations.ALL.get("en_us"))
+                .containsKeys("jei.mmcr.machine_recipe.overflow", "jei.mmcr.machine_recipe.overflow_entry");
+        assertThat(Translations.ALL.get("zh_cn"))
+                .containsKeys("jei.mmcr.machine_recipe.overflow", "jei.mmcr.machine_recipe.overflow_entry");
     }
 
     private static MachineRecipe recipe(String id, String machine, int priority) {

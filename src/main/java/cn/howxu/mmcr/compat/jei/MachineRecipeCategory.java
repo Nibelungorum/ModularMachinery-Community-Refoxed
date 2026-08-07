@@ -4,6 +4,8 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.registry.ModBlocks;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
+import mezz.jei.api.gui.builder.IRecipeSlotBuilder;
+import mezz.jei.api.gui.builder.ITooltipBuilder;
 import mezz.jei.api.gui.drawable.IDrawable;
 import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
 import mezz.jei.api.helpers.IGuiHelper;
@@ -16,6 +18,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.neoforged.neoforge.fluids.FluidStack;
 import org.jspecify.annotations.Nullable;
 
 import java.util.List;
@@ -68,48 +71,9 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     @Override
     public void setRecipe(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe, IFocusGroup focuses) {
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
-        for (MachineRecipeLayout.SlotPlan slot : layout.inputs().slots()) {
-            MachineRecipeLayout.EntryPlan entry = slot.entry();
-            if (entry == null) continue;
-            if (entry.kind() == MachineRecipeLayout.Kind.ITEM) {
-                Ingredient ingredient = recipe.itemInputs().get(entry.index());
-                int count = recipe.itemInputCounts().get(entry.index());
-                List<ItemStack> stacks = itemStacks(ingredient, count);
-                MMCR.LOG.info("JEI input slot recipe={} machine={} index={} position=({}, {}) requestedCount={} ingredient={} candidateCount={} stacks={}",
-                        recipe.recipeId(), recipe.machineId(), entry.index(), slot.x(), slot.y(), count, ingredient,
-                        stacks.size(), stacks.stream().map(MachineRecipeCategory::describeStack).toList());
-                builder.addInputSlot(slot.x(), slot.y())
-                        .setStandardSlotBackground()
-                        .addItemStacks(stacks);
-            } else {
-                int amount = recipe.fluidInputAmounts().get(entry.index());
-                recipe.fluidInputs().get(entry.index()).fluids().stream().findFirst().ifPresent(fluid ->
-                        builder.addInputSlot(slot.x(), slot.y())
-                                .setStandardSlotBackground()
-                                .setFluidRenderer(Math.max(FLUID_SLOT_CAPACITY, amount), true, 16, 16)
-                                .add(fluid.value(), amount));
-            }
-        }
-        for (MachineRecipeLayout.SlotPlan slot : layout.outputs().slots()) {
-            MachineRecipeLayout.EntryPlan entry = slot.entry();
-            if (entry == null) continue;
-            if (entry.kind() == MachineRecipeLayout.Kind.ITEM) {
-                ItemStack rawStack = recipe.itemOutputs().get(entry.index());
-                ItemStack stack = normalizeOutputStack(rawStack);
-                MMCR.LOG.info("JEI output slot recipe={} machine={} index={} position=({}, {}) rawStack={} jeiStack={}",
-                        recipe.recipeId(), recipe.machineId(), entry.index(), slot.x(), slot.y(), describeStack(rawStack), describeStack(stack));
-                builder.addOutputSlot(slot.x(), slot.y())
-                        .setOutputSlotBackground()
-                        .add(stack);
-            } else {
-                var stack = recipe.fluidOutputs().get(entry.index());
-                builder.addOutputSlot(slot.x(), slot.y())
-                        .setOutputSlotBackground()
-                        .setFluidRenderer(1, false, 16, 16)
-                        .add(stack.getFluid(), stack.getAmount(), stack.getComponentsPatch());
-            }
-        }
-        builder.moveRecipeTransferButton(132, 58);
+        addRegion(builder, recipe, layout.inputs(), true);
+        addRegion(builder, recipe, layout.outputs(), false);
+        builder.moveRecipeTransferButton(84, 150);
     }
 
     @Override
@@ -132,6 +96,12 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                     layout.durationTextX(), y, 0xFF404040, false);
             y += 10;
         }
+        for (MachineRecipeLayout.SlotPlan slot : layout.inputs().slots()) {
+            if (slot.entry() == null) guiGraphics.text(Minecraft.getInstance().font, "...", slot.x(), slot.y() + 4, 0xFF404040, false);
+        }
+        for (MachineRecipeLayout.SlotPlan slot : layout.outputs().slots()) {
+            if (slot.entry() == null) guiGraphics.text(Minecraft.getInstance().font, "...", slot.x(), slot.y() + 4, 0xFF404040, false);
+        }
     }
 
     @Override
@@ -149,9 +119,71 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 .toList();
     }
 
-    private static String describeStack(ItemStack stack) {
-        return "{item=" + stack.getItem() + ", count=" + stack.getCount()
-                + ", empty=" + stack.isEmpty() + ", components=" + stack.getComponents() + "}";
+    private static void addRegion(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe,
+            MachineRecipeLayout.RegionPlan region, boolean input) {
+        for (MachineRecipeLayout.SlotPlan slot : region.slots()) {
+            if (slot.entry() == null) {
+                IRecipeSlotBuilder jeiSlot = input ? builder.addInputSlot(slot.x(), slot.y()) : builder.addOutputSlot(slot.x(), slot.y());
+                jeiSlot.setStandardSlotBackground()
+                        .addRichTooltipCallback((view, tooltip) -> appendOverflowTooltip(tooltip, recipe, region.hiddenEntries(), input));
+            } else {
+                addEntry(builder, recipe, slot, input);
+            }
+        }
+    }
+
+    private static void addEntry(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe,
+            MachineRecipeLayout.SlotPlan slot, boolean input) {
+        IRecipeSlotBuilder jeiSlot = input ? builder.addInputSlot(slot.x(), slot.y()) : builder.addOutputSlot(slot.x(), slot.y());
+        jeiSlot.setStandardSlotBackground();
+        switch (slot.entry().kind()) {
+            case FLUID -> addFluid(jeiSlot, recipe, slot.entry(), input);
+            case ITEM -> addItem(jeiSlot, recipe, slot.entry(), input);
+        }
+    }
+
+    private static void addItem(IRecipeSlotBuilder jeiSlot, MachineRecipeDisplay recipe,
+            MachineRecipeLayout.EntryPlan entry, boolean input) {
+        if (input) {
+            jeiSlot.addItemStacks(itemStacks(recipe.itemInputs().get(entry.index()), recipe.itemInputCounts().get(entry.index())));
+        } else {
+            jeiSlot.add(normalizeOutputStack(recipe.itemOutputs().get(entry.index())));
+        }
+    }
+
+    private static void addFluid(IRecipeSlotBuilder jeiSlot, MachineRecipeDisplay recipe,
+            MachineRecipeLayout.EntryPlan entry, boolean input) {
+        if (input) {
+            int amount = recipe.fluidInputAmounts().get(entry.index());
+            recipe.fluidInputs().get(entry.index()).fluids().stream().findFirst()
+                    .ifPresent(fluid -> jeiSlot.setFluidRenderer(Math.max(FLUID_SLOT_CAPACITY, amount), true, 16, 16).add(fluid.value(), amount));
+        } else {
+            var stack = recipe.fluidOutputs().get(entry.index());
+            jeiSlot.setFluidRenderer(Math.max(FLUID_SLOT_CAPACITY, stack.getAmount()), false, 16, 16)
+                    .add(stack.getFluid(), stack.getAmount(), stack.getComponentsPatch());
+        }
+    }
+
+    private static void appendOverflowTooltip(ITooltipBuilder tooltip,
+            MachineRecipeDisplay recipe, List<MachineRecipeLayout.EntryPlan> hiddenEntries, boolean input) {
+        tooltip.add(Component.translatable("jei.mmcr.machine_recipe.overflow"));
+        for (MachineRecipeLayout.EntryPlan entry : hiddenEntries) {
+            if (entry.kind() == MachineRecipeLayout.Kind.ITEM) {
+                ItemStack stack = input
+                        ? itemStacks(recipe.itemInputs().get(entry.index()), recipe.itemInputCounts().get(entry.index())).getFirst()
+                        : recipe.itemOutputs().get(entry.index());
+                tooltip.add(Component.translatable("jei.mmcr.machine_recipe.overflow_entry", stack.getCount(), stack.getHoverName()));
+            } else {
+                if (input) {
+                    var fluid = recipe.fluidInputs().get(entry.index()).fluids().stream().findFirst().orElseThrow().value();
+                    int amount = recipe.fluidInputAmounts().get(entry.index());
+                    tooltip.add(Component.translatable("jei.mmcr.machine_recipe.overflow_entry", amount, new FluidStack(fluid, amount).getHoverName()));
+                } else {
+                    var fluidStack = recipe.fluidOutputs().get(entry.index());
+                    tooltip.add(Component.translatable("jei.mmcr.machine_recipe.overflow_entry", fluidStack.getAmount(), fluidStack.getHoverName()));
+                }
+            }
+        }
     }
 
     private static ItemStack normalizeOutputStack(ItemStack stack) {
