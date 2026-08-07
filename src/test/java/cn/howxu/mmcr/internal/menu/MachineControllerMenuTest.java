@@ -1,5 +1,9 @@
 package cn.howxu.mmcr.internal.menu;
 
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.Holder;
@@ -10,6 +14,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -72,8 +77,39 @@ class MachineControllerMenuTest {
         assertThat(menu.primaryOutputFluid().isEmpty()).isTrue();
     }
 
+    @Test
+    void machine_id_comes_from_the_resolved_controller() throws Exception {
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory(), controller);
+
+        assertThat(menu.machineId()).isEqualTo(MMCR.id("blast_furnace"));
+    }
+
+    @Test
+    void machine_id_is_null_without_a_resolved_controller() {
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory());
+
+        assertThat(menu.machineId()).isNull();
+    }
+
     private static Inventory emptyInventory() {
         return new Inventory(null, null);
+    }
+
+    private static MachineControllerBlockEntity controllerWithMachine(net.minecraft.resources.Identifier id) throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+        MachineControllerBlockEntity controller = (MachineControllerBlockEntity) unsafe.allocateInstance(MachineControllerBlockEntity.class);
+        setField(net.minecraft.world.level.block.entity.BlockEntity.class, controller, "worldPosition", net.minecraft.core.BlockPos.ZERO);
+        setField(MachineControllerBlockEntity.class, controller, "machine", new DynamicMachine(id, "machine." + id.getPath(), new BlockArray(Map.of())));
+        return controller;
+    }
+
+    private static void setField(Class<?> type, Object target, String name, Object value) throws Exception {
+        Field field = type.getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(target, value);
     }
 
     private static void bind(Object deferredHolder, MenuType<MachineControllerMenu> menuType) throws Exception {

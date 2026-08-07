@@ -95,6 +95,12 @@ class MachineRecipeDisplayTest {
         assertThat(MachineRecipeDisplays.all())
                 .extracting(MachineRecipeDisplay::recipeId)
                 .containsExactly(MMCR.id("high"), MMCR.id("low"), MMCR.id("other"));
+
+        assertThat(MachineRecipeDisplays.byMachine())
+                .containsOnlyKeys(MMCR.id("blast_furnace"), MMCR.id("other_machine"));
+        assertThat(MachineRecipeDisplays.byMachine().get(MMCR.id("blast_furnace")))
+                .extracting(MachineRecipeDisplay::recipeId)
+                .containsExactly(MMCR.id("high"), MMCR.id("low"));
     }
 
     private static MachineRecipe recipe(String id, String machine, int priority) {

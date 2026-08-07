@@ -1,9 +1,11 @@
 package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.entity.player.Player;
@@ -104,6 +106,12 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         if (level == null) return null;
         BlockEntity be = level.getBlockEntity(pos);
         return be instanceof MachineControllerBlockEntity controller ? controller : null;
+    }
+
+    public @Nullable Identifier machineId() {
+        MachineControllerBlockEntity controller = resolvedOwner();
+        Machine machine = controller == null ? null : controller.getMachine();
+        return machine == null ? null : machine.registryName();
     }
 
     public boolean isFormed() {
