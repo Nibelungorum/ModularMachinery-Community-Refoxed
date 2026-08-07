@@ -158,6 +158,11 @@ class MachineRecipeDisplayTest {
                 .containsKeys("jei.mmcr.machine_recipe.overflow", "jei.mmcr.machine_recipe.overflow_entry");
     }
 
+    @Test
+    void firstItemStackReturnsEmptyForIngredientWithoutCandidates() {
+        assertThat(MachineRecipeCategory.firstItemStack(List.of())).isEmpty();
+    }
+
     private static MachineRecipe recipe(String id, String machine, int priority) {
         return new MachineRecipe(
                 MMCR.id(id),

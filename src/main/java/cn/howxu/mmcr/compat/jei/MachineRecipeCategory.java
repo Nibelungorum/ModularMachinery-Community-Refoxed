@@ -23,6 +23,7 @@ import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 /**
  * JEI category for MMCR machine recipes.
@@ -119,6 +120,14 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 .toList();
     }
 
+    static Optional<ItemStack> firstItemStack(Ingredient ingredient, int count) {
+        return firstItemStack(itemStacks(ingredient, count));
+    }
+
+    static Optional<ItemStack> firstItemStack(List<ItemStack> stacks) {
+        return stacks.stream().findFirst();
+    }
+
     private static void addRegion(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe,
             MachineRecipeLayout.RegionPlan region, boolean input) {
         for (MachineRecipeLayout.SlotPlan slot : region.slots()) {
@@ -169,10 +178,13 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         tooltip.add(Component.translatable("jei.mmcr.machine_recipe.overflow"));
         for (MachineRecipeLayout.EntryPlan entry : hiddenEntries) {
             if (entry.kind() == MachineRecipeLayout.Kind.ITEM) {
-                ItemStack stack = input
-                        ? itemStacks(recipe.itemInputs().get(entry.index()), recipe.itemInputCounts().get(entry.index())).getFirst()
-                        : recipe.itemOutputs().get(entry.index());
-                tooltip.add(Component.translatable("jei.mmcr.machine_recipe.overflow_entry", stack.getCount(), stack.getHoverName()));
+                if (input) {
+                    firstItemStack(recipe.itemInputs().get(entry.index()), recipe.itemInputCounts().get(entry.index()))
+                            .ifPresent(stack -> tooltip.add(Component.translatable("jei.mmcr.machine_recipe.overflow_entry", stack.getCount(), stack.getHoverName())));
+                } else {
+                    ItemStack stack = recipe.itemOutputs().get(entry.index());
+                    tooltip.add(Component.translatable("jei.mmcr.machine_recipe.overflow_entry", stack.getCount(), stack.getHoverName()));
+                }
             } else {
                 if (input) {
                     var fluid = recipe.fluidInputs().get(entry.index()).fluids().stream().findFirst().orElseThrow().value();
