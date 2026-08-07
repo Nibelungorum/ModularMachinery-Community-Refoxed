@@ -81,7 +81,13 @@ public final class Translations {
                     Map.entry("jade.mmcr.machine_controller.parallelism", "Parallelism"),
                     Map.entry("jade.mmcr.machine_controller.parallelism.value", "%s / %s"),
                     Map.entry("jade.mmcr.machine_controller.components", "Components"),
-                    Map.entry("jade.mmcr.machine_controller.components.value", "Items %s/%s, Fluids %s/%s, Energy %s/%s"))),
+                    Map.entry("jade.mmcr.machine_controller.components.value", "Items %s/%s, Fluids %s/%s, Energy %s/%s"),
+                    Map.entry("jei.mmcr.machine_recipe", "Machine Recipe"),
+                    Map.entry("jei.mmcr.machine_recipe.duration", "Duration: %s t (%s s)"),
+                    Map.entry("jei.mmcr.machine_recipe.energy_in", "Energy Input: %s FE/t"),
+                    Map.entry("jei.mmcr.machine_recipe.energy_out", "Energy Output: %s FE/t"),
+                    Map.entry("jei.mmcr.transfer.fluid_energy_not_supported", "Only item inputs can be transferred. Fluids and energy must be supplied by hatches."),
+                    Map.entry("jei.mmcr.transfer.no_item_inputs", "This recipe has no item inputs to transfer."))),
             Map.entry("zh_cn", Map.ofEntries(
                     Map.entry("itemGroup.mmcr",                    "模块化机械社区版"),
                     Map.entry("block.mmcr.blast_furnace_controller", "高炉控制器"),
@@ -157,7 +163,13 @@ public final class Translations {
                     Map.entry("jade.mmcr.machine_controller.parallelism", "并行"),
                     Map.entry("jade.mmcr.machine_controller.parallelism.value", "%s / %s"),
                     Map.entry("jade.mmcr.machine_controller.components", "组件"),
-                    Map.entry("jade.mmcr.machine_controller.components.value", "物品 %s/%s，流体 %s/%s，能量 %s/%s")))
+                    Map.entry("jade.mmcr.machine_controller.components.value", "物品 %s/%s，流体 %s/%s，能量 %s/%s"),
+                    Map.entry("jei.mmcr.machine_recipe", "机器配方"),
+                    Map.entry("jei.mmcr.machine_recipe.duration", "耗时：%s tick（%s 秒）"),
+                    Map.entry("jei.mmcr.machine_recipe.energy_in", "能量输入：%s FE/t"),
+                    Map.entry("jei.mmcr.machine_recipe.energy_out", "能量输出：%s FE/t"),
+                    Map.entry("jei.mmcr.transfer.fluid_energy_not_supported", "仅支持转移物品输入；流体和能量需要通过对应端口供应。"),
+                    Map.entry("jei.mmcr.transfer.no_item_inputs", "该配方没有可转移的物品输入。")))
     );
 
     private Translations() {}
