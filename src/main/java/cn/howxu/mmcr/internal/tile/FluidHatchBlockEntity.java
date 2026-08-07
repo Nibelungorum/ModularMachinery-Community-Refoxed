@@ -18,15 +18,19 @@ import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
 
 public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
 
-    private final FluidTank tank = new FluidTank(8000) {
-        @Override
-        protected void onContentsChanged() {
-            setChanged();
-        }
-    };
+    private final FluidTank tank;
 
-    protected FluidHatchBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
+    protected FluidHatchBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state, IOPortKind kind) {
         super(type, pos, state);
+        int capacity = kind.fluidHatchSize()
+                .orElseThrow(() -> new IllegalStateException("Fluid hatch missing fluid size: " + kind.id()))
+                .capacity();
+        this.tank = new FluidTank(capacity) {
+            @Override
+            protected void onContentsChanged() {
+                setChanged();
+            }
+        };
     }
 
     public IFluidHandler getFluidHandler(Direction side) { return tank; }

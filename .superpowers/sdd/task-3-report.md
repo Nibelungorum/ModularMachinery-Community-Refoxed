@@ -1,38 +1,54 @@
-# Task 3 Report: Default Machine Recipe Coverage
+# Task 3 Report: Apply Item, Fluid, And Energy Sizes To Block Entities
 
-## Scope
+## What Changed
 
-- Modified `src/main/java/org/nibelungorum/DefaultRecipes.java`.
-- Modified `src/test/java/org/nibelungorum/DefaultRecipesTest.java`.
-- Modified `src/test/java/cn/howxu/mmcr/BuiltinRecipeBootstrapTest.java`.
-- Did not modify, restore, or rewrite `.gitignore`.
+- Added `IOPortSizeTest` to cover item bus slot counts, fluid hatch capacities, and energy hatch capacities for tiny/normal/high-end variants.
+- Changed `ItemBusBlockEntity`, `FluidHatchBlockEntity`, and `EnergyHatchBlockEntity` to initialize runtime storage from the active `IOPortKind` size metadata instead of hardcoded default capacities.
+- Added `kindFromState` and `typeFromState` helpers so concrete port block entities resolve the actual registered variant from the `IOPortBlock` in their `BlockState`.
+- Updated item/fluid/energy input and output block entities to retain the resolved runtime kind and report it through `kind()`.
+- Updated test bootstrap and controller tests so variant port blocks/entities can be instantiated in unit tests and Unsafe-allocated test ports have a populated `kind` field.
 
-## Implementation
+## Commands Run And Results
 
-- Replaced the four ad hoc registrations with declarative `Definition` entries.
-- Registered ten definitions for each of `blast_furnace`, `alloy_furnace`, `cracker`, and `reactor`.
-- `ensureRegistered()` checks `RecipeRegistry.getRecipe(id) == null` before every registration, preserving externally registered recipes and repeat-call idempotence.
-- All recipes use vanilla items and fluids; registrations use priority `0`, max threads `1`, and cancel-on-per-tick-failure `true`.
-- Preserved the existing semantics of `alloy_furnace_netherite`, `cracker_coal_lapis`, and `reactor_diamond_water` as required by the legacy callers and tests.
+- RED: `rtk gradlew test --tests cn.howxu.mmcr.internal.tile.IOPortSizeTest --no-daemon` failed with expected hardcoded storage assertions after test fixture fixes:
+  - `expected: 1 but was: 6`
+  - `expected: 100 but was: 8000`
+  - `expected: 2048 but was: 100000`
+- GREEN sizing: `rtk gradlew test --tests cn.howxu.mmcr.internal.tile.IOPortSizeTest --no-daemon` passed.
+- Focused regression: `rtk gradlew test --tests cn.howxu.mmcr.api.recipe.RecipeCraftingContextTest --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest --no-daemon` passed.
+- Compile check: `rtk gradlew compileJava --no-daemon` passed.
 
-## Compatibility Note
+## TDD Evidence
 
-The brief simultaneously assigns each legacy ID to the `iron_to_nugget` scenario and requires its pre-existing semantics to remain unchanged. These requirements conflict for the three legacy IDs. This implementation gives precedence to preserving their established semantics while retaining exactly ten recipes per machine; the remaining nine entries per machine follow the shared scenario matrix.
+- Wrote `IOPortSizeTest` before production changes.
+- Initial RED attempts exposed test fixture gaps for unbound variant holders and frozen registries; after fixing the fixture, the test failed for the intended behavior: storage still used hardcoded defaults.
+- Implemented the smallest production change to initialize storage from `kind().itemBusSize()`, `kind().fluidHatchSize()`, and `kind().energyHatchSize()` via the resolved runtime kind.
+- Re-ran sizing test and focused recipe/controller regression tests successfully.
 
-## Test-First Evidence
+## Files Changed
 
-1. Added recipe-count and coverage assertions.
-2. Ran `rtk gradlew test --tests org.nibelungorum.DefaultRecipesTest --no-daemon` before implementation.
-3. Result: `BUILD FAILED`, 6 tests completed, 2 failures at the new ten-recipe assertions in `ensureRegistered_publishes_builtin_blast_furnace_iron_to_nugget_recipe` and `ensureRegistered_is_idempotent`.
+- `src/main/java/cn/howxu/mmcr/internal/tile/ItemBusBlockEntity.java`
+- `src/main/java/cn/howxu/mmcr/internal/tile/FluidHatchBlockEntity.java`
+- `src/main/java/cn/howxu/mmcr/internal/tile/EnergyHatchBlockEntity.java`
+- `src/main/java/cn/howxu/mmcr/internal/tile/IOPortBlockEntity.java`
+- `src/main/java/cn/howxu/mmcr/internal/tile/ItemInputBusBlockEntity.java`
+- `src/main/java/cn/howxu/mmcr/internal/tile/ItemOutputBusBlockEntity.java`
+- `src/main/java/cn/howxu/mmcr/internal/tile/FluidInputHatchBlockEntity.java`
+- `src/main/java/cn/howxu/mmcr/internal/tile/FluidOutputHatchBlockEntity.java`
+- `src/main/java/cn/howxu/mmcr/internal/tile/EnergyInputHatchBlockEntity.java`
+- `src/main/java/cn/howxu/mmcr/internal/tile/EnergyOutputHatchBlockEntity.java`
+- `src/test/java/cn/howxu/mmcr/internal/tile/IOPortSizeTest.java`
+- `src/test/java/cn/howxu/mmcr/internal/tile/MachineControllerBlockEntityTest.java`
+- `src/test/java/cn/howxu/mmcr/test/TestBootstrap.java`
 
-## Final Verification
+## Self-Review
 
-| Command | Result |
-| --- | --- |
-| `rtk gradlew test --tests org.nibelungorum.DefaultRecipesTest --tests cn.howxu.mmcr.BuiltinRecipeBootstrapTest --no-daemon` | `BUILD SUCCESSFUL`; 7 tests completed, 0 failures. |
-| `rtk gradlew compileJava --no-daemon` | `BUILD SUCCESSFUL`. |
-| `rtk git diff --check` | Exit 0; no whitespace errors. |
+- Confirmed runtime storage now depends on the registered port kind rather than the abstract input/output class default.
+- Kept save/load and public handler getter behavior unchanged.
+- Avoided changing recipe/controller production logic; only adjusted tests that Unsafe-allocate ports and therefore bypass constructors.
+- Did not run `./gradlew runClient --no-daemon`.
 
-## Worktree Note
+## Concerns
 
-`reference/gtceu/` was already an untracked, unrelated directory. It is excluded from the task commit.
+- Test bootstrap now registers/binds all built-in port blocks for unit tests so variant `BlockState` carries `IOPortBlock.kind()`. This is test-only but broader than the original fixture, because variant storage cannot be verified through vanilla placeholder blocks.
+- Existing unrelated modification to `.superpowers/sdd/task-1-report.md` was present and intentionally not included in this task commit.

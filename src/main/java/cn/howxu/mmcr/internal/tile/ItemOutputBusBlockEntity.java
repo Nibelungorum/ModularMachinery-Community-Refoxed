@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.internal.port.IOPortKind;
-import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
@@ -9,8 +8,11 @@ import net.minecraft.world.level.block.state.BlockState;
 
 public class ItemOutputBusBlockEntity extends ItemBusBlockEntity {
 
+    private final IOPortKind kind;
+
     public ItemOutputBusBlockEntity(BlockPos pos, BlockState state) {
-        super(ModBlockEntities.BES.get(PortKinds.ITEM_OUTPUT.id()).get(), pos, state);
+        super(typeFromState(state, PortKinds.ITEM_OUTPUT), pos, state, kindFromState(state, PortKinds.ITEM_OUTPUT));
+        this.kind = kindFromState(state, PortKinds.ITEM_OUTPUT);
     }
 
     @Override
@@ -20,6 +22,6 @@ public class ItemOutputBusBlockEntity extends ItemBusBlockEntity {
 
     @Override
     public IOPortKind kind() {
-        return PortKinds.ITEM_OUTPUT;
+        return kind;
     }
 }

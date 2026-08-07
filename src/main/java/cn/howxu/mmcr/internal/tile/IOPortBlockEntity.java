@@ -2,7 +2,9 @@ package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
+import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -13,6 +15,14 @@ public abstract class IOPortBlockEntity extends BlockEntity implements MachineCo
 
     protected IOPortBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
         super(type, pos, state);
+    }
+
+    protected static IOPortKind kindFromState(BlockState state, IOPortKind fallback) {
+        return state.getBlock() instanceof IOPortBlock portBlock ? portBlock.kind() : fallback;
+    }
+
+    protected static BlockEntityType<?> typeFromState(BlockState state, IOPortKind fallback) {
+        return ModBlockEntities.BES.get(kindFromState(state, fallback).id()).get();
     }
 
     public abstract IOType ioType();
