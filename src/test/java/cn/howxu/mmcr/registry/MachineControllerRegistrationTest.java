@@ -5,11 +5,13 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -46,12 +48,23 @@ class MachineControllerRegistrationTest {
     }
 
     @Test
-    void controllerReservationsMapBlockAndItemToMachine() {
+    void controllerReservationsMapBlockAndItemToMachine() throws Exception {
         Identifier id = MMCR.id("blast_furnace");
+        String controllerName = MachineControllerSpec.defaultsFor(id).id().getPath();
+        Item controllerItem = ModItems.ITEMS.get(controllerName).get();
 
         assertThat(ModBlocks.hasControllerFor(id)).isTrue();
-        assertThat(ModItems.machineIdForControllerItem(ModBlocks.controllerFor(id).get().asItem())).isEqualTo(id);
+        assertThat(controllerItem).isSameAs(ModBlocks.controllerFor(id).get().asItem());
+        assertThat(controllerMachineIds()).containsEntry(controllerItem, id);
+        assertThat(ModItems.machineIdForControllerItem(controllerItem)).isEqualTo(id);
         assertThat(ModItems.machineIdForControllerItem(Items.AIR)).isNull();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<Item, Identifier> controllerMachineIds() throws Exception {
+        Field field = ModItems.class.getDeclaredField("controllerMachineIds");
+        field.setAccessible(true);
+        return (Map<Item, Identifier>) field.get(null);
     }
 
     private static MachineControllerBlock controllerBlockWithoutRunningMinecraftConstructor(Identifier machineId) throws Exception {

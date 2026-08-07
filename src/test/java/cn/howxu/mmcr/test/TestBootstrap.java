@@ -3,19 +3,23 @@ package cn.howxu.mmcr.test;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.Bootstrap;
-import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.neoforged.neoforge.registries.DeferredHolder;
 import org.nibelungorum.BuiltinMachines;
 
 import java.lang.reflect.Field;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -100,7 +104,12 @@ public final class TestBootstrap {
     private static void bindController(Identifier machineId) throws Exception {
         MachineControllerBlock block = controllerBlock(machineId);
         bind(ModBlocks.controllerFor(machineId), block);
-        Item.BY_BLOCK.put(block, blockItem(block));
+        String itemName = MachineControllerSpec.defaultsFor(machineId).id().getPath();
+        DeferredHolder<Item, Item> itemHolder = ModItems.ITEMS.get(itemName);
+        Item item = blockItem(block);
+        bind(itemHolder, item);
+        Item.BY_BLOCK.put(block, item);
+        reserveControllerItem(item, machineId);
     }
 
     private static void bind(Object deferredHolder, Object value) throws Exception {
@@ -129,6 +138,16 @@ public final class TestBootstrap {
         blockField.setAccessible(true);
         blockField.set(item, block);
         return item;
+    }
+
+    private static void reserveControllerItem(Item item, Identifier machineId) throws Exception {
+        Field field = ModItems.class.getDeclaredField("controllerMachineIds");
+        field.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        Map<Item, Identifier> controllerMachineIds = (Map<Item, Identifier>) field.get(null);
+        Map<Item, Identifier> ids = new LinkedHashMap<>(controllerMachineIds);
+        ids.put(item, machineId);
+        field.set(null, Map.copyOf(ids));
     }
 
 }
