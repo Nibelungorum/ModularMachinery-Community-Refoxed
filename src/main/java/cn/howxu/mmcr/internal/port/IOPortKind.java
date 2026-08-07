@@ -23,6 +23,12 @@ public interface IOPortKind {
     /** 该 kind 的主 capability 类型(对接 Forge / 第三方 capability)。默认无。 */
     default Optional<Class<?>> primaryCapability() { return Optional.empty(); }
 
+    default Optional<ItemBusSize> itemBusSize() { return Optional.empty(); }
+
+    default Optional<FluidHatchSize> fluidHatchSize() { return Optional.empty(); }
+
+    default Optional<EnergyHatchSize> energyHatchSize() { return Optional.empty(); }
+
     /** 该 kind 的服务端 tick 钩子,用于 MEK 气体管道分发等。默认无。 */
     default void tick(IOPortBlockEntity be) {}
 }
