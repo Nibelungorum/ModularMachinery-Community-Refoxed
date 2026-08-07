@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -44,6 +45,15 @@ class MachineControllerRegistrationTest {
         assertThat(ModBlocks.machineIdForController(block)).isEqualTo(MMCR.id("blast_furnace"));
     }
 
+    @Test
+    void controllerReservationsMapBlockAndItemToMachine() {
+        Identifier id = MMCR.id("blast_furnace");
+
+        assertThat(ModBlocks.hasControllerFor(id)).isTrue();
+        assertThat(ModItems.machineIdForControllerItem(ModBlocks.controllerFor(id).get().asItem())).isEqualTo(id);
+        assertThat(ModItems.machineIdForControllerItem(Items.AIR)).isNull();
+    }
+
     private static MachineControllerBlock controllerBlockWithoutRunningMinecraftConstructor(Identifier machineId) throws Exception {
         Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
         unsafeField.setAccessible(true);
@@ -54,4 +64,5 @@ class MachineControllerRegistrationTest {
         machineIdField.set(block, machineId);
         return block;
     }
+
 }

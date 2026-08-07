@@ -5,9 +5,12 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import org.nibelungorum.BuiltinMachines;
@@ -58,13 +61,13 @@ public final class TestBootstrap {
         MachineDefinitions.bootstrapBuiltins();
         Bootstrap.bootStrap();
         bind(ModBlocks.CASING, Blocks.STONE);
-        bind(ModBlocks.controllerFor(MMCR.id("blast_furnace")), Blocks.IRON_BLOCK);
-        bind(ModBlocks.controllerFor(id("alloy_furnace")), Blocks.IRON_BLOCK);
-        bind(ModBlocks.controllerFor(id("cracker")), Blocks.IRON_BLOCK);
-        bind(ModBlocks.controllerFor(id("reactor")), Blocks.IRON_BLOCK);
-        bind(ModBlocks.controllerFor(id("test_cube")), Blocks.IRON_BLOCK);
-        bind(ModBlocks.controllerFor(id("controller_tick")), Blocks.IRON_BLOCK);
-        bind(ModBlocks.controllerFor(id("iron_compressor")), Blocks.IRON_BLOCK);
+        bindController(MMCR.id("blast_furnace"));
+        bindController(id("alloy_furnace"));
+        bindController(id("cracker"));
+        bindController(id("reactor"));
+        bindController(id("test_cube"));
+        bindController(id("controller_tick"));
+        bindController(id("iron_compressor"));
         bind(ModBlocks.BLOCKS.get("item_input_bus"), Blocks.CHEST);
         bind(ModBlocks.BLOCKS.get("item_output_bus"), Blocks.CHEST);
         bind(ModBlocks.BLOCKS.get("fluid_input_hatch"), Blocks.BARREL);
@@ -94,10 +97,38 @@ public final class TestBootstrap {
         return Identifier.fromNamespaceAndPath(MMCR.MODID, path);
     }
 
-    private static void bind(Object deferredHolder, Block block) throws Exception {
+    private static void bindController(Identifier machineId) throws Exception {
+        MachineControllerBlock block = controllerBlock(machineId);
+        bind(ModBlocks.controllerFor(machineId), block);
+        Item.BY_BLOCK.put(block, blockItem(block));
+    }
+
+    private static void bind(Object deferredHolder, Object value) throws Exception {
         Field holder = deferredHolder.getClass().getSuperclass().getDeclaredField("holder");
         holder.setAccessible(true);
-        holder.set(deferredHolder, Holder.direct(block));
+        holder.set(deferredHolder, Holder.direct(value));
+    }
+
+    private static MachineControllerBlock controllerBlock(Identifier machineId) throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+        MachineControllerBlock block = (MachineControllerBlock) unsafe.allocateInstance(MachineControllerBlock.class);
+        Field machineIdField = MachineControllerBlock.class.getDeclaredField("machineId");
+        machineIdField.setAccessible(true);
+        machineIdField.set(block, machineId);
+        return block;
+    }
+
+    private static BlockItem blockItem(MachineControllerBlock block) throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+        BlockItem item = (BlockItem) unsafe.allocateInstance(BlockItem.class);
+        Field blockField = BlockItem.class.getDeclaredField("block");
+        blockField.setAccessible(true);
+        blockField.set(item, block);
+        return item;
     }
 
 }

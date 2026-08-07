@@ -62,6 +62,14 @@ public final class ModBlocks {
         return holder;
     }
 
+    public static boolean hasControllerFor(Identifier machineId) {
+        String name = MachineControllerSpec.defaultsFor(machineId).id().getPath();
+        DeferredHolder<Block, Block> holder = BLOCKS.get(name);
+        return holder != null
+                && holder.get() instanceof MachineControllerBlock controller
+                && controller.machineId().equals(machineId);
+    }
+
     public static Identifier machineIdForController(Block block) {
         if (block instanceof MachineControllerBlock controller) {
             return controller.machineId();
