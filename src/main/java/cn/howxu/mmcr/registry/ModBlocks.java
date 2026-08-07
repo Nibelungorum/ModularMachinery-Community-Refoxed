@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.block.DebugSourceBlock;
+import cn.howxu.mmcr.internal.block.FactoryControllerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineCasingBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
@@ -36,6 +37,7 @@ public final class ModBlocks {
         BLOCKS.put("basic_casing", REGISTER.registerBlock("basic_casing", MachineCasingBlock::new));
         PortKinds.all().forEach(ModBlocks::registerIoPort);
         for (ParallelTier tier : ParallelTier.values()) registerParallelController(tier);
+        registerFactoryController();
         registerDebugSource("debug_infinite_energy_source", null);
         registerDebugSource("debug_infinite_water_source", Fluids.WATER);
         registerDebugSource("debug_infinite_lava_source", Fluids.LAVA);
@@ -94,6 +96,14 @@ public final class ModBlocks {
                 () -> ModBlockEntities.BES.get(name).get();
         BLOCKS.put(name, REGISTER.registerBlock(name,
                 properties -> new ParallelControllerBlock(tier, beTypeSupplier, properties)));
+    }
+
+    private static void registerFactoryController() {
+        String name = "factory_controller";
+        Supplier<? extends BlockEntityType<?>> beTypeSupplier =
+                () -> ModBlockEntities.BES.get(name).get();
+        BLOCKS.put(name, REGISTER.registerBlock(name,
+                properties -> new FactoryControllerBlock(beTypeSupplier, properties)));
     }
 
     private static void registerDebugSource(String name, Fluid fluid) {

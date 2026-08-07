@@ -108,6 +108,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public Machine getMachine() { return machine; }
     public void setMachine(Machine m) {
         Identifier before = this.machine == null ? null : this.machine.registryName();
+        stopFactoryController();
         clearFoundModifiers();
         this.machine = m;
         LOG.info("[Ctrl#{}] setMachine: {} → {} at pos={}", instanceId, before, m == null ? null : m.registryName(), getBlockPos());
@@ -251,6 +252,16 @@ public class MachineControllerBlockEntity extends BlockEntity {
             }
         }
         return Math.min(max, machine.maxParallelism());
+    }
+
+    public @Nullable FactoryControllerBlockEntity getFactoryController() {
+        if (machine == null || !machine.hasFactory()) return null;
+        for (ProcessingComponent component : components) {
+            if (component.getContainer() instanceof FactoryControllerBlockEntity factory) {
+                return factory;
+            }
+        }
+        return null;
     }
 
     public void serverTick() {
@@ -551,6 +562,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 components.add(new ProcessingComponent(null, parallel, worldPos, relativePos, foundPattern.tagsAt(relativePos), null));
                 continue;
             }
+            if (level.getBlockEntity(worldPos) instanceof FactoryControllerBlockEntity factory) {
+                components.add(new ProcessingComponent(null, factory, worldPos, relativePos, foundPattern.tagsAt(relativePos), null));
+                continue;
+            }
             if (!(level.getBlockEntity(worldPos) instanceof MachineComponentTile tile)) continue;
 
             var component = tile.provideComponent();
@@ -610,6 +625,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void pauseActiveForUnloadedStructure() {
         if (active == null) return;
+        stopFactoryController();
         pausedActive = active;
         pausedContext = context;
         active = null;
@@ -660,6 +676,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         Identifier dropped = foundMachine == null ? null : foundMachine.registryName();
         boolean hadActive = active != null;
         Identifier activeRecipe = hadActive ? active.getRecipe().id() : null;
+        stopFactoryController();
         foundMachine = null;
         foundPattern = null;
         foundCompiledPattern = null;
@@ -689,6 +706,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
             LOG.info("[Ctrl#{}] resetMachine: pos={} dropped={} clearedActiveRecipe={} wasFormed={}", instanceId, getBlockPos(), dropped, activeRecipe, wasFormed);
         }
         setChanged();
+    }
+
+    private void stopFactoryController() {
+        FactoryControllerBlockEntity factory = getFactoryController();
+        if (factory != null) factory.stopAll();
     }
 
     private void broadcastStateIfChanged(boolean activeBeforeTick) {
@@ -862,6 +884,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (getBlockState().getValue(MachineControllerBlock.ACTIVE) != activeState) {
             level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.ACTIVE, activeState), 3);
         }
+    }
+
+    @Override
+    public void setRemoved() {
+        stopFactoryController();
+        super.setRemoved();
     }
 
     void bindDefaultMachine() {

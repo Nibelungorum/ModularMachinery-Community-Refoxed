@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.tile.DebugInfiniteEnergySourceBlockEntity;
 import cn.howxu.mmcr.internal.tile.DebugInfiniteFluidSourceBlockEntity;
+import cn.howxu.mmcr.internal.tile.FactoryControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import net.minecraft.core.BlockPos;
@@ -42,6 +43,7 @@ public final class ModBlockEntities {
                     ModBlocks.BLOCKS.get(name).get())));
         });
         for (ParallelTier tier : ParallelTier.values()) registerParallelController(tier);
+        registerFactoryController();
         registerDebugBe("debug_infinite_energy_source", (pos, state) ->
                 new DebugInfiniteEnergySourceBlockEntity(pos, state));
         Map<Fluid, String> debugFluidBe = Map.of(
@@ -61,6 +63,13 @@ public final class ModBlockEntities {
         String name = tier.idSuffix();
         BES.put(name, register(name, () -> new BlockEntityType<>(
                 (pos, state) -> new ParallelControllerBlockEntity(tier, pos, state),
+                ModBlocks.BLOCKS.get(name).get())));
+    }
+
+    private static void registerFactoryController() {
+        String name = "factory_controller";
+        BES.put(name, register(name, () -> new BlockEntityType<>(
+                FactoryControllerBlockEntity::new,
                 ModBlocks.BLOCKS.get(name).get())));
     }
 

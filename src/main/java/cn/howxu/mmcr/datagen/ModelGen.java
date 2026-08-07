@@ -68,7 +68,7 @@ public final class ModelGen extends ModelProvider {
                         .dispatch(block, BlockModelGenerators.plainVariant(modelId)));
                 blockModels.registerSimpleItemModel(block.asItem(),
                         ModelLocationUtils.getModelLocation(block));
-            } else if (isParallelController(name)) {
+            } else if (isParallelController(name) || "factory_controller".equals(name)) {
                 blockModels.createTrivialBlock(block, TexturedModel.CUBE.updateTexture(
                         m -> m.put(TextureSlot.ALL, new Material(MMCR.id("block/basic_casing")))));
             } else {

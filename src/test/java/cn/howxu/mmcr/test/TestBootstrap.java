@@ -6,8 +6,10 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
+import cn.howxu.mmcr.internal.block.FactoryControllerBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
+import cn.howxu.mmcr.internal.tile.FactoryControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -87,6 +89,7 @@ public final class TestBootstrap {
         bind(ModBlocks.BLOCKS.get("energy_input_hatch"), Blocks.COPPER_BLOCK);
         bind(ModBlocks.BLOCKS.get("energy_output_hatch"), Blocks.COPPER_BLOCK);
         for (ParallelTier tier : ParallelTier.values()) bindParallelController(tier);
+        bindFactoryController();
         restoreMachineDefinitions();
         registerRuntimeBuiltins();
         initialized = true;
@@ -155,6 +158,37 @@ public final class TestBootstrap {
                 (pos, state) -> new ParallelControllerBlockEntity(tier, pos, state),
                 block);
         Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id(tier.idSuffix()), beType);
+        blockEntities.freeze();
+        return beType;
+    }
+
+    private static void bindFactoryController() throws Exception {
+        String name = "factory_controller";
+        FactoryControllerBlock block = factoryControllerBlock();
+        bind(ModBlocks.BLOCKS.get(name), block);
+        DeferredHolder<Item, Item> itemHolder = ModItems.ITEMS.get(name);
+        Item item = registerItem(itemHolder);
+        bind(itemHolder, item);
+        Item.BY_BLOCK.put(block, item);
+        bind(ModBlockEntities.BES.get(name), factoryControllerBlockEntityType(block));
+    }
+
+    private static FactoryControllerBlock factoryControllerBlock() {
+        MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
+        blocks.unfreeze(true);
+        FactoryControllerBlock block = new FactoryControllerBlock(
+                () -> ModBlockEntities.BES.get("factory_controller").get(),
+                Blocks.IRON_BLOCK.properties());
+        Registry.register(BuiltInRegistries.BLOCK, MMCR.id("factory_controller"), block);
+        blocks.freeze();
+        return block;
+    }
+
+    private static BlockEntityType<?> factoryControllerBlockEntityType(FactoryControllerBlock block) {
+        MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
+        blockEntities.unfreeze(true);
+        BlockEntityType<?> beType = new BlockEntityType<>(FactoryControllerBlockEntity::new, block);
+        Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id("factory_controller"), beType);
         blockEntities.freeze();
         return beType;
     }
