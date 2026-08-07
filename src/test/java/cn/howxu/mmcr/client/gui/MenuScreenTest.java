@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.client.gui;
 
+import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -68,5 +69,15 @@ class MenuScreenTest {
         assertThat(MachineMenuScreen.FORMED_STATUS_COLOR).isEqualTo(0xFF55FF55);
         assertThat(MachineMenuScreen.UNFORMED_STATUS_COLOR).isEqualTo(0xFFFF5555);
         assertThat(MachineMenuScreen.IDLE_STATUS_COLOR).isEqualTo(0xFFFFAA00);
+    }
+
+    @Test
+    void item_bus_background_blits_never_sample_beyond_texture_height() {
+        assertThat(ItemBusMenu.imageHeightForSlots(32)).isGreaterThan(MachineMenuScreen.GUI_TEXTURE_SIZE);
+
+        assertThat(MachineMenuScreen.itemBusBackgroundBlits(ItemBusMenu.imageHeightForSlots(32)))
+                .allSatisfy(blit -> assertThat(blit.sourceY() + blit.height()).isLessThanOrEqualTo(MachineMenuScreen.GUI_TEXTURE_SIZE))
+                .extracting(MachineMenuScreen.BackgroundBlit::height)
+                .containsExactly(166, 18, 18, 18, 18, 18, 18);
     }
 }

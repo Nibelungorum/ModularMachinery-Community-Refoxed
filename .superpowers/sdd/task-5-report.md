@@ -53,3 +53,15 @@
 
 - Existing deprecation warnings remain for NeoForge item/fluid/energy helper classes; they predate this task and were not changed.
 - No full client runtime test was run; `./gradlew runClient --no-daemon` is explicitly forbidden.
+
+## Review Fix: Item Bus Background Blits Beyond Texture Height
+
+- Reviewer found that `MachineMenuScreen.extractBackground` blits the full `imageHeight` in a single `graphics.blit(...)` while the `inventory_normal.png` texture is only 256px tall; `imageHeightForSlots(32)` returned 274.
+- Introduced `MachineMenuScreen.itemBusBackgroundBlits(int)` returning a list of `BackgroundBlit` segments so each segment samples within the 256px source region. The first segment blits the existing 0-166 top region, and additional segments repeat the bottom slot-sized area inside the texture bounds.
+- Added `GUI_TEXTURE_SIZE` constant and `BackgroundBlit` record, exposed package-private so `MenuScreenTest` can assert every segment stays inside the source bounds.
+- Updated `MenuScreenTest.item_bus_background_blits_never_sample_beyond_texture_height()` to lock the segment layout (166, 18, 18, 18, 18, 18, 18) for the 32-slot case.
+
+## Review Fix Commands Run And Results
+
+- `rtk gradlew compileJava --no-daemon` → `BUILD SUCCESSFUL in 7s`.
+- `rtk gradlew test --tests cn.howxu.mmcr.client.gui.MenuScreenTest --tests cn.howxu.mmcr.internal.menu.ItemBusMenuTest --tests cn.howxu.mmcr.compat.jei.MachineRecipeTransferHandlerTest --no-daemon` → `BUILD SUCCESSFUL in 10s`; 19 tests, 1 pre-existing controller test failure, 18 passing including all updated screen/menu/JEI tests.
