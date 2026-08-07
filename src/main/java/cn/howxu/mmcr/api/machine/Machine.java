@@ -24,4 +24,20 @@ public interface Machine {
     default List<DynamicPatternSpec> dynamicPatterns() {
         return List.of();
     }
+
+    default int maxParallelism() {
+        return 1;
+    }
+
+    default boolean parallelizable() {
+        return false;
+    }
+
+    default boolean hasFactory() {
+        return false;
+    }
+
+    default int factoryThreadLimit() {
+        return 1;
+    }
 }

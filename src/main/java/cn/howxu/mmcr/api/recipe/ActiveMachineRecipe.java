@@ -50,8 +50,8 @@ public final class ActiveMachineRecipe {
         this.tick = serialized.getIntOr("tick", 0);
         this.totalTick = serialized.getIntOr("totalTick", 0);
         this.data = serialized.contains("data") ? serialized.getCompoundOrEmpty("data") : new CompoundTag();
-        this.maxParallelism = serialized.getIntOr("maxParallelism", 1);
-        this.parallelism = serialized.getIntOr("parallelism", 1);
+        setMaxParallelism(serialized.getIntOr("maxParallelism", 1));
+        setParallelism(serialized.getIntOr("parallelism", 1));
         LOG.info("ActiveMachineRecipe#{} restored from NBT: recipe={} resolved={} tick={}/{} maxParallelism={} parallelism={}",
                 instanceId, recipeId, this.recipe == null ? null : this.recipe.id(),
                 this.tick, this.totalTick, this.maxParallelism, this.parallelism);
@@ -91,6 +91,7 @@ public final class ActiveMachineRecipe {
 
     public void setMaxParallelism(int maxParallelism) {
         this.maxParallelism = Math.max(1, maxParallelism);
+        setParallelism(parallelism);
     }
 
     public int getParallelism() {
@@ -98,7 +99,7 @@ public final class ActiveMachineRecipe {
     }
 
     public void setParallelism(int parallelism) {
-        this.parallelism = Math.max(1, parallelism);
+        this.parallelism = Math.max(1, Math.min(parallelism, maxParallelism));
     }
 
     @Nullable
@@ -173,7 +174,7 @@ public final class ActiveMachineRecipe {
         ActiveMachineRecipe result = new ActiveMachineRecipe(recipe, input.getIntOr("maxParallelism", 1));
         result.tick = input.getIntOr("tick", 0);
         result.totalTick = input.getIntOr("totalTick", 0);
-        result.parallelism = input.getIntOr("parallelism", 1);
+        result.setParallelism(input.getIntOr("parallelism", 1));
         result.data = input.read("data", CompoundTag.CODEC).orElseGet(CompoundTag::new);
         LOG.debug("ActiveMachineRecipe#{} from(ValueInput) → recipe={} tick={}/{} maxParallelism={} parallelism={}",
                 result.instanceId, recipeId, result.tick, result.totalTick, result.maxParallelism, result.parallelism);

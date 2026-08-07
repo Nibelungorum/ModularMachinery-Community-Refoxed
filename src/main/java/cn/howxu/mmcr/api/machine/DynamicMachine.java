@@ -16,7 +16,11 @@ public record DynamicMachine(
         MachineControllerSpec controller,
         PortRequirementSpec portRequirements,
         List<DynamicPatternSpec> dynamicPatterns,
-        Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements
+        Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
+        int maxParallelism,
+        boolean parallelizable,
+        boolean hasFactory,
+        int factoryThreadLimit
 ) implements Machine {
     public DynamicMachine(Identifier registryName, String localizedName, BlockArray pattern) {
         this(registryName, localizedName, pattern, MachineControllerSpec.defaultsFor(registryName), PortRequirementSpec.none(), List.of(), Map.of());
@@ -40,8 +44,21 @@ public record DynamicMachine(
         if (pattern == null) throw new IllegalArgumentException("pattern null");
         if (controller == null) throw new IllegalArgumentException("controller null");
         if (portRequirements == null) throw new IllegalArgumentException("portRequirements null");
+        maxParallelism = Math.max(1, maxParallelism);
+        factoryThreadLimit = Math.max(1, factoryThreadLimit);
         dynamicPatterns = List.copyOf(dynamicPatterns == null ? List.of() : dynamicPatterns);
         modifierReplacements = copyModifierReplacements(pattern, modifierReplacements);
+    }
+
+    public DynamicMachine(
+            Identifier registryName,
+            String localizedName,
+            BlockArray pattern,
+            MachineControllerSpec controller,
+            PortRequirementSpec portRequirements,
+            List<DynamicPatternSpec> dynamicPatterns,
+            Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements) {
+        this(registryName, localizedName, pattern, controller, portRequirements, dynamicPatterns, modifierReplacements, 1, false, false, 1);
     }
 
     public DynamicMachine(
