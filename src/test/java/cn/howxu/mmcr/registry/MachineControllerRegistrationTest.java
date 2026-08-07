@@ -48,7 +48,7 @@ class MachineControllerRegistrationTest {
     }
 
     @Test
-    void controllerReservationsMapBlockAndItemToMachine() throws Exception {
+    void controllerBlockItemSupplierReservesItemForMachine() throws Exception {
         Identifier id = MMCR.id("blast_furnace");
         String controllerName = MachineControllerSpec.defaultsFor(id).id().getPath();
         Item controllerItem = ModItems.ITEMS.get(controllerName).get();
