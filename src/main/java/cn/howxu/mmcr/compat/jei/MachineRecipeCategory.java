@@ -68,40 +68,46 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     @Override
     public void setRecipe(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe, IFocusGroup focuses) {
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
-        for (MachineRecipeLayout.SlotPlan slot : layout.itemInputs()) {
-            Ingredient ingredient = recipe.itemInputs().get(slot.index());
-            int count = recipe.itemInputCounts().get(slot.index());
-            List<ItemStack> stacks = itemStacks(ingredient, count);
-            MMCR.LOG.info("JEI input slot recipe={} machine={} index={} position=({}, {}) requestedCount={} ingredient={} candidateCount={} stacks={}",
-                    recipe.recipeId(), recipe.machineId(), slot.index(), slot.x(), slot.y(), count, ingredient,
-                    stacks.size(), stacks.stream().map(MachineRecipeCategory::describeStack).toList());
-            builder.addInputSlot(slot.x(), slot.y())
-                    .setStandardSlotBackground()
-                    .addItemStacks(stacks);
+        for (MachineRecipeLayout.SlotPlan slot : layout.inputs().slots()) {
+            MachineRecipeLayout.EntryPlan entry = slot.entry();
+            if (entry == null) continue;
+            if (entry.kind() == MachineRecipeLayout.Kind.ITEM) {
+                Ingredient ingredient = recipe.itemInputs().get(entry.index());
+                int count = recipe.itemInputCounts().get(entry.index());
+                List<ItemStack> stacks = itemStacks(ingredient, count);
+                MMCR.LOG.info("JEI input slot recipe={} machine={} index={} position=({}, {}) requestedCount={} ingredient={} candidateCount={} stacks={}",
+                        recipe.recipeId(), recipe.machineId(), entry.index(), slot.x(), slot.y(), count, ingredient,
+                        stacks.size(), stacks.stream().map(MachineRecipeCategory::describeStack).toList());
+                builder.addInputSlot(slot.x(), slot.y())
+                        .setStandardSlotBackground()
+                        .addItemStacks(stacks);
+            } else {
+                int amount = recipe.fluidInputAmounts().get(entry.index());
+                recipe.fluidInputs().get(entry.index()).fluids().stream().findFirst().ifPresent(fluid ->
+                        builder.addInputSlot(slot.x(), slot.y())
+                                .setStandardSlotBackground()
+                                .setFluidRenderer(Math.max(FLUID_SLOT_CAPACITY, amount), true, 16, 16)
+                                .add(fluid.value(), amount));
+            }
         }
-        for (MachineRecipeLayout.SlotPlan slot : layout.itemOutputs()) {
-            ItemStack rawStack = recipe.itemOutputs().get(slot.index());
-            ItemStack stack = normalizeOutputStack(rawStack);
-            MMCR.LOG.info("JEI output slot recipe={} machine={} index={} position=({}, {}) rawStack={} jeiStack={}",
-                    recipe.recipeId(), recipe.machineId(), slot.index(), slot.x(), slot.y(), describeStack(rawStack), describeStack(stack));
-            builder.addOutputSlot(slot.x(), slot.y())
-                    .setOutputSlotBackground()
-                    .add(stack);
-        }
-        for (MachineRecipeLayout.SlotPlan slot : layout.fluidInputs()) {
-            int amount = recipe.fluidInputAmounts().get(slot.index());
-            recipe.fluidInputs().get(slot.index()).fluids().stream().findFirst().ifPresent(fluid ->
-                    builder.addInputSlot(slot.x(), slot.y())
-                            .setStandardSlotBackground()
-                            .setFluidRenderer(Math.max(FLUID_SLOT_CAPACITY, amount), true, 16, 16)
-                            .add(fluid.value(), amount));
-        }
-        for (MachineRecipeLayout.SlotPlan slot : layout.fluidOutputs()) {
-            var stack = recipe.fluidOutputs().get(slot.index());
-            builder.addOutputSlot(slot.x(), slot.y())
-                    .setOutputSlotBackground()
-                    .setFluidRenderer(1, false, 16, 16)
-                    .add(stack.getFluid(), stack.getAmount(), stack.getComponentsPatch());
+        for (MachineRecipeLayout.SlotPlan slot : layout.outputs().slots()) {
+            MachineRecipeLayout.EntryPlan entry = slot.entry();
+            if (entry == null) continue;
+            if (entry.kind() == MachineRecipeLayout.Kind.ITEM) {
+                ItemStack rawStack = recipe.itemOutputs().get(entry.index());
+                ItemStack stack = normalizeOutputStack(rawStack);
+                MMCR.LOG.info("JEI output slot recipe={} machine={} index={} position=({}, {}) rawStack={} jeiStack={}",
+                        recipe.recipeId(), recipe.machineId(), entry.index(), slot.x(), slot.y(), describeStack(rawStack), describeStack(stack));
+                builder.addOutputSlot(slot.x(), slot.y())
+                        .setOutputSlotBackground()
+                        .add(stack);
+            } else {
+                var stack = recipe.fluidOutputs().get(entry.index());
+                builder.addOutputSlot(slot.x(), slot.y())
+                        .setOutputSlotBackground()
+                        .setFluidRenderer(1, false, 16, 16)
+                        .add(stack.getFluid(), stack.getAmount(), stack.getComponentsPatch());
+            }
         }
         builder.moveRecipeTransferButton(132, 58);
     }
