@@ -14,8 +14,8 @@ import java.util.TreeSet;
 public final class RecipeRegistry {
 
     private static final Map<Identifier, MachineRecipe> STATIC_RECIPES = new LinkedHashMap<>();
-    private static final Map<Identifier, MachineRecipe> DYNAMIC_RECIPES = new LinkedHashMap<>();
-    private static final Map<Identifier, TreeMap<Integer, TreeSet<MachineRecipe>>> BY_MACHINE = new LinkedHashMap<>();
+    private static volatile Map<Identifier, MachineRecipe> DYNAMIC_RECIPES = Map.of();
+    private static volatile Map<Identifier, TreeMap<Integer, TreeSet<MachineRecipe>>> BY_MACHINE = Map.of();
     private static long reloadVersion;
 
     private RecipeRegistry() {
@@ -77,8 +77,7 @@ public final class RecipeRegistry {
             }
             replacement.put(entry.getKey(), entry.getValue());
         }
-        DYNAMIC_RECIPES.clear();
-        DYNAMIC_RECIPES.putAll(replacement);
+        DYNAMIC_RECIPES = Map.copyOf(replacement);
         rebuildIndex();
         reloadVersion++;
     }
@@ -94,19 +93,20 @@ public final class RecipeRegistry {
     }
 
     private static void rebuildIndex() {
-        BY_MACHINE.clear();
+        Map<Identifier, TreeMap<Integer, TreeSet<MachineRecipe>>> byMachine = new LinkedHashMap<>();
         for (MachineRecipe recipe : mergedRecipes().values()) {
-            TreeMap<Integer, TreeSet<MachineRecipe>> priorities = BY_MACHINE.computeIfAbsent(
+            TreeMap<Integer, TreeSet<MachineRecipe>> priorities = byMachine.computeIfAbsent(
                     recipe.machineId(), ignored -> new TreeMap<>());
             priorities.computeIfAbsent(recipe.priority(), ignored ->
                     new TreeSet<>(Comparator.comparing(MachineRecipe::id))).add(recipe);
         }
+        BY_MACHINE = Map.copyOf(byMachine);
     }
 
     public static void clearAll() {
         STATIC_RECIPES.clear();
-        DYNAMIC_RECIPES.clear();
-        BY_MACHINE.clear();
+        DYNAMIC_RECIPES = Map.of();
+        BY_MACHINE = Map.of();
         reloadVersion++;
     }
 

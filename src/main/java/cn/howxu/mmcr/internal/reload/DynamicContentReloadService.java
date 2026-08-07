@@ -31,8 +31,9 @@ public final class DynamicContentReloadService {
         producer.accept(candidate);
         Map<Identifier, Machine> oldMachines = MachineRegistry.dynamicSnapshot();
         Map<Identifier, MachineRecipe> oldRecipes = RecipeRegistry.dynamicSnapshot();
+        MachineRegistry.PreparedDynamic preparedMachines = MachineRegistry.prepareDynamic(candidate.machines);
         MachineDefinitions.replaceDynamic(candidate.machines);
-        MachineRegistry.replaceDynamic(candidate.machines);
+        MachineRegistry.installDynamic(preparedMachines);
         RecipeRegistry.replaceDynamic(candidate.recipes);
         RecipeCraftingContextPool.onGlobalReload();
         return ReloadResult.from(oldMachines, candidate.machines, oldRecipes, candidate.recipes);
@@ -62,7 +63,7 @@ public final class DynamicContentReloadService {
             if (RecipeRegistry.containsStatic(id)) {
                 throw new IllegalStateException("Dynamic recipe conflicts with static recipe: " + id);
             }
-            if (getMachine(recipe.machineId()) == null) {
+            if (!machines.containsKey(recipe.machineId()) && !MachineRegistry.containsStatic(recipe.machineId())) {
                 throw new IllegalStateException("Machine not found for dynamic recipe: " + recipe.machineId());
             }
             recipes.put(id, recipe);
@@ -70,7 +71,7 @@ public final class DynamicContentReloadService {
 
         public Machine getMachine(Identifier id) {
             Machine machine = machines.get(id);
-            return machine != null ? machine : MachineRegistry.getMachine(id);
+            return machine != null ? machine : MachineRegistry.containsStatic(id) ? MachineRegistry.getMachine(id) : null;
         }
     }
 

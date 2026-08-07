@@ -24,7 +24,7 @@ import java.util.function.Supplier;
 public final class MachineDefinitions {
 
     private static final Map<Identifier, Machine> STATIC_DEFINITIONS = new LinkedHashMap<>();
-    private static final Map<Identifier, Machine> DYNAMIC_DEFINITIONS = new LinkedHashMap<>();
+    private static volatile Map<Identifier, Machine> DYNAMIC_DEFINITIONS = Map.of();
     private static final List<Supplier<Machine>> BUILTIN_SUPPLIERS = new CopyOnWriteArrayList<>();
 
     private MachineDefinitions() {
@@ -87,8 +87,7 @@ public final class MachineDefinitions {
             }
             replacement.put(entry.getKey(), entry.getValue());
         }
-        DYNAMIC_DEFINITIONS.clear();
-        DYNAMIC_DEFINITIONS.putAll(replacement);
+        DYNAMIC_DEFINITIONS = Map.copyOf(replacement);
     }
 
     public static Map<Identifier, Machine> dynamicSnapshot() {
@@ -104,7 +103,7 @@ public final class MachineDefinitions {
     /** Test-only helper. Never call from production code. */
     public static void clearForTesting() {
         STATIC_DEFINITIONS.clear();
-        DYNAMIC_DEFINITIONS.clear();
+        DYNAMIC_DEFINITIONS = Map.of();
         BUILTIN_SUPPLIERS.clear();
     }
 }

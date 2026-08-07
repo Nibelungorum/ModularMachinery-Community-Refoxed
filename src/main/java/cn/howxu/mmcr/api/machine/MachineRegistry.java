@@ -9,8 +9,8 @@ import java.util.Map;
 public final class MachineRegistry {
 
     private static final Map<Identifier, Machine> STATIC_MACHINES = new LinkedHashMap<>();
-    private static final Map<Identifier, Machine> DYNAMIC_MACHINES = new LinkedHashMap<>();
-    private static final Map<Identifier, CompiledMachinePattern> COMPILED = new LinkedHashMap<>();
+    private static volatile Map<Identifier, Machine> DYNAMIC_MACHINES = Map.of();
+    private static volatile Map<Identifier, CompiledMachinePattern> COMPILED = Map.of();
 
     private MachineRegistry() {
     }
@@ -20,7 +20,9 @@ public final class MachineRegistry {
             throw new IllegalStateException("Machine already registered: " + machine.registryName());
         }
         STATIC_MACHINES.put(machine.registryName(), machine);
-        COMPILED.put(machine.registryName(), MachinePatternCompiler.compile(machine));
+        Map<Identifier, CompiledMachinePattern> compiled = new LinkedHashMap<>(COMPILED);
+        compiled.put(machine.registryName(), MachinePatternCompiler.compile(machine));
+        COMPILED = Map.copyOf(compiled);
     }
 
     public static Machine getMachine(Identifier id) {
@@ -52,9 +54,7 @@ public final class MachineRegistry {
             }
             replacement.put(entry.getKey(), entry.getValue());
         }
-        DYNAMIC_MACHINES.clear();
-        DYNAMIC_MACHINES.putAll(replacement);
-        rebuildCompiledCache();
+        installDynamic(prepareDynamic(replacement));
     }
 
     public static Map<Identifier, Machine> dynamicSnapshot() {
@@ -63,11 +63,30 @@ public final class MachineRegistry {
 
     public static void rebuildCompiledCache() {
         Map<Identifier, Machine> machines = mergedMachines();
-        BlockArrayCache.buildCache(machines.values());
-        COMPILED.clear();
+        Map<BlockArrayCache.Key, BlockArray> cache = BlockArrayCache.buildCacheSnapshot(machines.values());
+        Map<Identifier, CompiledMachinePattern> compiled = new LinkedHashMap<>();
         for (Machine machine : machines.values()) {
-            COMPILED.put(machine.registryName(), MachinePatternCompiler.compile(machine));
+            compiled.put(machine.registryName(), MachinePatternCompiler.compile(machine, cache));
         }
+        BlockArrayCache.installCache(cache);
+        COMPILED = Map.copyOf(compiled);
+    }
+
+    public static PreparedDynamic prepareDynamic(Map<Identifier, Machine> replacement) {
+        Map<Identifier, Machine> machines = new LinkedHashMap<>(STATIC_MACHINES);
+        machines.putAll(replacement);
+        Map<BlockArrayCache.Key, BlockArray> cache = BlockArrayCache.buildCacheSnapshot(machines.values());
+        Map<Identifier, CompiledMachinePattern> compiled = new LinkedHashMap<>();
+        for (Machine machine : machines.values()) {
+            compiled.put(machine.registryName(), MachinePatternCompiler.compile(machine, cache));
+        }
+        return new PreparedDynamic(Map.copyOf(replacement), cache, Map.copyOf(compiled));
+    }
+
+    public static void installDynamic(PreparedDynamic prepared) {
+        DYNAMIC_MACHINES = prepared.machines;
+        BlockArrayCache.installCache(prepared.cache);
+        COMPILED = prepared.compiled;
     }
 
     private static Map<Identifier, Machine> mergedMachines() {
@@ -79,8 +98,13 @@ public final class MachineRegistry {
     /** Test-only helper. Never call from production code. */
     public static void clearForTesting() {
         STATIC_MACHINES.clear();
-        DYNAMIC_MACHINES.clear();
-        COMPILED.clear();
+        DYNAMIC_MACHINES = Map.of();
+        COMPILED = Map.of();
         BlockArrayCache.clearForTesting();
+    }
+
+    public record PreparedDynamic(Map<Identifier, Machine> machines,
+                                  Map<BlockArrayCache.Key, BlockArray> cache,
+                                  Map<Identifier, CompiledMachinePattern> compiled) {
     }
 }
