@@ -65,8 +65,12 @@ public class FluidHatchMenu extends AbstractMachineMenu {
     }
 
     public int fluidCapacity() {
-        FluidTank tank = tank();
-        return tank == null ? capacity.get() : tank.getCapacity();
+        FluidHatchBlockEntity hatch = resolvedOwner();
+        return hatch == null ? capacity.get() : fluidCapacity(hatch);
+    }
+
+    static int fluidCapacity(FluidHatchBlockEntity hatch) {
+        return hatch.getFluidTank(null).getCapacity();
     }
 
     private FluidHatchBlockEntity resolvedOwner() {
