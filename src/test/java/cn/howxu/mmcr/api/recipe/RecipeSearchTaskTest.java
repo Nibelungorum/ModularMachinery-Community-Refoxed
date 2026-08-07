@@ -129,6 +129,23 @@ class RecipeSearchTaskTest {
         assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(8);
     }
 
+    @Test
+    void computeIncludesExactNonTierMaxParallelismCandidate() throws Exception {
+        Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
+        ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
+        bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(6));
+        MachineControllerBlockEntity controller = controllerWithComponents(bus);
+        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        MachineRecipe recipe = inputRecipe("parallelized_iron_exact", machineId, List.of(itemInput(Items.IRON_INGOT, 2)), true);
+
+        RecipeSearchResult result = new RecipeSearchTask(controller, machineId, 16, 3, List.of(recipe), pool).compute();
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.activeRecipe().getMaxParallelism()).isEqualTo(3);
+        assertThat(result.activeRecipe().getParallelism()).isEqualTo(3);
+        assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(6);
+    }
+
     private static MachineRecipe inputRecipe(String path, Identifier machineId, Item item, int count) {
         return inputRecipe(path, machineId, List.of(itemInput(item, count)));
     }

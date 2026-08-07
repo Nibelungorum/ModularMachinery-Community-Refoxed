@@ -258,6 +258,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (machine == null || !machine.hasFactory()) return null;
         for (ProcessingComponent component : components) {
             if (component.getContainer() instanceof FactoryControllerBlockEntity factory) {
+                int threadLimit = Math.max(1, machine.factoryThreadLimit());
+                if (factory.threadLimit() != threadLimit) factory.setThreadLimit(threadLimit);
                 return factory;
             }
         }

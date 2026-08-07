@@ -177,6 +177,35 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void formed_factory_controller_uses_machine_thread_limit() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        var factoryMachine = new DynamicMachine(
+                MMCR.id("formed_factory_limit_test_machine"),
+                "Formed Factory Limit Test",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("factory_controller").get()),
+                MachineControllerSpec.defaultsFor(MMCR.id("formed_factory_limit_test_machine")),
+                PortRequirementSpec.none(),
+                List.of(),
+                Map.of(),
+                1,
+                false,
+                true,
+                3);
+        FactoryControllerBlockEntity factory = factoryController(controllerPos.offset(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerForFactoryFormation(factoryMachine, controllerPos, factory);
+
+        assertThat(invokeTryFormMachine(controller, factoryMachine, Direction.SOUTH)).isTrue();
+
+        assertThat(controller.getFactoryController()).isSameAs(factory);
+        assertThat(factory.threadLimit()).isEqualTo(3);
+        addFactoryLane(factory);
+        addFactoryLane(factory);
+        addFactoryLane(factory);
+        assertThat(startFactoryLane(factory)).isFalse();
+        assertThat(factory.activeLaneCount()).isEqualTo(3);
+    }
+
+    @Test
     void reset_and_removed_stop_factory_controller_lanes() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         var factoryMachine = new DynamicMachine(
@@ -1119,11 +1148,15 @@ class MachineControllerBlockEntityTest {
     }
 
     private static void addFactoryLane(FactoryControllerBlockEntity factory) throws Exception {
+        assertThat(startFactoryLane(factory)).isTrue();
+    }
+
+    private static boolean startFactoryLane(FactoryControllerBlockEntity factory) throws Exception {
         Field schedulerField = FactoryControllerBlockEntity.class.getDeclaredField("scheduler");
         schedulerField.setAccessible(true);
         cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler scheduler =
                 (cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler) schedulerField.get(factory);
-        assertThat(scheduler.startLane(new cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler.Lane() {
+        return scheduler.startLane(new cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler.Lane() {
             @Override
             public boolean tick() {
                 return false;
@@ -1131,7 +1164,7 @@ class MachineControllerBlockEntityTest {
 
             @Override
             public void stop() { }
-        })).isTrue();
+        });
     }
 
     private static MachineControllerBlockEntity controllerWithEnergyHatches(EnergyInputHatchBlockEntity... hatches) throws Exception {

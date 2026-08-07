@@ -30,4 +30,17 @@ class MachineRecipeSchemaTest {
         });
         assertThat(MachineRecipeSchema.JSON_ELEMENT.typeInfo().asClass()).isEqualTo(JsonElement.class);
     }
+
+    @Test
+    void schema_exposes_parallel_opt_in_keys() {
+        assertThat(MachineRecipeSchema.SCHEMA.keys).contains(
+                MachineRecipeSchema.PARALLELIZED,
+                MachineRecipeSchema.MAX_THREADS);
+        assertThat(MachineRecipeSchema.PARALLELIZED.name).isEqualTo("parallelized");
+        assertThat(MachineRecipeSchema.PARALLELIZED.optional()).isTrue();
+        assertThat(MachineRecipeSchema.PARALLELIZED.optional.getInformativeValue()).isEqualTo(false);
+        assertThat(MachineRecipeSchema.MAX_THREADS.name).isEqualTo("max_threads");
+        assertThat(MachineRecipeSchema.MAX_THREADS.optional()).isTrue();
+        assertThat(MachineRecipeSchema.MAX_THREADS.optional.getInformativeValue()).isEqualTo(1);
+    }
 }

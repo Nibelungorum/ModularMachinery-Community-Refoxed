@@ -73,10 +73,11 @@ public final class RecipeSearchTask {
     private List<Integer> candidateParallelism(MachineRecipe recipe) {
         if (!recipe.isParallelized()) return List.of(1);
         List<Integer> candidates = new java.util.ArrayList<>();
+        candidates.add(maxParallelism);
         for (int tier : new int[]{512, 256, 64, 16, 4, 1}) {
             if (tier <= maxParallelism) candidates.add(tier);
         }
-        return candidates;
+        return candidates.stream().distinct().sorted(Comparator.reverseOrder()).toList();
     }
 
     private List<MachineRecipe> orderedCandidates() {

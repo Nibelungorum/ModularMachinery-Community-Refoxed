@@ -359,6 +359,29 @@ class RecipeApiSmokeTest {
     }
 
     @Test
+    void prepared_recipe_preserves_parallel_opt_in_when_converting_to_machine_recipe() {
+        var prepared = new PreparedRecipe(
+                "mmcr:parallel_prepared",
+                "mmcr:prep_machine",
+                50,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                3,
+                false,
+                List.of(),
+                true
+        );
+
+        var recipe = prepared.toMachineRecipe();
+
+        assertThat(prepared.isParallelized()).isTrue();
+        assertThat(recipe.maxThreads()).isEqualTo(3);
+        assertThat(recipe.isParallelized()).isTrue();
+    }
+
+    @Test
     void craft_check_reports_success_and_failure() {
         assertThat(CraftCheck.success().isSuccess()).isTrue();
         assertThat(CraftCheck.partialSuccess().isSuccess()).isFalse();
