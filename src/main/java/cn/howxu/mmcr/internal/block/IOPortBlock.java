@@ -27,6 +27,8 @@ import java.util.function.Supplier;
 
 public class IOPortBlock extends Block implements EntityBlock {
 
+    enum PortMenuKind { ITEM, FLUID, ENERGY, NONE }
+
     private final IOPortKind kind;
     private final Supplier<? extends BlockEntityType<?>> beType;
 
@@ -62,29 +64,28 @@ public class IOPortBlock extends Block implements EntityBlock {
         return InteractionResult.SUCCESS;
     }
 
+    static PortMenuKind menuKindFor(String id) {
+        if (id.startsWith("item_input_bus") || id.startsWith("item_output_bus")) return PortMenuKind.ITEM;
+        if (id.startsWith("fluid_input_hatch") || id.startsWith("fluid_output_hatch")) return PortMenuKind.FLUID;
+        if (id.startsWith("energy_input_hatch") || id.startsWith("energy_output_hatch")) return PortMenuKind.ENERGY;
+        return PortMenuKind.NONE;
+    }
+
     private static AbstractContainerMenu openServerMenu(String kind, int containerId,
                                                         net.minecraft.world.entity.player.Inventory playerInv,
                                                         Level level, BlockPos pos) {
-        return switch (kind) {
-            case "item_input_bus", "item_output_bus" -> new ItemBusMenu(containerId, playerInv,
+        return switch (menuKindFor(kind)) {
+            case ITEM -> new ItemBusMenu(containerId, playerInv,
                     level.getBlockEntity(pos) instanceof ItemBusBlockEntity bus ? bus : null);
-            case "fluid_input_hatch", "fluid_output_hatch" -> new FluidHatchMenu(containerId, playerInv,
+            case FLUID -> new FluidHatchMenu(containerId, playerInv,
                     level.getBlockEntity(pos) instanceof FluidHatchBlockEntity hatch ? hatch : null);
-            case "energy_input_hatch", "energy_output_hatch" -> new EnergyHatchMenu(containerId, playerInv,
+            case ENERGY -> new EnergyHatchMenu(containerId, playerInv,
                     level.getBlockEntity(pos) instanceof EnergyHatchBlockEntity hatch ? hatch : null);
-            default       -> null;
+            case NONE -> null;
         };
     }
 
-    private static Component titleFor(String kind) {
-        return switch (kind) {
-            case "item_input_bus" -> Component.translatable("container.mmcr.item_input_bus");
-            case "item_output_bus" -> Component.translatable("container.mmcr.item_output_bus");
-            case "fluid_input_hatch" -> Component.translatable("container.mmcr.fluid_input_hatch");
-            case "fluid_output_hatch" -> Component.translatable("container.mmcr.fluid_output_hatch");
-            case "energy_input_hatch" -> Component.translatable("container.mmcr.energy_input_hatch");
-            case "energy_output_hatch" -> Component.translatable("container.mmcr.energy_output_hatch");
-            default       -> Component.literal(kind);
-        };
+    static Component titleFor(String kind) {
+        return Component.translatable("container.mmcr." + kind);
     }
 }
