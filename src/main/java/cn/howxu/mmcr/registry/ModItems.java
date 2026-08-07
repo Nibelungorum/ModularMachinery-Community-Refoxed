@@ -50,13 +50,7 @@ public final class ModItems {
     }
 
     public static Identifier machineIdForControllerItem(Item item) {
-        Identifier machineId = controllerMachineIds.get(item);
-        if (machineId != null) return machineId;
-
-        if (item instanceof BlockItem blockItem) {
-            return ModBlocks.machineIdForController(blockItem.getBlock());
-        }
-        return null;
+        return controllerMachineIds.get(item);
     }
 
     public static void register(IEventBus bus) {

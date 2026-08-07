@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.BeforeAll;
@@ -60,6 +61,17 @@ class MachineControllerRegistrationTest {
         assertThat(ModItems.machineIdForControllerItem(Items.AIR)).isNull();
     }
 
+    @Test
+    void independentlyConstructed_controller_block_item_is_not_reserved_for_machine() throws Exception {
+        Identifier id = MMCR.id("blast_furnace");
+        BlockItem item = (BlockItem) unsafe().allocateInstance(BlockItem.class);
+        Field blockField = BlockItem.class.getDeclaredField("block");
+        blockField.setAccessible(true);
+        blockField.set(item, ModBlocks.controllerFor(id).get());
+
+        assertThat(ModItems.machineIdForControllerItem(item)).isNull();
+    }
+
     @SuppressWarnings("unchecked")
     private static Map<Item, Identifier> controllerMachineIds() throws Exception {
         Field field = ModItems.class.getDeclaredField("controllerMachineIds");
@@ -68,14 +80,17 @@ class MachineControllerRegistrationTest {
     }
 
     private static MachineControllerBlock controllerBlockWithoutRunningMinecraftConstructor(Identifier machineId) throws Exception {
-        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
-        unsafeField.setAccessible(true);
-        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
-        MachineControllerBlock block = (MachineControllerBlock) unsafe.allocateInstance(MachineControllerBlock.class);
+        MachineControllerBlock block = (MachineControllerBlock) unsafe().allocateInstance(MachineControllerBlock.class);
         Field machineIdField = MachineControllerBlock.class.getDeclaredField("machineId");
         machineIdField.setAccessible(true);
         machineIdField.set(block, machineId);
         return block;
+    }
+
+    private static sun.misc.Unsafe unsafe() throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        return (sun.misc.Unsafe) unsafeField.get(null);
     }
 
 }
