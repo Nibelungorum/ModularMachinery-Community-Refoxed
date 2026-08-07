@@ -55,7 +55,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class MachineControllerBlockEntity extends BlockEntity {
 
     private static final Logger LOG = LoggerFactory.getLogger(MachineControllerBlockEntity.class);
-    private static final String OUTPUT_DEBUG = "MMCR recipe output debug";
     private static final AtomicInteger INSTANCE_COUNTER = new AtomicInteger();
     private static final Set<MachineControllerBlockEntity> FORMED_CONTROLLERS = ConcurrentHashMap.newKeySet();
     private static final int CONFLICT_RECIPE_START_DELAY_TICKS = 20;
@@ -543,31 +542,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (!(tile instanceof BlockEntity container)) continue;
             components.add(new ProcessingComponent(component, container, worldPos, relativePos, foundPattern.tagsAt(relativePos)));
         }
-        LOG.info("{}: controller components updated ctrl=#{} pos={} machine={} total={} itemInputs={} itemOutputs={} fluidInputs={} fluidOutputs={} energyInputs={} energyOutputs={}",
-                OUTPUT_DEBUG, instanceId, getBlockPos(), foundMachine.registryName(), components.size(),
-                countComponent(ItemBusBlockEntity.class, cn.howxu.mmcr.util.IOType.INPUT),
-                countComponent(ItemBusBlockEntity.class, cn.howxu.mmcr.util.IOType.OUTPUT),
-                countComponent(FluidHatchBlockEntity.class, cn.howxu.mmcr.util.IOType.INPUT),
-                countComponent(FluidHatchBlockEntity.class, cn.howxu.mmcr.util.IOType.OUTPUT),
-                countComponent(EnergyHatchBlockEntity.class, cn.howxu.mmcr.util.IOType.INPUT),
-                countComponent(EnergyHatchBlockEntity.class, cn.howxu.mmcr.util.IOType.OUTPUT));
-        for (ProcessingComponent component : components) {
-            BlockEntity container = component.getContainer();
-            LOG.info("{}: component pos={} rel={} class={} tags={}",
-                    OUTPUT_DEBUG, component.getPos(), component.getRelativePos(),
-                    container == null ? "null" : container.getClass().getSimpleName(), component.tags());
-        }
-    }
-
-    private int countComponent(Class<? extends BlockEntity> type, cn.howxu.mmcr.util.IOType ioType) {
-        int count = 0;
-        for (ProcessingComponent component : components) {
-            BlockEntity container = component.getContainer();
-            if (type.isInstance(container) && container instanceof IOPortBlockEntity port && port.ioType() == ioType) {
-                count++;
-            }
-        }
-        return count;
     }
 
     private List<BlockPos> componentPositions() {

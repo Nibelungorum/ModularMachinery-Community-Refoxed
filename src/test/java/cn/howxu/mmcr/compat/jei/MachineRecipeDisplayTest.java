@@ -147,7 +147,10 @@ class MachineRecipeDisplayTest {
         assertThat(MachineRecipeLayout.forDisplay(display).inputs().slots())
                 .extracting(slot -> slot.entry().kind())
                 .startsWith(MachineRecipeLayout.Kind.FLUID, MachineRecipeLayout.Kind.FLUID);
-        assertThat(MachineRecipeLayout.forDisplay(overflow).inputs().slots()).hasSize(20);
+        MachineRecipeLayout overflowLayout = MachineRecipeLayout.forDisplay(overflow);
+        assertThat(overflowLayout.inputs().slots()).hasSize(17);
+        assertThat(overflowLayout.inputs().overflowSlot()).isNotNull();
+        assertThat(overflowLayout.inputs().hiddenEntries()).hasSize(16);
     }
 
     @Test

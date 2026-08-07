@@ -23,16 +23,11 @@ import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.IItemHandlerModifiable;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public final class RecipeCraftingContext {
-
-    private static final Logger LOG = LoggerFactory.getLogger(RecipeCraftingContext.class);
-    private static final String OUTPUT_DEBUG = "MMCR recipe output debug";
 
     public static final String FAILURE_MISSING_INPUT = "gui.mmcr.controller.failure.missing_input";
     public static final String FAILURE_MISSING_OUTPUT = "gui.mmcr.controller.failure.missing_output";
@@ -250,9 +245,6 @@ public final class RecipeCraftingContext {
         List<ItemOutputTransfer> transfers = new ArrayList<>();
         ItemStack output = item.stack();
         ItemStack remaining = normalizeRecipeOutput(output);
-        LOG.info("{}: simulate item output req={} stack={}x{} tags={} outputBuses={} excludedByTags={} slots={}",
-                OUTPUT_DEBUG, requirementIndex, output.getCount(), outputName(output), item.tags(),
-                itemHatches.size(), taggedOut.size(), itemStates.size());
         List<ItemBusBlockEntity> matched = new ArrayList<>();
         for (ItemOutputState state : itemStates) {
             int before = transfers.size();
@@ -268,15 +260,10 @@ public final class RecipeCraftingContext {
         }
         if (!remaining.isEmpty()) {
             RequirementFailure failure = buildMissingOutputFailure(requirementIndex, output.getCount(), remaining.getCount(), itemHatches, matched, taggedOut);
-            LOG.info("{}: simulate item output failed req={} stack={}x{} remaining={} matched={} searched={} excludedByTags={}",
-                    OUTPUT_DEBUG, requirementIndex, output.getCount(), outputName(output), remaining.getCount(),
-                    componentTraces(matched), componentTraces(itemHatches), componentTraces(taggedOut));
             setFailure(FAILURE_MISSING_OUTPUT, failure);
             return false;
         }
         itemOutputRoutes.set(requirementIndex, new ItemOutputRoute(transfers));
-        LOG.info("{}: simulate item output ok req={} stack={}x{} transfers={}",
-                OUTPUT_DEBUG, requirementIndex, output.getCount(), outputName(output), transfers.size());
         return true;
     }
 
@@ -390,21 +377,13 @@ public final class RecipeCraftingContext {
         List<ItemOutputTransfer> itemTransfers = new ArrayList<>();
         List<FluidOutputTransfer> fluidTransfers = new ArrayList<>();
         List<MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
-        LOG.info("{}: commit outputs begin recipe={} requirements={} itemRouteSlots={} fluidRouteSlots={}",
-                OUTPUT_DEBUG, recipe.id(), requirements.size(), itemOutputRoutes.size(), fluidOutputRoutes.size());
         RequirementFailure itemFailure = firstItemOutputFailure(requirements);
         if (itemFailure != null) {
-            LOG.info("{}: commit outputs item precheck failed recipe={} req={} kind={} required={} available={} remaining={}",
-                    OUTPUT_DEBUG, recipe.id(), itemFailure.requirementIndex(), itemFailure.kind(),
-                    itemFailure.required(), itemFailure.available(), itemFailure.shortAmount());
             setFailure(FAILURE_MISSING_OUTPUT, itemFailure);
             return false;
         }
         RequirementFailure fluidFailure = firstFluidOutputFailure(requirements);
         if (fluidFailure != null) {
-            LOG.info("{}: commit outputs fluid precheck failed recipe={} req={} kind={} required={} available={} remaining={}",
-                    OUTPUT_DEBUG, recipe.id(), fluidFailure.requirementIndex(), fluidFailure.kind(),
-                    fluidFailure.required(), fluidFailure.available(), fluidFailure.shortAmount());
             setFailure(FAILURE_MISSING_OUTPUT, fluidFailure);
             return false;
         }
@@ -417,10 +396,7 @@ public final class RecipeCraftingContext {
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
-                boolean produce = shouldProduce(item.chance());
-                LOG.info("{}: item output roll recipe={} req={} stack={}x{} chance={} produce={}",
-                        OUTPUT_DEBUG, recipe.id(), requirementIndex, item.stack().getCount(), outputName(item.stack()), item.chance(), produce);
-                if (!produce) continue;
+                if (!shouldProduce(item.chance())) continue;
                 ItemOutputRoute route = itemOutputRoutes.get(requirementIndex);
                 itemTransfers.addAll(route.transfers());
             } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT) {
@@ -429,8 +405,6 @@ public final class RecipeCraftingContext {
                 fluidTransfers.addAll(route.transfers());
             }
         }
-        LOG.info("{}: commit outputs executing recipe={} itemTransfers={} fluidTransfers={}",
-                OUTPUT_DEBUG, recipe.id(), itemTransfers.size(), fluidTransfers.size());
         insert(itemTransfers);
         fill(fluidTransfers);
         return true;
@@ -825,18 +799,8 @@ public final class RecipeCraftingContext {
         for (ItemOutputTransfer transfer : transfers) {
             ItemStack stack = normalizeRecipeOutput(transfer.stack());
             normalizeSlotBeforeInsert(transfer.handler(), transfer.slot(), stack);
-            ItemStack before = transfer.handler().getStackInSlot(transfer.slot()).copy();
-            ItemStack remainder = transfer.handler().insertItem(transfer.slot(), stack, false);
-            ItemStack after = transfer.handler().getStackInSlot(transfer.slot()).copy();
-            LOG.info("{}: insert item transfer slot={} stack={}x{} before={}x{} after={}x{} remainder={}x{}",
-                    OUTPUT_DEBUG, transfer.slot(), stack.getCount(), outputName(stack),
-                    before.getCount(), outputName(before), after.getCount(), outputName(after),
-                    remainder.getCount(), outputName(remainder));
+            transfer.handler().insertItem(transfer.slot(), stack, false);
         }
-    }
-
-    private static String outputName(ItemStack stack) {
-        return stack.isEmpty() ? "empty" : stack.getItem().builtInRegistryHolder().getRegisteredName();
     }
 
     private static boolean canDrain(List<FluidInputTransfer> transfers) {
