@@ -25,7 +25,7 @@ public final class MachineDefinitions {
 
     private static final Map<Identifier, MachineRegistration> STATIC_REGISTRATIONS = new LinkedHashMap<>();
     private static final List<Supplier<MachineRegistration>> BUILTIN_SUPPLIERS = new CopyOnWriteArrayList<>();
-    private static boolean registryPhaseOpen = true;
+    private static boolean registryPhaseOpen = false;
 
     private MachineDefinitions() {
     }

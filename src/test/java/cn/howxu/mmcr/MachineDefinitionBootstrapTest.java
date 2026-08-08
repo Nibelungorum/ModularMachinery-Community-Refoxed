@@ -2,8 +2,11 @@ package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,13 +25,18 @@ class MachineDefinitionBootstrapTest {
     @BeforeEach
     void resetDefinitions() {
         MachineDefinitions.clearForTesting();
+        MachineRegistry.clearForTesting();
+        MachineStructureRegistry.clearForTesting();
+        RecipeRegistry.clearForTesting();
         MachineDefinitions.beginRegistryPhase();
     }
 
     @AfterEach
     void cleanup() {
         MachineDefinitions.clearForTesting();
-        MachineDefinitions.beginRegistryPhase();
+        MachineRegistry.clearForTesting();
+        MachineStructureRegistry.clearForTesting();
+        RecipeRegistry.clearForTesting();
         System.clearProperty("neoforge.enableGameTest");
     }
 
