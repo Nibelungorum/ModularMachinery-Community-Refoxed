@@ -2,7 +2,6 @@ package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
-import cn.howxu.mmcr.registry.ModBlocks;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
@@ -40,7 +39,7 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
     public static final MapCodec<Unbaked> PORT_CODEC = MapCodec.unit(() -> new Unbaked(DynamicOverlayBakedModel.Kind.PORT));
 
     private static final Material FALLBACK_PARTICLE = new Material(MMCR.id("block/basic_casing"));
-    private static final float OVERLAY_GROW = 0.002f;
+    static final float OVERLAY_GROW = 0.002f;
 
     private final DynamicOverlayBakedModel.Kind kind;
     private final MaterialBaker materials;
@@ -100,23 +99,18 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
     }
 
     private static Identifier portOverlayTexture(BlockState state) {
-        Identifier blockId = ModBlocks.BLOCKS.entrySet().stream()
-                .filter(entry -> entry.getValue().get() == state.getBlock())
-                .map(entry -> Identifier.fromNamespaceAndPath(MMCR.MODID, entry.getKey()))
-                .findFirst()
-                .orElse(null);
-        if (blockId == null) {
-            return DynamicOverlayBakedModel.defaultPortOverlayTexture();
+        if (state.getBlock() instanceof cn.howxu.mmcr.internal.block.IOPortBlock port) {
+            return DynamicOverlayTextures.portOverlayTexture(port.kind());
         }
-        return DynamicOverlayBakedModel.overlayTextureFor(blockId.getPath());
+        return DynamicOverlayBakedModel.defaultPortOverlayTexture();
     }
 
     private Material.Baked material(Identifier texture) {
         return materials.get(new Material(texture), debugName);
     }
 
-    private static void addFace(QuadCollection.Builder quads, Direction direction, Material.Baked material,
-                                float grow, boolean culled) {
+    static void addFace(QuadCollection.Builder quads, Direction direction, Material.Baked material,
+                        float grow, boolean culled) {
         QuadBakingVertexConsumer builder = new QuadBakingVertexConsumer();
         builder.setSprite(material);
         builder.setDirection(direction);

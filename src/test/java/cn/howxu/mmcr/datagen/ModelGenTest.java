@@ -32,5 +32,11 @@ class ModelGenTest {
                 .extracting(ModelGen.GeneratedModel::name)
                 .doesNotContainAnyElementsOf(controllerIds)
                 .doesNotContainAnyElementsOf(portIds);
+        assertThat(ModelGen.collectKnownBlockNames())
+                .doesNotContainAnyElementsOf(controllerIds)
+                .doesNotContainAnyElementsOf(portIds);
+        assertThat(ModelGen.collectKnownItemNames())
+                .doesNotContainAnyElementsOf(controllerIds)
+                .doesNotContainAnyElementsOf(portIds);
     }
 }

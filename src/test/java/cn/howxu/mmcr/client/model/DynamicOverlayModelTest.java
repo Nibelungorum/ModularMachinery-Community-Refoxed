@@ -80,9 +80,9 @@ class DynamicOverlayModelTest {
 
     @Test
     void port_overlay_texture_uses_matching_port_tier() {
-        assertThat(DynamicOverlayBakedModel.overlayTextureFor("item_input_bus_big"))
+        assertThat(DynamicOverlayTextures.portOverlayTextureForName("item_input_bus_big"))
                 .isEqualTo(MMCR.id("block/overlay_inputbus_big"));
-        assertThat(DynamicOverlayBakedModel.overlayTextureFor("fluid_output_hatch"))
+        assertThat(DynamicOverlayTextures.portOverlayTextureForName("fluid_output_hatch"))
                 .isEqualTo(MMCR.id("block/overlay_fluidoutputhatch_normal"));
     }
 

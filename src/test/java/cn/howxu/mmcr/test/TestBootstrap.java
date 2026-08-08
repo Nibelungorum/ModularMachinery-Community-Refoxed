@@ -64,6 +64,7 @@ public final class TestBootstrap {
         loadingModListField.set(fmlLoader, emptyLoadingModList);
 
         Class.forName("net.minecraft.SharedConstants").getMethod("tryDetectVersion").invoke(null);
+        MachineDefinitions.beginRegistryPhase();
         BuiltinMachines.register();
         addTestMachineSuppliers();
         MachineDefinitions.bootstrapBuiltins();

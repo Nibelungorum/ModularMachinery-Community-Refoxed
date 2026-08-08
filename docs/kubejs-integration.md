@@ -207,7 +207,7 @@ ServerEvents.recipes(event => {
 
 ### 4.1 MachineBuilderJS（startup：机器身份 / controller）
 
-`MachineBuilderJS` 只在 `startup_scripts` 中声明机器身份和 controller 属性。它会创建 `MachineRegistration`，用于 NeoForge 注册阶段生成 controller block / item / block entity；它**不包含**结构 pattern、modifier replacement 或实际 recipe。
+`MachineBuilderJS` 只在 `startup_scripts` 中声明机器身份和 controller 属性。它会创建 `MachineRegistration`，必须发生在 `MachineDefinitions.freezeRegistryPhase()` 之前，用于 NeoForge 注册阶段生成 controller block / item / block entity；它**不包含**结构 pattern、modifier replacement 或实际 recipe。
 
 ```javascript
 // kubejs/startup_scripts/mmcr_machines.js
@@ -223,6 +223,10 @@ MMCR_MACHINE_BUILDER('mmcr:arc_furnace')
 - controller texture 和朝向规则
 - 是否允许 structure modifier replacement
 - logical recipe family id
+- controller block / item / block entity 的 registry-time 声明
+- 运行时模型所需的 controller base / overlay 与 formed port base texture 默认值
+
+**时序约束**：`startup_scripts` 是唯一允许新增 `MachineRegistration` 的脚本层；registry phase 关闭后再次调用机器 builder 注册会抛出明确异常。`server_scripts` 或 `/reload` 只能绑定已有 machine id 的结构和配方，不能创建新 controller 方块。
 
 ### 4.2 MachineStructureBuilderJS（server：结构 / modifier）
 

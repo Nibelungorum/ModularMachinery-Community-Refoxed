@@ -11,6 +11,7 @@ Modifer JEI集成
 额外解锁槽(发电阵列)
 
 modifier等级功能(实现线圈方块等级能力)
+
 机器的render和相关api暴露
 
 [X] 多线程 Stage 5已经实现了

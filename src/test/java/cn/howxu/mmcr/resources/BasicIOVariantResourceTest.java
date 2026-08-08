@@ -33,6 +33,9 @@ class BasicIOVariantResourceTest {
         assertThat(assetExists("models/item/" + id + ".json"))
                 .as(id + " item model")
                 .isFalse();
+        assertThat(assetExists("items/" + id + ".json"))
+                .as(id + " item definition")
+                .isFalse();
         assertThat(Translations.ALL.get("en_us"))
                 .as(id + " en_us translation")
                 .containsKey("block.mmcr." + id);
@@ -49,6 +52,9 @@ class BasicIOVariantResourceTest {
                     .isFalse();
             assertThat(assetExists("models/item/" + kind.id() + ".json"))
                     .as(kind.id() + " item model")
+                    .isFalse();
+            assertThat(assetExists("items/" + kind.id() + ".json"))
+                    .as(kind.id() + " item definition")
                     .isFalse();
             assertThat(Translations.ALL.get("en_us"))
                     .as(kind.id() + " en_us translations")

@@ -45,6 +45,19 @@ public final class ModelGen extends ModelProvider {
         return models;
     }
 
+    static List<String> collectKnownBlockNames() {
+        return ModBlocks.BLOCKS.keySet().stream()
+                .filter(ModelGen::shouldGenerateBlockModels)
+                .toList();
+    }
+
+    static List<String> collectKnownItemNames() {
+        List<String> names = new ArrayList<>(collectKnownBlockNames());
+        names.add("wrench");
+        names.add("multiblock_detector");
+        return List.copyOf(names);
+    }
+
     private static void registerModels(BlockModelRegistration blockRegistration,
                                        ItemModelRegistration itemRegistration) {
         ModBlocks.BLOCKS.forEach((name, blockHolder) -> {
@@ -90,13 +103,15 @@ public final class ModelGen extends ModelProvider {
 
     @Override
     protected Stream<? extends Holder<Block>> getKnownBlocks() {
-        return ModBlocks.BLOCKS.values().stream()
+        return collectKnownBlockNames().stream()
+                .map(ModBlocks.BLOCKS::get)
                 .map(h -> h.get().builtInRegistryHolder());
     }
 
     @Override
     protected Stream<? extends Holder<Item>> getKnownItems() {
-        return ModItems.ITEMS.values().stream()
+        return collectKnownItemNames().stream()
+                .map(ModItems.ITEMS::get)
                 .map(h -> h.get().builtInRegistryHolder());
     }
 }

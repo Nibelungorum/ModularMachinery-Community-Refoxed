@@ -96,6 +96,8 @@ com.cleanroommc.client.*                          [删除：cleanroommc 移植�
 - Server structure registration：可 reload 的 `BlockArray`、port requirement、dynamic pattern extension 和 modifier replacement。
 - Server recipe registration：可 reload 的实际 `MachineRecipe`，按 startup machine id 绑定。
 - `/reload` 可以更新 structures 和 recipes，但不能新增或删除 controller blocks。
+- Controller / I/O port 模型不再由 DataGen 输出 per-ID JSON。客户端用 `RuntimeMachineModelRegistry` 注册 `DynamicOverlayModelLoader` / `DynamicOverlayItemModel` codec，并通过 `RuntimeMachineResourcePack` 在资源 reload 时按已注册 block 注入 `blockstates/<id>.json` 与 `items/<id>.json`。
+- `DynamicOverlayModelLoader` 仍是世界内 controller / port 方块模型的唯一渲染来源；`DynamicOverlayTextures` 统一解析 controller front overlay 与 port overlay 命名，避免 client runtime 依赖 `datagen` 包。
 
 | MMCE 类 | MMCR 类 | 翻译手法 | 备注 |
 |---|---|---|---|
@@ -163,7 +165,7 @@ public sealed interface MachineIngredient {
 | 全部 ME 系列（`BlockME*`） | **删除**（Phase 6） |
 | `BlockCustomName` / `BlockVariants` 等基类 | **删除**：26.1.2 直接用 `BlockBehaviour.Properties` + DataComponent |
 
-### 3.6 渲染（删除为主）
+### 3.6 渲染（删除为主 + runtime 模型注入）
 
 | MMCE 类 | MMCR 状态 |
 |---|---|
@@ -176,6 +178,13 @@ public sealed interface MachineIngredient {
 | `Lumenized` bloom | **删除**（NeoForge 渲染已够） |
 
 **结论**：MMCE 50+ 个渲染 / 预览 / GeckoLib 文件，**首期全部 OUT**。
+
+当前保留的渲染路径只处理机器方块和方块物品：
+
+- `DynamicOverlayModelLoader`：NeoForge `DynamicBlockStateModel`，负责 controller / port 在世界内的 cube base + overlay。
+- `RuntimeMachineModelRegistry`：注册 custom blockstate model codec 和 item model codec，并产出 controller 全状态组合、port 单 variant 的运行时定义。
+- `RuntimeMachineResourcePack`：客户端内置资源包，在 `CLIENT_RESOURCES` pack finder 中提供动态 blockstate 与新版 `assets/mmcr/items/<id>.json` item definition，不提供 per-ID `models/item/<id>.json`。
+- `DynamicOverlayItemModel`：从 `BlockItem` 的 block 实例解析 `MachineControllerBlock.machineId()` 或 `IOPortBlock.kind()`，不读取 per-ID item model JSON。
 
 ### 3.7 网络（重新映射：合并到 1 包）
 
