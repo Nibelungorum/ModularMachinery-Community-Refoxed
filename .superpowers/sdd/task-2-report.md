@@ -26,6 +26,7 @@
 - Initial Task 2 implementation: `dca35fe refactor: remove dynamic machine models from datagen`.
 - Task 2 follow-up: `26fbd6e fix: complete Task 2 model generation follow-up`.
 - Report update: `c267c94 docs: record Task 2 follow-up commit`.
+- Test coverage repair: `77c3955 fix: test ModelGen registration output`.
 
 ## Concerns
 
@@ -43,3 +44,11 @@
 - This repair verification: the same three targeted test classes passed; `BUILD SUCCESSFUL`, 8 tests completed. `git diff --check` passed.
 - The repair test now records blockstate/item model requests from the shared registration path; it no longer calls an independent generated-name filter.
 - Follow-up implementation commit: `26fbd6e fix: complete Task 2 model generation follow-up`.
+
+## Important Finding Repair
+
+- Updated `ModelGenTest` to derive every controller ID from `MachineDefinitions.allRegistrations()` and every port ID from `PortKinds.all()`.
+- The test now uses the complete shared collector record and separately asserts that neither `GeneratedModel.Kind.BLOCKSTATE` nor `GeneratedModel.Kind.ITEM` contains any derived controller or port ID.
+- No independent production filtering logic was added.
+- Final repair verification: `./gradlew test --no-daemon --tests cn.howxu.mmcr.datagen.ModelGenTest --tests cn.howxu.mmcr.resources.BasicIOVariantResourceTest --tests cn.howxu.mmcr.client.model.DynamicOverlayModelTest` passed; `BUILD SUCCESSFUL`, 8 tests completed. `git diff --check` passed.
+- Repair commit: current commit, `test: cover all Task 2 model exclusions`.
