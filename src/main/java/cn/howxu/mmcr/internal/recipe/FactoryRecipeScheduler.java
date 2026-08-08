@@ -23,10 +23,18 @@ public final class FactoryRecipeScheduler {
     }
 
     public boolean startLane(Lane lane) {
-        if (lane == null || lanes.size() >= threadLimit) return false;
+        if (lane == null || !hasCapacity()) return false;
         lane.start();
         lanes.add(lane);
         return true;
+    }
+
+    public boolean hasCapacity() {
+        return lanes.size() < threadLimit;
+    }
+
+    public int laneCapacity() {
+        return Math.max(0, threadLimit - lanes.size());
     }
 
     public void tick() {

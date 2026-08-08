@@ -28,9 +28,13 @@ class FactoryRecipeSchedulerTest {
         FakeLane second = new FakeLane(3);
         FakeLane third = new FakeLane(3);
 
+        assertThat(scheduler.laneCapacity()).isEqualTo(2);
+        assertThat(scheduler.hasCapacity()).isTrue();
         assertThat(scheduler.startLane(first)).isTrue();
+        assertThat(scheduler.laneCapacity()).isEqualTo(1);
         assertThat(scheduler.startLane(second)).isTrue();
 
+        assertThat(scheduler.hasCapacity()).isFalse();
         assertThat(scheduler.startLane(third)).isFalse();
 
         assertThat(first.starts).isEqualTo(1);
@@ -52,6 +56,8 @@ class FactoryRecipeSchedulerTest {
         assertThat(first.ticks).isEqualTo(1);
         assertThat(second.ticks).isEqualTo(1);
         assertThat(scheduler.activeLaneCount()).isEqualTo(1);
+        assertThat(scheduler.hasCapacity()).isTrue();
+        assertThat(scheduler.laneCapacity()).isEqualTo(2);
 
         scheduler.tick();
 
@@ -72,6 +78,8 @@ class FactoryRecipeSchedulerTest {
         assertThat(first.stops).isEqualTo(1);
         assertThat(second.stops).isEqualTo(1);
         assertThat(scheduler.activeLaneCount()).isZero();
+        assertThat(scheduler.hasCapacity()).isTrue();
+        assertThat(scheduler.laneCapacity()).isEqualTo(2);
         scheduler.stopAll();
         assertThat(first.stops).isEqualTo(1);
         assertThat(second.stops).isEqualTo(1);
