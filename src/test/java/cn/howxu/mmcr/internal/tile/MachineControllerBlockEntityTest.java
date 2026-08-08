@@ -17,6 +17,7 @@ import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
+import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
@@ -289,6 +290,57 @@ class MachineControllerBlockEntityTest {
         controller.setRemoved();
 
         assertThat(factory.activeLaneCount()).isZero();
+    }
+
+    @Test
+    void reset_machine_stops_real_factory_lanes_and_returns_contexts_once() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.IRON_NUGGET);
+        FactoryRuntimeFixture fixture = formedFactoryRuntimeFixture(MMCR.id("factory_lane_reset_machine"), 2, 2);
+        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        setField(MachineControllerBlockEntity.class, fixture.controller(), "contextPool", pool);
+        MachineRecipe recipe = registerItemRecipe("factory_lane_reset", fixture.machine().registryName(), 20);
+        fixture.controller().serverTick();
+        assertThat(fixture.factory().activeLaneCount()).isEqualTo(2);
+
+        invokeResetMachine(fixture.controller());
+
+        assertThat(fixture.factory().activeLaneCount()).isZero();
+        assertReturnedContexts(pool, fixture.controller(), recipe, 2);
+    }
+
+    @Test
+    void set_removed_stops_real_factory_lanes_and_returns_contexts_once() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.IRON_NUGGET);
+        FactoryRuntimeFixture fixture = formedFactoryRuntimeFixture(MMCR.id("factory_lane_removed_machine"), 2, 2);
+        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        setField(MachineControllerBlockEntity.class, fixture.controller(), "contextPool", pool);
+        MachineRecipe recipe = registerItemRecipe("factory_lane_removed", fixture.machine().registryName(), 20);
+        fixture.controller().serverTick();
+        assertThat(fixture.factory().activeLaneCount()).isEqualTo(2);
+
+        fixture.controller().setRemoved();
+
+        assertThat(fixture.factory().activeLaneCount()).isZero();
+        assertReturnedContexts(pool, fixture.controller(), recipe, 2);
+    }
+
+    @Test
+    void chunk_unload_stops_real_factory_lanes_and_returns_contexts_once() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.IRON_NUGGET);
+        FactoryRuntimeFixture fixture = formedFactoryRuntimeFixture(MMCR.id("factory_lane_unload_machine"), 2, 2);
+        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        setField(MachineControllerBlockEntity.class, fixture.controller(), "contextPool", pool);
+        MachineRecipe recipe = registerItemRecipe("factory_lane_unload", fixture.machine().registryName(), 20);
+        fixture.controller().serverTick();
+        assertThat(fixture.factory().activeLaneCount()).isEqualTo(2);
+
+        MachineControllerBlockEntity.markStructureChunkDirty(levelOf(fixture.controller()), new net.minecraft.world.level.ChunkPos(fixture.controller().getBlockPos().getX() >> 4, fixture.controller().getBlockPos().getZ() >> 4));
+
+        assertThat(fixture.factory().activeLaneCount()).isZero();
+        assertReturnedContexts(pool, fixture.controller(), recipe, 2);
     }
 
     @Test
@@ -1321,8 +1373,8 @@ class MachineControllerBlockEntityTest {
         return new BlockArray(blocks);
     }
 
-    private static void registerItemRecipe(String path, Identifier machineId, int ticks) {
-        RecipeRegistry.register(new MachineRecipe(
+    private static MachineRecipe registerItemRecipe(String path, Identifier machineId, int ticks) {
+        MachineRecipe recipe = new MachineRecipe(
                 MMCR.id(path),
                 machineId,
                 ticks,
@@ -1335,7 +1387,9 @@ class MachineControllerBlockEntityTest {
                 List.of(),
                 List.of(
                         new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
-                        new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.IRON_NUGGET)))));
+                        new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.IRON_NUGGET))));
+        RecipeRegistry.register(recipe);
+        return recipe;
     }
 
     private static void registerItemInputRecipe(String path, Identifier machineId, int ticks) {
@@ -1360,6 +1414,20 @@ class MachineControllerBlockEntityTest {
             if (stack.is(item)) count += stack.getCount();
         }
         return count;
+    }
+
+    private static void assertReturnedContexts(RecipeCraftingContextPool pool,
+                                               MachineControllerBlockEntity controller,
+                                               MachineRecipe recipe,
+                                               int expected) {
+        List<RecipeCraftingContext> contexts = new ArrayList<>();
+        for (int i = 0; i < expected; i++) {
+            contexts.add(pool.borrow(new ActiveMachineRecipe(recipe, 1), controller));
+        }
+        assertThat(contexts).doesNotHaveDuplicates();
+        for (RecipeCraftingContext context : contexts) {
+            pool.returnContext(context);
+        }
     }
 
     private static void bindItemComponents(Item item) {
