@@ -12,6 +12,7 @@ import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.event.StructureDirtyEvents;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
+import cn.howxu.mmcr.internal.network.PktMachineAppearancePayload;
 import cn.howxu.mmcr.internal.network.PktControllerSpecsPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockDetectorPickPayload;
 import cn.howxu.mmcr.registry.ModBlockEntities;
@@ -92,6 +93,10 @@ public class MMCR {
                             PktControllerSpecsPayload.TYPE,
                             PktControllerSpecsPayload.STREAM_CODEC,
                             PktControllerSpecsPayload::handle)
+                    .playToClient(
+                            PktMachineAppearancePayload.TYPE,
+                            PktMachineAppearancePayload.STREAM_CODEC,
+                            PktMachineAppearancePayload::handle)
                     .playToServer(
                             PktMultiblockDetectorPickPayload.TYPE,
                             PktMultiblockDetectorPickPayload.STREAM_CODEC,

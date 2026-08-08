@@ -1,8 +1,10 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -84,5 +86,31 @@ class MachineBuilderJSTest {
         assertThat(registration.localizedName()).isEqualTo("Arc Furnace");
         assertThat(registration.controllerSpec().allowVerticalFacing()).isTrue();
         assertThat(registration.allowModifiers()).isTrue();
+    }
+
+    @Test
+    void builder_sets_machine_basic_block_for_all_base_textures() {
+        var registration = new MachineBuilderJS("mmcr:electric_press")
+                .localizedName("Electric Press")
+                .appearance("kubejs:steel_casing")
+                .createObject();
+
+        assertThat(registration.appearance()).isEqualTo(new MachineAppearanceSpec(
+                Identifier.parse("kubejs:steel_casing"),
+                Identifier.parse("kubejs:block/steel_casing"),
+                Identifier.parse("kubejs:block/steel_casing")));
+    }
+
+    @Test
+    void builder_allows_explicit_controller_and_port_base_overrides() {
+        var registration = new MachineBuilderJS("mmcr:electric_press")
+                .machineBasicBlock("kubejs:steel_casing")
+                .controllerBaseTexture("mmcr:block/basic_casing")
+                .formedPortBaseTexture("kubejs:block/clean_steel_casing")
+                .createObject();
+
+        assertThat(registration.appearance().machineBasicBlock()).isEqualTo(Identifier.parse("kubejs:steel_casing"));
+        assertThat(registration.appearance().controllerBaseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
+        assertThat(registration.appearance().formedPortBaseTexture()).isEqualTo(Identifier.parse("kubejs:block/clean_steel_casing"));
     }
 }

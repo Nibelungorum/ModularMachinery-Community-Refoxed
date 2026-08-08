@@ -45,6 +45,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -84,6 +85,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable ActiveMachineRecipe pausedActive;
     private @Nullable RecipeCraftingContext pausedContext;
     private RecipeCraftingContextPool contextPool = RecipeCraftingContextPool.global();
+    private final Set<BlockPos> linkedPortPositions = new HashSet<>();
     private int recipeSearchRetryCounter;
     private long recipeSearchAttemptCounter;
     private long cachedCandidatesReloadVersion = Long.MIN_VALUE;
@@ -546,14 +548,33 @@ public class MachineControllerBlockEntity extends BlockEntity {
         components.clear();
         if (level == null || foundMachine == null || foundPattern == null) return;
 
+        resetLinkedPorts();
+
         for (BlockPos relativePos : componentPositions()) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
             if (!(level.getBlockEntity(worldPos) instanceof MachineComponentTile tile)) continue;
 
+            if (tile instanceof IOPortBlockEntity port) {
+                port.setAppearanceBaseTexture(foundMachine.appearance().formedPortBaseTexture());
+                linkedPortPositions.add(worldPos.immutable());
+            }
             var component = tile.provideComponent();
             if (!(tile instanceof BlockEntity container)) continue;
             components.add(new ProcessingComponent(component, container, worldPos, relativePos, foundPattern.tagsAt(relativePos)));
         }
+    }
+
+    private void resetLinkedPorts() {
+        if (level == null || linkedPortPositions.isEmpty()) {
+            linkedPortPositions.clear();
+            return;
+        }
+        for (BlockPos portPos : linkedPortPositions) {
+            if (level.getBlockEntity(portPos) instanceof IOPortBlockEntity port) {
+                port.resetAppearanceBaseTexture();
+            }
+        }
+        linkedPortPositions.clear();
     }
 
     private List<BlockPos> componentPositions() {
@@ -683,6 +704,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         Identifier dropped = foundMachine == null ? null : foundMachine.registryName();
         boolean hadActive = active != null;
         Identifier activeRecipe = hadActive ? active.getRecipe().id() : null;
+        resetLinkedPorts();
         foundMachine = null;
         foundPattern = null;
         foundCompiledPattern = null;

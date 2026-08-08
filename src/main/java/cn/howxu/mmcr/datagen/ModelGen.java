@@ -9,10 +9,7 @@ import net.minecraft.client.data.models.BlockModelGenerators;
 import net.minecraft.client.data.models.ItemModelGenerators;
 import net.minecraft.client.data.models.ModelProvider;
 import net.minecraft.client.data.models.blockstates.MultiVariantGenerator;
-import net.minecraft.client.data.models.model.ModelLocationUtils;
-import net.minecraft.client.data.models.model.ModelTemplate;
 import net.minecraft.client.data.models.model.ModelTemplates;
-import net.minecraft.client.data.models.model.TextureMapping;
 import net.minecraft.client.data.models.model.TexturedModel;
 import net.minecraft.client.data.models.model.TextureSlot;
 import net.minecraft.client.resources.model.sprite.Material;
@@ -22,26 +19,12 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 
-import java.util.Optional;
 import java.util.stream.Stream;
 
 public final class ModelGen extends ModelProvider {
 
-    private static final TextureSlot BG_ALL = TextureSlot.create("bg_all");
-    private static final TextureSlot OV_TOP = TextureSlot.create("ov_top");
-    private static final TextureSlot OV_SIDE = TextureSlot.create("ov_side");
-    private static final TextureSlot OV_FRONT = TextureSlot.create("ov_front");
-    private static final TextureSlot OV_ALL = TextureSlot.create("ov_all");
-
-    private static final ModelTemplate CONTROLLER_OVERLAY = new ModelTemplate(
-            Optional.of(MMCR.id("block/machine_controller_overlay")),
-            Optional.empty(),
-            BG_ALL, OV_FRONT);
-
-    private static final ModelTemplate BUS_HATCH_OVERLAY = new ModelTemplate(
-            Optional.of(MMCR.id("block/bus_hatch_overlay")),
-            Optional.empty(),
-            BG_ALL, OV_ALL);
+    private static final Identifier DYNAMIC_CONTROLLER_MODEL = MMCR.id("block/dynamic_machine_controller");
+    private static final Identifier DYNAMIC_IO_PORT_MODEL = MMCR.id("block/dynamic_io_port");
 
     public ModelGen(PackOutput output) {
         super(output, MMCR.MODID);
@@ -52,24 +35,16 @@ public final class ModelGen extends ModelProvider {
         ModBlocks.BLOCKS.forEach((name, blockHolder) -> {
             Block block = blockHolder.get();
             if (block instanceof MachineControllerBlock) {
-                TextureMapping mapping = new TextureMapping()
-                        .put(BG_ALL, new Material(MMCR.id("block/basic_casing")))
-                        .put(OV_FRONT, new Material(MMCR.id("block/basic_controller")));
-                Identifier modelId = CONTROLLER_OVERLAY.create(block, mapping, blockModels.modelOutput);
                 blockModels.blockStateOutput.accept(MultiVariantGenerator
-                        .dispatch(block, BlockModelGenerators.plainVariant(modelId))
+                        .dispatch(block, BlockModelGenerators.plainVariant(DYNAMIC_CONTROLLER_MODEL))
                         .with(MachineControllerVariants.full()));
                 blockModels.registerSimpleItemModel(block.asItem(),
-                        modelId);
+                        DYNAMIC_CONTROLLER_MODEL);
             } else if (isIoPort(name)) {
-                TextureMapping mapping = new TextureMapping()
-                        .put(BG_ALL, new Material(MMCR.id("block/basic_casing")))
-                        .put(OV_ALL, new Material(MMCR.id("block/" + overlayTextureFor(name))));
-                Identifier modelId = BUS_HATCH_OVERLAY.create(block, mapping, blockModels.modelOutput);
                 blockModels.blockStateOutput.accept(MultiVariantGenerator
-                        .dispatch(block, BlockModelGenerators.plainVariant(modelId)));
+                        .dispatch(block, BlockModelGenerators.plainVariant(DYNAMIC_IO_PORT_MODEL)));
                 blockModels.registerSimpleItemModel(block.asItem(),
-                        ModelLocationUtils.getModelLocation(block));
+                        DYNAMIC_IO_PORT_MODEL);
             } else {
                 blockModels.createTrivialBlock(block, TexturedModel.CUBE.updateTexture(
                         m -> m.put(TextureSlot.ALL, textureFor(name))));
@@ -96,6 +71,14 @@ public final class ModelGen extends ModelProvider {
         if (blockName.startsWith("energy_input_hatch")) return overlayTexture(blockName, "energy_input_hatch", "overlay_energyinputhatch");
         if (blockName.startsWith("energy_output_hatch")) return overlayTexture(blockName, "energy_output_hatch", "overlay_energyoutputhatch");
         throw new IllegalArgumentException("No overlay texture for I/O port: " + blockName);
+    }
+
+    static Identifier dynamicControllerModel() {
+        return DYNAMIC_CONTROLLER_MODEL;
+    }
+
+    static Identifier dynamicIoPortModel() {
+        return DYNAMIC_IO_PORT_MODEL;
     }
 
     private static String overlayTexture(String blockName, String baseName, String textureBase) {

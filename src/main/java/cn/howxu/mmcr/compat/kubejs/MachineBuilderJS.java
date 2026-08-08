@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
@@ -16,6 +17,9 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient boolean fullyRotationallySymmetric = false;
     public transient boolean requireVerticalFacing = false;
     public transient boolean allowModifiers = false;
+    public transient Identifier machineBasicBlock;
+    public transient Identifier controllerBaseTexture;
+    public transient Identifier formedPortBaseTexture;
 
     public MachineBuilderJS(Identifier id) {
         super(id);
@@ -35,6 +39,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return MachineRegistration.builder(id)
                 .localizedName(localizedName)
                 .controllerSpec(controllerSpec())
+                .appearance(appearanceSpec())
                 .recipeFamilyId(id)
                 .allowModifiers(allowModifiers)
                 .build();
@@ -133,6 +138,37 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return this;
     }
 
+    public MachineBuilderJS machineBasicBlock(String blockId) {
+        return machineBasicBlock(Identifier.parse(blockId));
+    }
+
+    public MachineBuilderJS machineBasicBlock(Identifier blockId) {
+        this.machineBasicBlock = blockId;
+        return this;
+    }
+
+    public MachineBuilderJS controllerBaseTexture(String textureId) {
+        return controllerBaseTexture(Identifier.parse(textureId));
+    }
+
+    public MachineBuilderJS controllerBaseTexture(Identifier textureId) {
+        this.controllerBaseTexture = textureId;
+        return this;
+    }
+
+    public MachineBuilderJS formedPortBaseTexture(String textureId) {
+        return formedPortBaseTexture(Identifier.parse(textureId));
+    }
+
+    public MachineBuilderJS formedPortBaseTexture(Identifier textureId) {
+        this.formedPortBaseTexture = textureId;
+        return this;
+    }
+
+    public MachineBuilderJS appearance(String machineBasicBlock) {
+        return machineBasicBlock(machineBasicBlock);
+    }
+
     public void registerObject() {
         MachineDefinitions.register(createObject());
     }
@@ -153,5 +189,15 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 allowVerticalFacing,
                 fullyRotationallySymmetric,
                 requireVerticalFacing);
+    }
+
+    private MachineAppearanceSpec appearanceSpec() {
+        MachineAppearanceSpec base = machineBasicBlock == null
+                ? MachineAppearanceSpec.defaults()
+                : MachineAppearanceSpec.fromBasicBlock(machineBasicBlock);
+        return new MachineAppearanceSpec(
+                base.machineBasicBlock(),
+                controllerBaseTexture != null ? controllerBaseTexture : base.controllerBaseTexture(),
+                formedPortBaseTexture != null ? formedPortBaseTexture : base.formedPortBaseTexture());
     }
 }

@@ -13,6 +13,10 @@ public interface Machine {
 
     MachineControllerSpec controller();
 
+    default MachineAppearanceSpec appearance() {
+        return MachineAppearanceSpec.defaults();
+    }
+
     default PortRequirementSpec portRequirements() {
         return PortRequirementSpec.none();
     }

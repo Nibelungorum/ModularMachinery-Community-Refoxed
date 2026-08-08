@@ -22,4 +22,14 @@ class ModelGenTest {
         assertThat(ModelGen.overlayTextureFor("fluid_output_hatch")).isEqualTo("overlay_fluidoutputhatch_normal");
         assertThat(ModelGen.overlayTextureFor("energy_input_hatch")).isEqualTo("overlay_energyinputhatch_normal");
     }
+
+    @Test
+    void machine_controllers_use_shared_dynamic_model_reference() {
+        assertThat(ModelGen.dynamicControllerModel()).hasToString("mmcr:block/dynamic_machine_controller");
+    }
+
+    @Test
+    void io_ports_use_shared_dynamic_model_reference() {
+        assertThat(ModelGen.dynamicIoPortModel()).hasToString("mmcr:block/dynamic_io_port");
+    }
 }

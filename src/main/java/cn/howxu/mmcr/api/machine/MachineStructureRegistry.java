@@ -44,6 +44,7 @@ public final class MachineStructureRegistry {
                 registration.localizedName(),
                 structure.pattern(),
                 registration.controllerSpec(),
+                registration.appearance(),
                 structure.portRequirements(),
                 structure.portTierRequirements(),
                 structure.dynamicPatterns(),
