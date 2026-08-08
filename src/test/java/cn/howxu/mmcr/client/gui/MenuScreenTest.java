@@ -73,9 +73,9 @@ class MenuScreenTest {
 
     @Test
     void item_bus_background_blits_never_sample_beyond_texture_height() {
-        assertThat(ItemBusMenu.imageHeightForSlots(32)).isGreaterThan(MachineMenuScreen.GUI_TEXTURE_SIZE);
+        int oversizedImageHeight = MachineMenuScreen.GUI_TEXTURE_SIZE + ItemBusMenu.SLOT_SIZE;
 
-        assertThat(MachineMenuScreen.itemBusBackgroundBlits(ItemBusMenu.imageHeightForSlots(32)))
+        assertThat(MachineMenuScreen.itemBusBackgroundBlits(oversizedImageHeight))
                 .allSatisfy(blit -> assertThat(blit.sourceY() + blit.height()).isLessThanOrEqualTo(MachineMenuScreen.GUI_TEXTURE_SIZE))
                 .extracting(MachineMenuScreen.BackgroundBlit::height)
                 .containsExactly(166, 18, 18, 18, 18, 18, 18);

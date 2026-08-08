@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Holder;
@@ -42,17 +43,27 @@ class ItemBusMenuTest {
     void item_bus_menu_uses_two_rows_of_four_slots_by_default() {
         ItemBusMenu clientMenu = new ItemBusMenu(1, emptyInventory());
 
-        assertThat(ItemBusMenu.COLS).isEqualTo(4);
+        assertThat(ItemBusMenu.columnsForSize(ItemBusSize.NORMAL)).isEqualTo(3);
         assertThat(clientMenu.busRows()).isEqualTo(2);
         assertThat(clientMenu.slots.subList(0, clientMenu.busSlotCount())).hasSize(6);
     }
 
     @Test
-    void bus_rows_scale_from_slot_count() {
-        assertThat(ItemBusMenu.rowsForSlots(1)).isEqualTo(1);
-        assertThat(ItemBusMenu.rowsForSlots(6)).isEqualTo(2);
-        assertThat(ItemBusMenu.rowsForSlots(9)).isEqualTo(3);
-        assertThat(ItemBusMenu.rowsForSlots(32)).isEqualTo(8);
+    void bus_grid_uses_size_specific_rows_and_columns() {
+        assertThat(ItemBusMenu.rowsForSize(ItemBusSize.TINY)).isEqualTo(1);
+        assertThat(ItemBusMenu.columnsForSize(ItemBusSize.TINY)).isEqualTo(1);
+        assertThat(ItemBusMenu.rowsForSize(ItemBusSize.SMALL)).isEqualTo(2);
+        assertThat(ItemBusMenu.columnsForSize(ItemBusSize.SMALL)).isEqualTo(2);
+        assertThat(ItemBusMenu.rowsForSize(ItemBusSize.NORMAL)).isEqualTo(2);
+        assertThat(ItemBusMenu.columnsForSize(ItemBusSize.NORMAL)).isEqualTo(3);
+        assertThat(ItemBusMenu.rowsForSize(ItemBusSize.REINFORCED)).isEqualTo(3);
+        assertThat(ItemBusMenu.columnsForSize(ItemBusSize.REINFORCED)).isEqualTo(3);
+        assertThat(ItemBusMenu.rowsForSize(ItemBusSize.BIG)).isEqualTo(3);
+        assertThat(ItemBusMenu.columnsForSize(ItemBusSize.BIG)).isEqualTo(4);
+        assertThat(ItemBusMenu.rowsForSize(ItemBusSize.HUGE)).isEqualTo(4);
+        assertThat(ItemBusMenu.columnsForSize(ItemBusSize.HUGE)).isEqualTo(4);
+        assertThat(ItemBusMenu.rowsForSize(ItemBusSize.LUDICROUS)).isEqualTo(4);
+        assertThat(ItemBusMenu.columnsForSize(ItemBusSize.LUDICROUS)).isEqualTo(8);
     }
 
     @Test
@@ -69,10 +80,36 @@ class ItemBusMenuTest {
     }
 
     @Test
-    void item_bus_slots_center_four_column_layout() {
-        ItemBusMenu clientMenu = new ItemBusMenu(1, emptyInventory());
+    void item_bus_slot_layouts_use_size_specific_origins() {
+        assertSlotLayout(ItemBusSize.TINY, 81, 30, 1, 1);
+        assertSlotLayout(ItemBusSize.SMALL, 70, 18, 2, 2);
+        assertSlotLayout(ItemBusSize.NORMAL, 61, 18, 2, 3);
+        assertSlotLayout(ItemBusSize.REINFORCED, 61, 13, 3, 3);
+        assertSlotLayout(ItemBusSize.BIG, 52, 18, 3, 4);
+        assertSlotLayout(ItemBusSize.HUGE, 53, 8, 4, 4);
+        assertSlotLayout(ItemBusSize.LUDICROUS, 17, 8, 4, 8);
+    }
 
-        assertThat(clientMenu.slots.getFirst().x).isEqualTo(52);
+    @Test
+    void item_bus_texture_uses_size_specific_inventory_background() {
+        assertThat(ItemBusMenu.texturePathForSize(ItemBusSize.TINY)).isEqualTo("textures/gui/inventory_tiny.png");
+        assertThat(ItemBusMenu.texturePathForSize(ItemBusSize.SMALL)).isEqualTo("textures/gui/inventory_small.png");
+        assertThat(ItemBusMenu.texturePathForSize(ItemBusSize.NORMAL)).isEqualTo("textures/gui/inventory_normal.png");
+        assertThat(ItemBusMenu.texturePathForSize(ItemBusSize.REINFORCED)).isEqualTo("textures/gui/inventory_reinforced.png");
+        assertThat(ItemBusMenu.texturePathForSize(ItemBusSize.BIG)).isEqualTo("textures/gui/inventory_big.png");
+        assertThat(ItemBusMenu.texturePathForSize(ItemBusSize.HUGE)).isEqualTo("textures/gui/inventory_huge.png");
+        assertThat(ItemBusMenu.texturePathForSize(ItemBusSize.LUDICROUS)).isEqualTo("textures/gui/inventory_ludicrous.png");
+    }
+
+    @Test
+    void title_is_hidden_for_reinforced_huge_and_ludicrous_buses() {
+        assertThat(ItemBusMenu.showsTitleForSize(ItemBusSize.TINY)).isTrue();
+        assertThat(ItemBusMenu.showsTitleForSize(ItemBusSize.SMALL)).isTrue();
+        assertThat(ItemBusMenu.showsTitleForSize(ItemBusSize.NORMAL)).isTrue();
+        assertThat(ItemBusMenu.showsTitleForSize(ItemBusSize.REINFORCED)).isFalse();
+        assertThat(ItemBusMenu.showsTitleForSize(ItemBusSize.BIG)).isTrue();
+        assertThat(ItemBusMenu.showsTitleForSize(ItemBusSize.HUGE)).isFalse();
+        assertThat(ItemBusMenu.showsTitleForSize(ItemBusSize.LUDICROUS)).isFalse();
     }
 
     @Test
@@ -142,6 +179,15 @@ class ItemBusMenuTest {
 
     private static void bindItemComponents(Item item) {
         item.builtInRegistryHolder().bindComponents(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
+    }
+
+    private static void assertSlotLayout(ItemBusSize size, int startX, int startY, int rows, int columns) {
+        ItemBusMenu.SlotLayout layout = ItemBusMenu.slotLayoutForSize(size);
+
+        assertThat(layout.startX()).isEqualTo(startX);
+        assertThat(layout.startY()).isEqualTo(startY);
+        assertThat(layout.rows()).isEqualTo(rows);
+        assertThat(layout.columns()).isEqualTo(columns);
     }
 
     private static void bind(Object deferredHolder, MenuType<ItemBusMenu> menuType) throws Exception {

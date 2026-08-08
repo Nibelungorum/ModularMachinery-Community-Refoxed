@@ -36,7 +36,7 @@ public final class ModelGen extends ModelProvider {
     private static final ModelTemplate CONTROLLER_OVERLAY = new ModelTemplate(
             Optional.of(MMCR.id("block/machine_controller_overlay")),
             Optional.empty(),
-            BG_ALL, OV_TOP, OV_SIDE, OV_FRONT);
+            BG_ALL, OV_FRONT);
 
     private static final ModelTemplate BUS_HATCH_OVERLAY = new ModelTemplate(
             Optional.of(MMCR.id("block/bus_hatch_overlay")),
@@ -52,7 +52,10 @@ public final class ModelGen extends ModelProvider {
         ModBlocks.BLOCKS.forEach((name, blockHolder) -> {
             Block block = blockHolder.get();
             if (block instanceof MachineControllerBlock) {
-                Identifier modelId = MMCR.id("block/machine_controller_overlay");
+                TextureMapping mapping = new TextureMapping()
+                        .put(BG_ALL, new Material(MMCR.id("block/basic_casing")))
+                        .put(OV_FRONT, new Material(MMCR.id("block/basic_controller")));
+                Identifier modelId = CONTROLLER_OVERLAY.create(block, mapping, blockModels.modelOutput);
                 blockModels.blockStateOutput.accept(MultiVariantGenerator
                         .dispatch(block, BlockModelGenerators.plainVariant(modelId))
                         .with(MachineControllerVariants.full()));
@@ -85,14 +88,19 @@ public final class ModelGen extends ModelProvider {
         return PortKinds.all().stream().anyMatch(kind -> kind.id().equals(blockName));
     }
 
-    private static String overlayTextureFor(String blockName) {
-        if (blockName.startsWith("item_input_bus")) return "overlay_inputbus_normal";
-        if (blockName.startsWith("item_output_bus")) return "overlay_outputbus_normal";
-        if (blockName.startsWith("fluid_input_hatch")) return "overlay_fluidinputhatch_normal";
-        if (blockName.startsWith("fluid_output_hatch")) return "overlay_fluidoutputhatch_normal";
-        if (blockName.startsWith("energy_input_hatch")) return "overlay_energyinputhatch_normal";
-        if (blockName.startsWith("energy_output_hatch")) return "overlay_energyoutputhatch_normal";
+    static String overlayTextureFor(String blockName) {
+        if (blockName.startsWith("item_input_bus")) return overlayTexture(blockName, "item_input_bus", "overlay_inputbus");
+        if (blockName.startsWith("item_output_bus")) return overlayTexture(blockName, "item_output_bus", "overlay_outputbus");
+        if (blockName.startsWith("fluid_input_hatch")) return overlayTexture(blockName, "fluid_input_hatch", "overlay_fluidinputhatch");
+        if (blockName.startsWith("fluid_output_hatch")) return overlayTexture(blockName, "fluid_output_hatch", "overlay_fluidoutputhatch");
+        if (blockName.startsWith("energy_input_hatch")) return overlayTexture(blockName, "energy_input_hatch", "overlay_energyinputhatch");
+        if (blockName.startsWith("energy_output_hatch")) return overlayTexture(blockName, "energy_output_hatch", "overlay_energyoutputhatch");
         throw new IllegalArgumentException("No overlay texture for I/O port: " + blockName);
+    }
+
+    private static String overlayTexture(String blockName, String baseName, String textureBase) {
+        String tier = blockName.equals(baseName) ? "normal" : blockName.substring(baseName.length() + 1);
+        return textureBase + "_" + tier;
     }
 
     @Override

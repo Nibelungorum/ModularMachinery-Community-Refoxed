@@ -1,7 +1,5 @@
 kubejs集成的测试
 
-[X]更多的接口 
-
 Modifer JEI集成
 
 自动输入自动输出功能
@@ -10,74 +8,16 @@ Modifer JEI集成
 
 声音事件
 
-- 多线程 Stage 5---- Minecraft Crash Report ----
-// Would you like a cupcake?
-
-Time: 2026-08-08 09:21:35
-Description: Unexpected error
-
-java.lang.IllegalArgumentException: Progress must be between 0 and 1, got: 12.207031
-        at com.google.common.base.Preconditions.checkArgument(Preconditions.java:217) ~[guava-33.5.0-jre.jar:?] {}
-        at TRANSFORMER/jade@26.1.3+neoforge/snownee.jade.api.view.ProgressView$Part.<init>(ProgressView.java:108) ~[jade-324717-8251883.jar:26.1.3+neoforge] {}
-        at TRANSFORMER/jade@26.1.3+neoforge/snownee.jade.api.view.ProgressView$Part.<init>(ProgressView.java:112) ~[jade-324717-8251883.jar:26.1.3+neoforge] {}
-        at TRANSFORMER/jade@26.1.3+neoforge/snownee.jade.api.view.ProgressView$Part.of(ProgressView.java:132) ~[jade-324717-8251883.jar:26.1.3+neoforge] {}
-        at TRANSFORMER/jade@26.1.3+neoforge/snownee.jade.addon.universal.EnergyStorageProvider$Client.lambda$appendTooltip$0(EnergyStorageProvider.java:101) ~[jade-324717-8251883.jar:26.1.3+neoforge] {}
-        at TRANSFORMER/jade@26.1.3+neoforge/snownee.jade.api.view.ClientViewGroup.tooltip(ClientViewGroup.java:59) ~[jade-324717-8251883.jar:26.1.3+neoforge] {}
-        at TRANSFORMER/jade@26.1.3+neoforge/snownee.jade.addon.universal.EnergyStorageProvider$Client.appendTooltip(EnergyStorageProvider.java:73) ~[jade-324717-8251883.jar:26.1.3+neoforge] {}
-        at TRANSFORMER/jade@26.1.3+neoforge/snownee.jade.impl.BlockAccessorClientHandler.gatherComponents(BlockAccessorClientHandler.java:98) ~[jade-324717-8251883.jar:26.1.3+neoforge] {}
-        at TRANSFORMER/jade@26.1.3+neoforge/snownee.jade.impl.BlockAccessorClientHandler.gatherComponents(BlockAccessorClientHandler.java:26) ~[jade-324717-8251883.jar:26.1.3+neoforge] {}
-        at TRANSFORMER/jade@26.1.3+neoforge/snownee.jade.overlay.WailaTickHandler.tickClient(WailaTickHandler.java:259) ~[jade-324717-8251883.jar:26.1.3+neoforge] {}
-        at TRANSFORMER/jade@26.1.3+neoforge/snownee.jade.util.ClientProxy.onClientTick(ClientProxy.java:161) ~[jade-324717-8251883.jar:26.1.3+neoforge] {}
-        at net.neoforged.bus.ConsumerEventHandler.invoke(ConsumerEventHandler.java:27) ~[bus-8.0.5.jar:?] {}
-        at net.neoforged.bus.EventBus.post(EventBus.java:360) ~[bus-8.0.5.jar:?] {}
-        at net.neoforged.bus.EventBus.post(EventBus.java:328) ~[bus-8.0.5.jar:?] {}
-        at TRANSFORMER/neoforge@26.1.2.84/net.neoforged.neoforge.client.ClientHooks.fireClientTickPost(ClientHooks.java:912) ~[neoforge-26.1.2.84-universal.jar:?] {}
-        at TRANSFORMER/minecraft@26.1.2/net.minecraft.client.Minecraft.tick(Minecraft.java:1981) [neoforge-26.1.2.84.jar:?] {neoforge:access_transformer,neoforge:access_transformer,neoforge:mixin[APP:kubejs.mixins.json:MinecraftClientMixin from mod kubejs]}
-        at TRANSFORMER/minecraft@26.1.2/net.minecraft.client.Minecraft.runTick(Minecraft.java:1308) [neoforge-26.1.2.84.jar:?] {neoforge:access_transformer,neoforge:access_transformer,neoforge:mixin[APP:kubejs.mixins.json:MinecraftClientMixin from mod kubejs]}
-        at TRANSFORMER/minecraft@26.1.2/net.minecraft.client.Minecraft.run(Minecraft.java:937) [neoforge-26.1.2.84.jar:?] {neoforge:access_transformer,neoforge:access_transformer,neoforge:mixin[APP:kubejs.mixins.json:MinecraftClientMixin from mod kubejs]}
-        at TRANSFORMER/minecraft@26.1.2/net.minecraft.client.main.Main.main(Main.java:246) [neoforge-26.1.2.84.jar:?] {}
-        at net.neoforged.fml.startup.Client.main(Client.java:19) [loader-11.0.15.jar:11.0] {}
-
-
-A detailed walkthrough of the error, its code path and all known details is as follows:
----------------------------------------------------------------------------------------
-
--- Head --
-Thread: Render thread
-Stacktrace:
-        at com.google.common.base.Preconditions.checkArgument(Preconditions.java:217) ~[guava-33.5.0-jre.jar:?] {}
-        at TRANSFORMER/jade@26.1.3+neoforge/snownee.jade.api.view.ProgressView$Part.<init>(ProgressView.java:108) ~[jade-324717-8251883.jar:26.1.3+neoforge] {}
-        at TRANSFORMER/jade@26.1.3+neoforge/snownee.jade.api.view.ProgressView$Part.<init>(ProgressView.java:112) ~[jade-324717-8251883.jar:26.1.3+neoforge] {}
-        at TRANSFORMER/jade@26.1.3+neoforge/snownee.jade.api.view.ProgressView$Part.of(ProgressView.java:132) ~[jade-324717-8251883.jar:26.1.3+neoforge] {}
-        at TRANSFORMER/jade@26.1.3+neoforge/snownee.jade.addon.universal.EnergyStorageProvider$Client.lambda$appendTooltip$0(EnergyStorageProvider.java:101) ~[jade-324717-8251883.jar:26.1.3+neoforge] {}
-        at TRANSFORMER/jade@26.1.3+neoforge/snownee.jade.api.view.ClientViewGroup.tooltip(ClientViewGroup.java:59) ~[jade-324717-8251883.jar:26.1.3+neoforge] {}
-        at TRANSFORMER/jade@26.1.3+neoforge/snownee.jade.addon.universal.EnergyStorageProvider$Client.appendTooltip(EnergyStorageProvider.java:73) ~[jade-324717-8251883.jar:26.1.3+neoforge] {}
-        at TRANSFORMER/jade@26.1.3+neoforge/snownee.jade.impl.BlockAccessorClientHandler.gatherComponents(BlockAccessorClientHandler.java:98) ~[jade-324717-8251883.jar:26.1.3+neoforge] {}
-        at TRANSFORMER/jade@26.1.3+neoforge/snownee.jade.impl.BlockAccessorClientHandler.gatherComponents(BlockAccessorClientHandler.java:26) ~[jade-324717-8251883.jar:26.1.3+neoforge] {}
-        at TRANSFORMER/jade@26.1.3+neoforge/snownee.jade.overlay.WailaTickHandler.tickClient(WailaTickHandler.java:259) ~[jade-324717-8251883.jar:26.1.3+neoforge] {}
-        at TRANSFORMER/jade@26.1.3+neoforge/snownee.jade.util.ClientProxy.onClientTick(ClientProxy.java:161) ~[jade-324717-8251883.jar:26.1.3+neoforge] {}
-        at net.neoforged.bus.ConsumerEventHandler.invoke(ConsumerEventHandler.java:27) ~[bus-8.0.5.jar:?] {}
-        at net.neoforged.bus.EventBus.post(EventBus.java:360) ~[bus-8.0.5.jar:?] {}
-        at net.neoforged.bus.EventBus.post(EventBus.java:328) ~[bus-8.0.5.jar:?] {}
-        at TRANSFORMER/neoforge@26.1.2.84/net.neoforged.neoforge.client.ClientHooks.fireClientTickPost(ClientHooks.java:912) ~[neoforge-26.1.2.84-universal.jar:?] {}
--- Uptime --
-Details:
-        JVM uptime: 24.371s
-        Wall uptime: 16.423s
-        High-res time: 23.603s
-        Client ticks: 241 ticks / 12.050s
-Stacktrace:
-        at TRANSFORMER/minecraft@26.1.2/net.minecraft.client.Minecraft.fillReport(Minecraft.java:2472) [neoforge-26.1.2.84.jar:?] {neoforge:access_transformer,neoforge:access_transformer,neoforge:mixin[APP:kubejs.mixins.json:MinecraftClientMixin from mod kubejs]}
-        at TRANSFORMER/minecraft@26.1.2/net.minecraft.client.Minecraft.emergencySaveAndCrash(Minecraft.java:992) [neoforge-26.1.2.84.jar:?] {neoforge:access_transformer,neoforge:access_transformer,neoforge:mixin[APP:kubejs.mixins.json:MinecraftClientMixin from mod kubejs]}
-        at TRANSFORMER/minecraft@26.1.2/net.minecraft.client.Minecraft.run(Minecraft.java:960) [neoforge-26.1.2.84.jar:?] {neoforge:access_transformer,neoforge:access_transformer,neoforge:mixin[APP:kubejs.mixins.json:MinecraftClientMixin from mod kubejs]}
-        at TRANSFORMER/minecraft@26.1.2/net.minecraft.client.main.Main.main(Main.java:246) [neoforge-26.1.2.84.jar:?] {}
-        at net.neoforged.fml.startup.Client.main(Client.java:19) [loader-11.0.15.jar:11.0] {}已经实现了
-
 额外解锁槽(发电阵列)
 
 modifier等级功能(实现线圈方块等级能力)
+机器的render和相关api暴露
 
-- 动态机器注册，先注册机器(start_up)，再注册机器结构和配方(server)。
+[X] 多线程 Stage 5已经实现了
+
+[X] 更多的接口 
+
+[X] 动态机器注册，先注册机器(start_up)，再注册机器结构和配方(server)。
 
 全新的动态机器和配方的注册机制，可以同步拿到KubeJS集成，一劳永逸地解决控制器方块注册问题，涉及大改动，但是必须进行
 首先，将机器注册，结构注册，配方注册拆分开，机器注册是单独的，因为涉及到控制器方块添加，这一类注册必须在类似方块注册的阶段进行，同时，这一阶段也只能在KubeJS的start_up阶段进行，这样机器是否存在与控制器方块的注册直接共存亡，就解决了reload阶段可能出现的丢注册情况
@@ -90,9 +30,9 @@ modifier等级功能(实现线圈方块等级能力)
 
 写一份implement plan，期间参考reference/mmce和reference/gtceu，给出最好解决和优化方案。
 
-- 基于basic_casing的动态模型和贴图加载(控制器和端口分开，以及一个api同时设置)，网络包通信客户端渲染，客户端持久化和玩家login事件。
+基于basic_casing的动态模型和贴图加载(控制器和端口分开，以及一个api同时设置)，网络包通信客户端渲染，客户端持久化和玩家login事件。
 
-- block model动态化，统一化，overlay渲染，一劳永逸解决模型贴图问题，同时解决model gen问题
+block model动态化，统一化，overlay渲染，一劳永逸解决模型贴图问题，同时解决model gen问题
 
 大改当前的方块贴图相关部分，因为我们已经实现了更现代的注册功能，所以当前控制器的表现可以扩展一下了
 
@@ -110,4 +50,3 @@ modifier等级功能(实现线圈方块等级能力)
 
 写一份implement plan，期间参考reference/mmce和reference/gtceu，给出最好解决和优化方案。
 
-机器的render和相关api暴露

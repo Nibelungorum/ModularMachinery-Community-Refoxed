@@ -37,7 +37,6 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
 
     public static final int GUI_TEXTURE_SIZE = 256;
 
-    private static final Identifier ITEM_BUS_TEXTURE    = MMCR.id("textures/gui/inventory_normal.png");
     private static final Identifier TANK_TEXTURE        = MMCR.id("textures/gui/guitank.png");
     private static final Identifier CONTROLLER_TEXTURE  = MMCR.id("textures/gui/guicontroller_large.png");
     private static final NumberFormat NUMBER_FORMAT = NumberFormat.getIntegerInstance();
@@ -75,8 +74,9 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         boolean fluidMenu = menu instanceof FluidHatchMenu;
         boolean energyMenu = menu instanceof EnergyHatchMenu;
         boolean itemBusMenu = menu instanceof ItemBusMenu;
+        boolean showTitle = !(menu instanceof ItemBusMenu itemBus) || itemBus.showsTitle();
         this.titleLabelX = titleX(titleLabelX, fluidMenu, energyMenu, itemBusMenu);
-        this.titleLabelY = titleY(titleLabelY, fluidMenu || energyMenu, itemBusMenu);
+        this.titleLabelY = showTitle ? titleY(titleLabelY, fluidMenu || energyMenu, itemBusMenu) : hiddenInventoryLabelY();
         this.inventoryLabelY = hiddenInventoryLabelY();
     }
 
@@ -215,11 +215,11 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     static final int SLOT_SIZE = 18;
 
     private static Identifier textureFor(AbstractContainerMenu menu) {
-        if (menu instanceof ItemBusMenu)             return ITEM_BUS_TEXTURE;
+        if (menu instanceof ItemBusMenu itemBus)     return MMCR.id(itemBus.texturePath());
         if (menu instanceof FluidHatchMenu)         return TANK_TEXTURE;
         if (menu instanceof EnergyHatchMenu)        return TANK_TEXTURE;
         if (menu instanceof MachineControllerMenu)  return CONTROLLER_TEXTURE;
-        return ITEM_BUS_TEXTURE;
+        return MMCR.id(ItemBusMenu.texturePathForSize(cn.howxu.mmcr.internal.port.ItemBusSize.NORMAL));
     }
 
     private void renderFluidTank(GuiGraphicsExtractor g, FluidHatchMenu menu, int x, int y) {

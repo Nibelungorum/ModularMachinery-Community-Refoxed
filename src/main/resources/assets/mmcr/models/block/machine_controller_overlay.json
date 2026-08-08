@@ -8,12 +8,7 @@
     "bg_east": "#bg_all",
     "bg_south": "#bg_all",
     "bg_west": "#bg_all",
-    "ov_down": "#ov_top",
-    "ov_up": "#ov_top",
-    "ov_north": "#ov_front",
-    "ov_east": "#ov_side",
-    "ov_south": "#ov_side",
-    "ov_west": "#ov_side"
+    "ov_north": "#ov_front"
   },
   "elements": [
     {
@@ -32,12 +27,7 @@
       "from": [0, 0, 0],
       "to": [16, 16, 16],
       "faces": {
-        "down":  { "texture": "#ov_down",  "cullface": "down" },
-        "up":    { "texture": "#ov_up",    "cullface": "up" },
-        "north": { "texture": "#ov_north", "cullface": "north" },
-        "south": { "texture": "#ov_south", "cullface": "south" },
-        "west":  { "texture": "#ov_west",  "cullface": "west" },
-        "east":  { "texture": "#ov_east",  "cullface": "east" }
+        "north": { "texture": "#ov_north", "cullface": "north" }
       }
     }
   ]

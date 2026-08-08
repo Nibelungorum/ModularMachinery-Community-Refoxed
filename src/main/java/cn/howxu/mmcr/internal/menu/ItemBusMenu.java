@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
+import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -14,9 +15,9 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 
 public class ItemBusMenu extends AbstractMachineMenu {
 
-    public static final int COLS = 4;
     public static final int BASE_IMAGE_HEIGHT = 166;
     public static final int SLOT_SIZE = 18;
+    public static final int IMAGE_WIDTH = 176;
     public static final int BUS_SLOT_START = 0;
     public static final int DEFAULT_BUS_SLOT_COUNT = 6;
     public static final int PLAYER_INVENTORY_SLOT_COUNT = 36;
@@ -25,7 +26,9 @@ public class ItemBusMenu extends AbstractMachineMenu {
     private final Level level;
     private final BlockPos pos;
     private final int busSlotCount;
+    private final ItemBusSize busSize;
     private final int busRows;
+    private final int busColumns;
 
     /** 服务端:带 BE 引用,槽位直接绑定到 BE 的 ItemStackHandler。 */
     public ItemBusMenu(int containerId, Inventory playerInv, ItemBusBlockEntity owner) {
@@ -33,10 +36,12 @@ public class ItemBusMenu extends AbstractMachineMenu {
         this.owner = owner;
         this.level = playerInv.player == null ? null : playerInv.player.level();
         this.pos = owner == null ? BlockPos.ZERO : owner.getBlockPos();
+        this.busSize = size(owner);
         this.busSlotCount = slotCount(owner);
-        this.busRows = rowsForSlots(busSlotCount);
+        this.busRows = rowsForSize(busSize);
+        this.busColumns = columnsForSize(busSize);
         addBusSlots(owner);
-        addPlayerSlots(playerInv, playerInventoryYOffset());
+        addPlayerSlots(playerInv);
     }
 
     /** 客户端:BE 为 null;槽位数据由服务端通过数据包同步。 */
@@ -50,10 +55,12 @@ public class ItemBusMenu extends AbstractMachineMenu {
         this.level = playerInv.player == null ? null : playerInv.player.level();
         this.pos = pos;
         ItemBusBlockEntity resolved = resolvedOwner();
+        this.busSize = size(resolved);
         this.busSlotCount = slotCount(resolved);
-        this.busRows = rowsForSlots(busSlotCount);
+        this.busRows = rowsForSize(busSize);
+        this.busColumns = columnsForSize(busSize);
         addBusSlots(resolved);
-        addPlayerSlots(playerInv, playerInventoryYOffset());
+        addPlayerSlots(playerInv);
     }
 
     public static ItemBusMenu clientOpen(int containerId, Inventory playerInv, FriendlyByteBuf buf) {
@@ -68,34 +75,78 @@ public class ItemBusMenu extends AbstractMachineMenu {
 
     public int busRows() { return busRows; }
 
+    public int busColumns() { return busColumns; }
+
+    public ItemBusSize busSize() { return busSize; }
+
     public int playerInventorySlotStart() { return playerInventorySlotStart(busSlotCount); }
 
-    public int imageHeight() { return imageHeightForSlots(busSlotCount); }
+    public int imageHeight() { return imageHeightForSize(busSize); }
+
+    public String texturePath() { return texturePathForSize(busSize); }
+
+    public boolean showsTitle() { return showsTitleForSize(busSize); }
 
     public static int rowsForSlots(int slots) {
-        return Math.max(1, (slots + COLS - 1) / COLS);
+        return rowsForSize(sizeForSlots(slots));
     }
 
     public static int imageHeightForSlots(int slots) {
-        return BASE_IMAGE_HEIGHT + Math.max(0, rowsForSlots(slots) - 2) * SLOT_SIZE;
+        return imageHeightForSize(sizeForSlots(slots));
+    }
+
+    public static int imageHeightForSize(ItemBusSize size) {
+        return BASE_IMAGE_HEIGHT + Math.max(0, rowsForSize(size) - 2) * SLOT_SIZE;
+    }
+
+    public static int rowsForSize(ItemBusSize size) {
+        return slotLayoutForSize(size).rows();
+    }
+
+    public static int columnsForSize(ItemBusSize size) {
+        return slotLayoutForSize(size).columns();
+    }
+
+    public static SlotLayout slotLayoutForSize(ItemBusSize size) {
+        return switch (size) {
+            case TINY -> new SlotLayout(81, 30, 1, 1);
+            case SMALL -> new SlotLayout(70, 18, 2, 2);
+            case NORMAL -> new SlotLayout(61, 18, 2, 3);
+            case REINFORCED -> new SlotLayout(61, 13, 3, 3);
+            case BIG -> new SlotLayout(52, 18, 3, 4);
+            case HUGE -> new SlotLayout(53, 8, 4, 4);
+            case LUDICROUS -> new SlotLayout(17, 8, 4, 8);
+        };
+    }
+
+    public static String texturePathForSize(ItemBusSize size) {
+        return "textures/gui/inventory_" + size.id() + ".png";
+    }
+
+    public static boolean showsTitleForSize(ItemBusSize size) {
+        return switch (size) {
+            case REINFORCED, HUGE, LUDICROUS -> false;
+            default -> true;
+        };
     }
 
     public static int playerInventorySlotStart(int busSlots) {
         return BUS_SLOT_START + busSlots;
     }
 
+    public record SlotLayout(int startX, int startY, int rows, int columns) {}
+
     private void addBusSlots(ItemBusBlockEntity owner) {
         SimpleContainer clientContainer = owner == null ? new SimpleContainer(busSlotCount) : null;
+        SlotLayout layout = slotLayoutForSize(busSize);
         for (int index = 0; index < busSlotCount; index++) {
-            int row = index / COLS;
-            int col = index % COLS;
-            if (owner == null) addSlot(new Slot(clientContainer, index, 52 + col * SLOT_SIZE, 18 + row * SLOT_SIZE));
-            else addSlot(new DirectionalItemSlot(owner.getItemStackHandler(null), index, 52 + col * SLOT_SIZE, 18 + row * SLOT_SIZE, owner.ioType()));
+            int row = index / busColumns;
+            int col = index % busColumns;
+            int x = layout.startX() + col * SLOT_SIZE;
+            int y = layout.startY() + row * SLOT_SIZE;
+            if (owner == null) addSlot(new Slot(clientContainer, index, x, y));
+            else addSlot(new DirectionalItemSlot(owner.getItemStackHandler(null), index, x, y, owner.ioType()));
         }
-    }
-
-    private int playerInventoryYOffset() {
-        return Math.max(0, busRows - 2) * SLOT_SIZE;
     }
 
     private ItemBusBlockEntity resolvedOwner() {
@@ -107,6 +158,17 @@ public class ItemBusMenu extends AbstractMachineMenu {
 
     private static int slotCount(ItemBusBlockEntity owner) {
         return owner == null ? DEFAULT_BUS_SLOT_COUNT : owner.getItemStackHandler(null).getSlots();
+    }
+
+    private static ItemBusSize size(ItemBusBlockEntity owner) {
+        return owner == null ? ItemBusSize.NORMAL : owner.kind().itemBusSize().orElse(ItemBusSize.NORMAL);
+    }
+
+    private static ItemBusSize sizeForSlots(int slots) {
+        for (ItemBusSize size : ItemBusSize.values()) {
+            if (size.slots() == slots) return size;
+        }
+        return ItemBusSize.NORMAL;
     }
 
     @Override
