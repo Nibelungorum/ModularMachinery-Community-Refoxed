@@ -37,3 +37,4 @@
 - Removed the unreferenced `cube_all_overlay.json` resource.
 - The first follow-up verification exposed that `ModelGenTest` needed the existing `TestBootstrap` before touching NeoForge registries; the test now performs that initialization.
 - Verification: `./gradlew test --no-daemon --tests cn.howxu.mmcr.datagen.ModelGenTest --tests cn.howxu.mmcr.resources.BasicIOVariantResourceTest --tests cn.howxu.mmcr.client.model.DynamicOverlayModelTest` passed; `BUILD SUCCESSFUL`, 8 tests completed. `git diff --check` passed.
+- Follow-up implementation commit: `26fbd6e fix: complete Task 2 model generation follow-up`.
