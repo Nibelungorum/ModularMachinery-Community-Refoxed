@@ -31,6 +31,9 @@ public record PktMachineAppearancePayload(Map<Identifier, MachineAppearanceSpec>
             PktMachineAppearancePayload::new);
 
     public PktMachineAppearancePayload {
+        if (specs == null) {
+            throw new IllegalArgumentException("specs null");
+        }
         specs = Map.copyOf(specs);
         if (specs.size() > MAX_SPECS) {
             throw new IllegalArgumentException("Too many machine appearance specs");

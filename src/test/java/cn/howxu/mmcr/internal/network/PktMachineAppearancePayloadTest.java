@@ -39,4 +39,11 @@ class PktMachineAppearancePayloadTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Too many machine appearance specs");
     }
+
+    @Test
+    void rejects_null_snapshot() {
+        assertThatThrownBy(() -> new PktMachineAppearancePayload(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("specs null");
+    }
 }

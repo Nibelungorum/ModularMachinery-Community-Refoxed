@@ -5,7 +5,9 @@ import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -13,6 +15,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MachineAppearanceCacheTest {
+
+    @TempDir
+    Path tempDir;
 
     @AfterEach
     void clear() {
@@ -43,5 +48,23 @@ class MachineAppearanceCacheTest {
         assertThat(MachineAppearanceCache.replaceSnapshot(Collections.singletonMap(MMCR.id("bad"), null))).isFalse();
 
         assertThat(calls.get()).isEqualTo(1);
+    }
+
+    @Test
+    void persisted_snapshot_round_trips_complete_appearance_specs() {
+        Identifier id = MMCR.id("press");
+        MachineAppearanceSpec spec = new MachineAppearanceSpec(
+                Identifier.parse("kubejs:steel_casing"),
+                Identifier.parse("kubejs:block/controller_casing"),
+                Identifier.parse("kubejs:block/formed_casing"));
+        Path file = tempDir.resolve("machine-appearance.properties");
+
+        MachineAppearanceCache.replaceSnapshot(Map.of(id, spec));
+        MachineAppearanceCache.savePersistedSnapshot(file);
+        MachineAppearanceCache.replaceSnapshot(Map.of());
+
+        MachineAppearanceCache.loadPersistedSnapshot(file);
+
+        assertThat(MachineAppearanceCache.specFor(id)).isEqualTo(spec);
     }
 }
