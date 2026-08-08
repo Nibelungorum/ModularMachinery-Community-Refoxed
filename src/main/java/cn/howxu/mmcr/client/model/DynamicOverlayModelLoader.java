@@ -108,7 +108,7 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         if (blockId == null) {
             return DynamicOverlayBakedModel.defaultPortOverlayTexture();
         }
-        return ModelGenOverlayNames.overlayTextureFor(blockId.getPath());
+        return DynamicOverlayBakedModel.overlayTextureFor(blockId.getPath());
     }
 
     private Material.Baked material(Identifier texture) {
@@ -186,21 +186,4 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         }
     }
 
-    /** Avoids coupling the client model to datagen classes. */
-    private static final class ModelGenOverlayNames {
-        private static Identifier overlayTextureFor(String blockName) {
-            if (blockName.startsWith("item_input_bus")) return overlayTexture(blockName, "item_input_bus", "overlay_inputbus");
-            if (blockName.startsWith("item_output_bus")) return overlayTexture(blockName, "item_output_bus", "overlay_outputbus");
-            if (blockName.startsWith("fluid_input_hatch")) return overlayTexture(blockName, "fluid_input_hatch", "overlay_fluidinputhatch");
-            if (blockName.startsWith("fluid_output_hatch")) return overlayTexture(blockName, "fluid_output_hatch", "overlay_fluidoutputhatch");
-            if (blockName.startsWith("energy_input_hatch")) return overlayTexture(blockName, "energy_input_hatch", "overlay_energyinputhatch");
-            if (blockName.startsWith("energy_output_hatch")) return overlayTexture(blockName, "energy_output_hatch", "overlay_energyoutputhatch");
-            return DynamicOverlayBakedModel.defaultPortOverlayTexture();
-        }
-
-        private static Identifier overlayTexture(String blockName, String baseName, String textureBase) {
-            String tier = blockName.equals(baseName) ? "normal" : blockName.substring(baseName.length() + 1);
-            return MMCR.id("block/" + textureBase + "_" + tier);
-        }
-    }
 }
