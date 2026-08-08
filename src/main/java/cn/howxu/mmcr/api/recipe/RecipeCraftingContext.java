@@ -393,6 +393,7 @@ public final class RecipeCraftingContext {
 
     public boolean startCrafting(MachineRecipe recipe, int parallelism) {
         List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism);
+        if (!simulateInputs(requirements)) return false;
         if (!simulateOutputs(requirements)) return false;
         return commitInputs(requirements);
     }

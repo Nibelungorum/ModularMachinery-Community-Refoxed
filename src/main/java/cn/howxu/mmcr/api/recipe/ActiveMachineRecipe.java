@@ -189,12 +189,30 @@ public final class ActiveMachineRecipe {
             LOG.debug("ActiveMachineRecipe#{} start(): no recipe attached → refused", instanceId);
             return false;
         }
+        setParallelism(highestStartableParallelism(context));
         boolean started = context.startCrafting(recipe, parallelism);
         if (started) {
             refreshTotalTick(context);
         }
         LOG.info("ActiveMachineRecipe#{} start(): recipe {} started={} totalTick={}", instanceId, recipe.id(), started, totalTick);
         return started;
+    }
+
+    private int highestStartableParallelism(RecipeCraftingContext context) {
+        if (!recipe.isParallelized() || maxParallelism <= 1) return 1;
+        int low = 1;
+        int high = maxParallelism;
+        int best = 1;
+        while (low <= high) {
+            int mid = low + (high - low) / 2;
+            if (context.simulateInputs(recipe, mid) && context.simulateOutputs(recipe, mid)) {
+                best = mid;
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+        }
+        return best;
     }
 
     public TickStatus tick(RecipeCraftingContext context) {

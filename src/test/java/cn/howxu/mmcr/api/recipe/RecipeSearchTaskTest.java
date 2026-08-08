@@ -113,24 +113,26 @@ class RecipeSearchTaskTest {
     }
 
     @Test
-    void computeChoosesHighestFeasibleParallelizedTier() throws Exception {
+    void computeDoesNotUseParallelismToScaleRecipeSearch() throws Exception {
         Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
         ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
         bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(8));
         MachineControllerBlockEntity controller = controllerWithComponents(bus);
         RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
-        MachineRecipe recipe = inputRecipe("parallelized_iron", machineId, List.of(itemInput(Items.IRON_INGOT, 2)), true);
+        MachineRecipe specific = inputRecipe("specific_iron", machineId, List.of(itemInput(Items.IRON_INGOT, 9)), true);
+        MachineRecipe startable = inputRecipe("startable_iron", machineId, List.of(itemInput(Items.IRON_INGOT, 2)), true);
 
-        RecipeSearchResult result = new RecipeSearchTask(controller, machineId, 15, 16, List.of(recipe), pool).compute();
+        RecipeSearchResult result = new RecipeSearchTask(controller, machineId, 15, 16, List.of(specific, startable), pool).compute();
 
         assertThat(result.success()).isTrue();
+        assertThat(result.activeRecipe().getRecipe()).isEqualTo(startable);
         assertThat(result.activeRecipe().getMaxParallelism()).isEqualTo(16);
-        assertThat(result.activeRecipe().getParallelism()).isEqualTo(4);
+        assertThat(result.activeRecipe().getParallelism()).isEqualTo(1);
         assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(8);
     }
 
     @Test
-    void computeIncludesExactNonTierMaxParallelismCandidate() throws Exception {
+    void computeKeepsExactNonTierMaxParallelismWithoutApplyingItDuringSearch() throws Exception {
         Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
         ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
         bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(6));
@@ -142,7 +144,7 @@ class RecipeSearchTaskTest {
 
         assertThat(result.success()).isTrue();
         assertThat(result.activeRecipe().getMaxParallelism()).isEqualTo(3);
-        assertThat(result.activeRecipe().getParallelism()).isEqualTo(3);
+        assertThat(result.activeRecipe().getParallelism()).isEqualTo(1);
         assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(6);
     }
 
