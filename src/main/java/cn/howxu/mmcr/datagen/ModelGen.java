@@ -3,7 +3,6 @@ package cn.howxu.mmcr.datagen;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
-import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.PortKinds;
@@ -19,9 +18,10 @@ import net.minecraft.data.PackOutput;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 
-import java.util.stream.Stream;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.stream.Stream;
+import java.util.function.Supplier;
 
 public final class ModelGen extends ModelProvider {
 
@@ -31,15 +31,29 @@ public final class ModelGen extends ModelProvider {
 
     @Override
     protected void registerModels(BlockModelGenerators blockModels, ItemModelGenerators itemModels) {
+        registerModels((BlockModelRegistration) (block, name) -> blockModels.createTrivialBlock(block.get(), TexturedModel.CUBE.updateTexture(
+                        m -> m.put(TextureSlot.ALL, textureFor(name)))),
+                (ItemModelRegistration) (item, name) -> itemModels.generateFlatItem(item.get(), ModelTemplates.FLAT_ITEM));
+    }
+
+    static List<GeneratedModel> collectRegisteredModels() {
+        List<GeneratedModel> models = new ArrayList<>();
+        registerModels((block, name) -> {
+                    models.add(new GeneratedModel(GeneratedModel.Kind.BLOCKSTATE, name));
+                    models.add(new GeneratedModel(GeneratedModel.Kind.ITEM, name));
+                }, (item, name) -> models.add(new GeneratedModel(GeneratedModel.Kind.ITEM, name)));
+        return models;
+    }
+
+    private static void registerModels(BlockModelRegistration blockRegistration,
+                                       ItemModelRegistration itemRegistration) {
         ModBlocks.BLOCKS.forEach((name, blockHolder) -> {
-            Block block = blockHolder.get();
-            if (shouldGenerateBlockModels(name, block)) {
-                blockModels.createTrivialBlock(block, TexturedModel.CUBE.updateTexture(
-                        m -> m.put(TextureSlot.ALL, textureFor(name))));
+            if (shouldGenerateBlockModels(name)) {
+                blockRegistration.register(blockHolder::get, name);
             }
         });
-        itemModels.generateFlatItem(ModItems.WRENCH.get(), ModelTemplates.FLAT_ITEM);
-        itemModels.generateFlatItem(ModItems.MULTIBLOCK_DETECTOR.get(), ModelTemplates.FLAT_ITEM);
+        itemRegistration.register(ModItems.WRENCH::get, "wrench");
+        itemRegistration.register(ModItems.MULTIBLOCK_DETECTOR::get, "multiblock_detector");
     }
 
     private static boolean isIoPort(String blockName) {
@@ -51,29 +65,27 @@ public final class ModelGen extends ModelProvider {
         return new Material(MMCR.id("block/" + blockName));
     }
 
-    static List<String> generatedDynamicBlocks() {
-        return ModBlocks.BLOCKS.entrySet().stream()
-                .filter(entry -> shouldGenerateBlockModels(entry.getKey()))
-                .map(Map.Entry::getKey)
-                .toList();
-    }
-
-    private static boolean isDynamicBlockName(String name) {
-        return isIoPort(name) || MachineDefinitions.allRegistrations().stream()
-                .map(registration -> MachineControllerSpec.defaultsFor(registration.id()).id().getPath())
-                .anyMatch(name::equals);
-    }
-
     private static boolean shouldGenerateBlockModels(String name) {
-        return !isDynamicBlockName(name);
+        return !isIoPort(name) && MachineDefinitions.allRegistrations().stream()
+                .map(registration -> MachineControllerSpec.defaultsFor(registration.id()).id().getPath())
+                .noneMatch(name::equals);
     }
 
-    private static boolean isDynamicBlock(String name, Block block) {
-        return block instanceof MachineControllerBlock || isIoPort(name);
+    @FunctionalInterface
+    private interface BlockModelRegistration {
+        void register(Supplier<Block> block, String name);
     }
 
-    private static boolean shouldGenerateBlockModels(String name, Block block) {
-        return !isDynamicBlock(name, block);
+    @FunctionalInterface
+    private interface ItemModelRegistration {
+        void register(Supplier<Item> item, String name);
+    }
+
+    record GeneratedModel(Kind kind, String name) {
+        enum Kind {
+            BLOCKSTATE,
+            ITEM
+        }
     }
 
     @Override
