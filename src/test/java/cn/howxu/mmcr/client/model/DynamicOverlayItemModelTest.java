@@ -2,6 +2,7 @@ package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModItems;
@@ -59,6 +60,32 @@ class DynamicOverlayItemModelTest {
         assertThat(description.baseModel()).isEqualTo(MMCR.id("block/dynamic_io_port"));
         assertThat(description.baseTexture()).isNotNull();
         assertThat(description.overlayTexture()).isEqualTo(MMCR.id("block/overlay_inputbus_normal"));
+        assertThat(description.overlayFaces()).containsExactlyInAnyOrder(Direction.values());
+    }
+
+    @Test
+    void parallel_controller_item_uses_port_style_dynamic_overlay() {
+        var block = cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get();
+
+        var description = DynamicOverlayItemModel.describeBlock(block);
+
+        assertThat(description.kind()).isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
+        assertThat(description.baseModel()).isEqualTo(MMCR.id("block/dynamic_io_port"));
+        assertThat(description.baseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
+        assertThat(description.overlayTexture()).isEqualTo(MMCR.id("block/overlay_parallel_controller_reinforced"));
+        assertThat(description.overlayFaces()).containsExactlyInAnyOrder(Direction.values());
+    }
+
+    @Test
+    void factory_controller_item_uses_port_style_dynamic_overlay() {
+        var block = cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("factory_controller").get();
+
+        var description = DynamicOverlayItemModel.describeBlock(block);
+
+        assertThat(description.kind()).isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
+        assertThat(description.baseModel()).isEqualTo(MMCR.id("block/dynamic_io_port"));
+        assertThat(description.baseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
+        assertThat(description.overlayTexture()).isEqualTo(MMCR.id("block/overlay_factory_controller"));
         assertThat(description.overlayFaces()).containsExactlyInAnyOrder(Direction.values());
     }
 

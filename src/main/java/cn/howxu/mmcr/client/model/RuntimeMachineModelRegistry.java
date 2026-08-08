@@ -1,10 +1,13 @@
 package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.block.FactoryControllerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.client.event.RegisterBlockStateModels;
@@ -39,7 +42,10 @@ public final class RuntimeMachineModelRegistry {
     }
 
     static boolean isDynamicBlock(Block block) {
-        return block instanceof MachineControllerBlock || block instanceof IOPortBlock;
+        return block instanceof MachineControllerBlock
+                || block instanceof IOPortBlock
+                || block instanceof ParallelControllerBlock
+                || block instanceof FactoryControllerBlock;
     }
 
     static Map<String, Block> dynamicBlockEntries() {
@@ -62,6 +68,9 @@ public final class RuntimeMachineModelRegistry {
         }
         if (block instanceof IOPortBlock port) {
             return portDefinition(port);
+        }
+        if (block instanceof ParallelControllerBlock || block instanceof FactoryControllerBlock) {
+            return portStyleDefinition(block);
         }
         throw new IllegalArgumentException("Unsupported dynamic machine block: " + block);
     }
@@ -87,6 +96,11 @@ public final class RuntimeMachineModelRegistry {
 
     static RuntimeBlockStateDefinition portDefinition(IOPortBlock block) {
         return new RuntimeBlockStateDefinition(MMCR.id(block.kind().id()),
+                List.of(new RuntimeVariant("", DynamicOverlayModelLoader.PORT_ID)));
+    }
+
+    static RuntimeBlockStateDefinition portStyleDefinition(Block block) {
+        return new RuntimeBlockStateDefinition(BuiltInRegistries.BLOCK.getKey(block),
                 List.of(new RuntimeVariant("", DynamicOverlayModelLoader.PORT_ID)));
     }
 

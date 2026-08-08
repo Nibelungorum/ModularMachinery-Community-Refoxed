@@ -31,6 +31,24 @@ class DynamicOverlayTexturesTest {
     }
 
     @Test
+    void parallel_and_factory_controllers_use_port_style_overlays() {
+        assertThat(DynamicOverlayTextures.portOverlayTextureForName("parallel_controller_16"))
+                .isEqualTo(MMCR.id("block/overlay_parallel_controller_reinforced"));
+        assertThat(DynamicOverlayTextures.portOverlayTextureForName("factory_controller"))
+                .isEqualTo(MMCR.id("block/overlay_factory_controller"));
+    }
+
+    @Test
+    void parallel_and_factory_overlay_texture_resources_exist() {
+        assertThat(textureResource("overlay_parallel_controller_normal.png")).isNotNull();
+        assertThat(textureResource("overlay_parallel_controller_reinforced.png")).isNotNull();
+        assertThat(textureResource("overlay_parallel_controller_super.png")).isNotNull();
+        assertThat(textureResource("overlay_parallel_controller_elite.png")).isNotNull();
+        assertThat(textureResource("overlay_parallel_controller_ultimate.png")).isNotNull();
+        assertThat(textureResource("overlay_factory_controller.png")).isNotNull();
+    }
+
+    @Test
     void controller_overlay_uses_cached_front_texture() {
         Identifier machineId = MMCR.id("press");
         Identifier frontTexture = MMCR.id("block/press_controller");
@@ -44,5 +62,10 @@ class DynamicOverlayTexturesTest {
 
         assertThat(DynamicOverlayTextures.controllerOverlayTexture(machineId))
                 .isEqualTo(frontTexture);
+    }
+
+    private static java.net.URL textureResource(String name) {
+        return DynamicOverlayTexturesTest.class.getClassLoader()
+                .getResource("assets/mmcr/textures/block/" + name);
     }
 }

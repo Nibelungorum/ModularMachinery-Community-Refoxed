@@ -53,7 +53,7 @@ public final class DynamicOverlayBakedModel {
     public static TextureSet portTextures(Identifier machineId, Identifier explicitBaseTexture, Identifier overlayTexture) {
         Identifier base = explicitBaseTexture != null
                 ? explicitBaseTexture
-                : MachineAppearanceCache.specFor(machineId).formedPortBaseTexture();
+                : machineId == null ? MMCR.id("block/basic_casing") : MachineAppearanceCache.specFor(machineId).formedPortBaseTexture();
         return new TextureSet(base, overlayTexture);
     }
 

@@ -2,6 +2,7 @@ package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -39,6 +40,17 @@ class RuntimeMachineModelRegistryTest {
         var definition = RuntimeMachineModelRegistry.portDefinition(block);
 
         assertThat(definition.variants()).singleElement()
+                .satisfies(variant -> assertThat(variant.modelId()).isEqualTo(DynamicOverlayModelLoader.PORT_ID));
+    }
+
+    @Test
+    void parallel_and_factory_controllers_use_dynamic_port_loader() {
+        var parallel = ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get();
+        var factory = ModBlocks.BLOCKS.get("factory_controller").get();
+
+        assertThat(RuntimeMachineModelRegistry.dynamicBlockState(parallel).variants()).singleElement()
+                .satisfies(variant -> assertThat(variant.modelId()).isEqualTo(DynamicOverlayModelLoader.PORT_ID));
+        assertThat(RuntimeMachineModelRegistry.dynamicBlockState(factory).variants()).singleElement()
                 .satisfies(variant -> assertThat(variant.modelId()).isEqualTo(DynamicOverlayModelLoader.PORT_ID));
     }
 

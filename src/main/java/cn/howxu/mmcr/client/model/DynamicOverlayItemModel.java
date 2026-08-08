@@ -1,8 +1,10 @@
 package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.block.FactoryControllerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.client.renderer.block.dispatch.BlockModelRotation;
@@ -117,6 +119,12 @@ public final class DynamicOverlayItemModel implements ItemModel {
         if (block instanceof IOPortBlock port) {
             return Description.port(port.kind());
         }
+        if (block instanceof ParallelControllerBlock parallel) {
+            return Description.portStyle(parallel.tier().idSuffix());
+        }
+        if (block instanceof FactoryControllerBlock) {
+            return Description.portStyle("factory_controller");
+        }
         return Description.staticItem();
     }
 
@@ -138,6 +146,13 @@ public final class DynamicOverlayItemModel implements ItemModel {
             Identifier overlay = DynamicOverlayTextures.portOverlayTexture(kind);
             DynamicOverlayBakedModel.TextureSet textures = DynamicOverlayBakedModel.portTextures(MMCR.id("runtime_port_item"), null, overlay);
             return new Description(DynamicOverlayBakedModel.Kind.PORT, null, kind,
+                    MMCR.id("block/dynamic_io_port"), textures.base(), textures.overlay(), EnumSet.allOf(Direction.class));
+        }
+
+        static Description portStyle(String blockName) {
+            Identifier overlay = DynamicOverlayTextures.portOverlayTextureForName(blockName);
+            DynamicOverlayBakedModel.TextureSet textures = DynamicOverlayBakedModel.portTextures(MMCR.id("runtime_port_item"), null, overlay);
+            return new Description(DynamicOverlayBakedModel.Kind.PORT, null, null,
                     MMCR.id("block/dynamic_io_port"), textures.base(), textures.overlay(), EnumSet.allOf(Direction.class));
         }
 

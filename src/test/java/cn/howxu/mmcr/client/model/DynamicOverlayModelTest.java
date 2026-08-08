@@ -79,6 +79,17 @@ class DynamicOverlayModelTest {
     }
 
     @Test
+    void port_style_resolver_uses_basic_casing_when_machine_id_is_absent() {
+        DynamicOverlayBakedModel.TextureSet textures = DynamicOverlayBakedModel.portTextures(
+                null,
+                null,
+                MMCR.id("block/overlay_factory_controller"));
+
+        assertThat(textures.base()).isEqualTo(MMCR.id("block/basic_casing"));
+        assertThat(textures.overlay()).isEqualTo(MMCR.id("block/overlay_factory_controller"));
+    }
+
+    @Test
     void port_overlay_texture_uses_matching_port_tier() {
         assertThat(DynamicOverlayTextures.portOverlayTextureForName("item_input_bus_big"))
                 .isEqualTo(MMCR.id("block/overlay_inputbus_big"));
