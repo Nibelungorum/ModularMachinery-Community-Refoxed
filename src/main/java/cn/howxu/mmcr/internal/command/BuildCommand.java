@@ -25,7 +25,6 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.gameevent.GameEvent;
-import org.nibelungorum.DefaultMachines;
 
 public final class BuildCommand {
 
@@ -57,8 +56,6 @@ public final class BuildCommand {
     private static int run(CommandContext<CommandSourceStack> ctx, Identifier requested) throws CommandSyntaxException {
         ServerPlayer player = ctx.getSource().getPlayerOrException();
         ServerLevel level = player.level();
-        DefaultMachines.ensureRegistered();
-
         MachineSelector.Result selection = MachineSelector.select(requested, MachineRegistry.getAll());
         if (selection.machine() == null) {
             ctx.getSource().sendFailure(net.minecraft.network.chat.Component.literal(

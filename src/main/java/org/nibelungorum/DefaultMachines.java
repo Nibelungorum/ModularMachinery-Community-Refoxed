@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
@@ -47,7 +48,7 @@ public final class DefaultMachines {
     }
 
     public static void ensureRegistered() {
-        cn.howxu.mmcr.api.machine.MachineStructureRegistry.replaceDynamic(structures());
+        MachineStructureRegistry.replaceDynamic(structures());
     }
 
     public static Map<Identifier, MachineStructureDefinition> structures() {

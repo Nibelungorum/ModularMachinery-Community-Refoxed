@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -64,12 +65,13 @@ class MachineControllerBlockEntityTest {
     void cleanup() {
         MachineDefinitions.clearForTesting();
         MachineRegistry.clearForTesting();
+        MachineStructureRegistry.clearForTesting();
         RecipeRegistry.clearForTesting();
     }
 
     @Test
     void bind_default_machine_uses_owning_machine_id() {
-        DefaultMachines.ensureRegistered();
+        TestBootstrap.registerRuntimeBuiltins();
         var be = controllerBlockEntityWithoutRunningMinecraftConstructor();
 
         be.bindDefaultMachine(MMCR.id("blast_furnace"));
@@ -257,7 +259,7 @@ class MachineControllerBlockEntityTest {
 
     @Test
     void built_in_blast_furnace_rejects_three_arbitrary_ports() throws Exception {
-        DefaultMachines.ensureRegistered();
+        TestBootstrap.registerRuntimeBuiltins();
         DynamicMachine machine = (DynamicMachine) MachineRegistry.getMachine(MMCR.id("blast_furnace"));
         BlockPos controllerPos = new BlockPos(20, 4, 20);
         MachineControllerBlockEntity controller = controllerForDefaultBlastFurnace(
@@ -275,7 +277,7 @@ class MachineControllerBlockEntityTest {
 
     @Test
     void built_in_blast_furnace_forms_with_required_ports() throws Exception {
-        DefaultMachines.ensureRegistered();
+        TestBootstrap.registerRuntimeBuiltins();
         DynamicMachine machine = (DynamicMachine) MachineRegistry.getMachine(MMCR.id("blast_furnace"));
         BlockPos controllerPos = new BlockPos(20, 4, 20);
         MachineControllerBlockEntity controller = controllerForDefaultBlastFurnace(

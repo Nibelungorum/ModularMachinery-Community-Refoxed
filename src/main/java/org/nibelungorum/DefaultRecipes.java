@@ -19,6 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -39,14 +40,31 @@ public final class DefaultRecipes {
     }
 
     public static void ensureRegistered() {
+        registerStatic(recipes().values().stream().toList());
+    }
+
+    public static Map<Identifier, MachineRecipe> recipes() {
+        Map<Identifier, MachineRecipe> recipes = new java.util.LinkedHashMap<>();
         for (Definition definition : definitions()) {
-            if (RecipeRegistry.getRecipe(definition.id()) == null) {
-                register(new MachineRecipe(definition.id(), definition.machineId(), definition.ticks(), definition.inputs(),
-                        definition.outputs(), List.of(), 0, 1, true, definition.fluidOutputs()));
+            MachineRecipe recipe = createRecipe(definition);
+            recipes.put(recipe.id(), recipe);
+        }
+        return Map.copyOf(recipes);
+    }
+
+    public static void registerStatic(List<MachineRecipe> recipes) {
+        for (MachineRecipe recipe : recipes) {
+            if (RecipeRegistry.getRecipe(recipe.id()) == null) {
+                register(recipe);
             } else {
-                LOG.info("ensureRegistered: built-in recipe {} already registered; skipping", definition.id());
+                LOG.info("ensureRegistered: built-in recipe {} already registered; skipping", recipe.id());
             }
         }
+    }
+
+    private static MachineRecipe createRecipe(Definition definition) {
+        return new MachineRecipe(definition.id(), definition.machineId(), definition.ticks(), definition.inputs(),
+                definition.outputs(), List.of(), 0, 1, true, definition.fluidOutputs());
     }
 
     private static List<Definition> definitions() {

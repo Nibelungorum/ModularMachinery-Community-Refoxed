@@ -3,6 +3,7 @@ package cn.howxu.mmcr;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.command.BuildCommand;
 import cn.howxu.mmcr.internal.command.ExportCommand;
@@ -110,9 +111,21 @@ public class MMCR {
     }
 
     public static void registerRuntimeBuiltins() {
-        DynamicContentReloadService.reload(candidate -> DefaultMachines.structures().values().forEach(candidate::registerStructure));
-        DefaultRecipes.ensureRegistered();
+        DynamicContentReloadService.reload(candidate -> {
+            DefaultMachines.structures().values().forEach(candidate::registerStructure);
+            registerGameTestMachineStructuresIfPresent(candidate);
+        });
+        DefaultRecipes.registerStatic(DefaultRecipes.recipes().values().stream().toList());
         MachineRegistry.rebuildCompiledCache();
+    }
+
+    static void registerGameTestMachineStructuresIfPresent(DynamicContentReloadService.Candidate candidate) {
+        try {
+            Class.forName("cn.howxu.mmcr.GameTestRegistry");
+        } catch (ClassNotFoundException ignored) {
+            return;
+        }
+        registerGameTestMachineStructures(candidate);
     }
 
     static void registerGameTestMachineDefinitionsIfPresent() {
@@ -128,6 +141,18 @@ public class MMCR {
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("test_cube")).localizedName("Test").build());
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("controller_tick")).localizedName("Controller Tick").build());
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("iron_compressor")).localizedName("Iron Compressor").build());
+    }
+
+    public static void registerGameTestMachineStructures(DynamicContentReloadService.Candidate candidate) {
+        candidate.registerStructure(new MachineStructureDefinition(
+                id("test_cube"), org.nibelungorum.TestMachines.casingCubePattern(),
+                cn.howxu.mmcr.api.machine.PortRequirementSpec.none(), java.util.List.of(), java.util.Map.of()));
+        candidate.registerStructure(new MachineStructureDefinition(
+                id("controller_tick"), org.nibelungorum.TestMachines.casingCubePattern(),
+                cn.howxu.mmcr.api.machine.PortRequirementSpec.none(), java.util.List.of(), java.util.Map.of()));
+        candidate.registerStructure(new MachineStructureDefinition(
+                id("iron_compressor"), org.nibelungorum.TestMachines.ironCompressorPattern(),
+                cn.howxu.mmcr.api.machine.PortRequirementSpec.none(), java.util.List.of(), java.util.Map.of()));
     }
 
     private static void registerGameTests(RegisterGameTestsEvent event) {

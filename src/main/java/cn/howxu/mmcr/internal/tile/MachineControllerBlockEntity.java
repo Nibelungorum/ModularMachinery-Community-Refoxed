@@ -40,7 +40,6 @@ import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.Nullable;
-import org.nibelungorum.DefaultMachines;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -854,7 +853,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     void bindDefaultMachine(Identifier machineId) {
-        DefaultMachines.ensureRegistered();
         Machine resolved = cn.howxu.mmcr.api.machine.MachineRegistry.getMachine(machineId);
         if (resolved == null) {
             for (Machine candidate : cn.howxu.mmcr.api.machine.MachineRegistry.getAll().values()) {
