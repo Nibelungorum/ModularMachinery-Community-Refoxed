@@ -61,10 +61,11 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         Material.Baked base = material(textures.base());
         Material.Baked overlay = material(textures.overlay());
         Direction overlayFace = overlayFace(state);
+        Direction rollFacing = rollFacing(state);
         for (Direction direction : Direction.values()) {
             addFace(quads, direction, base, 0.0f, true);
             if (direction == overlayFace || overlayFace == null) {
-                addFace(quads, direction, overlay, OVERLAY_GROW, false);
+                addFace(quads, direction, rollFacing, overlay, OVERLAY_GROW, false);
             }
         }
 
@@ -97,6 +98,13 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         return null;
     }
 
+    private Direction rollFacing(BlockState state) {
+        if (kind == DynamicOverlayBakedModel.Kind.CONTROLLER && state.hasProperty(MachineControllerBlock.ROLL_FACING)) {
+            return state.getValue(MachineControllerBlock.ROLL_FACING);
+        }
+        return Direction.NORTH;
+    }
+
     private static Identifier machineId(BlockState state, ModelData modelData) {
         Identifier modelDataId = modelData.get(MachineModelDataKeys.MACHINE_ID);
         if (modelDataId != null) {
@@ -121,6 +129,11 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
 
     static void addFace(QuadCollection.Builder quads, Direction direction, Material.Baked material,
                         float grow, boolean culled) {
+        addFace(quads, direction, Direction.NORTH, material, grow, culled);
+    }
+
+    static void addFace(QuadCollection.Builder quads, Direction direction, Direction rollFacing, Material.Baked material,
+                        float grow, boolean culled) {
         QuadBakingVertexConsumer builder = new QuadBakingVertexConsumer();
         builder.setSprite(material);
         builder.setDirection(direction);
@@ -128,7 +141,8 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
 
         Vec3i normal = direction.getUnitVec3i();
         for (Vector3f vertex : vertices(direction, grow)) {
-            putVertex(builder, material, normal, vertex.x(), vertex.y(), vertex.z(), u(direction, vertex), v(direction, vertex));
+            float[] uv = uv(direction, rollFacing, vertex);
+            putVertex(builder, material, normal, vertex.x(), vertex.y(), vertex.z(), uv[0], uv[1]);
         }
 
         if (culled) {
@@ -159,6 +173,18 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
             case SOUTH -> List.of(new Vector3f(min, max, max), new Vector3f(min, min, max), new Vector3f(max, min, max), new Vector3f(max, max, max));
             case NORTH -> List.of(new Vector3f(max, max, min), new Vector3f(max, min, min), new Vector3f(min, min, min), new Vector3f(min, max, min));
         };
+    }
+
+    static float[] uv(Direction direction, Direction rollFacing, Vector3f vertex) {
+        if (direction.getAxis().isVertical()) {
+            return switch (rollFacing) {
+                case EAST -> new float[]{1.0f - vertex.z(), vertex.x()};
+                case SOUTH -> new float[]{vertex.x(), vertex.z()};
+                case WEST -> new float[]{vertex.z(), 1.0f - vertex.x()};
+                default -> new float[]{1.0f - vertex.x(), 1.0f - vertex.z()};
+            };
+        }
+        return new float[]{u(direction, vertex), v(direction, vertex)};
     }
 
     private static float u(Direction direction, Vector3f vertex) {

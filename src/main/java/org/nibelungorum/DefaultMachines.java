@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
@@ -141,16 +142,13 @@ public final class DefaultMachines {
                 .build();
 
         PortRequirementSpec portRequirements = PortRequirementSpec.none();
-        PortTierRequirementSpec tierRequirements = PortTierRequirementSpec.builder()
-                .minItemInput(ItemBusSize.REINFORCED)
-                .minEnergyInput(EnergyHatchSize.BIG)
-                .anyItemOutput()
-                .build();
+        PortTierRequirementSpec tierRequirements = PortTierRequirementSpec.none();
         return new DynamicMachine(
                 ALLOY_FURNACE_ID,
                 "合金炉",
                 pattern,
                 MachineControllerSpec.defaultsFor(ALLOY_FURNACE_ID),
+                MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("bricks")),
                 portRequirements,
                 tierRequirements,
                 List.of(),
@@ -262,7 +260,7 @@ public final class DefaultMachines {
                 .pattern("AAXXXXXAA", "  EFFFE  ", "  EFFFE  ", "  EFFFE  ", "  JJJJJ  ", "         ", "         ", "         ")
                 .pattern(" AAXXXAA ", "   DID   ", "         ", "         ", "         ", "         ", "         ", "         ")
                 .pattern("  AAAAA  ", "         ", "         ", "         ", "         ", "         ", "         ", "         ")
-                .set('X', new BlockPredicate.OfBlock(Blocks.REINFORCED_DEEPSLATE))
+                .set('X', new BlockPredicate.OfBlock(Blocks.BLUE_ICE))
                 .set('A', new BlockPredicate.OfBlock(Blocks.DEEPSLATE_BRICK_STAIRS))
                 .set('D', optionalSlot)
                 .set('E', new BlockPredicate.OfBlock(Blocks.POLISHED_DEEPSLATE))
@@ -278,14 +276,17 @@ public final class DefaultMachines {
                 .build();
 
         PortRequirementSpec portRequirements = PortRequirementSpec.none();
-        PortTierRequirementSpec tierRequirements = PortTierRequirementSpec.builder()
-                .minEnergyOutput(EnergyHatchSize.ULTIMATE)
-                .minFluidInput(FluidHatchSize.BIG)
-                .minFluidOutput(FluidHatchSize.LUDICROUS)
-                .anyItemInput()
-                .anyItemOutput()
-                .build();
-        return new DynamicMachine(REACTOR_ID, "反应堆", pattern, MachineControllerSpec.defaultsFor(REACTOR_ID), portRequirements, tierRequirements, List.of(), Map.of());
+        PortTierRequirementSpec tierRequirements = PortTierRequirementSpec.none();
+        return new DynamicMachine(
+                REACTOR_ID,
+                "反应堆",
+                pattern,
+                MachineControllerSpec.defaultsFor(REACTOR_ID),
+                MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("blue_ice")),
+                portRequirements,
+                tierRequirements,
+                List.of(),
+                Map.of());
     }
 
     private static BlockPredicate portFamily(IOType ioType, PortTierRequirementSpec.PortCategory category) {

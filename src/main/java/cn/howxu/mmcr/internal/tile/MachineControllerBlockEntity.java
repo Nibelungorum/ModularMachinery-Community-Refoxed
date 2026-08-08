@@ -566,16 +566,27 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void resetLinkedPorts() {
         Set<BlockPos> linkedPortPositions = linkedPortPositions();
-        if (level == null || linkedPortPositions.isEmpty()) {
+        if (level == null) {
             linkedPortPositions.clear();
             return;
         }
+        resetPortsAtCurrentStructurePositions();
         for (BlockPos portPos : linkedPortPositions) {
             if (level.getBlockEntity(portPos) instanceof IOPortBlockEntity port) {
                 port.resetAppearanceBaseTexture();
             }
         }
         linkedPortPositions.clear();
+    }
+
+    private void resetPortsAtCurrentStructurePositions() {
+        if (level == null || foundPattern == null) return;
+        for (BlockPos relativePos : componentPositions()) {
+            BlockPos worldPos = getBlockPos().offset(relativePos);
+            if (level.getBlockEntity(worldPos) instanceof IOPortBlockEntity port) {
+                port.resetAppearanceBaseTexture();
+            }
+        }
     }
 
     private Set<BlockPos> linkedPortPositions() {

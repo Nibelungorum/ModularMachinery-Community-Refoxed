@@ -826,6 +826,33 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void reset_restores_formed_port_texture_even_when_linked_positions_were_lost() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockPos portPos = controllerPos.offset(1, 0, 0);
+        BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
+        DynamicMachine machine = new DynamicMachine(
+                MMCR.id("appearance_reset_machine"),
+                "Appearance Reset",
+                pattern,
+                MachineControllerSpec.defaultsFor(MMCR.id("appearance_reset_machine")),
+                cn.howxu.mmcr.api.machine.MachineAppearanceSpec.fromBasicBlock(net.minecraft.resources.Identifier.withDefaultNamespace("blue_ice")),
+                PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(),
+                List.of(),
+                Map.of());
+        MachineRegistry.register(machine);
+        IOPortBlockEntity port = itemInputBus(portPos);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, port);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        assertThat(port.appearanceBaseTexture()).isEqualTo(net.minecraft.resources.Identifier.withDefaultNamespace("block/blue_ice"));
+        setField(MachineControllerBlockEntity.class, controller, "linkedPortPositions", new java.util.HashSet<>());
+
+        invokeResetMachine(controller);
+
+        assertThat(port.appearanceBaseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
+    }
+
+    @Test
     void static_block_change_marker_marks_matching_formed_controller_dirty() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         BlockPos portPos = controllerPos.offset(1, 0, 0);

@@ -65,7 +65,7 @@ public final class DynamicOverlayItemModel implements ItemModel {
         }
         renderState.appendModelIdentityElement(description);
 
-        BaseModel baseModel = baseModel(description.baseModel());
+        BaseModel baseModel = baseModel(description.baseModel(), description.baseTexture());
         baseModel.applyToLayer(renderState.newLayer(), displayContext, transformation);
 
         Material.Baked overlay = material(description.overlayTexture());
@@ -82,12 +82,17 @@ public final class DynamicOverlayItemModel implements ItemModel {
         layer.prepareQuadList().addAll(quads.build().getAll());
     }
 
-    private BaseModel baseModel(Identifier modelId) {
+    private BaseModel baseModel(Identifier modelId, Identifier baseTexture) {
         var model = modelBaker.getModel(modelId);
         var textures = model.getTopTextureSlots();
-        var quads = model.bakeTopGeometry(textures, modelBaker, BlockModelRotation.IDENTITY).getAll();
+        QuadCollection.Builder quads = new QuadCollection.Builder();
+        Material.Baked base = material(baseTexture);
+        for (Direction direction : Direction.values()) {
+            DynamicOverlayModelLoader.addFace(quads, direction, base, 0.0f, true);
+        }
         var renderProperties = ModelRenderProperties.fromResolvedModel(modelBaker, model, textures);
-        return new BaseModel(quads, () -> CuboidItemModelWrapper.computeExtents(quads), renderProperties);
+        List<BakedQuad> builtQuads = quads.build().getAll();
+        return new BaseModel(builtQuads, () -> CuboidItemModelWrapper.computeExtents(builtQuads), renderProperties);
     }
 
     private Material.Baked material(Identifier texture) {

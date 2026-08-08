@@ -79,6 +79,9 @@ class DefaultMachinesTest {
         assertThat(machine).isNotNull();
         assertThat(machine.localizedName()).isEqualTo("合金炉");
         assertThat(machine.controller().id()).isEqualTo(MMCR.id("alloy_furnace_controller"));
+        assertThat(machine.appearance().machineBasicBlock()).isEqualTo(net.minecraft.resources.Identifier.withDefaultNamespace("bricks"));
+        assertThat(machine.appearance().controllerBaseTexture()).isEqualTo(net.minecraft.resources.Identifier.withDefaultNamespace("block/bricks"));
+        assertThat(machine.appearance().formedPortBaseTexture()).isEqualTo(net.minecraft.resources.Identifier.withDefaultNamespace("block/bricks"));
         assertThat(machine.portRequirements().isEmpty()).isTrue();
         assertThat(machine.pattern().pattern()).hasSize(26);
         assertThat(machine.pattern().get(BlockPos.ZERO))
@@ -161,6 +164,9 @@ class DefaultMachinesTest {
         assertThat(machine).isNotNull();
         assertThat(machine.localizedName()).isEqualTo("反应堆");
         assertThat(machine.controller().id()).isEqualTo(MMCR.id("reactor_controller"));
+        assertThat(machine.appearance().machineBasicBlock()).isEqualTo(net.minecraft.resources.Identifier.withDefaultNamespace("blue_ice"));
+        assertThat(machine.appearance().controllerBaseTexture()).isEqualTo(net.minecraft.resources.Identifier.withDefaultNamespace("block/blue_ice"));
+        assertThat(machine.appearance().formedPortBaseTexture()).isEqualTo(net.minecraft.resources.Identifier.withDefaultNamespace("block/blue_ice"));
         assertThat(machine.portRequirements().isEmpty()).isTrue();
         assertThat(machine.pattern().get(BlockPos.ZERO))
                 .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine.registryName()).get()));
@@ -173,7 +179,7 @@ class DefaultMachinesTest {
         assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(ModBlocks.BLOCKS.get("energy_output_hatch").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(ModBlocks.BLOCKS.get("energy_output_hatch_ultimate").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(net.minecraft.world.level.block.Blocks.BLUE_ICE.defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(0, -1, -6)).matches(net.minecraft.world.level.block.Blocks.REINFORCED_DEEPSLATE.defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(0, -1, -6)).matches(net.minecraft.world.level.block.Blocks.BLUE_ICE.defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(0, -1, 1)).matches(net.minecraft.world.level.block.Blocks.DEEPSLATE_BRICK_STAIRS.defaultBlockState())).isTrue();
     }
 
@@ -234,11 +240,11 @@ class DefaultMachinesTest {
         assertThat(requirementIds(MachineRegistry.getMachine(MMCR.id("blast_furnace"))))
                 .contains("energy_input_hatch>=ludicrous", "item_input_bus>=normal");
         assertThat(requirementIds(MachineRegistry.getMachine(MMCR.id("alloy_furnace"))))
-                .contains("item_input_bus>=reinforced", "energy_input_hatch>=big");
+                .isEmpty();
         assertThat(requirementIds(MachineRegistry.getMachine(MMCR.id("cracker"))))
                 .contains("fluid_output_hatch>=huge", "energy_input_hatch>=reinforced", "item_input_bus>=normal");
         assertThat(requirementIds(MachineRegistry.getMachine(MMCR.id("reactor"))))
-                .contains("energy_output_hatch>=ultimate", "fluid_input_hatch>=big", "fluid_output_hatch>=ludicrous");
+                .isEmpty();
     }
 
     private static List<String> requirementIds(Machine machine) {

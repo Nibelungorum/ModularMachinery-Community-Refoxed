@@ -1,6 +1,7 @@
 package org.nibelungorum;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
@@ -57,6 +58,7 @@ public final class BuiltinMachines {
             return MachineRegistration.builder(ALLOY_FURNACE_ID)
                     .localizedName("合金炉")
                     .controllerSpec(controller)
+                    .appearance(MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("bricks")))
                     .recipeFamilyId(ALLOY_FURNACE_ID)
                     .allowModifiers(true)
                     .build();
@@ -93,6 +95,7 @@ public final class BuiltinMachines {
             return MachineRegistration.builder(REACTOR_ID)
                     .localizedName("反应堆")
                     .controllerSpec(controller)
+                    .appearance(MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("blue_ice")))
                     .recipeFamilyId(REACTOR_ID)
                     .allowModifiers(false)
                     .build();

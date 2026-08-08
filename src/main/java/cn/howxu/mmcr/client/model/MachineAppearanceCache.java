@@ -2,6 +2,7 @@ package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import net.minecraft.resources.Identifier;
 import net.neoforged.fml.loading.FMLPaths;
 
@@ -38,7 +39,11 @@ public final class MachineAppearanceCache {
 
     public static MachineAppearanceSpec specFor(Identifier machineId) {
         MachineAppearanceSpec spec = snapshot.get(machineId);
-        return spec != null ? spec : MachineAppearanceSpec.defaults();
+        if (spec != null) {
+            return spec;
+        }
+        var registration = MachineDefinitions.getRegistration(machineId);
+        return registration != null ? registration.appearance() : MachineAppearanceSpec.defaults();
     }
 
     public static long revision() {

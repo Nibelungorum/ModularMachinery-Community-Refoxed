@@ -38,6 +38,17 @@ class DynamicOverlayItemModelTest {
     }
 
     @Test
+    void reactor_controller_item_uses_machine_appearance_base_texture() {
+        var item = ModItems.ITEMS.get("reactor_controller").get();
+
+        var description = DynamicOverlayItemModel.describeItem(item);
+
+        assertThat(description.kind()).isEqualTo(DynamicOverlayBakedModel.Kind.CONTROLLER);
+        assertThat(description.machineId()).isEqualTo(MMCR.id("reactor"));
+        assertThat(description.baseTexture()).isEqualTo(net.minecraft.resources.Identifier.withDefaultNamespace("block/blue_ice"));
+    }
+
+    @Test
     void port_item_resolves_from_block_item() {
         var block = cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get();
 

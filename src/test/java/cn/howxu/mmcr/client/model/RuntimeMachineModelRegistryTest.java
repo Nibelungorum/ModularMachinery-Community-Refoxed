@@ -7,6 +7,8 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.core.Direction;
+import org.joml.Vector3f;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -47,6 +49,16 @@ class RuntimeMachineModelRegistryTest {
         String json = RuntimeMachineModelRegistry.blockStateJson(RuntimeMachineModelRegistry.portDefinition(block));
 
         assertThat(json).contains("\"type\": \"mmcr:dynamic_port_overlay\"");
+    }
+
+    @Test
+    void vertical_controller_overlay_uv_uses_roll_facing() {
+        Vector3f northWest = new Vector3f(0.0f, 1.0f, 0.0f);
+
+        assertThat(DynamicOverlayModelLoader.uv(Direction.UP, Direction.NORTH, northWest)).containsExactly(1.0f, 1.0f);
+        assertThat(DynamicOverlayModelLoader.uv(Direction.UP, Direction.EAST, northWest)).containsExactly(1.0f, 0.0f);
+        assertThat(DynamicOverlayModelLoader.uv(Direction.UP, Direction.SOUTH, northWest)).containsExactly(0.0f, 0.0f);
+        assertThat(DynamicOverlayModelLoader.uv(Direction.UP, Direction.WEST, northWest)).containsExactly(0.0f, 1.0f);
     }
 
 }
