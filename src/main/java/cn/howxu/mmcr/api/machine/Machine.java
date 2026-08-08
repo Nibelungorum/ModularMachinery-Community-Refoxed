@@ -17,6 +17,10 @@ public interface Machine {
         return PortRequirementSpec.none();
     }
 
+    default PortTierRequirementSpec portTierRequirements() {
+        return PortTierRequirementSpec.none();
+    }
+
     default RecipeFailureActions failureAction() {
         return RecipeFailureActions.getDefaultAction();
     }
