@@ -50,13 +50,14 @@ public class EnergyHatchCapabilityGameTest {
             tx.commit();
         }
 
-        outputHatch.getEnergyStorage(null).receiveEnergy(10000, false);
+        var outputStorage = outputHatch.getMutableEnergyStorage(null);
+        while (outputStorage.receiveEnergy(10000, false) > 0) {}
 
         try (Transaction tx = Transaction.openRoot()) {
             int inserted = output.insert(200, tx);
             int extracted = output.extract(700, tx);
             helper.assertTrue(inserted == 0, "Output energy capability rejects receiving");
-            helper.assertTrue(extracted == 700, "Output energy capability extracts");
+            helper.assertTrue(extracted == 512, "Output energy capability extracts up to transfer limit");
             tx.commit();
         }
 

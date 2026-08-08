@@ -41,7 +41,8 @@ public class E2ERecipeRunGameTest {
         helper.setBlock(outputPos, ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState());
         BlockPos energyPos = new BlockPos(2, 2, 1);
         helper.setBlock(energyPos, ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState());
-        helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).getEnergyStorage(null).receiveEnergy(10000, false);
+        var energyInput = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).getMutableEnergyStorage(null);
+        while (energyInput.receiveEnergy(10000, false) > 0) {}
 
         Map<BlockPos, BlockPredicate> pattern = new HashMap<>();
         for (int x = -1; x <= 1; x++) for (int z = -1; z <= 1; z++)
@@ -69,7 +70,7 @@ public class E2ERecipeRunGameTest {
         int energy = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).getEnergyStorage(null).getEnergyStored();
         helper.assertTrue(input.isEmpty(), "Input ingots consumed");
         helper.assertTrue(output.is(Items.IRON_NUGGET), "Output is iron nugget");
-        helper.assertTrue(energy == 6800, "Energy consumed per tick");
+        helper.assertTrue(energy == 4992, "Energy consumed per tick");
         helper.succeed();
     }
 
@@ -87,7 +88,8 @@ public class E2ERecipeRunGameTest {
 
         BlockPos energyPos = controllerPos.offset(-2, 0, 0);
         helper.setBlock(energyPos, ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState());
-        helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).getEnergyStorage(null).receiveEnergy(10000, false);
+        var energyInput = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).getMutableEnergyStorage(null);
+        while (energyInput.receiveEnergy(10000, false) > 0) {}
 
         Map<BlockPos, BlockPredicate> pattern = new HashMap<>();
         pattern.put(inputPos.subtract(controllerPos), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()));
@@ -114,7 +116,7 @@ public class E2ERecipeRunGameTest {
         int energy = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).getEnergyStorage(null).getEnergyStored();
         helper.assertTrue(input.isEmpty(), "Pattern input bus consumed ingot outside legacy scan");
         helper.assertTrue(output.is(Items.IRON_NUGGET), "Pattern output bus received nugget outside legacy scan");
-        helper.assertTrue(energy == 9000, "Pattern energy hatch consumed energy outside legacy scan");
+        helper.assertTrue(energy == 7192, "Pattern energy hatch consumed energy outside legacy scan");
         helper.succeed();
     }
 }

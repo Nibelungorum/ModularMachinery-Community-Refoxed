@@ -12,6 +12,8 @@ import net.neoforged.neoforge.items.ItemStackHandler;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class IOPortSizeTest {
@@ -54,6 +56,24 @@ class IOPortSizeTest {
         assertThat(storage(ultimate).getMaxEnergyStored()).isEqualTo(2097152);
     }
 
+    @Test
+    void energyHatchClampsLoadedEnergyToCapacity() {
+        EnergyHatchBlockEntity hatch = energyHatch("energy_input_hatch");
+        storage(hatch).receiveEnergy(8192, false);
+        setEnergy(storage(hatch), 100000);
+
+        assertThat(hatch.getEnergyStorage(null).getEnergyStored()).isEqualTo(storage(hatch).getMaxEnergyStored());
+    }
+
+    @Test
+    void energyHatchDoesNotExtractMoreThanCapacityWhenOverfilled() {
+        EnergyHatchBlockEntity hatch = energyHatch("energy_output_hatch");
+        storage(hatch).receiveEnergy(8192, false);
+        setEnergy(storage(hatch), 100000);
+
+        assertThat(hatch.getEnergyStorage(null).extractEnergy(20000, true)).isEqualTo(storage(hatch).getMaxEnergyStored());
+    }
+
     private static ItemBusBlockEntity itemBus(String id) {
         return (ItemBusBlockEntity) ModBlockEntities.BES.get(id).get().create(BlockPos.ZERO, state(id));
     }
@@ -80,5 +100,15 @@ class IOPortSizeTest {
 
     private static EnergyStorage storage(EnergyHatchBlockEntity hatch) {
         return hatch.getMutableEnergyStorage(null);
+    }
+
+    private static void setEnergy(EnergyStorage storage, int energy) {
+        try {
+            Field energyField = EnergyStorage.class.getDeclaredField("energy");
+            energyField.setAccessible(true);
+            energyField.setInt(storage, energy);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("Unable to set energy", e);
+        }
     }
 }

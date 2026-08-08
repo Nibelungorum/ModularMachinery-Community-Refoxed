@@ -80,4 +80,12 @@ class MenuScreenTest {
                 .extracting(MachineMenuScreen.BackgroundBlit::height)
                 .containsExactly(166, 18, 18, 18, 18, 18, 18);
     }
+
+    @Test
+    void background_blits_use_full_texture_dimensions() {
+        MachineMenuScreen.BackgroundBlit blit = MachineMenuScreen.backgroundBlit(0, 0, 176, 166);
+
+        assertThat(blit.sourceWidth()).isEqualTo(MachineMenuScreen.GUI_TEXTURE_SIZE);
+        assertThat(blit.sourceHeight()).isEqualTo(MachineMenuScreen.GUI_TEXTURE_SIZE);
+    }
 }

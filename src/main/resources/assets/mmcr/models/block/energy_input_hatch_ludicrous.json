@@ -1,7 +1,0 @@
-{
-  "parent": "mmcr:block/bus_hatch_overlay",
-  "textures": {
-    "bg_all": "mmcr:block/basic_casing",
-    "ov_all": "mmcr:block/overlay_energyinputhatch_normal"
-  }
-}

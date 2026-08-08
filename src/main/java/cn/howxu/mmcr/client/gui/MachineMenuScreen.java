@@ -162,11 +162,15 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         int y = (height - imageHeight) / 2;
         if (menu instanceof ItemBusMenu) {
             for (BackgroundBlit blit : itemBusBackgroundBlits(imageHeight)) {
+                BackgroundBlit drawBlit = backgroundBlit(blit.destY(), blit.sourceY(), imageWidth, blit.height());
                 graphics.blit(RenderPipelines.GUI_TEXTURED, textureFor(menu),
-                        x, y + blit.destY(), 0, blit.sourceY(), imageWidth, blit.height(), imageWidth, GUI_TEXTURE_SIZE);
+                        x, y + drawBlit.destY(), 0, drawBlit.sourceY(), drawBlit.width(), drawBlit.height(),
+                        drawBlit.sourceWidth(), drawBlit.sourceHeight());
             }
         } else {
-            graphics.blit(RenderPipelines.GUI_TEXTURED, textureFor(menu), x, y, 0, 0, imageWidth, imageHeight, imageWidth, GUI_TEXTURE_SIZE);
+            BackgroundBlit blit = backgroundBlit(0, 0, imageWidth, imageHeight);
+            graphics.blit(RenderPipelines.GUI_TEXTURED, textureFor(menu), x, y, 0, 0, blit.width(), blit.height(),
+                    blit.sourceWidth(), blit.sourceHeight());
         }
 
         if (menu instanceof FluidHatchMenu fh)        renderFluidTank(graphics, fh, x, y);
@@ -177,7 +181,15 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
      * 一个分段的 item bus 背景贴图指令。源区域(sourceY, height)必须在 {@link #GUI_TEXTURE_SIZE} 范围内,
      * 因为 {@code inventory_normal.png} 高度为 {@value #GUI_TEXTURE_SIZE}px。
      */
-    public record BackgroundBlit(int destY, int sourceY, int height) {}
+    public record BackgroundBlit(int destY, int sourceY, int width, int height, int sourceWidth, int sourceHeight) {
+        public BackgroundBlit(int destY, int sourceY, int height) {
+            this(destY, sourceY, 0, height, GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
+        }
+    }
+
+    public static BackgroundBlit backgroundBlit(int destY, int sourceY, int width, int height) {
+        return new BackgroundBlit(destY, sourceY, width, height, GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
+    }
 
     /**
      * 把 item bus 背景拆为多段绘制,避免一次 blit 时 sourceY 越界。

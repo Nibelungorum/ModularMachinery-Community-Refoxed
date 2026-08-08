@@ -98,27 +98,34 @@ public final class ModCapabilities {
 
         @Override
         public FluidResource getResource(int slot) {
+            checkSlot(slot);
             FluidStack stack = handler.getFluidInTank(slot);
             return stack.isEmpty() ? FluidResource.EMPTY : FluidResource.of(stack);
         }
 
         @Override
         public long getAmountAsLong(int slot) {
+            checkSlot(slot);
             return handler.getFluidInTank(slot).getAmount();
         }
 
         @Override
         public long getCapacityAsLong(int slot, FluidResource resource) {
+            checkSlot(slot);
             return handler.getTankCapacity(slot);
         }
 
         @Override
         public boolean isValid(int slot, FluidResource resource) {
+            checkSlot(slot);
+            TransferPreconditions.checkNonEmpty(resource);
             return handler.isFluidValid(slot, resource.toStack(1));
         }
 
         @Override
         public int insert(int slot, FluidResource resource, int amount, TransactionContext tx) {
+            checkSlot(slot);
+            TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
             if (!canInsert) return 0;
             updateSnapshots(tx);
             return handler.fill(resource.toStack(amount), IFluidHandler.FluidAction.EXECUTE);
@@ -126,9 +133,17 @@ public final class ModCapabilities {
 
         @Override
         public int extract(int slot, FluidResource resource, int amount, TransactionContext tx) {
+            checkSlot(slot);
+            TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
             if (!canExtract) return 0;
             updateSnapshots(tx);
             return handler.drain(resource.toStack(amount), IFluidHandler.FluidAction.EXECUTE).getAmount();
+        }
+
+        private void checkSlot(int slot) {
+            if (slot < 0 || slot >= handler.getTanks()) {
+                throw new IndexOutOfBoundsException(slot);
+            }
         }
 
         @Override

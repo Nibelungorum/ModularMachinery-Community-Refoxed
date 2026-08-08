@@ -50,6 +50,14 @@ public class FluidHatchCapabilityGameTest {
             tx.commit();
         }
 
+        try (Transaction tx = Transaction.openRoot()) {
+            try {
+                input.extract(0, FluidResource.of(Fluids.WATER), -1, tx);
+                helper.fail("Fluid capability rejects negative extraction amount");
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+
         outputHatch.getFluidHandler(null).fill(new FluidStack(Fluids.WATER, 2000), IFluidHandler.FluidAction.EXECUTE);
 
         try (Transaction tx = Transaction.openRoot()) {

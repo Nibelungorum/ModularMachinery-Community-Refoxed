@@ -127,9 +127,10 @@ dependencies {
 
     // Mek
     // runtimeOnly "com.github.mekanism:Mekanism:26.1.2-10.8.0.homebaked"
-    // Oritech
+    
     runtimeOnly "curse.maven:athena-841890:7970442"
     runtimeOnly "curse.maven:geckolib-388172:8327201"
+    // Oritech
     runtimeOnly "curse.maven:oritech-1030830:8571095"
     // pipez 1.2.31+26.1.2
     // runtimeOnly "curse.maven:pipez-443900:8351634"

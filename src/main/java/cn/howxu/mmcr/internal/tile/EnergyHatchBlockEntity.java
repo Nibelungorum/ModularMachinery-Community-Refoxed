@@ -27,6 +27,11 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
                 .orElseThrow(() -> new IllegalStateException("Energy hatch missing energy size: " + kind.id()));
         this.storage = new EnergyStorage(size.capacity(), size.transfer(), size.transfer()) {
             @Override
+            public int getEnergyStored() {
+                return Math.min(super.getEnergyStored(), getMaxEnergyStored());
+            }
+
+            @Override
             public int receiveEnergy(int maxReceive, boolean simulate) {
                 int received = super.receiveEnergy(maxReceive, simulate);
                 if (!simulate && received > 0) setChanged();
@@ -35,7 +40,10 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
 
             @Override
             public int extractEnergy(int maxExtract, boolean simulate) {
-                int extracted = super.extractEnergy(maxExtract, simulate);
+                int extracted = Math.min(maxExtract, getEnergyStored());
+                if (!simulate) {
+                    super.extractEnergy(extracted, false);
+                }
                 if (!simulate && extracted > 0) setChanged();
                 return extracted;
             }
