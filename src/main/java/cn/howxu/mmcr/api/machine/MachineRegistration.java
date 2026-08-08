@@ -12,6 +12,7 @@ public record MachineRegistration(
         Identifier id,
         String localizedName,
         MachineControllerSpec controllerSpec,
+        MachineAppearanceSpec appearance,
         Identifier recipeFamilyId,
         boolean allowModifiers
 ) {
@@ -19,6 +20,7 @@ public record MachineRegistration(
         if (id == null) throw new IllegalArgumentException("id null");
         if (localizedName == null || localizedName.isBlank()) throw new IllegalArgumentException("localizedName blank");
         controllerSpec = controllerSpec == null ? MachineControllerSpec.defaultsFor(id) : controllerSpec;
+        appearance = appearance == null ? MachineAppearanceSpec.defaults() : appearance;
         recipeFamilyId = recipeFamilyId == null ? id : recipeFamilyId;
     }
 
@@ -30,6 +32,7 @@ public record MachineRegistration(
         private final Identifier id;
         private String localizedName = "Unknown Machine";
         private MachineControllerSpec controllerSpec;
+        private MachineAppearanceSpec appearance;
         private Identifier recipeFamilyId;
         private boolean allowModifiers;
 
@@ -47,6 +50,11 @@ public record MachineRegistration(
             return this;
         }
 
+        public Builder appearance(MachineAppearanceSpec appearance) {
+            this.appearance = appearance;
+            return this;
+        }
+
         public Builder recipeFamilyId(Identifier recipeFamilyId) {
             this.recipeFamilyId = recipeFamilyId;
             return this;
@@ -58,7 +66,7 @@ public record MachineRegistration(
         }
 
         public MachineRegistration build() {
-            return new MachineRegistration(id, localizedName, controllerSpec, recipeFamilyId, allowModifiers);
+            return new MachineRegistration(id, localizedName, controllerSpec, appearance, recipeFamilyId, allowModifiers);
         }
     }
 }

@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.network;
 
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -28,8 +29,19 @@ public final class ControllerSpecSync {
         return Map.copyOf(snapshot);
     }
 
+    public static Map<Identifier, MachineAppearanceSpec> createAppearanceSnapshot() {
+        Map<Identifier, MachineAppearanceSpec> snapshot = new LinkedHashMap<>();
+        MachineRegistry.getAll().forEach((id, machine) -> {
+            if (ModBlocks.hasControllerFor(id)) {
+                snapshot.put(id, machine.appearance());
+            }
+        });
+        return Map.copyOf(snapshot);
+    }
+
     public static void sendTo(ServerPlayer player) {
         PacketDistributor.sendToPlayer(player, new PktControllerSpecsPayload(createSnapshot()));
+        PacketDistributor.sendToPlayer(player, new PktMachineAppearancePayload(createAppearanceSnapshot()));
     }
 
     public static void sendToAll(MinecraftServer server) {
