@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.datagen;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
@@ -19,6 +21,7 @@ import net.minecraft.world.level.block.Block;
 
 import java.util.stream.Stream;
 import java.util.List;
+import java.util.Map;
 
 public final class ModelGen extends ModelProvider {
 
@@ -30,7 +33,7 @@ public final class ModelGen extends ModelProvider {
     protected void registerModels(BlockModelGenerators blockModels, ItemModelGenerators itemModels) {
         ModBlocks.BLOCKS.forEach((name, blockHolder) -> {
             Block block = blockHolder.get();
-            if (!(block instanceof MachineControllerBlock) && !isIoPort(name)) {
+            if (shouldGenerateBlockModels(name, block)) {
                 blockModels.createTrivialBlock(block, TexturedModel.CUBE.updateTexture(
                         m -> m.put(TextureSlot.ALL, textureFor(name))));
             }
@@ -49,7 +52,28 @@ public final class ModelGen extends ModelProvider {
     }
 
     static List<String> generatedDynamicBlocks() {
-        return List.of();
+        return ModBlocks.BLOCKS.entrySet().stream()
+                .filter(entry -> shouldGenerateBlockModels(entry.getKey()))
+                .map(Map.Entry::getKey)
+                .toList();
+    }
+
+    private static boolean isDynamicBlockName(String name) {
+        return isIoPort(name) || MachineDefinitions.allRegistrations().stream()
+                .map(registration -> MachineControllerSpec.defaultsFor(registration.id()).id().getPath())
+                .anyMatch(name::equals);
+    }
+
+    private static boolean shouldGenerateBlockModels(String name) {
+        return !isDynamicBlockName(name);
+    }
+
+    private static boolean isDynamicBlock(String name, Block block) {
+        return block instanceof MachineControllerBlock || isIoPort(name);
+    }
+
+    private static boolean shouldGenerateBlockModels(String name, Block block) {
+        return !isDynamicBlock(name, block);
     }
 
     @Override

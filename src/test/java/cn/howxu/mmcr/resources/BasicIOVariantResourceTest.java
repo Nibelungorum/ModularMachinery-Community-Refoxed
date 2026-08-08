@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.resources;
 
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.datagen.Translations;
 import cn.howxu.mmcr.registry.PortKinds;
 import org.junit.jupiter.api.Test;
@@ -20,6 +22,25 @@ class BasicIOVariantResourceTest {
 
     private static final Path MAIN_ASSETS = Path.of("src/main/resources/assets/mmcr");
     private static final Path GENERATED_ASSETS = Path.of("src/generated/resources/assets/mmcr");
+
+    @Test
+    void defaultControllerKeepsTranslationsWithoutGeneratedModels() {
+        String id = MachineControllerSpec.defaultsFor(MMCR.id("blast_furnace")).id().getPath();
+
+        assertThat(assetExists("blockstates/" + id + ".json"))
+                .as(id + " blockstate")
+                .isFalse();
+        assertThat(assetExists("models/item/" + id + ".json"))
+                .as(id + " item model")
+                .isFalse();
+        assertThat(Translations.ALL.get("en_us"))
+                .as(id + " en_us translation")
+                .containsKey("block.mmcr." + id);
+        assertThat(Translations.ALL.get("zh_cn"))
+                .as(id + " zh_cn translation")
+                .containsKey("block.mmcr." + id);
+    }
+
     @Test
     void everyPortKindKeepsTranslationsWithoutGeneratedModels() {
         for (var kind : PortKinds.all()) {
