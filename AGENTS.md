@@ -6,6 +6,13 @@
 - 项目类型：Minecraft / Java / Gradle Mod 项目
 - 主要目标：移植reference/mmce项目(MC 1.12.2 Forge) 到当前项目 MC 26.1.2 NeoForge
 
+## 参照源码
+
+- 涉及NeoForge API相关的资源(如测试，注册，事件，模型，DataGen等)，不要反编译Gradle里的neforge。
+- /home/howxu/Projects/Applied-Energistics-2 可以参照部分26.1.2的API，这是最优先。
+- reference/gtceu 可以参照绝大部分实现，但是是1.21.1，这是次优先。
+- reference/neoforge 可以直接参照neoforge源代码，这是最终手段。
+
 ## 工作原则
 
 - 优先做最小正确改动，不进行无关重构。
@@ -14,7 +21,7 @@
 - 不添加用户未要求的功能、抽象层或配置项。
 - 如果需求存在多种解释，先说明假设；关键不确定点应先询问。
 - 减少测试的使用，测试只是辅助，先完成整体，再进行测试调整，而不是做一点测一点。
-- 涉及NeoForge API相关的资源(如测试，注册，事件，模型，DataGen等)，不要先去反编译neforge，先到/home/howxu/Projects/Applied-Energistics-2看看有没有案例可以参考。
+
 - 减少subagent使用。小范围，单需求使用3个subagent，一个注重写代码，一个负责写测试，一个负责debug和收尾。大范围，多需求可以在3的倍数上叠加。如果可以单agent直接做完更好。
 - 单元任务完成，通过验证，验收后，记得commit一下。
 - 优先按照MMCE进行移植，不一定要最小实现。

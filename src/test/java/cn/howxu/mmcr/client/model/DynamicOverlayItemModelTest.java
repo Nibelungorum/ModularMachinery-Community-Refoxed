@@ -9,6 +9,7 @@ import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Items;
+import net.minecraft.core.Direction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -30,6 +31,10 @@ class DynamicOverlayItemModelTest {
 
         assertThat(description.kind()).isEqualTo(DynamicOverlayBakedModel.Kind.CONTROLLER);
         assertThat(description.machineId()).isEqualTo(MMCR.id("blast_furnace"));
+        assertThat(description.baseModel()).isEqualTo(MMCR.id("block/dynamic_machine_controller"));
+        assertThat(description.baseTexture()).isNotNull();
+        assertThat(description.overlayTexture()).isNotNull();
+        assertThat(description.overlayFaces()).containsExactly(Direction.NORTH);
     }
 
     @Test
@@ -40,7 +45,10 @@ class DynamicOverlayItemModelTest {
 
         assertThat(description.kind()).isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
         assertThat(description.portKind()).isEqualTo(PortKinds.ITEM_INPUT);
+        assertThat(description.baseModel()).isEqualTo(MMCR.id("block/dynamic_io_port"));
+        assertThat(description.baseTexture()).isNotNull();
         assertThat(description.overlayTexture()).isEqualTo(MMCR.id("block/overlay_inputbus_normal"));
+        assertThat(description.overlayFaces()).containsExactlyInAnyOrder(Direction.values());
     }
 
     @Test

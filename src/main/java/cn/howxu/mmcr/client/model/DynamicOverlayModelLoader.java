@@ -60,9 +60,12 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
 
         Material.Baked base = material(textures.base());
         Material.Baked overlay = material(textures.overlay());
+        Direction overlayFace = overlayFace(state);
         for (Direction direction : Direction.values()) {
             addFace(quads, direction, base, 0.0f, true);
-            addFace(quads, direction, overlay, OVERLAY_GROW, false);
+            if (direction == overlayFace || overlayFace == null) {
+                addFace(quads, direction, overlay, OVERLAY_GROW, false);
+            }
         }
 
         parts.add(new SimpleModelWrapper(quads.build(), true, base));
@@ -85,6 +88,13 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         }
         Identifier base = level.getModelData(pos).get(MachineModelDataKeys.PORT_BASE_TEXTURE);
         return DynamicOverlayBakedModel.portTextures(machineId, base, portOverlayTexture(state));
+    }
+
+    private Direction overlayFace(BlockState state) {
+        if (kind == DynamicOverlayBakedModel.Kind.CONTROLLER && state.hasProperty(MachineControllerBlock.FACING)) {
+            return state.getValue(MachineControllerBlock.FACING);
+        }
+        return null;
     }
 
     private static Identifier machineId(BlockState state, ModelData modelData) {

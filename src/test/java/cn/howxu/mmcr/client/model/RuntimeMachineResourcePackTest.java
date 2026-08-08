@@ -22,7 +22,19 @@ class RuntimeMachineResourcePackTest {
         assertThat(RuntimeMachineResourcePack.resources().keySet())
                 .anyMatch(id -> id.equals(MMCR.id("blockstates/blast_furnace_controller.json")))
                 .anyMatch(id -> id.equals(MMCR.id("items/blast_furnace_controller.json")))
+                .anyMatch(id -> id.equals(MMCR.id("items/item_input_bus.json")))
                 .noneMatch(id -> id.equals(MMCR.id("blockstates/basic_casing.json")));
+    }
+
+    @Test
+    void generated_item_definitions_share_one_dynamic_item_model() {
+        var resources = RuntimeMachineResourcePack.resources();
+
+        assertThat(resources.get(MMCR.id("items/blast_furnace_controller.json")))
+                .isEqualTo(RuntimeMachineModelRegistry.itemDefinitionJson());
+        assertThat(resources.get(MMCR.id("items/item_input_bus.json")))
+                .isEqualTo(RuntimeMachineModelRegistry.itemDefinitionJson())
+                .contains("mmcr:dynamic_machine_item");
     }
 
     @Test

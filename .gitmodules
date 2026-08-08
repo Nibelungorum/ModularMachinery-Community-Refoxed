@@ -16,3 +16,7 @@
 	path = reference/pipez
 	url = https://github.com/henkelmax/pipez
 	branch = 26.1
+[submodule "reference/neoforge"]
+	path = reference/neoforge
+	url = https://github.com/neoforged/NeoForge
+	branch = 26.1.x
