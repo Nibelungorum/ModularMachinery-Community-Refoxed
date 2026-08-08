@@ -26,6 +26,26 @@ public class FactoryControllerBlockEntity extends BlockEntity {
         return threadLimit;
     }
 
+    public boolean hasLaneCapacity() {
+        return scheduler.hasCapacity();
+    }
+
+    public int laneCapacity() {
+        return scheduler.laneCapacity();
+    }
+
+    public boolean startLane(FactoryRecipeScheduler.Lane lane) {
+        boolean started = scheduler.startLane(lane);
+        if (started) setChanged();
+        return started;
+    }
+
+    public void tickScheduler() {
+        int before = scheduler.activeLaneCount();
+        scheduler.tick();
+        if (scheduler.activeLaneCount() != before) setChanged();
+    }
+
     public void setThreadLimit(int threadLimit) {
         stopAll();
         this.threadLimit = Math.max(1, threadLimit);

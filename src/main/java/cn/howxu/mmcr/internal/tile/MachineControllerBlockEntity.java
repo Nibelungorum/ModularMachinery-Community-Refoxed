@@ -22,6 +22,7 @@ import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
+import cn.howxu.mmcr.internal.recipe.FactoryRecipeLane;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -275,6 +276,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         boolean powered = level.getDirectSignalTo(getBlockPos()) > 0;
         redstonePaused = powered;
         if (powered) {
+            stopFactoryController();
             if (active != null) {
                 pausedActive = active;
                 pausedContext = context;
@@ -299,13 +301,31 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
         if (shouldCheckStructure()) checkStructure();
         if (isFormed() && isStructureAreaLoaded()) {
-            boolean startedThisTick = false;
-            if (active == null) {
-                startedThisTick = tryStartNewRecipe();
+            FactoryControllerBlockEntity factory = getFactoryController();
+            if (factory != null) {
+                tickFactoryRecipes(factory);
+            } else {
+                tickSingleActiveRecipe();
             }
-            if (active != null && !startedThisTick) tickActiveRecipe();
         }
         broadcastStateIfChanged(activeBefore);
+    }
+
+    private void tickSingleActiveRecipe() {
+        boolean startedThisTick = false;
+        if (active == null) {
+            startedThisTick = tryStartNewRecipe();
+        }
+        if (active != null && !startedThisTick) tickActiveRecipe();
+    }
+
+    private void tickFactoryRecipes(FactoryControllerBlockEntity factory) {
+        factory.tickScheduler();
+        while (factory.hasLaneCapacity()) {
+            if (!tryStartFactoryLane(factory)) break;
+        }
+        setActiveState(factory.activeLaneCount() > 0);
+        if (factory.activeLaneCount() > 0) lastFailureUnloc = null;
     }
 
     private void checkStructure() {
@@ -756,6 +776,41 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return false;
     }
 
+    private boolean tryStartFactoryLane(FactoryControllerBlockEntity factory) {
+        if (!shouldSearchRecipe()) return false;
+        recipeSearchAttemptCounter++;
+        Identifier machineId = foundMachine == null ? null : foundMachine.registryName();
+        if (machineId == null) return false;
+        List<MachineRecipe> candidates = recipesForMachine();
+        RecipeSearchResult result;
+        try {
+            result = new RecipeSearchTask(this, machineId, structureVersion, getMaxParallelism(), candidates, contextPool()).compute();
+        } catch (RuntimeException e) {
+            LOG.warn("[Ctrl#{}] tryStartFactoryLane: recipe search failed at pos={}; retrying later", instanceId, getBlockPos(), e);
+            recipeSearchRetryCounter++;
+            lastFailureUnloc = RecipeCraftingContext.FAILURE_SEARCH_EXCEPTION;
+            return false;
+        }
+        if (!result.success()) {
+            recipeSearchRetryCounter++;
+            lastFailureUnloc = result.failureUnloc();
+            return false;
+        }
+        if (!isSearchResultCurrentForFactory(result)) {
+            returnContext(result.context());
+            return false;
+        }
+        FactoryRecipeLane lane = new FactoryRecipeLane(result.activeRecipe(), result.context(), this::returnContext);
+        if (!factory.startLane(lane)) {
+            returnContext(result.context());
+            return false;
+        }
+        recipeSearchRetryCounter = 0;
+        lastFailureUnloc = null;
+        setChanged();
+        return true;
+    }
+
     private boolean shouldSearchRecipe() {
         if (recipeSearchRetryCounter <= 0) return true;
         long ticks = recipeSearchAttemptCounter;
@@ -841,6 +896,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 && foundMachine.registryName().equals(result.machineId())
                 && structureVersion == result.structureVersion()
                 && active == null;
+    }
+
+    private boolean isSearchResultCurrentForFactory(RecipeSearchResult result) {
+        return isFormed()
+                && foundMachine != null
+                && foundMachine.registryName().equals(result.machineId())
+                && structureVersion == result.structureVersion();
     }
 
     private void tickActiveRecipe() {

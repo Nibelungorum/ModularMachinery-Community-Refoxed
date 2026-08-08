@@ -29,8 +29,13 @@ import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -203,6 +208,56 @@ class MachineControllerBlockEntityTest {
         addFactoryLane(factory);
         assertThat(startFactoryLane(factory)).isFalse();
         assertThat(factory.activeLaneCount()).isEqualTo(3);
+    }
+
+    @Test
+    void factory_controller_starts_multiple_recipe_lanes_on_server_tick() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.IRON_NUGGET);
+        FactoryRuntimeFixture fixture = formedFactoryRuntimeFixture(MMCR.id("factory_lane_smelt_machine"), 3, 3);
+        registerItemRecipe("factory_lane_smelt", fixture.machine().registryName(), 20);
+
+        fixture.controller().serverTick();
+
+        assertThat(fixture.factory().threadLimit()).isEqualTo(3);
+        assertThat(fixture.factory().activeLaneCount()).isEqualTo(3);
+        assertThat(fixture.controller().getActive()).isNull();
+    }
+
+    @Test
+    void factory_lanes_do_not_overconsume_shared_inputs() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.IRON_NUGGET);
+        FactoryRuntimeFixture fixture = formedFactoryRuntimeFixture(MMCR.id("factory_lane_limited_machine"), 3, 2);
+        registerItemRecipe("factory_lane_limited", fixture.machine().registryName(), 20);
+
+        fixture.controller().serverTick();
+
+        assertThat(fixture.factory().activeLaneCount()).isEqualTo(2);
+        assertThat(countItem(fixture.inputBus(), Items.IRON_INGOT)).isZero();
+    }
+
+    @Test
+    void non_factory_machine_still_uses_single_active_recipe_slot() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.IRON_NUGGET);
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        ItemInputBusBlockEntity input = itemInputBus(controllerPos.offset(1, 0, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 3));
+        var machine = new DynamicMachine(
+                MMCR.id("single_slot_stays_single_machine"),
+                "Single Slot Stays Single",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()));
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, input);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        addItemInputComponent(controller, input);
+        registerItemInputRecipe("single_slot_stays_single", machine.registryName(), 20);
+
+        controller.serverTick();
+
+        assertThat(controller.getActive()).isNotNull();
+        assertThat(controller.getFactoryController()).isNull();
     }
 
     @Test
@@ -1204,6 +1259,113 @@ class MachineControllerBlockEntityTest {
         return controller;
     }
 
+    private static FactoryRuntimeFixture formedFactoryRuntimeFixture(Identifier machineId,
+                                                                     int threadLimit,
+                                                                     int inputCount) throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockPos inputPos = controllerPos.offset(1, 0, 0);
+        BlockPos outputPos = controllerPos.offset(2, 0, 0);
+        BlockPos factoryPos = controllerPos.offset(3, 0, 0);
+        ItemInputBusBlockEntity input = itemInputBus(inputPos);
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, inputCount));
+        ItemOutputBusBlockEntity output = itemOutputBus(outputPos);
+        setField(ItemBusBlockEntity.class, output, "handler", new ItemStackHandler(6));
+        FactoryControllerBlockEntity factory = factoryController(factoryPos);
+        var machine = new DynamicMachine(
+                machineId,
+                "Factory Runtime",
+                factoryItemPattern(),
+                MachineControllerSpec.defaultsFor(machineId),
+                PortRequirementSpec.none(),
+                List.of(),
+                Map.of(),
+                1,
+                false,
+                true,
+                threadLimit);
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFactoryRuntimeFormation(machine, controllerPos, input, output, factory);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        addItemInputComponent(controller, input);
+        addItemOutputComponent(controller, output);
+        addFactoryComponent(controller, factory);
+        return new FactoryRuntimeFixture(controller, factory, input, output, machine);
+    }
+
+    private static void addItemInputComponent(MachineControllerBlockEntity controller, ItemInputBusBlockEntity input) throws Exception {
+        addComponent(controller, new MachineComponent(PortKinds.ITEM_INPUT, cn.howxu.mmcr.util.IOType.INPUT), input);
+    }
+
+    private static void addItemOutputComponent(MachineControllerBlockEntity controller, ItemOutputBusBlockEntity output) throws Exception {
+        addComponent(controller, new MachineComponent(PortKinds.ITEM_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT), output);
+    }
+
+    private static void addFactoryComponent(MachineControllerBlockEntity controller, FactoryControllerBlockEntity factory) throws Exception {
+        addComponent(controller, null, factory);
+    }
+
+    private static void addComponent(MachineControllerBlockEntity controller,
+                                     MachineComponent component,
+                                     BlockEntity container) throws Exception {
+        Field componentsField = MachineControllerBlockEntity.class.getDeclaredField("components");
+        componentsField.setAccessible(true);
+        List<ProcessingComponent> list = (List<ProcessingComponent>) componentsField.get(controller);
+        list.add(new ProcessingComponent(component, container, container.getBlockPos(), container.getBlockPos().subtract(controller.getBlockPos()), (String) null));
+    }
+
+    private static BlockArray factoryItemPattern() {
+        Map<BlockPos, BlockPredicate> blocks = new HashMap<>();
+        blocks.put(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()));
+        blocks.put(new BlockPos(2, 0, 0), new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_output_bus").get()));
+        blocks.put(new BlockPos(3, 0, 0), new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("factory_controller").get()));
+        return new BlockArray(blocks);
+    }
+
+    private static void registerItemRecipe(String path, Identifier machineId, int ticks) {
+        RecipeRegistry.register(new MachineRecipe(
+                MMCR.id(path),
+                machineId,
+                ticks,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                List.of(
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
+                        new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.IRON_NUGGET)))));
+    }
+
+    private static void registerItemInputRecipe(String path, Identifier machineId, int ticks) {
+        RecipeRegistry.register(new MachineRecipe(
+                MMCR.id(path),
+                machineId,
+                ticks,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY))));
+    }
+
+    private static int countItem(ItemInputBusBlockEntity input, Item item) {
+        int count = 0;
+        for (int slot = 0; slot < input.getItemStackHandler(null).getSlots(); slot++) {
+            ItemStack stack = input.getItemStackHandler(null).getStackInSlot(slot);
+            if (stack.is(item)) count += stack.getCount();
+        }
+        return count;
+    }
+
+    private static void bindItemComponents(Item item) {
+        item.builtInRegistryHolder().bindComponents(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
+    }
+
     private static BlockArray onePortPattern(Block portBlock) {
         Map<BlockPos, BlockPredicate> blocks = new HashMap<>();
         blocks.put(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(portBlock));
@@ -1376,6 +1538,34 @@ class MachineControllerBlockEntityTest {
         return controller;
     }
 
+    private static MachineControllerBlockEntity controllerForFactoryRuntimeFormation(
+            DynamicMachine machine,
+            BlockPos controllerPos,
+            ItemInputBusBlockEntity input,
+            ItemOutputBusBlockEntity output,
+            FactoryControllerBlockEntity factory) throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        var controllerBlock = testControllerBlock(machine);
+        var controllerState = controllerBlock.defaultBlockState()
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FORMED, false)
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FACING, Direction.SOUTH)
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ROLL_FACING, Direction.NORTH);
+        setField(BlockEntity.class, controller, "worldPosition", controllerPos);
+        setField(BlockEntity.class, controller, "blockState", controllerState);
+        Map<BlockPos, Block> blocks = new HashMap<>();
+        blocks.put(controllerPos, controllerBlock);
+        blocks.put(input.getBlockPos(), cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
+        blocks.put(output.getBlockPos(), cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_output_bus").get());
+        blocks.put(factory.getBlockPos(), cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("factory_controller").get());
+        Level level = LevelStub.create(blocks, List.of(controller, input, output, factory));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, input, "level", level);
+        setField(BlockEntity.class, output, "level", level);
+        setField(BlockEntity.class, factory, "level", level);
+        return controller;
+    }
+
     private static MachineControllerBlockEntity controllerForDefaultBlastFurnace(
             DynamicMachine machine,
             BlockPos controllerPos,
@@ -1498,4 +1688,10 @@ class MachineControllerBlockEntityTest {
         field.setAccessible(true);
         return field.get(target);
     }
+
+    private record FactoryRuntimeFixture(MachineControllerBlockEntity controller,
+                                         FactoryControllerBlockEntity factory,
+                                         ItemInputBusBlockEntity inputBus,
+                                         ItemOutputBusBlockEntity outputBus,
+                                         DynamicMachine machine) { }
 }
