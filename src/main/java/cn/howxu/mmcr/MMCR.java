@@ -51,9 +51,11 @@ public class MMCR {
             DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
 
     public MMCR(IEventBus modBus, ModContainer modContainer) {
+        MachineDefinitions.beginRegistryPhase();
         BuiltinMachines.register();
         registerGameTestMachineDefinitionsIfPresent();
         MachineDefinitions.bootstrapBuiltins();
+        MachineDefinitions.freezeRegistryPhase();
         ModDataComponents.register(modBus);
         ModBlocks.register(modBus);
         ModItems.register(modBus);

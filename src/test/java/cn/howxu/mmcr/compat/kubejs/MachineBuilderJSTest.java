@@ -3,18 +3,34 @@ package cn.howxu.mmcr.compat.kubejs;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MachineBuilderJSTest {
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
+        MachineDefinitions.beginRegistryPhase();
         TestBootstrap.bootstrap();
+    }
+
+    @BeforeEach
+    void beginRegistryPhase() {
+        MachineDefinitions.beginRegistryPhase();
+    }
+
+    @AfterEach
+    void resetDefinitions() {
+        MachineDefinitions.clearForTesting();
+        MachineDefinitions.beginRegistryPhase();
     }
 
     @Test
@@ -112,5 +128,18 @@ class MachineBuilderJSTest {
         assertThat(registration.appearance().machineBasicBlock()).isEqualTo(Identifier.parse("kubejs:steel_casing"));
         assertThat(registration.appearance().controllerBaseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
         assertThat(registration.appearance().formedPortBaseTexture()).isEqualTo(Identifier.parse("kubejs:block/clean_steel_casing"));
+    }
+
+    @Test
+    void startup_builder_registers_only_during_registry_phase() {
+        var builder = new MachineBuilderJS(MMCR.id("startup_press"));
+        builder.registerObject();
+
+        assertThat(MachineDefinitions.getRegistration(MMCR.id("startup_press"))).isNotNull();
+
+        MachineDefinitions.freezeRegistryPhase();
+        assertThatThrownBy(builder::registerObject)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("registry phase");
     }
 }

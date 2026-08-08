@@ -25,16 +25,32 @@ public final class MachineDefinitions {
 
     private static final Map<Identifier, MachineRegistration> STATIC_REGISTRATIONS = new LinkedHashMap<>();
     private static final List<Supplier<MachineRegistration>> BUILTIN_SUPPLIERS = new CopyOnWriteArrayList<>();
+    private static boolean registryPhaseOpen = true;
 
     private MachineDefinitions() {
     }
 
     /** Register a single startup machine declaration; intended for startup scripts (e.g. KubeJS). */
     public static void register(MachineRegistration registration) {
+        if (!registryPhaseOpen) {
+            throw new IllegalStateException("Machine registration rejected: registry phase is closed");
+        }
         if (STATIC_REGISTRATIONS.containsKey(registration.id())) {
             throw new IllegalStateException("Machine registration already registered: " + registration.id());
         }
         STATIC_REGISTRATIONS.put(registration.id(), registration);
+    }
+
+    public static void beginRegistryPhase() {
+        registryPhaseOpen = true;
+    }
+
+    public static void freezeRegistryPhase() {
+        registryPhaseOpen = false;
+    }
+
+    public static boolean isRegistryPhaseOpen() {
+        return registryPhaseOpen;
     }
 
     /**
@@ -81,5 +97,6 @@ public final class MachineDefinitions {
     public static void clearForTesting() {
         STATIC_REGISTRATIONS.clear();
         BUILTIN_SUPPLIERS.clear();
+        registryPhaseOpen = true;
     }
 }
