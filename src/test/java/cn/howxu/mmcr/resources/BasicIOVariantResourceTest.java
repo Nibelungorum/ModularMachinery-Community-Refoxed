@@ -19,18 +19,19 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class BasicIOVariantResourceTest {
 
-    private static final Path ASSETS = Path.of("src/main/resources/assets/mmcr");
+    private static final Path MAIN_ASSETS = Path.of("src/main/resources/assets/mmcr");
+    private static final Path GENERATED_ASSETS = Path.of("src/generated/resources/assets/mmcr");
 
     @Test
     void everyPortKindHasBlockstateBlockModelItemModelAndTranslations() {
         for (var kind : PortKinds.all()) {
-            assertThat(Files.exists(ASSETS.resolve("blockstates/" + kind.id() + ".json")))
+            assertThat(assetExists("blockstates/" + kind.id() + ".json"))
                     .as(kind.id() + " blockstate")
                     .isTrue();
-            assertThat(Files.exists(ASSETS.resolve("models/block/" + kind.id() + ".json")))
+            assertThat(assetExists("models/block/" + kind.id() + ".json"))
                     .as(kind.id() + " block model")
                     .isTrue();
-            assertThat(Files.exists(ASSETS.resolve("models/item/" + kind.id() + ".json")))
+            assertThat(Files.exists(MAIN_ASSETS.resolve("models/item/" + kind.id() + ".json")))
                     .as(kind.id() + " item model")
                     .isTrue();
             assertThat(Translations.ALL.get("en_us"))
@@ -40,5 +41,9 @@ class BasicIOVariantResourceTest {
                     .as(kind.id() + " zh_cn translations")
                     .containsKeys("block.mmcr." + kind.id(), "container.mmcr." + kind.id());
         }
+    }
+
+    private static boolean assetExists(String path) {
+        return Files.exists(MAIN_ASSETS.resolve(path)) || Files.exists(GENERATED_ASSETS.resolve(path));
     }
 }
