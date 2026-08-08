@@ -11,6 +11,8 @@ import net.minecraft.resources.Identifier;
  * @author howxu <dev@howxu.cn>
  */
 public final class DynamicOverlayBakedModel {
+    private static final Identifier DEFAULT_PORT_OVERLAY_TEXTURE = Identifier.withDefaultNamespace("block/copper_block");
+
     private DynamicOverlayBakedModel() {
     }
 
@@ -52,6 +54,10 @@ public final class DynamicOverlayBakedModel {
                 ? explicitBaseTexture
                 : MachineAppearanceCache.specFor(machineId).formedPortBaseTexture();
         return new TextureSet(base, overlayTexture);
+    }
+
+    public static Identifier defaultPortOverlayTexture() {
+        return DEFAULT_PORT_OVERLAY_TEXTURE;
     }
 
     public static CacheKey controllerCacheKey(Identifier machineId) {

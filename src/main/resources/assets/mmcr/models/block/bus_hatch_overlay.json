@@ -1,3 +1,6 @@
 {
-  "loader": "mmcr:dynamic_port_overlay"
+  "parent": "minecraft:block/cube_all",
+  "textures": {
+    "all": "mmcr:block/basic_casing"
+  }
 }

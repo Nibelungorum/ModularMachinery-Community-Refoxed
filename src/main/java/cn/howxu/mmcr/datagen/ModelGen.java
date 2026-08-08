@@ -7,11 +7,19 @@ import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.PortKinds;
 import net.minecraft.client.data.models.BlockModelGenerators;
 import net.minecraft.client.data.models.ItemModelGenerators;
+import net.minecraft.client.data.models.MultiVariant;
 import net.minecraft.client.data.models.ModelProvider;
 import net.minecraft.client.data.models.blockstates.MultiVariantGenerator;
+import net.minecraft.client.data.models.model.ItemModelUtils;
+import net.minecraft.client.data.models.model.ModelTemplate;
 import net.minecraft.client.data.models.model.ModelTemplates;
+import net.minecraft.client.data.models.model.TextureMapping;
 import net.minecraft.client.data.models.model.TexturedModel;
 import net.minecraft.client.data.models.model.TextureSlot;
+import net.neoforged.neoforge.client.model.block.CustomUnbakedBlockStateModel;
+import net.neoforged.neoforge.client.model.generators.blockstate.CustomBlockStateModelBuilder;
+import cn.howxu.mmcr.client.model.DynamicOverlayBakedModel;
+import cn.howxu.mmcr.client.model.DynamicOverlayModelLoader;
 import net.minecraft.client.resources.model.sprite.Material;
 import net.minecraft.core.Holder;
 import net.minecraft.data.PackOutput;
@@ -23,8 +31,11 @@ import java.util.stream.Stream;
 
 public final class ModelGen extends ModelProvider {
 
-    private static final Identifier DYNAMIC_CONTROLLER_MODEL = MMCR.id("block/dynamic_machine_controller");
-    private static final Identifier DYNAMIC_IO_PORT_MODEL = MMCR.id("block/dynamic_io_port");
+    private static final Identifier CONTROLLER_ITEM_MODEL = MMCR.id("block/machine_controller_overlay");
+    private static final Identifier IO_PORT_ITEM_MODEL = MMCR.id("block/bus_hatch_overlay");
+    private static final TextureSlot BASE = TextureSlot.create("base");
+    private static final TextureSlot OVERLAY = TextureSlot.create("overlay");
+    private static final ModelTemplate CUBE_ALL_OVERLAY_ITEM = ModelTemplates.create("mmcr:cube_all_overlay", BASE, OVERLAY);
 
     public ModelGen(PackOutput output) {
         super(output, MMCR.MODID);
@@ -36,15 +47,15 @@ public final class ModelGen extends ModelProvider {
             Block block = blockHolder.get();
             if (block instanceof MachineControllerBlock) {
                 blockModels.blockStateOutput.accept(MultiVariantGenerator
-                        .dispatch(block, BlockModelGenerators.plainVariant(DYNAMIC_CONTROLLER_MODEL))
+                        .dispatch(block, customBlockStateModel(new DynamicOverlayModelLoader.Unbaked(DynamicOverlayBakedModel.Kind.CONTROLLER)))
                         .with(MachineControllerVariants.full()));
-                blockModels.registerSimpleItemModel(block.asItem(),
-                        DYNAMIC_CONTROLLER_MODEL);
+                itemModels.itemModelOutput.accept(block.asItem(), ItemModelUtils.plainModel(
+                        itemOverlayModel(name, MMCR.id("block/basic_controller"), itemModels)));
             } else if (isIoPort(name)) {
                 blockModels.blockStateOutput.accept(MultiVariantGenerator
-                        .dispatch(block, BlockModelGenerators.plainVariant(DYNAMIC_IO_PORT_MODEL)));
-                blockModels.registerSimpleItemModel(block.asItem(),
-                        DYNAMIC_IO_PORT_MODEL);
+                        .dispatch(block, customBlockStateModel(new DynamicOverlayModelLoader.Unbaked(DynamicOverlayBakedModel.Kind.PORT))));
+                itemModels.itemModelOutput.accept(block.asItem(), ItemModelUtils.plainModel(
+                        itemOverlayModel(name, MMCR.id("block/" + overlayTextureFor(name)), itemModels)));
             } else {
                 blockModels.createTrivialBlock(block, TexturedModel.CUBE.updateTexture(
                         m -> m.put(TextureSlot.ALL, textureFor(name))));
@@ -74,11 +85,21 @@ public final class ModelGen extends ModelProvider {
     }
 
     static Identifier dynamicControllerModel() {
-        return DYNAMIC_CONTROLLER_MODEL;
+        return CONTROLLER_ITEM_MODEL;
     }
 
     static Identifier dynamicIoPortModel() {
-        return DYNAMIC_IO_PORT_MODEL;
+        return IO_PORT_ITEM_MODEL;
+    }
+
+    private static Identifier itemOverlayModel(String blockName, Identifier overlayTexture, ItemModelGenerators itemModels) {
+        return CUBE_ALL_OVERLAY_ITEM.create(MMCR.id("item/" + blockName), new TextureMapping()
+                .put(BASE, textureFor("basic_casing"))
+                .put(OVERLAY, new Material(overlayTexture)), itemModels.modelOutput);
+    }
+
+    private static MultiVariant customBlockStateModel(CustomUnbakedBlockStateModel model) {
+        return MultiVariant.of(new CustomBlockStateModelBuilder.Simple(model));
     }
 
     private static String overlayTexture(String blockName, String baseName, String textureBase) {
