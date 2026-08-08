@@ -22,6 +22,7 @@ import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
+import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -312,6 +313,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     resetMachine(false);
                     return;
                 }
+                failure = validatePortTiers(foundMachine, foundPattern, foundCompiledPattern, facing);
+                if (failure.isPresent()) {
+                    recordFormationFailure(foundMachine, failure.get());
+                    resetMachine(false);
+                    return;
+                }
                 if (!isFormed()) setFormed(true);
                 updateComponents();
                 return;
@@ -404,6 +411,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
 
         var failure = candidate.portRequirements().validate(countPorts(rotatedPattern, compiled, facing));
+        if (failure.isPresent()) {
+            recordFormationFailure(candidate, failure.get());
+            return false;
+        }
+
+        failure = validatePortTiers(candidate, rotatedPattern, compiled, facing);
         if (failure.isPresent()) {
             recordFormationFailure(candidate, failure.get());
             return false;
@@ -562,6 +575,32 @@ public class MachineControllerBlockEntity extends BlockEntity {
             counts.merge(port.kind().id(), 1, Integer::sum);
         }
         return PortRequirementSpec.PortCounts.of(counts);
+    }
+
+    private List<IOPortKind> portKinds(BlockArray rotatedPattern, @Nullable CompiledMachinePattern compiledPattern, Direction facing) {
+        if (level == null || rotatedPattern == null) return List.of();
+
+        List<BlockPos> positions = compiledPattern == null ? new ArrayList<>(rotatedPattern.pattern().keySet()) : compiledPattern.portPositions(facing);
+        List<IOPortKind> kinds = new ArrayList<>();
+        for (BlockPos relativePos : positions) {
+            BlockPos worldPos = getBlockPos().offset(relativePos);
+            if (level.getBlockEntity(worldPos) instanceof IOPortBlockEntity port) {
+                kinds.add(port.kind());
+            }
+        }
+        return List.copyOf(kinds);
+    }
+
+    private java.util.Optional<PortRequirementSpec.Failure> validatePortTiers(Machine candidate, BlockArray rotatedPattern,
+                                                                              @Nullable CompiledMachinePattern compiledPattern,
+                                                                              Direction facing) {
+        return candidate.portTierRequirements().validate(portKinds(rotatedPattern, compiledPattern, facing))
+                .map(failure -> new PortRequirementSpec.Failure(
+                        failure.requirement().id(),
+                        failure.actualPortIds().size(),
+                        1,
+                        java.util.OptionalInt.empty(),
+                        PortRequirementSpec.FailureReason.MISSING));
     }
 
     private boolean isInsideCompiledBounds(BlockPos worldPos) {

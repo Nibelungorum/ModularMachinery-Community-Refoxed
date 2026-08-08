@@ -9,10 +9,16 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
+import cn.howxu.mmcr.internal.port.EnergyHatchSize;
+import cn.howxu.mmcr.internal.port.FluidHatchSize;
+import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
+import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
@@ -95,12 +101,12 @@ public final class DefaultMachines {
             Block energyOutput) {
         Block controller = ModBlocks.controllerFor(BLAST_FURNACE_ID).get();
         BlockPredicate ioPort = new BlockPredicate.AnyOf(List.of(
-                new BlockPredicate.OfBlock(itemInput),
-                new BlockPredicate.OfBlock(itemOutput),
-                new BlockPredicate.OfBlock(fluidInput),
-                new BlockPredicate.OfBlock(fluidOutput),
-                new BlockPredicate.OfBlock(energyInput),
-                new BlockPredicate.OfBlock(energyOutput)));
+                portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.ITEM),
+                portFamily(IOType.OUTPUT, PortTierRequirementSpec.PortCategory.ITEM),
+                portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.FLUID),
+                portFamily(IOType.OUTPUT, PortTierRequirementSpec.PortCategory.FLUID),
+                portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.ENERGY),
+                portFamily(IOType.OUTPUT, PortTierRequirementSpec.PortCategory.ENERGY)));
 
         BlockArray pattern = BlockArray.builder()
                 .pattern("XXX", "XIX", "XXX")
@@ -111,23 +117,24 @@ public final class DefaultMachines {
                 .set('I', ioPort)
                 .build();
 
-        PortRequirementSpec portRequirements = PortRequirementSpec.builder()
-                .min(PortKinds.ITEM_INPUT.id(), 1)
-                .min(PortKinds.ITEM_OUTPUT.id(), 1)
-                .min(PortKinds.ENERGY_INPUT.id(), 1)
+        PortRequirementSpec portRequirements = PortRequirementSpec.none();
+        PortTierRequirementSpec tierRequirements = PortTierRequirementSpec.builder()
+                .minEnergyInput(EnergyHatchSize.LUDICROUS)
+                .minItemInput(ItemBusSize.NORMAL)
+                .anyItemOutput()
                 .build();
         Machine definition = MachineDefinitions.get(BLAST_FURNACE_ID);
         return definition == null
-                ? new DynamicMachine(BLAST_FURNACE_ID, "高炉", pattern, MachineControllerSpec.defaultsFor(BLAST_FURNACE_ID), portRequirements)
-                : new DynamicMachine(BLAST_FURNACE_ID, "高炉", pattern, MachineControllerSpec.defaultsFor(BLAST_FURNACE_ID), portRequirements);
+                ? new DynamicMachine(BLAST_FURNACE_ID, "高炉", pattern, MachineControllerSpec.defaultsFor(BLAST_FURNACE_ID), portRequirements, tierRequirements, List.of(), Map.of())
+                : new DynamicMachine(BLAST_FURNACE_ID, "高炉", pattern, MachineControllerSpec.defaultsFor(BLAST_FURNACE_ID), portRequirements, tierRequirements, List.of(), Map.of());
     }
 
     public static Machine alloyFurnace(Block itemInput, Block itemOutput, Block energyInput) {
         Block controller = ModBlocks.controllerFor(ALLOY_FURNACE_ID).get();
         BlockPredicate ioPort = new BlockPredicate.AnyOf(List.of(
-                new BlockPredicate.OfBlock(itemInput),
-                new BlockPredicate.OfBlock(itemOutput),
-                new BlockPredicate.OfBlock(energyInput)));
+                portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.ITEM),
+                portFamily(IOType.OUTPUT, PortTierRequirementSpec.PortCategory.ITEM),
+                portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.ENERGY)));
 
         BlockArray pattern = BlockArray.builder()
                 .pattern("XXX", "XIX", "XXX")
@@ -139,10 +146,11 @@ public final class DefaultMachines {
                 .set('M', new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE))
                 .build();
 
-        PortRequirementSpec portRequirements = PortRequirementSpec.builder()
-                .min(PortKinds.ITEM_INPUT.id(), 1)
-                .min(PortKinds.ITEM_OUTPUT.id(), 1)
-                .min(PortKinds.ENERGY_INPUT.id(), 1)
+        PortRequirementSpec portRequirements = PortRequirementSpec.none();
+        PortTierRequirementSpec tierRequirements = PortTierRequirementSpec.builder()
+                .minItemInput(ItemBusSize.REINFORCED)
+                .minEnergyInput(EnergyHatchSize.BIG)
+                .anyItemOutput()
                 .build();
         Machine definition = MachineDefinitions.get(ALLOY_FURNACE_ID);
         return new DynamicMachine(
@@ -151,6 +159,7 @@ public final class DefaultMachines {
                 pattern,
                 MachineControllerSpec.defaultsFor(ALLOY_FURNACE_ID),
                 portRequirements,
+                tierRequirements,
                 List.of(),
                 alloyFurnaceModifiers());
     }
@@ -203,10 +212,10 @@ public final class DefaultMachines {
     public static Machine cracker(Block itemInput, Block itemOutput, Block fluidOutput, Block energyInput) {
         Block controller = ModBlocks.controllerFor(CRACKER_ID).get();
         BlockPredicate port = new BlockPredicate.AnyOf(List.of(
-                new BlockPredicate.OfBlock(itemInput),
-                new BlockPredicate.OfBlock(itemOutput),
-                new BlockPredicate.OfBlock(fluidOutput),
-                new BlockPredicate.OfBlock(energyInput),
+                portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.ITEM),
+                portFamily(IOType.OUTPUT, PortTierRequirementSpec.PortCategory.ITEM),
+                portFamily(IOType.OUTPUT, PortTierRequirementSpec.PortCategory.FLUID),
+                portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.ENERGY),
                 new BlockPredicate.OfBlock(Blocks.WEATHERED_COPPER)));
 
         BlockArray pattern = BlockArray.builder()
@@ -221,11 +230,12 @@ public final class DefaultMachines {
                 .controller('E')
                 .build();
 
-        PortRequirementSpec portRequirements = PortRequirementSpec.builder()
-                .min(PortKinds.ITEM_INPUT.id(), 1)
-                .min(PortKinds.FLUID_OUTPUT.id(), 1)
-                .min(PortKinds.ENERGY_INPUT.id(), 1)
-                .min(PortKinds.ITEM_OUTPUT.id(), 1)
+        PortRequirementSpec portRequirements = PortRequirementSpec.none();
+        PortTierRequirementSpec tierRequirements = PortTierRequirementSpec.builder()
+                .minFluidOutput(FluidHatchSize.HUGE)
+                .minEnergyInput(EnergyHatchSize.REINFORCED)
+                .minItemInput(ItemBusSize.NORMAL)
+                .anyItemOutput()
                 .build();
         MachineControllerSpec controllerSpec = new MachineControllerSpec(
                 MachineControllerSpec.defaultsFor(CRACKER_ID).id(),
@@ -238,19 +248,19 @@ public final class DefaultMachines {
                 true);
         Machine definition = MachineDefinitions.get(CRACKER_ID);
         return definition == null
-                ? new DynamicMachine(CRACKER_ID, "裂化器", pattern, controllerSpec, portRequirements)
-                : new DynamicMachine(CRACKER_ID, "裂化器", pattern, controllerSpec, portRequirements);
+                ? new DynamicMachine(CRACKER_ID, "裂化器", pattern, controllerSpec, portRequirements, tierRequirements, List.of(), Map.of())
+                : new DynamicMachine(CRACKER_ID, "裂化器", pattern, controllerSpec, portRequirements, tierRequirements, List.of(), Map.of());
     }
 
     public static Machine reactor(Block itemInput, Block itemOutput, Block fluidInput, Block fluidOutput, Block energyOutput) {
         Block controller = ModBlocks.controllerFor(REACTOR_ID).get();
         BlockPredicate optionalSlot = new BlockPredicate.AnyOf(List.of(
                 new BlockPredicate.OfBlock(Blocks.BLUE_ICE),
-                new BlockPredicate.OfBlock(itemInput),
-                new BlockPredicate.OfBlock(itemOutput),
-                new BlockPredicate.OfBlock(fluidInput),
-                new BlockPredicate.OfBlock(fluidOutput),
-                new BlockPredicate.OfBlock(energyOutput)));
+                portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.ITEM),
+                portFamily(IOType.OUTPUT, PortTierRequirementSpec.PortCategory.ITEM),
+                portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.FLUID),
+                portFamily(IOType.OUTPUT, PortTierRequirementSpec.PortCategory.FLUID),
+                portFamily(IOType.OUTPUT, PortTierRequirementSpec.PortCategory.ENERGY)));
 
         BlockArray pattern = BlockArray.builder()
                 .pattern("  AAAAA  ", "         ", "         ", "         ", "         ", "         ", "         ", "         ")
@@ -277,17 +287,34 @@ public final class DefaultMachines {
                 .controller('I')
                 .build();
 
-        PortRequirementSpec portRequirements = PortRequirementSpec.builder()
-                .min(PortKinds.FLUID_INPUT.id(), 1)
-                .min(PortKinds.FLUID_OUTPUT.id(), 1)
-                .min(PortKinds.ENERGY_OUTPUT.id(), 1)
-                .min(PortKinds.ITEM_OUTPUT.id(), 1)
-                .min(PortKinds.ITEM_INPUT.id(), 1)
+        PortRequirementSpec portRequirements = PortRequirementSpec.none();
+        PortTierRequirementSpec tierRequirements = PortTierRequirementSpec.builder()
+                .minEnergyOutput(EnergyHatchSize.ULTIMATE)
+                .minFluidInput(FluidHatchSize.BIG)
+                .minFluidOutput(FluidHatchSize.LUDICROUS)
+                .anyItemInput()
+                .anyItemOutput()
                 .build();
         Machine definition = MachineDefinitions.get(REACTOR_ID);
         return definition == null
-                ? new DynamicMachine(REACTOR_ID, "反应堆", pattern, MachineControllerSpec.defaultsFor(REACTOR_ID), portRequirements)
-                : new DynamicMachine(REACTOR_ID, "反应堆", pattern, MachineControllerSpec.defaultsFor(REACTOR_ID), portRequirements);
+                ? new DynamicMachine(REACTOR_ID, "反应堆", pattern, MachineControllerSpec.defaultsFor(REACTOR_ID), portRequirements, tierRequirements, List.of(), Map.of())
+                : new DynamicMachine(REACTOR_ID, "反应堆", pattern, MachineControllerSpec.defaultsFor(REACTOR_ID), portRequirements, tierRequirements, List.of(), Map.of());
+    }
+
+    private static BlockPredicate portFamily(IOType ioType, PortTierRequirementSpec.PortCategory category) {
+        return new BlockPredicate.AnyOf(PortKinds.all().stream()
+                .filter(kind -> kind.ioType() == ioType)
+                .filter(kind -> matchesCategory(kind, category))
+                .<BlockPredicate>map(kind -> new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get(kind.id()).get()))
+                .toList());
+    }
+
+    private static boolean matchesCategory(IOPortKind kind, PortTierRequirementSpec.PortCategory category) {
+        return switch (category) {
+            case ITEM -> kind.itemBusSize().isPresent();
+            case FLUID -> kind.fluidHatchSize().isPresent();
+            case ENERGY -> kind.energyHatchSize().isPresent();
+        };
     }
 
     private static BlockPredicate block(String id) {

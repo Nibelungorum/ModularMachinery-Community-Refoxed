@@ -17,14 +17,17 @@ import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
@@ -256,6 +259,84 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void matching_structure_rejects_port_below_required_tier() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray pattern = anyEnergyInputPattern();
+        DynamicMachine machine = new DynamicMachine(
+                MMCR.id("requires_ludicrous_energy_machine"),
+                "Requires Ludicrous Energy",
+                pattern,
+                MachineControllerSpec.defaultsFor(MMCR.id("requires_ludicrous_energy_machine")),
+                PortRequirementSpec.none(),
+                PortTierRequirementSpec.builder().minEnergyInput(EnergyHatchSize.LUDICROUS).build(),
+                List.of(),
+                Map.of());
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, energyHatch(controllerPos.offset(1, 0, 0)));
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
+
+        assertThat(formed).isFalse();
+        assertThat(controller.getFoundMachine()).isNull();
+        assertThat(controller.getLastFormationFailure()).isNotNull();
+        assertThat(controller.getLastFormationFailure().portId()).isEqualTo("energy_input_hatch>=ludicrous");
+    }
+
+    @Test
+    void matching_structure_accepts_port_at_required_tier() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray pattern = anyEnergyInputPattern();
+        DynamicMachine machine = new DynamicMachine(
+                MMCR.id("accepts_ludicrous_energy_machine"),
+                "Accepts Ludicrous Energy",
+                pattern,
+                MachineControllerSpec.defaultsFor(MMCR.id("accepts_ludicrous_energy_machine")),
+                PortRequirementSpec.none(),
+                PortTierRequirementSpec.builder().minEnergyInput(EnergyHatchSize.LUDICROUS).build(),
+                List.of(),
+                Map.of());
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, energyHatch(controllerPos.offset(1, 0, 0), "energy_input_hatch_ludicrous"));
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
+
+        assertThat(formed).isTrue();
+        assertThat(controller.getLastFormationFailure()).isNull();
+    }
+
+    @Test
+    void cached_formed_structure_revalidates_port_tier_requirements() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockPos portPos = controllerPos.offset(1, 0, 0);
+        BlockArray pattern = anyEnergyInputPattern();
+        DynamicMachine machine = new DynamicMachine(
+                MMCR.id("cached_requires_ludicrous_energy_machine"),
+                "Cached Requires Ludicrous Energy",
+                pattern,
+                MachineControllerSpec.defaultsFor(MMCR.id("cached_requires_ludicrous_energy_machine")),
+                PortRequirementSpec.none(),
+                PortTierRequirementSpec.builder().minEnergyInput(EnergyHatchSize.LUDICROUS).build(),
+                List.of(),
+                Map.of());
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, energyHatch(portPos, "energy_input_hatch_ludicrous"));
+        setField(MachineControllerBlockEntity.class, controller, "machine", machine);
+        for (int i = 0; i < Config.DEFAULT_MACHINE_CHECK_INTERVAL_TICKS; i++) {
+            controller.serverTick();
+        }
+        assertThat(controller.isFormed()).isTrue();
+
+        Level level = levelOf(controller);
+        EnergyInputHatchBlockEntity replacement = energyHatch(portPos);
+        setField(BlockEntity.class, replacement, "level", level);
+        level.setBlock(portPos, blockForPort(replacement).defaultBlockState(), 3);
+        LevelStub.putBlockEntity(level, replacement);
+
+        controller.serverTick();
+
+        assertThat(controller.isFormed()).isFalse();
+        assertThat(controller.getLastFormationFailure()).isNotNull();
+        assertThat(controller.getLastFormationFailure().portId()).isEqualTo("energy_input_hatch>=ludicrous");
+    }
+
+    @Test
     void built_in_blast_furnace_rejects_three_arbitrary_ports() throws Exception {
         DefaultMachines.ensureRegistered();
         DynamicMachine machine = (DynamicMachine) MachineRegistry.getMachine(MMCR.id("blast_furnace"));
@@ -283,7 +364,7 @@ class MachineControllerBlockEntityTest {
                 controllerPos,
                 itemInputBus(controllerPos.offset(0, 0, -2)),
                 itemOutputBus(controllerPos.offset(-1, 0, -1)),
-                energyHatch(controllerPos.offset(1, 0, -1)));
+                energyHatch(controllerPos.offset(1, 0, -1), "energy_input_hatch_ludicrous"));
 
         boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
 
@@ -847,6 +928,10 @@ class MachineControllerBlockEntityTest {
     }
 
     private static EnergyInputHatchBlockEntity energyHatch(BlockPos pos) {
+        return energyHatch(pos, PortKinds.ENERGY_INPUT.id());
+    }
+
+    private static EnergyInputHatchBlockEntity energyHatch(BlockPos pos, String id) {
         try {
             Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
             unsafeField.setAccessible(true);
@@ -855,7 +940,10 @@ class MachineControllerBlockEntityTest {
             setField(BlockEntity.class, hatch, "type", null);
             setField(BlockEntity.class, hatch, "worldPosition", pos);
             setField(BlockEntity.class, hatch, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
-            setField(EnergyInputHatchBlockEntity.class, hatch, "kind", PortKinds.ENERGY_INPUT);
+            setField(EnergyInputHatchBlockEntity.class, hatch, "kind", PortKinds.all().stream()
+                    .filter(kind -> kind.id().equals(id))
+                    .findFirst()
+                    .orElseThrow());
             setField(EnergyHatchBlockEntity.class, hatch, "storage", new EnergyStorage(1000, 1000, 1000));
             return hatch;
         } catch (ReflectiveOperationException e) {
@@ -982,6 +1070,15 @@ class MachineControllerBlockEntityTest {
         blocks.put(new BlockPos(1, 0, 0), new BlockPredicate.AnyOf(List.of(
                 new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()),
                 new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("energy_input_hatch").get()))));
+        return new BlockArray(blocks);
+    }
+
+    private static BlockArray anyEnergyInputPattern() {
+        Map<BlockPos, BlockPredicate> blocks = new HashMap<>();
+        blocks.put(new BlockPos(1, 0, 0), new BlockPredicate.AnyOf(PortKinds.all().stream()
+                .filter(kind -> kind.ioType() == IOType.INPUT && kind.energyHatchSize().isPresent())
+                .<BlockPredicate>map(kind -> new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get(kind.id()).get()))
+                .toList()));
         return new BlockArray(blocks);
     }
 

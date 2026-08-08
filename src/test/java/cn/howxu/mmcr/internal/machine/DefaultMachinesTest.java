@@ -5,6 +5,7 @@ import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -44,11 +46,7 @@ class DefaultMachinesTest {
         assertThat(machine).isNotNull();
         assertThat(machine.localizedName()).isEqualTo("高炉");
         assertThat(machine.controller().id()).isEqualTo(MMCR.id("blast_furnace_controller"));
-        assertThat(machine.portRequirements().requirements())
-                .containsKeys(PortKinds.ITEM_INPUT.id(), PortKinds.ITEM_OUTPUT.id(), PortKinds.ENERGY_INPUT.id());
-        assertThat(machine.portRequirements().requirements().get(PortKinds.ITEM_INPUT.id()).min()).isEqualTo(1);
-        assertThat(machine.portRequirements().requirements().get(PortKinds.ITEM_OUTPUT.id()).min()).isEqualTo(1);
-        assertThat(machine.portRequirements().requirements().get(PortKinds.ENERGY_INPUT.id()).min()).isEqualTo(1);
+        assertThat(machine.portRequirements().isEmpty()).isTrue();
         assertThat(machine.pattern().pattern()).hasSize(26);
         assertThat(machine.pattern().get(BlockPos.ZERO))
                 .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine).get()));
@@ -57,13 +55,13 @@ class DefaultMachinesTest {
                 .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.CASING.get()));
         assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)))
                 .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.CASING.get()));
-        assertThat(machine.pattern().get(new BlockPos(0, 0, -2)))
-                .isEqualTo(portPredicate());
         assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("item_input_bus_ludicrous").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("energy_input_hatch_ultimate").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("energy_output_hatch").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, 1, 0)))
                 .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.CASING.get()));
@@ -79,11 +77,7 @@ class DefaultMachinesTest {
         assertThat(machine).isNotNull();
         assertThat(machine.localizedName()).isEqualTo("合金炉");
         assertThat(machine.controller().id()).isEqualTo(MMCR.id("alloy_furnace_controller"));
-        assertThat(machine.portRequirements().requirements())
-                .containsKeys(PortKinds.ITEM_INPUT.id(), PortKinds.ITEM_OUTPUT.id(), PortKinds.ENERGY_INPUT.id());
-        assertThat(machine.portRequirements().requirements().get(PortKinds.ITEM_INPUT.id()).min()).isEqualTo(1);
-        assertThat(machine.portRequirements().requirements().get(PortKinds.ITEM_OUTPUT.id()).min()).isEqualTo(1);
-        assertThat(machine.portRequirements().requirements().get(PortKinds.ENERGY_INPUT.id()).min()).isEqualTo(1);
+        assertThat(machine.portRequirements().isEmpty()).isTrue();
         assertThat(machine.pattern().pattern()).hasSize(26);
         assertThat(machine.pattern().get(BlockPos.ZERO))
                 .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine).get()));
@@ -92,8 +86,10 @@ class DefaultMachinesTest {
         assertThat(machine.pattern().get(new BlockPos(0, -1, -1)))
                 .isEqualTo(new BlockPredicate.OfBlock(net.minecraft.world.level.block.Blocks.BLAST_FURNACE));
         assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("item_input_bus_reinforced").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("energy_input_hatch_big").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState())).isFalse();
 
         var mPosUp = new BlockPos(0, -1, -1);
@@ -137,12 +133,7 @@ class DefaultMachinesTest {
         assertThat(machine.localizedName()).isEqualTo("裂化器");
         assertThat(machine.controller().id()).isEqualTo(MMCR.id("cracker_controller"));
         assertThat(machine.controller().allowVerticalFacing()).isTrue();
-        assertThat(machine.portRequirements().requirements())
-                .containsKeys(PortKinds.ITEM_INPUT.id(), PortKinds.ITEM_OUTPUT.id(), PortKinds.FLUID_OUTPUT.id(), PortKinds.ENERGY_INPUT.id());
-        assertThat(machine.portRequirements().requirements().get(PortKinds.ITEM_INPUT.id()).min()).isEqualTo(1);
-        assertThat(machine.portRequirements().requirements().get(PortKinds.ITEM_OUTPUT.id()).min()).isEqualTo(1);
-        assertThat(machine.portRequirements().requirements().get(PortKinds.FLUID_OUTPUT.id()).min()).isEqualTo(1);
-        assertThat(machine.portRequirements().requirements().get(PortKinds.ENERGY_INPUT.id()).min()).isEqualTo(1);
+        assertThat(machine.portRequirements().isEmpty()).isTrue();
         assertThat(machine.pattern().get(BlockPos.ZERO))
                 .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine).get()));
         assertThat(machine.pattern().get(new BlockPos(0, -2, 0))).isNull();
@@ -150,7 +141,9 @@ class DefaultMachinesTest {
         assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(ModBlocks.BLOCKS.get("fluid_output_hatch_huge").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(ModBlocks.BLOCKS.get("energy_input_hatch_reinforced").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(net.minecraft.world.level.block.Blocks.WEATHERED_COPPER.defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(0, -3, -1)).matches(net.minecraft.world.level.block.Blocks.POLISHED_ANDESITE.defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(1, 0, 0)).matches(net.minecraft.world.level.block.Blocks.BLUE_ICE.defaultBlockState())).isTrue();
@@ -166,20 +159,17 @@ class DefaultMachinesTest {
         assertThat(machine).isNotNull();
         assertThat(machine.localizedName()).isEqualTo("反应堆");
         assertThat(machine.controller().id()).isEqualTo(MMCR.id("reactor_controller"));
-        assertThat(machine.portRequirements().requirements())
-                .containsKeys(PortKinds.ITEM_INPUT.id(), PortKinds.ITEM_OUTPUT.id(), PortKinds.FLUID_INPUT.id(), PortKinds.FLUID_OUTPUT.id(), PortKinds.ENERGY_OUTPUT.id());
-        assertThat(machine.portRequirements().requirements().get(PortKinds.ITEM_INPUT.id()).min()).isEqualTo(1);
-        assertThat(machine.portRequirements().requirements().get(PortKinds.ITEM_OUTPUT.id()).min()).isEqualTo(1);
-        assertThat(machine.portRequirements().requirements().get(PortKinds.FLUID_INPUT.id()).min()).isEqualTo(1);
-        assertThat(machine.portRequirements().requirements().get(PortKinds.FLUID_OUTPUT.id()).min()).isEqualTo(1);
-        assertThat(machine.portRequirements().requirements().get(PortKinds.ENERGY_OUTPUT.id()).min()).isEqualTo(1);
+        assertThat(machine.portRequirements().isEmpty()).isTrue();
         assertThat(machine.pattern().get(BlockPos.ZERO))
                 .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine).get()));
         assertThat(machine.pattern().get(new BlockPos(0, 0, 0)).matches(ModBlocks.controllerFor(machine).get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(ModBlocks.BLOCKS.get("fluid_input_hatch_big").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(ModBlocks.BLOCKS.get("fluid_output_hatch_ludicrous").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(ModBlocks.BLOCKS.get("energy_output_hatch").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(ModBlocks.BLOCKS.get("energy_output_hatch_ultimate").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(net.minecraft.world.level.block.Blocks.BLUE_ICE.defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(0, -1, -6)).matches(net.minecraft.world.level.block.Blocks.REINFORCED_DEEPSLATE.defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(0, -1, 1)).matches(net.minecraft.world.level.block.Blocks.DEEPSLATE_BRICK_STAIRS.defaultBlockState())).isTrue();
@@ -235,14 +225,24 @@ class DefaultMachinesTest {
                 .isFalse();
     }
 
-    private static BlockPredicate portPredicate() {
-        return new BlockPredicate.AnyOf(java.util.List.of(
-                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()),
-                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_output_bus").get()),
-                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("fluid_input_hatch").get()),
-                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("fluid_output_hatch").get()),
-                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("energy_input_hatch").get()),
-                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("energy_output_hatch").get())));
+    @Test
+    void built_in_machines_define_expected_port_tier_requirements() {
+        DefaultMachines.ensureRegistered();
+
+        assertThat(requirementIds(MachineRegistry.getMachine(MMCR.id("blast_furnace"))))
+                .contains("energy_input_hatch>=ludicrous", "item_input_bus>=normal");
+        assertThat(requirementIds(MachineRegistry.getMachine(MMCR.id("alloy_furnace"))))
+                .contains("item_input_bus>=reinforced", "energy_input_hatch>=big");
+        assertThat(requirementIds(MachineRegistry.getMachine(MMCR.id("cracker"))))
+                .contains("fluid_output_hatch>=huge", "energy_input_hatch>=reinforced", "item_input_bus>=normal");
+        assertThat(requirementIds(MachineRegistry.getMachine(MMCR.id("reactor"))))
+                .contains("energy_output_hatch>=ultimate", "fluid_input_hatch>=big", "fluid_output_hatch>=ludicrous");
+    }
+
+    private static List<String> requirementIds(Machine machine) {
+        return machine.portTierRequirements().requirements().stream()
+                .map(PortTierRequirementSpec.Requirement::id)
+                .toList();
     }
 
     private static net.minecraft.world.level.block.state.BlockState crackerPortPredicateState() {
