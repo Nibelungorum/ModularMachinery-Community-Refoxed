@@ -45,7 +45,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     public MachineRecipeCategory(IGuiHelper guiHelper, Machine machine) {
         this.machine = machine;
         this.recipeType = JeiMachineRecipeTypes.forMachine(machine.registryName());
-        this.icon = guiHelper.createDrawableItemLike(ModBlocks.controllerFor(machine).get());
+        this.icon = guiHelper.createDrawableItemLike(ModBlocks.controllerFor(machine.registryName()).get());
         this.slotBackground = guiHelper.getSlotDrawable();
     }
 

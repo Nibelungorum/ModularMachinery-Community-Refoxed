@@ -1,19 +1,10 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.machine.BlockPredicate;
-import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
-import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.test.TestBootstrap;
-import net.minecraft.core.BlockPos;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-
-import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -30,7 +21,7 @@ class MachineBuilderJSTest {
                 .controllerTextures(MMCR.id("block/arc_front"), MMCR.id("block/arc_side"))
                 .createObject();
 
-        assertThat(machine.controller()).isEqualTo(new MachineControllerSpec(
+        assertThat(machine.controllerSpec()).isEqualTo(new MachineControllerSpec(
                 MMCR.id("arc_furnace_controller"),
                 MMCR.id("block/arc_front"),
                 MMCR.id("block/arc_side"),
@@ -47,10 +38,10 @@ class MachineBuilderJSTest {
                 .controllerBottomTexture(MMCR.id("block/arc_bottom"))
                 .createObject();
 
-        assertThat(machine.controller().frontTexture()).isEqualTo(MMCR.id("block/arc_front"));
-        assertThat(machine.controller().sideTexture()).isEqualTo(MMCR.id("block/arc_side"));
-        assertThat(machine.controller().topTexture()).isEqualTo(MMCR.id("block/arc_top"));
-        assertThat(machine.controller().bottomTexture()).isEqualTo(MMCR.id("block/arc_bottom"));
+        assertThat(machine.controllerSpec().frontTexture()).isEqualTo(MMCR.id("block/arc_front"));
+        assertThat(machine.controllerSpec().sideTexture()).isEqualTo(MMCR.id("block/arc_side"));
+        assertThat(machine.controllerSpec().topTexture()).isEqualTo(MMCR.id("block/arc_top"));
+        assertThat(machine.controllerSpec().bottomTexture()).isEqualTo(MMCR.id("block/arc_bottom"));
     }
 
     @Test
@@ -59,7 +50,7 @@ class MachineBuilderJSTest {
                 .allowVerticalFacing()
                 .createObject();
 
-        assertThat(machine.controller().allowVerticalFacing()).isTrue();
+        assertThat(machine.controllerSpec().allowVerticalFacing()).isTrue();
     }
 
     @Test
@@ -68,7 +59,7 @@ class MachineBuilderJSTest {
                 .fullyRotationallySymmetric()
                 .createObject();
 
-        assertThat(machine.controller().fullyRotationallySymmetric()).isTrue();
+        assertThat(machine.controllerSpec().fullyRotationallySymmetric()).isTrue();
     }
 
     @Test
@@ -77,23 +68,21 @@ class MachineBuilderJSTest {
                 .requireVerticalFacing()
                 .createObject();
 
-        assertThat(machine.controller().allowVerticalFacing()).isTrue();
-        assertThat(machine.controller().requireVerticalFacing()).isTrue();
+        assertThat(machine.controllerSpec().allowVerticalFacing()).isTrue();
+        assertThat(machine.controllerSpec().requireVerticalFacing()).isTrue();
     }
 
     @Test
-    void builder_passes_single_block_replacements_to_machine() {
-        var replacement = new SingleBlockModifierReplacement(
-                "speed", new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
-                List.of(), "", ItemStack.EMPTY);
-        var builder = new MachineBuilderJS("mmcr:builder_replacement")
-                .pattern("_I", Map.of("I", Blocks.IRON_BLOCK))
-                .addModifier(replacement);
+    void startup_builder_creates_machine_registration_without_structure() {
+        var registration = new MachineBuilderJS(MMCR.id("arc_furnace"))
+                .localizedName("Arc Furnace")
+                .allowVerticalFacing()
+                .allowModifiers()
+                .createObject();
 
-        DynamicMachine machine = builder.createObject();
-
-        assertThat(machine.modifierReplacementsAt(new BlockPos(1, 0, 0))).singleElement()
-                .extracting(SingleBlockModifierReplacement::getModifierName)
-                .isEqualTo("speed");
+        assertThat(registration.id()).isEqualTo(MMCR.id("arc_furnace"));
+        assertThat(registration.localizedName()).isEqualTo("Arc Furnace");
+        assertThat(registration.controllerSpec().allowVerticalFacing()).isTrue();
+        assertThat(registration.allowModifiers()).isTrue();
     }
 }

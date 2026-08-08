@@ -1,0 +1,43 @@
+package org.nibelungorum;
+
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.registry.ModBlocks;
+import net.minecraft.core.BlockPos;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * Machine structures used by the GameTest-only default machine registrations.
+ *
+ * @author howxu <dev@howxu.cn>
+ */
+public final class TestMachines {
+    private TestMachines() {
+    }
+
+    public static BlockArray casingCubePattern() {
+        Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
+        for (int x = -1; x <= 1; x++) {
+            for (int z = -1; z <= 1; z++) {
+                if (x != 0 || z != 0) {
+                    pattern.put(new BlockPos(x, 0, z), new BlockPredicate.OfBlock(ModBlocks.CASING.get()));
+                }
+            }
+        }
+        return new BlockArray(pattern);
+    }
+
+    public static BlockArray ironCompressorPattern() {
+        return BlockArray.builder()
+                .pattern("CCC", "CIC", "CCC")
+                .pattern("CIC", "   ", "COC")
+                .pattern("CCC", "CEC", "CCC")
+                .set('C', new BlockPredicate.OfBlock(ModBlocks.CASING.get()))
+                .set('I', new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()))
+                .set('O', new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_output_bus").get()))
+                .set('E', new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("energy_input_hatch").get()))
+                .build();
+    }
+}

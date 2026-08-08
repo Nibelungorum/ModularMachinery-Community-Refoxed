@@ -1,16 +1,12 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.nibelungorum.BuiltinMachines;
-import cn.howxu.mmcr.api.machine.BlockArray;
-import cn.howxu.mmcr.api.machine.DynamicMachine;
-import cn.howxu.mmcr.api.machine.Machine;
 import net.minecraft.resources.Identifier;
-
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -36,11 +32,11 @@ class MachineDefinitionBootstrapTest {
         MMCR.registerGameTestMachineDefinitionsIfPresent();
         MachineDefinitions.bootstrapBuiltins();
 
-        assertThat(MachineDefinitions.get(MMCR.id("blast_furnace"))).isNotNull();
-        assertThat(MachineDefinitions.get(MMCR.id("alloy_furnace"))).isNotNull();
-        assertThat(MachineDefinitions.get(MMCR.id("test_cube"))).isNull();
-        assertThat(MachineDefinitions.get(MMCR.id("controller_tick"))).isNull();
-        assertThat(MachineDefinitions.get(MMCR.id("iron_compressor"))).isNull();
+        assertThat(MachineDefinitions.getRegistration(MMCR.id("blast_furnace"))).isNotNull();
+        assertThat(MachineDefinitions.getRegistration(MMCR.id("alloy_furnace"))).isNotNull();
+        assertThat(MachineDefinitions.getRegistration(MMCR.id("test_cube"))).isNull();
+        assertThat(MachineDefinitions.getRegistration(MMCR.id("controller_tick"))).isNull();
+        assertThat(MachineDefinitions.getRegistration(MMCR.id("iron_compressor"))).isNull();
     }
 
     @Test
@@ -48,25 +44,18 @@ class MachineDefinitionBootstrapTest {
         BuiltinMachines.register();
         MachineDefinitions.bootstrapBuiltins();
 
-        assertThat(MachineDefinitions.get(MMCR.id("cracker")).controller().allowVerticalFacing()).isTrue();
+        assertThat(MachineDefinitions.getRegistration(MMCR.id("cracker")).controllerSpec().allowVerticalFacing()).isTrue();
     }
 
     @Test
-    void dynamicDefinitionsMergeWithStaticAndRejectStaticIds() {
+    void startupRegistrationsRejectDuplicateIds() {
         var staticId = Identifier.parse("mmcr:static_machine");
-        var dynamicId = Identifier.parse("mmcr:dynamic_machine");
-        MachineDefinitions.register(new DynamicMachine(staticId, "Static", new BlockArray(Map.of())));
+        MachineDefinitions.register(MachineRegistration.builder(staticId).localizedName("Static").build());
 
-        MachineDefinitions.replaceDynamic(Map.of(dynamicId,
-                new DynamicMachine(dynamicId, "Dynamic", new BlockArray(Map.of()))));
-
-        assertThat(MachineDefinitions.get(staticId)).isNotNull();
-        assertThat(MachineDefinitions.get(dynamicId)).isNotNull();
-        assertThat(MachineDefinitions.all()).extracting(Machine::registryName)
-                .containsExactly(staticId, dynamicId);
-        assertThatThrownBy(() -> MachineDefinitions.replaceDynamic(Map.of(staticId,
-                new DynamicMachine(staticId, "Conflict", new BlockArray(Map.of())))))
+        assertThat(MachineDefinitions.getRegistration(staticId)).isNotNull();
+        assertThat(MachineDefinitions.allRegistrations()).extracting(MachineRegistration::id)
+                .containsExactly(staticId);
+        assertThatThrownBy(() -> MachineDefinitions.register(MachineRegistration.builder(staticId).localizedName("Conflict").build()))
                 .isInstanceOf(IllegalStateException.class);
-        assertThat(MachineDefinitions.get(dynamicId)).isNotNull();
     }
 }

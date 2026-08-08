@@ -205,39 +205,56 @@ ServerEvents.recipes(event => {
 
 ## 4. KubeJS 端 Builder 设计
 
-### 4.1 MachineBuilderJS（核心：多方块结构定义）
+### 4.1 MachineBuilderJS（startup：机器身份 / controller）
 
-> **多方块结构（MMCE §5 的 `BlockArray`）就是用 KubeJS 注册的，不走 JSON。** 这是 1.12.2 时代最大的体验债——玩家必须手写 JSON 才能添加一个多方块；现在 KubeJS 脚本可以一行注册。
+`MachineBuilderJS` 只在 `startup_scripts` 中声明机器身份和 controller 属性。它会创建 `MachineRegistration`，用于 NeoForge 注册阶段生成 controller block / item / block entity；它**不包含**结构 pattern、modifier replacement 或实际 recipe。
 
 ```javascript
-// 调用形态（与 MMCE §23.2 MachineBuilder 对位）：
-StartupEvents.registry('mmcr:machine', event => {
-    event.create('mmcr:blast_furnace')
-        .localizedName('Blast Furnace')
-        .pattern(`
-            CCC
-            CFB
-            CCC
-        `, { C: 'mmcr:casing', F: 'minecraft:furnace' });
-});
+// kubejs/startup_scripts/mmcr_machines.js
+MMCR_MACHINE_BUILDER('mmcr:arc_furnace')
+    .localizedName('Arc Furnace')
+    .controllerTextures('mmcr:block/arc_front', 'mmcr:block/arc_side')
+    .allowModifiers()
+    .register();
 ```
+
+**startup 层只负责**：
+- machine id / localized name
+- controller texture 和朝向规则
+- 是否允许 structure modifier replacement
+- logical recipe family id
+
+### 4.2 MachineStructureBuilderJS（server：结构 / modifier）
+
+`MachineStructureBuilderJS` 在 `server_scripts` 中声明 reloadable structure content。`/reload` 可以替换结构和 recipe，但不能新增或删除 controller block。
+
+```javascript
+// kubejs/server_scripts/mmcr_structures.js
+MMCR_STRUCTURE_BUILDER('mmcr:arc_furnace')
+    .pattern(`
+        III
+        ICI
+        III
+    `, {
+        I: 'minecraft:iron_block',
+        C: 'mmcr:arc_furnace_controller'
+    })
+    .register(event);
+```
+
+**server structure 层负责**：
+- `BlockArray` pattern
+- port requirement
+- dynamic pattern extension
+- modifier replacement block declarations
 
 **关键差异 vs MMCE 1.12.2**：
 
 | MMCE 1.12.2 写法 | MMCR 26.1.2 KubeJS 写法 |
 |---|---|
-| 写 JSON 文件到 `assets/mmcr/machinery/blast_furnace.json`，GSON 解析 `BlockArray` | KubeJS 脚本一行 `.pattern(...)` 注册 |
-| 写法：`{ "pattern": ["CCC","CFB","CCC"], "key": { "C": {...}, "F": {...} } }` | `.pattern(string, map)` —— 字符串按行 / 拆字解析 |
-| `MachineLoader.discoverDirectory(...)` 扫盘 | `MMCR.machines` 同步注册到 `MachineRegistry` |
-| `JsonDeserializer` 两阶段加载 | 一次性 register，no preload |
-
-**实现路径**：
-- `MachineBuilderJS` extends KubeJS `BuilderBase<Machine>`。
-- `pattern(String s, Map<String, Object> keys)` 拆字符串：
-  - 按行拆，得到 2D 字符网格。
-  - 按字符查 keys map，转成 `BlockPredicate`（`Block` / `BlockState` / `TagKey` / "air"）。
-  - 计算 bounding box，把每格（按 controller 朝向归一化）放进 `BlockArray`。
-- `register()` → `MachineRegistry.register(builder.build())`。
+| `preloadMachines` 先发现机器，再加载结构 JSON | `startup_scripts` 先声明 `MachineRegistration`，`server_scripts` 再加载 `MachineStructureDefinition` |
+| reload 可重读结构和 recipe | `/reload` 只替换 structures + recipes，不改变 controller 注册表 |
+| recipe 随 machine JSON 隐式存在 | startup 只创建 logical recipe family；实际 recipe 是 server content |
 
 **BlockPredicate 的内部表示**（参考 MMCE §5.1 的 `BlockInformation`）：
 ```java
@@ -255,7 +272,7 @@ public sealed interface BlockPredicate {
 - keys map 里 key 是「字符」→ BlockPredicate。
 - 解析失败抛 `IllegalArgumentException`，KubeJS 会自动把行号 / 文件名带上。
 
-### 4.2 MachineRecipeBuilderJS
+### 4.3 MachineRecipeBuilderJS
 
 ```javascript
 ServerEvents.recipes(event => {
@@ -268,22 +285,8 @@ ServerEvents.recipes(event => {
 
 实现路径：
 - 直接对应 `MachineRecipe` record 的构造参数。
-- 调用 `RecipeRegistry.register(MachineRecipe)`。
-
-### 4.2 MachineRecipeBuilderJS
-
-```javascript
-ServerEvents.recipes(event => {
-    event.recipes.mmcr.machine_recipe('mmcr:iron_compressor', 40)
-        .itemInput('2x minecraft:iron_ingot')
-        .itemOutput('minecraft:iron_plate')
-        .energyPerTick(80);
-});
-```
-
-实现路径：
-- 直接对应 `MachineRecipe` record 的构造参数。
-- 调用 `RecipeRegistry.register(MachineRecipe)`。
+- 校验 machine id 已有 startup registration 或当前 runtime machine。
+- 调用 `RecipeRegistry.register(MachineRecipe)`；实际 recipe 不由 startup machine registration 自动生成。
 
 ## 5. 事件暴露
 

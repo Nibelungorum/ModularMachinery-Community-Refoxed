@@ -32,7 +32,7 @@ public final class ModBlockEntities {
             new LinkedHashMap<>();
 
     static {
-        MachineDefinitions.all().forEach(machine -> registerMachineController(machine.registryName()));
+        MachineDefinitions.allRegistrations().forEach(registration -> registerMachineController(registration.id()));
         PortKinds.all().forEach(kind -> {
             String name = kind.id();
             BES.put(name, register(name, () -> new BlockEntityType<>(

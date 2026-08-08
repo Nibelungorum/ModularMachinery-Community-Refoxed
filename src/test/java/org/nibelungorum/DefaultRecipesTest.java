@@ -3,6 +3,7 @@ package org.nibelungorum;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -26,6 +27,7 @@ class DefaultRecipesTest {
     @AfterEach
     void cleanup() {
         MachineRegistry.clearForTesting();
+        MachineStructureRegistry.clearForTesting();
         RecipeRegistry.clearForTesting();
     }
 
@@ -36,7 +38,7 @@ class DefaultRecipesTest {
 
     @Test
     void ensureRegistered_publishes_builtin_blast_furnace_iron_to_nugget_recipe() {
-        DefaultMachines.ensureRegistered();
+        installDefaultRuntimeContent();
         DefaultRecipes.ensureRegistered();
 
         var machine = (DynamicMachine) MachineRegistry.getMachine(MMCR.id("blast_furnace"));
@@ -60,7 +62,7 @@ class DefaultRecipesTest {
 
     @Test
     void ensureRegistered_publishes_builtin_alloy_furnace_netherite_recipe() {
-        DefaultMachines.ensureRegistered();
+        installDefaultRuntimeContent();
         DefaultRecipes.ensureRegistered();
 
         var machine = (DynamicMachine) MachineRegistry.getMachine(MMCR.id("alloy_furnace"));
@@ -88,7 +90,7 @@ class DefaultRecipesTest {
 
     @Test
     void ensureRegistered_publishes_builtin_cracker_coal_lapis_recipe() {
-        DefaultMachines.ensureRegistered();
+        installDefaultRuntimeContent();
         DefaultRecipes.ensureRegistered();
 
         var machine = (DynamicMachine) MachineRegistry.getMachine(MMCR.id("cracker"));
@@ -120,7 +122,7 @@ class DefaultRecipesTest {
 
     @Test
     void ensureRegistered_publishes_builtin_reactor_recipe() {
-        DefaultMachines.ensureRegistered();
+        installDefaultRuntimeContent();
         DefaultRecipes.ensureRegistered();
 
         var machine = (DynamicMachine) MachineRegistry.getMachine(MMCR.id("reactor"));
@@ -157,7 +159,7 @@ class DefaultRecipesTest {
 
     @Test
     void ensureRegistered_is_idempotent() {
-        DefaultMachines.ensureRegistered();
+        installDefaultRuntimeContent();
         DefaultRecipes.ensureRegistered();
         DefaultRecipes.ensureRegistered();
 
@@ -174,7 +176,7 @@ class DefaultRecipesTest {
 
     @Test
     void default_recipes_include_three_input_and_three_output_ui_examples() {
-        DefaultMachines.ensureRegistered();
+        installDefaultRuntimeContent();
         DefaultRecipes.ensureRegistered();
 
         assertThat(RecipeRegistry.getRecipe(MMCR.id("blast_furnace_multi_item")).inputs())
@@ -186,7 +188,7 @@ class DefaultRecipesTest {
 
     @Test
     void alloy_furnace_has_large_recipe_for_jei_overflow_display() {
-        DefaultMachines.ensureRegistered();
+        installDefaultRuntimeContent();
         DefaultRecipes.ensureRegistered();
 
         var recipe = RecipeRegistry.getRecipe(MMCR.id("alloy_furnace_jei_large"));
@@ -200,7 +202,7 @@ class DefaultRecipesTest {
 
     @Test
     void alloy_furnace_has_25x25_recipe_for_jei_overflow_display() {
-        DefaultMachines.ensureRegistered();
+        installDefaultRuntimeContent();
         DefaultRecipes.ensureRegistered();
 
         var recipe = RecipeRegistry.getRecipe(MMCR.id("alloy_furnace_jei_25x25"));
@@ -210,5 +212,9 @@ class DefaultRecipesTest {
                 .filteredOn(MachineIngredient.ItemIngredient.class::isInstance)
                 .hasSize(25);
         assertThat(recipe.outputs()).hasSize(25);
+    }
+
+    private static void installDefaultRuntimeContent() {
+        MachineStructureRegistry.replaceDynamic(DefaultMachines.structures());
     }
 }

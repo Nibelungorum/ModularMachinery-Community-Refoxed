@@ -44,16 +44,8 @@ public class E2ERecipeRunGameTest {
         var energyInput = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).getMutableEnergyStorage(null);
         while (energyInput.receiveEnergy(10000, false) > 0) {}
 
-        Map<BlockPos, BlockPredicate> pattern = new HashMap<>();
-        for (int x = -1; x <= 1; x++) for (int z = -1; z <= 1; z++)
-            if (x != 0 || z != 0) pattern.put(new BlockPos(x, 0, z),
-                    new BlockPredicate.OfBlock(ModBlocks.CASING.get()));
-        pattern.put(inputPos.subtract(controllerPos), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()));
-        pattern.put(outputPos.subtract(controllerPos), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_output_bus").get()));
-        pattern.put(energyPos.subtract(controllerPos), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("energy_input_hatch").get()));
         Identifier machineId = Identifier.fromNamespaceAndPath(MMCR.MODID, "iron_compressor");
-        var machine = new DynamicMachine(machineId, "Iron Compressor", new BlockArray(pattern));
-        MachineRegistry.register(machine);
+        var machine = MachineRegistry.getMachine(machineId);
         RecipeRegistry.register(new MachineRecipe(Identifier.fromNamespaceAndPath(MMCR.MODID, "iron_compressor_recipe"),
                 machineId, 40,
                 List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2),

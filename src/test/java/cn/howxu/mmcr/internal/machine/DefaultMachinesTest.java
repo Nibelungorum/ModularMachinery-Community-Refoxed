@@ -5,6 +5,7 @@ import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -34,12 +35,13 @@ class DefaultMachinesTest {
     @AfterEach
     void cleanup() {
         MachineRegistry.clearForTesting();
+        MachineStructureRegistry.clearForTesting();
     }
 
     @Test
-    void ensureRegistered_registers_default_blast_furnace_once() {
-        DefaultMachines.ensureRegistered();
-        DefaultMachines.ensureRegistered();
+    void structures_install_default_blast_furnace_once() {
+        installDefaultStructures();
+        installDefaultStructures();
 
         var machine = MachineRegistry.getMachine(MMCR.id("blast_furnace"));
 
@@ -49,7 +51,7 @@ class DefaultMachinesTest {
         assertThat(machine.portRequirements().isEmpty()).isTrue();
         assertThat(machine.pattern().pattern()).hasSize(26);
         assertThat(machine.pattern().get(BlockPos.ZERO))
-                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine).get()));
+                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine.registryName()).get()));
         assertThat(machine.pattern().get(new BlockPos(0, 0, -1))).isNull();
         assertThat(machine.pattern().get(new BlockPos(0, -1, -1)))
                 .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.CASING.get()));
@@ -68,9 +70,9 @@ class DefaultMachinesTest {
     }
 
     @Test
-    void ensureRegistered_registers_default_alloy_furnace_once() {
-        DefaultMachines.ensureRegistered();
-        DefaultMachines.ensureRegistered();
+    void structures_install_default_alloy_furnace_once() {
+        installDefaultStructures();
+        installDefaultStructures();
 
         var machine = (cn.howxu.mmcr.api.machine.DynamicMachine) MachineRegistry.getMachine(MMCR.id("alloy_furnace"));
 
@@ -80,7 +82,7 @@ class DefaultMachinesTest {
         assertThat(machine.portRequirements().isEmpty()).isTrue();
         assertThat(machine.pattern().pattern()).hasSize(26);
         assertThat(machine.pattern().get(BlockPos.ZERO))
-                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine).get()));
+                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine.registryName()).get()));
         assertThat(machine.pattern().get(new BlockPos(-1, -1, -2)))
                 .isEqualTo(new BlockPredicate.OfBlock(net.minecraft.world.level.block.Blocks.BRICKS));
         assertThat(machine.pattern().get(new BlockPos(0, -1, -1)))
@@ -123,9 +125,9 @@ class DefaultMachinesTest {
     }
 
     @Test
-    void ensureRegistered_registers_default_cracker_once() {
-        DefaultMachines.ensureRegistered();
-        DefaultMachines.ensureRegistered();
+    void structures_install_default_cracker_once() {
+        installDefaultStructures();
+        installDefaultStructures();
 
         var machine = MachineRegistry.getMachine(MMCR.id("cracker"));
 
@@ -135,7 +137,7 @@ class DefaultMachinesTest {
         assertThat(machine.controller().allowVerticalFacing()).isTrue();
         assertThat(machine.portRequirements().isEmpty()).isTrue();
         assertThat(machine.pattern().get(BlockPos.ZERO))
-                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine).get()));
+                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine.registryName()).get()));
         assertThat(machine.pattern().get(new BlockPos(0, -2, 0))).isNull();
         assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(crackerPortPredicateState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue();
@@ -150,9 +152,9 @@ class DefaultMachinesTest {
     }
 
     @Test
-    void ensureRegistered_registers_default_reactor_once() {
-        DefaultMachines.ensureRegistered();
-        DefaultMachines.ensureRegistered();
+    void structures_install_default_reactor_once() {
+        installDefaultStructures();
+        installDefaultStructures();
 
         var machine = MachineRegistry.getMachine(MMCR.id("reactor"));
 
@@ -161,8 +163,8 @@ class DefaultMachinesTest {
         assertThat(machine.controller().id()).isEqualTo(MMCR.id("reactor_controller"));
         assertThat(machine.portRequirements().isEmpty()).isTrue();
         assertThat(machine.pattern().get(BlockPos.ZERO))
-                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine).get()));
-        assertThat(machine.pattern().get(new BlockPos(0, 0, 0)).matches(ModBlocks.controllerFor(machine).get().defaultBlockState())).isTrue();
+                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine.registryName()).get()));
+        assertThat(machine.pattern().get(new BlockPos(0, 0, 0)).matches(ModBlocks.controllerFor(machine.registryName()).get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(ModBlocks.BLOCKS.get("fluid_input_hatch_big").get().defaultBlockState())).isTrue();
@@ -247,5 +249,9 @@ class DefaultMachinesTest {
 
     private static net.minecraft.world.level.block.state.BlockState crackerPortPredicateState() {
         return ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState();
+    }
+
+    private static void installDefaultStructures() {
+        MachineStructureRegistry.replaceDynamic(DefaultMachines.structures());
     }
 }

@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.compat.kubejs;
 
-import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -14,7 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MachineRecipeBuilderJS {
-    public Machine machine;
+    public Identifier machineId;
     public int tickTime = 40;
     public final List<MachineIngredient> inputs = new ArrayList<>();
     public final List<ItemStack> outputs = new ArrayList<>();
@@ -37,12 +37,13 @@ public class MachineRecipeBuilderJS {
     }
 
     public MachineRecipeBuilderJS machine(String id) {
-        var machineId = Identifier.parse(id);
-        this.machine = MachineRegistry.getMachine(machineId);
+        var parsed = Identifier.parse(id);
 
-        if (this.machine == null) {
+        if (MachineRegistry.getMachine(parsed) == null && MachineDefinitions.getRegistration(parsed) == null) {
             throw new IllegalArgumentException("Machine not found: " + id);
         }
+
+        this.machineId = parsed;
 
         return this;
     }
@@ -75,7 +76,7 @@ public class MachineRecipeBuilderJS {
     }
 
     public void build() {
-        if (machine == null) {
+        if (machineId == null) {
             throw new IllegalStateException("machine() not called");
         }
 
@@ -85,6 +86,6 @@ public class MachineRecipeBuilderJS {
             recipeInputs.add(new MachineIngredient.EnergyIngredient(energyPerTick));
         }
 
-        RecipeRegistry.register(new MachineRecipe(id, machine.registryName(), tickTime, List.copyOf(recipeInputs), List.copyOf(outputs), List.of(), 0, 1, cancelIfPerTickFails));
+        RecipeRegistry.register(new MachineRecipe(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(outputs), List.of(), 0, 1, cancelIfPerTickFails));
     }
 }

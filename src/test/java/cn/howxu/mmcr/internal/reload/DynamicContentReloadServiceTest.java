@@ -1,16 +1,21 @@
 package cn.howxu.mmcr.internal.reload;
 
+import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.BlockArray;
-import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
-import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -32,18 +37,21 @@ class DynamicContentReloadServiceTest {
     void cleanup() {
         MachineDefinitions.clearForTesting();
         MachineRegistry.clearForTesting();
+        MachineStructureRegistry.clearForTesting();
         RecipeRegistry.clearForTesting();
     }
 
     @Test
     void producerFailureRetainsPreviousDynamicSnapshot() {
+        register("mmcr:test_cube");
+        register("mmcr:controller_tick");
         DynamicContentReloadService.reload(candidate -> {
-            candidate.registerMachine(machine("mmcr:test_cube"));
+            candidate.registerStructure(structure("mmcr:test_cube"));
             candidate.registerRecipe(recipe("mmcr:old_recipe", "mmcr:test_cube"));
         });
 
         assertThatThrownBy(() -> DynamicContentReloadService.reload(candidate -> {
-            candidate.registerMachine(machine("mmcr:controller_tick"));
+            candidate.registerStructure(structure("mmcr:controller_tick"));
             throw new IllegalStateException("script failed");
         })).isInstanceOf(IllegalStateException.class);
 
@@ -53,33 +61,38 @@ class DynamicContentReloadServiceTest {
     }
 
     @Test
-    void successfulReloadReportsRemovedMachinesAndDropsTheirRecipes() {
+    void successfulReloadReportsRemovedStructuresAndDropsTheirRecipes() {
+        register("mmcr:test_cube");
+        register("mmcr:controller_tick");
         DynamicContentReloadService.reload(candidate -> {
-            candidate.registerMachine(machine("mmcr:test_cube"));
-            candidate.registerMachine(machine("mmcr:controller_tick"));
+            candidate.registerStructure(structure("mmcr:test_cube"));
+            candidate.registerStructure(structure("mmcr:controller_tick"));
             candidate.registerRecipe(recipe("mmcr:old_recipe", "mmcr:test_cube"));
         });
 
         var result = DynamicContentReloadService.reload(candidate ->
-                candidate.registerMachine(machine("mmcr:controller_tick")));
+                candidate.registerStructure(structure("mmcr:controller_tick")));
 
-        assertThat(result.removedMachines()).containsExactly(Identifier.parse("mmcr:test_cube"));
+        assertThat(result.removedStructures()).containsExactly(Identifier.parse("mmcr:test_cube"));
         assertThat(MachineRegistry.getCompiled(Identifier.parse("mmcr:test_cube"))).isNull();
         assertThat(RecipeRegistry.getRecipe(Identifier.parse("mmcr:old_recipe"))).isNull();
     }
 
     @Test
     void compilationFailureRetainsPreviousRuntimeSnapshotAndCache() {
-        var oldMachine = machine("mmcr:test_cube");
-        DynamicContentReloadService.reload(candidate -> candidate.registerMachine(oldMachine));
+        register("mmcr:test_cube");
+        register("mmcr:controller_tick");
+        var oldStructure = structure("mmcr:test_cube");
+        DynamicContentReloadService.reload(candidate -> candidate.registerStructure(oldStructure));
+        var oldMachine = MachineRegistry.getMachine(Identifier.parse("mmcr:test_cube"));
         var oldCompiled = MachineRegistry.getCompiled(oldMachine.registryName());
         var oldRotated = cn.howxu.mmcr.api.machine.BlockArrayCache.get(oldMachine.pattern(), net.minecraft.core.Direction.NORTH);
 
         assertThatThrownBy(() -> DynamicContentReloadService.reload(candidate ->
-                candidate.registerMachine(failingMachine("mmcr:controller_tick"))))
+                candidate.registerStructure(failingStructure("mmcr:controller_tick"))))
                 .isInstanceOf(RuntimeException.class);
 
-        assertThat(MachineRegistry.getMachine(oldMachine.registryName())).isSameAs(oldMachine);
+        assertThat(MachineRegistry.getMachine(oldMachine.registryName())).isNotNull();
         assertThat(MachineRegistry.getCompiled(oldMachine.registryName())).isSameAs(oldCompiled);
         assertThat(cn.howxu.mmcr.api.machine.BlockArrayCache.get(oldMachine.pattern(), net.minecraft.core.Direction.NORTH))
                 .isSameAs(oldRotated);
@@ -88,32 +101,33 @@ class DynamicContentReloadServiceTest {
 
     @Test
     void candidateRecipeCanReferenceStaticMachine() {
-        var staticMachine = machine("mmcr:static");
+        var staticMachine = new cn.howxu.mmcr.api.machine.DynamicMachine(Identifier.parse("mmcr:static"), "mmcr:static", new BlockArray(Map.of()));
         MachineRegistry.register(staticMachine);
         DynamicContentReloadService.reload(candidate ->
                 candidate.registerRecipe(recipe("mmcr:static_recipe", "mmcr:static")));
         assertThat(RecipeRegistry.getRecipe(Identifier.parse("mmcr:static_recipe"))).isNotNull();
     }
 
-    private static DynamicMachine machine(String id) {
+    private static void register(String id) {
         Identifier identifier = Identifier.parse(id);
-        return new DynamicMachine(identifier, id, new BlockArray(Map.of()));
+        MachineDefinitions.register(MachineRegistration.builder(identifier).localizedName(id).build());
     }
 
     private static MachineRecipe recipe(String id, String machineId) {
         return new MachineRecipe(Identifier.parse(id), Identifier.parse(machineId), 1, List.of(), List.of());
     }
 
-    private static cn.howxu.mmcr.api.machine.Machine failingMachine(String id) {
+    private static MachineStructureDefinition structure(String id) {
         Identifier identifier = Identifier.parse(id);
-        return new cn.howxu.mmcr.api.machine.Machine() {
-            @Override public Identifier registryName() { return identifier; }
-            @Override public String localizedName() { return id; }
-            @Override public BlockArray pattern() { return new BlockArray(Map.of()); }
-            @Override public MachineControllerSpec controller() { return MachineControllerSpec.defaultsFor(identifier); }
-            @Override public PortRequirementSpec portRequirements() { return PortRequirementSpec.none(); }
-            @Override public RecipeFailureActions failureAction() { return RecipeFailureActions.getDefaultAction(); }
-            @Override public List<cn.howxu.mmcr.api.machine.DynamicPatternSpec> dynamicPatterns() { return List.of((cn.howxu.mmcr.api.machine.DynamicPatternSpec) null); }
-        };
+        return new MachineStructureDefinition(identifier, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(), Map.of());
+    }
+
+    private static MachineStructureDefinition failingStructure(String id) {
+        Identifier identifier = Identifier.parse(id);
+        BlockPos outsidePattern = new BlockPos(1, 0, 0);
+        var replacement = new SingleBlockModifierReplacement(
+                "invalid", outsidePattern, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), "", ItemStack.EMPTY);
+        return new MachineStructureDefinition(identifier, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(),
+                Map.of(outsidePattern, List.of(replacement)));
     }
 }

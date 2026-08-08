@@ -90,6 +90,13 @@ com.cleanroommc.client.*                          [删除：cleanroommc 移植�
 
 ### 3.2 机器系统
 
+当前 MMCR 将动态机器生命周期拆成三层：
+
+- Startup machine registration：不可 reload 的机器身份、controller block id、朝向规则、modifier 能力和 logical recipe family。
+- Server structure registration：可 reload 的 `BlockArray`、port requirement、dynamic pattern extension 和 modifier replacement。
+- Server recipe registration：可 reload 的实际 `MachineRecipe`，按 startup machine id 绑定。
+- `/reload` 可以更新 structures 和 recipes，但不能新增或删除 controller blocks。
+
 | MMCE 类 | MMCR 类 | 翻译手法 | 备注 |
 |---|---|---|---|
 | `AbstractMachine` | `cn.howxu.mmcr.machine.Machine`（抽象 record + 默认实现） | 直译 | record 风格；`registryName` / `localizedName` / `pattern` / `recipeType` |

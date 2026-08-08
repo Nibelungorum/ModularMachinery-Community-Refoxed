@@ -11,8 +11,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
 
 /**
- * Registry-time collection of machine definitions.
- * <p>Definitions feed into {@link cn.howxu.mmcr.registry.ModBlocks} static init
+ * Registry-time collection of startup machine declarations.
+ * <p>Declarations feed into {@link cn.howxu.mmcr.registry.ModBlocks} static init
  * so each machine can register its own controller block/item/block-entity
  * before the DeferredRegister is frozen.
  *
@@ -23,27 +23,26 @@ import java.util.function.Supplier;
  */
 public final class MachineDefinitions {
 
-    private static final Map<Identifier, Machine> STATIC_DEFINITIONS = new LinkedHashMap<>();
-    private static volatile Map<Identifier, Machine> DYNAMIC_DEFINITIONS = Map.of();
-    private static final List<Supplier<Machine>> BUILTIN_SUPPLIERS = new CopyOnWriteArrayList<>();
+    private static final Map<Identifier, MachineRegistration> STATIC_REGISTRATIONS = new LinkedHashMap<>();
+    private static final List<Supplier<MachineRegistration>> BUILTIN_SUPPLIERS = new CopyOnWriteArrayList<>();
 
     private MachineDefinitions() {
     }
 
-    /** Register a single machine definition; intended for runtime scripts (e.g. KubeJS). */
-    public static void register(Machine machine) {
-        if (STATIC_DEFINITIONS.containsKey(machine.registryName())) {
-            throw new IllegalStateException("Machine definition already registered: " + machine.registryName());
+    /** Register a single startup machine declaration; intended for startup scripts (e.g. KubeJS). */
+    public static void register(MachineRegistration registration) {
+        if (STATIC_REGISTRATIONS.containsKey(registration.id())) {
+            throw new IllegalStateException("Machine registration already registered: " + registration.id());
         }
-        STATIC_DEFINITIONS.put(machine.registryName(), machine);
+        STATIC_REGISTRATIONS.put(registration.id(), registration);
     }
 
     /**
      * Add a supplier that produces a built-in machine definition. The supplier
      * is invoked at most once by {@link #bootstrapBuiltins()}; idempotent at
-     * the registry level via {@link #register(Machine)}.
+     * the registry level via {@link #register(MachineRegistration)}.
      */
-    public static void addBuiltinSupplier(Supplier<Machine> supplier) {
+    public static void addBuiltinSupplier(Supplier<MachineRegistration> supplier) {
         if (supplier == null) throw new IllegalArgumentException("supplier null");
         BUILTIN_SUPPLIERS.add(supplier);
     }
@@ -54,11 +53,11 @@ public final class MachineDefinitions {
      * any {@code ModBlocks} class is loaded.
      */
     public static void bootstrapBuiltins() {
-        for (Supplier<Machine> supplier : BUILTIN_SUPPLIERS) {
-            Machine machine = supplier.get();
-            if (machine == null) continue;
+        for (Supplier<MachineRegistration> supplier : BUILTIN_SUPPLIERS) {
+            MachineRegistration registration = supplier.get();
+            if (registration == null) continue;
             try {
-                register(machine);
+                register(registration);
             } catch (IllegalStateException duplicate) {
                 // A script already registered the same machine id; ignore silently.
             }
@@ -66,44 +65,21 @@ public final class MachineDefinitions {
         BUILTIN_SUPPLIERS.clear();
     }
 
-    public static Machine get(Identifier id) {
-        Machine machine = STATIC_DEFINITIONS.get(id);
-        return machine != null ? machine : DYNAMIC_DEFINITIONS.get(id);
+    public static MachineRegistration getRegistration(Identifier id) {
+        return STATIC_REGISTRATIONS.get(id);
     }
 
-    public static Collection<Machine> all() {
-        return Collections.unmodifiableCollection(mergedDefinitions().values());
+    public static Collection<MachineRegistration> allRegistrations() {
+        return Collections.unmodifiableCollection(STATIC_REGISTRATIONS.values());
     }
 
     public static boolean containsStatic(Identifier id) {
-        return STATIC_DEFINITIONS.containsKey(id);
-    }
-
-    public static void replaceDynamic(Map<Identifier, Machine> machines) {
-        Map<Identifier, Machine> replacement = new LinkedHashMap<>();
-        for (Map.Entry<Identifier, Machine> entry : machines.entrySet()) {
-            if (STATIC_DEFINITIONS.containsKey(entry.getKey())) {
-                throw new IllegalStateException("Dynamic machine conflicts with static definition: " + entry.getKey());
-            }
-            replacement.put(entry.getKey(), entry.getValue());
-        }
-        DYNAMIC_DEFINITIONS = Map.copyOf(replacement);
-    }
-
-    public static Map<Identifier, Machine> dynamicSnapshot() {
-        return Map.copyOf(DYNAMIC_DEFINITIONS);
-    }
-
-    private static Map<Identifier, Machine> mergedDefinitions() {
-        Map<Identifier, Machine> definitions = new LinkedHashMap<>(STATIC_DEFINITIONS);
-        definitions.putAll(DYNAMIC_DEFINITIONS);
-        return definitions;
+        return STATIC_REGISTRATIONS.containsKey(id);
     }
 
     /** Test-only helper. Never call from production code. */
     public static void clearForTesting() {
-        STATIC_DEFINITIONS.clear();
-        DYNAMIC_DEFINITIONS = Map.of();
+        STATIC_REGISTRATIONS.clear();
         BUILTIN_SUPPLIERS.clear();
     }
 }

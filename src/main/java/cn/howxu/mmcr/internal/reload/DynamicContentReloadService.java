@@ -1,12 +1,12 @@
 package cn.howxu.mmcr.internal.reload;
 
-import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
-import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.resources.Identifier;
 
 import java.util.LinkedHashMap;
@@ -30,30 +30,28 @@ public final class DynamicContentReloadService {
     public static ReloadResult reload(Consumer<Candidate> producer) {
         Candidate candidate = begin();
         producer.accept(candidate);
-        Map<Identifier, Machine> oldMachines = MachineRegistry.dynamicSnapshot();
+        Map<Identifier, MachineStructureDefinition> oldStructures = MachineStructureRegistry.dynamicSnapshot();
         Map<Identifier, MachineRecipe> oldRecipes = RecipeRegistry.dynamicSnapshot();
-        MachineRegistry.PreparedDynamic preparedMachines = MachineRegistry.prepareDynamic(candidate.machines);
-        MachineDefinitions.replaceDynamic(candidate.machines);
-        MachineRegistry.installDynamic(preparedMachines);
+        MachineStructureRegistry.replaceDynamic(candidate.structures);
         RecipeRegistry.replaceDynamic(candidate.recipes);
         RecipeCraftingContextPool.onGlobalReload();
-        return ReloadResult.from(oldMachines, candidate.machines, oldRecipes, candidate.recipes);
+        return ReloadResult.from(oldStructures, candidate.structures, oldRecipes, candidate.recipes);
     }
 
     public static final class Candidate {
 
-        private final Map<Identifier, Machine> machines = new LinkedHashMap<>();
+        private final Map<Identifier, MachineStructureDefinition> structures = new LinkedHashMap<>();
         private final Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>();
 
-        public void registerMachine(Machine machine) {
-            Identifier id = machine.registryName();
-            if (machines.containsKey(id)) {
-                throw new IllegalStateException("Dynamic machine already registered: " + id);
+        public void registerStructure(MachineStructureDefinition structure) {
+            Identifier id = structure.machineId();
+            if (structures.containsKey(id)) {
+                throw new IllegalStateException("Dynamic structure already registered: " + id);
             }
-            if (MachineDefinitions.containsStatic(id) || MachineRegistry.containsStatic(id)) {
-                throw new IllegalStateException("Dynamic machine conflicts with static machine: " + id);
+            if (MachineDefinitions.getRegistration(id) == null) {
+                throw new IllegalStateException("No startup machine registration for structure: " + id);
             }
-            machines.put(id, machine);
+            structures.put(id, structure);
         }
 
         public void registerRecipe(MachineRecipe recipe) {
@@ -64,34 +62,29 @@ public final class DynamicContentReloadService {
             if (RecipeRegistry.containsStatic(id)) {
                 throw new IllegalStateException("Dynamic recipe conflicts with static recipe: " + id);
             }
-            if (!machines.containsKey(recipe.machineId()) && !MachineRegistry.containsStatic(recipe.machineId())) {
+            if (!structures.containsKey(recipe.machineId()) && MachineRegistry.getMachine(recipe.machineId()) == null) {
                 throw new IllegalStateException("Machine not found for dynamic recipe: " + recipe.machineId());
             }
             recipes.put(id, recipe);
         }
-
-        public Machine getMachine(Identifier id) {
-            Machine machine = machines.get(id);
-            return machine != null ? machine : MachineRegistry.containsStatic(id) ? MachineRegistry.getMachine(id) : null;
-        }
     }
 
     public record ReloadResult(
-            Set<Identifier> addedMachines,
-            Set<Identifier> updatedMachines,
-            Set<Identifier> removedMachines,
+            Set<Identifier> addedStructures,
+            Set<Identifier> updatedStructures,
+            Set<Identifier> removedStructures,
             int addedRecipes,
             int updatedRecipes,
             int removedRecipes) {
 
-        private static ReloadResult from(Map<Identifier, Machine> oldMachines,
-                                         Map<Identifier, Machine> newMachines,
+        private static ReloadResult from(Map<Identifier, MachineStructureDefinition> oldStructures,
+                                         Map<Identifier, MachineStructureDefinition> newStructures,
                                          Map<Identifier, MachineRecipe> oldRecipes,
                                          Map<Identifier, MachineRecipe> newRecipes) {
             return new ReloadResult(
-                    addedIds(oldMachines, newMachines),
-                    updatedIds(oldMachines, newMachines),
-                    removedIds(oldMachines, newMachines),
+                    addedIds(oldStructures, newStructures),
+                    updatedIds(oldStructures, newStructures),
+                    removedIds(oldStructures, newStructures),
                     addedIds(oldRecipes, newRecipes).size(),
                     updatedIds(oldRecipes, newRecipes).size(),
                     removedIds(oldRecipes, newRecipes).size());

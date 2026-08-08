@@ -71,7 +71,7 @@ class BuildPlacementConsistencyTest {
 
         Map<BlockPos, BlockState> world = buildPlacement(machine, controller, Direction.EAST);
 
-        assertThat(world.get(controller).getBlock()).isEqualTo(ModBlocks.controllerFor(machine).get());
+        assertThat(world.get(controller).getBlock()).isEqualTo(ModBlocks.controllerFor(machine.registryName()).get());
     }
 
     @Test
@@ -93,7 +93,7 @@ class BuildPlacementConsistencyTest {
      */
     private static Map<BlockPos, BlockState> buildPlacement(Machine machine, BlockPos controller, Direction ctrlFacing) {
         Map<BlockPos, BlockState> written = new LinkedHashMap<>();
-        BlockState ctrlBase = ModBlocks.controllerFor(machine).get().defaultBlockState();
+        BlockState ctrlBase = ModBlocks.controllerFor(machine.registryName()).get().defaultBlockState();
         BlockState ctrlFinal = ctrlBase.hasProperty(BlockStateProperties.FACING)
                 ? ctrlBase.setValue(BlockStateProperties.FACING, ctrlFacing)
                 : ctrlBase;
@@ -110,8 +110,8 @@ class BuildPlacementConsistencyTest {
         return switch (p) {
             case BlockPredicate.OfBlock of -> of.block().defaultBlockState();
             case BlockPredicate.AnyOf anyOf -> anyOf.children().stream()
-                    .filter(c -> c instanceof BlockPredicate.OfBlock)
-                    .map(c -> ((BlockPredicate.OfBlock) c).block().defaultBlockState())
+                    .map(BuildPlacementConsistencyTest::resolve)
+                    .filter(java.util.Objects::nonNull)
                     .findFirst().orElse(null);
             case BlockPredicate.Air ignored -> null;
             default -> Blocks.STONE.defaultBlockState();
@@ -129,7 +129,7 @@ class BuildPlacementConsistencyTest {
     }
 
     private static Machine fixture() {
-        return DefaultMachines.blastFurnace(
+        Machine machine = DefaultMachines.blastFurnace(
                 Blocks.STONE,
                 Blocks.OAK_PLANKS,
                 Blocks.SPRUCE_PLANKS,
@@ -137,5 +137,14 @@ class BuildPlacementConsistencyTest {
                 Blocks.JUNGLE_PLANKS,
                 Blocks.ACACIA_PLANKS,
                 Blocks.DARK_OAK_PLANKS);
+        return new DynamicMachine(
+                machine.registryName(),
+                machine.localizedName(),
+                machine.pattern(),
+                machine.controller(),
+                PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(),
+                List.of(),
+                Map.of());
     }
 }

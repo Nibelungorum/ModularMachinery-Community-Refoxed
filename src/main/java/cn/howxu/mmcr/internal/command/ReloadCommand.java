@@ -18,15 +18,10 @@ public final class ReloadCommand {
                             var result = DynamicContentReloadService.reload(candidate -> {});
                             cn.howxu.mmcr.internal.network.ControllerSpecSync.sendToAll(ctx.getSource().getServer());
                             ctx.getSource().sendSuccess(() -> net.minecraft.network.chat.Component.literal(
-                                    "MMCR reload: machines +%d ~%d -%d, recipes +%d ~%d -%d".formatted(
-                                            result.addedMachines().size(), result.updatedMachines().size(),
-                                            result.removedMachines().size(), result.addedRecipes(),
+                                    "MMCR reload: structures +%d ~%d -%d, recipes +%d ~%d -%d".formatted(
+                                            result.addedStructures().size(), result.updatedStructures().size(),
+                                            result.removedStructures().size(), result.addedRecipes(),
                                             result.updatedRecipes(), result.removedRecipes())), false);
-                            for (var id : result.removedMachines()) {
-                                ctx.getSource().sendSuccess(() -> net.minecraft.network.chat.Component.literal(
-                                        "Removed machine " + id
-                                                + "; its controller block remains registered until the next server restart."), false);
-                            }
                             return 1;
                         })));
     }

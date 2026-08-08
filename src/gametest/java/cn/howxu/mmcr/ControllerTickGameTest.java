@@ -24,14 +24,8 @@ public class ControllerTickGameTest {
 
         BlockPos controllerPos = new BlockPos(1, 1, 1);
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("controller_tick")).get().defaultBlockState());
-        Map<BlockPos, BlockPredicate> pattern = new HashMap<>();
-        for (int x = -1; x <= 1; x++) for (int z = -1; z <= 1; z++)
-            if (x != 0 || z != 0) pattern.put(new BlockPos(x, 0, z),
-                    new BlockPredicate.OfBlock(ModBlocks.CASING.get()));
 
-        var machine = new DynamicMachine(Identifier.fromNamespaceAndPath(MMCR.MODID, "controller_tick"),
-                "Controller Tick", new BlockArray(pattern));
-        MachineRegistry.register(machine);
+        var machine = MachineRegistry.getMachine(MMCR.id("controller_tick"));
         var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(machine);
         controller.serverTick();

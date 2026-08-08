@@ -1,10 +1,11 @@
 package cn.howxu.mmcr.test;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.machine.BlockArray;
-import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -24,6 +25,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import org.nibelungorum.BuiltinMachines;
+import org.nibelungorum.DefaultRecipes;
 
 import java.lang.reflect.Field;
 import java.util.List;
@@ -63,12 +65,7 @@ public final class TestBootstrap {
 
         Class.forName("net.minecraft.SharedConstants").getMethod("tryDetectVersion").invoke(null);
         BuiltinMachines.register();
-        MachineDefinitions.addBuiltinSupplier(() ->
-                new DynamicMachine(id("test_cube"), "Test", new BlockArray(Map.of())));
-        MachineDefinitions.addBuiltinSupplier(() ->
-                new DynamicMachine(id("controller_tick"), "Controller Tick", new BlockArray(Map.of())));
-        MachineDefinitions.addBuiltinSupplier(() ->
-                new DynamicMachine(id("iron_compressor"), "Iron Compressor", new BlockArray(Map.of())));
+        addTestMachineSuppliers();
         MachineDefinitions.bootstrapBuiltins();
         Bootstrap.bootStrap();
         bindController(MMCR.id("blast_furnace"));
@@ -88,12 +85,26 @@ public final class TestBootstrap {
     public static void restoreMachineDefinitions() {
         MachineDefinitions.clearForTesting();
         BuiltinMachines.register();
+        addTestMachineSuppliers();
         MachineDefinitions.bootstrapBuiltins();
     }
 
     public static void registerRuntimeBuiltins() {
-        MMCR.registerRuntimeBuiltins();
+        restoreMachineDefinitions();
+        DynamicContentReloadService.reload(candidate -> {
+            org.nibelungorum.DefaultMachines.structures().values().forEach(candidate::registerStructure);
+            MMCR.registerGameTestMachineStructures(candidate);
+        });
+        DefaultRecipes.registerStatic(DefaultRecipes.recipes().values().stream().toList());
+        MachineRegistry.rebuildCompiledCache();
     }
+
+    private static void addTestMachineSuppliers() {
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("test_cube")).localizedName("Test").build());
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("controller_tick")).localizedName("Controller Tick").build());
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("iron_compressor")).localizedName("Iron Compressor").build());
+    }
+
 
     private static Identifier id(String path) {
         return Identifier.fromNamespaceAndPath(MMCR.MODID, path);

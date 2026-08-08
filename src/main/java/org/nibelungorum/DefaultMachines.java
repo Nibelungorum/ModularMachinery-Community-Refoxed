@@ -6,8 +6,8 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
-import cn.howxu.mmcr.api.machine.MachineDefinitions;
-import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -54,37 +54,34 @@ public final class DefaultMachines {
     }
 
     public static void ensureRegistered() {
-        if (MachineRegistry.getMachine(BLAST_FURNACE_ID) == null) {
-            Block casing = ModBlocks.CASING.get();
-            Block itemInput = ModBlocks.BLOCKS.get("item_input_bus").get();
-            Block itemOutput = ModBlocks.BLOCKS.get("item_output_bus").get();
-            Block fluidInput = ModBlocks.BLOCKS.get("fluid_input_hatch").get();
-            Block fluidOutput = ModBlocks.BLOCKS.get("fluid_output_hatch").get();
-            Block energyInput = ModBlocks.BLOCKS.get("energy_input_hatch").get();
-            Block energyOutput = ModBlocks.BLOCKS.get("energy_output_hatch").get();
-            MachineRegistry.register(blastFurnace(casing, itemInput, itemOutput, fluidInput, fluidOutput, energyInput, energyOutput));
-        }
-        if (MachineRegistry.getMachine(ALLOY_FURNACE_ID) == null) {
-            Block itemInput = ModBlocks.BLOCKS.get("item_input_bus").get();
-            Block itemOutput = ModBlocks.BLOCKS.get("item_output_bus").get();
-            Block energyInput = ModBlocks.BLOCKS.get("energy_input_hatch").get();
-            MachineRegistry.register(alloyFurnace(itemInput, itemOutput, energyInput));
-        }
-        if (MachineRegistry.getMachine(CRACKER_ID) == null) {
-            Block itemInput = ModBlocks.BLOCKS.get("item_input_bus").get();
-            Block itemOutput = ModBlocks.BLOCKS.get("item_output_bus").get();
-            Block fluidOutput = ModBlocks.BLOCKS.get("fluid_output_hatch").get();
-            Block energyInput = ModBlocks.BLOCKS.get("energy_input_hatch").get();
-            MachineRegistry.register(cracker(itemInput, itemOutput, fluidOutput, energyInput));
-        }
-        if (MachineRegistry.getMachine(REACTOR_ID) == null) {
-            Block itemInput = ModBlocks.BLOCKS.get("item_input_bus").get();
-            Block itemOutput = ModBlocks.BLOCKS.get("item_output_bus").get();
-            Block fluidInput = ModBlocks.BLOCKS.get("fluid_input_hatch").get();
-            Block fluidOutput = ModBlocks.BLOCKS.get("fluid_output_hatch").get();
-            Block energyOutput = ModBlocks.BLOCKS.get("energy_output_hatch").get();
-            MachineRegistry.register(reactor(itemInput, itemOutput, fluidInput, fluidOutput, energyOutput));
-        }
+        MachineStructureRegistry.replaceDynamic(structures());
+    }
+
+    public static Map<Identifier, MachineStructureDefinition> structures() {
+        Block casing = ModBlocks.CASING.get();
+        Block itemInput = ModBlocks.BLOCKS.get("item_input_bus").get();
+        Block itemOutput = ModBlocks.BLOCKS.get("item_output_bus").get();
+        Block fluidInput = ModBlocks.BLOCKS.get("fluid_input_hatch").get();
+        Block fluidOutput = ModBlocks.BLOCKS.get("fluid_output_hatch").get();
+        Block energyInput = ModBlocks.BLOCKS.get("energy_input_hatch").get();
+        Block energyOutput = ModBlocks.BLOCKS.get("energy_output_hatch").get();
+
+        Map<Identifier, MachineStructureDefinition> structures = new LinkedHashMap<>();
+        structures.put(BLAST_FURNACE_ID, structureOf(blastFurnace(casing, itemInput, itemOutput, fluidInput, fluidOutput, energyInput, energyOutput)));
+        structures.put(ALLOY_FURNACE_ID, structureOf(alloyFurnace(itemInput, itemOutput, energyInput)));
+        structures.put(CRACKER_ID, structureOf(cracker(itemInput, itemOutput, fluidOutput, energyInput)));
+        structures.put(REACTOR_ID, structureOf(reactor(itemInput, itemOutput, fluidInput, fluidOutput, energyOutput)));
+        return Map.copyOf(structures);
+    }
+
+    private static MachineStructureDefinition structureOf(Machine machine) {
+        return new MachineStructureDefinition(
+                machine.registryName(),
+                machine.pattern(),
+                machine.portRequirements(),
+                machine.portTierRequirements(),
+                machine.dynamicPatterns(),
+                machine instanceof DynamicMachine dynamic ? dynamic.modifierReplacements() : Map.of());
     }
 
     /**
@@ -123,10 +120,7 @@ public final class DefaultMachines {
                 .minItemInput(ItemBusSize.NORMAL)
                 .anyItemOutput()
                 .build();
-        Machine definition = MachineDefinitions.get(BLAST_FURNACE_ID);
-        return definition == null
-                ? new DynamicMachine(BLAST_FURNACE_ID, "高炉", pattern, MachineControllerSpec.defaultsFor(BLAST_FURNACE_ID), portRequirements, tierRequirements, List.of(), Map.of())
-                : new DynamicMachine(BLAST_FURNACE_ID, "高炉", pattern, MachineControllerSpec.defaultsFor(BLAST_FURNACE_ID), portRequirements, tierRequirements, List.of(), Map.of());
+        return new DynamicMachine(BLAST_FURNACE_ID, "高炉", pattern, MachineControllerSpec.defaultsFor(BLAST_FURNACE_ID), portRequirements, tierRequirements, List.of(), Map.of());
     }
 
     public static Machine alloyFurnace(Block itemInput, Block itemOutput, Block energyInput) {
@@ -152,7 +146,6 @@ public final class DefaultMachines {
                 .minEnergyInput(EnergyHatchSize.BIG)
                 .anyItemOutput()
                 .build();
-        Machine definition = MachineDefinitions.get(ALLOY_FURNACE_ID);
         return new DynamicMachine(
                 ALLOY_FURNACE_ID,
                 "合金炉",
@@ -246,10 +239,7 @@ public final class DefaultMachines {
                 true,
                 true,
                 true);
-        Machine definition = MachineDefinitions.get(CRACKER_ID);
-        return definition == null
-                ? new DynamicMachine(CRACKER_ID, "裂化器", pattern, controllerSpec, portRequirements, tierRequirements, List.of(), Map.of())
-                : new DynamicMachine(CRACKER_ID, "裂化器", pattern, controllerSpec, portRequirements, tierRequirements, List.of(), Map.of());
+        return new DynamicMachine(CRACKER_ID, "裂化器", pattern, controllerSpec, portRequirements, tierRequirements, List.of(), Map.of());
     }
 
     public static Machine reactor(Block itemInput, Block itemOutput, Block fluidInput, Block fluidOutput, Block energyOutput) {
@@ -295,10 +285,7 @@ public final class DefaultMachines {
                 .anyItemInput()
                 .anyItemOutput()
                 .build();
-        Machine definition = MachineDefinitions.get(REACTOR_ID);
-        return definition == null
-                ? new DynamicMachine(REACTOR_ID, "反应堆", pattern, MachineControllerSpec.defaultsFor(REACTOR_ID), portRequirements, tierRequirements, List.of(), Map.of())
-                : new DynamicMachine(REACTOR_ID, "反应堆", pattern, MachineControllerSpec.defaultsFor(REACTOR_ID), portRequirements, tierRequirements, List.of(), Map.of());
+        return new DynamicMachine(REACTOR_ID, "反应堆", pattern, MachineControllerSpec.defaultsFor(REACTOR_ID), portRequirements, tierRequirements, List.of(), Map.of());
     }
 
     private static BlockPredicate portFamily(IOType ioType, PortTierRequirementSpec.PortCategory category) {

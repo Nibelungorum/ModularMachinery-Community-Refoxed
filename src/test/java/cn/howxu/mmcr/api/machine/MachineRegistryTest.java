@@ -17,7 +17,9 @@ class MachineRegistryTest {
 
     @AfterEach
     void cleanup() {
+        MachineDefinitions.clearForTesting();
         MachineRegistry.clearForTesting();
+        MachineStructureRegistry.clearForTesting();
     }
 
     @Test
@@ -101,20 +103,22 @@ class MachineRegistryTest {
     }
 
     @Test
-    void replacingDynamicMachinesRebuildsMergedCompiledCache() {
+    void installingStructuresRebuildsMergedCompiledCache() {
         var staticMachine = new DynamicMachine(Identifier.parse("mmcr:static"), "Static", new BlockArray(Map.of()));
-        var dynamicMachine = new DynamicMachine(Identifier.parse("mmcr:dynamic"), "Dynamic", new BlockArray(Map.of()));
+        var dynamicId = Identifier.parse("mmcr:dynamic");
+        var dynamicStructure = new MachineStructureDefinition(dynamicId, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(), Map.of());
         MachineRegistry.register(staticMachine);
+        MachineDefinitions.register(MachineRegistration.builder(dynamicId).localizedName("Dynamic").build());
 
-        MachineRegistry.replaceDynamic(Map.of(dynamicMachine.registryName(), dynamicMachine));
+        MachineStructureRegistry.replaceDynamic(Map.of(dynamicId, dynamicStructure));
 
         assertThat(MachineRegistry.getCompiled(staticMachine.registryName())).isNotNull();
-        assertThat(MachineRegistry.getCompiled(dynamicMachine.registryName())).isNotNull();
+        assertThat(MachineRegistry.getCompiled(dynamicId)).isNotNull();
 
-        MachineRegistry.replaceDynamic(Map.of());
+        MachineStructureRegistry.replaceDynamic(Map.of());
 
         assertThat(MachineRegistry.getMachine(staticMachine.registryName())).isSameAs(staticMachine);
-        assertThat(MachineRegistry.getMachine(dynamicMachine.registryName())).isNull();
-        assertThat(MachineRegistry.getCompiled(dynamicMachine.registryName())).isNull();
+        assertThat(MachineRegistry.getMachine(dynamicId)).isNull();
+        assertThat(MachineRegistry.getCompiled(dynamicId)).isNull();
     }
 }
