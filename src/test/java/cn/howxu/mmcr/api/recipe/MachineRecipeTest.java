@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.recipe;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -20,6 +21,7 @@ import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -60,6 +62,47 @@ class MachineRecipeTest {
         var back = MachineRecipe.CODEC.codec().parse(JsonOps.INSTANCE, json).getOrThrow();
 
         assertThat(back).isEqualTo(recipe);
+    }
+
+    @Test
+    void recipe_codec_roundtrips_parallelized_and_equality_includes_flag() {
+        bindItemComponents(Items.IRON_BLOCK);
+        MachineRecipe serial = new MachineRecipe(
+                MMCR.id("parallel_test"),
+                MMCR.id("blast_furnace"),
+                20,
+                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
+                List.of(new ItemStack(Items.IRON_BLOCK)),
+                List.of(),
+                0,
+                3,
+                false,
+                List.of(),
+                List.of(),
+                true);
+        assertThat(serial.isParallelized()).isTrue();
+        assertThat(serial.maxThreads()).isEqualTo(3);
+
+        var encoded = MachineRecipe.CODEC.codec().encodeStart(jsonOps(), serial).getOrThrow();
+        var decoded = MachineRecipe.CODEC.codec().parse(jsonOps(), encoded).getOrThrow();
+        var nonParallel = new MachineRecipe(
+                MMCR.id("parallel_test"),
+                MMCR.id("blast_furnace"),
+                20,
+                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
+                List.of(new ItemStack(Items.IRON_BLOCK)),
+                List.of(),
+                0,
+                3,
+                false,
+                List.of(),
+                List.of(),
+                false);
+
+        assertThat(decoded.isParallelized()).isTrue();
+        assertThat(decoded.maxThreads()).isEqualTo(3);
+        assertThat(decoded).isNotEqualTo(nonParallel);
+        assertThat(decoded.hashCode()).isNotEqualTo(nonParallel.hashCode());
     }
 
     @Test

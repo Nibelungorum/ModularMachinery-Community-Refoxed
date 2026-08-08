@@ -647,6 +647,75 @@ class RecipeCraftingContextTest {
     }
 
     @Test
+    void multipliedItemRuntimeIoConsumesInputsAndInsertsOutputs() {
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.IRON_NUGGET);
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 0, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(8));
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = controllerWithComponents(input, output);
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "multiplied_item_runtime_io",
+                List.of(
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY),
+                        new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_NUGGET.getDefaultInstance())
+                )
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateInputs(recipe, 4)).isTrue();
+        assertThat(context.simulateOutputs(recipe, 4)).isTrue();
+        assertThat(context.startCrafting(recipe, 4)).isTrue();
+        assertThat(context.finishCrafting(recipe, 4)).isTrue();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(4);
+    }
+
+    @Test
+    void multipliedOutputSpaceFailureDoesNotConsumeInputs() {
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.IRON_NUGGET);
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 0, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(8));
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(2, 0, 0));
+        for (int slot = 1; slot < output.getItemStackHandler(null).getSlots(); slot++) {
+            output.getItemStackHandler(null).setStackInSlot(slot, Items.COBBLESTONE.getDefaultInstance().copyWithCount(64));
+        }
+        output.getItemStackHandler(null).setStackInSlot(0, Items.IRON_NUGGET.getDefaultInstance().copyWithCount(61));
+        MachineControllerBlockEntity controller = controllerWithComponents(input, output);
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "multiplied_blocked_item_runtime_output",
+                List.of(
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY),
+                        new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_NUGGET.getDefaultInstance())
+                )
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateInputs(recipe, 4)).isTrue();
+        assertThat(context.simulateOutputs(recipe, 4)).isFalse();
+        assertThat(context.startCrafting(recipe, 4)).isFalse();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(8);
+    }
+
+    @Test
+    void multipliedEnergyRequirementDrainsPerParallelTick() {
+        EnergyInputHatchBlockEntity hatch = energyInputHatch(new BlockPos(1, 0, 0));
+        hatch.getMutableEnergyStorage(null).receiveEnergy(30, false);
+        MachineControllerBlockEntity controller = controllerWithComponents(hatch);
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "multiplied_energy_tick",
+                List.of(new EnergyRequirement(10))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.ioTick(recipe, 4)).isFalse();
+        assertThat(hatch.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(30);
+        assertThat(context.ioTick(recipe, 3)).isTrue();
+        assertThat(hatch.getMutableEnergyStorage(null).getEnergyStored()).isZero();
+    }
+
+    @Test
     void missingItemInputFailureRecordsSearchedComponents() {
         bindItemComponents(Items.IRON_INGOT);
         ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 0, 0));

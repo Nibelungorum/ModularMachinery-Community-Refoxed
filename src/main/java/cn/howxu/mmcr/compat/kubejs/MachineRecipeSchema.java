@@ -45,10 +45,16 @@ public final class MachineRecipeSchema {
             new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false), "modifiers", ComponentRole.OTHER)
                     .optional(List.of()).exclude();
 
+    public static final RecipeKey<Integer> MAX_THREADS =
+            new RecipeKey<>(NumberComponent.NON_NEGATIVE_INT, "max_threads", ComponentRole.OTHER).optional(1);
+
+    public static final RecipeKey<Boolean> PARALLELIZED =
+            new RecipeKey<>(BooleanComponent.BOOLEAN, "parallelized", ComponentRole.OTHER).optional(false);
+
     public static final RecipeKey<Boolean> CANCEL_IF_PER_TICK_FAILS =
             new RecipeKey<>(BooleanComponent.BOOLEAN, "cancelIfPerTickFails", ComponentRole.OTHER).optional(false);
 
-    public static final RecipeSchema SCHEMA = new RecipeSchema(MACHINE, TICK_TIME, INPUTS, ENERGY_PER_TICK, OUTPUTS, MODIFIERS, CANCEL_IF_PER_TICK_FAILS)
+    public static final RecipeSchema SCHEMA = new RecipeSchema(MACHINE, TICK_TIME, INPUTS, ENERGY_PER_TICK, OUTPUTS, MODIFIERS, MAX_THREADS, PARALLELIZED, CANCEL_IF_PER_TICK_FAILS)
             .factory(MachineRecipeFactory.INSTANCE);
 
     private MachineRecipeSchema() {

@@ -2,6 +2,7 @@ package cn.howxu.mmcr.datagen;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import cn.howxu.mmcr.api.recipe.ParallelTier;
 import org.junit.jupiter.api.Test;
 
 class TranslationsTest {
@@ -18,6 +19,21 @@ class TranslationsTest {
         assertEquals("Cracker Controller", Translations.ALL.get("en_us").get("item.mmcr.cracker_controller"));
         assertEquals("裂化器控制器", Translations.ALL.get("zh_cn").get("block.mmcr.cracker_controller"));
         assertEquals("裂化器控制器", Translations.ALL.get("zh_cn").get("item.mmcr.cracker_controller"));
+    }
+
+    @Test
+    void parallel_controllers_have_block_and_item_display_names() {
+        for (ParallelTier tier : ParallelTier.values()) {
+            String id = tier.idSuffix();
+            assertEquals("Parallel Controller " + tier.maxParallelism() + "x",
+                    Translations.ALL.get("en_us").get("block.mmcr." + id));
+            assertEquals("Parallel Controller " + tier.maxParallelism() + "x",
+                    Translations.ALL.get("en_us").get("item.mmcr." + id));
+            assertEquals("并行控制器 " + tier.maxParallelism() + "x",
+                    Translations.ALL.get("zh_cn").get("block.mmcr." + id));
+            assertEquals("并行控制器 " + tier.maxParallelism() + "x",
+                    Translations.ALL.get("zh_cn").get("item.mmcr." + id));
+        }
     }
 
     @Test

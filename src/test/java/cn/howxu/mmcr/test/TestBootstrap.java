@@ -5,9 +5,14 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
-import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.api.recipe.ParallelTier;
+import cn.howxu.mmcr.internal.block.FactoryControllerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
+import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
+import cn.howxu.mmcr.internal.tile.FactoryControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModItems;
@@ -19,10 +24,9 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import org.nibelungorum.BuiltinMachines;
 import org.nibelungorum.DefaultRecipes;
@@ -78,6 +82,8 @@ public final class TestBootstrap {
         bindController(id("iron_compressor"));
         bind(ModBlocks.CASING, Blocks.STONE);
         bindPortBlocks();
+        for (ParallelTier tier : ParallelTier.values()) bindParallelController(tier);
+        bindFactoryController();
         restoreMachineDefinitions();
         registerRuntimeBuiltins();
         initialized = true;
@@ -116,7 +122,7 @@ public final class TestBootstrap {
         bind(ModBlocks.controllerFor(machineId), block);
         String itemName = MachineControllerSpec.defaultsFor(machineId).id().getPath();
         DeferredHolder<Item, Item> itemHolder = ModItems.ITEMS.get(itemName);
-        Item item = registerControllerItem(itemHolder);
+        Item item = registerItem(itemHolder);
         bind(itemHolder, item);
         Item.BY_BLOCK.put(block, item);
     }
@@ -130,19 +136,87 @@ public final class TestBootstrap {
         return block;
     }
 
+    private static void bindParallelController(ParallelTier tier) throws Exception {
+        String name = tier.idSuffix();
+        ParallelControllerBlock block = parallelControllerBlock(tier);
+        bind(ModBlocks.BLOCKS.get(name), block);
+        DeferredHolder<Item, Item> itemHolder = ModItems.ITEMS.get(name);
+        Item item = registerItem(itemHolder);
+        bind(itemHolder, item);
+        Item.BY_BLOCK.put(block, item);
+        bind(ModBlockEntities.BES.get(name), parallelControllerBlockEntityType(tier, block));
+    }
+
+    private static ParallelControllerBlock parallelControllerBlock(ParallelTier tier) {
+        MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
+        blocks.unfreeze(true);
+        ParallelControllerBlock block = new ParallelControllerBlock(
+                tier,
+                () -> ModBlockEntities.BES.get(tier.idSuffix()).get(),
+                Blocks.IRON_BLOCK.properties());
+        Registry.register(BuiltInRegistries.BLOCK, MMCR.id(tier.idSuffix()), block);
+        blocks.freeze();
+        return block;
+    }
+
+    private static BlockEntityType<?> parallelControllerBlockEntityType(ParallelTier tier, ParallelControllerBlock block) {
+        MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
+        blockEntities.unfreeze(true);
+        BlockEntityType<?> beType = new BlockEntityType<>(
+                (pos, state) -> new ParallelControllerBlockEntity(tier, pos, state),
+                block);
+        Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id(tier.idSuffix()), beType);
+        blockEntities.freeze();
+        return beType;
+    }
+
+    private static void bindFactoryController() throws Exception {
+        String name = "factory_controller";
+        FactoryControllerBlock block = factoryControllerBlock();
+        bind(ModBlocks.BLOCKS.get(name), block);
+        DeferredHolder<Item, Item> itemHolder = ModItems.ITEMS.get(name);
+        Item item = registerItem(itemHolder);
+        bind(itemHolder, item);
+        Item.BY_BLOCK.put(block, item);
+        bind(ModBlockEntities.BES.get(name), factoryControllerBlockEntityType(block));
+    }
+
+    private static FactoryControllerBlock factoryControllerBlock() {
+        MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
+        blocks.unfreeze(true);
+        FactoryControllerBlock block = new FactoryControllerBlock(
+                () -> ModBlockEntities.BES.get("factory_controller").get(),
+                Blocks.IRON_BLOCK.properties());
+        Registry.register(BuiltInRegistries.BLOCK, MMCR.id("factory_controller"), block);
+        blocks.freeze();
+        return block;
+    }
+
+    private static BlockEntityType<?> factoryControllerBlockEntityType(FactoryControllerBlock block) {
+        MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
+        blockEntities.unfreeze(true);
+        BlockEntityType<?> beType = new BlockEntityType<>(FactoryControllerBlockEntity::new, block);
+        Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id("factory_controller"), beType);
+        blockEntities.freeze();
+        return beType;
+    }
+
     private static void bind(Object deferredHolder, Object value) throws Exception {
-        Class<?> type = deferredHolder.getClass();
-        Field holder = null;
-        while (type != null && holder == null) {
-            try {
-                holder = type.getDeclaredField("holder");
-            } catch (NoSuchFieldException ignored) {
-                type = type.getSuperclass();
-            }
-        }
-        if (holder == null) throw new NoSuchFieldException("holder");
+        Field holder = fieldInHierarchy(deferredHolder.getClass(), "holder");
         holder.setAccessible(true);
         holder.set(deferredHolder, Holder.direct(value));
+    }
+
+    private static Field fieldInHierarchy(Class<?> type, String name) throws NoSuchFieldException {
+        Class<?> current = type;
+        while (current != null) {
+            try {
+                return current.getDeclaredField(name);
+            } catch (NoSuchFieldException ignored) {
+                current = current.getSuperclass();
+            }
+        }
+        throw new NoSuchFieldException(name);
     }
 
     @SuppressWarnings("unchecked")
@@ -154,7 +228,7 @@ public final class TestBootstrap {
         return (Supplier<Item>) entries.get(itemHolder);
     }
 
-    private static Item registerControllerItem(DeferredHolder<Item, Item> itemHolder) throws Exception {
+    private static Item registerItem(DeferredHolder<Item, Item> itemHolder) throws Exception {
         MappedRegistry<Item> items = (MappedRegistry<Item>) BuiltInRegistries.ITEM;
         items.unfreeze(true);
         Item item = registeredItemSupplier(itemHolder).get();

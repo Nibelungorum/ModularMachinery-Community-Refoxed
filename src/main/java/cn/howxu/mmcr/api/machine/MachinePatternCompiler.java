@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.api.machine;
 
+import cn.howxu.mmcr.internal.block.FactoryControllerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
+import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -95,7 +97,9 @@ public final class MachinePatternCompiler {
 
     private static boolean couldBeComponent(BlockPredicate predicate) {
         return switch (predicate) {
-            case BlockPredicate.OfBlock of -> of.block() instanceof IOPortBlock;
+            case BlockPredicate.OfBlock of -> of.block() instanceof IOPortBlock
+                    || of.block() instanceof ParallelControllerBlock
+                    || of.block() instanceof FactoryControllerBlock;
             case BlockPredicate.AnyOf ignored -> true;
             default -> true;
         };

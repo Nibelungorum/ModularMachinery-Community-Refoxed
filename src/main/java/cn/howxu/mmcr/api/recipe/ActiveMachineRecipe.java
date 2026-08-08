@@ -47,8 +47,8 @@ public final class ActiveMachineRecipe {
         this.tick = serialized.getIntOr("tick", 0);
         this.totalTick = serialized.getIntOr("totalTick", 0);
         this.data = serialized.contains("data") ? serialized.getCompoundOrEmpty("data") : new CompoundTag();
-        this.maxParallelism = serialized.getIntOr("maxParallelism", 1);
-        this.parallelism = serialized.getIntOr("parallelism", 1);
+        setMaxParallelism(serialized.getIntOr("maxParallelism", 1));
+        setParallelism(serialized.getIntOr("parallelism", 1));
         LOG.info("ActiveMachineRecipe#{} restored from NBT: recipe={} resolved={} tick={}/{} maxParallelism={} parallelism={}",
                 instanceId, recipeId, this.recipe == null ? null : this.recipe.id(),
                 this.tick, this.totalTick, this.maxParallelism, this.parallelism);
@@ -88,6 +88,7 @@ public final class ActiveMachineRecipe {
 
     public void setMaxParallelism(int maxParallelism) {
         this.maxParallelism = Math.max(1, maxParallelism);
+        setParallelism(parallelism);
     }
 
     public int getParallelism() {
@@ -95,7 +96,7 @@ public final class ActiveMachineRecipe {
     }
 
     public void setParallelism(int parallelism) {
-        this.parallelism = Math.max(1, parallelism);
+        this.parallelism = Math.max(1, Math.min(parallelism, maxParallelism));
     }
 
     @Nullable
@@ -170,7 +171,7 @@ public final class ActiveMachineRecipe {
         ActiveMachineRecipe result = new ActiveMachineRecipe(recipe, input.getIntOr("maxParallelism", 1));
         result.tick = input.getIntOr("tick", 0);
         result.totalTick = input.getIntOr("totalTick", 0);
-        result.parallelism = input.getIntOr("parallelism", 1);
+        result.setParallelism(input.getIntOr("parallelism", 1));
         result.data = input.read("data", CompoundTag.CODEC).orElseGet(CompoundTag::new);
         LOG.debug("ActiveMachineRecipe#{} from(ValueInput) → recipe={} tick={}/{} maxParallelism={} parallelism={}",
                 result.instanceId, recipeId, result.tick, result.totalTick, result.maxParallelism, result.parallelism);
@@ -188,7 +189,7 @@ public final class ActiveMachineRecipe {
             LOG.debug("ActiveMachineRecipe#{} start(): no recipe attached → refused", instanceId);
             return false;
         }
-        boolean started = context.startCrafting(recipe);
+        boolean started = context.startCrafting(recipe, parallelism);
         if (started) {
             refreshTotalTick(context);
         }
@@ -209,13 +210,13 @@ public final class ActiveMachineRecipe {
         int beforeTick = getTick();
         int nextTick = Math.min(beforeTick + 1, total);
         if (nextTick >= total) {
-            if (!context.simulateOutputs(recipe)) {
+            if (!context.simulateOutputs(recipe, parallelism)) {
                 LOG.info("ActiveMachineRecipe#{} tick(): recipe {} outputs unavailable before completion → WAITING at tick {}",
                         instanceId, recipe.id(), beforeTick);
                 return TickStatus.WAITING;
             }
         }
-        if (!context.ioTick(recipe)) {
+        if (!context.ioTick(recipe, parallelism)) {
             doFailureAction(context.failureAction());
             LOG.info("ActiveMachineRecipe#{} tick(): recipe {} ioTick refused at tick {} → WAITING", instanceId, recipe.id(), beforeTick);
             return TickStatus.WAITING;
@@ -228,7 +229,7 @@ public final class ActiveMachineRecipe {
 
         LOG.info("ActiveMachineRecipe#{} tick(): recipe {} reached completion tick {} of {}; entering final commit phase", instanceId, recipe.id(), nextTick, total);
 
-        boolean outputsOk = context.finishCrafting(recipe);
+        boolean outputsOk = context.finishCrafting(recipe, parallelism);
         if (!outputsOk) {
             int restored = Math.max(0, total - 1);
             LOG.info("ActiveMachineRecipe#{} tick(): recipe {} finish failed → rollback tick {} → {} (WAITING)",

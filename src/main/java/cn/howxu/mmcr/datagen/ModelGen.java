@@ -3,6 +3,7 @@ package cn.howxu.mmcr.datagen;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.PortKinds;
@@ -79,7 +80,8 @@ public final class ModelGen extends ModelProvider {
     }
 
     private static boolean shouldGenerateBlockModels(String name) {
-        return !isIoPort(name) && MachineDefinitions.allRegistrations().stream()
+        return !isIoPort(name) && !isParallelController(name) && !"factory_controller".equals(name)
+                && MachineDefinitions.allRegistrations().stream()
                 .map(registration -> MachineControllerSpec.defaultsFor(registration.id()).id().getPath())
                 .noneMatch(name::equals);
     }
@@ -99,6 +101,13 @@ public final class ModelGen extends ModelProvider {
             BLOCKSTATE,
             ITEM
         }
+    }
+
+    private static boolean isParallelController(String blockName) {
+        for (ParallelTier tier : ParallelTier.values()) {
+            if (tier.idSuffix().equals(blockName)) return true;
+        }
+        return false;
     }
 
     @Override

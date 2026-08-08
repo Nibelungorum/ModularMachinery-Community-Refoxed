@@ -18,22 +18,26 @@ public record DynamicMachine(
         PortRequirementSpec portRequirements,
         PortTierRequirementSpec portTierRequirements,
         List<DynamicPatternSpec> dynamicPatterns,
-        Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements
+        Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
+        int maxParallelism,
+        boolean parallelizable,
+        boolean hasFactory,
+        int factoryThreadLimit
 ) implements Machine {
     public DynamicMachine(Identifier registryName, String localizedName, BlockArray pattern) {
-        this(registryName, localizedName, pattern, MachineControllerSpec.defaultsFor(registryName), MachineAppearanceSpec.defaults(), PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of());
+        this(registryName, localizedName, pattern, MachineControllerSpec.defaultsFor(registryName), MachineAppearanceSpec.defaults(), PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), 1, false, false, 1);
     }
 
     public DynamicMachine(Identifier registryName, String localizedName, BlockArray pattern, MachineControllerSpec controller) {
-        this(registryName, localizedName, pattern, controller, MachineAppearanceSpec.defaults(), PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of());
+        this(registryName, localizedName, pattern, controller, MachineAppearanceSpec.defaults(), PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), 1, false, false, 1);
     }
 
     public DynamicMachine(Identifier registryName, String localizedName, BlockArray pattern, List<DynamicPatternSpec> dynamicPatterns) {
-        this(registryName, localizedName, pattern, MachineControllerSpec.defaultsFor(registryName), MachineAppearanceSpec.defaults(), PortRequirementSpec.none(), PortTierRequirementSpec.none(), dynamicPatterns, Map.of());
+        this(registryName, localizedName, pattern, MachineControllerSpec.defaultsFor(registryName), MachineAppearanceSpec.defaults(), PortRequirementSpec.none(), PortTierRequirementSpec.none(), dynamicPatterns, Map.of(), 1, false, false, 1);
     }
 
     public DynamicMachine(Identifier registryName, String localizedName, BlockArray pattern, MachineControllerSpec controller, PortRequirementSpec portRequirements) {
-        this(registryName, localizedName, pattern, controller, MachineAppearanceSpec.defaults(), portRequirements, PortTierRequirementSpec.none(), List.of(), Map.of());
+        this(registryName, localizedName, pattern, controller, MachineAppearanceSpec.defaults(), portRequirements, PortTierRequirementSpec.none(), List.of(), Map.of(), 1, false, false, 1);
     }
 
     public DynamicMachine {
@@ -44,6 +48,8 @@ public record DynamicMachine(
         appearance = appearance == null ? MachineAppearanceSpec.defaults() : appearance;
         if (portRequirements == null) throw new IllegalArgumentException("portRequirements null");
         if (portTierRequirements == null) throw new IllegalArgumentException("portTierRequirements null");
+        maxParallelism = Math.max(1, maxParallelism);
+        factoryThreadLimit = Math.max(1, factoryThreadLimit);
         dynamicPatterns = List.copyOf(dynamicPatterns == null ? List.of() : dynamicPatterns);
         modifierReplacements = copyModifierReplacements(pattern, modifierReplacements);
     }
@@ -53,9 +59,12 @@ public record DynamicMachine(
             String localizedName,
             BlockArray pattern,
             MachineControllerSpec controller,
+            MachineAppearanceSpec appearance,
             PortRequirementSpec portRequirements,
-            List<DynamicPatternSpec> dynamicPatterns) {
-        this(registryName, localizedName, pattern, controller, MachineAppearanceSpec.defaults(), portRequirements, PortTierRequirementSpec.none(), dynamicPatterns, Map.of());
+            PortTierRequirementSpec portTierRequirements,
+            List<DynamicPatternSpec> dynamicPatterns,
+            Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements) {
+        this(registryName, localizedName, pattern, controller, appearance, portRequirements, portTierRequirements, dynamicPatterns, modifierReplacements, 1, false, false, 1);
     }
 
     public DynamicMachine(
@@ -66,7 +75,32 @@ public record DynamicMachine(
             PortRequirementSpec portRequirements,
             List<DynamicPatternSpec> dynamicPatterns,
             Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements) {
-        this(registryName, localizedName, pattern, controller, MachineAppearanceSpec.defaults(), portRequirements, PortTierRequirementSpec.none(), dynamicPatterns, modifierReplacements);
+        this(registryName, localizedName, pattern, controller, MachineAppearanceSpec.defaults(), portRequirements, PortTierRequirementSpec.none(), dynamicPatterns, modifierReplacements, 1, false, false, 1);
+    }
+
+    public DynamicMachine(
+            Identifier registryName,
+            String localizedName,
+            BlockArray pattern,
+            MachineControllerSpec controller,
+            PortRequirementSpec portRequirements,
+            List<DynamicPatternSpec> dynamicPatterns,
+            Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
+            int maxParallelism,
+            boolean parallelizable,
+            boolean hasFactory,
+            int factoryThreadLimit) {
+        this(registryName, localizedName, pattern, controller, MachineAppearanceSpec.defaults(), portRequirements, PortTierRequirementSpec.none(), dynamicPatterns, modifierReplacements, maxParallelism, parallelizable, hasFactory, factoryThreadLimit);
+    }
+
+    public DynamicMachine(
+            Identifier registryName,
+            String localizedName,
+            BlockArray pattern,
+            MachineControllerSpec controller,
+            PortRequirementSpec portRequirements,
+            List<DynamicPatternSpec> dynamicPatterns) {
+        this(registryName, localizedName, pattern, controller, MachineAppearanceSpec.defaults(), portRequirements, PortTierRequirementSpec.none(), dynamicPatterns, Map.of(), 1, false, false, 1);
     }
 
     public DynamicMachine(
@@ -78,7 +112,7 @@ public record DynamicMachine(
             PortTierRequirementSpec portTierRequirements,
             List<DynamicPatternSpec> dynamicPatterns,
             Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements) {
-        this(registryName, localizedName, pattern, controller, MachineAppearanceSpec.defaults(), portRequirements, portTierRequirements, dynamicPatterns, modifierReplacements);
+        this(registryName, localizedName, pattern, controller, MachineAppearanceSpec.defaults(), portRequirements, portTierRequirements, dynamicPatterns, modifierReplacements, 1, false, false, 1);
     }
 
     public List<SingleBlockModifierReplacement> modifierReplacementsAt(BlockPos pos) {
