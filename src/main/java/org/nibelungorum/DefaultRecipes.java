@@ -22,7 +22,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * 默认内建配方注册入口。
+ * Built-in actual recipe content. Machine startup registration creates the recipe
+ * family only; this class registers concrete recipes after structures are installed.
  */
 public final class DefaultRecipes {
 

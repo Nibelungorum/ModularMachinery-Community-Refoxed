@@ -71,7 +71,7 @@ class BuildPlacementConsistencyTest {
 
         Map<BlockPos, BlockState> world = buildPlacement(machine, controller, Direction.EAST);
 
-        assertThat(world.get(controller).getBlock()).isEqualTo(ModBlocks.controllerFor(machine).get());
+        assertThat(world.get(controller).getBlock()).isEqualTo(ModBlocks.controllerFor(machine.registryName()).get());
     }
 
     @Test
@@ -93,7 +93,7 @@ class BuildPlacementConsistencyTest {
      */
     private static Map<BlockPos, BlockState> buildPlacement(Machine machine, BlockPos controller, Direction ctrlFacing) {
         Map<BlockPos, BlockState> written = new LinkedHashMap<>();
-        BlockState ctrlBase = ModBlocks.controllerFor(machine).get().defaultBlockState();
+        BlockState ctrlBase = ModBlocks.controllerFor(machine.registryName()).get().defaultBlockState();
         BlockState ctrlFinal = ctrlBase.hasProperty(BlockStateProperties.FACING)
                 ? ctrlBase.setValue(BlockStateProperties.FACING, ctrlFacing)
                 : ctrlBase;

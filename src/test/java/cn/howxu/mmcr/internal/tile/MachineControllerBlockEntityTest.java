@@ -377,7 +377,7 @@ class MachineControllerBlockEntityTest {
     void formed_controller_exposes_only_matching_position_modifiers() throws Exception {
         var replacement = replacementAt(new BlockPos(1, 0, 0), Blocks.GOLD_BLOCK, "speed", 2F);
         var machine = machineWithReplacements(replacement);
-        MachineDefinitions.register(machine);
+        MachineRegistry.register(machine);
 
         MachineControllerBlockEntity controller = controllerFor(machine);
         placeControllerAndReplacement(controller, machine, Blocks.GOLD_BLOCK);
@@ -393,7 +393,7 @@ class MachineControllerBlockEntityTest {
         var first = replacementAt(new BlockPos(1, 0, 0), Blocks.GOLD_BLOCK, "speed", 2F);
         var second = replacementAt(new BlockPos(2, 0, 0), Blocks.DIAMOND_BLOCK, "speed", 4F);
         var machine = machineWithReplacements(first, second);
-        MachineDefinitions.register(machine);
+        MachineRegistry.register(machine);
 
         MachineControllerBlockEntity controller = controllerFor(machine);
         placeControllerAndReplacement(controller, machine, Blocks.GOLD_BLOCK, Blocks.DIAMOND_BLOCK);
@@ -413,7 +413,7 @@ class MachineControllerBlockEntityTest {
         var first = replacementAt(new BlockPos(1, 0, 0), Blocks.GOLD_BLOCK, "speed", 2F);
         var second = replacementAt(new BlockPos(1, 0, 0), Blocks.DIAMOND_BLOCK, "speed", 4F);
         var machine = machineWithReplacements(first, second);
-        MachineDefinitions.register(machine);
+        MachineRegistry.register(machine);
 
         MachineControllerBlockEntity controller = controllerFor(machine);
         Level level = levelOf(controller);
@@ -436,7 +436,7 @@ class MachineControllerBlockEntityTest {
         var first = replacementAt(new BlockPos(1, 0, 0), Blocks.GOLD_BLOCK, "speed", 2F);
         var second = replacementAt(new BlockPos(1, 0, 0), Blocks.DIAMOND_BLOCK, "speed", 4F);
         var machine = machineWithReplacements(first, second);
-        MachineDefinitions.register(machine);
+        MachineRegistry.register(machine);
 
         MachineControllerBlockEntity controller = controllerFor(machine);
         Level level = levelOf(controller);
@@ -465,7 +465,7 @@ class MachineControllerBlockEntityTest {
         var replacement = replacementAt(new BlockPos(1, 0, 0), Blocks.GOLD_BLOCK, "speed", 2F);
         var machine = machineWithReplacements(replacement);
         var other = new DynamicMachine(MMCR.id("replacement_target_machine"), "Replacement Target", onePortPattern(Blocks.IRON_BLOCK));
-        MachineDefinitions.register(machine);
+        MachineRegistry.register(machine);
 
         MachineControllerBlockEntity controller = controllerFor(machine);
         placeControllerAndReplacement(controller, machine, Blocks.GOLD_BLOCK);

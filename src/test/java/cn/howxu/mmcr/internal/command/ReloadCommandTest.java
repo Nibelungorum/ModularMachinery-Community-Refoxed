@@ -1,7 +1,10 @@
 package cn.howxu.mmcr.internal.command;
 
 import cn.howxu.mmcr.api.machine.BlockArray;
-import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
@@ -38,21 +41,22 @@ class ReloadCommandTest {
     void cleanup() {
         MachineDefinitions.clearForTesting();
         MachineRegistry.clearForTesting();
+        MachineStructureRegistry.clearForTesting();
         RecipeRegistry.clearForTesting();
     }
 
     @Test
-    void reloadCommandClearsDynamicSnapshotAndReportsRemovedControllers() throws Exception {
-        DynamicContentReloadService.reload(candidate -> candidate.registerMachine(machine("mmcr:removed")));
+    void reloadCommandClearsDynamicStructuresAndReportsSummary() throws Exception {
+        Identifier removed = Identifier.parse("mmcr:removed");
+        MachineDefinitions.register(MachineRegistration.builder(removed).localizedName("Removed").build());
+        DynamicContentReloadService.reload(candidate -> candidate.registerStructure(structure(removed)));
         CommandDispatcher<CommandSourceStack> dispatcher = new CommandDispatcher<>();
         ReloadCommand.register(dispatcher);
 
         int result = dispatcher.execute("mmcr reload", source());
 
         assertThat(result).isEqualTo(1);
-        assertThat(messages).anyMatch(message -> message.contains("MMCR reload"));
-        assertThat(messages).anyMatch(message -> message.contains("mmcr:removed"));
-        assertThat(messages).anyMatch(message -> message.contains("next server restart"));
+        assertThat(messages).anyMatch(message -> message.contains("MMCR reload: structures +0 ~0 -1"));
     }
 
     private CommandSourceStack source() {
@@ -81,8 +85,7 @@ class ReloadCommandTest {
                 "test", Component.literal("test"), null, null);
     }
 
-    private static DynamicMachine machine(String id) {
-        Identifier identifier = Identifier.parse(id);
-        return new DynamicMachine(identifier, id, new BlockArray(Map.of()));
+    private static MachineStructureDefinition structure(Identifier id) {
+        return new MachineStructureDefinition(id, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(), Map.of());
     }
 }

@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.internal.block;
 
-import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
@@ -93,8 +93,8 @@ public class MachineControllerBlock extends Block implements EntityBlock {
     }
 
     private boolean isVerticalAllowed() {
-        Machine machine = MachineDefinitions.get(machineId);
-        return machine != null && machine.controller().allowVerticalFacing();
+        MachineRegistration registration = MachineDefinitions.getRegistration(machineId);
+        return registration != null && registration.controllerSpec().allowVerticalFacing();
     }
 
     @Override
@@ -111,10 +111,10 @@ public class MachineControllerBlock extends Block implements EntityBlock {
     }
 
     static Component titleFor(Identifier machineId) {
-        Machine machine = MachineDefinitions.get(machineId);
-        return machine == null
+        MachineRegistration registration = MachineDefinitions.getRegistration(machineId);
+        return registration == null
                 ? Component.translatable("container.mmcr.machine_controller")
-                : Component.literal(machine.localizedName());
+                : Component.literal(registration.localizedName());
     }
 
     @Override

@@ -29,22 +29,22 @@ class MachineControllerBlockTest {
 
     @Test
     void cracker_controller_definition_allows_vertical_placement() {
-        assertThat(cn.howxu.mmcr.api.machine.MachineDefinitions.get(MMCR.id("cracker")).controller().allowVerticalFacing()).isTrue();
+        assertThat(cn.howxu.mmcr.api.machine.MachineDefinitions.getRegistration(MMCR.id("cracker")).controllerSpec().allowVerticalFacing()).isTrue();
     }
 
     @Test
     void cracker_controller_definition_is_fully_rotationally_symmetric() {
-        assertThat(cn.howxu.mmcr.api.machine.MachineDefinitions.get(MMCR.id("cracker")).controller().fullyRotationallySymmetric()).isTrue();
+        assertThat(cn.howxu.mmcr.api.machine.MachineDefinitions.getRegistration(MMCR.id("cracker")).controllerSpec().fullyRotationallySymmetric()).isTrue();
     }
 
     @Test
     void cracker_controller_definition_requires_vertical_placement() {
-        assertThat(cn.howxu.mmcr.api.machine.MachineDefinitions.get(MMCR.id("cracker")).controller().requireVerticalFacing()).isTrue();
+        assertThat(cn.howxu.mmcr.api.machine.MachineDefinitions.getRegistration(MMCR.id("cracker")).controllerSpec().requireVerticalFacing()).isTrue();
     }
 
     @Test
     void blast_furnace_controller_definition_is_horizontal_only() {
-        assertThat(cn.howxu.mmcr.api.machine.MachineDefinitions.get(MMCR.id("blast_furnace")).controller().allowVerticalFacing()).isFalse();
+        assertThat(cn.howxu.mmcr.api.machine.MachineDefinitions.getRegistration(MMCR.id("blast_furnace")).controllerSpec().allowVerticalFacing()).isFalse();
     }
 
     @Test

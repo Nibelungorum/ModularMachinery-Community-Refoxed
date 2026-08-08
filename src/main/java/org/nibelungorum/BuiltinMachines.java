@@ -1,10 +1,9 @@
 package org.nibelungorum;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.machine.BlockArray;
-import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
 import net.minecraft.resources.Identifier;
 
 /**
@@ -37,7 +36,12 @@ public final class BuiltinMachines {
                     false,
                     false,
                     false);
-            return new DynamicMachine(BLAST_FURNACE_ID, "高炉", new BlockArray(java.util.Map.of()), controller);
+            return MachineRegistration.builder(BLAST_FURNACE_ID)
+                    .localizedName("高炉")
+                    .controllerSpec(controller)
+                    .recipeFamilyId(BLAST_FURNACE_ID)
+                    .allowModifiers(false)
+                    .build();
         });
         MachineDefinitions.addBuiltinSupplier(() -> {
             MachineControllerSpec defaults = MachineControllerSpec.defaultsFor(ALLOY_FURNACE_ID);
@@ -50,7 +54,12 @@ public final class BuiltinMachines {
                     false,
                     false,
                     false);
-            return new DynamicMachine(ALLOY_FURNACE_ID, "合金炉", new BlockArray(java.util.Map.of()), controller);
+            return MachineRegistration.builder(ALLOY_FURNACE_ID)
+                    .localizedName("合金炉")
+                    .controllerSpec(controller)
+                    .recipeFamilyId(ALLOY_FURNACE_ID)
+                    .allowModifiers(true)
+                    .build();
         });
         MachineDefinitions.addBuiltinSupplier(() -> {
             MachineControllerSpec defaults = MachineControllerSpec.defaultsFor(CRACKER_ID);
@@ -63,7 +72,12 @@ public final class BuiltinMachines {
                     true,
                     true,
                     true);
-            return new DynamicMachine(CRACKER_ID, "裂化器", new BlockArray(java.util.Map.of()), controller);
+            return MachineRegistration.builder(CRACKER_ID)
+                    .localizedName("裂化器")
+                    .controllerSpec(controller)
+                    .recipeFamilyId(CRACKER_ID)
+                    .allowModifiers(false)
+                    .build();
         });
         MachineDefinitions.addBuiltinSupplier(() -> {
             MachineControllerSpec defaults = MachineControllerSpec.defaultsFor(REACTOR_ID);
@@ -76,7 +90,12 @@ public final class BuiltinMachines {
                     false,
                     false,
                     false);
-            return new DynamicMachine(REACTOR_ID, "反应堆", new BlockArray(java.util.Map.of()), controller);
+            return MachineRegistration.builder(REACTOR_ID)
+                    .localizedName("反应堆")
+                    .controllerSpec(controller)
+                    .recipeFamilyId(REACTOR_ID)
+                    .allowModifiers(false)
+                    .build();
         });
     }
 }

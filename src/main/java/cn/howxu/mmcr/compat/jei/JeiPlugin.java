@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.client.gui.MachineMenuScreen;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -37,14 +37,14 @@ public final class JeiPlugin implements IModPlugin {
     @Override
     public void registerCategories(IRecipeCategoryRegistration registration) {
         var guiHelper = registration.getJeiHelpers().getGuiHelper();
-        MachineDefinitions.all().forEach(machine ->
+        MachineRegistry.getAll().values().forEach(machine ->
                 registration.addRecipeCategories(new MachineRecipeCategory(guiHelper, machine)));
     }
 
     @Override
     public void registerRecipes(IRecipeRegistration registration) {
         var displaysByMachine = MachineRecipeDisplays.byMachine();
-        Set<Identifier> machineIds = MachineDefinitions.all().stream()
+        Set<Identifier> machineIds = MachineRegistry.getAll().values().stream()
                 .map(machine -> machine.registryName())
                 .collect(Collectors.toSet());
         displaysByMachine.forEach((machineId, displays) -> {
@@ -52,23 +52,23 @@ public final class JeiPlugin implements IModPlugin {
                 displays.forEach(display -> MMCR.LOG.warn("Skipping JEI recipe {} for unknown machine {}", display.recipeId(), machineId));
             }
         });
-        MachineDefinitions.all().forEach(machine -> registration.addRecipes(
+        MachineRegistry.getAll().values().forEach(machine -> registration.addRecipes(
                 JeiMachineRecipeTypes.forMachine(machine.registryName()),
                 displaysByMachine.getOrDefault(machine.registryName(), List.of())));
     }
 
     @Override
     public void registerRecipeCatalysts(IRecipeCatalystRegistration registration) {
-        MachineDefinitions.all().forEach(machine ->
+        MachineRegistry.getAll().values().forEach(machine ->
                 registration.addCraftingStation(
                         JeiMachineRecipeTypes.forMachine(machine.registryName()),
-                        new ItemStack(ModBlocks.controllerFor(machine).get())));
+                        new ItemStack(ModBlocks.controllerFor(machine.registryName()).get())));
     }
 
     @Override
     public void registerRecipeTransferHandlers(IRecipeTransferRegistration registration) {
         var helper = registration.getTransferHelper();
-        MachineDefinitions.all().forEach(machine -> {
+        MachineRegistry.getAll().values().forEach(machine -> {
             var type = JeiMachineRecipeTypes.forMachine(machine.registryName());
             registration.addRecipeTransferHandler(new MachineRecipeTransferHandler(helper, type), type);
         });

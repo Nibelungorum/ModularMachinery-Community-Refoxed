@@ -51,7 +51,7 @@ class DefaultMachinesTest {
         assertThat(machine.portRequirements().requirements().get(PortKinds.ENERGY_INPUT.id()).min()).isEqualTo(1);
         assertThat(machine.pattern().pattern()).hasSize(26);
         assertThat(machine.pattern().get(BlockPos.ZERO))
-                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine).get()));
+                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine.registryName()).get()));
         assertThat(machine.pattern().get(new BlockPos(0, 0, -1))).isNull();
         assertThat(machine.pattern().get(new BlockPos(0, -1, -1)))
                 .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.CASING.get()));
@@ -86,7 +86,7 @@ class DefaultMachinesTest {
         assertThat(machine.portRequirements().requirements().get(PortKinds.ENERGY_INPUT.id()).min()).isEqualTo(1);
         assertThat(machine.pattern().pattern()).hasSize(26);
         assertThat(machine.pattern().get(BlockPos.ZERO))
-                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine).get()));
+                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine.registryName()).get()));
         assertThat(machine.pattern().get(new BlockPos(-1, -1, -2)))
                 .isEqualTo(new BlockPredicate.OfBlock(net.minecraft.world.level.block.Blocks.BRICKS));
         assertThat(machine.pattern().get(new BlockPos(0, -1, -1)))
@@ -144,7 +144,7 @@ class DefaultMachinesTest {
         assertThat(machine.portRequirements().requirements().get(PortKinds.FLUID_OUTPUT.id()).min()).isEqualTo(1);
         assertThat(machine.portRequirements().requirements().get(PortKinds.ENERGY_INPUT.id()).min()).isEqualTo(1);
         assertThat(machine.pattern().get(BlockPos.ZERO))
-                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine).get()));
+                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine.registryName()).get()));
         assertThat(machine.pattern().get(new BlockPos(0, -2, 0))).isNull();
         assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(crackerPortPredicateState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue();
@@ -174,8 +174,8 @@ class DefaultMachinesTest {
         assertThat(machine.portRequirements().requirements().get(PortKinds.FLUID_OUTPUT.id()).min()).isEqualTo(1);
         assertThat(machine.portRequirements().requirements().get(PortKinds.ENERGY_OUTPUT.id()).min()).isEqualTo(1);
         assertThat(machine.pattern().get(BlockPos.ZERO))
-                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine).get()));
-        assertThat(machine.pattern().get(new BlockPos(0, 0, 0)).matches(ModBlocks.controllerFor(machine).get().defaultBlockState())).isTrue();
+                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine.registryName()).get()));
+        assertThat(machine.pattern().get(new BlockPos(0, 0, 0)).matches(ModBlocks.controllerFor(machine.registryName()).get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState())).isTrue();

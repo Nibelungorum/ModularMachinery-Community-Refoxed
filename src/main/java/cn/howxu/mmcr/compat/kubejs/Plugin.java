@@ -14,6 +14,7 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
         bindings.add("MMCR_MACHINES", MachineRegistry.class);
         bindings.add("MMCR_RECIPES", RecipeRegistry.class);
         bindings.add("MMCR_MACHINE_BUILDER", MachineBuilderJS.class);
+        bindings.add("MMCR_STRUCTURE_BUILDER", MachineStructureBuilderJS.class);
     }
 
     @Override

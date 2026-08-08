@@ -91,7 +91,7 @@ public final class BuildCommand {
      * 按 pattern 相对 controller 的偏移逐格 setBlock;结构坐标随 controller 朝向旋转。
      */
     private static void placeMachine(ServerLevel level, Machine machine, BlockPos controller, Direction ctrlFacing) {
-        BlockState controllerState = ModBlocks.controllerFor(machine).get().defaultBlockState()
+        BlockState controllerState = ModBlocks.controllerFor(machine.registryName()).get().defaultBlockState()
                 .setValue(BlockStateProperties.FACING, ctrlFacing);
         setBlock(level, controller, controllerState);
 
