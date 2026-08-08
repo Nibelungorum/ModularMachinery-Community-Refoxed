@@ -20,7 +20,7 @@ public final class ModUIs {
             DeferredRegister.create(Registries.MENU, MMCR.MODID);
 
     public static final DeferredHolder<MenuType<?>, MenuType<ItemBusMenu>> ITEM_BUS =
-            REGISTER.register("item_bus", () -> new MenuType<>(ItemBusMenu::clientOpen, FeatureFlags.VANILLA_SET));
+            REGISTER.register("item_bus", () -> new MenuType<>((IContainerFactory<ItemBusMenu>) ItemBusMenu::clientOpen, FeatureFlags.VANILLA_SET));
 
     public static final DeferredHolder<MenuType<?>, MenuType<FluidHatchMenu>> FLUID_HATCH =
             REGISTER.register("fluid_hatch", () -> new MenuType<>((IContainerFactory<FluidHatchMenu>) FluidHatchMenu::clientOpen, FeatureFlags.VANILLA_SET));

@@ -855,6 +855,7 @@ class MachineControllerBlockEntityTest {
             setField(BlockEntity.class, hatch, "type", null);
             setField(BlockEntity.class, hatch, "worldPosition", pos);
             setField(BlockEntity.class, hatch, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
+            setField(EnergyInputHatchBlockEntity.class, hatch, "kind", PortKinds.ENERGY_INPUT);
             setField(EnergyHatchBlockEntity.class, hatch, "storage", new EnergyStorage(1000, 1000, 1000));
             return hatch;
         } catch (ReflectiveOperationException e) {
@@ -871,6 +872,7 @@ class MachineControllerBlockEntityTest {
             setField(BlockEntity.class, bus, "type", null);
             setField(BlockEntity.class, bus, "worldPosition", pos);
             setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
+            setField(ItemInputBusBlockEntity.class, bus, "kind", PortKinds.ITEM_INPUT);
             setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
             return bus;
         } catch (ReflectiveOperationException e) {
@@ -887,6 +889,7 @@ class MachineControllerBlockEntityTest {
             setField(BlockEntity.class, bus, "type", null);
             setField(BlockEntity.class, bus, "worldPosition", pos);
             setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
+            setField(ItemOutputBusBlockEntity.class, bus, "kind", PortKinds.ITEM_OUTPUT);
             return bus;
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate item output bus", e);
@@ -902,6 +905,7 @@ class MachineControllerBlockEntityTest {
             setField(BlockEntity.class, hatch, "type", null);
             setField(BlockEntity.class, hatch, "worldPosition", pos);
             setField(BlockEntity.class, hatch, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
+            setField(FluidInputHatchBlockEntity.class, hatch, "kind", PortKinds.FLUID_INPUT);
             setField(FluidHatchBlockEntity.class, hatch, "tank", new FluidTank(8000) {
                 @Override protected void onContentsChanged() { }
             });
@@ -920,6 +924,7 @@ class MachineControllerBlockEntityTest {
             setField(BlockEntity.class, hatch, "type", null);
             setField(BlockEntity.class, hatch, "worldPosition", pos);
             setField(BlockEntity.class, hatch, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
+            setField(FluidOutputHatchBlockEntity.class, hatch, "kind", PortKinds.FLUID_OUTPUT);
             setField(FluidHatchBlockEntity.class, hatch, "tank", new FluidTank(8000) {
                 @Override protected void onContentsChanged() { }
             });

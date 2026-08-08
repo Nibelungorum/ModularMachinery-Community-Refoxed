@@ -28,11 +28,14 @@ import net.neoforged.neoforge.client.fluid.FluidTintSource;
 import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.text.NumberFormat;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 /** 一个屏幕入口,按具体菜单类型分派纹理 / 尺寸 / 自定义渲染。 */
 public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainerMenu> implements MenuAccess<AbstractContainerMenu> {
+
+    public static final int GUI_TEXTURE_SIZE = 256;
 
     private static final Identifier ITEM_BUS_TEXTURE    = MMCR.id("textures/gui/inventory_normal.png");
     private static final Identifier TANK_TEXTURE        = MMCR.id("textures/gui/guitank.png");
@@ -68,13 +71,18 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     public MachineMenuScreen(AbstractContainerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title,
                 menu instanceof MachineControllerMenu ? 176 : 176,
-                menu instanceof MachineControllerMenu ? 213 : 166);
+                imageHeightFor(menu));
         boolean fluidMenu = menu instanceof FluidHatchMenu;
         boolean energyMenu = menu instanceof EnergyHatchMenu;
         boolean itemBusMenu = menu instanceof ItemBusMenu;
         this.titleLabelX = titleX(titleLabelX, fluidMenu, energyMenu, itemBusMenu);
         this.titleLabelY = titleY(titleLabelY, fluidMenu || energyMenu, itemBusMenu);
         this.inventoryLabelY = hiddenInventoryLabelY();
+    }
+
+    static int imageHeightFor(AbstractContainerMenu menu) {
+        if (menu instanceof ItemBusMenu itemBus) return itemBus.imageHeight();
+        return menu instanceof MachineControllerMenu ? 213 : 166;
     }
 
     static int titleX(int baseX) {
@@ -152,11 +160,47 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         super.extractBackground(graphics, mouseX, mouseY, partialTicks);
         int x = (width - imageWidth) / 2;
         int y = (height - imageHeight) / 2;
-        graphics.blit(RenderPipelines.GUI_TEXTURED, textureFor(menu), x, y, 0, 0, imageWidth, imageHeight, 256, 256);
+        if (menu instanceof ItemBusMenu) {
+            for (BackgroundBlit blit : itemBusBackgroundBlits(imageHeight)) {
+                graphics.blit(RenderPipelines.GUI_TEXTURED, textureFor(menu),
+                        x, y + blit.destY(), 0, blit.sourceY(), imageWidth, blit.height(), imageWidth, GUI_TEXTURE_SIZE);
+            }
+        } else {
+            graphics.blit(RenderPipelines.GUI_TEXTURED, textureFor(menu), x, y, 0, 0, imageWidth, imageHeight, imageWidth, GUI_TEXTURE_SIZE);
+        }
 
         if (menu instanceof FluidHatchMenu fh)        renderFluidTank(graphics, fh, x, y);
         else if (menu instanceof EnergyHatchMenu eh)  renderEnergyBar(graphics, eh, x, y);
     }
+
+    /**
+     * 一个分段的 item bus 背景贴图指令。源区域(sourceY, height)必须在 {@link #GUI_TEXTURE_SIZE} 范围内,
+     * 因为 {@code inventory_normal.png} 高度为 {@value #GUI_TEXTURE_SIZE}px。
+     */
+    public record BackgroundBlit(int destY, int sourceY, int height) {}
+
+    /**
+     * 把 item bus 背景拆为多段绘制,避免一次 blit 时 sourceY 越界。
+     * 第一段使用真实的 0-166 顶部区域,后续每段高 {@link #SLOT_SIZE},sourceY 退回到纹理底部可用像素,
+     * 保证每段 sourceY + height ≤ {@value #GUI_TEXTURE_SIZE}。
+     */
+    public static List<BackgroundBlit> itemBusBackgroundBlits(int imageHeight) {
+        List<BackgroundBlit> blits = new ArrayList<>();
+        int topHeight = Math.min(BASE_BUS_BACKGROUND_HEIGHT, imageHeight);
+        blits.add(new BackgroundBlit(0, 0, topHeight));
+        int destY = topHeight;
+        while (destY < imageHeight) {
+            int height = Math.min(SLOT_SIZE, imageHeight - destY);
+            int sourceY = Math.max(0, GUI_TEXTURE_SIZE - height);
+            blits.add(new BackgroundBlit(destY, sourceY, height));
+            destY += height;
+        }
+        return blits;
+    }
+
+    static final int BASE_BUS_BACKGROUND_HEIGHT = 166;
+
+    static final int SLOT_SIZE = 18;
 
     private static Identifier textureFor(AbstractContainerMenu menu) {
         if (menu instanceof ItemBusMenu)             return ITEM_BUS_TEXTURE;

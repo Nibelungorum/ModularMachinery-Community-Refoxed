@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.tile;
 
+import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
@@ -18,24 +19,27 @@ import net.neoforged.neoforge.energy.IEnergyStorage;
 
 public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
 
-    private final EnergyStorage storage = new EnergyStorage(100000, 100000, 100000) {
-        @Override
-        public int receiveEnergy(int maxReceive, boolean simulate) {
-            int received = super.receiveEnergy(maxReceive, simulate);
-            if (!simulate && received > 0) setChanged();
-            return received;
-        }
+    private final EnergyStorage storage;
 
-        @Override
-        public int extractEnergy(int maxExtract, boolean simulate) {
-            int extracted = super.extractEnergy(maxExtract, simulate);
-            if (!simulate && extracted > 0) setChanged();
-            return extracted;
-        }
-    };
-
-    protected EnergyHatchBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
+    protected EnergyHatchBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state, IOPortKind kind) {
         super(type, pos, state);
+        EnergyHatchSize size = kind.energyHatchSize()
+                .orElseThrow(() -> new IllegalStateException("Energy hatch missing energy size: " + kind.id()));
+        this.storage = new EnergyStorage(size.capacity(), size.transfer(), size.transfer()) {
+            @Override
+            public int receiveEnergy(int maxReceive, boolean simulate) {
+                int received = super.receiveEnergy(maxReceive, simulate);
+                if (!simulate && received > 0) setChanged();
+                return received;
+            }
+
+            @Override
+            public int extractEnergy(int maxExtract, boolean simulate) {
+                int extracted = super.extractEnergy(maxExtract, simulate);
+                if (!simulate && extracted > 0) setChanged();
+                return extracted;
+            }
+        };
     }
 
     public IEnergyStorage getEnergyStorage(Direction side) { return storage; }

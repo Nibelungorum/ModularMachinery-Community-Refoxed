@@ -6,8 +6,11 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModItems;
+import cn.howxu.mmcr.registry.PortKinds;
 import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
@@ -18,6 +21,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import org.nibelungorum.BuiltinMachines;
 
@@ -75,12 +79,7 @@ public final class TestBootstrap {
         bindController(id("controller_tick"));
         bindController(id("iron_compressor"));
         bind(ModBlocks.CASING, Blocks.STONE);
-        bind(ModBlocks.BLOCKS.get("item_input_bus"), Blocks.CHEST);
-        bind(ModBlocks.BLOCKS.get("item_output_bus"), Blocks.CHEST);
-        bind(ModBlocks.BLOCKS.get("fluid_input_hatch"), Blocks.BARREL);
-        bind(ModBlocks.BLOCKS.get("fluid_output_hatch"), Blocks.BARREL);
-        bind(ModBlocks.BLOCKS.get("energy_input_hatch"), Blocks.COPPER_BLOCK);
-        bind(ModBlocks.BLOCKS.get("energy_output_hatch"), Blocks.COPPER_BLOCK);
+        bindPortBlocks();
         restoreMachineDefinitions();
         registerRuntimeBuiltins();
         initialized = true;
@@ -120,7 +119,16 @@ public final class TestBootstrap {
     }
 
     private static void bind(Object deferredHolder, Object value) throws Exception {
-        Field holder = deferredHolder.getClass().getSuperclass().getDeclaredField("holder");
+        Class<?> type = deferredHolder.getClass();
+        Field holder = null;
+        while (type != null && holder == null) {
+            try {
+                holder = type.getDeclaredField("holder");
+            } catch (NoSuchFieldException ignored) {
+                type = type.getSuperclass();
+            }
+        }
+        if (holder == null) throw new NoSuchFieldException("holder");
         holder.setAccessible(true);
         holder.set(deferredHolder, Holder.direct(value));
     }
@@ -141,6 +149,28 @@ public final class TestBootstrap {
         Registry.register(BuiltInRegistries.ITEM, itemHolder.getId(), item);
         items.freeze();
         return item;
+    }
+
+    private static void bindPortBlocks() throws Exception {
+        MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
+        MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
+        blocks.unfreeze(true);
+        blockEntities.unfreeze(true);
+        for (var kind : PortKinds.all()) {
+            Block block = new IOPortBlock(kind, () -> ModBlockEntities.BES.get(kind.id()).get(), Blocks.IRON_BLOCK.properties());
+            if (!BuiltInRegistries.BLOCK.containsKey(MMCR.id(kind.id()))) {
+                Registry.register(BuiltInRegistries.BLOCK, MMCR.id(kind.id()), block);
+            }
+            bind(ModBlocks.BLOCKS.get(kind.id()), block);
+
+            if (!BuiltInRegistries.BLOCK_ENTITY_TYPE.containsKey(MMCR.id(kind.id()))) {
+                Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id(kind.id()),
+                        new BlockEntityType<>(kind.entityFactory(), block));
+            }
+            bind(ModBlockEntities.BES.get(kind.id()), BuiltInRegistries.BLOCK_ENTITY_TYPE.getValue(MMCR.id(kind.id())));
+        }
+        blockEntities.freeze();
+        blocks.freeze();
     }
 
 }

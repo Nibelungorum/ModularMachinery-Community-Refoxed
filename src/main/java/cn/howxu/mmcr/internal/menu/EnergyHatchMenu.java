@@ -65,8 +65,12 @@ public class EnergyHatchMenu extends AbstractMachineMenu {
     }
 
     public int energyCapacity() {
-        EnergyStorage storage = storage();
-        return storage == null ? capacity.get() : storage.getMaxEnergyStored();
+        EnergyHatchBlockEntity hatch = resolvedOwner();
+        return hatch == null ? capacity.get() : energyCapacity(hatch);
+    }
+
+    static int energyCapacity(EnergyHatchBlockEntity hatch) {
+        return hatch.getMutableEnergyStorage(null).getMaxEnergyStored();
     }
 
     private EnergyHatchBlockEntity resolvedOwner() {

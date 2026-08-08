@@ -13,15 +13,19 @@ import net.neoforged.neoforge.items.ItemStackHandler;
 
 public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
 
-    private final ItemStackHandler handler = new ItemStackHandler(6) {
-        @Override
-        protected void onContentsChanged(int slot) {
-            setChanged();
-        }
-    };
+    private final ItemStackHandler handler;
 
-    protected ItemBusBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
+    protected ItemBusBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state, IOPortKind kind) {
         super(type, pos, state);
+        int slots = kind.itemBusSize()
+                .orElseThrow(() -> new IllegalStateException("Item bus missing item size: " + kind.id()))
+                .slots();
+        this.handler = new ItemStackHandler(slots) {
+            @Override
+            protected void onContentsChanged(int slot) {
+                setChanged();
+            }
+        };
     }
 
     public IItemHandler getItemHandler(Direction side) { return handler; }
