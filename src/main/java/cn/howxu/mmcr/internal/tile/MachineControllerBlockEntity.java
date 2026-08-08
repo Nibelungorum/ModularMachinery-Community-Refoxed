@@ -85,7 +85,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable ActiveMachineRecipe pausedActive;
     private @Nullable RecipeCraftingContext pausedContext;
     private RecipeCraftingContextPool contextPool = RecipeCraftingContextPool.global();
-    private final Set<BlockPos> linkedPortPositions = new HashSet<>();
+    private Set<BlockPos> linkedPortPositions = new HashSet<>();
     private int recipeSearchRetryCounter;
     private long recipeSearchAttemptCounter;
     private long cachedCandidatesReloadVersion = Long.MIN_VALUE;
@@ -556,7 +556,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
             if (tile instanceof IOPortBlockEntity port) {
                 port.setAppearanceBaseTexture(foundMachine.appearance().formedPortBaseTexture());
-                linkedPortPositions.add(worldPos.immutable());
+                linkedPortPositions().add(worldPos.immutable());
             }
             var component = tile.provideComponent();
             if (!(tile instanceof BlockEntity container)) continue;
@@ -565,6 +565,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void resetLinkedPorts() {
+        Set<BlockPos> linkedPortPositions = linkedPortPositions();
         if (level == null || linkedPortPositions.isEmpty()) {
             linkedPortPositions.clear();
             return;
@@ -575,6 +576,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
             }
         }
         linkedPortPositions.clear();
+    }
+
+    private Set<BlockPos> linkedPortPositions() {
+        if (linkedPortPositions == null) linkedPortPositions = new HashSet<>();
+        return linkedPortPositions;
     }
 
     private List<BlockPos> componentPositions() {
