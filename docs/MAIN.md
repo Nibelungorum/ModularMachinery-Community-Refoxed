@@ -49,7 +49,7 @@
 - 机器绑定 / 结构匹配 / 成型状态 / active recipe 基础状态。
 - **多方向控制器**：机器级 opt-in 启用 UP/DOWN 控制器朝向（默认水平四向），并能记录竖直结构的成型态。Controller 在结构重置时同步清空 components / active recipe / context。
 - 端口要求 spec（`PortRequirementSpec` / `MachineControllerSpec`）：机器定义可声明成型所需的端口集合与朝向，控制器在成型时校验。
-- **阶段 5 并行 / 工厂基线**：`ParallelTier` 注册 4/16/64/256/512x 并行控制器，机器与配方都必须显式 opt-in 才会选择并行度；runtime IO 按 active parallelism 成倍 simulate / commit。Factory controller 采用 snapshot-only scheduler 安全调度，实际 world / BE 提交仍回到 server tick；Jade 诊断区分 max available parallelism、当前 active parallelism 与 factory active lane count。
+- **阶段 5 并行 / 工厂基线**：`ParallelTier` 注册 4/16/64/256/512x 并行控制器，机器与配方都必须显式 opt-in 才会选择并行度；runtime IO 按 active parallelism 成倍 simulate / commit。Factory controller 已实现 server-tick factory lanes，按机器 `factoryThreadLimit()` 启动多个 recipe lane；Jade 诊断区分 max available parallelism、当前 active parallelism 与 factory active lane count / limit。
 
 #### 1.1.4 IO 端口（item / fluid / energy）
 
@@ -300,14 +300,14 @@ src/main/java/
 | `TaskExecutor` | Java executor 或 server tick task queue | 重映射，**不能破坏 MC 主线程安全** |
 | `RecipeCraftingContextPool` | context pool | 沿用既有池化，避免跨 tick 复用过期 BE |
 
-**实现说明**：MMCE async 优化策略已按 NeoForge 主线程安全边界重映射为 snapshot-only scheduling；scheduler 可以并行评估不可变候选快照，但所有真实 world / BE IO 提交都在 server tick 上执行，避免异步线程读写世界状态。
+**实现说明**：MMCE async 优化策略按 NeoForge 主线程安全边界重映射为 snapshot-only scheduling。当前 Stage 5 已实现 server-tick factory lanes：factory controller 按机器 `factoryThreadLimit()` 启动多个 `ActiveMachineRecipe + RecipeCraftingContext` lane，每条 lane 在启动时独立完成输入 / 输出模拟与输入提交，tick / finish / stop 都在 server tick 上执行。未来如加入异步搜索，只能处理不可变快照，真实 world / BE IO 仍必须回到 server tick。
 
 **验收门槛**：
 - 无 parallel controller 时 parallelism 恒为 1。
 - 有 parallel controller 且 recipe 允许并行时，输入 / 输出 / energy 按 parallelism 成倍模拟和提交。
 - 输出空间不足时不启动并行 recipe。
 - 不在异步线程直接读写 world / BE。
-- 工厂 controller 能管理多个 recipe thread，且卸载 / 破坏结构时安全停止。
+- 工厂 controller 能管理多个 server-tick recipe lane，且卸载 / 破坏结构时安全停止并归还 context。
 
 ### 2.7 阶段 6：智能接口 ⬜
 

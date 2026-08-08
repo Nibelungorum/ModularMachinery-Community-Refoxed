@@ -33,6 +33,7 @@ class MachineControllerComponentProviderSnapshotTest {
         tag.putInt("parallelism", 4);
         tag.putInt("maxParallelism", 16);
         tag.putInt("factoryLanes", 2);
+        tag.putInt("factoryThreadLimit", 3);
 
         MachineControllerComponentProvider.Snapshot snapshot = MachineControllerComponentProvider.Snapshot.from(tag);
 
@@ -43,6 +44,7 @@ class MachineControllerComponentProviderSnapshotTest {
         assertThat(snapshot.maxParallelism()).isEqualTo(16);
         assertThat(snapshot.shouldShowParallelism()).isTrue();
         assertThat(snapshot.factoryLanes()).isEqualTo(2);
+        assertThat(snapshot.factoryThreadLimit()).isEqualTo(3);
         assertThat(snapshot.shouldShowFactoryLanes()).isTrue();
     }
 
@@ -54,8 +56,23 @@ class MachineControllerComponentProviderSnapshotTest {
         assertThat(snapshot.maxParallelism()).isEqualTo(1);
         assertThat(snapshot.factorySupported()).isFalse();
         assertThat(snapshot.factoryLanes()).isZero();
+        assertThat(snapshot.factoryThreadLimit()).isEqualTo(1);
         assertThat(snapshot.shouldShowParallelism()).isFalse();
         assertThat(snapshot.shouldShowFactoryLanes()).isFalse();
+    }
+
+    @Test
+    void factory_diagnostics_show_active_lanes_and_thread_limit() {
+        CompoundTag tag = new CompoundTag();
+        tag.putBoolean("factorySupported", true);
+        tag.putInt("factoryLanes", 2);
+        tag.putInt("factoryThreadLimit", 3);
+
+        MachineControllerComponentProvider.Snapshot snapshot = MachineControllerComponentProvider.Snapshot.from(tag);
+
+        assertThat(snapshot.shouldShowFactoryLanes()).isTrue();
+        assertThat(snapshot.factoryLanes()).isEqualTo(2);
+        assertThat(snapshot.factoryThreadLimit()).isEqualTo(3);
     }
 
     @Test

@@ -47,7 +47,7 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
         }
         if (snapshot.shouldShowFactoryLanes()) {
             tooltip.add(row("factory_lanes", Component.translatable("jade.mmcr.machine_controller.factory_lanes.value",
-                    snapshot.factoryLanes())));
+                    snapshot.factoryLanes(), snapshot.factoryThreadLimit())));
         }
         tooltip.add(row("components", Component.translatable("jade.mmcr.machine_controller.components.value",
                 snapshot.itemInputs(), snapshot.itemOutputs(),
@@ -73,6 +73,7 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
             int maxParallelism,
             boolean factorySupported,
             int factoryLanes,
+            int factoryThreadLimit,
             int itemInputs,
             int itemOutputs,
             int fluidInputs,
@@ -93,6 +94,7 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
                     tag.getIntOr("maxParallelism", 1),
                     tag.getBooleanOr("factorySupported", false),
                     tag.getIntOr("factoryLanes", 0),
+                    tag.getIntOr("factoryThreadLimit", 1),
                     tag.getIntOr("itemInputs", 0),
                     tag.getIntOr("itemOutputs", 0),
                     tag.getIntOr("fluidInputs", 0),
