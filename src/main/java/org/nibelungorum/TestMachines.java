@@ -31,10 +31,10 @@ public final class TestMachines {
 
     public static BlockArray ironCompressorPattern() {
         return BlockArray.builder()
-                .pattern("CCC", "CIC", "CCC")
-                .pattern("CIC", "   ", "COC")
-                .pattern("CCC", "CEC", "CCC")
-                .set('C', new BlockPredicate.OfBlock(ModBlocks.CASING.get()))
+                .pattern("   ", "XXX", " I ")
+                .pattern("   ", "X X", "  E")
+                .pattern("   ", "XXX", " O ")
+                .set('X', new BlockPredicate.OfBlock(ModBlocks.CASING.get()))
                 .set('I', new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()))
                 .set('O', new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_output_bus").get()))
                 .set('E', new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("energy_input_hatch").get()))

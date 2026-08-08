@@ -31,6 +31,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
+import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
@@ -58,7 +59,7 @@ public class MMCR {
         ModBlockEntities.register(modBus);
         ModUIs.register(modBus);
         ModRecipeTypes.register(modBus);
-        registerRuntimeBuiltins();
+        modBus.addListener(MMCR::onCommonSetup);
         CREATIVE_TABS.register(modBus);
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
         modBus.addListener(ModCapabilities::register);
@@ -117,6 +118,10 @@ public class MMCR {
         });
         DefaultRecipes.registerStatic(DefaultRecipes.recipes().values().stream().toList());
         MachineRegistry.rebuildCompiledCache();
+    }
+
+    private static void onCommonSetup(FMLCommonSetupEvent event) {
+        event.enqueueWork(MMCR::registerRuntimeBuiltins);
     }
 
     static void registerGameTestMachineStructuresIfPresent(DynamicContentReloadService.Candidate candidate) {

@@ -13,6 +13,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
 
@@ -26,6 +27,15 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
                 .orElseThrow(() -> new IllegalStateException("Fluid hatch missing fluid size: " + kind.id()))
                 .capacity();
         this.tank = new FluidTank(capacity) {
+            @Override
+            public FluidStack getFluidInTank(int tank) {
+                FluidStack stack = super.getFluidInTank(tank);
+                if (stack.getAmount() <= getTankCapacity(tank)) return stack;
+                FluidStack capped = stack.copy();
+                capped.setAmount(getTankCapacity(tank));
+                return capped;
+            }
+
             @Override
             protected void onContentsChanged() {
                 setChanged();

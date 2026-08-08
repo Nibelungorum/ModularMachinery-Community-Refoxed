@@ -54,11 +54,15 @@ public class ControllerTickGameTest {
                 "Scanned Controller Tick", new BlockArray(pattern));
         MachineRegistry.register(machine);
 
-        var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
-        controller.serverTick();
+        try {
+            var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+            controller.serverTick();
 
-        helper.assertTrue(controller.isFormed(), "Structure formed from registry scan");
-        helper.assertTrue(controller.getMachine() == machine, "Controller bound scanned machine");
-        helper.succeed();
+            helper.assertTrue(controller.isFormed(), "Structure formed from registry scan");
+            helper.assertTrue(controller.getMachine() == machine, "Controller bound scanned machine");
+            helper.succeed();
+        } finally {
+            MMCR.registerRuntimeBuiltins();
+        }
     }
 }

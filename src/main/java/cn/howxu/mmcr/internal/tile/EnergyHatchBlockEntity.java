@@ -40,9 +40,14 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
 
             @Override
             public int extractEnergy(int maxExtract, boolean simulate) {
-                int extracted = Math.min(maxExtract, getEnergyStored());
-                if (!simulate) {
-                    super.extractEnergy(extracted, false);
+                int extracted;
+                if (energy > getMaxEnergyStored()) {
+                    extracted = Math.min(maxExtract, getMaxEnergyStored());
+                    if (!simulate) {
+                        energy = Math.max(0, energy - extracted);
+                    }
+                } else {
+                    extracted = super.extractEnergy(maxExtract, simulate);
                 }
                 if (!simulate && extracted > 0) setChanged();
                 return extracted;

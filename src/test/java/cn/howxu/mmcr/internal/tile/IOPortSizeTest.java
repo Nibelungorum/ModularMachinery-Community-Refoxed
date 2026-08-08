@@ -7,6 +7,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.energy.EnergyStorage;
+import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
 import net.neoforged.neoforge.items.ItemStackHandler;
 import org.junit.jupiter.api.BeforeAll;
@@ -74,6 +75,23 @@ class IOPortSizeTest {
         assertThat(hatch.getEnergyStorage(null).extractEnergy(20000, true)).isEqualTo(storage(hatch).getMaxEnergyStored());
     }
 
+    @Test
+    void energyHatchExtractsTransferLimitWhenNormallyFilled() {
+        EnergyHatchBlockEntity hatch = energyHatch("energy_output_hatch");
+        storage(hatch).receiveEnergy(8192, false);
+
+        assertThat(hatch.getEnergyStorage(null).extractEnergy(20000, true)).isEqualTo(512);
+    }
+
+    @Test
+    void fluidHatchReportsNoMoreFluidThanCapacityWhenOverfilled() {
+        FluidHatchBlockEntity hatch = fluidHatch("fluid_input_hatch");
+        tank(hatch).fill(new FluidStack(net.minecraft.world.level.material.Fluids.WATER, 1000), FluidTank.FluidAction.EXECUTE);
+        setFluidAmount(tank(hatch), 8000);
+
+        assertThat(hatch.getFluidHandler(null).getFluidInTank(0).getAmount()).isEqualTo(tank(hatch).getCapacity());
+    }
+
     private static ItemBusBlockEntity itemBus(String id) {
         return (ItemBusBlockEntity) ModBlockEntities.BES.get(id).get().create(BlockPos.ZERO, state(id));
     }
@@ -110,5 +128,9 @@ class IOPortSizeTest {
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to set energy", e);
         }
+    }
+
+    private static void setFluidAmount(FluidTank tank, int amount) {
+        tank.getFluid().setAmount(amount);
     }
 }

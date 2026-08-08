@@ -1,11 +1,14 @@
 package cn.howxu.mmcr.internal.event;
 
+import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.DebugInfiniteFluidSourceBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.InfiniteEnergyHandler;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
+import cn.howxu.mmcr.registry.PortKinds;
+import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Direction;
 import net.neoforged.neoforge.capabilities.BlockCapability;
 import net.minecraft.world.item.ItemStack;
@@ -25,7 +28,9 @@ import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 public final class ModCapabilities {
     public static final BlockCapability<ResourceHandler<ItemResource>, Direction> ITEM_BLOCK =
@@ -38,30 +43,9 @@ public final class ModCapabilities {
     private ModCapabilities() {}
 
     public static void register(RegisterCapabilitiesEvent event) {
-        event.registerBlockEntity(
-                ITEM_BLOCK,
-                ModBlockEntities.BES.get("item_input_bus").get(),
-                (be, side) -> be instanceof ItemBusBlockEntity ib ? new LegacyItemHandlerAdapter(ib.getItemStackHandler(side), true, true) : null);
-        event.registerBlockEntity(
-                ITEM_BLOCK,
-                ModBlockEntities.BES.get("item_output_bus").get(),
-                (be, side) -> be instanceof ItemBusBlockEntity ib ? new LegacyItemHandlerAdapter(ib.getItemStackHandler(side), true, true) : null);
-        event.registerBlockEntity(
-                FLUID_BLOCK,
-                ModBlockEntities.BES.get("fluid_input_hatch").get(),
-                (be, side) -> be instanceof FluidHatchBlockEntity fh ? new LegacyFluidHandlerAdapter(fh.getFluidTank(side), true, true) : null);
-        event.registerBlockEntity(
-                FLUID_BLOCK,
-                ModBlockEntities.BES.get("fluid_output_hatch").get(),
-                (be, side) -> be instanceof FluidHatchBlockEntity fh ? new LegacyFluidHandlerAdapter(fh.getFluidTank(side), false, true) : null);
-        event.registerBlockEntity(
-                ENERGY_BLOCK,
-                ModBlockEntities.BES.get("energy_input_hatch").get(),
-                (be, side) -> be instanceof EnergyHatchBlockEntity eh ? new LegacyEnergyHandlerAdapter(eh, true, false) : null);
-        event.registerBlockEntity(
-                ENERGY_BLOCK,
-                ModBlockEntities.BES.get("energy_output_hatch").get(),
-                (be, side) -> be instanceof EnergyHatchBlockEntity eh ? new LegacyEnergyHandlerAdapter(eh, false, true) : null);
+        for (IOPortKind kind : nativeCapabilityPorts()) {
+            registerNativePort(event, kind);
+        }
         event.registerBlockEntity(
                 ENERGY_BLOCK,
                 ModBlockEntities.BES.get("debug_infinite_energy_source").get(),
@@ -78,6 +62,41 @@ public final class ModCapabilities {
                 (be, side) -> be instanceof DebugInfiniteFluidSourceBlockEntity fs
                         ? new InfiniteResourceHandler<>(FluidResource.of(fs.getFluid()))
                         : null);
+    }
+
+    static Set<String> nativeCapabilityPortIds() {
+        Set<String> ids = new LinkedHashSet<>();
+        nativeCapabilityPorts().forEach(kind -> ids.add(kind.id()));
+        return Set.copyOf(ids);
+    }
+
+    private static List<IOPortKind> nativeCapabilityPorts() {
+        return PortKinds.all().stream()
+                .filter(kind -> kind.itemBusSize().isPresent()
+                        || kind.fluidHatchSize().isPresent()
+                        || kind.energyHatchSize().isPresent())
+                .toList();
+    }
+
+    private static void registerNativePort(RegisterCapabilitiesEvent event, IOPortKind kind) {
+        if (kind.itemBusSize().isPresent()) {
+            event.registerBlockEntity(
+                    ITEM_BLOCK,
+                    ModBlockEntities.BES.get(kind.id()).get(),
+                    (be, side) -> be instanceof ItemBusBlockEntity ib ? new LegacyItemHandlerAdapter(ib.getItemStackHandler(side), true, true) : null);
+        } else if (kind.fluidHatchSize().isPresent()) {
+            boolean canInsert = kind.ioType() == IOType.INPUT;
+            event.registerBlockEntity(
+                    FLUID_BLOCK,
+                    ModBlockEntities.BES.get(kind.id()).get(),
+                    (be, side) -> be instanceof FluidHatchBlockEntity fh ? new LegacyFluidHandlerAdapter(fh.getFluidTank(side), canInsert, true) : null);
+        } else if (kind.energyHatchSize().isPresent()) {
+            boolean canInsert = kind.ioType() == IOType.INPUT;
+            event.registerBlockEntity(
+                    ENERGY_BLOCK,
+                    ModBlockEntities.BES.get(kind.id()).get(),
+                    (be, side) -> be instanceof EnergyHatchBlockEntity eh ? new LegacyEnergyHandlerAdapter(eh, canInsert, !canInsert) : null);
+        }
     }
 
     private static final class LegacyFluidHandlerAdapter extends SnapshotJournal<FluidStack> implements ResourceHandler<FluidResource> {

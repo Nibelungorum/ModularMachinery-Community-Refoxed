@@ -107,7 +107,7 @@ public record CompiledMachinePattern(
                 for (var positionEntry : entry.getValue().entrySet()) {
                     positionCopy.put(positionEntry.getKey(), List.copyOf(positionEntry.getValue()));
                 }
-                copy.put(entry.getKey(), Map.copyOf(positionCopy));
+                copy.put(entry.getKey(), java.util.Collections.unmodifiableMap(positionCopy));
             }
         }
         return Map.copyOf(copy);

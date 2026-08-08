@@ -15,6 +15,8 @@ modifier等级功能(实现线圈方块等级能力)
 
 [X] 多线程 Stage 5已经实现了
 
+.worktrees/phase5-mmce-optimizations
+
 [X] 更多的接口 
 
 [X] 动态机器注册，先注册机器(start_up)，再注册机器结构和配方(server)。
@@ -30,7 +32,7 @@ modifier等级功能(实现线圈方块等级能力)
 
 写一份implement plan，期间参考reference/mmce和reference/gtceu，给出最好解决和优化方案。
 
-基于basic_casing的动态模型和贴图加载(控制器和端口分开，以及一个api同时设置)，网络包通信客户端渲染，客户端持久化和玩家login事件。
+[X] 基于basic_casing的动态模型和贴图加载(控制器和端口分开，以及一个api同时设置)，网络包通信客户端渲染，客户端持久化和玩家login事件。
 
 block model动态化，统一化，overlay渲染，一劳永逸解决模型贴图问题，同时解决model gen问题
 
@@ -50,3 +52,4 @@ block model动态化，统一化，overlay渲染，一劳永逸解决模型贴�
 
 写一份implement plan，期间参考reference/mmce和reference/gtceu，给出最好解决和优化方案。
 
+.worktrees/dynamic-machine-texture-models
