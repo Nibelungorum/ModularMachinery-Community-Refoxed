@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.BlockRotator;
 import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.config.Config;
@@ -37,6 +38,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.energy.EnergyStorage;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -139,6 +141,170 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.getFoundMachine()).isSameAs(machine);
         assertThat(controller.getLastFormationFailure()).isNull();
         assertThat(controller.isFormed()).isTrue();
+    }
+
+    @Test
+    void forming_structure_updates_port_appearance_base_texture() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        ItemInputBusBlockEntity port = itemInputBus(controllerPos.offset(1, 0, 0));
+        BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
+        Identifier formedTexture = Identifier.parse("kubejs:block/formed_casing");
+        DynamicMachine machine = new DynamicMachine(
+                MMCR.id("port_appearance_machine"),
+                "Port Appearance",
+                pattern,
+                MachineControllerSpec.defaultsFor(MMCR.id("port_appearance_machine")),
+                new MachineAppearanceSpec(MMCR.id("basic_casing"), MMCR.id("block/basic_casing"), formedTexture),
+                PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(),
+                List.of(),
+                Map.of());
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, port);
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
+
+        assertThat(formed).isTrue();
+        assertThat(port.appearanceBaseTexture()).isEqualTo(formedTexture);
+    }
+
+    @Test
+    void invalidating_structure_resets_linked_port_appearance_base_texture() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        ItemInputBusBlockEntity port = itemInputBus(controllerPos.offset(1, 0, 0));
+        BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
+        Identifier formedTexture = Identifier.parse("kubejs:block/formed_casing");
+        DynamicMachine machine = new DynamicMachine(
+                MMCR.id("port_reset_machine"),
+                "Port Reset",
+                pattern,
+                MachineControllerSpec.defaultsFor(MMCR.id("port_reset_machine")),
+                new MachineAppearanceSpec(MMCR.id("basic_casing"), MMCR.id("block/basic_casing"), formedTexture),
+                PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(),
+                List.of(),
+                Map.of());
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, port);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+
+        breakStructureBlock(controller);
+
+        assertThat(port.appearanceBaseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
+    }
+
+    @Test
+    void removing_controller_block_resets_linked_port_appearance_base_texture() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        ItemInputBusBlockEntity port = itemInputBus(controllerPos.offset(1, 0, 0));
+        BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
+        Identifier formedTexture = Identifier.parse("kubejs:block/formed_casing");
+        DynamicMachine machine = new DynamicMachine(
+                MMCR.id("controller_removed_port_reset_machine"),
+                "Controller Removed Port Reset",
+                pattern,
+                MachineControllerSpec.defaultsFor(MMCR.id("controller_removed_port_reset_machine")),
+                new MachineAppearanceSpec(MMCR.id("basic_casing"), MMCR.id("block/basic_casing"), formedTexture),
+                PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(),
+                List.of(),
+                Map.of());
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, port);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+
+        invokeBlockOnRemove(controller.getBlockState().getBlock(), controller.getBlockState(), levelOf(controller), controllerPos,
+                Blocks.AIR.defaultBlockState(), false);
+
+        assertThat(port.appearanceBaseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
+    }
+
+    @Test
+    void replacing_controller_block_resets_linked_port_appearance_base_texture() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        ItemInputBusBlockEntity port = itemInputBus(controllerPos.offset(1, 0, 0));
+        DynamicMachine machine = portAppearanceMachine(
+                "controller_replaced_port_reset_machine",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()),
+                Identifier.parse("kubejs:block/formed_casing"));
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, port);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+
+        invokeBlockOnRemove(controller.getBlockState().getBlock(), controller.getBlockState(), levelOf(controller), controllerPos,
+                Blocks.DIAMOND_BLOCK.defaultBlockState(), false);
+
+        assertThat(port.appearanceBaseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
+    }
+
+    @Test
+    void port_tick_resets_appearance_when_linked_controller_is_replaced() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        ItemInputBusBlockEntity port = itemInputBus(controllerPos.offset(1, 0, 0));
+        DynamicMachine machine = portAppearanceMachine(
+                "port_tick_controller_replaced_machine",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()),
+                Identifier.parse("kubejs:block/formed_casing"));
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, port);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+
+        levelOf(controller).setBlock(controllerPos, Blocks.DIAMOND_BLOCK.defaultBlockState(), 3);
+        for (int i = 0; i < 40; i++) {
+            port.serverTick();
+        }
+
+        assertThat(port.appearanceBaseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
+    }
+
+    @Test
+    void port_tick_resets_appearance_when_linked_controller_is_unformed() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        ItemInputBusBlockEntity port = itemInputBus(controllerPos.offset(1, 0, 0));
+        DynamicMachine machine = portAppearanceMachine(
+                "port_tick_controller_unformed_machine",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()),
+                Identifier.parse("kubejs:block/formed_casing"));
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, port);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+
+        controller.setFormed(false);
+        for (int i = 0; i < 40; i++) {
+            port.serverTick();
+        }
+
+        assertThat(port.appearanceBaseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
+    }
+
+    @Test
+    void changing_controller_state_does_not_reset_linked_port_appearance_base_texture() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        ItemInputBusBlockEntity port = itemInputBus(controllerPos.offset(1, 0, 0));
+        Identifier formedTexture = Identifier.parse("kubejs:block/formed_casing");
+        DynamicMachine machine = portAppearanceMachine(
+                "controller_state_change_keeps_port_machine",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()),
+                formedTexture);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, port);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+
+        invokeBlockOnRemove(controller.getBlockState().getBlock(), controller.getBlockState(), levelOf(controller), controllerPos,
+                controller.getBlockState().setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ACTIVE, true), false);
+
+        assertThat(port.appearanceBaseTexture()).isEqualTo(formedTexture);
+    }
+
+    @Test
+    void moving_controller_block_does_not_reset_linked_port_appearance_base_texture() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        ItemInputBusBlockEntity port = itemInputBus(controllerPos.offset(1, 0, 0));
+        Identifier formedTexture = Identifier.parse("kubejs:block/formed_casing");
+        DynamicMachine machine = portAppearanceMachine(
+                "controller_moved_keeps_port_machine",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()),
+                formedTexture);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, port);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+
+        invokeBlockOnRemove(controller.getBlockState().getBlock(), controller.getBlockState(), levelOf(controller), controllerPos,
+                Blocks.AIR.defaultBlockState(), true);
+
+        assertThat(port.appearanceBaseTexture()).isEqualTo(formedTexture);
     }
 
     @Test
@@ -1141,6 +1307,20 @@ class MachineControllerBlockEntityTest {
                 MachineControllerSpec.defaultsFor(id), PortRequirementSpec.none(), List.of(), modifierMap);
     }
 
+    private static DynamicMachine portAppearanceMachine(String path, BlockArray pattern, Identifier formedTexture) {
+        Identifier id = MMCR.id(path);
+        return new DynamicMachine(
+                id,
+                path,
+                pattern,
+                MachineControllerSpec.defaultsFor(id),
+                new MachineAppearanceSpec(MMCR.id("basic_casing"), MMCR.id("block/basic_casing"), formedTexture),
+                PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(),
+                List.of(),
+                Map.of());
+    }
+
     private static MachineControllerBlockEntity controllerFor(DynamicMachine machine) throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         return controllerForFormation(machine, controllerPos, itemInputBus(controllerPos.offset(8, 0, 0)));
@@ -1322,6 +1502,24 @@ class MachineControllerBlockEntityTest {
         Method method = MachineControllerBlockEntity.class.getDeclaredMethod("collectFoundModifiers", Map.class);
         method.setAccessible(true);
         method.invoke(controller, replacements);
+    }
+
+    private static void invokeBlockOnRemove(Block block, BlockState state, Level level, BlockPos pos, BlockState newState, boolean moving) throws Exception {
+        Method method = onRemoveMethod(block.getClass());
+        method.setAccessible(true);
+        method.invoke(block, state, level, pos, newState, moving);
+    }
+
+    private static Method onRemoveMethod(Class<?> type) throws NoSuchMethodException {
+        Class<?> current = type;
+        while (current != null) {
+            try {
+                return current.getDeclaredMethod("onRemove", BlockState.class, Level.class, BlockPos.class, BlockState.class, boolean.class);
+            } catch (NoSuchMethodException ignored) {
+                current = current.getSuperclass();
+            }
+        }
+        throw new NoSuchMethodException("onRemove");
     }
 
     private static CompiledMachinePattern compiledPattern(MachineControllerBlockEntity controller) throws Exception {

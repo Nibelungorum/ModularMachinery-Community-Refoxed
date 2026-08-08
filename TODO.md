@@ -4,7 +4,7 @@ Modifer JEI集成
 
 自动输入自动输出功能
 
-接口集成
+接口集成(AE2 总成型接口[新UI?] MEK气体接口(涉及配方modify))
 
 声音事件
 
@@ -12,7 +12,7 @@ Modifer JEI集成
 
 modifier等级功能(实现线圈方块等级能力)
 
-机器的render和相关api暴露
+机器的render和相关api暴露(最后一个再做这个)
 
 [X] 多线程 Stage 5已经实现了
 

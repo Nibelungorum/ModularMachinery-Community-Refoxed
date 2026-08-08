@@ -200,6 +200,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public List<ProcessingComponent> getComponents() { return List.copyOf(components); }
 
+    public boolean hasLinkedPort(BlockPos portPos) {
+        return linkedPortPositions != null && linkedPortPositions.contains(portPos);
+    }
+
+    public void resetLinkedPortAppearances() {
+        resetLinkedPorts();
+    }
+
     public long totalStoredEnergy() {
         long total = 0;
         for (ProcessingComponent component : components) {
@@ -555,7 +563,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (!(level.getBlockEntity(worldPos) instanceof MachineComponentTile tile)) continue;
 
             if (tile instanceof IOPortBlockEntity port) {
-                port.setAppearanceBaseTexture(foundMachine.appearance().formedPortBaseTexture());
+                Identifier formedTexture = foundMachine.appearance().formedPortBaseTexture();
+                port.bindControllerAppearance(getBlockPos(), formedTexture);
                 linkedPortPositions().add(worldPos.immutable());
             }
             var component = tile.provideComponent();
@@ -832,15 +841,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
             clearPendingConflictStart();
             recipeSearchRetryCounter++;
             lastFailureUnloc = nextContext.getLastFailureUnloc();
-            LOG.info("[Ctrl#{}] tryStartNewRecipe: recipe={} refused during start; waiting for I/O at pos={}",
-                    instanceId, next.getRecipe().id(), getBlockPos());
             return false;
         }
         setActiveState(true);
         recipeSearchRetryCounter = 0;
         lastFailureUnloc = null;
-        LOG.info("[Ctrl#{}] tryStartNewRecipe: START recipe={} tickTime={} priority={} maxParallel={} ({} candidates)",
-                instanceId, next.getRecipe().id(), next.getRecipe().tickTime(), next.getRecipe().priority(), next.getMaxParallelism(), candidateCount);
         setChanged();
         return true;
     }
@@ -884,8 +889,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private void tickActiveRecipe() {
         if (active == null || context == null) return;
         if (!context.isStructureVersionCurrent()) {
-            LOG.info("[Ctrl#{}] tickActiveRecipe: recipe {} refreshed stale structure context at pos={}",
-                    instanceId, active.getRecipe().id(), getBlockPos());
             if (context.isStructureVersionOnlyCurrent()) {
                 context.refreshModifierSnapshot(foundModifierList());
                 active.refreshTotalTick(context);
@@ -896,8 +899,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         ActiveMachineRecipe.TickStatus status = active.tick(context);
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
-            LOG.info("[Ctrl#{}] tickActiveRecipe: recipe {} FINISHED after {} ticks (total {}) at pos={}; slot cleared",
-                    instanceId, active.getRecipe().id(), active.getTick(), active.getTotalTick(), getBlockPos());
             lastFailureUnloc = null;
             returnContext(context);
             active = null;
@@ -906,8 +907,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         } else if (status == ActiveMachineRecipe.TickStatus.WAITING) {
             lastFailureUnloc = context.getLastFailureUnloc();
             if (active.getRecipe().doesCancelRecipeOnPerTickFailure()) {
-                LOG.info("[Ctrl#{}] tickActiveRecipe: recipe {} canceled after per-tick failure at pos={}; already consumed inputs are voided",
-                        instanceId, active.getRecipe().id(), getBlockPos());
                 returnContext(context);
                 active = null;
                 context = null;

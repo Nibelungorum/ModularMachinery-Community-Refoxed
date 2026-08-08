@@ -145,6 +145,13 @@ public class MachineControllerBlock extends Block implements EntityBlock {
         return InteractionResult.SUCCESS;
     }
 
+    protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean moving) {
+        if (moving || state.getBlock() == newState.getBlock()) return;
+        if (!level.isClientSide() && level.getBlockEntity(pos) instanceof MachineControllerBlockEntity controller) {
+            controller.resetLinkedPortAppearances();
+        }
+    }
+
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(
             Level level, BlockState state, BlockEntityType<T> beType) {

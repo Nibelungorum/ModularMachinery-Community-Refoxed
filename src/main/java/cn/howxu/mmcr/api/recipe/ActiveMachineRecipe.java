@@ -36,10 +36,7 @@ public final class ActiveMachineRecipe {
         this.maxParallelism = Math.max(1, maxParallelism);
         this.parallelism = 1;
         this.data = new CompoundTag();
-        if (recipe != null) {
-            LOG.info("ActiveMachineRecipe#{} new: recipe={} machine={} tickTime={} maxParallelism={} initialTick=0/{}",
-                    instanceId, recipe.id(), recipe.machineId(), this.totalTick, this.maxParallelism, this.totalTick);
-        } else {
+        if (recipe == null) {
             LOG.warn("ActiveMachineRecipe#{} created with null recipe", instanceId);
         }
     }

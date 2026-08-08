@@ -44,10 +44,28 @@ class MachinePortAppearanceTest {
         IOPortBlockEntity port = itemInputBus();
         Identifier texture = Identifier.parse("kubejs:block/steel_casing");
 
-        port.setAppearanceBaseTexture(texture);
+        port.bindControllerAppearance(new BlockPos(12, 4, 12), texture);
 
-        assertThat(port.getUpdateTag(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)).getString("AppearanceBaseTexture"))
-                .contains(texture.toString());
+        var tag = port.getUpdateTag(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+        assertThat(tag.getString("AppearanceBaseTexture")).contains(texture.toString());
+        assertThat(tag.getBooleanOr("HasLinkedController", false)).isTrue();
+        assertThat(tag.getIntOr("LinkedControllerX", 0)).isEqualTo(12);
+        assertThat(tag.getIntOr("LinkedControllerY", 0)).isEqualTo(4);
+        assertThat(tag.getIntOr("LinkedControllerZ", 0)).isEqualTo(12);
+    }
+
+    @Test
+    void io_port_restores_linked_controller_from_update_tag() throws Exception {
+        IOPortBlockEntity source = itemInputBus();
+        Identifier texture = Identifier.parse("kubejs:block/steel_casing");
+        BlockPos controllerPos = new BlockPos(12, 4, 12);
+        source.bindControllerAppearance(controllerPos, texture);
+        IOPortBlockEntity restored = itemInputBus();
+
+        invokeHandleUpdateTag(restored, source.getUpdateTag(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)));
+
+        assertThat(restored.appearanceBaseTexture()).isEqualTo(texture);
+        assertThat(restored.linkedControllerPos()).isEqualTo(controllerPos);
     }
 
     @Test
@@ -65,5 +83,11 @@ class MachinePortAppearanceTest {
         return (IOPortBlockEntity) ModBlockEntities.BES.get("item_input_bus").get().create(
                 BlockPos.ZERO,
                 ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+    }
+
+    private static void invokeHandleUpdateTag(IOPortBlockEntity port, net.minecraft.nbt.CompoundTag tag) throws Exception {
+        port.handleUpdateTag(net.minecraft.world.level.storage.TagValueInput.create(
+                net.minecraft.util.ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), tag));
     }
 }
