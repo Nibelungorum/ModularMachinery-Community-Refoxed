@@ -1,6 +1,14 @@
 package cn.howxu.mmcr.client.gui;
 
+import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
+import cn.howxu.mmcr.internal.network.FactoryControllerSnapshot;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.flag.FeatureFlags;
+import net.minecraft.world.inventory.MenuType;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -8,6 +16,13 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class FactoryControllerScreenTest {
+    @BeforeAll
+    static void bootstrapMinecraft() throws Exception {
+        cn.howxu.mmcr.test.TestBootstrap.bootstrap();
+        bind(cn.howxu.mmcr.registry.ModUIs.FACTORY_CONTROLLER,
+                new MenuType<>(FactoryControllerMenu::clientOpen, FeatureFlags.VANILLA_SET));
+    }
+
     @Test
     void queue_layout_selects_thread_zero_and_maps_visible_rows() {
         assertThat(FactoryControllerScreen.defaultSelectedThread()).isZero();
@@ -95,7 +110,40 @@ class FactoryControllerScreenTest {
         assertThat(FactoryControllerScreen.shouldRenderProgress(true, 100)).isTrue();
     }
 
+    @Test
+    void parallel_label_uses_selected_thread_parallelism() {
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        menu.applySnapshot(new FactoryControllerSnapshot(BlockPos.ZERO, true, false, 1, 2, 16, 16,
+                "Factory", 0, List.of(
+                new FactoryRecipeScheduler.ThreadSnapshot(0, true, false, true, "mmcr:first", 4, 20, 16),
+                new FactoryRecipeScheduler.ThreadSnapshot(1, false, false, false, "", 0, 0, 1))));
+
+        menu.selectThread(1);
+        assertThat(FactoryControllerScreen.selectedParallelism(menu)).isZero();
+
+        menu.applySnapshot(new FactoryControllerSnapshot(BlockPos.ZERO, true, false, 2, 2, 24, 16,
+                "Factory", 0, List.of(
+                new FactoryRecipeScheduler.ThreadSnapshot(0, true, false, true, "mmcr:first", 4, 20, 16),
+                new FactoryRecipeScheduler.ThreadSnapshot(1, false, false, true, "mmcr:second", 4, 20, 8))));
+        assertThat(FactoryControllerScreen.selectedParallelism(menu)).isEqualTo(8);
+    }
+
     private static FactoryRecipeScheduler.ThreadSnapshot thread(int index) {
         return new FactoryRecipeScheduler.ThreadSnapshot(index, false, false, false, "", 0, 0, 1);
+    }
+
+    private static void bind(Object deferredHolder, MenuType<FactoryControllerMenu> menuType) throws Exception {
+        Class<?> type = deferredHolder.getClass();
+        java.lang.reflect.Field holder = null;
+        while (type != null && holder == null) {
+            try {
+                holder = type.getDeclaredField("holder");
+            } catch (NoSuchFieldException ignored) {
+                type = type.getSuperclass();
+            }
+        }
+        if (holder == null) throw new NoSuchFieldException("holder");
+        holder.setAccessible(true);
+        holder.set(deferredHolder, Holder.direct(menuType));
     }
 }

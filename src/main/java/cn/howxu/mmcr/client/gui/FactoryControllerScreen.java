@@ -72,6 +72,10 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
         return Math.min(THREAD_ROW_WIDTH, tick * THREAD_ROW_WIDTH / totalTick);
     }
 
+    static int selectedParallelism(FactoryControllerMenu menu) {
+        return menu.currentParallelism();
+    }
+
     static int elementTextureWidth() { return ELEMENT_TEXTURE_WIDTH; }
     static int elementTextureHeight() { return ELEMENT_TEXTURE_HEIGHT; }
     static int threadElementY(int y) { return y + THREAD_ELEMENT_Y_OFFSET; }
@@ -164,7 +168,7 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
             graphics.text(font, MachineMenuScreen.parallelSlotLine(menu.parallelSlots()), x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
             lineY = nextDetailY(lineY);
         }
-        graphics.text(font, MachineMenuScreen.parallelLine(selected.parallelism(), menu.maxParallelism()), x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
+        graphics.text(font, MachineMenuScreen.parallelLine(selectedParallelism(menu), menu.maxParallelism()), x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
         lineY = nextDetailY(lineY);
         if (menu.isRedstonePaused()) {
             graphics.text(font, Component.translatable("gui.mmcr.controller.redstone_stopped"), x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
