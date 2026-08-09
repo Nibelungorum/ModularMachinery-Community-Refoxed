@@ -15,6 +15,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MenuScreenTest {
 
     @Test
+    void hatchBarAtlasCoordinatesMatchMmce() {
+        assertThat(MachineMenuScreen.fluidBarOverlaySourceX()).isEqualTo(176);
+        assertThat(MachineMenuScreen.energyBarSourceX()).isEqualTo(196);
+        assertThat(MachineMenuScreen.energyBarSourceY(0)).isEqualTo(61);
+        assertThat(MachineMenuScreen.energyBarSourceY(1)).isEqualTo(60);
+        assertThat(MachineMenuScreen.energyBarSourceY(61)).isZero();
+    }
+
+    @Test
     void layout_offsets_title_and_hides_inventory_label() {
         assertThat(MachineMenuScreen.titleX(8)).isEqualTo(10);
         assertThat(MachineMenuScreen.titleY(6)).isEqualTo(10);

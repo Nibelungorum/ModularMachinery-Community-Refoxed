@@ -38,7 +38,10 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     public static final int GUI_TEXTURE_SIZE = 256;
 
     private static final Identifier TANK_TEXTURE        = MMCR.id("textures/gui/guitank.png");
+    private static final Identifier GUI_BAR_TEXTURE     = MMCR.id("textures/gui/guibar.png");
     private static final Identifier CONTROLLER_TEXTURE  = MMCR.id("textures/gui/guicontroller_large.png");
+    private static final int FLUID_BAR_OVERLAY_SOURCE_X = 176;
+    private static final int ENERGY_BAR_SOURCE_X = 196;
     private static final NumberFormat NUMBER_FORMAT = NumberFormat.getIntegerInstance();
     static final int TITLE_COLOR = -12566464;
     static final int CONTROLLER_TITLE_COLOR = 0xFFE8E8E8;
@@ -151,6 +154,18 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         return titleY + STORAGE_TEXT_OFFSET_Y;
     }
 
+    static int fluidBarOverlaySourceX() {
+        return FLUID_BAR_OVERLAY_SOURCE_X;
+    }
+
+    static int energyBarSourceX() {
+        return ENERGY_BAR_SOURCE_X;
+    }
+
+    static int energyBarSourceY(int filled) {
+        return ENERGY_H - filled;
+    }
+
     @Override
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         graphics.text(font, title, titleLabelX, titleLabelY, titleColor(menu instanceof MachineControllerMenu), false);
@@ -242,6 +257,10 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         if (!fluid.isEmpty() && filled > 0) {
             drawFluid(g, fluid, x + TANK_X, y + TANK_Y, TANK_W, TANK_H, Math.min(filled, TANK_H));
         }
+        g.blit(RenderPipelines.GUI_TEXTURED, GUI_BAR_TEXTURE,
+                x + TANK_X, y + TANK_Y,
+                fluidBarOverlaySourceX(), 0, TANK_W, TANK_H,
+                GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
         renderAmountText(g, x, y, amountText(amount, capacity, "mB"));
     }
 
@@ -249,10 +268,13 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         int stored = menu.storedEnergy();
         int capacity = menu.energyCapacity();
         if (capacity <= 0) return;
-        int filled = stored <= 0 ? 0 : Math.max(1, (int) Math.ceil((double) stored * ENERGY_H / capacity));
+        int filled = stored <= 0 ? 0 : Math.min(ENERGY_H, Math.max(1, (int) Math.ceil((double) stored * ENERGY_H / capacity)));
         int drawY = y + ENERGY_Y + (ENERGY_H - filled);
         if (filled > 0) {
-            g.fill(x + ENERGY_X, drawY, x + ENERGY_X + ENERGY_W, y + ENERGY_Y + ENERGY_H, 0xFFE03B27);
+            g.blit(RenderPipelines.GUI_TEXTURED, GUI_BAR_TEXTURE,
+                    x + ENERGY_X, drawY,
+                    energyBarSourceX(), energyBarSourceY(filled), ENERGY_W, filled,
+                    GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
         }
         renderAmountText(g, x, y, amountText(stored, capacity, "FE"));
     }
@@ -340,6 +362,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
                     menu.currentParallelism(),
                     menu.maxParallelism(),
                     menu.hasFactoryController(),
+                    menu.factoryActiveThreadCount(),
                     menu.factoryThreadCount());
             scaledY = renderScaledWrappedLine(g, workLine,
                     scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
@@ -385,12 +408,15 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     }
 
     static Component controllerWorkLine(int parallelism, int maxParallelism,
-                                        boolean hasFactoryController, int factoryThreadCount) {
-        return hasFactoryController ? factoryThreadLine(factoryThreadCount) : parallelLine(parallelism, maxParallelism);
+                                        boolean hasFactoryController, int factoryActiveThreadCount, int factoryThreadCount) {
+        return hasFactoryController
+                ? factoryThreadLine(factoryActiveThreadCount, factoryThreadCount)
+                : parallelLine(parallelism, maxParallelism);
     }
 
-    static Component factoryThreadLine(int threadCount) {
+    static Component factoryThreadLine(int activeThreadCount, int threadCount) {
         return Component.translatable("gui.mmcr.controller.threads",
+                Component.literal(NUMBER_FORMAT.format(activeThreadCount)),
                 Component.literal(NUMBER_FORMAT.format(threadCount)));
     }
 
