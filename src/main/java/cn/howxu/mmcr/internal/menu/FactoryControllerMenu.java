@@ -25,11 +25,16 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
 
     private final BlockPos controllerPos;
     private final ControllerMenuState state;
+    private final MachineControllerBlockEntity owner;
+    private final ServerPlayer player;
     private FactoryControllerSnapshot snapshot;
+    private FactoryControllerSnapshot lastSentSnapshot;
     private int selectedThreadIndex;
 
     public FactoryControllerMenu(int containerId, Inventory inventory, MachineControllerBlockEntity owner, ServerPlayer player) {
         super(ModUIs.FACTORY_CONTROLLER.get(), containerId);
+        this.owner = owner;
+        this.player = player;
         controllerPos = owner == null ? BlockPos.ZERO : owner.getBlockPos();
         state = new ControllerMenuState(this, owner);
         ControllerMenuState.addControllerPlayerSlots(this, inventory, FACTORY_PLAYER_INVENTORY_X);
@@ -38,6 +43,7 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
             FactorySchedulerBlockEntity factory = owner.getFactoryController();
             if (factory != null) {
                 factory.ensureBaseThreadFor(owner);
+                snapshot = factory.snapshot(owner);
                 factory.sendSnapshot(player, owner);
             }
         }
@@ -49,6 +55,8 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
 
     private FactoryControllerMenu(int containerId, Inventory inventory, BlockPos controllerPos) {
         super(ModUIs.FACTORY_CONTROLLER.get(), containerId);
+        this.owner = null;
+        this.player = null;
         this.controllerPos = controllerPos;
         state = new ControllerMenuState(this, null);
         ControllerMenuState.addControllerPlayerSlots(this, inventory, FACTORY_PLAYER_INVENTORY_X);
@@ -88,6 +96,20 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
 
     public void selectThread(int index) {
         if (snapshot.threads().stream().anyMatch(thread -> thread.index() == index)) selectedThreadIndex = index;
+    }
+
+    @Override
+    public void broadcastChanges() {
+        super.broadcastChanges();
+        if (owner == null) return;
+        FactorySchedulerBlockEntity factory = owner.getFactoryController();
+        if (factory == null) return;
+        FactoryControllerSnapshot next = factory.snapshot(owner);
+        snapshot = next;
+        if (player != null && !next.equals(lastSentSnapshot)) {
+            factory.sendSnapshot(player, owner);
+            lastSentSnapshot = next;
+        }
     }
 
     @Override
