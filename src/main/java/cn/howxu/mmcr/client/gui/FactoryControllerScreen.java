@@ -30,7 +30,7 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     static final int SCROLLBAR_X = 94;
     static final int SCROLLBAR_Y = 8;
     static final int SCROLLBAR_HEIGHT = 197;
-    static final int SCROLLBAR_HANDLE_WIDTH = 8;
+    static final int SCROLLBAR_HANDLE_WIDTH = 12;
     static final int SCROLLBAR_HANDLE_HEIGHT = 16;
     private static final int ELEMENT_TEXTURE_WIDTH = 256;
     private static final int ELEMENT_TEXTURE_HEIGHT = 256;
@@ -41,6 +41,8 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     private static final Identifier BACKGROUND = MMCR.id("textures/gui/guifactory.png");
     private static final Identifier ELEMENTS = MMCR.id("textures/gui/guifactoryelements.png");
     private int scrollOffset;
+    private boolean draggingScrollbar;
+    private int scrollbarDragOffsetY;
 
     public FactoryControllerScreen(FactoryControllerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, IMAGE_WIDTH, IMAGE_HEIGHT);
@@ -97,6 +99,13 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
         if (range == 0) return SCROLLBAR_Y;
         int availableHeight = SCROLLBAR_HEIGHT - SCROLLBAR_HANDLE_HEIGHT;
         return SCROLLBAR_Y + clampScrollOffset(scrollOffset, threadCount) * availableHeight / range;
+    }
+    static int scrollOffsetFromScrollbarY(int scrollbarY, int threadCount, int dragOffsetY) {
+        int range = Math.max(0, threadCount - VISIBLE_THREADS);
+        if (range == 0) return 0;
+        int availableHeight = SCROLLBAR_HEIGHT - SCROLLBAR_HANDLE_HEIGHT;
+        int handleY = Math.max(0, Math.min(availableHeight, scrollbarY - SCROLLBAR_Y - dragOffsetY));
+        return clampScrollOffset(Math.round((float) handleY * range / availableHeight), threadCount);
     }
 
     @Override
@@ -173,6 +182,13 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         if (event.button() == 0) {
+            if (mouseOverScrollbar((int) event.x(), (int) event.y())) {
+                draggingScrollbar = true;
+                scrollbarDragOffsetY = Math.max(0, Math.min(SCROLLBAR_HANDLE_HEIGHT,
+                        (int) event.y() - topPos - scrollbarHandleY(scrollOffset, menu.threads().size())));
+                scrollOffset = scrollOffsetFromScrollbarY((int) event.y() - topPos, menu.threads().size(), scrollbarDragOffsetY);
+                return true;
+            }
             int threadIndex = threadIndexAt(leftPos + THREAD_ROW_X, topPos + THREAD_ROW_Y, scrollOffset,
                     (int) event.x(), (int) event.y(), menu.threads());
             if (threadIndex >= 0) {
@@ -184,6 +200,24 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     }
 
     @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        if (event.button() == 0 && draggingScrollbar) {
+            draggingScrollbar = false;
+            return true;
+        }
+        return super.mouseReleased(event);
+    }
+
+    @Override
+    public boolean mouseDragged(MouseButtonEvent event, double deltaX, double deltaY) {
+        if (draggingScrollbar) {
+            scrollOffset = scrollOffsetFromScrollbarY((int) event.y() - topPos, menu.threads().size(), scrollbarDragOffsetY);
+            return true;
+        }
+        return super.mouseDragged(event, deltaX, deltaY);
+    }
+
+    @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double deltaX, double deltaY) {
         scrollOffset = clampScrollOffset(scrollOffset - (int) Math.signum(deltaY), menu.threads().size());
         return true;
@@ -191,5 +225,13 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
 
     private static String truncate(String value, int maxLength) {
         return value.length() <= maxLength ? value : value.substring(0, Math.max(0, maxLength - 3)) + "...";
+    }
+
+    private boolean mouseOverScrollbar(int mouseX, int mouseY) {
+        return shouldRenderScrollbar(menu.threads().size())
+                && mouseX >= leftPos + SCROLLBAR_X
+                && mouseX < leftPos + SCROLLBAR_X + SCROLLBAR_HANDLE_WIDTH
+                && mouseY >= topPos + SCROLLBAR_Y
+                && mouseY < topPos + SCROLLBAR_Y + SCROLLBAR_HEIGHT;
     }
 }

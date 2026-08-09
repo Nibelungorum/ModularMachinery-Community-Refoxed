@@ -20,7 +20,7 @@ modifier等级功能(实现线圈方块等级能力)
 
 .worktrees/phase5-mmce-optimizations
 
-多线程UI的滑块还没有做 干吧跌
+多线程UI的滑块贴图还没有做 干吧跌
 
 [X] 并行仓测试，默认机器加入并行仓进行测试
 

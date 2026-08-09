@@ -266,6 +266,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     @Override
     public boolean stillValid(Player player) {
-        return owner == null || MenuSupport.stillValidWithin(player, owner.getBlockPos());
+        return owner == null || (MenuSupport.stillValidWithin(player, owner.getBlockPos())
+                && MenuSupport.controllerStillPresentAndFormed(owner));
     }
 }

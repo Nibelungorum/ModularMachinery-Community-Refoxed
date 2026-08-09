@@ -119,6 +119,7 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
 
     @Override
     public boolean stillValid(Player player) {
-        return MenuSupport.stillValidWithin(player, controllerPos);
+        return MenuSupport.stillValidWithin(player, controllerPos)
+                && MenuSupport.controllerStillPresentAndFormed(owner);
     }
 }

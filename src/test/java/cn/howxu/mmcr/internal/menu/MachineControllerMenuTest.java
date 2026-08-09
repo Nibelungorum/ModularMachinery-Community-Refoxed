@@ -4,7 +4,9 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.Holder;
@@ -151,6 +153,18 @@ class MachineControllerMenuTest {
         assertThat(menu.machineId()).isNull();
     }
 
+    @Test
+    void formed_controller_menu_becomes_invalid_when_structure_unforms() throws Exception {
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        controller.setLevel(LevelStub.createWithBlockEntities(List.of(controller)));
+        controller.getLevel().setBlock(controller.getBlockPos(), controller.getBlockState().setValue(MachineControllerBlock.FORMED, true), 3);
+
+        assertThat(MenuSupport.controllerStillPresentAndFormed(controller)).isTrue();
+        controller.getLevel().setBlock(controller.getBlockPos(), controller.getBlockState().setValue(MachineControllerBlock.FORMED, false), 3);
+
+        assertThat(MenuSupport.controllerStillPresentAndFormed(controller)).isFalse();
+    }
+
     private static Inventory emptyInventory() {
         return new Inventory(null, null);
     }
@@ -161,6 +175,7 @@ class MachineControllerMenuTest {
         sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
         MachineControllerBlockEntity controller = (MachineControllerBlockEntity) unsafe.allocateInstance(MachineControllerBlockEntity.class);
         setField(net.minecraft.world.level.block.entity.BlockEntity.class, controller, "worldPosition", net.minecraft.core.BlockPos.ZERO);
+        setField(net.minecraft.world.level.block.entity.BlockEntity.class, controller, "blockState", ModBlocks.controllerFor(id).get().defaultBlockState());
         setField(MachineControllerBlockEntity.class, controller, "machine", new DynamicMachine(id, "machine." + id.getPath(), new BlockArray(Map.of())));
         setField(MachineControllerBlockEntity.class, controller, "components", List.of());
         return controller;

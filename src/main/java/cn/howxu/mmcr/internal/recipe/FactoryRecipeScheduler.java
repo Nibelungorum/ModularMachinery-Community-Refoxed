@@ -101,7 +101,7 @@ public final class FactoryRecipeScheduler {
     }
 
     public int availableParallelism() {
-        return Math.max(0, parallelLimit - usedParallelism());
+        return parallelLimit;
     }
 
     public int activeThreadCount() {

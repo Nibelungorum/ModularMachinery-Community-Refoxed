@@ -41,9 +41,18 @@ class FactoryControllerScreenTest {
     void scrollbar_handle_uses_mmce_offset_and_scroll_range() {
         assertThat(FactoryControllerScreen.shouldRenderScrollbar(6)).isFalse();
         assertThat(FactoryControllerScreen.shouldRenderScrollbar(7)).isTrue();
+        assertThat(FactoryControllerScreen.SCROLLBAR_HANDLE_WIDTH).isEqualTo(12);
         assertThat(FactoryControllerScreen.scrollbarHandleY(0, 8)).isEqualTo(FactoryControllerScreen.SCROLLBAR_Y);
         assertThat(FactoryControllerScreen.scrollbarHandleY(1, 8)).isEqualTo(98);
         assertThat(FactoryControllerScreen.scrollbarHandleY(2, 8)).isEqualTo(189);
+    }
+
+    @Test
+    void scrollbar_drag_position_maps_back_to_scroll_offset() {
+        assertThat(FactoryControllerScreen.scrollOffsetFromScrollbarY(FactoryControllerScreen.SCROLLBAR_Y, 8, 0)).isZero();
+        assertThat(FactoryControllerScreen.scrollOffsetFromScrollbarY(98, 8, 0)).isEqualTo(1);
+        assertThat(FactoryControllerScreen.scrollOffsetFromScrollbarY(189, 8, 0)).isEqualTo(2);
+        assertThat(FactoryControllerScreen.scrollOffsetFromScrollbarY(500, 8, 0)).isEqualTo(2);
     }
 
     @Test

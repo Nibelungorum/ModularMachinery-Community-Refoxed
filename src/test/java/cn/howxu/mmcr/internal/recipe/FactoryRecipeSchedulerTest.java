@@ -122,7 +122,7 @@ class FactoryRecipeSchedulerTest {
     }
 
     @Test
-    void available_parallelism_subtracts_active_thread_budget() {
+    void available_parallelism_reports_per_thread_parallel_limit() {
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(4);
         FactoryRecipeThread first = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());
         FactoryRecipeThread second = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());
@@ -131,7 +131,7 @@ class FactoryRecipeSchedulerTest {
         scheduler.addThreadForTesting(first);
         scheduler.addThreadForTesting(second);
 
-        assertThat(scheduler.availableParallelism()).isZero();
+        assertThat(scheduler.availableParallelism()).isEqualTo(4);
     }
 
     @Test
@@ -283,6 +283,19 @@ class FactoryRecipeSchedulerTest {
     }
 
     @Test
+    void factory_threads_each_receive_full_parallelism_limit() throws Exception {
+        MachineControllerBlockEntity controller = controller(MMCR.id("factory_multi_thread_machine"));
+        MachineRecipe recipe = parallelizedRecipe("factory_multi_thread_recipe", 0);
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(4, new RecipeCraftingContextPool());
+
+        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 16, new RecipeCraftingContextPool());
+
+        assertThat(scheduler.threadSnapshots()).filteredOn(FactoryRecipeScheduler.ThreadSnapshot::active)
+                .hasSize(4)
+                .allSatisfy(snapshot -> assertThat(snapshot.parallelism()).isEqualTo(16));
+    }
+
+    @Test
     void factory_threads_prioritize_private_cache_and_invalidate_on_structure_change() throws Exception {
         MachineControllerBlockEntity controller = controller(MMCR.id("factory_cache_invalidation_machine"));
         MachineRecipe cached = recipe("factory_cache_invalidation_cached", 0);
@@ -313,6 +326,11 @@ class FactoryRecipeSchedulerTest {
 
     private static MachineRecipe recipe(String id, int maxThreads) {
         return new MachineRecipe(MMCR.id(id), MMCR.id("factory_machine"), 20, List.of(), List.of(), List.of(), 0, maxThreads);
+    }
+
+    private static MachineRecipe parallelizedRecipe(String id, int maxThreads) {
+        return new MachineRecipe(MMCR.id(id), MMCR.id("factory_machine"), 20, List.of(), List.of(), List.of(), 0, maxThreads,
+                false, List.of(), List.of(), true);
     }
 
     private static MachineControllerBlockEntity controller(net.minecraft.resources.Identifier machineId) throws Exception {
