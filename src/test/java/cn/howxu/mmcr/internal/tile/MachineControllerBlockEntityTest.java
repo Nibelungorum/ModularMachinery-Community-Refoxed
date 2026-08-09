@@ -321,10 +321,10 @@ class MachineControllerBlockEntityTest {
         fixture.controller().serverTick();
 
         assertThat(fixture.factory().threadLimit()).isEqualTo(3);
-        assertThat(fixture.factory().activeLaneCount()).isEqualTo(2);
+        assertThat(fixture.factory().activeLaneCount()).isEqualTo(1);
         assertThat(fixture.controller().getActive()).isNull();
         assertThat(fixture.controller().isRuntimeActive()).isTrue();
-        assertThat(fixture.controller().activeFactoryThreadCount()).isEqualTo(2);
+        assertThat(fixture.controller().activeFactoryThreadCount()).isEqualTo(1);
         assertThat(fixture.controller().currentParallelism()).isEqualTo(1);
     }
 
@@ -337,8 +337,8 @@ class MachineControllerBlockEntityTest {
 
         fixture.controller().serverTick();
 
-        assertThat(fixture.factory().activeLaneCount()).isEqualTo(2);
-        assertThat(countItem(fixture.inputBus(), Items.IRON_INGOT)).isZero();
+        assertThat(fixture.factory().activeLaneCount()).isEqualTo(1);
+        assertThat(countItem(fixture.inputBus(), Items.IRON_INGOT)).isEqualTo(1);
     }
 
     @Test

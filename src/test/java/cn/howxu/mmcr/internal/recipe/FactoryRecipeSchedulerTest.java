@@ -282,6 +282,28 @@ class FactoryRecipeSchedulerTest {
         assertThat(scheduler.threadSnapshots()).allSatisfy(snapshot -> assertThat(snapshot.active()).isTrue());
     }
 
+    @Test
+    void factory_threads_prioritize_private_cache_and_invalidate_on_structure_change() throws Exception {
+        MachineControllerBlockEntity controller = controller(MMCR.id("factory_cache_invalidation_machine"));
+        MachineRecipe cached = recipe("factory_cache_invalidation_cached", 0);
+        MachineRecipe fallback = new MachineRecipe(MMCR.id("factory_cache_invalidation_fallback"),
+                MMCR.id("factory_machine"), 20, List.of(), List.of(), List.of(), -1, 0);
+        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1, pool);
+
+        scheduler.tickThreads(controller, List.of(cached), controller.getStructureVersion(), 1, pool);
+        FactoryRecipeThread thread = scheduler.allThreads().getFirst();
+        thread.invalidate();
+
+        scheduler.tickThreads(controller, List.of(fallback, cached), controller.getStructureVersion(), 1, pool);
+
+        assertThat(thread.getActiveRecipe().getRecipe()).isSameAs(cached);
+        thread.invalidate();
+        scheduler.tickThreads(controller, List.of(fallback, cached), controller.getStructureVersion() + 1, 1, pool);
+
+        assertThat(thread.getActiveRecipe().getRecipe()).isSameAs(fallback);
+    }
+
     private static ActiveMachineRecipe activeRecipeWithParallelism(int parallelism) {
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_parallel_" + parallelism), MMCR.id("factory_machine"), 20, List.of(), List.of());
         ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, parallelism);
