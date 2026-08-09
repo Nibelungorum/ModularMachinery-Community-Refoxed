@@ -15,6 +15,7 @@ import net.neoforged.neoforge.client.event.RegisterBlockStateModels;
 import net.neoforged.neoforge.client.event.RegisterItemModelsEvent;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +29,8 @@ import org.jetbrains.annotations.Nullable;
  * @author howxu <dev@howxu.cn>
  */
 public final class RuntimeMachineModelRegistry {
+    private static volatile @Nullable Map<Block, RuntimeBlockModelDefinition> definitions;
+
     private RuntimeMachineModelRegistry() {
     }
 
@@ -62,34 +65,34 @@ public final class RuntimeMachineModelRegistry {
         return definitionMap().values().stream();
     }
 
-    private static Map<Block, RuntimeBlockModelDefinition> definitionMap() {
-        Map<Block, RuntimeBlockModelDefinition> definitions = new LinkedHashMap<>();
+    private static synchronized Map<Block, RuntimeBlockModelDefinition> definitionMap() {
+        Map<Block, RuntimeBlockModelDefinition> cached = definitions;
+        if (cached != null) {
+            return cached;
+        }
+        boolean allBound = ModBlocks.BLOCKS.values().stream().allMatch(holder -> holder.isBound());
+        Map<Block, RuntimeBlockModelDefinition> resolved = new LinkedHashMap<>();
         ModBlocks.BLOCKS.forEach((name, holder) -> {
             if (!holder.isBound()) {
                 return;
             }
             RuntimeBlockModelDefinition definition = definition(name, holder.get());
             if (definition != null) {
-                definitions.put(definition.block(), definition);
+                resolved.put(definition.block(), definition);
             }
         });
-        return definitions;
+        if (!allBound) {
+            return resolved;
+        }
+        cached = Collections.unmodifiableMap(resolved);
+        definitions = cached;
+        return cached;
     }
 
     public static RuntimeBlockStateDefinition dynamicBlockState(Block block) {
         RuntimeBlockModelDefinition definition = definition(block);
         if (definition != null) return definition.blockStateDefinition();
         throw new IllegalArgumentException("Unsupported dynamic machine block: " + block);
-    }
-
-    static RuntimeBlockStateDefinition dynamicBlockState(RuntimeBlockModelDescriptor descriptor) {
-        if (descriptor.kind() == RuntimeBlockModelDescriptor.Kind.CONTROLLER) {
-            return controllerDefinition((MachineControllerBlock) descriptor.block());
-        }
-        if (descriptor.kind() == RuntimeBlockModelDescriptor.Kind.PORT) {
-            return portDefinition((IOPortBlock) descriptor.block());
-        }
-        return portStyleDefinition(descriptor.block());
     }
 
     static RuntimeBlockStateDefinition controllerDefinition(MachineControllerBlock block) {
@@ -119,12 +122,6 @@ public final class RuntimeMachineModelRegistry {
     static RuntimeBlockStateDefinition portStyleDefinition(Block block) {
         return new RuntimeBlockStateDefinition(BuiltInRegistries.BLOCK.getKey(block),
                 List.of(new RuntimeVariant("", DynamicOverlayModelLoader.PORT_ID)));
-    }
-
-    static RuntimeBlockModelDescriptor describe(String blockName, Block block) {
-        Identifier id = BuiltInRegistries.BLOCK.getKey(block);
-        String resolvedName = blockName != null ? blockName : id.getPath();
-        return RuntimeBlockModelDescriptor.describe(resolvedName, block);
     }
 
     private static @Nullable RuntimeBlockModelDefinition definition(String blockName, Block block) {

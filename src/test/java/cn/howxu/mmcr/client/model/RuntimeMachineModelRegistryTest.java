@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RuntimeMachineModelRegistryTest {
 
@@ -57,6 +58,41 @@ class RuntimeMachineModelRegistryTest {
                 .isEqualTo("factory_controller");
         assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.BLOCKS.get("factory_controller").get()).itemDescription().overlayTexture())
                 .isEqualTo(MMCR.id("block/overlay_factory_controller"));
+    }
+
+    @Test
+    void definitions_are_stable_after_deferred_holders_bind() {
+        var block = ModBlocks.CONTROLLER.get();
+
+        var first = RuntimeMachineModelRegistry.definition(block);
+        var second = RuntimeMachineModelRegistry.definition(block);
+        var firstDefinitions = RuntimeMachineModelRegistry.definitions().toList();
+        var secondDefinitions = RuntimeMachineModelRegistry.definitions().toList();
+
+        assertThat(first).isSameAs(second);
+        assertThat(firstDefinitions).containsExactlyElementsOf(secondDefinitions);
+        assertThat(firstDefinitions.getFirst()).isSameAs(secondDefinitions.getFirst());
+    }
+
+    @Test
+    void dynamic_block_state_requires_an_explicit_definition() {
+        var block = ModBlocks.CONTROLLER.get();
+
+        assertThat(RuntimeMachineModelRegistry.dynamicBlockState(block))
+                .isSameAs(RuntimeMachineModelRegistry.definition(block).blockStateDefinition());
+        assertThatThrownBy(() -> RuntimeMachineModelRegistry.dynamicBlockState(ModBlocks.BASIC_CASING.get()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unsupported dynamic machine block");
+    }
+
+    @Test
+    void item_description_does_not_share_mutable_overlay_faces() {
+        var description = RuntimeMachineModelRegistry.definition(ModBlocks.CONTROLLER.get()).itemDescription();
+
+        description.overlayFaces().clear();
+
+        assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.CONTROLLER.get()).itemDescription().overlayFaces())
+                .containsExactly(Direction.NORTH);
     }
 
     @Test

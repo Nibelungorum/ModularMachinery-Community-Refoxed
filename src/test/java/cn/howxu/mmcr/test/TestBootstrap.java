@@ -86,6 +86,9 @@ public final class TestBootstrap {
         bindPortBlocks();
         for (ParallelTier tier : ParallelTier.values()) bindParallelController(tier);
         bindFactoryController();
+        bind(ModBlocks.BLOCKS.get("debug_infinite_energy_source"), Blocks.STONE);
+        bind(ModBlocks.BLOCKS.get("debug_infinite_water_source"), Blocks.STONE);
+        bind(ModBlocks.BLOCKS.get("debug_infinite_lava_source"), Blocks.STONE);
         bind(ModItems.THREAD_DISPERSER, registerItem(ModItems.THREAD_DISPERSER));
         restoreMachineDefinitions();
         registerRuntimeBuiltins();
