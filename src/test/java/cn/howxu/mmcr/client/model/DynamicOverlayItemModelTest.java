@@ -53,7 +53,7 @@ class DynamicOverlayItemModelTest {
     void port_item_resolves_from_block_item() {
         var block = cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get();
 
-        var description = DynamicOverlayItemModel.describeBlock(block);
+        var description = DynamicOverlayItemModel.describeItem(block.asItem());
 
         assertThat(description.kind()).isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
         assertThat(description.portKind()).isEqualTo(PortKinds.ITEM_INPUT);

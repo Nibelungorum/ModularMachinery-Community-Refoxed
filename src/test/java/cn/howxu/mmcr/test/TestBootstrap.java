@@ -252,6 +252,10 @@ public final class TestBootstrap {
                 Registry.register(BuiltInRegistries.BLOCK, MMCR.id(kind.id()), block);
             }
             bind(ModBlocks.BLOCKS.get(kind.id()), block);
+            DeferredHolder<Item, Item> itemHolder = ModItems.ITEMS.get(kind.id());
+            Item item = registerItem(itemHolder);
+            bind(itemHolder, item);
+            Item.BY_BLOCK.put(block, item);
 
             if (!BuiltInRegistries.BLOCK_ENTITY_TYPE.containsKey(MMCR.id(kind.id()))) {
                 Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id(kind.id()),
