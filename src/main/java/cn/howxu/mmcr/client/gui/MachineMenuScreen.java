@@ -336,8 +336,12 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
                 scaledY = renderScaledWrappedLine(g, parallelSlotLine(parallelSlots),
                         scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
             }
-            Component parallelLine = controllerParallelLine(menu.currentParallelism(), menu.maxParallelism(), menu.hasFactoryController());
-            scaledY = renderScaledWrappedLine(g, parallelLine,
+            Component workLine = controllerWorkLine(
+                    menu.currentParallelism(),
+                    menu.maxParallelism(),
+                    menu.hasFactoryController(),
+                    menu.factoryThreadCount());
+            scaledY = renderScaledWrappedLine(g, workLine,
                     scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
         }
 
@@ -380,13 +384,14 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
                 Component.literal(NUMBER_FORMAT.format(maxParallelism)));
     }
 
-    static Component totalParallelLine(int maxParallelism) {
-        return Component.translatable("gui.mmcr.controller.parallel_total",
-                Component.literal(NUMBER_FORMAT.format(maxParallelism)));
+    static Component controllerWorkLine(int parallelism, int maxParallelism,
+                                        boolean hasFactoryController, int factoryThreadCount) {
+        return hasFactoryController ? factoryThreadLine(factoryThreadCount) : parallelLine(parallelism, maxParallelism);
     }
 
-    static Component controllerParallelLine(int parallelism, int maxParallelism, boolean hasFactoryController) {
-        return parallelLine(parallelism, maxParallelism);
+    static Component factoryThreadLine(int threadCount) {
+        return Component.translatable("gui.mmcr.controller.threads",
+                Component.literal(NUMBER_FORMAT.format(threadCount)));
     }
 
     static Component parallelSlotLine(int parallelSlots) {
