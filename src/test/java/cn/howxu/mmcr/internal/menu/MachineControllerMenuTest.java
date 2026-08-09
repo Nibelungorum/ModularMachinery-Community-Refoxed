@@ -87,14 +87,17 @@ class MachineControllerMenuTest {
         assertThat(menu.parallelControllerCount()).isZero();
         assertThat(menu.currentParallelism()).isZero();
         assertThat(menu.maxParallelism()).isEqualTo(1);
+        assertThat(menu.hasFactoryController()).isFalse();
 
         menu.setData(6, 1);
         menu.setData(7, 0);
         menu.setData(8, 4);
+        menu.setData(9, 1);
 
         assertThat(menu.parallelControllerCount()).isEqualTo(1);
         assertThat(menu.currentParallelism()).isZero();
         assertThat(menu.maxParallelism()).isEqualTo(4);
+        assertThat(menu.hasFactoryController()).isTrue();
     }
 
     @Test

@@ -23,6 +23,17 @@ class MachineControllerComponentProviderTest {
                 .containsExactly("machine", "structure", "state", "parallel_slots", "parallelism", "threads");
     }
 
+    @Test
+    void controller_without_parallel_controllers_hides_parallel_lines() {
+        CompoundTag tag = new CompoundTag();
+        tag.putBoolean("formed", true);
+        tag.putInt("parallelism", 0);
+        tag.putInt("maxParallelism", 1);
+
+        assertThat(MachineControllerComponentProvider.lineKeys(MachineControllerComponentProvider.Snapshot.from(tag)))
+                .containsExactly("structure", "state");
+    }
+
     private static MachineControllerComponentProvider.Snapshot snapshot(boolean threaded) {
         CompoundTag tag = new CompoundTag();
         tag.putString("machine", "mmcr:blast_furnace");

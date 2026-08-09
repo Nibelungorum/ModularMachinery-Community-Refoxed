@@ -134,6 +134,30 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void max_parallelism_sums_all_parallel_controllers_up_to_machine_limit() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        var parallelMachine = new DynamicMachine(
+                MMCR.id("summed_parallel_test_machine"),
+                "Summed Parallel Test",
+                onePortPattern(Blocks.IRON_BLOCK),
+                MachineControllerSpec.defaultsFor(MMCR.id("summed_parallel_test_machine")),
+                PortRequirementSpec.none(),
+                List.of(),
+                Map.of(),
+                64,
+                true,
+                false,
+                1);
+
+        setField(MachineControllerBlockEntity.class, controller, "machine", parallelMachine);
+        addParallelComponent(controller, ParallelTier.X4);
+        addParallelComponent(controller, ParallelTier.X4);
+
+        assertThat(controller.parallelControllerCount()).isEqualTo(2);
+        assertThat(controller.getMaxParallelism()).isEqualTo(8);
+    }
+
+    @Test
     void effective_threads_require_multithreading_and_parallelism_requires_parallel_flag() throws Exception {
         MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
         initializeComponents(controller);

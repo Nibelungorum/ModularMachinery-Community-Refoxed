@@ -273,13 +273,14 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     public int getMaxParallelism() {
         if (machine == null || !machine.parallelizable()) return 1;
-        int max = 1;
+        long max = 0;
         for (ProcessingComponent component : components) {
             if (component.getContainer() instanceof ParallelControllerBlockEntity parallel) {
-                max = Math.max(max, parallel.maxParallelism());
+                max += parallel.maxParallelism();
+                if (max >= machine.maxParallelism()) return machine.maxParallelism();
             }
         }
-        return Math.min(max, machine.maxParallelism());
+        return Math.max(1, (int) max);
     }
 
     public int parallelControllerCount() {

@@ -30,6 +30,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     private final DataSlot parallelControllerCount;
     private final DataSlot currentParallelism;
     private final DataSlot maxParallelism;
+    private final DataSlot factoryControllerPresent;
 
     public MachineControllerMenu(int containerId, Inventory playerInv, MachineControllerBlockEntity owner) {
         super(ModUIs.MACHINE_CONTROLLER.get(), containerId);
@@ -72,6 +73,10 @@ public class MachineControllerMenu extends AbstractMachineMenu {
             @Override public int get() { return owner.getMaxParallelism(); }
             @Override public void set(int value) {}
         });
+        this.factoryControllerPresent = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
+            @Override public int get() { return owner.getFactoryController() == null ? 0 : 1; }
+            @Override public void set(int value) {}
+        });
         addControllerPlayerSlots(playerInv);
     }
 
@@ -89,6 +94,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.parallelControllerCount = addDataSlot(DataSlot.standalone());
         this.currentParallelism = addDataSlot(DataSlot.standalone());
         this.maxParallelism = addDataSlot(DataSlot.standalone());
+        this.factoryControllerPresent = addDataSlot(DataSlot.standalone());
         addControllerPlayerSlots(playerInv);
     }
 
@@ -176,6 +182,11 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     public int maxParallelism() {
         MachineControllerBlockEntity controller = resolvedOwner();
         return controller == null ? Math.max(1, maxParallelism.get()) : controller.getMaxParallelism();
+    }
+
+    public boolean hasFactoryController() {
+        MachineControllerBlockEntity controller = resolvedOwner();
+        return controller == null ? factoryControllerPresent.get() != 0 : controller.getFactoryController() != null;
     }
 
     public long totalStoredEnergy() {

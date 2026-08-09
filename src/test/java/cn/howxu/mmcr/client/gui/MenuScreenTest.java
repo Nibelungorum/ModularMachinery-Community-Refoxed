@@ -66,6 +66,7 @@ class MenuScreenTest {
     @Test
     void controller_detail_lines_use_parallel_and_parallel_slot_labels() {
         assertThat(MachineMenuScreen.parallelLine(3, 16).getString()).isEqualTo("gui.mmcr.controller.parallel");
+        assertThat(MachineMenuScreen.totalParallelLine(16).getString()).isEqualTo("gui.mmcr.controller.parallel_total");
         assertThat(MachineMenuScreen.parallelSlotLine(1).getString()).isEqualTo("gui.mmcr.controller.parallel_slots");
     }
 
