@@ -321,11 +321,11 @@ class MachineControllerBlockEntityTest {
         fixture.controller().serverTick();
 
         assertThat(fixture.factory().threadLimit()).isEqualTo(3);
-        assertThat(fixture.factory().activeLaneCount()).isEqualTo(1);
+        assertThat(fixture.factory().activeLaneCount()).isEqualTo(3);
         assertThat(fixture.controller().getActive()).isNull();
         assertThat(fixture.controller().isRuntimeActive()).isTrue();
-        assertThat(fixture.controller().activeFactoryThreadCount()).isEqualTo(1);
-        assertThat(fixture.controller().currentParallelism()).isEqualTo(1);
+        assertThat(fixture.controller().activeFactoryThreadCount()).isEqualTo(3);
+        assertThat(fixture.controller().currentParallelism()).isZero();
     }
 
     @Test
@@ -337,8 +337,8 @@ class MachineControllerBlockEntityTest {
 
         fixture.controller().serverTick();
 
-        assertThat(fixture.factory().activeLaneCount()).isEqualTo(1);
-        assertThat(countItem(fixture.inputBus(), Items.IRON_INGOT)).isEqualTo(1);
+        assertThat(fixture.factory().activeLaneCount()).isEqualTo(2);
+        assertThat(countItem(fixture.inputBus(), Items.IRON_INGOT)).isZero();
     }
 
     @Test
@@ -404,12 +404,12 @@ class MachineControllerBlockEntityTest {
         setField(MachineControllerBlockEntity.class, fixture.controller(), "contextPool", pool);
         MachineRecipe recipe = registerItemRecipe("factory_lane_reset", fixture.machine().registryName(), 20, 0);
         fixture.controller().serverTick();
-        assertThat(fixture.factory().activeLaneCount()).isEqualTo(1);
+        assertThat(fixture.factory().activeLaneCount()).isEqualTo(2);
 
         invokeResetMachine(fixture.controller());
 
         assertThat(fixture.factory().activeLaneCount()).isZero();
-        assertReturnedContexts(pool, fixture.controller(), recipe, 1);
+        assertReturnedContexts(pool, fixture.controller(), recipe, 2);
     }
 
     @Test
@@ -421,12 +421,12 @@ class MachineControllerBlockEntityTest {
         setField(MachineControllerBlockEntity.class, fixture.controller(), "contextPool", pool);
         MachineRecipe recipe = registerItemRecipe("factory_lane_removed", fixture.machine().registryName(), 20, 0);
         fixture.controller().serverTick();
-        assertThat(fixture.factory().activeLaneCount()).isEqualTo(1);
+        assertThat(fixture.factory().activeLaneCount()).isEqualTo(2);
 
         fixture.controller().setRemoved();
 
         assertThat(fixture.factory().activeLaneCount()).isZero();
-        assertReturnedContexts(pool, fixture.controller(), recipe, 1);
+        assertReturnedContexts(pool, fixture.controller(), recipe, 2);
     }
 
     @Test
@@ -438,12 +438,12 @@ class MachineControllerBlockEntityTest {
         setField(MachineControllerBlockEntity.class, fixture.controller(), "contextPool", pool);
         MachineRecipe recipe = registerItemRecipe("factory_lane_unload", fixture.machine().registryName(), 20, 0);
         fixture.controller().serverTick();
-        assertThat(fixture.factory().activeLaneCount()).isEqualTo(1);
+        assertThat(fixture.factory().activeLaneCount()).isEqualTo(2);
 
         MachineControllerBlockEntity.markStructureChunkDirty(levelOf(fixture.controller()), new net.minecraft.world.level.ChunkPos(fixture.controller().getBlockPos().getX() >> 4, fixture.controller().getBlockPos().getZ() >> 4));
 
         assertThat(fixture.factory().activeLaneCount()).isZero();
-        assertReturnedContexts(pool, fixture.controller(), recipe, 1);
+        assertReturnedContexts(pool, fixture.controller(), recipe, 2);
     }
 
     @Test
