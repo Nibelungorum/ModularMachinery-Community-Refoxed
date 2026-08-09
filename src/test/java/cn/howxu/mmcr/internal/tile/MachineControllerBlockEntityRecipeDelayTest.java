@@ -92,6 +92,16 @@ class MachineControllerBlockEntityRecipeDelayTest {
     }
 
     @Test
+    void inputBusChangeClearsRecipeSearchRetryDelay() throws Exception {
+        MachineControllerBlockEntity controller = formedController(Identifier.fromNamespaceAndPath("mmcr", "machine"));
+        setField(MachineControllerBlockEntity.class, controller, "recipeSearchRetryCounter", 3);
+
+        controller.onRecipeInputsChanged();
+
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "recipeSearchRetryCounter")).isEqualTo(0);
+    }
+
+    @Test
     void repeatedConflictProneRecipeStartsImmediatelyAfterInitialDelayHasElapsed() throws Exception {
         Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
         MachineRecipe recipe = inputRecipe("single_gold", machineId, List.of());

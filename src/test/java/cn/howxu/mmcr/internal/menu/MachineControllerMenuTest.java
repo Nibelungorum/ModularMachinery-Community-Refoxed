@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -89,14 +91,27 @@ class MachineControllerMenuTest {
         assertThat(menu.maxParallelism()).isEqualTo(1);
         assertThat(menu.hasFactoryController()).isFalse();
 
+        menu.setData(7, 7);
+        menu.setData(8, 524);
+
+        assertThat(menu.currentParallelism()).isEqualTo(7);
+        assertThat(menu.maxParallelism()).isEqualTo(524);
+    }
+
+    @Test
+    void client_menu_uses_synced_parallel_data_when_the_client_controller_is_available() throws Exception {
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory());
+        setField(MachineControllerMenu.class, menu, "level", LevelStub.createWithBlockEntities(java.util.List.of(controller)));
+
         menu.setData(6, 1);
-        menu.setData(7, 0);
-        menu.setData(8, 4);
+        menu.setData(7, 7);
+        menu.setData(8, 524);
         menu.setData(9, 1);
 
         assertThat(menu.parallelControllerCount()).isEqualTo(1);
-        assertThat(menu.currentParallelism()).isZero();
-        assertThat(menu.maxParallelism()).isEqualTo(4);
+        assertThat(menu.currentParallelism()).isEqualTo(7);
+        assertThat(menu.maxParallelism()).isEqualTo(524);
         assertThat(menu.hasFactoryController()).isTrue();
     }
 
@@ -136,6 +151,7 @@ class MachineControllerMenuTest {
         MachineControllerBlockEntity controller = (MachineControllerBlockEntity) unsafe.allocateInstance(MachineControllerBlockEntity.class);
         setField(net.minecraft.world.level.block.entity.BlockEntity.class, controller, "worldPosition", net.minecraft.core.BlockPos.ZERO);
         setField(MachineControllerBlockEntity.class, controller, "machine", new DynamicMachine(id, "machine." + id.getPath(), new BlockArray(Map.of())));
+        setField(MachineControllerBlockEntity.class, controller, "components", List.of());
         return controller;
     }
 

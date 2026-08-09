@@ -336,9 +336,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
                 scaledY = renderScaledWrappedLine(g, parallelSlotLine(parallelSlots),
                         scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
             }
-            Component parallelLine = menu.hasFactoryController()
-                    ? totalParallelLine(menu.maxParallelism())
-                    : parallelLine(menu.currentParallelism(), menu.maxParallelism());
+            Component parallelLine = controllerParallelLine(menu.currentParallelism(), menu.maxParallelism());
             scaledY = renderScaledWrappedLine(g, parallelLine,
                     scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
         }
@@ -385,6 +383,10 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     static Component totalParallelLine(int maxParallelism) {
         return Component.translatable("gui.mmcr.controller.parallel_total",
                 Component.literal(NUMBER_FORMAT.format(maxParallelism)));
+    }
+
+    static Component controllerParallelLine(int parallelism, int maxParallelism) {
+        return parallelLine(parallelism, maxParallelism);
     }
 
     static Component parallelSlotLine(int parallelSlots) {

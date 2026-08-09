@@ -170,21 +170,25 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     }
 
     public int parallelControllerCount() {
+        if (owner == null) return parallelControllerCount.get();
         MachineControllerBlockEntity controller = resolvedOwner();
         return controller == null ? parallelControllerCount.get() : controller.parallelControllerCount();
     }
 
     public int currentParallelism() {
+        if (owner == null) return currentParallelism.get();
         MachineControllerBlockEntity controller = resolvedOwner();
         return controller == null ? currentParallelism.get() : controller.currentParallelism();
     }
 
     public int maxParallelism() {
+        if (owner == null) return Math.max(1, maxParallelism.get());
         MachineControllerBlockEntity controller = resolvedOwner();
         return controller == null ? Math.max(1, maxParallelism.get()) : controller.getMaxParallelism();
     }
 
     public boolean hasFactoryController() {
+        if (owner == null) return factoryControllerPresent.get() != 0;
         MachineControllerBlockEntity controller = resolvedOwner();
         return controller == null ? factoryControllerPresent.get() != 0 : controller.getFactoryController() != null;
     }

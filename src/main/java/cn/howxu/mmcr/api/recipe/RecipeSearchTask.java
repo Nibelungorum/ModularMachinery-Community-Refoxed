@@ -60,14 +60,6 @@ public final class RecipeSearchTask {
                 return RecipeSearchResult.success(activeRecipe, context, machineId, structureVersion, conflictProne);
             }
 
-            LOG.info("[ParallelSearch] machine={} recipe={} recipeParallelized={} searchMaxParallelism={} rejected failure={} requirementFailure={}",
-                    machineId,
-                    recipe.id(),
-                    recipe.isParallelized(),
-                    maxParallelism,
-                    context.getLastFailureUnloc(),
-                    context.getLastRequirementFailure());
-
             float validity = validity(context.getLastFailureUnloc(), context.getLastRequirementFailure());
             if (validity > bestValidity) {
                 bestValidity = validity;

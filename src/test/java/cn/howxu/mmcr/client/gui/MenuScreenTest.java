@@ -71,6 +71,12 @@ class MenuScreenTest {
     }
 
     @Test
+    void controller_parallel_line_keeps_current_parallelism_for_factory_controllers() {
+        assertThat(MachineMenuScreen.controllerParallelLine(7, 524).getString())
+                .isEqualTo("gui.mmcr.controller.parallel");
+    }
+
+    @Test
     void controller_status_color_uses_single_three_state_value() {
         assertThat(MachineMenuScreen.controllerStatusColor(false, false)).isEqualTo(MachineMenuScreen.UNFORMED_STATUS_COLOR);
         assertThat(MachineMenuScreen.controllerStatusColor(true, true)).isEqualTo(MachineMenuScreen.FORMED_STATUS_COLOR);

@@ -24,6 +24,7 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
             @Override
             protected void onContentsChanged(int slot) {
                 setChanged();
+                notifyControllerOfInputChange();
             }
         };
     }
@@ -31,6 +32,13 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
     public IItemHandler getItemHandler(Direction side) { return handler; }
 
     public ItemStackHandler getItemStackHandler(Direction side) { return handler; }
+
+    private void notifyControllerOfInputChange() {
+        if (ioType() != IOType.INPUT || level == null || level.isClientSide() || linkedControllerPos() == null) return;
+        if (level.getBlockEntity(linkedControllerPos()) instanceof MachineControllerBlockEntity controller) {
+            controller.onRecipeInputsChanged();
+        }
+    }
 
     @Override
     public abstract IOType ioType();

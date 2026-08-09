@@ -380,16 +380,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     private void tickFactoryRecipes(FactorySchedulerBlockEntity factory) {
         int maxParallelism = getMaxParallelism();
-        LOG.info("[ParallelDispatch Ctrl#{}] pos={} machine={} machineParallelizable={} maxParallelism={} threadLimit={} activeThreads={} usedParallelism={} availableParallelism={}",
-                instanceId,
-                getBlockPos(),
-                foundMachine == null ? null : foundMachine.registryName(),
-                foundMachine != null && foundMachine.parallelizable(),
-                maxParallelism,
-                factory.threadLimit(),
-                factory.activeThreadCount(),
-                factory.usedParallelism(),
-                factory.availableParallelism());
         factory.tickScheduler(this, recipesForMachine(), structureVersion, maxParallelism, contextPool());
         setActiveState(factory.activeLaneCount() > 0);
         if (factory.activeLaneCount() > 0) lastFailureUnloc = null;
@@ -940,6 +930,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private int nextRecipeSearchDelay() {
         if (recipeSearchRetryCounter <= 0) return 1;
         return Math.min(100, 5 + recipeSearchRetryCounter * 5);
+    }
+
+    void onRecipeInputsChanged() {
+        recipeSearchRetryCounter = 0;
     }
 
     private boolean applySearchResult(RecipeSearchResult result, int candidateCount) {
