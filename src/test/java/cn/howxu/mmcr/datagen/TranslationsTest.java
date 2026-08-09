@@ -53,12 +53,12 @@ class TranslationsTest {
         assertEquals("Parallel Slots", Translations.ALL.get("en_us").get("jade.mmcr.machine_controller.parallel_slots"));
         assertEquals("Multithreading", Translations.ALL.get("en_us").get("jade.mmcr.machine_controller.threads"));
         assertEquals("Parallel Slot Count: %s", Translations.ALL.get("en_us").get("gui.mmcr.controller.parallel_slots"));
-        assertEquals("Current Threads: %s", Translations.ALL.get("en_us").get("gui.mmcr.controller.threads"));
+        assertEquals("Threads: %s", Translations.ALL.get("en_us").get("gui.mmcr.controller.threads"));
         assertEquals("Parallel: %s / %s", Translations.ALL.get("en_us").get("gui.mmcr.controller.parallel"));
         assertEquals("并行仓数量", Translations.ALL.get("zh_cn").get("jade.mmcr.machine_controller.parallel_slots"));
         assertEquals("多线程", Translations.ALL.get("zh_cn").get("jade.mmcr.machine_controller.threads"));
         assertEquals("并行仓数量: %s", Translations.ALL.get("zh_cn").get("gui.mmcr.controller.parallel_slots"));
-        assertEquals("当前线程数: %s", Translations.ALL.get("zh_cn").get("gui.mmcr.controller.threads"));
+        assertEquals("线程数: %s", Translations.ALL.get("zh_cn").get("gui.mmcr.controller.threads"));
         assertEquals("并行数: %s / %s", Translations.ALL.get("zh_cn").get("gui.mmcr.controller.parallel"));
     }
 
