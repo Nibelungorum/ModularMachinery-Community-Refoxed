@@ -72,7 +72,7 @@ class MenuScreenTest {
 
     @Test
     void controller_parallel_line_keeps_current_parallelism_for_factory_controllers() {
-        assertThat(MachineMenuScreen.controllerParallelLine(7, 524).getString())
+        assertThat(MachineMenuScreen.controllerParallelLine(7, 524, true).getString())
                 .isEqualTo("gui.mmcr.controller.parallel");
     }
 
