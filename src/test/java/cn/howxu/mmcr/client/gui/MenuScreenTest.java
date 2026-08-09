@@ -76,19 +76,6 @@ class MenuScreenTest {
     void controller_detail_lines_use_parallel_and_parallel_slot_labels() {
         assertThat(MachineMenuScreen.parallelLine(3, 16).getString()).isEqualTo("gui.mmcr.controller.parallel");
         assertThat(MachineMenuScreen.parallelSlotLine(1).getString()).isEqualTo("gui.mmcr.controller.parallel_slots");
-        assertThat(MachineMenuScreen.factoryThreadLine(3).getString()).isEqualTo("gui.mmcr.controller.threads");
-    }
-
-    @Test
-    void controller_work_line_uses_thread_count_when_a_factory_controller_is_present() {
-        assertThat(MachineMenuScreen.controllerWorkLine(7, 524, true, 3).getString())
-                .isEqualTo("gui.mmcr.controller.threads");
-    }
-
-    @Test
-    void controller_work_line_uses_parallelism_without_a_factory_controller() {
-        assertThat(MachineMenuScreen.controllerWorkLine(7, 524, false, 0).getString())
-                .isEqualTo("gui.mmcr.controller.parallel");
     }
 
     @Test

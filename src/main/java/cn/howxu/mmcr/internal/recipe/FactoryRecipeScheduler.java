@@ -40,6 +40,7 @@ public final class FactoryRecipeScheduler {
         this.threadLimit = Math.max(1, threadLimit);
         this.parallelLimit = this.threadLimit;
         this.contextPool = contextPool;
+        ensureBaseThread(null, contextPool);
     }
 
     public boolean startLane(Lane lane) {
@@ -76,10 +77,11 @@ public final class FactoryRecipeScheduler {
         lanes.clear();
         for (FactoryRecipeThread thread : threads) thread.invalidate();
         threads.clear();
+        ensureBaseThread(null, contextPool);
     }
 
     public int activeLaneCount() {
-        return lanes.size() + threads.size();
+        return lanes.size() + (int) threads.stream().filter(thread -> !thread.isBaseThread()).count();
     }
 
     public int threadLimit() {
@@ -103,7 +105,7 @@ public final class FactoryRecipeScheduler {
     }
 
     public int activeThreadCount() {
-        return threads.size();
+        return (int) threads.stream().filter(thread -> !thread.isIdle()).count();
     }
 
     public int usedParallelism() {
@@ -116,6 +118,25 @@ public final class FactoryRecipeScheduler {
 
     public List<FactoryRecipeThread> allThreads() {
         return List.copyOf(threads);
+    }
+
+    public void ensureBaseThread(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
+        if (!threads.isEmpty() && threads.getFirst().isBaseThread()) return;
+        threads.removeIf(FactoryRecipeThread::isBaseThread);
+        threads.addFirst(FactoryRecipeThread.base(controller, contextPool == null ? this.contextPool : contextPool));
+    }
+
+    public List<ThreadSnapshot> threadSnapshots() {
+        List<ThreadSnapshot> snapshots = new ArrayList<>(threads.size());
+        for (int index = 0; index < threads.size(); index++) {
+            FactoryRecipeThread thread = threads.get(index);
+            var active = thread.getActiveRecipe();
+            snapshots.add(new ThreadSnapshot(index, thread.isBaseThread(), thread.isCoreThread(), active != null,
+                    active == null || active.getRecipe() == null ? "" : active.getRecipe().id().toString(),
+                    active == null ? 0 : active.getTick(), active == null ? 0 : active.getTotalTick(),
+                    active == null ? 1 : active.getParallelism()));
+        }
+        return List.copyOf(snapshots);
     }
 
     public List<MachineRecipe> availableCandidates(List<MachineRecipe> candidates) {
@@ -145,6 +166,7 @@ public final class FactoryRecipeScheduler {
 
     public void syncCoreThreads(MachineControllerBlockEntity controller, Machine machine, List<MachineRecipe> candidates,
                                 RecipeCraftingContextPool contextPool) {
+        ensureBaseThread(controller, contextPool);
         if (machine == null) return;
         threads.removeIf(FactoryRecipeThread::isCoreThread);
         Map<Identifier, MachineRecipe> byId = new LinkedHashMap<>();
@@ -161,6 +183,7 @@ public final class FactoryRecipeScheduler {
 
     public void tickThreads(MachineControllerBlockEntity controller, List<MachineRecipe> candidates,
                             long structureVersion, int parallelLimit, RecipeCraftingContextPool contextPool) {
+        ensureBaseThread(controller, contextPool);
         this.parallelLimit = Math.max(1, parallelLimit);
         for (FactoryRecipeThread thread : List.copyOf(threads)) {
             thread.bindController(controller);
@@ -180,6 +203,7 @@ public final class FactoryRecipeScheduler {
     }
 
     public void addThreadForTesting(FactoryRecipeThread thread) {
+        ensureBaseThread(null, contextPool);
         if (thread != null && !threads.contains(thread)) threads.add(thread);
     }
 
@@ -195,6 +219,7 @@ public final class FactoryRecipeScheduler {
             threads.add(FactoryRecipeThread.load(input.childOrEmpty("thread_" + i), controller,
                     contextPool == null ? this.contextPool : contextPool));
         }
+        ensureBaseThread(controller, contextPool);
     }
 
     public static RecipeSnapshot captureSnapshot(Identifier recipeId,
@@ -243,6 +268,13 @@ public final class FactoryRecipeScheduler {
             type = type == null ? "unknown" : type;
             relativePos = relativePos == null ? BlockPos.ZERO : relativePos.immutable();
             tags = List.copyOf(tags == null ? List.of() : tags);
+        }
+    }
+
+    public record ThreadSnapshot(int index, boolean baseThread, boolean coreThread, boolean active,
+                                 String recipeId, int tick, int totalTick, int parallelism) {
+        public static ThreadSnapshot idleBase() {
+            return new ThreadSnapshot(0, true, false, false, "", 0, 0, 1);
         }
     }
 }

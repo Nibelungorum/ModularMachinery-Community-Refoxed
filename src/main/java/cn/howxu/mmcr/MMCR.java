@@ -15,6 +15,7 @@ import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.network.PktMachineAppearancePayload;
 import cn.howxu.mmcr.internal.network.PktControllerSpecsPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockDetectorPickPayload;
+import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModDataComponents;
@@ -91,6 +92,10 @@ public class MMCR {
                     PktMachineStatePayload.TYPE,
                     PktMachineStatePayload.STREAM_CODEC,
                     PktMachineStatePayload::handle)
+                    .playToClient(
+                            PktFactoryControllerStatePayload.TYPE,
+                            PktFactoryControllerStatePayload.STREAM_CODEC,
+                            PktFactoryControllerStatePayload::handle)
                     .playToClient(
                             PktControllerSpecsPayload.TYPE,
                             PktControllerSpecsPayload.STREAM_CODEC,

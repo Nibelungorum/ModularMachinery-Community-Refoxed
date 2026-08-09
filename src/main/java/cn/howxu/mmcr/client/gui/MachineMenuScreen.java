@@ -338,7 +338,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
                 controllerStatusColor(menu.isFormed(), active));
         scaledY += font.lineHeight;
 
-        if (active && !menu.hasFactoryController()) {
+        if (active) {
             int percent = progressPercent(menu.activeRecipeTick(), menu.activeRecipeTotalTick());
             Component progressLine = Component.translatable("gui.mmcr.controller.progress", percent + "%" + progressDots(percent));
             scaledY = renderScaledWrappedLine(g, progressLine, scaledX, scaledY, scaledWidth, PROGRESS_STATUS_COLOR);
@@ -358,12 +358,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
                 scaledY = renderScaledWrappedLine(g, parallelSlotLine(parallelSlots),
                         scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
             }
-            Component workLine = controllerWorkLine(
-                    menu.currentParallelism(),
-                    menu.maxParallelism(),
-                    menu.hasFactoryController(),
-                    menu.factoryActiveThreadCount(),
-                    menu.factoryThreadCount());
+            Component workLine = parallelLine(menu.currentParallelism(), menu.maxParallelism());
             scaledY = renderScaledWrappedLine(g, workLine,
                     scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
         }

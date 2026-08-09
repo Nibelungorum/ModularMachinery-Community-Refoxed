@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.block;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
+import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
@@ -26,6 +27,9 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import org.jetbrains.annotations.Nullable;
 import net.minecraft.world.phys.BlockHitResult;
 
 public class MachineControllerBlock extends Block implements EntityBlock {
@@ -123,9 +127,18 @@ public class MachineControllerBlock extends Block implements EntityBlock {
     @Override
     public MenuProvider getMenuProvider(BlockState state, Level level, BlockPos pos) {
         return new SimpleMenuProvider(
-                (containerId, playerInv, player) -> new MachineControllerMenu(containerId, playerInv,
+                (containerId, playerInv, player) -> createMenu(containerId, playerInv, player,
                         level.getBlockEntity(pos) instanceof MachineControllerBlockEntity mc ? mc : null),
                 titleFor(machineId));
+    }
+
+    static AbstractContainerMenu createMenu(int containerId, net.minecraft.world.entity.player.Inventory playerInventory,
+                                            Player player, @Nullable MachineControllerBlockEntity controller) {
+        if (controller != null && controller.hasFactoryController()) {
+            return new FactoryControllerMenu(containerId, playerInventory, controller,
+                    player instanceof ServerPlayer serverPlayer ? serverPlayer : null);
+        }
+        return new MachineControllerMenu(containerId, playerInventory, controller);
     }
 
     static Component titleFor(Identifier machineId) {

@@ -6,6 +6,7 @@ import cn.howxu.mmcr.internal.menu.FactorySchedulerMenu;
 import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
+import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
@@ -31,6 +32,9 @@ public final class ModUIs {
 
     public static final DeferredHolder<MenuType<?>, MenuType<MachineControllerMenu>> MACHINE_CONTROLLER =
             REGISTER.register("machine_controller", () -> new MenuType<>((IContainerFactory<MachineControllerMenu>) MachineControllerMenu::clientOpen, FeatureFlags.VANILLA_SET));
+
+    public static final DeferredHolder<MenuType<?>, MenuType<FactoryControllerMenu>> FACTORY_CONTROLLER =
+            REGISTER.register("factory_controller_multiblock", () -> new MenuType<>((IContainerFactory<FactoryControllerMenu>) FactoryControllerMenu::clientOpen, FeatureFlags.VANILLA_SET));
 
     public static final DeferredHolder<MenuType<?>, MenuType<FactorySchedulerMenu>> FACTORY_SCHEDULER =
             REGISTER.register("factory_controller", () -> new MenuType<>((IContainerFactory<FactorySchedulerMenu>) FactorySchedulerMenu::clientOpen, FeatureFlags.VANILLA_SET));

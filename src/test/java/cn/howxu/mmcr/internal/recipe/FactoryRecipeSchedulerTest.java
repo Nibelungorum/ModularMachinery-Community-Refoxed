@@ -160,6 +160,17 @@ class FactoryRecipeSchedulerTest {
     }
 
     @Test
+    void scheduler_always_exposes_non_expiring_base_thread_at_index_zero() {
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1);
+
+        for (int i = 0; i <= FactoryRecipeThread.IDLE_TIMEOUT_TICKS; i++) {
+            scheduler.tickThreads(null, List.of(), 1L, 1, new RecipeCraftingContextPool());
+        }
+
+        assertThat(scheduler.threadSnapshots()).containsExactly(FactoryRecipeScheduler.ThreadSnapshot.idleBase());
+    }
+
+    @Test
     void parallel_limit_does_not_cap_thread_count() {
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(4);
         FactoryRecipeThread first = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());
@@ -187,7 +198,7 @@ class FactoryRecipeSchedulerTest {
         scheduler.setThreadLimit(1);
 
         assertThat(scheduler.threadLimit()).isEqualTo(1);
-        assertThat(scheduler.activeThreadCount()).isEqualTo(1);
+        assertThat(scheduler.activeThreadCount()).isZero();
     }
 
     private static ActiveMachineRecipe activeRecipeWithParallelism(int parallelism) {
