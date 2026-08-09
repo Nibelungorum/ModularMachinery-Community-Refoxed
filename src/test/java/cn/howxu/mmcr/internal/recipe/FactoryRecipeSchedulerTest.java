@@ -1,6 +1,11 @@
 package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
@@ -17,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -319,6 +325,47 @@ class FactoryRecipeSchedulerTest {
         scheduler.tickThreads(controller, List.of(fallback, cached), controller.getStructureVersion() + 1, 1, pool);
 
         assertThat(thread.getActiveRecipe().getRecipe()).isSameAs(fallback);
+    }
+
+    @Test
+    void core_thread_searches_only_its_declared_recipes() throws Exception {
+        MachineControllerBlockEntity controller = controller(MMCR.id("factory_core_filter_machine"));
+        MachineRecipe allowed = recipe("factory_core_allowed", 0);
+        MachineRecipe denied = recipe("factory_core_denied", 0);
+        FactoryRecipeThread thread = FactoryRecipeThread.core(controller, new RecipeCraftingContextPool(),
+                "allowed_only", Set.of(allowed));
+
+        assertThat(thread.candidatesFor(List.of(denied, allowed))).containsExactly(allowed);
+        assertThat(thread.searchAndStartRecipe(List.of(denied, allowed), 1, controller.getStructureVersion())).isTrue();
+        assertThat(thread.getActiveRecipe().getRecipe()).isSameAs(allowed);
+    }
+
+    @Test
+    void core_thread_reconciliation_retains_named_threads_and_updates_their_recipe_sets() throws Exception {
+        MachineControllerBlockEntity controller = controller(MMCR.id("factory_core_sync_machine"));
+        MachineRecipe first = recipe("factory_core_sync_first", 0);
+        MachineRecipe second = recipe("factory_core_sync_second", 0);
+        var machineId = MMCR.id("factory_core_sync_machine");
+        DynamicMachine machine = new DynamicMachine(machineId, "Factory Core Sync",
+                new BlockArray(java.util.Map.of()), MachineControllerSpec.defaultsFor(machineId),
+                MachineAppearanceSpec.defaults(), PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), java.util.Map.of(),
+                1, false, true, 3, List.of(new FactoryThreadSpec("core", List.of(first.id()))));
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(3, new RecipeCraftingContextPool());
+
+        scheduler.syncCoreThreads(controller, machine, List.of(first, second), new RecipeCraftingContextPool());
+        FactoryRecipeThread original = scheduler.allThreads().stream()
+                .filter(FactoryRecipeThread::isCoreThread)
+                .findFirst().orElseThrow();
+
+        DynamicMachine updatedMachine = new DynamicMachine(machineId, "Factory Core Sync",
+                new BlockArray(java.util.Map.of()), MachineControllerSpec.defaultsFor(machineId),
+                MachineAppearanceSpec.defaults(), PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), java.util.Map.of(),
+                1, false, true, 3, List.of(new FactoryThreadSpec("core", List.of(second.id()))));
+        scheduler.syncCoreThreads(controller, updatedMachine, List.of(first, second), new RecipeCraftingContextPool());
+
+        assertThat(scheduler.allThreads()).contains(original);
+        assertThat(original.recipeSet()).containsExactly(second);
+        assertThat(scheduler.allThreads()).filteredOn(FactoryRecipeThread::isCoreThread).hasSize(1);
     }
 
     private static ActiveMachineRecipe activeRecipeWithParallelism(int parallelism) {

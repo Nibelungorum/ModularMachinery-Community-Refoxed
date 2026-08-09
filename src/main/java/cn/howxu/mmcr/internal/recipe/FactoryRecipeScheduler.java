@@ -168,20 +168,44 @@ public final class FactoryRecipeScheduler {
     }
 
     public void syncCoreThreads(MachineControllerBlockEntity controller, Machine machine, List<MachineRecipe> candidates,
-                                RecipeCraftingContextPool contextPool) {
+                                 RecipeCraftingContextPool contextPool) {
         ensureBaseThread(controller, contextPool);
-        if (machine == null) return;
-        threads.removeIf(FactoryRecipeThread::isCoreThread);
         Map<Identifier, MachineRecipe> byId = new LinkedHashMap<>();
-        for (MachineRecipe recipe : candidates == null ? List.<MachineRecipe>of() : candidates) byId.putIfAbsent(recipe.id(), recipe);
-        for (FactoryThreadSpec spec : machine.factoryThreads()) {
-            Set<MachineRecipe> recipes = new LinkedHashSet<>();
-            for (Identifier id : spec.recipeIds()) {
-                MachineRecipe recipe = byId.get(id);
-                if (recipe != null) recipes.add(recipe);
-            }
-            threads.add(FactoryRecipeThread.core(controller, contextPool == null ? this.contextPool : contextPool, spec.name(), recipes));
+        for (MachineRecipe recipe : candidates == null ? List.<MachineRecipe>of() : candidates) {
+            byId.putIfAbsent(recipe.id(), recipe);
         }
+
+        Map<String, FactoryRecipeThread> existingCoreThreads = new LinkedHashMap<>();
+        List<FactoryRecipeThread> dynamicThreads = new ArrayList<>();
+        for (FactoryRecipeThread thread : threads) {
+            if (thread.isBaseThread()) continue;
+            if (thread.isCoreThread()) existingCoreThreads.putIfAbsent(thread.threadName(), thread);
+            else dynamicThreads.add(thread);
+        }
+
+        List<FactoryRecipeThread> reconciled = new ArrayList<>();
+        reconciled.add(threads.getFirst());
+        if (machine != null) {
+            for (FactoryThreadSpec spec : machine.factoryThreads()) {
+                Set<MachineRecipe> recipes = new LinkedHashSet<>();
+                for (Identifier id : spec.recipeIds()) {
+                    MachineRecipe recipe = byId.get(id);
+                    if (recipe != null) recipes.add(recipe);
+                }
+                FactoryRecipeThread thread = existingCoreThreads.remove(spec.name());
+                if (thread == null) {
+                    thread = FactoryRecipeThread.core(controller, contextPool == null ? this.contextPool : contextPool, spec.name(), recipes);
+                } else {
+                    thread.bindController(controller);
+                    thread.replaceRecipeSet(recipes);
+                }
+                reconciled.add(thread);
+            }
+        }
+        for (FactoryRecipeThread removed : existingCoreThreads.values()) removed.invalidate();
+        reconciled.addAll(dynamicThreads);
+        threads.clear();
+        threads.addAll(reconciled);
     }
 
     public void tickThreads(MachineControllerBlockEntity controller, List<MachineRecipe> candidates,

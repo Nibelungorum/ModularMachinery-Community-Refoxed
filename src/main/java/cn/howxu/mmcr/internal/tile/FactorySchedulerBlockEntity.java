@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
+import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import cn.howxu.mmcr.internal.network.FactoryControllerSnapshot;
 import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
@@ -134,6 +135,12 @@ public class FactorySchedulerBlockEntity extends BlockEntity {
 
     public void ensureBaseThreadFor(MachineControllerBlockEntity controller) {
         scheduler.ensureBaseThread(controller, null);
+    }
+
+    public void syncCoreThreads(MachineControllerBlockEntity controller, Machine machine,
+                                List<MachineRecipe> candidates, RecipeCraftingContextPool contextPool) {
+        scheduler.syncCoreThreads(controller, machine, candidates, contextPool);
+        lastSyncedSnapshot = null;
     }
 
     public List<FactoryRecipeScheduler.ThreadSnapshot> threadSnapshots(MachineControllerBlockEntity controller) {

@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.BlockRotator;
 import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
@@ -291,6 +292,41 @@ class MachineControllerBlockEntityTest {
         addFactoryLane(factory);
         assertThat(startFactoryLane(factory)).isFalse();
         assertThat(factory.activeLaneCount()).isEqualTo(3);
+    }
+
+    @Test
+    void formed_factory_controller_syncs_declared_core_threads() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        Identifier machineId = MMCR.id("formed_factory_core_machine");
+        MachineRecipe coreRecipe = new MachineRecipe(MMCR.id("formed_factory_core_recipe"), machineId,
+                20, List.of(), List.of(), List.of(), 0, 0);
+        FactoryThreadSpec coreSpec = new FactoryThreadSpec("core", List.of(coreRecipe.id()));
+        DynamicMachine factoryMachine = new DynamicMachine(
+                machineId,
+                "Formed Factory Core",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("factory_controller").get()),
+                MachineControllerSpec.defaultsFor(machineId),
+                MachineAppearanceSpec.defaults(),
+                PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(),
+                List.of(),
+                Map.of(),
+                1,
+                false,
+                true,
+                2,
+                List.of(coreSpec));
+        MachineRegistry.register(factoryMachine);
+        RecipeRegistry.register(coreRecipe);
+        FactorySchedulerBlockEntity factory = factoryController(controllerPos.offset(1, 0, 0), 1);
+        MachineControllerBlockEntity controller = controllerForFactoryFormation(factoryMachine, controllerPos, factory);
+        assertThat(invokeTryFormMachine(controller, factoryMachine, Direction.SOUTH)).isTrue();
+
+        invokeTickFactoryRecipes(controller, factory);
+
+        assertThat(factory.threadSnapshots(controller)).filteredOn(snapshot -> snapshot.coreThread())
+                .singleElement()
+                .satisfies(snapshot -> assertThat(snapshot.recipeId()).isEqualTo(coreRecipe.id().toString()));
     }
 
     @Test
@@ -2180,6 +2216,13 @@ class MachineControllerBlockEntityTest {
         Method method = MachineControllerBlockEntity.class.getDeclaredMethod("tickActiveRecipe");
         method.setAccessible(true);
         method.invoke(controller);
+    }
+
+    private static void invokeTickFactoryRecipes(MachineControllerBlockEntity controller,
+                                                 FactorySchedulerBlockEntity factory) throws Exception {
+        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("tickFactoryRecipes", FactorySchedulerBlockEntity.class);
+        method.setAccessible(true);
+        method.invoke(controller, factory);
     }
 
     private static void invokeCollectFoundModifiers(

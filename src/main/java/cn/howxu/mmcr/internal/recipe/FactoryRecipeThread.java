@@ -55,6 +55,19 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     public Set<MachineRecipe> recipeSet() { return Set.copyOf(recipeSet); }
+    public List<MachineRecipe> candidatesFor(List<MachineRecipe> candidates) {
+        if (!coreThread || candidates == null || candidates.isEmpty()) {
+            return candidates == null ? List.of() : candidates;
+        }
+        return candidates.stream().filter(recipeSet::contains).toList();
+    }
+
+    public void replaceRecipeSet(Set<MachineRecipe> recipes) {
+        if (!coreThread) return;
+        recipeSet.clear();
+        recipeSet.addAll(recipes == null ? Set.of() : recipes);
+    }
+
     public boolean isCoreThread() { return coreThread; }
     public boolean isBaseThread() { return baseThread; }
     public String threadName() { return threadName; }
@@ -66,7 +79,8 @@ public final class FactoryRecipeThread extends RecipeThread {
 
     @Override
     public boolean searchAndStartRecipe(List<MachineRecipe> candidates, int availableParallelism, long structureVersion) {
-        if (!super.searchAndStartRecipe(candidates, availableParallelism, structureVersion)) return false;
+        List<MachineRecipe> threadCandidates = candidatesFor(candidates);
+        if (!super.searchAndStartRecipe(threadCandidates, availableParallelism, structureVersion)) return false;
         rememberLastRecipe(activeRecipe.getRecipe(), structureVersion, controller.getModifierSnapshotVersion());
         return true;
     }
@@ -76,7 +90,7 @@ public final class FactoryRecipeThread extends RecipeThread {
         if (lastRecipe == null || controller == null || availableParallelism <= 0
                 || lastRecipeStructureVersion != structureVersion
                 || lastRecipeModifierSnapshotVersion != modifierSnapshotVersion
-                || !candidates.contains(lastRecipe)) return false;
+                || !candidatesFor(candidates).contains(lastRecipe)) return false;
         ActiveMachineRecipe next = new ActiveMachineRecipe(lastRecipe, availableParallelism);
         var nextContext = contextPool.borrow(next, controller);
         try {
