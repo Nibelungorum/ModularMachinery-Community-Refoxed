@@ -171,6 +171,14 @@ class FactoryRecipeSchedulerTest {
     }
 
     @Test
+    void active_thread_count_excludes_idle_cached_threads() {
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2);
+        scheduler.addThreadForTesting(FactoryRecipeThread.simple(null, new RecipeCraftingContextPool()));
+
+        assertThat(scheduler.activeThreadCount()).isZero();
+    }
+
+    @Test
     void parallel_limit_does_not_cap_thread_count() {
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(4);
         FactoryRecipeThread first = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());

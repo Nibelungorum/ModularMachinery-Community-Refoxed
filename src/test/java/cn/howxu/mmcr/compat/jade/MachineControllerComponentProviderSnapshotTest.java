@@ -100,6 +100,7 @@ class MachineControllerComponentProviderSnapshotTest {
         assertThat(snapshot.shouldShowFactoryLanes()).isTrue();
         assertThat(snapshot.factoryLanes()).isEqualTo(2);
         assertThat(snapshot.factoryThreadLimit()).isEqualTo(3);
+        assertThat(snapshot.shouldShowParallelism()).isFalse();
     }
 
     @Test
@@ -126,6 +127,20 @@ class MachineControllerComponentProviderSnapshotTest {
         assertThat(snapshot.factoryPresent()).isTrue();
         assertThat(snapshot.factoryLanes()).isZero();
         assertThat(snapshot.shouldShowFactoryLanes()).isTrue();
+    }
+
+    @Test
+    void factory_snapshot_hides_parallelism_when_thread_controller_exists() {
+        CompoundTag tag = new CompoundTag();
+        tag.putBoolean("factoryPresent", true);
+        tag.putInt("parallelism", 7);
+        tag.putInt("maxParallelism", 524);
+
+        MachineControllerComponentProvider.Snapshot snapshot = MachineControllerComponentProvider.Snapshot.from(tag);
+
+        assertThat(MachineControllerComponentProvider.lineKeys(snapshot))
+                .doesNotContain("parallelism")
+                .contains("threads");
     }
 
     @Test

@@ -395,8 +395,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private void tickFactoryRecipes(FactorySchedulerBlockEntity factory) {
         int maxParallelism = getMaxParallelism();
         factory.tickScheduler(this, recipesForMachine(), structureVersion, maxParallelism, contextPool());
-        setActiveState(factory.activeLaneCount() > 0);
-        if (factory.activeLaneCount() > 0) lastFailureUnloc = null;
+        setActiveState(factory.activeThreadCount() > 0);
+        if (factory.activeThreadCount() > 0) lastFailureUnloc = null;
     }
 
     @Override

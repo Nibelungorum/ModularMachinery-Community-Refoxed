@@ -28,6 +28,13 @@ class FactoryControllerScreenTest {
         assertThat(FactoryControllerScreen.progressWidth(100, 100)).isEqualTo(FactoryControllerScreen.THREAD_ROW_WIDTH);
     }
 
+    @Test
+    void thread_elements_use_the_full_atlas_and_a_small_vertical_offset() {
+        assertThat(FactoryControllerScreen.elementTextureWidth()).isEqualTo(256);
+        assertThat(FactoryControllerScreen.elementTextureHeight()).isEqualTo(256);
+        assertThat(FactoryControllerScreen.threadElementY(20)).isEqualTo(22);
+    }
+
     private static FactoryRecipeScheduler.ThreadSnapshot thread(int index) {
         return new FactoryRecipeScheduler.ThreadSnapshot(index, false, false, false, "", 0, 0, 1);
     }

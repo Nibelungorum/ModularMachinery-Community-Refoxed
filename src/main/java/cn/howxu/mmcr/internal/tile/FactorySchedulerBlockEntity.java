@@ -144,7 +144,9 @@ public class FactorySchedulerBlockEntity extends BlockEntity {
     public FactoryControllerSnapshot snapshot(MachineControllerBlockEntity controller) {
         ensureBaseThreadFor(controller);
         return new FactoryControllerSnapshot(controller.getBlockPos(), controller.isFormed(), controller.isRedstonePaused(),
-                activeThreadCount(), threadLimit(), usedParallelism(), controller.getMaxParallelism(), scheduler.threadSnapshots());
+                activeThreadCount(), threadLimit(), usedParallelism(), controller.getMaxParallelism(),
+                controller.getMachine() == null ? "" : controller.getMachine().localizedName(),
+                controller.parallelControllerCount(), scheduler.threadSnapshots());
     }
 
     public void sendSnapshot(ServerPlayer player, MachineControllerBlockEntity controller) {

@@ -21,6 +21,8 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public final class FactoryControllerMenu extends AbstractMachineMenu {
+    private static final int FACTORY_PLAYER_INVENTORY_X = 112;
+
     private final BlockPos controllerPos;
     private final ControllerMenuState state;
     private FactoryControllerSnapshot snapshot;
@@ -30,7 +32,7 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
         super(ModUIs.FACTORY_CONTROLLER.get(), containerId);
         controllerPos = owner == null ? BlockPos.ZERO : owner.getBlockPos();
         state = new ControllerMenuState(this, owner);
-        ControllerMenuState.addControllerPlayerSlots(this, inventory);
+        ControllerMenuState.addControllerPlayerSlots(this, inventory, FACTORY_PLAYER_INVENTORY_X);
         snapshot = FactoryControllerSnapshot.empty(controllerPos);
         if (owner != null) {
             FactorySchedulerBlockEntity factory = owner.getFactoryController();
@@ -49,7 +51,7 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
         super(ModUIs.FACTORY_CONTROLLER.get(), containerId);
         this.controllerPos = controllerPos;
         state = new ControllerMenuState(this, null);
-        ControllerMenuState.addControllerPlayerSlots(this, inventory);
+        ControllerMenuState.addControllerPlayerSlots(this, inventory, FACTORY_PLAYER_INVENTORY_X);
         snapshot = FactoryControllerSnapshot.empty(controllerPos);
     }
 
@@ -68,6 +70,8 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
     public int threadCount() { return snapshot.threadCount(); }
     public int currentParallelism() { return snapshot.currentParallelism(); }
     public int maxParallelism() { return snapshot.maxParallelism(); }
+    public String machineName() { return snapshot.machineName(); }
+    public int parallelSlots() { return snapshot.parallelSlots(); }
     public List<FactoryRecipeScheduler.ThreadSnapshot> threads() { return snapshot.threads(); }
 
     public void applySnapshot(FactoryControllerSnapshot snapshot) {

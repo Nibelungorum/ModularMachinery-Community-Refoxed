@@ -31,6 +31,24 @@ class FactoryControllerMenuTest {
         assertThat(menu.selectedThread().index()).isZero();
     }
 
+    @Test
+    void empty_snapshot_keeps_thread_zero_visible() {
+        FactoryControllerSnapshot snapshot = FactoryControllerSnapshot.empty(BlockPos.ZERO);
+
+        assertThat(snapshot.threadCount()).isEqualTo(1);
+        assertThat(snapshot.threads()).containsExactly(FactoryRecipeScheduler.ThreadSnapshot.idleBase());
+    }
+
+    @Test
+    void player_inventory_is_shifted_right_of_factory_thread_list() {
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null), bufferAt(BlockPos.ZERO));
+
+        assertThat(menu.slots.getFirst().x).isEqualTo(112);
+        assertThat(menu.slots.getFirst().y).isEqualTo(131);
+        assertThat(menu.slots.get(27).x).isEqualTo(112);
+        assertThat(menu.slots.get(27).y).isEqualTo(189);
+    }
+
     private static FactoryControllerSnapshot snapshot(int... indexes) {
         return new FactoryControllerSnapshot(BlockPos.ZERO, true, false, 0, indexes.length, 0, 1,
                 java.util.Arrays.stream(indexes).mapToObj(index -> new FactoryRecipeScheduler.ThreadSnapshot(

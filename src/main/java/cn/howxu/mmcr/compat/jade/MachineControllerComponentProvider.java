@@ -141,7 +141,7 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
         }
 
         boolean shouldShowParallelism() {
-            return maxParallelism > 1 || parallelism > 1;
+            return !factoryPresent && (maxParallelism > 1 || parallelism > 1);
         }
 
         boolean hasFactoryController() {

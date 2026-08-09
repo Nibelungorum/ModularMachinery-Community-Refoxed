@@ -26,6 +26,9 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     public static final int THREAD_ROW_WIDTH = 86;
     static final int THREAD_ROW_HEIGHT = 32;
     static final int VISIBLE_THREADS = 6;
+    private static final int ELEMENT_TEXTURE_WIDTH = 256;
+    private static final int ELEMENT_TEXTURE_HEIGHT = 256;
+    private static final int THREAD_ELEMENT_Y_OFFSET = 2;
     private static final Identifier BACKGROUND = MMCR.id("textures/gui/guifactory.png");
     private static final Identifier ELEMENTS = MMCR.id("textures/gui/guifactoryelements.png");
     private int scrollOffset;
@@ -55,18 +58,28 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
         return Math.min(THREAD_ROW_WIDTH, tick * THREAD_ROW_WIDTH / totalTick);
     }
 
+    static int elementTextureWidth() { return ELEMENT_TEXTURE_WIDTH; }
+    static int elementTextureHeight() { return ELEMENT_TEXTURE_HEIGHT; }
+    static int threadElementY(int y) { return y + THREAD_ELEMENT_Y_OFFSET; }
+
+    @Override
+    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
+        super.extractBackground(graphics, mouseX, mouseY, partialTicks);
+        graphics.blit(RenderPipelines.GUI_TEXTURED, BACKGROUND, leftPos, topPos, 0, 0,
+                IMAGE_WIDTH, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_HEIGHT);
+    }
+
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
         scrollOffset = Math.min(scrollOffset, Math.max(0, menu.threads().size() - VISIBLE_THREADS));
-        graphics.blit(RenderPipelines.GUI_TEXTURED, BACKGROUND, leftPos, topPos, 0, 0, IMAGE_WIDTH, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_HEIGHT);
         for (int row = 0; row < VISIBLE_THREADS; row++) {
             int index = scrollOffset + row;
             if (index >= menu.threads().size()) break;
             FactoryRecipeScheduler.ThreadSnapshot thread = menu.threads().get(index);
             int y = topPos + THREAD_ROW_Y + row * THREAD_ROW_HEIGHT;
-            graphics.blit(RenderPipelines.GUI_TEXTURED, ELEMENTS, leftPos + THREAD_ROW_X, y, 0, 0,
-                    THREAD_ROW_WIDTH, THREAD_ROW_HEIGHT, THREAD_ROW_WIDTH, THREAD_ROW_HEIGHT);
+            graphics.blit(RenderPipelines.GUI_TEXTURED, ELEMENTS, leftPos + THREAD_ROW_X, threadElementY(y), 0, 0,
+                    THREAD_ROW_WIDTH, THREAD_ROW_HEIGHT, ELEMENT_TEXTURE_WIDTH, ELEMENT_TEXTURE_HEIGHT);
             int progress = progressWidth(thread.tick(), thread.totalTick());
             if (progress > 0) graphics.fill(leftPos + THREAD_ROW_X, y, leftPos + THREAD_ROW_X + progress, y + THREAD_ROW_HEIGHT, 0x6600AA55);
             graphics.text(font, Component.translatable("gui.mmcr.factory.thread", thread.index()), leftPos + THREAD_ROW_X + 3, y + 3, 0xFF222222, false);
@@ -75,14 +88,25 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
         FactoryRecipeScheduler.ThreadSnapshot selected = menu.selectedThread();
         int x = leftPos + 113;
         int y = topPos + 12;
-        graphics.text(font, Component.translatable("gui.mmcr.factory.selected_thread", selected.index()), x, y, 0xFFFFFFFF, true);
-        graphics.text(font, Component.translatable("gui.mmcr.factory.recipe", selected.recipeId().isEmpty() ? Component.translatable("gui.mmcr.factory.no_recipe") : Component.literal(truncate(selected.recipeId(), 22))), x, y + 14, 0xFFFFFFFF, true);
-        graphics.text(font, Component.translatable("gui.mmcr.factory.thread_progress", selected.tick(), selected.totalTick(), progressWidth(selected.tick(), selected.totalTick()) * 100 / THREAD_ROW_WIDTH + "%"), x, y + 28, 0xFFFFFFFF, true);
-        graphics.text(font, Component.translatable("gui.mmcr.factory.thread_parallelism", selected.parallelism()), x, y + 42, 0xFFFFFFFF, true);
-        graphics.text(font, Component.translatable("gui.mmcr.factory.formed", menu.isFormed()), x, y + 56, 0xFFFFFFFF, true);
-        graphics.text(font, Component.translatable("gui.mmcr.factory.redstone_paused", menu.isRedstonePaused()), x, y + 70, 0xFFFFFFFF, true);
-        graphics.text(font, Component.translatable("gui.mmcr.factory.active_threads", menu.activeThreadCount(), menu.threadCount()), x, y + 84, 0xFFFFFFFF, true);
-        graphics.text(font, Component.translatable("gui.mmcr.factory.parallelism", menu.currentParallelism(), menu.maxParallelism()), x, y + 98, 0xFFFFFFFF, true);
+        String machineName = menu.machineName().isEmpty() ? title.getString() : menu.machineName();
+        graphics.text(font, Component.literal(machineName + " #" + selected.index()), x, y, 0xFFFFFFFF, true);
+        graphics.text(font, Component.translatable("gui.mmcr.controller.status_label"), x, y + 14, 0xFFFFFFFF, true);
+        graphics.text(font, Component.translatable(MachineMenuScreen.controllerStatusKey(menu.isFormed(), selected.active())),
+                x + font.width(Component.translatable("gui.mmcr.controller.status_label")) + 4, y + 14, 0xFFFFFFFF, true);
+        graphics.text(font, Component.translatable("gui.mmcr.controller.progress",
+                progressWidth(selected.tick(), selected.totalTick()) * 100 / THREAD_ROW_WIDTH + "%"), x, y + 28, 0xFFFFFFFF, true);
+        int lineY = y + 42;
+        if (menu.parallelSlots() > 0) {
+            graphics.text(font, MachineMenuScreen.parallelSlotLine(menu.parallelSlots()), x, lineY, 0xFFFFFFFF, true);
+            lineY += 14;
+        }
+        graphics.text(font, MachineMenuScreen.parallelLine(selected.parallelism(), menu.maxParallelism()), x, lineY, 0xFFFFFFFF, true);
+        lineY += 14;
+        if (menu.isRedstonePaused()) {
+            graphics.text(font, Component.translatable("gui.mmcr.controller.redstone_stopped"), x, lineY, 0xFFFFFFFF, true);
+            lineY += 14;
+        }
+        graphics.text(font, MachineMenuScreen.factoryThreadLine(menu.activeThreadCount(), menu.threadCount()), x, lineY, 0xFFFFFFFF, true);
     }
 
     @Override

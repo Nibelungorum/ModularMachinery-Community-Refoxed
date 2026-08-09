@@ -15,8 +15,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MenuScreenTest {
 
     @Test
-        assertThat(MachineMenuScreen.fluidBarOverlayTexture()).isEqualTo(MMCR.id("textures/gui/guitank.png"));
     void hatchBarAtlasCoordinatesMatchMmce() {
+        assertThat(MachineMenuScreen.fluidBarOverlayTexture()).isEqualTo(MMCR.id("textures/gui/guitank.png"));
         assertThat(MachineMenuScreen.fluidBarOverlaySourceX()).isEqualTo(176);
         assertThat(MachineMenuScreen.energyBarSourceX()).isEqualTo(196);
         assertThat(MachineMenuScreen.energyBarSourceY(0)).isEqualTo(61);
@@ -77,6 +77,19 @@ class MenuScreenTest {
     void controller_detail_lines_use_parallel_and_parallel_slot_labels() {
         assertThat(MachineMenuScreen.parallelLine(3, 16).getString()).isEqualTo("gui.mmcr.controller.parallel");
         assertThat(MachineMenuScreen.parallelSlotLine(1).getString()).isEqualTo("gui.mmcr.controller.parallel_slots");
+        assertThat(MachineMenuScreen.factoryThreadLine(0, 3).getString()).isEqualTo("gui.mmcr.controller.threads");
+    }
+
+    @Test
+    void controller_work_line_uses_thread_count_when_a_factory_controller_is_present() {
+        assertThat(MachineMenuScreen.controllerWorkLine(7, 524, true, 0, 3).getString())
+                .isEqualTo("gui.mmcr.controller.threads");
+    }
+
+    @Test
+    void controller_work_line_uses_parallelism_without_a_factory_controller() {
+        assertThat(MachineMenuScreen.controllerWorkLine(7, 524, false, 0, 0).getString())
+                .isEqualTo("gui.mmcr.controller.parallel");
     }
 
     @Test

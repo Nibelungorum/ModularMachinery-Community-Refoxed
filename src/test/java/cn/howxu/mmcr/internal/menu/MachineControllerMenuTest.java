@@ -98,6 +98,20 @@ class MachineControllerMenuTest {
     }
 
     @Test
+    void client_menu_updates_factory_thread_count_from_synced_data_slot() {
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory());
+
+        assertThat(menu.factoryThreadCount()).isZero();
+        menu.setData(10, 3);
+
+        assertThat(menu.factoryThreadCount()).isEqualTo(3);
+        assertThat(menu.factoryActiveThreadCount()).isZero();
+        menu.setData(11, 2);
+
+        assertThat(menu.factoryActiveThreadCount()).isEqualTo(2);
+    }
+
+    @Test
     void client_menu_uses_synced_parallel_data_when_the_client_controller_is_available() throws Exception {
         MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
         MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory());
