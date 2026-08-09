@@ -2,6 +2,8 @@ package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.recipe.ParallelTier;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.server.packs.PackType;
 import org.junit.jupiter.api.BeforeAll;
@@ -38,6 +40,17 @@ class RuntimeMachineResourcePackTest {
     }
 
     @Test
+    void resources_match_registered_model_definitions() {
+        var resources = RuntimeMachineResourcePack.resources();
+
+        assertResourcesMatchDefinition(resources, "blast_furnace_controller", ModBlocks.CONTROLLER.get());
+        assertResourcesMatchDefinition(resources, "item_input_bus", ModBlocks.BLOCKS.get("item_input_bus").get());
+        assertResourcesMatchDefinition(resources, ParallelTier.X16.idSuffix(),
+                ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get());
+        assertResourcesMatchDefinition(resources, "factory_controller", ModBlocks.BLOCKS.get("factory_controller").get());
+    }
+
+    @Test
     void get_resource_returns_dynamic_blockstate_json() throws Exception {
         try (var pack = new RuntimeMachineResourcePack(new net.minecraft.server.packs.PackLocationInfo(
                 "test", net.minecraft.network.chat.Component.literal("test"),
@@ -47,5 +60,18 @@ class RuntimeMachineResourcePackTest {
             assertThat(supplier).isNotNull();
             assertThat(new String(supplier.get().readAllBytes())).contains("mmcr:dynamic_controller_overlay");
         }
+    }
+
+    private static void assertResourcesMatchDefinition(java.util.Map<net.minecraft.resources.Identifier, String> resources,
+                                                       String blockName, net.minecraft.world.level.block.Block block) {
+        RuntimeBlockModelDefinition definition = RuntimeMachineModelRegistry.definition(block);
+
+        assertThat(resources).containsKeys(
+                MMCR.id("blockstates/" + blockName + ".json"),
+                MMCR.id("items/" + blockName + ".json"));
+        assertThat(resources.get(MMCR.id("blockstates/" + blockName + ".json")))
+                .isEqualTo(RuntimeMachineModelRegistry.blockStateJson(definition.blockStateDefinition()));
+        assertThat(resources.get(MMCR.id("items/" + blockName + ".json")))
+                .isEqualTo(RuntimeMachineModelRegistry.itemDefinitionJson());
     }
 }

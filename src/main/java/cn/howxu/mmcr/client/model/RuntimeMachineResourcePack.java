@@ -54,12 +54,11 @@ public final class RuntimeMachineResourcePack implements PackResources {
     }
 
     static Map<Identifier, String> resources() {
-        Map<String, net.minecraft.world.level.block.Block> blocks = RuntimeMachineModelRegistry.dynamicBlockEntries();
         Map<Identifier, String> resources = new java.util.LinkedHashMap<>();
-        blocks.forEach((name, block) -> {
-            RuntimeBlockModelDescriptor descriptor = RuntimeMachineModelRegistry.describe(name, block);
-            RuntimeMachineModelRegistry.RuntimeBlockStateDefinition definition = RuntimeMachineModelRegistry.dynamicBlockState(descriptor);
-            resources.put(MMCR.id("blockstates/" + name + ".json"), RuntimeMachineModelRegistry.blockStateJson(definition));
+        RuntimeMachineModelRegistry.definitions().forEach(definition -> {
+            String name = definition.blockName();
+            resources.put(MMCR.id("blockstates/" + name + ".json"),
+                    RuntimeMachineModelRegistry.blockStateJson(definition.blockStateDefinition()));
             resources.put(MMCR.id("items/" + name + ".json"), RuntimeMachineModelRegistry.itemDefinitionJson());
         });
         return Map.copyOf(resources);
