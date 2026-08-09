@@ -20,32 +20,39 @@ public final class FactoryRecipeThread extends RecipeThread {
     public static final int IDLE_TIMEOUT_TICKS = 200;
 
     private final boolean coreThread;
+    private final boolean baseThread;
     private final String threadName;
     private final Set<MachineRecipe> recipeSet = new LinkedHashSet<>();
     private int idleTicks;
 
     private FactoryRecipeThread(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool,
-                                boolean coreThread, String threadName) {
+                                 boolean coreThread, boolean baseThread, String threadName) {
         super(controller, contextPool);
         this.coreThread = coreThread;
+        this.baseThread = baseThread;
         this.threadName = threadName == null ? "" : threadName;
     }
 
     public static FactoryRecipeThread simple(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
-        return new FactoryRecipeThread(controller, contextPool, false, "");
+        return new FactoryRecipeThread(controller, contextPool, false, false, "");
+    }
+
+    public static FactoryRecipeThread base(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
+        return new FactoryRecipeThread(controller, contextPool, false, true, "");
     }
 
     public static FactoryRecipeThread core(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool,
                                            String threadName, Set<MachineRecipe> recipes) {
-        FactoryRecipeThread thread = new FactoryRecipeThread(controller, contextPool, true, threadName);
+        FactoryRecipeThread thread = new FactoryRecipeThread(controller, contextPool, true, false, threadName);
         thread.recipeSet.addAll(recipes == null ? Set.of() : recipes);
         return thread;
     }
 
     public Set<MachineRecipe> recipeSet() { return Set.copyOf(recipeSet); }
     public boolean isCoreThread() { return coreThread; }
+    public boolean isBaseThread() { return baseThread; }
     public String threadName() { return threadName; }
-    public boolean isTimedOut() { return !coreThread && isIdle() && idleTicks >= IDLE_TIMEOUT_TICKS; }
+    public boolean isTimedOut() { return !baseThread && !coreThread && isIdle() && idleTicks >= IDLE_TIMEOUT_TICKS; }
     public void tickIdle() { idleTicks = isIdle() ? idleTicks + 1 : 0; }
 
     @Override protected void onStarted() { idleTicks = 0; }
@@ -57,6 +64,7 @@ public final class FactoryRecipeThread extends RecipeThread {
 
     public void save(ValueOutput output) {
         output.putBoolean("core", coreThread);
+        output.putBoolean("base", baseThread);
         output.putString("name", threadName);
         output.putInt("idle_ticks", idleTicks);
         output.putBoolean("has_active", activeRecipe != null);
@@ -66,7 +74,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     public static FactoryRecipeThread load(ValueInput input, MachineControllerBlockEntity controller,
                                            RecipeCraftingContextPool contextPool) {
         FactoryRecipeThread thread = new FactoryRecipeThread(controller, contextPool,
-                input.getBooleanOr("core", false), input.getStringOr("name", ""));
+                input.getBooleanOr("core", false), input.getBooleanOr("base", false), input.getStringOr("name", ""));
         thread.idleTicks = input.getIntOr("idle_ticks", 0);
         if (input.getBooleanOr("has_active", false)) {
             thread.activeRecipe = ActiveMachineRecipe.from(input.childOrEmpty("active_recipe"));

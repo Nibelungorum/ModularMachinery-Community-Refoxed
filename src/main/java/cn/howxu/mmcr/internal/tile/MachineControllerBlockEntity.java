@@ -317,6 +317,11 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         return null;
     }
 
+    public boolean hasFactoryController() {
+        if (machine == null || !machine.hasFactory()) return false;
+        return components.stream().anyMatch(component -> component.getContainer() instanceof FactorySchedulerBlockEntity);
+    }
+
     public int effectiveFactoryThreadLimit() {
         if (machine == null || !machine.hasFactory()) return 1;
         int aggregatedThreads = factorySchedulerThreadCount();

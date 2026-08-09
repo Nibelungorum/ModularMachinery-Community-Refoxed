@@ -3,6 +3,9 @@ package cn.howxu.mmcr.internal.tile;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
+import cn.howxu.mmcr.internal.network.FactoryControllerSnapshot;
+import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
+import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModItems;
 import net.minecraft.core.BlockPos;
@@ -12,6 +15,10 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import org.jetbrains.annotations.Nullable;
 import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.ItemStackHandler;
 
@@ -40,6 +47,7 @@ public class FactorySchedulerBlockEntity extends BlockEntity {
     private int threadLimit = 1;
     private int threadLimitSyncTicks;
     private FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(threadLimit);
+    private @Nullable FactoryControllerSnapshot lastSyncedSnapshot;
 
     public FactorySchedulerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.BES.get("factory_controller").get(), pos, state);
@@ -96,11 +104,13 @@ public class FactorySchedulerBlockEntity extends BlockEntity {
         int before = scheduler.activeThreadCount();
         scheduler.tickThreads(controller, candidates, structureVersion, parallelLimit, contextPool);
         if (scheduler.activeThreadCount() != before) setChanged();
+        if (controller != null) syncOpenControllerMenus(controller);
     }
 
     public void setThreadLimit(int threadLimit) {
         this.threadLimit = Math.max(1, threadLimit);
         this.scheduler.setThreadLimit(this.threadLimit);
+        lastSyncedSnapshot = null;
         setChanged();
     }
 
@@ -119,6 +129,38 @@ public class FactorySchedulerBlockEntity extends BlockEntity {
 
     public void stopAll() {
         scheduler.stopAll();
+        lastSyncedSnapshot = null;
+    }
+
+    public void ensureBaseThreadFor(MachineControllerBlockEntity controller) {
+        scheduler.ensureBaseThread(controller, null);
+    }
+
+    public List<FactoryRecipeScheduler.ThreadSnapshot> threadSnapshots(MachineControllerBlockEntity controller) {
+        ensureBaseThreadFor(controller);
+        return scheduler.threadSnapshots();
+    }
+
+    public FactoryControllerSnapshot snapshot(MachineControllerBlockEntity controller) {
+        ensureBaseThreadFor(controller);
+        return new FactoryControllerSnapshot(controller.getBlockPos(), controller.isFormed(), controller.isRedstonePaused(),
+                activeThreadCount(), threadLimit(), usedParallelism(), controller.getMaxParallelism(), scheduler.threadSnapshots());
+    }
+
+    public void sendSnapshot(ServerPlayer player, MachineControllerBlockEntity controller) {
+        if (player != null) player.connection.send(new ClientboundCustomPayloadPacket(new PktFactoryControllerStatePayload(snapshot(controller))));
+    }
+
+    public void syncOpenControllerMenus(MachineControllerBlockEntity controller) {
+        if (!(controller.getLevel() instanceof ServerLevel serverLevel)) return;
+        FactoryControllerSnapshot next = snapshot(controller);
+        if (next.equals(lastSyncedSnapshot)) return;
+        lastSyncedSnapshot = next;
+        for (ServerPlayer player : serverLevel.players()) {
+            if (player.containerMenu instanceof FactoryControllerMenu menu && menu.controllerPos().equals(controller.getBlockPos())) {
+                player.connection.send(new ClientboundCustomPayloadPacket(new PktFactoryControllerStatePayload(next)));
+            }
+        }
     }
 
     public int threadCount() {
@@ -150,6 +192,7 @@ public class FactorySchedulerBlockEntity extends BlockEntity {
         threadLimitSyncTicks = 0;
         scheduler = new FactoryRecipeScheduler(threadLimit);
         scheduler.load(input.childOrEmpty("scheduler"), null, null);
+        lastSyncedSnapshot = null;
     }
 
     @Override

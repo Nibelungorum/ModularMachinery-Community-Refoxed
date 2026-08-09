@@ -4,6 +4,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.inventory.DataSlot;
 
 /**
  * 所有具体菜单类的基类,提供玩家物品栏布局的复用方法。
@@ -28,5 +29,13 @@ public abstract class AbstractMachineMenu extends AbstractContainerMenu {
         for (int col = 0; col < 9; col++) {
             addSlot(new Slot(playerInv, col, 8 + col * 18, 142 + yOffset));
         }
+    }
+
+    final DataSlot addControllerDataSlot(DataSlot slot) {
+        return addDataSlot(slot);
+    }
+
+    final void addControllerSlot(Slot slot) {
+        addSlot(slot);
     }
 }

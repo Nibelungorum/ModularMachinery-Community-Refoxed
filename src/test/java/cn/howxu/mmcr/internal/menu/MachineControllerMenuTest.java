@@ -89,23 +89,12 @@ class MachineControllerMenuTest {
         assertThat(menu.parallelControllerCount()).isZero();
         assertThat(menu.currentParallelism()).isZero();
         assertThat(menu.maxParallelism()).isEqualTo(1);
-        assertThat(menu.hasFactoryController()).isFalse();
 
         menu.setData(7, 7);
         menu.setData(8, 524);
 
         assertThat(menu.currentParallelism()).isEqualTo(7);
         assertThat(menu.maxParallelism()).isEqualTo(524);
-    }
-
-    @Test
-    void client_menu_updates_factory_thread_count_from_synced_data_slot() {
-        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory());
-
-        assertThat(menu.factoryThreadCount()).isZero();
-        menu.setData(10, 3);
-
-        assertThat(menu.factoryThreadCount()).isEqualTo(3);
     }
 
     @Test
@@ -117,14 +106,10 @@ class MachineControllerMenuTest {
         menu.setData(6, 1);
         menu.setData(7, 7);
         menu.setData(8, 524);
-        menu.setData(9, 1);
-        menu.setData(10, 3);
 
         assertThat(menu.parallelControllerCount()).isEqualTo(1);
         assertThat(menu.currentParallelism()).isEqualTo(7);
         assertThat(menu.maxParallelism()).isEqualTo(524);
-        assertThat(menu.hasFactoryController()).isTrue();
-        assertThat(menu.factoryThreadCount()).isEqualTo(3);
     }
 
     @Test

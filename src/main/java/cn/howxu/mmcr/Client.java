@@ -1,6 +1,7 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.client.gui.MachineMenuScreen;
+import cn.howxu.mmcr.client.gui.FactoryControllerScreen;
 import cn.howxu.mmcr.client.controller.ControllerModelInvalidator;
 import cn.howxu.mmcr.client.controller.ControllerSpecCache;
 import cn.howxu.mmcr.client.model.DynamicOverlayBakedModel;
@@ -43,6 +44,7 @@ public class Client {
 
     private static void registerMenuScreens(RegisterMenuScreensEvent event) {
         MachineMenuScreen.registerScreens(event);
+        event.register(ModUIs.FACTORY_CONTROLLER.get(), FactoryControllerScreen::new);
     }
 
     private static void registerModelLoaders(RegisterBlockStateModels event) {
