@@ -251,6 +251,37 @@ class FactoryRecipeSchedulerTest {
         assertThat(thread.getActiveRecipe().getRecipe()).isSameAs(fallback);
     }
 
+    @Test
+    void thread_zero_starts_recipe_without_a_thread_disperser() throws Exception {
+        MachineControllerBlockEntity controller = controller(MMCR.id("factory_base_thread_machine"));
+        MachineRecipe recipe = recipe("factory_base_thread_recipe", 0);
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1, new RecipeCraftingContextPool());
+
+        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 1, new RecipeCraftingContextPool());
+
+        assertThat(scheduler.threadSnapshots()).singleElement()
+                .satisfies(snapshot -> {
+                    assertThat(snapshot.index()).isZero();
+                    assertThat(snapshot.active()).isTrue();
+                    assertThat(snapshot.recipeId()).isEqualTo(recipe.id().toString());
+                });
+    }
+
+    @Test
+    void allocated_idle_workers_are_reused_before_new_workers_are_created() throws Exception {
+        MachineControllerBlockEntity controller = controller(MMCR.id("factory_reuse_machine"));
+        MachineRecipe first = recipe("factory_reuse_first", 0);
+        MachineRecipe second = recipe("factory_reuse_second", 0);
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2, new RecipeCraftingContextPool());
+        scheduler.addThreadForTesting(FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool()));
+
+        scheduler.tickThreads(controller, List.of(first, second), controller.getStructureVersion(), 2, new RecipeCraftingContextPool());
+
+        assertThat(scheduler.threadSnapshots()).extracting(FactoryRecipeScheduler.ThreadSnapshot::index)
+                .containsExactly(0, 1);
+        assertThat(scheduler.threadSnapshots()).allSatisfy(snapshot -> assertThat(snapshot.active()).isTrue());
+    }
+
     private static ActiveMachineRecipe activeRecipeWithParallelism(int parallelism) {
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_parallel_" + parallelism), MMCR.id("factory_machine"), 20, List.of(), List.of());
         ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, parallelism);

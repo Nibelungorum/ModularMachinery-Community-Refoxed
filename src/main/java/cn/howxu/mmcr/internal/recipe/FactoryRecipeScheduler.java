@@ -81,7 +81,7 @@ public final class FactoryRecipeScheduler {
     }
 
     public int activeLaneCount() {
-        return lanes.size() + (int) threads.stream().filter(thread -> !thread.isBaseThread()).count();
+        return lanes.size() + activeThreadCount();
     }
 
     public int threadLimit() {
@@ -196,12 +196,21 @@ public final class FactoryRecipeScheduler {
         }
         if (controller == null || candidates == null || candidates.isEmpty()) return;
 
-        while (threads.size() < threadLimit) {
+        long modifierSnapshotVersion = controller.getModifierSnapshotVersion();
+        for (FactoryRecipeThread thread : threads) {
+            if (!thread.isIdle()) continue;
+            List<MachineRecipe> availableCandidates = availableCandidates(candidates);
+            if (availableCandidates.isEmpty()) break;
+            int availableParallelism = availableParallelism();
+            if (thread.tryRestartLastRecipe(availableCandidates, availableParallelism, structureVersion, modifierSnapshotVersion)) continue;
+            thread.searchAndStartRecipe(availableCandidates, availableParallelism, structureVersion);
+        }
+        while (threads.size() < threadLimit && availableParallelism() > 0) {
             List<MachineRecipe> availableCandidates = availableCandidates(candidates);
             if (availableCandidates.isEmpty()) break;
             FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, contextPool == null ? this.contextPool : contextPool);
-            if (!thread.searchAndStartRecipe(availableCandidates, this.parallelLimit, structureVersion)) break;
             threads.add(thread);
+            if (!thread.searchAndStartRecipe(availableCandidates, availableParallelism(), structureVersion)) break;
         }
     }
 
