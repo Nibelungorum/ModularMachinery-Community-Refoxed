@@ -44,6 +44,18 @@ class RuntimeMachineModelRegistryTest {
     }
 
     @Test
+    void dynamic_blocks_have_explicit_definitions() {
+        assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.CONTROLLER.get()).modelKind())
+                .isEqualTo(DynamicOverlayBakedModel.Kind.CONTROLLER);
+        assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.BLOCKS.get("item_input_bus").get()).modelKind())
+                .isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
+        assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get()).modelKind())
+                .isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
+        assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.BLOCKS.get("factory_controller").get()).blockName())
+                .isEqualTo("factory_controller");
+    }
+
+    @Test
     void parallel_and_factory_controllers_use_dynamic_port_loader() {
         var parallel = ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get();
         var factory = ModBlocks.BLOCKS.get("factory_controller").get();

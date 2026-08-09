@@ -1,8 +1,10 @@
 package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -16,6 +18,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Runtime model definitions for machine controller and I/O port blocks.
@@ -36,30 +40,44 @@ public final class RuntimeMachineModelRegistry {
     }
 
     static Stream<Block> dynamicBlocks() {
-        return dynamicBlockEntries().values().stream();
+        return definitions().map(RuntimeBlockModelDefinition::block);
     }
 
     static boolean isDynamicBlock(Block block) {
-        return describe(null, block) != null;
+        return definition(block) != null;
     }
 
     static Map<String, Block> dynamicBlockEntries() {
         Map<String, Block> blocks = new LinkedHashMap<>();
+        definitions().forEach(definition -> blocks.put(definition.blockName(), definition.block()));
+        return blocks;
+    }
+
+    static @Nullable RuntimeBlockModelDefinition definition(Block block) {
+        return definitionMap().get(block);
+    }
+
+    static Stream<RuntimeBlockModelDefinition> definitions() {
+        return definitionMap().values().stream();
+    }
+
+    private static Map<Block, RuntimeBlockModelDefinition> definitionMap() {
+        Map<Block, RuntimeBlockModelDefinition> definitions = new LinkedHashMap<>();
         ModBlocks.BLOCKS.forEach((name, holder) -> {
             if (!holder.isBound()) {
                 return;
             }
-            Block block = holder.get();
-            if (describe(name, block) != null) {
-                blocks.put(name, block);
+            RuntimeBlockModelDefinition definition = definition(name, holder.get());
+            if (definition != null) {
+                definitions.put(definition.block(), definition);
             }
         });
-        return blocks;
+        return definitions;
     }
 
     public static RuntimeBlockStateDefinition dynamicBlockState(Block block) {
-        RuntimeBlockModelDescriptor descriptor = describe(null, block);
-        if (descriptor != null) return dynamicBlockState(descriptor);
+        RuntimeBlockModelDefinition definition = definition(block);
+        if (definition != null) return definition.blockStateDefinition();
         throw new IllegalArgumentException("Unsupported dynamic machine block: " + block);
     }
 
@@ -106,6 +124,34 @@ public final class RuntimeMachineModelRegistry {
         Identifier id = BuiltInRegistries.BLOCK.getKey(block);
         String resolvedName = blockName != null ? blockName : id.getPath();
         return RuntimeBlockModelDescriptor.describe(resolvedName, block);
+    }
+
+    private static @Nullable RuntimeBlockModelDefinition definition(String blockName, Block block) {
+        if (block instanceof MachineControllerBlock controller) {
+            return new RuntimeBlockModelDefinition(
+                    block,
+                    blockName,
+                    DynamicOverlayBakedModel.Kind.CONTROLLER,
+                    controllerDefinition(controller),
+                    DynamicOverlayItemModel.Description.controller(controller.machineId()));
+        }
+        if (block instanceof IOPortBlock port) {
+            return new RuntimeBlockModelDefinition(
+                    block,
+                    blockName,
+                    DynamicOverlayBakedModel.Kind.PORT,
+                    portDefinition(port),
+                    DynamicOverlayItemModel.Description.port(port.kind()));
+        }
+        if (block instanceof ParallelControllerBlock || block instanceof FactorySchedulerBlock) {
+            return new RuntimeBlockModelDefinition(
+                    block,
+                    blockName,
+                    DynamicOverlayBakedModel.Kind.PORT,
+                    portStyleDefinition(block),
+                    DynamicOverlayItemModel.Description.portStyle(blockName));
+        }
+        return null;
     }
 
     static String blockStateJson(RuntimeBlockStateDefinition definition) {
