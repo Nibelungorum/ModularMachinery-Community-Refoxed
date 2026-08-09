@@ -27,7 +27,7 @@ import java.util.Set;
 public final class FactoryRecipeScheduler {
 
     private int threadLimit;
-    private int parallelLimit;
+    private int perThreadParallelLimit;
     private final List<Lane> lanes = new ArrayList<>();
     private final List<FactoryRecipeThread> threads = new ArrayList<>();
     private final RecipeCraftingContextPool contextPool;
@@ -38,7 +38,7 @@ public final class FactoryRecipeScheduler {
 
     public FactoryRecipeScheduler(int threadLimit, RecipeCraftingContextPool contextPool) {
         this.threadLimit = Math.max(1, threadLimit);
-        this.parallelLimit = this.threadLimit;
+        this.perThreadParallelLimit = this.threadLimit;
         this.contextPool = contextPool;
         ensureBaseThread(null, contextPool);
     }
@@ -101,7 +101,11 @@ public final class FactoryRecipeScheduler {
     }
 
     public int availableParallelism() {
-        return parallelLimit;
+        return perThreadParallelLimit;
+    }
+
+    public int perThreadParallelLimit() {
+        return perThreadParallelLimit;
     }
 
     public int activeThreadCount() {
@@ -109,11 +113,7 @@ public final class FactoryRecipeScheduler {
     }
 
     public int usedParallelism() {
-        int used = 0;
-        for (FactoryRecipeThread thread : threads) {
-            used = Math.min(parallelLimit, used + thread.usedParallelism());
-        }
-        return used;
+        return threads.stream().mapToInt(FactoryRecipeThread::usedParallelism).sum();
     }
 
     public List<FactoryRecipeThread> allThreads() {
@@ -187,7 +187,7 @@ public final class FactoryRecipeScheduler {
     public void tickThreads(MachineControllerBlockEntity controller, List<MachineRecipe> candidates,
                             long structureVersion, int parallelLimit, RecipeCraftingContextPool contextPool) {
         ensureBaseThread(controller, contextPool);
-        this.parallelLimit = Math.max(1, parallelLimit);
+        this.perThreadParallelLimit = Math.max(1, parallelLimit);
         for (FactoryRecipeThread thread : List.copyOf(threads)) {
             thread.bindController(controller);
             thread.tick();

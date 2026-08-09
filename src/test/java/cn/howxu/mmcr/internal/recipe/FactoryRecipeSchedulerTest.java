@@ -122,16 +122,20 @@ class FactoryRecipeSchedulerTest {
     }
 
     @Test
-    void available_parallelism_reports_per_thread_parallel_limit() {
+    void per_thread_parallelism_is_not_reduced_by_other_active_threads() {
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(4);
         FactoryRecipeThread first = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());
         FactoryRecipeThread second = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());
-        first.setActiveRecipeForTesting(activeRecipeWithParallelism(3));
-        second.setActiveRecipeForTesting(activeRecipeWithParallelism(1));
+        first.setActiveRecipeForTesting(activeRecipeWithParallelism(16));
+        second.setActiveRecipeForTesting(activeRecipeWithParallelism(16));
         scheduler.addThreadForTesting(first);
         scheduler.addThreadForTesting(second);
 
-        assertThat(scheduler.availableParallelism()).isEqualTo(4);
+        scheduler.tickThreads(null, List.of(), 1L, 16, new RecipeCraftingContextPool());
+
+        assertThat(scheduler.perThreadParallelLimit()).isEqualTo(16);
+        assertThat(scheduler.availableParallelism()).isEqualTo(16);
+        assertThat(scheduler.usedParallelism()).isEqualTo(32);
     }
 
     @Test
