@@ -127,7 +127,7 @@ public final class FactoryRecipeScheduler {
     }
 
     public List<ThreadSnapshot> threadSnapshots() {
-        List<ThreadSnapshot> snapshots = new ArrayList<>(threads.size());
+        List<ThreadSnapshot> snapshots = new ArrayList<>(threadLimit);
         for (int index = 0; index < threads.size(); index++) {
             FactoryRecipeThread thread = threads.get(index);
             var active = thread.getActiveRecipe();
@@ -135,6 +135,9 @@ public final class FactoryRecipeScheduler {
                     active == null || active.getRecipe() == null ? "" : active.getRecipe().id().toString(),
                     active == null ? 0 : active.getTick(), active == null ? 0 : active.getTotalTick(),
                     active == null ? 1 : active.getParallelism()));
+        }
+        for (int index = snapshots.size(); index < threadLimit; index++) {
+            snapshots.add(new ThreadSnapshot(index, false, false, false, "", 0, 0, 1));
         }
         return List.copyOf(snapshots);
     }

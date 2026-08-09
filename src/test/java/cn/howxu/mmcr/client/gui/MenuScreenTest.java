@@ -108,6 +108,12 @@ class MenuScreenTest {
     }
 
     @Test
+    void controller_detail_lines_use_factory_controller_spacing() {
+        assertThat(MachineMenuScreen.controllerDetailScale()).isEqualTo(1.0F);
+        assertThat(MachineMenuScreen.nextControllerDetailY(20)).isEqualTo(34);
+    }
+
+    @Test
     void item_bus_background_blits_never_sample_beyond_texture_height() {
         int oversizedImageHeight = MachineMenuScreen.GUI_TEXTURE_SIZE + ItemBusMenu.SLOT_SIZE;
 

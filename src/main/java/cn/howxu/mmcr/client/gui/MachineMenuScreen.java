@@ -58,6 +58,8 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     static final int ITEM_BUS_TITLE_OFFSET_X = -4;
     static final int ITEM_BUS_TITLE_OFFSET_Y = -2;
     static final int CONTROLLER_STATUS_OFFSET_Y = 12;
+    private static final float CONTROLLER_DETAIL_SCALE = 1.0F;
+    private static final int CONTROLLER_DETAIL_LINE_SPACING = 14;
     static final int STORAGE_TEXT_OFFSET_Y = 12;
     static final int HIDDEN_INVENTORY_LABEL_Y = -1000;
 
@@ -144,6 +146,14 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
 
     static int controllerStatusY(int titleY) {
         return titleY + CONTROLLER_STATUS_OFFSET_Y;
+    }
+
+    static float controllerDetailScale() {
+        return CONTROLLER_DETAIL_SCALE;
+    }
+
+    static int nextControllerDetailY(int y) {
+        return y + CONTROLLER_DETAIL_LINE_SPACING;
     }
 
     static int storageTextX(int titleX) {
@@ -324,13 +334,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         boolean active = menu.hasActiveRecipe();
         var owner = menu.resolvedOwner();
 
-        if (owner != null && owner.getMachine() != null) {
-            g.text(font, Component.translatable("gui.mmcr.controller.machine", owner.getMachine().localizedName()),
-                    textX, textY, PROGRESS_STATUS_COLOR, true);
-            textY += 12;
-        }
-
-        final float scale = 0.9F;
+        final float scale = controllerDetailScale();
         g.pose().pushMatrix();
         g.pose().scale(scale, scale);
         int scaledX = (int) (textX / scale);
@@ -340,13 +344,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         renderControllerStatusLineScaled(g, scaledX, scaledY,
                 Component.translatable(controllerStatusKey(menu.isFormed(), active)),
                 controllerStatusColor(menu.isFormed(), active));
-        scaledY += font.lineHeight;
-
-        if (active) {
-            int percent = progressPercent(menu.activeRecipeTick(), menu.activeRecipeTotalTick());
-            Component progressLine = Component.translatable("gui.mmcr.controller.progress", percent + "%" + progressDots(percent));
-            scaledY = renderScaledWrappedLine(g, progressLine, scaledX, scaledY, scaledWidth, PROGRESS_STATUS_COLOR);
-        }
+        scaledY = nextControllerDetailY(scaledY);
 
         if (!menu.isFormed() && !active) {
             String failure = menu.lastFailureMessage();
@@ -354,6 +352,11 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
                 Component failureLine = Component.translatable("gui.mmcr.controller.last_failure", Component.translatable(failure));
                 scaledY = renderScaledWrappedLine(g, failureLine, scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
             }
+        }
+
+        if (owner != null && owner.getMachine() != null) {
+            scaledY = renderScaledWrappedLine(g, Component.translatable("gui.mmcr.controller.machine", owner.getMachine().localizedName()),
+                    scaledX, scaledY, scaledWidth, PROGRESS_STATUS_COLOR);
         }
 
         if (menu.isFormed()) {
@@ -397,6 +400,12 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
             scaledY = renderScaledWrappedLine(g, fluidLine, scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
         }
 
+        if (active) {
+            int percent = progressPercent(menu.activeRecipeTick(), menu.activeRecipeTotalTick());
+            Component progressLine = Component.translatable("gui.mmcr.controller.progress", percent + "%" + progressDots(percent));
+            renderScaledWrappedLine(g, progressLine, scaledX, scaledY, scaledWidth, PROGRESS_STATUS_COLOR);
+        }
+
         g.pose().popMatrix();
     }
 
@@ -433,13 +442,13 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     private int renderScaledWrappedLine(GuiGraphicsExtractor g, Component text, int x, int y, int maxWidth, int color) {
         if (font.width(text) <= maxWidth) {
             g.text(font, text, x, y, color, true);
-            return y + font.lineHeight;
+            return nextControllerDetailY(y);
         }
         List<FormattedCharSequence> lines = font.split(text, maxWidth);
         int cy = y;
         for (FormattedCharSequence line : lines) {
             g.text(font, line, x, cy, color, true);
-            cy += font.lineHeight;
+            cy = nextControllerDetailY(cy);
         }
         return cy;
     }

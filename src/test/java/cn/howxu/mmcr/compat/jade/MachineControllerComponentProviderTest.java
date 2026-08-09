@@ -20,7 +20,7 @@ class MachineControllerComponentProviderTest {
         MachineControllerComponentProvider.Snapshot snapshot = snapshot(true);
 
         assertThat(MachineControllerComponentProvider.lineKeys(snapshot))
-                .containsExactly("machine", "structure", "state", "parallel_slots", "parallelism", "threads");
+                .containsExactly("machine", "structure", "state", "parallel_slots", "threads");
     }
 
     @Test

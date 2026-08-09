@@ -137,11 +137,13 @@ public class FactorySchedulerBlockEntity extends BlockEntity {
     }
 
     public List<FactoryRecipeScheduler.ThreadSnapshot> threadSnapshots(MachineControllerBlockEntity controller) {
+        syncThreadLimit(null);
         ensureBaseThreadFor(controller);
         return scheduler.threadSnapshots();
     }
 
     public FactoryControllerSnapshot snapshot(MachineControllerBlockEntity controller) {
+        syncThreadLimit(null);
         ensureBaseThreadFor(controller);
         return new FactoryControllerSnapshot(controller.getBlockPos(), controller.isFormed(), controller.isRedstonePaused(),
                 activeThreadCount(), threadLimit(), usedParallelism(), controller.getMaxParallelism(),

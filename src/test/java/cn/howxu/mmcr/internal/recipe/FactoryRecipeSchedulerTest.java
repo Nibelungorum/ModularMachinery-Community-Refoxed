@@ -171,6 +171,16 @@ class FactoryRecipeSchedulerTest {
     }
 
     @Test
+    void thread_snapshots_include_idle_placeholders_up_to_thread_limit() {
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(4);
+
+        assertThat(scheduler.threadSnapshots())
+                .extracting(FactoryRecipeScheduler.ThreadSnapshot::index)
+                .containsExactly(0, 1, 2, 3);
+        assertThat(scheduler.threadSnapshots()).allSatisfy(snapshot -> assertThat(snapshot.active()).isFalse());
+    }
+
+    @Test
     void active_thread_count_excludes_idle_cached_threads() {
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2);
         scheduler.addThreadForTesting(FactoryRecipeThread.simple(null, new RecipeCraftingContextPool()));

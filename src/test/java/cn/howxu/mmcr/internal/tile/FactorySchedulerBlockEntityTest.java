@@ -102,6 +102,16 @@ class FactorySchedulerBlockEntityTest {
         assertThat(syncs).hasValue(1);
     }
 
+    @Test
+    void threadSnapshotsImmediatelyReflectIdleInventoryThreadCount() {
+        FactorySchedulerBlockEntity scheduler = createScheduler();
+        scheduler.getItemStackHandler(null).setStackInSlot(0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 64));
+
+        assertThat(scheduler.threadSnapshots(null)).hasSize(65);
+        assertThat(scheduler.threadLimit()).isEqualTo(65);
+        assertThat(scheduler.activeThreadCount()).isZero();
+    }
+
     private static FactorySchedulerBlockEntity createScheduler() {
         BlockEntity entity = ModBlockEntities.BES.get("factory_controller").get().create(
                 BlockPos.ZERO,

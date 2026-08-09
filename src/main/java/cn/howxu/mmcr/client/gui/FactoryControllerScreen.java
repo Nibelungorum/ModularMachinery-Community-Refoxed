@@ -25,16 +25,20 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     static final int THREAD_ROW_Y = 8;
     public static final int THREAD_ROW_WIDTH = 86;
     static final int THREAD_ROW_HEIGHT = 32;
+    static final int THREAD_ROW_GAP = 1;
     static final int VISIBLE_THREADS = 6;
     private static final int ELEMENT_TEXTURE_WIDTH = 256;
     private static final int ELEMENT_TEXTURE_HEIGHT = 256;
-    private static final int THREAD_ELEMENT_Y_OFFSET = 2;
+    private static final int THREAD_ELEMENT_Y_OFFSET = 0;
+    private static final int SELECTED_THREAD_OVERLAY = 0x66A8D8FF;
+    private static final int DETAIL_LINE_SPACING = 14;
     private static final Identifier BACKGROUND = MMCR.id("textures/gui/guifactory.png");
     private static final Identifier ELEMENTS = MMCR.id("textures/gui/guifactoryelements.png");
     private int scrollOffset;
 
     public FactoryControllerScreen(FactoryControllerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, IMAGE_WIDTH, IMAGE_HEIGHT);
+        titleLabelY = -1000;
         inventoryLabelY = -1000;
     }
 
@@ -42,8 +46,10 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
 
     static int threadIndexAt(int left, int top, int scroll, int mouseX, int mouseY) {
         if (mouseX < left || mouseX >= left + THREAD_ROW_WIDTH) return -1;
-        int row = (mouseY - top) / THREAD_ROW_HEIGHT;
-        if (mouseY < top || row < 0 || row >= VISIBLE_THREADS) return -1;
+        int localY = mouseY - top;
+        int rowStride = THREAD_ROW_HEIGHT + THREAD_ROW_GAP;
+        int row = localY / rowStride;
+        if (mouseY < top || row < 0 || localY % rowStride >= THREAD_ROW_HEIGHT) return -1;
         return scroll + row;
     }
 
@@ -61,6 +67,24 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     static int elementTextureWidth() { return ELEMENT_TEXTURE_WIDTH; }
     static int elementTextureHeight() { return ELEMENT_TEXTURE_HEIGHT; }
     static int threadElementY(int y) { return y + THREAD_ELEMENT_Y_OFFSET; }
+    static int selectedOverlayX(int x) { return x; }
+    static int selectedOverlayY(int y) { return threadElementY(y); }
+    static int selectedOverlayWidth() { return THREAD_ROW_WIDTH; }
+    static int selectedOverlayHeight() { return THREAD_ROW_HEIGHT; }
+    static int selectedOverlayRight(int x) { return selectedOverlayX(x) + selectedOverlayWidth() - 1; }
+    static int selectedOverlayBottom(int y) { return selectedOverlayY(y) + selectedOverlayHeight() - 1; }
+    static int progressOverlayX(int x) { return x; }
+    static int progressOverlayY(int y) { return threadElementY(y); }
+    static int progressOverlayHeight() { return THREAD_ROW_HEIGHT; }
+    static int progressOverlayRight(int x, int progress) { return progressOverlayX(x) + progress; }
+    static int progressOverlayBottom(int y) { return progressOverlayY(y) + progressOverlayHeight(); }
+    static int detailTitleY(int y) { return y; }
+    static int nextDetailY(int y) { return y + DETAIL_LINE_SPACING; }
+    static boolean shouldRenderProgress(boolean active, int totalTick) { return active && totalTick > 0; }
+    static int visibleThreadCount(int threadCount) { return Math.min(VISIBLE_THREADS, Math.max(0, threadCount)); }
+    static int clampScrollOffset(int scrollOffset, int threadCount) {
+        return Math.max(0, Math.min(Math.max(0, threadCount - VISIBLE_THREADS), scrollOffset));
+    }
 
     @Override
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
@@ -72,16 +96,27 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
-        scrollOffset = Math.min(scrollOffset, Math.max(0, menu.threads().size() - VISIBLE_THREADS));
-        for (int row = 0; row < VISIBLE_THREADS; row++) {
+        scrollOffset = clampScrollOffset(scrollOffset, menu.threads().size());
+        int visibleThreadCount = visibleThreadCount(menu.threads().size());
+        for (int row = 0; row < visibleThreadCount; row++) {
             int index = scrollOffset + row;
             if (index >= menu.threads().size()) break;
             FactoryRecipeScheduler.ThreadSnapshot thread = menu.threads().get(index);
-            int y = topPos + THREAD_ROW_Y + row * THREAD_ROW_HEIGHT;
+            int y = topPos + THREAD_ROW_Y + row * (THREAD_ROW_HEIGHT + THREAD_ROW_GAP);
+            int elementX = leftPos + THREAD_ROW_X;
+            int selectedOverlayX = selectedOverlayX(elementX);
+            int selectedOverlayY = selectedOverlayY(y);
+            int progressOverlayX = progressOverlayX(elementX);
+            int progressOverlayY = progressOverlayY(y);
             graphics.blit(RenderPipelines.GUI_TEXTURED, ELEMENTS, leftPos + THREAD_ROW_X, threadElementY(y), 0, 0,
                     THREAD_ROW_WIDTH, THREAD_ROW_HEIGHT, ELEMENT_TEXTURE_WIDTH, ELEMENT_TEXTURE_HEIGHT);
+            if (thread.index() == menu.selectedThread().index()) {
+                graphics.fill(selectedOverlayX, selectedOverlayY,
+                        selectedOverlayRight(elementX), selectedOverlayBottom(y), SELECTED_THREAD_OVERLAY);
+            }
             int progress = progressWidth(thread.tick(), thread.totalTick());
-            if (progress > 0) graphics.fill(leftPos + THREAD_ROW_X, y, leftPos + THREAD_ROW_X + progress, y + THREAD_ROW_HEIGHT, 0x6600AA55);
+            if (progress > 0) graphics.fill(progressOverlayX, progressOverlayY,
+                    progressOverlayRight(elementX, progress), progressOverlayBottom(y), 0x6600AA55);
             graphics.text(font, Component.translatable("gui.mmcr.factory.thread", thread.index()), leftPos + THREAD_ROW_X + 3, y + 3, 0xFF222222, false);
             graphics.text(font, Component.translatable(thread.active() ? "gui.mmcr.controller.running" : "gui.mmcr.controller.idle"), leftPos + THREAD_ROW_X + 3, y + 15, 0xFF222222, false);
         }
@@ -89,24 +124,30 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
         int x = leftPos + 113;
         int y = topPos + 12;
         String machineName = menu.machineName().isEmpty() ? title.getString() : menu.machineName();
-        graphics.text(font, Component.literal(machineName + " #" + selected.index()), x, y, 0xFFFFFFFF, true);
-        graphics.text(font, Component.translatable("gui.mmcr.controller.status_label"), x, y + 14, 0xFFFFFFFF, true);
+        graphics.text(font, Component.literal(machineName + " #" + selected.index()), x, detailTitleY(y), MachineMenuScreen.CONTROLLER_TITLE_COLOR, true);
+        int lineY = nextDetailY(y);
+        graphics.text(font, Component.translatable("gui.mmcr.controller.status_label"), x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
         graphics.text(font, Component.translatable(MachineMenuScreen.controllerStatusKey(menu.isFormed(), selected.active())),
-                x + font.width(Component.translatable("gui.mmcr.controller.status_label")) + 4, y + 14, 0xFFFFFFFF, true);
-        graphics.text(font, Component.translatable("gui.mmcr.controller.progress",
-                progressWidth(selected.tick(), selected.totalTick()) * 100 / THREAD_ROW_WIDTH + "%"), x, y + 28, 0xFFFFFFFF, true);
-        int lineY = y + 42;
+                x + font.width(Component.translatable("gui.mmcr.controller.status_label")) + 4, lineY,
+                MachineMenuScreen.controllerStatusColor(menu.isFormed(), selected.active()), true);
+        lineY = nextDetailY(lineY);
         if (menu.parallelSlots() > 0) {
-            graphics.text(font, MachineMenuScreen.parallelSlotLine(menu.parallelSlots()), x, lineY, 0xFFFFFFFF, true);
-            lineY += 14;
+            graphics.text(font, MachineMenuScreen.parallelSlotLine(menu.parallelSlots()), x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
+            lineY = nextDetailY(lineY);
         }
-        graphics.text(font, MachineMenuScreen.parallelLine(selected.parallelism(), menu.maxParallelism()), x, lineY, 0xFFFFFFFF, true);
-        lineY += 14;
+        graphics.text(font, MachineMenuScreen.parallelLine(selected.parallelism(), menu.maxParallelism()), x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
+        lineY = nextDetailY(lineY);
         if (menu.isRedstonePaused()) {
-            graphics.text(font, Component.translatable("gui.mmcr.controller.redstone_stopped"), x, lineY, 0xFFFFFFFF, true);
-            lineY += 14;
+            graphics.text(font, Component.translatable("gui.mmcr.controller.redstone_stopped"), x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
+            lineY = nextDetailY(lineY);
         }
-        graphics.text(font, MachineMenuScreen.factoryThreadLine(menu.activeThreadCount(), menu.threadCount()), x, lineY, 0xFFFFFFFF, true);
+        graphics.text(font, MachineMenuScreen.factoryThreadLine(menu.activeThreadCount(), menu.threadCount()), x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
+        lineY = nextDetailY(lineY);
+        if (shouldRenderProgress(selected.active(), selected.totalTick())) {
+            int percent = progressWidth(selected.tick(), selected.totalTick()) * 100 / THREAD_ROW_WIDTH;
+            graphics.text(font, Component.translatable("gui.mmcr.controller.progress", percent + "%"), x, lineY,
+                    MachineMenuScreen.PROGRESS_STATUS_COLOR, true);
+        }
     }
 
     @Override
@@ -124,7 +165,7 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double deltaX, double deltaY) {
-        scrollOffset = Math.max(0, Math.min(Math.max(0, menu.threads().size() - VISIBLE_THREADS), scrollOffset - (int) Math.signum(deltaY)));
+        scrollOffset = clampScrollOffset(scrollOffset - (int) Math.signum(deltaY), menu.threads().size());
         return true;
     }
 
