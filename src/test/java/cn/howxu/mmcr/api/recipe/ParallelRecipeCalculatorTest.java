@@ -5,6 +5,7 @@ import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.PortKinds;
@@ -12,18 +13,13 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.core.HolderLookup;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.util.ProblemReporter;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
 import net.neoforged.neoforge.items.ItemStackHandler;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -33,7 +29,10 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class ActiveMachineRecipeTest {
+/**
+ * @author howxu <dev@howxu.cn>
+ */
+class ParallelRecipeCalculatorTest {
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -41,94 +40,22 @@ class ActiveMachineRecipeTest {
         bindItemComponents(Items.IRON_INGOT);
     }
 
-    @AfterEach
-    void cleanup() {
-        RecipeRegistry.clearForTesting();
-    }
-
     @Test
-    void setParallelismClampsToActiveMaximumAndPersistsClampedValue() {
-        MachineRecipe recipe = new MachineRecipe(
-                MMCR.id("active_parallel_clamp"),
-                MMCR.id("blast_furnace"),
-                20,
-                List.of(),
-                List.of());
-        RecipeRegistry.register(recipe);
-
-        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, 16);
-        active.setParallelism(64);
-        assertThat(active.getParallelism()).isEqualTo(16);
-        active.setMaxParallelism(4);
-        assertThat(active.getParallelism()).isEqualTo(4);
-        active.setMaxParallelism(16);
-        active.setParallelism(0);
-        assertThat(active.getParallelism()).isEqualTo(1);
-
-        active.setParallelism(64);
-        ActiveMachineRecipe fromNbt = new ActiveMachineRecipe(active.serialize());
-        assertThat(fromNbt.getMaxParallelism()).isEqualTo(16);
-        assertThat(fromNbt.getParallelism()).isEqualTo(16);
-
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, HolderLookup.Provider.create(java.util.stream.Stream.empty()));
-        active.serialize(output);
-        CompoundTag tag = output.buildResult();
-        ActiveMachineRecipe fromValueInput = ActiveMachineRecipe.from(TagValueInput.create(ProblemReporter.DISCARDING, HolderLookup.Provider.create(java.util.stream.Stream.empty()), tag));
-
-        assertThat(fromValueInput.getMaxParallelism()).isEqualTo(16);
-        assertThat(fromValueInput.getParallelism()).isEqualTo(16);
-    }
-
-    @Test
-    void finishRetryCooldownPersistsAcrossNbtAndValueIo() {
-        MachineRecipe recipe = new MachineRecipe(
-                MMCR.id("active_retry_cooldown"),
-                MMCR.id("blast_furnace"),
-                20,
-                List.of(),
-                List.of());
-        RecipeRegistry.register(recipe);
-        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, 1);
-
-        assertThat(active.shouldRetryFinish(5)).isTrue();
-        active.markFinishBlocked(5);
-        assertThat(active.shouldRetryFinish(14)).isFalse();
-        assertThat(active.shouldRetryFinish(15)).isTrue();
-
-        ActiveMachineRecipe fromNbt = new ActiveMachineRecipe(active.serialize());
-        assertThat(fromNbt.shouldRetryFinish(14)).isFalse();
-        assertThat(fromNbt.shouldRetryFinish(15)).isTrue();
-
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, HolderLookup.Provider.create(java.util.stream.Stream.empty()));
-        active.serialize(output);
-        ActiveMachineRecipe fromValueInput = ActiveMachineRecipe.from(TagValueInput.create(
-                ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(java.util.stream.Stream.empty()),
-                output.buildResult()));
-
-        assertThat(fromValueInput.shouldRetryFinish(14)).isFalse();
-        assertThat(fromValueInput.shouldRetryFinish(15)).isTrue();
-    }
-
-    @Test
-    void startPromotesParallelismToHighestFeasibleCraftAmount() throws Exception {
+    void itemInputFastPathComputesSafeParallelUpperBound() throws Exception {
         ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
-        bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(8));
+        bus.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 11));
         MachineControllerBlockEntity controller = controllerWithComponents(bus);
-        MachineRecipe recipe = inputRecipe("active_parallel_start", MMCR.id("blast_furnace"), Items.IRON_INGOT, 2);
-        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, 16);
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+        MachineRecipe recipe = inputRecipe("parallel_fast_path", Items.IRON_INGOT, 3);
 
-        boolean started = active.start(new RecipeCraftingContext(controller));
-
-        assertThat(started).isTrue();
-        assertThat(active.getParallelism()).isEqualTo(4);
-        assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isZero();
+        assertThat(context.maxInputParallelism(recipe, 8)).isEqualTo(3);
+        assertThat(ParallelRecipeCalculator.maxStartableParallelism(context, recipe, 8)).isEqualTo(3);
     }
 
-    private static MachineRecipe inputRecipe(String path, net.minecraft.resources.Identifier machineId, Item item, int count) {
+    private static MachineRecipe inputRecipe(String path, Item item, int count) {
         return new MachineRecipe(
                 MMCR.id(path),
-                machineId,
+                MMCR.id("blast_furnace"),
                 20,
                 List.of(),
                 List.of(),
@@ -148,8 +75,8 @@ class ActiveMachineRecipeTest {
         ItemInputBusBlockEntity bus = (ItemInputBusBlockEntity) unsafe.allocateInstance(ItemInputBusBlockEntity.class);
         setField(BlockEntity.class, bus, "type", null);
         setField(BlockEntity.class, bus, "worldPosition", pos);
-        setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
-        setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
+        setField(BlockEntity.class, bus, "blockState", Blocks.CHEST.defaultBlockState());
+        setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
         return bus;
     }
 

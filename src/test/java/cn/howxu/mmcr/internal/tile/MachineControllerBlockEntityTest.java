@@ -127,6 +127,13 @@ class MachineControllerBlockEntityTest {
         addParallelComponent(controller, ParallelTier.X16);
         assertThat(controller.getMaxParallelism()).isEqualTo(16);
 
+        ParallelControllerBlockEntity parallel = (ParallelControllerBlockEntity) controller.getComponents().getFirst().getContainer();
+        parallel.setCurrentParallelism(7);
+        assertThat(parallel.currentParallelism()).isEqualTo(7);
+        assertThat(controller.getMaxParallelism()).isEqualTo(7);
+        parallel.setCurrentParallelism(99);
+        assertThat(parallel.currentParallelism()).isEqualTo(16);
+
         setField(MachineControllerBlockEntity.class, controller, "machine", nonParallelMachine);
         assertThat(controller.getMaxParallelism()).isEqualTo(1);
     }

@@ -41,8 +41,12 @@ public class FactoryControllerBlockEntity extends BlockEntity {
     }
 
     public void tickScheduler() {
+        tickScheduler(0L);
+    }
+
+    public void tickScheduler(long gameTime) {
         int before = scheduler.activeLaneCount();
-        scheduler.tick();
+        scheduler.tick(gameTime);
         if (scheduler.activeLaneCount() != before) setChanged();
     }
 

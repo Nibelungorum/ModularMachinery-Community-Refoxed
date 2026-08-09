@@ -33,6 +33,10 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
 
     boolean commit(RecipeCraftingContext context, int requirementIndex);
 
+    default int maxInputParallelism(RecipeCraftingContext context, int limit) {
+        return -1;
+    }
+
     default boolean ioTick(RecipeCraftingContext context, int requirementIndex) {
         return true;
     }

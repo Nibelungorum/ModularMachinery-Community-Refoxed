@@ -38,10 +38,14 @@ public final class FactoryRecipeScheduler {
     }
 
     public void tick() {
+        tick(0L);
+    }
+
+    public void tick(long gameTime) {
         Iterator<Lane> iterator = lanes.iterator();
         while (iterator.hasNext()) {
             Lane lane = iterator.next();
-            if (lane.tick()) iterator.remove();
+            if (lane.tick(gameTime)) iterator.remove();
         }
     }
 
@@ -84,6 +88,10 @@ public final class FactoryRecipeScheduler {
 
     public interface Lane {
         default void start() { }
+
+        default boolean tick(long gameTime) {
+            return tick();
+        }
 
         boolean tick();
 
