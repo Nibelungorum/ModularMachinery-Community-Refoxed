@@ -2,9 +2,12 @@ package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -219,6 +222,35 @@ class FactoryRecipeSchedulerTest {
         assertThat(scheduler.activeThreadCount()).isZero();
     }
 
+    @Test
+    void cached_recipe_restarts_before_normal_candidate_ordering() throws Exception {
+        MachineControllerBlockEntity controller = controller(MMCR.id("factory_cache_machine"));
+        MachineRecipe cached = recipe("factory_cached", 0);
+        MachineRecipe fallback = recipe("factory_fallback", 0);
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+        thread.rememberLastRecipe(cached, controller.getStructureVersion(), controller.getModifierSnapshotVersion());
+
+        assertThat(thread.tryRestartLastRecipe(List.of(fallback, cached), 1,
+                controller.getStructureVersion(), controller.getModifierSnapshotVersion())).isTrue();
+
+        assertThat(thread.getActiveRecipe().getRecipe()).isSameAs(cached);
+    }
+
+    @Test
+    void invalid_cached_recipe_allows_normal_candidate_search() throws Exception {
+        MachineControllerBlockEntity controller = controller(MMCR.id("factory_stale_cache_machine"));
+        MachineRecipe stale = recipe("factory_stale", 0);
+        MachineRecipe fallback = recipe("factory_cache_fallback", 0);
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+        thread.rememberLastRecipe(stale, controller.getStructureVersion() + 1, controller.getModifierSnapshotVersion());
+
+        assertThat(thread.tryRestartLastRecipe(List.of(fallback), 1,
+                controller.getStructureVersion(), controller.getModifierSnapshotVersion())).isFalse();
+        assertThat(thread.searchAndStartRecipe(List.of(fallback), 1, controller.getStructureVersion())).isTrue();
+
+        assertThat(thread.getActiveRecipe().getRecipe()).isSameAs(fallback);
+    }
+
     private static ActiveMachineRecipe activeRecipeWithParallelism(int parallelism) {
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_parallel_" + parallelism), MMCR.id("factory_machine"), 20, List.of(), List.of());
         ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, parallelism);
@@ -228,6 +260,18 @@ class FactoryRecipeSchedulerTest {
 
     private static MachineRecipe recipe(String id, int maxThreads) {
         return new MachineRecipe(MMCR.id(id), MMCR.id("factory_machine"), 20, List.of(), List.of(), List.of(), 0, maxThreads);
+    }
+
+    private static MachineControllerBlockEntity controller(net.minecraft.resources.Identifier machineId) throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        MachineControllerBlockEntity controller = (MachineControllerBlockEntity) ((sun.misc.Unsafe) unsafeField.get(null))
+                .allocateInstance(MachineControllerBlockEntity.class);
+        DynamicMachine machine = new DynamicMachine(machineId, "Factory Cache", new BlockArray(java.util.Map.of()));
+        Field foundMachine = MachineControllerBlockEntity.class.getDeclaredField("foundMachine");
+        foundMachine.setAccessible(true);
+        foundMachine.set(controller, machine);
+        return controller;
     }
 
     private static final class FakeLane implements FactoryRecipeScheduler.Lane {
