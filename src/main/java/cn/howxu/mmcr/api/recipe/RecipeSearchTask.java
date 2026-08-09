@@ -3,6 +3,8 @@ package cn.howxu.mmcr.api.recipe;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Comparator;
@@ -11,6 +13,8 @@ import java.util.Comparator;
  * @author howxu <dev@howxu.cn>
  */
 public final class RecipeSearchTask {
+
+    private static final Logger LOG = LoggerFactory.getLogger(RecipeSearchTask.class);
 
     private final MachineControllerBlockEntity controller;
     private final Identifier machineId;
@@ -44,12 +48,25 @@ public final class RecipeSearchTask {
             ActiveMachineRecipe activeRecipe = new ActiveMachineRecipe(recipe, maxParallelism);
             RecipeCraftingContext context = null;
             context = contextPool.borrow(activeRecipe, controller);
-            if (context.simulateInputs(recipe) && context.simulateOutputs(recipe)) {
-                activeRecipe.setMaxParallelism(maxParallelism);
-                activeRecipe.setParallelism(1);
+            if (activeRecipe.canStartCrafting(context)) {
+                LOG.info("[ParallelSearch] machine={} recipe={} recipeParallelized={} searchMaxParallelism={} selectedParallelism={} structureVersion={}",
+                        machineId,
+                        recipe.id(),
+                        recipe.isParallelized(),
+                        maxParallelism,
+                        activeRecipe.getParallelism(),
+                        structureVersion);
                 boolean conflictProne = hasMoreSpecificPendingInputCandidate(recipe, recipeIndex, ordered);
                 return RecipeSearchResult.success(activeRecipe, context, machineId, structureVersion, conflictProne);
             }
+
+            LOG.info("[ParallelSearch] machine={} recipe={} recipeParallelized={} searchMaxParallelism={} rejected failure={} requirementFailure={}",
+                    machineId,
+                    recipe.id(),
+                    recipe.isParallelized(),
+                    maxParallelism,
+                    context.getLastFailureUnloc(),
+                    context.getLastRequirementFailure());
 
             float validity = validity(context.getLastFailureUnloc(), context.getLastRequirementFailure());
             if (validity > bestValidity) {

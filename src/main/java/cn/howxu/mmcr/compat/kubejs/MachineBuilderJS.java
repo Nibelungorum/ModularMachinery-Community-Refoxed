@@ -17,6 +17,9 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient boolean fullyRotationallySymmetric = false;
     public transient boolean requireVerticalFacing = false;
     public transient boolean allowModifiers = false;
+    public transient boolean allowMultithreading = false;
+    public transient boolean allowParallelism = false;
+    public transient int maxParallelAmount = 1;
     public transient Identifier machineBasicBlock;
     public transient Identifier controllerBaseTexture;
     public transient Identifier formedPortBaseTexture;
@@ -42,6 +45,9 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .appearance(appearanceSpec())
                 .recipeFamilyId(id)
                 .allowModifiers(allowModifiers)
+                .allowMultithreading(allowMultithreading)
+                .allowParallelism(allowParallelism)
+                .maxParallelAmount(maxParallelAmount)
                 .build();
     }
 
@@ -135,6 +141,29 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
 
     public MachineBuilderJS allowModifiers(boolean allow) {
         this.allowModifiers = allow;
+        return this;
+    }
+
+    public MachineBuilderJS allowMultithreading() {
+        return allowMultithreading(true);
+    }
+
+    public MachineBuilderJS allowMultithreading(boolean allow) {
+        this.allowMultithreading = allow;
+        return this;
+    }
+
+    public MachineBuilderJS allowParallelism() {
+        return allowParallelism(true);
+    }
+
+    public MachineBuilderJS allowParallelism(boolean allow) {
+        this.allowParallelism = allow;
+        return this;
+    }
+
+    public MachineBuilderJS maxParallelAmount(int amount) {
+        this.maxParallelAmount = amount;
         return this;
     }
 

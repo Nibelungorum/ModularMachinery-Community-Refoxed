@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.event;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.DebugInfiniteFluidSourceBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.InfiniteEnergyHandler;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
@@ -47,6 +48,12 @@ public final class ModCapabilities {
             registerNativePort(event, kind);
         }
         event.registerBlockEntity(
+                ITEM_BLOCK,
+                ModBlockEntities.BES.get("factory_controller").get(),
+                (be, side) -> be instanceof FactorySchedulerBlockEntity scheduler
+                        ? new LegacyItemHandlerAdapter(scheduler.getItemStackHandler(side), true, true)
+                        : null);
+        event.registerBlockEntity(
                 ENERGY_BLOCK,
                 ModBlockEntities.BES.get("debug_infinite_energy_source").get(),
                 (be, side) -> InfiniteEnergyHandler.INSTANCE);
@@ -67,6 +74,12 @@ public final class ModCapabilities {
     static Set<String> nativeCapabilityPortIds() {
         Set<String> ids = new LinkedHashSet<>();
         nativeCapabilityPorts().forEach(kind -> ids.add(kind.id()));
+        return Set.copyOf(ids);
+    }
+
+    static Set<String> nativeCapabilityBlockEntityIds() {
+        Set<String> ids = new LinkedHashSet<>(nativeCapabilityPortIds());
+        ids.add("factory_controller");
         return Set.copyOf(ids);
     }
 

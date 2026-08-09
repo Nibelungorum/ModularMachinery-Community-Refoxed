@@ -1,10 +1,8 @@
 package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.internal.block.FactoryControllerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
-import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -42,10 +40,7 @@ public final class RuntimeMachineModelRegistry {
     }
 
     static boolean isDynamicBlock(Block block) {
-        return block instanceof MachineControllerBlock
-                || block instanceof IOPortBlock
-                || block instanceof ParallelControllerBlock
-                || block instanceof FactoryControllerBlock;
+        return describe(null, block) != null;
     }
 
     static Map<String, Block> dynamicBlockEntries() {
@@ -55,7 +50,7 @@ public final class RuntimeMachineModelRegistry {
                 return;
             }
             Block block = holder.get();
-            if (isDynamicBlock(block)) {
+            if (describe(name, block) != null) {
                 blocks.put(name, block);
             }
         });
@@ -63,16 +58,19 @@ public final class RuntimeMachineModelRegistry {
     }
 
     public static RuntimeBlockStateDefinition dynamicBlockState(Block block) {
-        if (block instanceof MachineControllerBlock controller) {
-            return controllerDefinition(controller);
-        }
-        if (block instanceof IOPortBlock port) {
-            return portDefinition(port);
-        }
-        if (block instanceof ParallelControllerBlock || block instanceof FactoryControllerBlock) {
-            return portStyleDefinition(block);
-        }
+        RuntimeBlockModelDescriptor descriptor = describe(null, block);
+        if (descriptor != null) return dynamicBlockState(descriptor);
         throw new IllegalArgumentException("Unsupported dynamic machine block: " + block);
+    }
+
+    static RuntimeBlockStateDefinition dynamicBlockState(RuntimeBlockModelDescriptor descriptor) {
+        if (descriptor.kind() == RuntimeBlockModelDescriptor.Kind.CONTROLLER) {
+            return controllerDefinition((MachineControllerBlock) descriptor.block());
+        }
+        if (descriptor.kind() == RuntimeBlockModelDescriptor.Kind.PORT) {
+            return portDefinition((IOPortBlock) descriptor.block());
+        }
+        return portStyleDefinition(descriptor.block());
     }
 
     static RuntimeBlockStateDefinition controllerDefinition(MachineControllerBlock block) {
@@ -102,6 +100,12 @@ public final class RuntimeMachineModelRegistry {
     static RuntimeBlockStateDefinition portStyleDefinition(Block block) {
         return new RuntimeBlockStateDefinition(BuiltInRegistries.BLOCK.getKey(block),
                 List.of(new RuntimeVariant("", DynamicOverlayModelLoader.PORT_ID)));
+    }
+
+    static RuntimeBlockModelDescriptor describe(String blockName, Block block) {
+        Identifier id = BuiltInRegistries.BLOCK.getKey(block);
+        String resolvedName = blockName != null ? blockName : id.getPath();
+        return RuntimeBlockModelDescriptor.describe(resolvedName, block);
     }
 
     static String blockStateJson(RuntimeBlockStateDefinition definition) {

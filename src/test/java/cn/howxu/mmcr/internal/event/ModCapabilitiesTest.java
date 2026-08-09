@@ -21,4 +21,10 @@ class ModCapabilitiesTest {
                 .toList());
     }
 
+    @Test
+    void factory_controller_is_registered_for_pipe_item_capability() {
+        assertThat(ModCapabilities.nativeCapabilityBlockEntityIds()).contains("factory_controller");
+        assertThat(ModCapabilities.nativeCapabilityBlockEntityIds()).doesNotContain("factory_scheduler");
+    }
+
 }

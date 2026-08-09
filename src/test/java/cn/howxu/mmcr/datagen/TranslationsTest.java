@@ -37,6 +37,30 @@ class TranslationsTest {
     }
 
     @Test
+    void factory_controller_and_thread_disperser_have_display_names() {
+        assertEquals("Factory Controller", Translations.ALL.get("en_us").get("block.mmcr.factory_controller"));
+        assertEquals("Factory Controller", Translations.ALL.get("en_us").get("item.mmcr.factory_controller"));
+        assertEquals("Thread Disperser", Translations.ALL.get("en_us").get("item.mmcr.thread_disperser"));
+        assertEquals("Factory Controller", Translations.ALL.get("en_us").get("container.mmcr.factory_controller"));
+        assertEquals("工厂控制器", Translations.ALL.get("zh_cn").get("block.mmcr.factory_controller"));
+        assertEquals("工厂控制器", Translations.ALL.get("zh_cn").get("item.mmcr.factory_controller"));
+        assertEquals("线程分散器", Translations.ALL.get("zh_cn").get("item.mmcr.thread_disperser"));
+        assertEquals("工厂控制器", Translations.ALL.get("zh_cn").get("container.mmcr.factory_controller"));
+    }
+
+    @Test
+    void controller_parallel_thread_and_port_labels_are_generated_for_both_locales() {
+        assertEquals("Parallel Slots", Translations.ALL.get("en_us").get("jade.mmcr.machine_controller.parallel_slots"));
+        assertEquals("Multithreading", Translations.ALL.get("en_us").get("jade.mmcr.machine_controller.threads"));
+        assertEquals("Parallel Slot Count: %s", Translations.ALL.get("en_us").get("gui.mmcr.controller.parallel_slots"));
+        assertEquals("Parallel: %s / %s", Translations.ALL.get("en_us").get("gui.mmcr.controller.parallel"));
+        assertEquals("并行仓数量", Translations.ALL.get("zh_cn").get("jade.mmcr.machine_controller.parallel_slots"));
+        assertEquals("多线程", Translations.ALL.get("zh_cn").get("jade.mmcr.machine_controller.threads"));
+        assertEquals("并行仓数量: %s", Translations.ALL.get("zh_cn").get("gui.mmcr.controller.parallel_slots"));
+        assertEquals("并行数: %s / %s", Translations.ALL.get("zh_cn").get("gui.mmcr.controller.parallel"));
+    }
+
+    @Test
     void jei_recipe_labels_are_generated_for_both_locales() {
         assertEquals("Machine Recipe", Translations.ALL.get("en_us").get("jei.mmcr.machine_recipe"));
         assertEquals("Duration: %s t %s s", Translations.ALL.get("en_us").get("jei.mmcr.machine_recipe.duration"));

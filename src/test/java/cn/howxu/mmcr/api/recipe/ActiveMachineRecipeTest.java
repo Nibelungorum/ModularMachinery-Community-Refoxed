@@ -80,15 +80,18 @@ class ActiveMachineRecipeTest {
     }
 
     @Test
-    void startPromotesParallelismToHighestFeasibleCraftAmount() throws Exception {
+    void contextCheckPromotesParallelismBeforeStartCommitsInputs() throws Exception {
         ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
         bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(8));
         MachineControllerBlockEntity controller = controllerWithComponents(bus);
         MachineRecipe recipe = inputRecipe("active_parallel_start", MMCR.id("blast_furnace"), Items.IRON_INGOT, 2);
         ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, 16);
 
-        boolean started = active.start(new RecipeCraftingContext(controller));
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+        boolean canStart = active.canStartCrafting(context);
+        boolean started = active.start(context);
 
+        assertThat(canStart).isTrue();
         assertThat(started).isTrue();
         assertThat(active.getParallelism()).isEqualTo(4);
         assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isZero();

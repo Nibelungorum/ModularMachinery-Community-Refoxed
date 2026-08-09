@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.machine;
 
-import cn.howxu.mmcr.internal.block.FactoryControllerBlock;
+import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
@@ -99,7 +99,7 @@ public final class MachinePatternCompiler {
         return switch (predicate) {
             case BlockPredicate.OfBlock of -> of.block() instanceof IOPortBlock
                     || of.block() instanceof ParallelControllerBlock
-                    || of.block() instanceof FactoryControllerBlock;
+                    || of.block() instanceof FactorySchedulerBlock;
             case BlockPredicate.AnyOf ignored -> true;
             default -> true;
         };

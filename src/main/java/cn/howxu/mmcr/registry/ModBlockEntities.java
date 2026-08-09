@@ -6,7 +6,7 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.tile.DebugInfiniteEnergySourceBlockEntity;
 import cn.howxu.mmcr.internal.tile.DebugInfiniteFluidSourceBlockEntity;
-import cn.howxu.mmcr.internal.tile.FactoryControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import net.minecraft.core.BlockPos;
@@ -69,7 +69,7 @@ public final class ModBlockEntities {
     private static void registerFactoryController() {
         String name = "factory_controller";
         BES.put(name, register(name, () -> new BlockEntityType<>(
-                FactoryControllerBlockEntity::new,
+                FactorySchedulerBlockEntity::new,
                 ModBlocks.BLOCKS.get(name).get())));
     }
 

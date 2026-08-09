@@ -14,7 +14,10 @@ public record MachineRegistration(
         MachineControllerSpec controllerSpec,
         MachineAppearanceSpec appearance,
         Identifier recipeFamilyId,
-        boolean allowModifiers
+        boolean allowModifiers,
+        boolean allowMultithreading,
+        boolean allowParallelism,
+        int maxParallelAmount
 ) {
     public MachineRegistration {
         if (id == null) throw new IllegalArgumentException("id null");
@@ -22,6 +25,7 @@ public record MachineRegistration(
         controllerSpec = controllerSpec == null ? MachineControllerSpec.defaultsFor(id) : controllerSpec;
         appearance = appearance == null ? MachineAppearanceSpec.defaults() : appearance;
         recipeFamilyId = recipeFamilyId == null ? id : recipeFamilyId;
+        maxParallelAmount = Math.max(1, maxParallelAmount);
     }
 
     public static Builder builder(Identifier id) {
@@ -35,6 +39,9 @@ public record MachineRegistration(
         private MachineAppearanceSpec appearance;
         private Identifier recipeFamilyId;
         private boolean allowModifiers;
+        private boolean allowMultithreading;
+        private boolean allowParallelism;
+        private int maxParallelAmount = 1;
 
         private Builder(Identifier id) {
             this.id = id;
@@ -65,8 +72,24 @@ public record MachineRegistration(
             return this;
         }
 
+        public Builder allowMultithreading(boolean allowMultithreading) {
+            this.allowMultithreading = allowMultithreading;
+            return this;
+        }
+
+        public Builder allowParallelism(boolean allowParallelism) {
+            this.allowParallelism = allowParallelism;
+            return this;
+        }
+
+        public Builder maxParallelAmount(int maxParallelAmount) {
+            this.maxParallelAmount = maxParallelAmount;
+            return this;
+        }
+
         public MachineRegistration build() {
-            return new MachineRegistration(id, localizedName, controllerSpec, appearance, recipeFamilyId, allowModifiers);
+            return new MachineRegistration(id, localizedName, controllerSpec, appearance, recipeFamilyId, allowModifiers,
+                    allowMultithreading, allowParallelism, maxParallelAmount);
         }
     }
 }

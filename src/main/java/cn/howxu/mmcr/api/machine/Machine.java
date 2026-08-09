@@ -48,4 +48,8 @@ public interface Machine {
     default int factoryThreadLimit() {
         return 1;
     }
+
+    default List<FactoryThreadSpec> factoryThreads() {
+        return List.of();
+    }
 }

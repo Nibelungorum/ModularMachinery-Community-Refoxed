@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.registry;
 
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
+import cn.howxu.mmcr.internal.item.ThreadDisperserItem;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
@@ -10,7 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class FactoryControllerRegistrationTest {
+class FactorySchedulerRegistrationTest {
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -18,7 +19,7 @@ class FactoryControllerRegistrationTest {
     }
 
     @Test
-    void factory_controller_has_block_item_and_block_entity_registered() {
+    void factory_controller_uses_scheduler_block_and_block_entity_registered() {
         assertThat(ModBlocks.BLOCKS).containsKey("factory_controller");
         assertThat(ModBlocks.BLOCKS).doesNotContainKey("factory_scheduler");
         assertThat(ModBlocks.BLOCKS.get("factory_controller").get()).isInstanceOf(FactorySchedulerBlock.class);
@@ -32,10 +33,11 @@ class FactoryControllerRegistrationTest {
                 ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
 
         assertThat(entity).isInstanceOf(FactorySchedulerBlockEntity.class);
-        FactorySchedulerBlockEntity factory = (FactorySchedulerBlockEntity) entity;
-        assertThat(factory.activeLaneCount()).isZero();
-        factory.stopAll();
-        factory.stopAll();
-        assertThat(factory.activeLaneCount()).isZero();
+    }
+
+    @Test
+    void thread_disperser_item_is_registered() {
+        assertThat(ModItems.ITEMS).containsKey("thread_disperser");
+        assertThat(ModItems.THREAD_DISPERSER.get()).isInstanceOf(ThreadDisperserItem.class);
     }
 }

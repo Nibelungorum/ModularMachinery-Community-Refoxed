@@ -11,6 +11,28 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DynamicMachineTest {
 
     @Test
+    void dynamic_machine_preserves_factory_thread_specs() {
+        FactoryThreadSpec thread = new FactoryThreadSpec("smelting", List.of(MMCR.id("iron_recipe")));
+        DynamicMachine machine = new DynamicMachine(
+                MMCR.id("factory_threads_machine"),
+                "Factory Threads",
+                new BlockArray(Map.of()),
+                MachineControllerSpec.defaultsFor(MMCR.id("factory_threads_machine")),
+                MachineAppearanceSpec.defaults(),
+                PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(),
+                List.of(),
+                Map.of(),
+                16,
+                true,
+                true,
+                4,
+                List.of(thread));
+
+        assertThat(machine.factoryThreads()).containsExactly(thread);
+    }
+
+    @Test
     void compatibilityConstructorsDefaultParallelAndFactoryCapabilities() {
         DynamicMachine machine = new DynamicMachine(
                 MMCR.id("parallel_defaults"),

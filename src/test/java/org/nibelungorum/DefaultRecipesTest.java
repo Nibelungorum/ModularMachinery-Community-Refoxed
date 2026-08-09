@@ -58,6 +58,7 @@ class DefaultRecipesTest {
         assertThat(((MachineIngredient.EnergyIngredient) recipe.inputs().get(1)).fePerTick()).isEqualTo(1);
         assertThat(recipe.outputs().getFirst().getItem()).isEqualTo(net.minecraft.world.item.Items.IRON_NUGGET);
         assertThat(recipe.outputs().getFirst().getCount()).isEqualTo(1);
+        assertThat(recipe.isParallelized()).isTrue();
     }
 
     @Test

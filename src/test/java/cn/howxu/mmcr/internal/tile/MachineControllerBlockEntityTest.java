@@ -126,9 +126,53 @@ class MachineControllerBlockEntityTest {
         setField(MachineControllerBlockEntity.class, controller, "machine", parallelMachine);
         addParallelComponent(controller, ParallelTier.X16);
         assertThat(controller.getMaxParallelism()).isEqualTo(16);
+        assertThat(controller.parallelControllerCount()).isEqualTo(1);
+        assertThat(controller.currentParallelism()).isZero();
 
         setField(MachineControllerBlockEntity.class, controller, "machine", nonParallelMachine);
         assertThat(controller.getMaxParallelism()).isEqualTo(1);
+    }
+
+    @Test
+    void effective_threads_require_multithreading_and_parallelism_requires_parallel_flag() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
+        addFactorySchedulerComponent(controller, factoryController(new BlockPos(1, 0, 0), 4));
+        addParallelComponent(controller, ParallelTier.X16);
+
+        var threadsOnly = new DynamicMachine(
+                MMCR.id("threads_only_runtime_machine"),
+                "Threads Only Runtime",
+                onePortPattern(Blocks.IRON_BLOCK),
+                MachineControllerSpec.defaultsFor(MMCR.id("threads_only_runtime_machine")),
+                PortRequirementSpec.none(),
+                List.of(),
+                Map.of(),
+                1,
+                false,
+                true,
+                1);
+        var parallelOnly = new DynamicMachine(
+                MMCR.id("parallel_only_runtime_machine"),
+                "Parallel Only Runtime",
+                onePortPattern(Blocks.IRON_BLOCK),
+                MachineControllerSpec.defaultsFor(MMCR.id("parallel_only_runtime_machine")),
+                PortRequirementSpec.none(),
+                List.of(),
+                Map.of(),
+                8,
+                true,
+                false,
+                1);
+
+        setField(MachineControllerBlockEntity.class, controller, "machine", threadsOnly);
+        assertThat(controller.effectiveFactoryThreadLimit()).isEqualTo(5);
+        assertThat(controller.getMaxParallelism()).isEqualTo(1);
+
+        setField(MachineControllerBlockEntity.class, controller, "machine", parallelOnly);
+        assertThat(controller.effectiveFactoryThreadLimit()).isEqualTo(1);
+        assertThat(controller.getMaxParallelism()).isEqualTo(8);
     }
 
     @Test
@@ -173,7 +217,7 @@ class MachineControllerBlockEntityTest {
                 false,
                 true,
                 4);
-        FactoryControllerBlockEntity factory = factoryController(controllerPos.offset(1, 0, 0));
+        FactorySchedulerBlockEntity factory = factoryController(controllerPos.offset(1, 0, 0));
         MachineControllerBlockEntity controller = controllerForFactoryFormation(factoryMachine, controllerPos, factory);
 
         assertThat(invokeTryFormMachine(controller, factoryMachine, Direction.SOUTH)).isTrue();
@@ -189,7 +233,7 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
-    void formed_factory_controller_uses_machine_thread_limit() throws Exception {
+    void formed_factory_controller_uses_own_thread_disperser_count() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         var factoryMachine = new DynamicMachine(
                 MMCR.id("formed_factory_limit_test_machine"),
@@ -203,12 +247,13 @@ class MachineControllerBlockEntityTest {
                 false,
                 true,
                 3);
-        FactoryControllerBlockEntity factory = factoryController(controllerPos.offset(1, 0, 0));
+        FactorySchedulerBlockEntity factory = factoryController(controllerPos.offset(1, 0, 0), 2);
         MachineControllerBlockEntity controller = controllerForFactoryFormation(factoryMachine, controllerPos, factory);
 
         assertThat(invokeTryFormMachine(controller, factoryMachine, Direction.SOUTH)).isTrue();
 
         assertThat(controller.getFactoryController()).isSameAs(factory);
+        assertThat(controller.factorySchedulerThreadCount()).isEqualTo(3);
         assertThat(factory.threadLimit()).isEqualTo(3);
         addFactoryLane(factory);
         addFactoryLane(factory);
@@ -218,17 +263,38 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void factory_controller_threads_are_summed_and_saturated() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
+
+        assertThat(controller.factorySchedulerThreadCount()).isZero();
+
+        addFactorySchedulerComponent(controller, factoryController(new BlockPos(1, 0, 0), 64));
+        addFactorySchedulerComponent(controller, factoryController(new BlockPos(2, 0, 0), 3));
+
+        assertThat(controller.factorySchedulerThreadCount()).isEqualTo(69);
+
+        addFactorySchedulerComponent(controller, factoryController(new BlockPos(3, 0, 0), Integer.MAX_VALUE));
+
+        assertThat(controller.factorySchedulerThreadCount()).isEqualTo(Integer.MAX_VALUE);
+    }
+
+    @Test
     void factory_controller_starts_multiple_recipe_lanes_on_server_tick() throws Exception {
         bindItemComponents(Items.IRON_INGOT);
         bindItemComponents(Items.IRON_NUGGET);
         FactoryRuntimeFixture fixture = formedFactoryRuntimeFixture(MMCR.id("factory_lane_smelt_machine"), 3, 3);
-        registerItemRecipe("factory_lane_smelt", fixture.machine().registryName(), 20);
+        registerItemRecipe("factory_lane_smelt", fixture.machine().registryName(), 20, 0);
 
         fixture.controller().serverTick();
 
         assertThat(fixture.factory().threadLimit()).isEqualTo(3);
         assertThat(fixture.factory().activeLaneCount()).isEqualTo(3);
         assertThat(fixture.controller().getActive()).isNull();
+        assertThat(fixture.controller().isRuntimeActive()).isTrue();
+        assertThat(fixture.controller().activeFactoryThreadCount()).isEqualTo(3);
+        assertThat(fixture.controller().currentParallelism()).isEqualTo(1);
     }
 
     @Test
@@ -236,7 +302,7 @@ class MachineControllerBlockEntityTest {
         bindItemComponents(Items.IRON_INGOT);
         bindItemComponents(Items.IRON_NUGGET);
         FactoryRuntimeFixture fixture = formedFactoryRuntimeFixture(MMCR.id("factory_lane_limited_machine"), 3, 2);
-        registerItemRecipe("factory_lane_limited", fixture.machine().registryName(), 20);
+        registerItemRecipe("factory_lane_limited", fixture.machine().registryName(), 20, 0);
 
         fixture.controller().serverTick();
 
@@ -282,7 +348,7 @@ class MachineControllerBlockEntityTest {
                 false,
                 true,
                 4);
-        FactoryControllerBlockEntity factory = factoryController(controllerPos.offset(1, 0, 0));
+        FactorySchedulerBlockEntity factory = factoryController(controllerPos.offset(1, 0, 0));
         MachineControllerBlockEntity controller = controllerForFactoryFormation(factoryMachine, controllerPos, factory);
         assertThat(invokeTryFormMachine(controller, factoryMachine, Direction.SOUTH)).isTrue();
         addFactoryLane(factory);
@@ -305,7 +371,7 @@ class MachineControllerBlockEntityTest {
         FactoryRuntimeFixture fixture = formedFactoryRuntimeFixture(MMCR.id("factory_lane_reset_machine"), 2, 2);
         RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
         setField(MachineControllerBlockEntity.class, fixture.controller(), "contextPool", pool);
-        MachineRecipe recipe = registerItemRecipe("factory_lane_reset", fixture.machine().registryName(), 20);
+        MachineRecipe recipe = registerItemRecipe("factory_lane_reset", fixture.machine().registryName(), 20, 0);
         fixture.controller().serverTick();
         assertThat(fixture.factory().activeLaneCount()).isEqualTo(2);
 
@@ -322,7 +388,7 @@ class MachineControllerBlockEntityTest {
         FactoryRuntimeFixture fixture = formedFactoryRuntimeFixture(MMCR.id("factory_lane_removed_machine"), 2, 2);
         RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
         setField(MachineControllerBlockEntity.class, fixture.controller(), "contextPool", pool);
-        MachineRecipe recipe = registerItemRecipe("factory_lane_removed", fixture.machine().registryName(), 20);
+        MachineRecipe recipe = registerItemRecipe("factory_lane_removed", fixture.machine().registryName(), 20, 0);
         fixture.controller().serverTick();
         assertThat(fixture.factory().activeLaneCount()).isEqualTo(2);
 
@@ -339,7 +405,7 @@ class MachineControllerBlockEntityTest {
         FactoryRuntimeFixture fixture = formedFactoryRuntimeFixture(MMCR.id("factory_lane_unload_machine"), 2, 2);
         RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
         setField(MachineControllerBlockEntity.class, fixture.controller(), "contextPool", pool);
-        MachineRecipe recipe = registerItemRecipe("factory_lane_unload", fixture.machine().registryName(), 20);
+        MachineRecipe recipe = registerItemRecipe("factory_lane_unload", fixture.machine().registryName(), 20, 0);
         fixture.controller().serverTick();
         assertThat(fixture.factory().activeLaneCount()).isEqualTo(2);
 
@@ -788,6 +854,26 @@ class MachineControllerBlockEntityTest {
                 itemInputBus(controllerPos.offset(0, 0, -2)),
                 itemOutputBus(controllerPos.offset(-1, 0, -1)),
                 energyHatch(controllerPos.offset(1, 0, -1), "energy_input_hatch_ludicrous"));
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
+
+        assertThat(formed).isTrue();
+        assertThat(controller.getLastFormationFailure()).isNull();
+    }
+
+    @Test
+    void built_in_blast_furnace_forms_when_top_factory_slot_is_casing() throws Exception {
+        TestBootstrap.registerRuntimeBuiltins();
+        DynamicMachine machine = (DynamicMachine) MachineRegistry.getMachine(MMCR.id("blast_furnace"));
+        BlockPos controllerPos = new BlockPos(20, 4, 20);
+        MachineControllerBlockEntity controller = controllerForDefaultBlastFurnace(
+                machine,
+                controllerPos,
+                itemInputBus(controllerPos.offset(0, 0, -2)),
+                itemOutputBus(controllerPos.offset(-1, 0, -1)),
+                energyHatch(controllerPos.offset(1, 0, -1), "energy_input_hatch_ludicrous"));
+        Level level = levelOf(controller);
+        level.setBlock(controllerPos.offset(0, 1, -1), cn.howxu.mmcr.registry.ModBlocks.CASING.get().defaultBlockState(), 3);
 
         boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
 
@@ -1325,7 +1411,7 @@ class MachineControllerBlockEntityTest {
                 true,
                 4);
         MachineRegistry.register(factoryMachine);
-        FactoryControllerBlockEntity factory = factoryController(controllerPos.offset(1, 0, 0));
+        FactorySchedulerBlockEntity factory = factoryController(controllerPos.offset(1, 0, 0));
         MachineControllerBlockEntity controller = controllerForFactoryFormation(factoryMachine, controllerPos, factory);
         assertThat(invokeTryFormMachine(controller, factoryMachine, Direction.SOUTH)).isTrue();
         addFactoryLane(factory);
@@ -1524,29 +1610,45 @@ class MachineControllerBlockEntityTest {
         }
     }
 
-    private static FactoryControllerBlockEntity factoryController(BlockPos pos) {
+    private static FactorySchedulerBlockEntity factoryController(BlockPos pos) {
+        return factoryController(pos, 0);
+    }
+
+    private static FactorySchedulerBlockEntity factoryController(BlockPos pos, int dispersers) {
         try {
             Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
             unsafeField.setAccessible(true);
             sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
-            FactoryControllerBlockEntity entity = (FactoryControllerBlockEntity) unsafe.allocateInstance(FactoryControllerBlockEntity.class);
+            FactorySchedulerBlockEntity entity = (FactorySchedulerBlockEntity) unsafe.allocateInstance(FactorySchedulerBlockEntity.class);
             setField(BlockEntity.class, entity, "type", null);
             setField(BlockEntity.class, entity, "worldPosition", pos);
             setField(BlockEntity.class, entity, "blockState", Blocks.IRON_BLOCK.defaultBlockState());
-            setField(FactoryControllerBlockEntity.class, entity, "threadLimit", 4);
-            setField(FactoryControllerBlockEntity.class, entity, "scheduler", new cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler(4));
+            setField(FactorySchedulerBlockEntity.class, entity, "threadLimit", 4);
+            setField(FactorySchedulerBlockEntity.class, entity, "scheduler", new cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler(4));
+            setField(FactorySchedulerBlockEntity.class, entity, "handler", threadDisperserHandler(dispersers));
             return entity;
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate factory controller", e);
         }
     }
 
-    private static void addFactoryLane(FactoryControllerBlockEntity factory) throws Exception {
+    private static ItemStackHandler threadDisperserHandler(int dispersers) {
+        ItemStackHandler handler = new ItemStackHandler(1) {
+            @Override
+            public boolean isItemValid(int slot, ItemStack stack) {
+                return stack.is(cn.howxu.mmcr.registry.ModItems.THREAD_DISPERSER.get());
+            }
+        };
+        handler.setStackInSlot(0, new ItemStack(cn.howxu.mmcr.registry.ModItems.THREAD_DISPERSER.get(), dispersers));
+        return handler;
+    }
+
+    private static void addFactoryLane(FactorySchedulerBlockEntity factory) throws Exception {
         assertThat(startFactoryLane(factory)).isTrue();
     }
 
-    private static boolean startFactoryLane(FactoryControllerBlockEntity factory) throws Exception {
-        Field schedulerField = FactoryControllerBlockEntity.class.getDeclaredField("scheduler");
+    private static boolean startFactoryLane(FactorySchedulerBlockEntity factory) throws Exception {
+        Field schedulerField = FactorySchedulerBlockEntity.class.getDeclaredField("scheduler");
         schedulerField.setAccessible(true);
         cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler scheduler =
                 (cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler) schedulerField.get(factory);
@@ -1609,7 +1711,7 @@ class MachineControllerBlockEntityTest {
         input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, inputCount));
         ItemOutputBusBlockEntity output = itemOutputBus(outputPos);
         setField(ItemBusBlockEntity.class, output, "handler", new ItemStackHandler(6));
-        FactoryControllerBlockEntity factory = factoryController(factoryPos);
+        FactorySchedulerBlockEntity factory = factoryController(factoryPos, Math.max(0, threadLimit - 1));
         var machine = new DynamicMachine(
                 machineId,
                 "Factory Runtime",
@@ -1627,7 +1729,6 @@ class MachineControllerBlockEntityTest {
         assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
         addItemInputComponent(controller, input);
         addItemOutputComponent(controller, output);
-        addFactoryComponent(controller, factory);
         return new FactoryRuntimeFixture(controller, factory, input, output, machine);
     }
 
@@ -1639,8 +1740,12 @@ class MachineControllerBlockEntityTest {
         addComponent(controller, new MachineComponent(PortKinds.ITEM_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT), output);
     }
 
-    private static void addFactoryComponent(MachineControllerBlockEntity controller, FactoryControllerBlockEntity factory) throws Exception {
+    private static void addFactoryComponent(MachineControllerBlockEntity controller, FactorySchedulerBlockEntity factory) throws Exception {
         addComponent(controller, null, factory);
+    }
+
+    private static void addFactorySchedulerComponent(MachineControllerBlockEntity controller, FactorySchedulerBlockEntity scheduler) throws Exception {
+        addComponent(controller, null, scheduler);
     }
 
     private static void addComponent(MachineControllerBlockEntity controller,
@@ -1661,6 +1766,10 @@ class MachineControllerBlockEntityTest {
     }
 
     private static MachineRecipe registerItemRecipe(String path, Identifier machineId, int ticks) {
+        return registerItemRecipe(path, machineId, ticks, 1);
+    }
+
+    private static MachineRecipe registerItemRecipe(String path, Identifier machineId, int ticks, int maxThreads) {
         MachineRecipe recipe = new MachineRecipe(
                 MMCR.id(path),
                 machineId,
@@ -1669,7 +1778,7 @@ class MachineControllerBlockEntityTest {
                 List.of(),
                 List.of(),
                 0,
-                1,
+                maxThreads,
                 false,
                 List.of(),
                 List.of(
@@ -1897,7 +2006,7 @@ class MachineControllerBlockEntityTest {
     private static MachineControllerBlockEntity controllerForFactoryFormation(
             DynamicMachine machine,
             BlockPos controllerPos,
-            FactoryControllerBlockEntity factory) throws Exception {
+            FactorySchedulerBlockEntity factory) throws Exception {
         MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
         initializeComponents(controller);
         var controllerBlock = testControllerBlock(machine);
@@ -1921,7 +2030,7 @@ class MachineControllerBlockEntityTest {
             BlockPos controllerPos,
             ItemInputBusBlockEntity input,
             ItemOutputBusBlockEntity output,
-            FactoryControllerBlockEntity factory) throws Exception {
+            FactorySchedulerBlockEntity factory) throws Exception {
         MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
         initializeComponents(controller);
         var controllerBlock = testControllerBlock(machine);
@@ -1964,7 +2073,7 @@ class MachineControllerBlockEntityTest {
         for (var entry : machine.pattern().pattern().entrySet()) {
             blocks.put(controllerPos.offset(entry.getKey()), switch (entry.getValue()) {
                 case BlockPredicate.OfBlock of -> of.block();
-                case BlockPredicate.AnyOf ignored -> cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get();
+                case BlockPredicate.AnyOf anyOf -> firstBlock(anyOf);
                 default -> cn.howxu.mmcr.registry.ModBlocks.CASING.get();
             });
         }
@@ -1978,6 +2087,13 @@ class MachineControllerBlockEntityTest {
         setField(BlockEntity.class, second, "level", level);
         setField(BlockEntity.class, third, "level", level);
         return controller;
+    }
+
+    private static Block firstBlock(BlockPredicate.AnyOf predicate) {
+        for (BlockPredicate child : predicate.children()) {
+            if (child instanceof BlockPredicate.OfBlock of) return of.block();
+        }
+        return cn.howxu.mmcr.registry.ModBlocks.CASING.get();
     }
 
     private static Block blockForPort(IOPortBlockEntity port) {
@@ -2086,7 +2202,7 @@ class MachineControllerBlockEntityTest {
     }
 
     private record FactoryRuntimeFixture(MachineControllerBlockEntity controller,
-                                         FactoryControllerBlockEntity factory,
+                                         FactorySchedulerBlockEntity factory,
                                          ItemInputBusBlockEntity inputBus,
                                          ItemOutputBusBlockEntity outputBus,
                                          DynamicMachine machine) { }

@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.block.DebugSourceBlock;
-import cn.howxu.mmcr.internal.block.FactoryControllerBlock;
+import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineCasingBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
@@ -98,7 +98,7 @@ public final class ModBlocks {
         Supplier<? extends BlockEntityType<?>> beTypeSupplier =
                 () -> ModBlockEntities.BES.get(name).get();
         BLOCKS.put(name, REGISTER.registerBlock(name,
-                properties -> new FactoryControllerBlock(beTypeSupplier, properties)));
+                properties -> new FactorySchedulerBlock(beTypeSupplier, properties)));
     }
 
     private static void registerDebugSource(String name, Fluid fluid) {

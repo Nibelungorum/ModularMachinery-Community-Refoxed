@@ -52,6 +52,7 @@ public final class DynamicOverlayTextures {
         if (ParallelTier.X64.idSuffix().equals(blockName)) return MMCR.id("block/overlay_parallel_controller_super");
         if (ParallelTier.X256.idSuffix().equals(blockName)) return MMCR.id("block/overlay_parallel_controller_elite");
         if (ParallelTier.X512.idSuffix().equals(blockName)) return MMCR.id("block/overlay_parallel_controller_ultimate");
+        if (ParallelTier.MAX.idSuffix().equals(blockName)) return MMCR.id("block/overlay_parallel_controller_ultimate");
         return DynamicOverlayBakedModel.defaultPortOverlayTexture();
     }
 }

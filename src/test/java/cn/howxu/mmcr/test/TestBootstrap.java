@@ -6,12 +6,12 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
-import cn.howxu.mmcr.internal.block.FactoryControllerBlock;
+import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
-import cn.howxu.mmcr.internal.tile.FactoryControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModBlockEntities;
@@ -20,6 +20,8 @@ import cn.howxu.mmcr.registry.PortKinds;
 import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
+import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.Bootstrap;
@@ -84,6 +86,7 @@ public final class TestBootstrap {
         bindPortBlocks();
         for (ParallelTier tier : ParallelTier.values()) bindParallelController(tier);
         bindFactoryController();
+        bind(ModItems.THREAD_DISPERSER, registerItem(ModItems.THREAD_DISPERSER));
         restoreMachineDefinitions();
         registerRuntimeBuiltins();
         initialized = true;
@@ -172,7 +175,7 @@ public final class TestBootstrap {
 
     private static void bindFactoryController() throws Exception {
         String name = "factory_controller";
-        FactoryControllerBlock block = factoryControllerBlock();
+        FactorySchedulerBlock block = factoryControllerBlock();
         bind(ModBlocks.BLOCKS.get(name), block);
         DeferredHolder<Item, Item> itemHolder = ModItems.ITEMS.get(name);
         Item item = registerItem(itemHolder);
@@ -181,10 +184,10 @@ public final class TestBootstrap {
         bind(ModBlockEntities.BES.get(name), factoryControllerBlockEntityType(block));
     }
 
-    private static FactoryControllerBlock factoryControllerBlock() {
+    private static FactorySchedulerBlock factoryControllerBlock() {
         MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
         blocks.unfreeze(true);
-        FactoryControllerBlock block = new FactoryControllerBlock(
+        FactorySchedulerBlock block = new FactorySchedulerBlock(
                 () -> ModBlockEntities.BES.get("factory_controller").get(),
                 Blocks.IRON_BLOCK.properties());
         Registry.register(BuiltInRegistries.BLOCK, MMCR.id("factory_controller"), block);
@@ -192,10 +195,10 @@ public final class TestBootstrap {
         return block;
     }
 
-    private static BlockEntityType<?> factoryControllerBlockEntityType(FactoryControllerBlock block) {
+    private static BlockEntityType<?> factoryControllerBlockEntityType(FactorySchedulerBlock block) {
         MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
         blockEntities.unfreeze(true);
-        BlockEntityType<?> beType = new BlockEntityType<>(FactoryControllerBlockEntity::new, block);
+        BlockEntityType<?> beType = new BlockEntityType<>(FactorySchedulerBlockEntity::new, block);
         Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id("factory_controller"), beType);
         blockEntities.freeze();
         return beType;
@@ -234,6 +237,7 @@ public final class TestBootstrap {
         Item item = registeredItemSupplier(itemHolder).get();
         Registry.register(BuiltInRegistries.ITEM, itemHolder.getId(), item);
         items.freeze();
+        item.builtInRegistryHolder().bindComponents(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
         return item;
     }
 

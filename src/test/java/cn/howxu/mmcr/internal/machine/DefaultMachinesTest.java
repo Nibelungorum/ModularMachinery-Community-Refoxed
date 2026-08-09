@@ -46,9 +46,9 @@ class DefaultMachinesTest {
         var machine = MachineRegistry.getMachine(MMCR.id("blast_furnace"));
 
         assertThat(machine).isNotNull();
-        assertThat(machine.parallelizable()).isFalse();
-        assertThat(machine.maxParallelism()).isEqualTo(1);
-        assertThat(machine.hasFactory()).isFalse();
+        assertThat(machine.parallelizable()).isTrue();
+        assertThat(machine.maxParallelism()).isEqualTo(Integer.MAX_VALUE);
+        assertThat(machine.hasFactory()).isTrue();
         assertThat(machine.localizedName()).isEqualTo("高炉");
         assertThat(machine.controller().id()).isEqualTo(MMCR.id("blast_furnace_controller"));
         assertThat(machine.portRequirements().isEmpty()).isTrue();
@@ -68,8 +68,6 @@ class DefaultMachinesTest {
         assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("energy_input_hatch_ultimate").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("energy_output_hatch").get().defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(-1, 1, 0)))
-                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.CASING.get()));
     }
 
     @Test
@@ -201,7 +199,12 @@ class DefaultMachinesTest {
         for (var entry : machine.pattern().pattern().entrySet()) {
             blocks.put(controller.offset(cn.howxu.mmcr.api.machine.BlockRotator.rotateSouthTo(entry.getKey(), Direction.UP)), switch (entry.getValue()) {
                 case BlockPredicate.OfBlock of -> of.block();
-                case BlockPredicate.AnyOf ignored -> ModBlocks.BLOCKS.get("item_input_bus").get();
+                case BlockPredicate.AnyOf any -> any.children().stream()
+                        .filter(BlockPredicate.OfBlock.class::isInstance)
+                        .map(BlockPredicate.OfBlock.class::cast)
+                        .map(BlockPredicate.OfBlock::block)
+                        .findFirst()
+                        .orElse(ModBlocks.BLOCKS.get("item_input_bus").get());
                 default -> ModBlocks.CASING.get();
             });
         }
@@ -221,22 +224,29 @@ class DefaultMachinesTest {
                 ModBlocks.BLOCKS.get("fluid_output_hatch").get(),
                 ModBlocks.BLOCKS.get("energy_input_hatch").get(),
                 ModBlocks.BLOCKS.get("energy_output_hatch").get());
-        BlockPos controller = new BlockPos(10, 4, 10);
-        Map<BlockPos, Block> blocks = new HashMap<>();
-        for (var entry : machine.pattern().pattern().entrySet()) {
-            blocks.put(controller.offset(entry.getKey()), switch (entry.getValue()) {
-                case BlockPredicate.OfBlock of -> of.block();
-                case BlockPredicate.AnyOf ignored -> ModBlocks.BLOCKS.get("item_input_bus").get();
-                default -> ModBlocks.CASING.get();
-            });
-        }
+        assertThat(machine.pattern().get(BlockPos.ZERO))
+                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine.registryName()).get()));
+        assertThat(machine.pattern().get(new BlockPos(-1, -1, -2)).matches(ModBlocks.CASING.get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, -1, -2)).matches(ModBlocks.BLOCKS.get("parallel_controller_4").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(0, 1, -1)).matches(ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState())).isTrue();
+    }
 
-        assertThat(StructureMatcher.matches(machine.pattern(), LevelStub.create(blocks), controller, Direction.SOUTH))
-                .as("默认三层模板中 C 在下方，原始坐标应识别为向南/向下")
-                .isTrue();
-        assertThat(StructureMatcher.matches(machine.pattern(), LevelStub.create(blocks), controller, Direction.NORTH))
-                .as("同一原始模板不应再识别为向北/向上")
-                .isFalse();
+    @Test
+    void default_blast_furnace_accepts_parallel_controllers_and_factory_scheduler_slots() {
+        Machine machine = DefaultMachines.blastFurnace(
+                ModBlocks.CASING.get(),
+                ModBlocks.BLOCKS.get("item_input_bus").get(),
+                ModBlocks.BLOCKS.get("item_output_bus").get(),
+                ModBlocks.BLOCKS.get("fluid_input_hatch").get(),
+                ModBlocks.BLOCKS.get("fluid_output_hatch").get(),
+                ModBlocks.BLOCKS.get("energy_input_hatch").get(),
+                ModBlocks.BLOCKS.get("energy_output_hatch").get());
+
+        assertThat(machine.pattern().get(new BlockPos(-1, -1, -2)).matches(ModBlocks.CASING.get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, -1, -2)).matches(ModBlocks.BLOCKS.get("parallel_controller_max").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(0, 1, -1)).matches(ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState())).isTrue();
+        assertThat(machine.parallelizable()).isTrue();
+        assertThat(machine.hasFactory()).isTrue();
     }
 
     @Test

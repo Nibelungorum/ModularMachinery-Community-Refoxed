@@ -48,7 +48,11 @@ public final class MachineStructureRegistry {
                 structure.portRequirements(),
                 structure.portTierRequirements(),
                 structure.dynamicPatterns(),
-                structure.modifierReplacements());
+                structure.modifierReplacements(),
+                registration.maxParallelAmount(),
+                registration.allowParallelism(),
+                registration.allowMultithreading(),
+                1);
     }
 
     public static void clearForTesting() {

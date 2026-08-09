@@ -42,6 +42,9 @@ public final class BuiltinMachines {
                     .controllerSpec(controller)
                     .recipeFamilyId(BLAST_FURNACE_ID)
                     .allowModifiers(false)
+                    .allowMultithreading(true)
+                    .allowParallelism(true)
+                    .maxParallelAmount(Integer.MAX_VALUE)
                     .build();
         });
         MachineDefinitions.addBuiltinSupplier(() -> {

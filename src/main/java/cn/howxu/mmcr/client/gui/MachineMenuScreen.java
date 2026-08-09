@@ -2,10 +2,10 @@ package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
+import cn.howxu.mmcr.internal.menu.FactorySchedulerMenu;
 import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
-import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -74,9 +74,10 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         boolean fluidMenu = menu instanceof FluidHatchMenu;
         boolean energyMenu = menu instanceof EnergyHatchMenu;
         boolean itemBusMenu = menu instanceof ItemBusMenu;
+        boolean factoryMenu = menu instanceof FactorySchedulerMenu;
         boolean showTitle = !(menu instanceof ItemBusMenu itemBus) || itemBus.showsTitle();
-        this.titleLabelX = titleX(titleLabelX, fluidMenu, energyMenu, itemBusMenu);
-        this.titleLabelY = showTitle ? titleY(titleLabelY, fluidMenu || energyMenu, itemBusMenu) : hiddenInventoryLabelY();
+        this.titleLabelX = titleX(titleLabelX, fluidMenu, energyMenu, itemBusMenu, factoryMenu);
+        this.titleLabelY = showTitle ? titleY(titleLabelY, fluidMenu || energyMenu, itemBusMenu, factoryMenu) : hiddenInventoryLabelY();
         this.inventoryLabelY = hiddenInventoryLabelY();
     }
 
@@ -98,9 +99,13 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     }
 
     static int titleX(int baseX, boolean fluidMenu, boolean energyMenu, boolean itemBusMenu) {
+        return titleX(baseX, fluidMenu, energyMenu, itemBusMenu, false);
+    }
+
+    static int titleX(int baseX, boolean fluidMenu, boolean energyMenu, boolean itemBusMenu, boolean factoryMenu) {
         if (fluidMenu) return baseX + FLUID_TITLE_OFFSET_X;
         if (energyMenu) return baseX + ENERGY_TITLE_OFFSET_X;
-        if (itemBusMenu) return baseX + ITEM_BUS_TITLE_OFFSET_X;
+        if (itemBusMenu || factoryMenu) return baseX + ITEM_BUS_TITLE_OFFSET_X;
         return baseX + TITLE_OFFSET_X;
     }
 
@@ -113,8 +118,12 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     }
 
     static int titleY(int baseY, boolean tankMenu, boolean itemBusMenu) {
+        return titleY(baseY, tankMenu, itemBusMenu, false);
+    }
+
+    static int titleY(int baseY, boolean tankMenu, boolean itemBusMenu, boolean factoryMenu) {
         if (tankMenu) return baseY + TANK_TITLE_OFFSET_Y;
-        if (itemBusMenu) return baseY + ITEM_BUS_TITLE_OFFSET_Y;
+        if (itemBusMenu || factoryMenu) return baseY + ITEM_BUS_TITLE_OFFSET_Y;
         return baseY + TITLE_OFFSET_Y;
     }
 
@@ -219,6 +228,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         if (menu instanceof FluidHatchMenu)         return TANK_TEXTURE;
         if (menu instanceof EnergyHatchMenu)        return TANK_TEXTURE;
         if (menu instanceof MachineControllerMenu)  return CONTROLLER_TEXTURE;
+        if (menu instanceof FactorySchedulerMenu factory) return MMCR.id(factory.texturePath());
         return MMCR.id(ItemBusMenu.texturePathForSize(cn.howxu.mmcr.internal.port.ItemBusSize.NORMAL));
     }
 
@@ -283,10 +293,10 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     }
 
     private void renderControllerStatus(GuiGraphicsExtractor g, MachineControllerMenu menu, int x, int y) {
-        MachineControllerBlockEntity owner = menu.resolvedOwner();
         int textY = y + controllerStatusY(titleLabelY);
         int textX = x + controllerStatusX(titleLabelX);
         boolean active = menu.hasActiveRecipe();
+        var owner = menu.resolvedOwner();
 
         if (owner != null && owner.getMachine() != null) {
             g.text(font, Component.translatable("gui.mmcr.controller.machine", owner.getMachine().localizedName()),
@@ -312,12 +322,22 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
             scaledY = renderScaledWrappedLine(g, progressLine, scaledX, scaledY, scaledWidth, PROGRESS_STATUS_COLOR);
         }
 
-        if (!active) {
+        if (!menu.isFormed() && !active) {
             String failure = menu.lastFailureMessage();
             if (failure != null) {
                 Component failureLine = Component.translatable("gui.mmcr.controller.last_failure", Component.translatable(failure));
                 scaledY = renderScaledWrappedLine(g, failureLine, scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
             }
+        }
+
+        if (menu.isFormed()) {
+            int parallelSlots = menu.parallelControllerCount();
+            if (parallelSlots > 0) {
+                scaledY = renderScaledWrappedLine(g, parallelSlotLine(parallelSlots),
+                        scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
+            }
+            scaledY = renderScaledWrappedLine(g, parallelLine(menu.currentParallelism(), menu.maxParallelism()),
+                    scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
         }
 
         if (menu.isRedstonePaused()) {
@@ -351,6 +371,17 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         }
 
         g.pose().popMatrix();
+    }
+
+    static Component parallelLine(int parallelism, int maxParallelism) {
+        return Component.translatable("gui.mmcr.controller.parallel",
+                Component.literal(NUMBER_FORMAT.format(parallelism)),
+                Component.literal(NUMBER_FORMAT.format(maxParallelism)));
+    }
+
+    static Component parallelSlotLine(int parallelSlots) {
+        return Component.translatable("gui.mmcr.controller.parallel_slots",
+                Component.literal(NUMBER_FORMAT.format(parallelSlots)));
     }
 
     private void renderControllerStatusLineScaled(GuiGraphicsExtractor g, int x, int y, Component value, int valueColor) {
@@ -398,5 +429,6 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         event.register(ModUIs.FLUID_HATCH.get(),       MachineMenuScreen::new);
         event.register(ModUIs.ENERGY_HATCH.get(),      MachineMenuScreen::new);
         event.register(ModUIs.MACHINE_CONTROLLER.get(), MachineMenuScreen::new);
+        event.register(ModUIs.FACTORY_SCHEDULER.get(),  MachineMenuScreen::new);
     }
 }

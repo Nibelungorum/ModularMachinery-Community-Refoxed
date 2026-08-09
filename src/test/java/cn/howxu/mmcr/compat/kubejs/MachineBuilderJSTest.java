@@ -105,6 +105,19 @@ class MachineBuilderJSTest {
     }
 
     @Test
+    void startup_builder_sets_concurrency_capabilities() {
+        var registration = new MachineBuilderJS(MMCR.id("concurrent_press"))
+                .allowMultithreading()
+                .allowParallelism(true)
+                .maxParallelAmount(12)
+                .createObject();
+
+        assertThat(registration.allowMultithreading()).isTrue();
+        assertThat(registration.allowParallelism()).isTrue();
+        assertThat(registration.maxParallelAmount()).isEqualTo(12);
+    }
+
+    @Test
     void builder_sets_machine_basic_block_for_all_base_textures() {
         var registration = new MachineBuilderJS("mmcr:electric_press")
                 .localizedName("Electric Press")

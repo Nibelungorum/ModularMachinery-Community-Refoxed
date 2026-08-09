@@ -6,6 +6,8 @@ import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,5 +40,25 @@ class ModelGenTest {
         assertThat(ModelGen.collectKnownItemNames())
                 .doesNotContainAnyElementsOf(controllerIds)
                 .doesNotContainAnyElementsOf(portIds);
+    }
+
+    @Test
+    void factory_controller_uses_dynamic_resources_and_thread_disperser_resources_exist() {
+        Path root = Path.of("src/main/resources/assets/mmcr");
+
+        assertThat(ModelGen.collectKnownBlockNames()).doesNotContain("factory_controller");
+        assertThat(ModelGen.collectKnownItemNames()).doesNotContain("factory_controller");
+        assertThat(ModelGen.collectKnownBlockNames()).doesNotContain("factory_scheduler");
+        assertThat(ModelGen.collectKnownItemNames()).doesNotContain("factory_scheduler");
+        assertThat(Files.exists(root.resolve("blockstates/factory_controller.json"))).isFalse();
+        assertThat(Files.exists(root.resolve("models/block/factory_controller.json"))).isFalse();
+        assertThat(Files.exists(root.resolve("models/item/factory_controller.json"))).isFalse();
+        assertThat(Files.exists(root.resolve("blockstates/factory_scheduler.json"))).isFalse();
+        assertThat(Files.exists(root.resolve("models/block/factory_scheduler.json"))).isFalse();
+        assertThat(Files.exists(root.resolve("models/item/factory_scheduler.json"))).isFalse();
+        assertThat(Files.exists(root.resolve("models/item/thread_disperser.json"))).isTrue();
+        assertThat(Files.exists(root.resolve("textures/block/overlay_factory_controller.png"))).isTrue();
+        assertThat(Files.exists(root.resolve("textures/item/thread_disperser.png"))).isTrue();
+        assertThat(Files.exists(root.resolve("textures/gui/inventory_tiny.png"))).isTrue();
     }
 }

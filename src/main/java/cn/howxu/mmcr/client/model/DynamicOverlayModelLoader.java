@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.internal.block.FactoryControllerBlock;
+import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import com.mojang.serialization.MapCodec;
@@ -125,7 +125,7 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         if (state.getBlock() instanceof ParallelControllerBlock parallel) {
             return DynamicOverlayTextures.portOverlayTextureForName(parallel.tier().idSuffix());
         }
-        if (state.getBlock() instanceof FactoryControllerBlock) {
+        if (state.getBlock() instanceof FactorySchedulerBlock) {
             return DynamicOverlayTextures.portOverlayTextureForName("factory_controller");
         }
         return DynamicOverlayBakedModel.defaultPortOverlayTexture();

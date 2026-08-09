@@ -64,7 +64,7 @@ public final class DefaultRecipes {
 
     private static MachineRecipe createRecipe(Definition definition) {
         return new MachineRecipe(definition.id(), definition.machineId(), definition.ticks(), definition.inputs(),
-                definition.outputs(), List.of(), 0, 1, true, definition.fluidOutputs());
+                definition.outputs(), List.of(), 0, 1, true, definition.fluidOutputs(), List.of(), true);
     }
 
     private static List<Definition> definitions() {

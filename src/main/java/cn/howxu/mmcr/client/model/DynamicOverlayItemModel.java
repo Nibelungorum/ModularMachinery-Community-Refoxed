@@ -1,10 +1,6 @@
 package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.internal.block.FactoryControllerBlock;
-import cn.howxu.mmcr.internal.block.IOPortBlock;
-import cn.howxu.mmcr.internal.block.MachineControllerBlock;
-import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.client.renderer.block.dispatch.BlockModelRotation;
@@ -113,18 +109,11 @@ public final class DynamicOverlayItemModel implements ItemModel {
     }
 
     static Description describeBlock(Block block) {
-        if (block instanceof MachineControllerBlock controller) {
-            return Description.controller(controller.machineId());
-        }
-        if (block instanceof IOPortBlock port) {
-            return Description.port(port.kind());
-        }
-        if (block instanceof ParallelControllerBlock parallel) {
-            return Description.portStyle(parallel.tier().idSuffix());
-        }
-        if (block instanceof FactoryControllerBlock) {
-            return Description.portStyle("factory_controller");
-        }
+        RuntimeBlockModelDescriptor descriptor = RuntimeMachineModelRegistry.describe(null, block);
+        if (descriptor == null) return Description.staticItem();
+        if (descriptor.kind() == RuntimeBlockModelDescriptor.Kind.CONTROLLER) return Description.controller(descriptor.machineId());
+        if (descriptor.kind() == RuntimeBlockModelDescriptor.Kind.PORT) return Description.port(descriptor.portKind());
+        if (descriptor.kind() == RuntimeBlockModelDescriptor.Kind.PORT_STYLE) return Description.portStyle(descriptor.blockName());
         return Description.staticItem();
     }
 

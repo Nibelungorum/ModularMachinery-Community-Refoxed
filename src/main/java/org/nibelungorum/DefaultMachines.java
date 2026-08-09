@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
+import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
@@ -105,12 +106,23 @@ public final class DefaultMachines {
                 portFamily(IOType.OUTPUT, PortTierRequirementSpec.PortCategory.FLUID),
                 portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.ENERGY),
                 portFamily(IOType.OUTPUT, PortTierRequirementSpec.PortCategory.ENERGY)));
+        List<BlockPredicate> parallelSlotBlocks = new ArrayList<>();
+        parallelSlotBlocks.add(new BlockPredicate.OfBlock(casing));
+        for (ParallelTier tier : ParallelTier.values()) {
+            parallelSlotBlocks.add(new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get(tier.idSuffix()).get()));
+        }
+        BlockPredicate casingOrParallelController = new BlockPredicate.AnyOf(parallelSlotBlocks);
+        BlockPredicate casingOrFactoryController = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(casing),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get())));
 
         BlockArray pattern = BlockArray.builder()
-                .pattern("XXX", "XIX", "XXX")
-                .pattern("XXX", "I I", "XXX")
-                .pattern("XXX", "XCX", "XXX")
+                .pattern("AXA", "XIX", "XXX")
+                .pattern("XXX", "I I", "XBX")
+                .pattern("AXA", "XCX", "XXX")
                 .set('X', new BlockPredicate.OfBlock(casing))
+                .set('A', casingOrParallelController)
+                .set('B', casingOrFactoryController)
                 .set('C', new BlockPredicate.OfBlock(controller))
                 .set('I', ioPort)
                 .build();
@@ -121,7 +133,20 @@ public final class DefaultMachines {
                 .minItemInput(ItemBusSize.NORMAL)
                 .anyItemOutput()
                 .build();
-        return new DynamicMachine(BLAST_FURNACE_ID, "高炉", pattern, MachineControllerSpec.defaultsFor(BLAST_FURNACE_ID), portRequirements, tierRequirements, List.of(), Map.of());
+        return new DynamicMachine(
+                BLAST_FURNACE_ID,
+                "高炉",
+                pattern,
+                MachineControllerSpec.defaultsFor(BLAST_FURNACE_ID),
+                MachineAppearanceSpec.defaults(),
+                portRequirements,
+                tierRequirements,
+                List.of(),
+                Map.of(),
+                Integer.MAX_VALUE,
+                true,
+                true,
+                4);
     }
 
     public static Machine alloyFurnace(Block itemInput, Block itemOutput, Block energyInput) {

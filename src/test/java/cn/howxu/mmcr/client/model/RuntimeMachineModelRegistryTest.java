@@ -55,6 +55,17 @@ class RuntimeMachineModelRegistryTest {
     }
 
     @Test
+    void runtime_resources_include_dynamic_factory_controller() {
+        assertThat(RuntimeMachineModelRegistry.dynamicBlockEntries()).containsKey("factory_controller");
+        assertThat(RuntimeMachineModelRegistry.dynamicBlockEntries()).doesNotContainKey("factory_scheduler");
+        assertThat(RuntimeMachineResourcePack.resources())
+                .containsKey(MMCR.id("blockstates/factory_controller.json"))
+                .containsKey(MMCR.id("items/factory_controller.json"))
+                .doesNotContainKey(MMCR.id("blockstates/factory_scheduler.json"))
+                .doesNotContainKey(MMCR.id("items/factory_scheduler.json"));
+    }
+
+    @Test
     void dynamic_json_points_to_custom_loader_type() {
         var block = (IOPortBlock) ModBlocks.BLOCKS.get("item_input_bus").get();
 

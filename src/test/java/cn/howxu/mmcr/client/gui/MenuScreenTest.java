@@ -1,7 +1,14 @@
 package cn.howxu.mmcr.client.gui;
 
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.menu.FactorySchedulerMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import org.junit.jupiter.api.Test;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -57,6 +64,12 @@ class MenuScreenTest {
     }
 
     @Test
+    void controller_detail_lines_use_parallel_and_parallel_slot_labels() {
+        assertThat(MachineMenuScreen.parallelLine(3, 16).getString()).isEqualTo("gui.mmcr.controller.parallel");
+        assertThat(MachineMenuScreen.parallelSlotLine(1).getString()).isEqualTo("gui.mmcr.controller.parallel_slots");
+    }
+
+    @Test
     void controller_status_color_uses_single_three_state_value() {
         assertThat(MachineMenuScreen.controllerStatusColor(false, false)).isEqualTo(MachineMenuScreen.UNFORMED_STATUS_COLOR);
         assertThat(MachineMenuScreen.controllerStatusColor(true, true)).isEqualTo(MachineMenuScreen.FORMED_STATUS_COLOR);
@@ -87,5 +100,40 @@ class MenuScreenTest {
 
         assertThat(blit.sourceWidth()).isEqualTo(MachineMenuScreen.GUI_TEXTURE_SIZE);
         assertThat(blit.sourceHeight()).isEqualTo(MachineMenuScreen.GUI_TEXTURE_SIZE);
+    }
+
+    @Test
+    void factory_controller_menu_uses_tiny_inventory_texture() {
+        assertThat(screenTextureFor(factoryMenuWithoutConstructor()))
+                .isEqualTo(MMCR.id("textures/gui/inventory_tiny.png"));
+    }
+
+    @Test
+    void factory_controller_title_offsets_match_tiny_item_bus() {
+        assertThat(MachineMenuScreen.titleX(8, false, false, true)).isEqualTo(4);
+        assertThat(MachineMenuScreen.titleY(6, false, true)).isEqualTo(4);
+        assertThat(MachineMenuScreen.titleX(8, false, false, false, true)).isEqualTo(4);
+        assertThat(MachineMenuScreen.titleY(6, false, false, true)).isEqualTo(4);
+    }
+
+    private static Identifier screenTextureFor(AbstractContainerMenu menu) {
+        try {
+            Method method = MachineMenuScreen.class.getDeclaredMethod("textureFor", AbstractContainerMenu.class);
+            method.setAccessible(true);
+            return (Identifier) method.invoke(null, menu);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("Unable to resolve screen texture", e);
+        }
+    }
+
+    private static FactorySchedulerMenu factoryMenuWithoutConstructor() {
+        try {
+            Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+            unsafeField.setAccessible(true);
+            sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+            return (FactorySchedulerMenu) unsafe.allocateInstance(FactorySchedulerMenu.class);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("Unable to allocate factory menu", e);
+        }
     }
 }

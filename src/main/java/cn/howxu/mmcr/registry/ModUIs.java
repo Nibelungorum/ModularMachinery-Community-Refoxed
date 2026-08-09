@@ -2,6 +2,7 @@ package cn.howxu.mmcr.registry;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
+import cn.howxu.mmcr.internal.menu.FactorySchedulerMenu;
 import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
@@ -30,6 +31,9 @@ public final class ModUIs {
 
     public static final DeferredHolder<MenuType<?>, MenuType<MachineControllerMenu>> MACHINE_CONTROLLER =
             REGISTER.register("machine_controller", () -> new MenuType<>((IContainerFactory<MachineControllerMenu>) MachineControllerMenu::clientOpen, FeatureFlags.VANILLA_SET));
+
+    public static final DeferredHolder<MenuType<?>, MenuType<FactorySchedulerMenu>> FACTORY_SCHEDULER =
+            REGISTER.register("factory_controller", () -> new MenuType<>((IContainerFactory<FactorySchedulerMenu>) FactorySchedulerMenu::clientOpen, FeatureFlags.VANILLA_SET));
 
     public static void register(IEventBus bus) {
         REGISTER.register(bus);

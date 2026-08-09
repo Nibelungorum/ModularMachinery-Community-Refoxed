@@ -27,6 +27,9 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     private final DataSlot activeTotalTick;
     private final DataSlot lastFailure;
     private final DataSlot redstonePaused;
+    private final DataSlot parallelControllerCount;
+    private final DataSlot currentParallelism;
+    private final DataSlot maxParallelism;
 
     public MachineControllerMenu(int containerId, Inventory playerInv, MachineControllerBlockEntity owner) {
         super(ModUIs.MACHINE_CONTROLLER.get(), containerId);
@@ -38,7 +41,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
             @Override public void set(int value) {}
         });
         this.active = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return owner.getActiveRecipe() == null ? 0 : 1; }
+            @Override public int get() { return owner.isRuntimeActive() ? 1 : 0; }
             @Override public void set(int value) {}
         });
         this.activeTick = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
@@ -57,6 +60,18 @@ public class MachineControllerMenu extends AbstractMachineMenu {
             @Override public int get() { return owner.isRedstonePaused() ? 1 : 0; }
             @Override public void set(int value) {}
         });
+        this.parallelControllerCount = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
+            @Override public int get() { return owner.parallelControllerCount(); }
+            @Override public void set(int value) {}
+        });
+        this.currentParallelism = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
+            @Override public int get() { return owner.currentParallelism(); }
+            @Override public void set(int value) {}
+        });
+        this.maxParallelism = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
+            @Override public int get() { return owner.getMaxParallelism(); }
+            @Override public void set(int value) {}
+        });
         addControllerPlayerSlots(playerInv);
     }
 
@@ -71,6 +86,9 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.activeTotalTick = addDataSlot(DataSlot.standalone());
         this.lastFailure = addDataSlot(DataSlot.standalone());
         this.redstonePaused = addDataSlot(DataSlot.standalone());
+        this.parallelControllerCount = addDataSlot(DataSlot.standalone());
+        this.currentParallelism = addDataSlot(DataSlot.standalone());
+        this.maxParallelism = addDataSlot(DataSlot.standalone());
         addControllerPlayerSlots(playerInv);
     }
 
@@ -121,7 +139,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     public boolean hasActiveRecipe() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? active.get() != 0 : controller.getActiveRecipe() != null || controller.hasClientActiveRecipe() || active.get() != 0;
+        return controller == null ? active.get() != 0 : controller.isRuntimeActive() || controller.hasClientActiveRecipe() || active.get() != 0;
     }
 
     public int activeRecipeTick() {
@@ -143,6 +161,21 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     public boolean isRedstonePaused() {
         MachineControllerBlockEntity controller = resolvedOwner();
         return (controller != null && controller.isRedstonePaused()) || redstonePaused.get() != 0;
+    }
+
+    public int parallelControllerCount() {
+        MachineControllerBlockEntity controller = resolvedOwner();
+        return controller == null ? parallelControllerCount.get() : controller.parallelControllerCount();
+    }
+
+    public int currentParallelism() {
+        MachineControllerBlockEntity controller = resolvedOwner();
+        return controller == null ? currentParallelism.get() : controller.currentParallelism();
+    }
+
+    public int maxParallelism() {
+        MachineControllerBlockEntity controller = resolvedOwner();
+        return controller == null ? Math.max(1, maxParallelism.get()) : controller.getMaxParallelism();
     }
 
     public long totalStoredEnergy() {

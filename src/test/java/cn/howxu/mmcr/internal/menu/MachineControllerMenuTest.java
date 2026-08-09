@@ -54,6 +54,19 @@ class MachineControllerMenuTest {
     }
 
     @Test
+    void client_menu_treats_factory_thread_state_as_active_even_without_recipe_progress() {
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory());
+
+        menu.setData(0, 1);
+        menu.setData(1, 1);
+
+        assertThat(menu.isFormed()).isTrue();
+        assertThat(menu.hasActiveRecipe()).isTrue();
+        assertThat(menu.activeRecipeTick()).isZero();
+        assertThat(menu.activeRecipeTotalTick()).isZero();
+    }
+
+    @Test
     void client_menu_updates_failure_and_redstone_state_from_synced_data_slots() {
         MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory());
 
@@ -65,6 +78,23 @@ class MachineControllerMenuTest {
 
         assertThat(menu.lastFailureMessage()).isEqualTo("gui.mmcr.controller.failure.missing_input");
         assertThat(menu.isRedstonePaused()).isTrue();
+    }
+
+    @Test
+    void client_menu_updates_parallel_display_from_synced_data_slots() {
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory());
+
+        assertThat(menu.parallelControllerCount()).isZero();
+        assertThat(menu.currentParallelism()).isZero();
+        assertThat(menu.maxParallelism()).isEqualTo(1);
+
+        menu.setData(6, 1);
+        menu.setData(7, 0);
+        menu.setData(8, 4);
+
+        assertThat(menu.parallelControllerCount()).isEqualTo(1);
+        assertThat(menu.currentParallelism()).isZero();
+        assertThat(menu.maxParallelism()).isEqualTo(4);
     }
 
     @Test

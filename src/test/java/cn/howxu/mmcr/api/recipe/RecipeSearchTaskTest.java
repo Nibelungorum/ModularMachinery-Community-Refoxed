@@ -113,7 +113,7 @@ class RecipeSearchTaskTest {
     }
 
     @Test
-    void computeDoesNotUseParallelismToScaleRecipeSearch() throws Exception {
+    void computeUsesParallelRecipeCalculatorBeforeReturningStartableRecipe() throws Exception {
         Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
         ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
         bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(8));
@@ -127,12 +127,12 @@ class RecipeSearchTaskTest {
         assertThat(result.success()).isTrue();
         assertThat(result.activeRecipe().getRecipe()).isEqualTo(startable);
         assertThat(result.activeRecipe().getMaxParallelism()).isEqualTo(16);
-        assertThat(result.activeRecipe().getParallelism()).isEqualTo(1);
+        assertThat(result.activeRecipe().getParallelism()).isEqualTo(4);
         assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(8);
     }
 
     @Test
-    void computeKeepsExactNonTierMaxParallelismWithoutApplyingItDuringSearch() throws Exception {
+    void computeKeepsExactNonTierMaxParallelismAndAppliesStartableParallelism() throws Exception {
         Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
         ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
         bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(6));
@@ -144,7 +144,7 @@ class RecipeSearchTaskTest {
 
         assertThat(result.success()).isTrue();
         assertThat(result.activeRecipe().getMaxParallelism()).isEqualTo(3);
-        assertThat(result.activeRecipe().getParallelism()).isEqualTo(1);
+        assertThat(result.activeRecipe().getParallelism()).isEqualTo(3);
         assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(6);
     }
 

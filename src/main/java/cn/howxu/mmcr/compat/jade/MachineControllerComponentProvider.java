@@ -10,6 +10,9 @@ import snownee.jade.api.IComponentProvider;
 import snownee.jade.api.ITooltip;
 import snownee.jade.api.config.IPluginConfig;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * @author howxu <dev@howxu.cn>
  */
@@ -27,32 +30,41 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
     public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
         Snapshot snapshot = Snapshot.from(accessor.getServerData());
 
-        if (!snapshot.machine().isEmpty()) {
-            tooltip.add(row("machine", Component.literal(snapshot.machine()).withStyle(ChatFormatting.WHITE)));
+        for (String key : lineKeys(snapshot)) {
+            tooltip.add(row(key, lineValue(snapshot, key)));
         }
-        tooltip.add(row("structure", Component.translatable("jade.mmcr.machine_controller.structure." + (snapshot.formed() ? "formed" : "unformed"))
-                .withStyle(snapshot.formed() ? ChatFormatting.GREEN : ChatFormatting.RED)));
-        tooltip.add(row("state", Component.translatable("jade.mmcr.machine_controller.status." + snapshot.status())));
+    }
 
-        if (!snapshot.activeRecipe().isEmpty()) {
-            tooltip.add(row("recipe", Component.literal(snapshot.activeRecipe()).withStyle(ChatFormatting.WHITE)));
-        }
-        if (snapshot.hasProgress()) {
-            tooltip.add(row("progress", Component.translatable("jade.mmcr.machine_controller.progress.value",
-                    snapshot.progressPercent(), snapshot.tick(), snapshot.totalTick())));
-        }
-        if (snapshot.shouldShowParallelism()) {
-            tooltip.add(row("parallelism", Component.translatable("jade.mmcr.machine_controller.parallelism.value",
-                    snapshot.parallelism(), snapshot.maxParallelism())));
-        }
-        if (snapshot.shouldShowFactoryLanes()) {
-            tooltip.add(row("factory_lanes", Component.translatable("jade.mmcr.machine_controller.factory_lanes.value",
-                    snapshot.factoryLanes(), snapshot.factoryThreadLimit())));
-        }
-        tooltip.add(row("components", Component.translatable("jade.mmcr.machine_controller.components.value",
-                snapshot.itemInputs(), snapshot.itemOutputs(),
-                snapshot.fluidInputs(), snapshot.fluidOutputs(),
-                snapshot.energyInputs(), snapshot.energyOutputs())));
+    static List<String> lineKeys(Snapshot snapshot) {
+        List<String> keys = new ArrayList<>();
+        if (!snapshot.machine().isEmpty()) keys.add("machine");
+        keys.add("structure");
+        keys.add("state");
+        if (!snapshot.hasFactoryController() && !snapshot.activeRecipe().isEmpty()) keys.add("recipe");
+        if (!snapshot.hasFactoryController() && snapshot.hasProgress()) keys.add("progress");
+        if (snapshot.shouldShowParallelSlots()) keys.add("parallel_slots");
+        if (snapshot.shouldShowParallelism()) keys.add("parallelism");
+        if (snapshot.shouldShowFactoryLanes()) keys.add("threads");
+        return keys;
+    }
+
+    private static Component lineValue(Snapshot snapshot, String key) {
+        return switch (key) {
+            case "machine" -> Component.literal(snapshot.machine()).withStyle(ChatFormatting.WHITE);
+            case "structure" -> Component.translatable("jade.mmcr.machine_controller.structure." + (snapshot.formed() ? "formed" : "unformed"))
+                    .withStyle(snapshot.formed() ? ChatFormatting.GREEN : ChatFormatting.RED);
+            case "state" -> Component.translatable("jade.mmcr.machine_controller.status." + snapshot.status());
+            case "recipe" -> Component.literal(snapshot.activeRecipe()).withStyle(ChatFormatting.WHITE);
+            case "progress" -> Component.translatable("jade.mmcr.machine_controller.progress.value",
+                    snapshot.progressPercent(), snapshot.tick(), snapshot.totalTick());
+            case "parallel_slots" -> Component.translatable("jade.mmcr.machine_controller.parallel_slots.value",
+                    snapshot.parallelSlots());
+            case "parallelism" -> Component.translatable("jade.mmcr.machine_controller.parallelism.value",
+                    snapshot.parallelism(), snapshot.maxParallelism());
+            case "threads" -> Component.translatable("jade.mmcr.machine_controller.threads.value",
+                    snapshot.factoryLanes(), snapshot.factoryThreadLimit());
+            default -> Component.empty();
+        };
     }
 
     private static Component row(String key, Component value) {
@@ -71,7 +83,10 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
             int totalTick,
             int parallelism,
             int maxParallelism,
+            int parallelSlots,
+            int maxParallelSlots,
             boolean factorySupported,
+            boolean factoryPresent,
             int factoryLanes,
             int factoryThreadLimit,
             int itemInputs,
@@ -90,9 +105,12 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
                     tag.getStringOr("activeRecipe", ""),
                     tag.getIntOr("tick", 0),
                     tag.getIntOr("totalTick", 0),
-                    tag.getIntOr("parallelism", 1),
+                    tag.getIntOr("parallelism", 0),
                     tag.getIntOr("maxParallelism", 1),
+                    tag.getIntOr("parallelSlots", 0),
+                    tag.getIntOr("maxParallelSlots", 0),
                     tag.getBooleanOr("factorySupported", false),
+                    tag.getBooleanOr("factoryPresent", false),
                     tag.getIntOr("factoryLanes", 0),
                     tag.getIntOr("factoryThreadLimit", 1),
                     tag.getIntOr("itemInputs", 0),
@@ -105,7 +123,7 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
 
         String status() {
             if (!formed) return "unformed";
-            if (active) return activeRecipe.isEmpty() ? "waiting" : "working";
+            if (active) return "working";
             return "idle";
         }
 
@@ -118,12 +136,20 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
             return Math.clamp(Math.round(tick * 100.0F / totalTick), 0, 100);
         }
 
+        boolean shouldShowParallelSlots() {
+            return parallelSlots > 0;
+        }
+
         boolean shouldShowParallelism() {
-            return parallelism > 1 || maxParallelism > 1;
+            return maxParallelism > 1 || parallelism > 1;
+        }
+
+        boolean hasFactoryController() {
+            return factoryPresent;
         }
 
         boolean shouldShowFactoryLanes() {
-            return factorySupported || factoryLanes > 0;
+            return factoryPresent;
         }
     }
 }

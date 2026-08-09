@@ -16,7 +16,11 @@ modifier等级功能(实现线圈方块等级能力)
 
 [X] 多线程 Stage 5已经实现了
 
+[X] 工厂调度器与线程分散器：独立线程仓、结构聚合、注册 API、菜单和资源
+
 .worktrees/phase5-mmce-optimizations
+
+[X] 并行仓测试，默认机器加入并行仓进行测试
 
 [X] 更多的接口 
 

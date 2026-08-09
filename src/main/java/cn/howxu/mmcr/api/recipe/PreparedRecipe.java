@@ -84,7 +84,7 @@ public final class PreparedRecipe {
         this.fluidOutputs = fluidOutputs == null ? Collections.emptyList() : List.copyOf(fluidOutputs);
         this.modifiers = modifiers == null ? Collections.emptyList() : List.copyOf(modifiers);
         this.priority = priority;
-        this.maxThreads = Math.max(1, maxThreads);
+        this.maxThreads = maxThreads;
         this.cancelRecipeOnPerTickFailure = cancelRecipeOnPerTickFailure;
         this.parallelized = parallelized;
     }
@@ -142,7 +142,7 @@ public final class PreparedRecipe {
     }
 
     public void setMaxThreads(int maxThreads) {
-        this.maxThreads = Math.max(1, maxThreads);
+        this.maxThreads = maxThreads;
     }
 
     public void setCancelRecipeOnPerTickFailure(boolean cancelRecipeOnPerTickFailure) {

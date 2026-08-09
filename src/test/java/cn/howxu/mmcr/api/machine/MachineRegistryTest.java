@@ -121,4 +121,22 @@ class MachineRegistryTest {
         assertThat(MachineRegistry.getMachine(dynamicId)).isNull();
         assertThat(MachineRegistry.getCompiled(dynamicId)).isNull();
     }
+
+    @Test
+    void dynamic_runtime_machine_preserves_registration_concurrency_capabilities() {
+        var dynamicId = Identifier.parse("mmcr:dynamic_concurrency");
+        var registration = MachineRegistration.builder(dynamicId)
+                .localizedName("Dynamic Concurrency")
+                .allowMultithreading(true)
+                .allowParallelism(true)
+                .maxParallelAmount(9)
+                .build();
+        var structure = new MachineStructureDefinition(dynamicId, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(), Map.of());
+
+        var runtime = MachineStructureRegistry.toRuntimeMachine(registration, structure);
+
+        assertThat(runtime.hasFactory()).isTrue();
+        assertThat(runtime.parallelizable()).isTrue();
+        assertThat(runtime.maxParallelism()).isEqualTo(9);
+    }
 }

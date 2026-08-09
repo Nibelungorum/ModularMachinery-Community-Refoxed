@@ -398,6 +398,30 @@ public final class RecipeCraftingContext {
         return commitInputs(requirements);
     }
 
+    public boolean canStartCrafting(ActiveMachineRecipe activeRecipe) {
+        if (activeRecipe == null || activeRecipe.getRecipe() == null) return false;
+        int parallelism = ParallelRecipeCalculator.maxStartableParallelism(
+                this, activeRecipe.getRecipe(), activeRecipe.getMaxParallelism());
+        if (parallelism <= 0) return false;
+        activeRecipe.setParallelism(parallelism);
+        return true;
+    }
+
+    public boolean canRestartCrafting(ActiveMachineRecipe activeRecipe) {
+        if (activeRecipe == null || activeRecipe.getRecipe() == null) return false;
+        int current = activeRecipe.getParallelism();
+        int max = activeRecipe.getMaxParallelism();
+        if (current > max) {
+            activeRecipe.setParallelism(max);
+            if (simulateInputs(activeRecipe.getRecipe(), max)
+                    && simulateOutputs(activeRecipe.getRecipe(), max)) {
+                return true;
+            }
+            activeRecipe.setParallelism(1);
+        }
+        return canStartCrafting(activeRecipe);
+    }
+
     public boolean finishCrafting(MachineRecipe recipe) {
         return finishCrafting(recipe, 1);
     }
