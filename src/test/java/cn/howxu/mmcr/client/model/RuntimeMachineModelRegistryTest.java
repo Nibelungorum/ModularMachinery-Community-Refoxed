@@ -75,6 +75,17 @@ class RuntimeMachineModelRegistryTest {
     }
 
     @Test
+    void cached_block_state_variants_cannot_be_mutated() {
+        var definition = RuntimeMachineModelRegistry.definition(ModBlocks.CONTROLLER.get());
+        String resourceJson = RuntimeMachineModelRegistry.blockStateJson(definition.blockStateDefinition());
+
+        assertThatThrownBy(() -> definition.blockStateDefinition().variants().clear())
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThat(RuntimeMachineModelRegistry.blockStateJson(definition.blockStateDefinition()))
+                .isEqualTo(resourceJson);
+    }
+
+    @Test
     void dynamic_block_state_requires_an_explicit_definition() {
         var block = ModBlocks.CONTROLLER.get();
 

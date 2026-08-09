@@ -181,7 +181,11 @@ public final class RuntimeMachineModelRegistry {
         return "{\n  \"model\": {\n    \"type\": \"" + DynamicOverlayItemModel.ID + "\"\n  }\n}\n";
     }
 
-    public record RuntimeBlockStateDefinition(Identifier id, List<RuntimeVariant> variants) {}
+    public record RuntimeBlockStateDefinition(Identifier id, List<RuntimeVariant> variants) {
+        public RuntimeBlockStateDefinition {
+            variants = List.copyOf(variants);
+        }
+    }
 
     public record RuntimeVariant(String state, Identifier modelId) {}
 }
