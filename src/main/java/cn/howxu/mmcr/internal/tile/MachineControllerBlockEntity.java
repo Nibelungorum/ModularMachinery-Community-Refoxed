@@ -209,11 +209,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     public int currentParallelism() {
-        if (active != null) return active.getParallelism();
-        FactorySchedulerBlockEntity factory = getFactoryController();
-        if (factory == null) return 0;
-        int usedParallelism = factory.usedParallelism();
-        return usedParallelism > 0 ? usedParallelism : factory.activeLaneCount();
+        return active == null ? 0 : active.getParallelism();
     }
 
     public int activeFactoryThreadCount() {

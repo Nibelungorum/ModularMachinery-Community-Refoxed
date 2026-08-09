@@ -40,6 +40,34 @@ class FactoryControllerMenuTest {
     }
 
     @Test
+    void current_parallelism_uses_the_selected_active_thread() {
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        menu.applySnapshot(new FactoryControllerSnapshot(BlockPos.ZERO, true, false, 2, 2, 32, 16,
+                "Factory", 0, java.util.List.of(
+                new FactoryRecipeScheduler.ThreadSnapshot(0, true, false, true, "mmcr:first", 4, 20, 16),
+                new FactoryRecipeScheduler.ThreadSnapshot(1, false, false, true, "mmcr:second", 4, 20, 8))));
+
+        menu.selectThread(1);
+
+        assertThat(menu.currentParallelism()).isEqualTo(8);
+        assertThat(menu.maxParallelism()).isEqualTo(16);
+    }
+
+    @Test
+    void current_parallelism_is_zero_for_selected_idle_thread() {
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        menu.applySnapshot(new FactoryControllerSnapshot(BlockPos.ZERO, true, false, 1, 2, 16, 16,
+                "Factory", 0, java.util.List.of(
+                new FactoryRecipeScheduler.ThreadSnapshot(0, true, false, true, "mmcr:first", 4, 20, 16),
+                new FactoryRecipeScheduler.ThreadSnapshot(1, false, false, false, "", 0, 0, 1))));
+
+        menu.selectThread(1);
+
+        assertThat(menu.currentParallelism()).isZero();
+        assertThat(menu.maxParallelism()).isEqualTo(16);
+    }
+
+    @Test
     void player_inventory_is_shifted_right_of_factory_thread_list() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null), bufferAt(BlockPos.ZERO));
 
