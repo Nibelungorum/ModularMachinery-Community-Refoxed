@@ -107,6 +107,22 @@ class RuntimeMachineModelRegistryTest {
     }
 
     @Test
+    void definition_does_not_share_its_input_item_description() {
+        var overlayFaces = java.util.EnumSet.of(Direction.NORTH);
+        var description = new DynamicOverlayItemModel.Description(
+                DynamicOverlayBakedModel.Kind.CONTROLLER, MMCR.id("test"), null,
+                MMCR.id("block/dynamic_machine_controller"), MMCR.id("block/test_base"),
+                MMCR.id("block/test_overlay"), overlayFaces);
+        var definition = new RuntimeBlockModelDefinition(
+                ModBlocks.CONTROLLER.get(), "test", DynamicOverlayBakedModel.Kind.CONTROLLER,
+                RuntimeMachineModelRegistry.controllerDefinition((MachineControllerBlock) ModBlocks.CONTROLLER.get()), description);
+
+        overlayFaces.clear();
+
+        assertThat(definition.itemDescription().overlayFaces()).containsExactly(Direction.NORTH);
+    }
+
+    @Test
     void parallel_and_factory_controllers_use_dynamic_port_loader() {
         var parallel = ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get();
         var factory = ModBlocks.BLOCKS.get("factory_controller").get();

@@ -22,6 +22,10 @@ public record RuntimeBlockModelDefinition(
         Objects.requireNonNull(modelKind, "modelKind");
         Objects.requireNonNull(blockStateDefinition, "blockStateDefinition");
         Objects.requireNonNull(itemDescription, "itemDescription");
+        itemDescription = new DynamicOverlayItemModel.Description(
+                itemDescription.kind(), itemDescription.machineId(), itemDescription.portKind(),
+                itemDescription.baseModel(), itemDescription.baseTexture(), itemDescription.overlayTexture(),
+                EnumSet.copyOf(itemDescription.overlayFaces()));
     }
 
     @Override

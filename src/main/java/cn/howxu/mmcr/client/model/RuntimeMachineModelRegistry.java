@@ -65,11 +65,21 @@ public final class RuntimeMachineModelRegistry {
         return definitionMap().values().stream();
     }
 
-    private static synchronized Map<Block, RuntimeBlockModelDefinition> definitionMap() {
+    private static Map<Block, RuntimeBlockModelDefinition> definitionMap() {
         Map<Block, RuntimeBlockModelDefinition> cached = definitions;
         if (cached != null) {
             return cached;
         }
+        synchronized (RuntimeMachineModelRegistry.class) {
+            cached = definitions;
+            if (cached != null) {
+                return cached;
+            }
+            return buildDefinitionMap();
+        }
+    }
+
+    private static Map<Block, RuntimeBlockModelDefinition> buildDefinitionMap() {
         boolean allBound = ModBlocks.BLOCKS.values().stream().allMatch(holder -> holder.isBound());
         Map<Block, RuntimeBlockModelDefinition> resolved = new LinkedHashMap<>();
         ModBlocks.BLOCKS.forEach((name, holder) -> {
@@ -84,7 +94,7 @@ public final class RuntimeMachineModelRegistry {
         if (!allBound) {
             return resolved;
         }
-        cached = Collections.unmodifiableMap(resolved);
+        Map<Block, RuntimeBlockModelDefinition> cached = Collections.unmodifiableMap(resolved);
         definitions = cached;
         return cached;
     }
