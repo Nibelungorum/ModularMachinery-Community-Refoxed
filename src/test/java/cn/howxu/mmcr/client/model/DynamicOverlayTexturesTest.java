@@ -3,6 +3,7 @@ package cn.howxu.mmcr.client.model;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.client.controller.ControllerSpecCache;
+import cn.howxu.mmcr.registry.PortKinds;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -19,23 +20,9 @@ class DynamicOverlayTexturesTest {
     }
 
     @Test
-    void port_overlay_uses_kind_id_and_tier() {
-        assertThat(DynamicOverlayTextures.portOverlayTextureForName("item_input_bus_big"))
+    void port_overlay_uses_declared_kind_tier() {
+        assertThat(DynamicOverlayTextures.portOverlayTexture(PortKinds.ITEM_INPUT))
                 .isEqualTo(MMCR.id("block/overlay_inputbus_big"));
-    }
-
-    @Test
-    void unknown_port_kind_uses_default_overlay() {
-        assertThat(DynamicOverlayTextures.portOverlayTextureForName("external_port"))
-                .isEqualTo(DynamicOverlayBakedModel.defaultPortOverlayTexture());
-    }
-
-    @Test
-    void parallel_and_factory_controllers_use_port_style_overlays() {
-        assertThat(DynamicOverlayTextures.portOverlayTextureForName("parallel_controller_16"))
-                .isEqualTo(MMCR.id("block/overlay_parallel_controller_reinforced"));
-        assertThat(DynamicOverlayTextures.portOverlayTextureForName("factory_controller"))
-                .isEqualTo(MMCR.id("block/overlay_factory_controller"));
     }
 
     @Test

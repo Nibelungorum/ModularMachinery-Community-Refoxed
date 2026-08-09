@@ -109,12 +109,8 @@ public final class DynamicOverlayItemModel implements ItemModel {
     }
 
     static Description describeBlock(Block block) {
-        RuntimeBlockModelDescriptor descriptor = RuntimeMachineModelRegistry.describe(null, block);
-        if (descriptor == null) return Description.staticItem();
-        if (descriptor.kind() == RuntimeBlockModelDescriptor.Kind.CONTROLLER) return Description.controller(descriptor.machineId());
-        if (descriptor.kind() == RuntimeBlockModelDescriptor.Kind.PORT) return Description.port(descriptor.portKind());
-        if (descriptor.kind() == RuntimeBlockModelDescriptor.Kind.PORT_STYLE) return Description.portStyle(descriptor.blockName());
-        return Description.staticItem();
+        RuntimeBlockModelDefinition definition = RuntimeMachineModelRegistry.definition(block);
+        return definition == null ? Description.staticItem() : definition.itemDescription();
     }
 
     public record Description(
@@ -138,8 +134,7 @@ public final class DynamicOverlayItemModel implements ItemModel {
                     MMCR.id("block/dynamic_io_port"), textures.base(), textures.overlay(), EnumSet.allOf(Direction.class));
         }
 
-        static Description portStyle(String blockName) {
-            Identifier overlay = DynamicOverlayTextures.portOverlayTextureForName(blockName);
+        static Description portOverlay(Identifier overlay) {
             DynamicOverlayBakedModel.TextureSet textures = DynamicOverlayBakedModel.portTextures(MMCR.id("runtime_port_item"), null, overlay);
             return new Description(DynamicOverlayBakedModel.Kind.PORT, null, null,
                     MMCR.id("block/dynamic_io_port"), textures.base(), textures.overlay(), EnumSet.allOf(Direction.class));

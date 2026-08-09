@@ -1,8 +1,6 @@
 package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
-import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
@@ -119,16 +117,10 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
     }
 
     private static Identifier portOverlayTexture(BlockState state) {
-        if (state.getBlock() instanceof cn.howxu.mmcr.internal.block.IOPortBlock port) {
-            return DynamicOverlayTextures.portOverlayTexture(port.kind());
-        }
-        if (state.getBlock() instanceof ParallelControllerBlock parallel) {
-            return DynamicOverlayTextures.portOverlayTextureForName(parallel.tier().idSuffix());
-        }
-        if (state.getBlock() instanceof FactorySchedulerBlock) {
-            return DynamicOverlayTextures.portOverlayTextureForName("factory_controller");
-        }
-        return DynamicOverlayBakedModel.defaultPortOverlayTexture();
+        RuntimeBlockModelDefinition definition = RuntimeMachineModelRegistry.definition(state.getBlock());
+        return definition == null
+                ? DynamicOverlayBakedModel.defaultPortOverlayTexture()
+                : definition.itemDescription().overlayTexture();
     }
 
     private Material.Baked material(Identifier texture) {

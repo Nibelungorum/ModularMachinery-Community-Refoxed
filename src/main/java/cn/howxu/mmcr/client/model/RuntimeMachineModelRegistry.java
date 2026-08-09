@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
@@ -144,14 +145,27 @@ public final class RuntimeMachineModelRegistry {
                     DynamicOverlayItemModel.Description.port(port.kind()));
         }
         if (block instanceof ParallelControllerBlock || block instanceof FactorySchedulerBlock) {
+            Identifier overlay = block instanceof ParallelControllerBlock parallel
+                    ? parallelControllerOverlayTexture(parallel.tier())
+                    : MMCR.id("block/overlay_factory_controller");
             return new RuntimeBlockModelDefinition(
                     block,
                     blockName,
                     DynamicOverlayBakedModel.Kind.PORT,
                     portStyleDefinition(block),
-                    DynamicOverlayItemModel.Description.portStyle(blockName));
+                    DynamicOverlayItemModel.Description.portOverlay(overlay));
         }
         return null;
+    }
+
+    private static Identifier parallelControllerOverlayTexture(ParallelTier tier) {
+        return switch (tier) {
+            case X4 -> MMCR.id("block/overlay_parallel_controller_normal");
+            case X16 -> MMCR.id("block/overlay_parallel_controller_reinforced");
+            case X64 -> MMCR.id("block/overlay_parallel_controller_super");
+            case X256 -> MMCR.id("block/overlay_parallel_controller_elite");
+            case X512, MAX -> MMCR.id("block/overlay_parallel_controller_ultimate");
+        };
     }
 
     static String blockStateJson(RuntimeBlockStateDefinition definition) {

@@ -51,8 +51,12 @@ class RuntimeMachineModelRegistryTest {
                 .isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
         assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get()).modelKind())
                 .isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
+        assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get()).itemDescription().overlayTexture())
+                .isEqualTo(MMCR.id("block/overlay_parallel_controller_reinforced"));
         assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.BLOCKS.get("factory_controller").get()).blockName())
                 .isEqualTo("factory_controller");
+        assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.BLOCKS.get("factory_controller").get()).itemDescription().overlayTexture())
+                .isEqualTo(MMCR.id("block/overlay_factory_controller"));
     }
 
     @Test
