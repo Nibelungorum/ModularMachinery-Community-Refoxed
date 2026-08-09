@@ -22,7 +22,7 @@ class DynamicOverlayTexturesTest {
     @Test
     void port_overlay_uses_declared_kind_tier() {
         assertThat(DynamicOverlayTextures.portOverlayTexture(PortKinds.ITEM_INPUT))
-                .isEqualTo(MMCR.id("block/overlay_inputbus_big"));
+                .isEqualTo(MMCR.id("block/overlay_inputbus_normal"));
     }
 
     @Test
