@@ -27,9 +27,15 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     static final int THREAD_ROW_HEIGHT = 32;
     static final int THREAD_ROW_GAP = 1;
     static final int VISIBLE_THREADS = 6;
+    static final int SCROLLBAR_X = 94;
+    static final int SCROLLBAR_Y = 8;
+    static final int SCROLLBAR_HEIGHT = 197;
+    static final int SCROLLBAR_HANDLE_WIDTH = 8;
+    static final int SCROLLBAR_HANDLE_HEIGHT = 16;
     private static final int ELEMENT_TEXTURE_WIDTH = 256;
     private static final int ELEMENT_TEXTURE_HEIGHT = 256;
     private static final int THREAD_ELEMENT_Y_OFFSET = 0;
+    private static final int SCROLLBAR_HANDLE_COLOR = 0xFF000000;
     private static final int SELECTED_THREAD_OVERLAY = 0x66A8D8FF;
     private static final int DETAIL_LINE_SPACING = 14;
     private static final Identifier BACKGROUND = MMCR.id("textures/gui/guifactory.png");
@@ -85,6 +91,13 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     static int clampScrollOffset(int scrollOffset, int threadCount) {
         return Math.max(0, Math.min(Math.max(0, threadCount - VISIBLE_THREADS), scrollOffset));
     }
+    static boolean shouldRenderScrollbar(int threadCount) { return threadCount > VISIBLE_THREADS; }
+    static int scrollbarHandleY(int scrollOffset, int threadCount) {
+        int range = Math.max(0, threadCount - VISIBLE_THREADS);
+        if (range == 0) return SCROLLBAR_Y;
+        int availableHeight = SCROLLBAR_HEIGHT - SCROLLBAR_HANDLE_HEIGHT;
+        return SCROLLBAR_Y + clampScrollOffset(scrollOffset, threadCount) * availableHeight / range;
+    }
 
     @Override
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
@@ -119,6 +132,13 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
                     progressOverlayRight(elementX, progress), progressOverlayBottom(y), 0x6600AA55);
             graphics.text(font, Component.translatable("gui.mmcr.factory.thread", thread.index()), leftPos + THREAD_ROW_X + 3, y + 3, 0xFF222222, false);
             graphics.text(font, Component.translatable(thread.active() ? "gui.mmcr.controller.running" : "gui.mmcr.controller.idle"), leftPos + THREAD_ROW_X + 3, y + 15, 0xFF222222, false);
+        }
+        if (shouldRenderScrollbar(menu.threads().size())) {
+            int scrollbarX = leftPos + SCROLLBAR_X;
+            int scrollbarY = topPos + scrollbarHandleY(scrollOffset, menu.threads().size());
+            graphics.fill(scrollbarX, scrollbarY,
+                    scrollbarX + SCROLLBAR_HANDLE_WIDTH, scrollbarY + SCROLLBAR_HANDLE_HEIGHT,
+                    SCROLLBAR_HANDLE_COLOR);
         }
         FactoryRecipeScheduler.ThreadSnapshot selected = menu.selectedThread();
         int x = leftPos + 113;

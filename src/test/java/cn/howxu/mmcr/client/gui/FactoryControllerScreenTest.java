@@ -38,6 +38,15 @@ class FactoryControllerScreenTest {
     }
 
     @Test
+    void scrollbar_handle_uses_mmce_offset_and_scroll_range() {
+        assertThat(FactoryControllerScreen.shouldRenderScrollbar(6)).isFalse();
+        assertThat(FactoryControllerScreen.shouldRenderScrollbar(7)).isTrue();
+        assertThat(FactoryControllerScreen.scrollbarHandleY(0, 8)).isEqualTo(FactoryControllerScreen.SCROLLBAR_Y);
+        assertThat(FactoryControllerScreen.scrollbarHandleY(1, 8)).isEqualTo(98);
+        assertThat(FactoryControllerScreen.scrollbarHandleY(2, 8)).isEqualTo(189);
+    }
+
+    @Test
     void progress_is_zero_for_idle_and_full_when_complete() {
         assertThat(FactoryControllerScreen.progressWidth(0, 0)).isZero();
         assertThat(FactoryControllerScreen.progressWidth(100, 100)).isEqualTo(FactoryControllerScreen.THREAD_ROW_WIDTH);
