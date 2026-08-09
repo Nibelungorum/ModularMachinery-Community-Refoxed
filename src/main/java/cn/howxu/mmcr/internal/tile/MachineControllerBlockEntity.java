@@ -1022,7 +1022,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         ActiveMachineRecipe next = new ActiveMachineRecipe(lastRecipe, getMaxParallelism());
         RecipeCraftingContext nextContext = contextPool().borrow(next, this);
         try {
-            if (!nextContext.simulateInputs(lastRecipe) || !nextContext.simulateOutputs(lastRecipe)) return false;
+            if (!next.canStartCrafting(nextContext)) return false;
             active = next;
             context = nextContext;
             if (!next.start(nextContext)) {

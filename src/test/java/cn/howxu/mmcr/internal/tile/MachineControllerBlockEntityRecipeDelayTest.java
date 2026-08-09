@@ -3,6 +3,8 @@ package cn.howxu.mmcr.internal.tile;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
@@ -10,6 +12,7 @@ import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
+import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.recipe.RecipeStartDelay;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
@@ -121,6 +124,33 @@ class MachineControllerBlockEntityRecipeDelayTest {
     }
 
     @Test
+    void restartedParallelRecipeRecalculatesParallelism() throws Exception {
+        Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
+        ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
+        bus.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.GOLD_INGOT, 16));
+        MachineControllerBlockEntity controller = formedController(machineId, bus);
+        DynamicMachine machine = new DynamicMachine(
+                machineId, "Parallel Machine", new BlockArray(java.util.Map.of()),
+                MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(),
+                List.of(), java.util.Map.of(), 16, true, false, 1);
+        setField(MachineControllerBlockEntity.class, controller, "machine", machine);
+        setField(MachineControllerBlockEntity.class, controller, "foundMachine", machine);
+        addParallelComponent(controller, ParallelTier.X16);
+        MachineRecipe recipe = parallelizedInputRecipe("parallel_gold", machineId, Items.GOLD_INGOT, 1);
+        setField(MachineControllerBlockEntity.class, controller, "lastRecipe", recipe);
+        setField(MachineControllerBlockEntity.class, controller, "lastRecipeStructureVersion", 31L);
+        setField(MachineControllerBlockEntity.class, controller, "lastRecipeModifierSnapshotVersion", 0L);
+        setField(MachineControllerBlockEntity.class, controller, "recipeDirty", false);
+
+        assertThat(controller.getMaxParallelism()).isEqualTo(16);
+        assertThat(new ActiveMachineRecipe(recipe, controller.getMaxParallelism())
+                .canStartCrafting(new RecipeCraftingContext(controller))).isTrue();
+        assertThat(invokeTryRestartLastRecipe(controller, machineId)).isTrue();
+        assertThat(controller.getActive()).isNotNull();
+        assertThat(controller.getActive().getParallelism()).isEqualTo(16);
+    }
+
+    @Test
     void sharedDelayHelperDelaysOnlyConflictProneRecipeWithinWindow() {
         RecipeStartDelay delay = new RecipeStartDelay();
         Identifier recipe = Identifier.fromNamespaceAndPath("mmcr", "single_gold");
@@ -146,6 +176,12 @@ class MachineControllerBlockEntityRecipeDelayTest {
         var method = MachineControllerBlockEntity.class.getDeclaredMethod("applySearchResult", RecipeSearchResult.class, int.class);
         method.setAccessible(true);
         return (boolean) method.invoke(controller, result, candidateCount);
+    }
+
+    private static boolean invokeTryRestartLastRecipe(MachineControllerBlockEntity controller, Identifier machineId) throws Exception {
+        var method = MachineControllerBlockEntity.class.getDeclaredMethod("tryRestartLastRecipe", Identifier.class);
+        method.setAccessible(true);
+        return (boolean) method.invoke(controller, machineId);
     }
 
     private static RecipeSearchResult startableConflictResult(Identifier machineId, MachineRecipe recipe, long structureVersion) throws Exception {
@@ -174,6 +210,22 @@ class MachineControllerBlockEntityRecipeDelayTest {
                 List.copyOf(inputs));
     }
 
+    private static MachineRecipe parallelizedInputRecipe(String path, Identifier machineId, Item item, int count) {
+        return new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", path),
+                machineId,
+                20,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                List.of(itemInput(item, count)),
+                true);
+    }
+
     private static ItemRequirement itemInput(Item item, int count) {
         return new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(item), count, ItemStack.EMPTY);
     }
@@ -186,12 +238,36 @@ class MachineControllerBlockEntityRecipeDelayTest {
         setField(BlockEntity.class, bus, "type", null);
         setField(BlockEntity.class, bus, "worldPosition", pos);
         setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
+        setField(ItemInputBusBlockEntity.class, bus, "kind", cn.howxu.mmcr.registry.PortKinds.ITEM_INPUT);
         setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
         return bus;
     }
 
+    private static void addParallelComponent(MachineControllerBlockEntity controller, ParallelTier tier) throws Exception {
+        ParallelControllerBlockEntity parallel = parallelController(tier, new BlockPos(2, 0, 0));
+        @SuppressWarnings("unchecked")
+        List<ProcessingComponent> components = (List<ProcessingComponent>) fieldValue(MachineControllerBlockEntity.class, controller, "components");
+        components.add(new ProcessingComponent(null, parallel, parallel.getBlockPos(), BlockPos.ZERO, List.of(), null));
+    }
+
+    private static ParallelControllerBlockEntity parallelController(ParallelTier tier, BlockPos pos) throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+        ParallelControllerBlockEntity parallel = (ParallelControllerBlockEntity) unsafe.allocateInstance(ParallelControllerBlockEntity.class);
+        setField(BlockEntity.class, parallel, "type", null);
+        setField(BlockEntity.class, parallel, "worldPosition", pos);
+        setField(BlockEntity.class, parallel, "blockState", Blocks.IRON_BLOCK.defaultBlockState());
+        setField(ParallelControllerBlockEntity.class, parallel, "tier", tier);
+        return parallel;
+    }
+
     private static MachineControllerBlockEntity formedController(Identifier machineId) throws Exception {
-        MachineControllerBlockEntity controller = controllerWithComponents();
+        return formedController(machineId, new BlockEntity[0]);
+    }
+
+    private static MachineControllerBlockEntity formedController(Identifier machineId, BlockEntity... ports) throws Exception {
+        MachineControllerBlockEntity controller = controllerWithComponents(ports);
         DynamicMachine machine = new DynamicMachine(machineId, "Machine", new BlockArray(java.util.Map.of()));
         setField(MachineControllerBlockEntity.class, controller, "foundMachine", machine);
         setField(MachineControllerBlockEntity.class, controller, "machine", machine);
@@ -203,8 +279,13 @@ class MachineControllerBlockEntityRecipeDelayTest {
                 .setValue(MachineControllerBlock.FACING, net.minecraft.core.Direction.NORTH)
                 .setValue(MachineControllerBlock.ROLL_FACING, net.minecraft.core.Direction.NORTH)
                 .setValue(MachineControllerBlock.ACTIVE, false));
-        var level = LevelStub.create(java.util.Map.of(BlockPos.ZERO, controllerBlock), List.of(controller));
+        List<BlockEntity> blockEntities = new ArrayList<>(List.of(ports));
+        blockEntities.add(controller);
+        var level = LevelStub.create(java.util.Map.of(BlockPos.ZERO, controllerBlock), blockEntities);
         setField(BlockEntity.class, controller, "level", level);
+        for (BlockEntity port : ports) {
+            setField(BlockEntity.class, port, "level", level);
+        }
         return controller;
     }
 
