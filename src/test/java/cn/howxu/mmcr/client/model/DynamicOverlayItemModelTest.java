@@ -1,8 +1,11 @@
 package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
+import cn.howxu.mmcr.client.controller.ControllerSpecCache;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModItems;
@@ -13,6 +16,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.core.Direction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -47,6 +52,34 @@ class DynamicOverlayItemModelTest {
         assertThat(description.kind()).isEqualTo(DynamicOverlayBakedModel.Kind.CONTROLLER);
         assertThat(description.machineId()).isEqualTo(MMCR.id("reactor"));
         assertThat(description.baseTexture()).isEqualTo(net.minecraft.resources.Identifier.withDefaultNamespace("block/blue_ice"));
+    }
+
+    @Test
+    void controller_item_resolves_textures_from_current_snapshots_after_definition_is_cached() {
+        var block = ((BlockItem) ModItems.ITEMS.get("blast_furnace_controller").get()).getBlock();
+        var machineId = MMCR.id("blast_furnace");
+        var appearanceSnapshot = MachineAppearanceCache.snapshot();
+        var controllerSnapshot = ControllerSpecCache.snapshot();
+        RuntimeMachineModelRegistry.definition(block);
+
+        try {
+            MachineAppearanceCache.replaceSnapshot(Map.of(machineId, new MachineAppearanceSpec(
+                    MMCR.id("block/basic_casing"), MMCR.id("block/updated_controller_base"), MMCR.id("block/basic_casing"))));
+            ControllerSpecCache.replaceSnapshot(Map.of(machineId, new MachineControllerSpec(
+                    machineId, MMCR.id("block/updated_controller_overlay"), MMCR.id("block/basic_casing"),
+                    MMCR.id("block/basic_casing"), MMCR.id("block/basic_casing"), false)));
+
+            var itemDescription = DynamicOverlayItemModel.describeItem(ModItems.ITEMS.get("blast_furnace_controller").get());
+            var blockDescription = DynamicOverlayItemModel.describeBlock(block);
+
+            assertThat(itemDescription.baseTexture()).isEqualTo(MMCR.id("block/updated_controller_base"));
+            assertThat(itemDescription.overlayTexture()).isEqualTo(MMCR.id("block/updated_controller_overlay"));
+            assertThat(blockDescription.baseTexture()).isEqualTo(MMCR.id("block/updated_controller_base"));
+            assertThat(blockDescription.overlayTexture()).isEqualTo(MMCR.id("block/updated_controller_overlay"));
+        } finally {
+            MachineAppearanceCache.replaceSnapshot(appearanceSnapshot);
+            ControllerSpecCache.replaceSnapshot(controllerSnapshot);
+        }
     }
 
     @Test

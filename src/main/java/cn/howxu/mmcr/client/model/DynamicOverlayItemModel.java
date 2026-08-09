@@ -110,7 +110,12 @@ public final class DynamicOverlayItemModel implements ItemModel {
 
     static Description describeBlock(Block block) {
         RuntimeBlockModelDefinition definition = RuntimeMachineModelRegistry.definition(block);
-        return definition == null ? Description.staticItem() : definition.itemDescription();
+        if (definition == null) {
+            return Description.staticItem();
+        }
+        Description description = definition.itemDescription();
+        return description.kind() == DynamicOverlayBakedModel.Kind.CONTROLLER
+                ? Description.controller(description.machineId()) : description;
     }
 
     public record Description(
