@@ -158,6 +158,10 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         return FLUID_BAR_OVERLAY_SOURCE_X;
     }
 
+    static Identifier fluidBarOverlayTexture() {
+        return TANK_TEXTURE;
+    }
+
     static int energyBarSourceX() {
         return ENERGY_BAR_SOURCE_X;
     }
@@ -257,7 +261,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         if (!fluid.isEmpty() && filled > 0) {
             drawFluid(g, fluid, x + TANK_X, y + TANK_Y, TANK_W, TANK_H, Math.min(filled, TANK_H));
         }
-        g.blit(RenderPipelines.GUI_TEXTURED, GUI_BAR_TEXTURE,
+        g.blit(RenderPipelines.GUI_TEXTURED, fluidBarOverlayTexture(),
                 x + TANK_X, y + TANK_Y,
                 fluidBarOverlaySourceX(), 0, TANK_W, TANK_H,
                 GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);

@@ -15,6 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MenuScreenTest {
 
     @Test
+        assertThat(MachineMenuScreen.fluidBarOverlayTexture()).isEqualTo(MMCR.id("textures/gui/guitank.png"));
     void hatchBarAtlasCoordinatesMatchMmce() {
         assertThat(MachineMenuScreen.fluidBarOverlaySourceX()).isEqualTo(176);
         assertThat(MachineMenuScreen.energyBarSourceX()).isEqualTo(196);
