@@ -31,6 +31,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     private final DataSlot currentParallelism;
     private final DataSlot maxParallelism;
     private final DataSlot factoryControllerPresent;
+    private final DataSlot factoryThreadCount;
 
     public MachineControllerMenu(int containerId, Inventory playerInv, MachineControllerBlockEntity owner) {
         super(ModUIs.MACHINE_CONTROLLER.get(), containerId);
@@ -77,6 +78,13 @@ public class MachineControllerMenu extends AbstractMachineMenu {
             @Override public int get() { return owner.getFactoryController() == null ? 0 : 1; }
             @Override public void set(int value) {}
         });
+        this.factoryThreadCount = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
+            @Override public int get() {
+                var factory = owner.getFactoryController();
+                return factory == null ? 0 : factory.threadCount();
+            }
+            @Override public void set(int value) {}
+        });
         addControllerPlayerSlots(playerInv);
     }
 
@@ -95,6 +103,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.currentParallelism = addDataSlot(DataSlot.standalone());
         this.maxParallelism = addDataSlot(DataSlot.standalone());
         this.factoryControllerPresent = addDataSlot(DataSlot.standalone());
+        this.factoryThreadCount = addDataSlot(DataSlot.standalone());
         addControllerPlayerSlots(playerInv);
     }
 
@@ -191,6 +200,12 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         if (owner == null) return factoryControllerPresent.get() != 0;
         MachineControllerBlockEntity controller = resolvedOwner();
         return controller == null ? factoryControllerPresent.get() != 0 : controller.getFactoryController() != null;
+    }
+
+    public int factoryThreadCount() {
+        if (owner == null) return factoryThreadCount.get();
+        var factory = owner.getFactoryController();
+        return factory == null ? 0 : factory.threadCount();
     }
 
     public long totalStoredEnergy() {
