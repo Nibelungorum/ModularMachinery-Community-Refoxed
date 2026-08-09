@@ -23,6 +23,7 @@ import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.recipe.RecipeStartDelay;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -58,8 +59,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private static final Logger LOG = LoggerFactory.getLogger(MachineControllerBlockEntity.class);
     private static final AtomicInteger INSTANCE_COUNTER = new AtomicInteger();
     private static final Set<MachineControllerBlockEntity> FORMED_CONTROLLERS = ConcurrentHashMap.newKeySet();
-    private static final int CONFLICT_RECIPE_START_DELAY_TICKS = 20;
-
     private final int instanceId = INSTANCE_COUNTER.incrementAndGet();
 
     private Machine machine;
@@ -92,8 +91,11 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private int cachedDatapackRecipeCount = -1;
     private @Nullable Identifier cachedCandidatesMachineId;
     private List<MachineRecipe> cachedCandidates = List.of();
-    private @Nullable Identifier pendingConflictRecipeId;
-    private long pendingConflictStartTick = Long.MIN_VALUE;
+    private RecipeStartDelay recipeStartDelay = new RecipeStartDelay();
+    private @Nullable MachineRecipe lastRecipe;
+    private long lastRecipeStructureVersion = Long.MIN_VALUE;
+    private long lastRecipeModifierSnapshotVersion = Long.MIN_VALUE;
+    private boolean recipeDirty = true;
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
@@ -113,6 +115,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         stopFactoryController();
         clearFoundModifiers();
         this.machine = m;
+        markRecipeDirty();
         LOG.info("[Ctrl#{}] setMachine: {} → {} at pos={}", instanceId, before, m == null ? null : m.registryName(), getBlockPos());
         setChanged();
     }
@@ -160,6 +163,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (!isFormed() || foundCompiledPattern == null || controllerFacing == null) return;
         if (!isInsideCompiledBounds(changedPos)) return;
         structureDirty = true;
+        markRecipeDirty();
         setChanged();
     }
 
@@ -219,6 +223,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     public List<ProcessingComponent> getComponents() { return List.copyOf(components); }
 
+    public void markRecipeDirty() {
+        recipeDirty = true;
+    }
+
     public boolean hasLinkedPort(BlockPos portPos) {
         return linkedPortPositions != null && linkedPortPositions.contains(portPos);
     }
@@ -276,7 +284,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         long max = 0;
         for (ProcessingComponent component : components) {
             if (component.getContainer() instanceof ParallelControllerBlockEntity parallel) {
-                max += parallel.maxParallelism();
+                max += parallel.currentParallelism();
                 if (max >= machine.maxParallelism()) return machine.maxParallelism();
             }
         }
@@ -355,6 +363,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             pausedActive = null;
             pausedContext = null;
             structureDirty = true;
+            markRecipeDirty();
             setActiveState(true);
         }
 
@@ -639,13 +648,17 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 }
             }
         }
-        if (!before.equals(foundModifierList())) modifierSnapshotVersion++;
+        if (!before.equals(foundModifierList())) {
+            modifierSnapshotVersion++;
+            markRecipeDirty();
+        }
     }
 
     private void clearFoundModifiers() {
         if (foundModifiers.isEmpty()) return;
         foundModifiers.clear();
         modifierSnapshotVersion++;
+        markRecipeDirty();
     }
 
     private void updateComponents() {
@@ -860,6 +873,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (clearFormationFailure) lastFormationFailure = null;
         redstonePaused = false;
         if (dropped != null || wasFormed || hadActive) structureVersion++;
+        markRecipeDirty();
         clearCandidateCache();
         if (wasFormed) setFormed(false);
         if (dropped != null || hadActive) {
@@ -894,6 +908,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         recipeSearchAttemptCounter++;
         Identifier machineId = foundMachine == null ? null : foundMachine.registryName();
         if (machineId == null) return false;
+        if (tryRestartLastRecipe(machineId)) return true;
         List<MachineRecipe> candidates = recipesForMachine();
         RecipeSearchResult result;
         try {
@@ -959,6 +974,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             return false;
         }
         setActiveState(true);
+        rememberLastRecipe(next.getRecipe());
         recipeSearchRetryCounter = 0;
         lastFailureUnloc = null;
         setChanged();
@@ -966,22 +982,16 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private boolean shouldDelayConflictProneStart(RecipeSearchResult result, long gameTime) {
-        if (!result.hasMoreSpecificPendingInputCandidate()) {
-            clearPendingConflictStart();
-            return false;
-        }
-        Identifier recipeId = result.activeRecipe().getRecipe().id();
-        if (!recipeId.equals(pendingConflictRecipeId)) {
-            pendingConflictRecipeId = recipeId;
-            pendingConflictStartTick = gameTime;
-            return true;
-        }
-        return gameTime - pendingConflictStartTick < CONFLICT_RECIPE_START_DELAY_TICKS;
+        return recipeStartDelay().shouldDelay(result.activeRecipe().getRecipe().id(), result.hasMoreSpecificPendingInputCandidate(), gameTime);
     }
 
     private void clearPendingConflictStart() {
-        pendingConflictRecipeId = null;
-        pendingConflictStartTick = Long.MIN_VALUE;
+        recipeStartDelay().clear();
+    }
+
+    private RecipeStartDelay recipeStartDelay() {
+        if (recipeStartDelay == null) recipeStartDelay = new RecipeStartDelay();
+        return recipeStartDelay;
     }
 
     private long currentGameTime() {
@@ -999,6 +1009,39 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 && foundMachine.registryName().equals(result.machineId())
                 && structureVersion == result.structureVersion()
                 && active == null;
+    }
+
+    private boolean tryRestartLastRecipe(Identifier machineId) {
+        if (recipeDirty || lastRecipe == null || active != null || foundMachine == null) return false;
+        if (!machineId.equals(lastRecipe.machineId())) return false;
+        if (lastRecipeStructureVersion != structureVersion || lastRecipeModifierSnapshotVersion != modifierSnapshotVersion) return false;
+        ActiveMachineRecipe next = new ActiveMachineRecipe(lastRecipe, getMaxParallelism());
+        RecipeCraftingContext nextContext = contextPool().borrow(next, this);
+        try {
+            if (!nextContext.simulateInputs(lastRecipe) || !nextContext.simulateOutputs(lastRecipe)) return false;
+            active = next;
+            context = nextContext;
+            if (!next.start(nextContext)) {
+                active = null;
+                context = null;
+                recipeDirty = true;
+                return false;
+            }
+            setActiveState(true);
+            recipeSearchRetryCounter = 0;
+            lastFailureUnloc = null;
+            setChanged();
+            return true;
+        } finally {
+            if (active != next) returnContext(nextContext);
+        }
+    }
+
+    private void rememberLastRecipe(MachineRecipe recipe) {
+        lastRecipe = recipe;
+        lastRecipeStructureVersion = structureVersion;
+        lastRecipeModifierSnapshotVersion = modifierSnapshotVersion;
+        recipeDirty = false;
     }
 
     private boolean isSearchResultCurrentForFactory(RecipeSearchResult result) {
@@ -1019,7 +1062,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 context.setStructureModifiers(foundModifierList());
             }
         }
-        ActiveMachineRecipe.TickStatus status = active.tick(context);
+        ActiveMachineRecipe.TickStatus status = active.tick(context, (int) Math.min(Integer.MAX_VALUE, Math.max(0L, currentGameTime())));
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
             lastFailureUnloc = null;
             returnContext(context);
@@ -1118,6 +1161,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         cachedCandidatesReloadVersion = Long.MIN_VALUE;
         cachedDatapackRecipeCount = -1;
         cachedCandidates = List.of();
+        markRecipeDirty();
     }
 
     private void returnContext(@Nullable RecipeCraftingContext returnedContext) {

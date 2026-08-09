@@ -54,8 +54,13 @@ public final class FactoryRecipeLane implements FactoryRecipeScheduler.Lane {
 
     @Override
     public boolean tick() {
+        return tick(0L);
+    }
+
+    @Override
+    public boolean tick(long gameTime) {
         if (closed) return true;
-        ActiveMachineRecipe.TickStatus status = recipe.tick(context);
+        ActiveMachineRecipe.TickStatus status = recipe.tick(context, (int) Math.min(Integer.MAX_VALUE, Math.max(0L, gameTime)));
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
             close();
             return true;

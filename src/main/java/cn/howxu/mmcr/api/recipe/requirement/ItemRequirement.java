@@ -46,4 +46,12 @@ public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient ite
                 ? context.collectItemInputRoute(requirementIndex)
                 : context.collectItemOutputRoute(requirementIndex);
     }
+
+    @Override
+    public int maxInputParallelism(RecipeCraftingContext context, int limit) {
+        if (io != RecipeModifier.IOType.INPUT || item == null || count <= 0 || !tags.isEmpty()) return -1;
+        if (item.items().count() != 1) return -1;
+        int available = context.countMatchingItemInputs(item, List.of());
+        return Math.min(Math.max(1, limit), available / count);
+    }
 }

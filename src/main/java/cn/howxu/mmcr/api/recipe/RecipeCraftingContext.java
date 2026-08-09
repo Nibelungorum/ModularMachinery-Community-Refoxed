@@ -191,6 +191,27 @@ public final class RecipeCraftingContext {
         return simulateOutputs(scaledRequirements(recipe, parallelism));
     }
 
+    public int maxInputParallelism(MachineRecipe recipe, int limit) {
+        int max = Math.max(1, limit);
+        int best = max;
+        for (MachineRequirement requirement : recipe.runtimeRequirements(structureModifiers)) {
+            if (requirement.io() != RecipeModifier.IOType.INPUT) continue;
+            int requirementMax = requirement.maxInputParallelism(this, max);
+            if (requirementMax < 0) return -1;
+            best = Math.min(best, requirementMax);
+        }
+        return best;
+    }
+
+    public int countMatchingItemInputs(net.minecraft.world.item.crafting.Ingredient ingredient, List<String> requiredTags) {
+        if (ingredient == null) return 0;
+        int count = 0;
+        for (ItemInputState state : itemInputStates(requiredTags)) {
+            if (ingredient.test(state.stack())) count += state.stack().getCount();
+        }
+        return count;
+    }
+
     private boolean simulateOutputs(List<MachineRequirement> requirements) {
         lastFailureUnloc = null;
         lastRequirementFailure = null;
@@ -1026,6 +1047,10 @@ public final class RecipeCraftingContext {
 
         private ItemBusBlockEntity bus() {
             return bus;
+        }
+
+        private ItemStack stack() {
+            return stack;
         }
     }
 

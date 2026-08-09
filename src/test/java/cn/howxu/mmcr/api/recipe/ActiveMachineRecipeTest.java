@@ -97,6 +97,55 @@ class ActiveMachineRecipeTest {
         assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isZero();
     }
 
+    @Test
+    void finishRetryCooldownPersistsAcrossNbtAndValueIo() {
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("active_retry_cooldown"),
+                MMCR.id("blast_furnace"),
+                20,
+                List.of(),
+                List.of());
+        RecipeRegistry.register(recipe);
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, 1);
+
+        assertThat(active.shouldRetryFinish(5)).isTrue();
+        active.markFinishBlocked(5);
+        assertThat(active.shouldRetryFinish(14)).isFalse();
+        assertThat(active.shouldRetryFinish(15)).isTrue();
+
+        ActiveMachineRecipe fromNbt = new ActiveMachineRecipe(active.serialize());
+        assertThat(fromNbt.shouldRetryFinish(14)).isFalse();
+        assertThat(fromNbt.shouldRetryFinish(15)).isTrue();
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        active.serialize(output);
+        ActiveMachineRecipe fromValueInput = ActiveMachineRecipe.from(TagValueInput.create(
+                ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()),
+                output.buildResult()));
+
+        assertThat(fromValueInput.shouldRetryFinish(14)).isFalse();
+        assertThat(fromValueInput.shouldRetryFinish(15)).isTrue();
+    }
+
+    @Test
+    void startPromotesParallelismToHighestFeasibleCraftAmount() throws Exception {
+        ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
+        bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(8));
+        MachineControllerBlockEntity controller = controllerWithComponents(bus);
+        MachineRecipe recipe = inputRecipe("active_parallel_start", MMCR.id("blast_furnace"), Items.IRON_INGOT, 2);
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, 16);
+
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+        boolean canStart = active.canStartCrafting(context);
+        boolean started = active.start(context);
+
+        assertThat(canStart).isTrue();
+        assertThat(started).isTrue();
+        assertThat(active.getParallelism()).isEqualTo(4);
+        assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isZero();
+    }
+
     private static MachineRecipe inputRecipe(String path, net.minecraft.resources.Identifier machineId, Item item, int count) {
         return new MachineRecipe(
                 MMCR.id(path),

@@ -18,7 +18,8 @@ public final class ParallelRecipeCalculator {
         }
         if (!safeSimulateInputs(context, recipe, 1) || !safeSimulateOutputs(context, recipe, 1)) return 0;
 
-        int inputLimit = maxByInput(context, recipe, limit);
+        int inputLimit = context.maxInputParallelism(recipe, limit);
+        if (inputLimit < 0) inputLimit = maxByInput(context, recipe, limit);
         return inputLimit <= 0 ? 0 : limitByOutput(context, recipe, inputLimit);
     }
 

@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
+import cn.howxu.mmcr.internal.recipe.RecipeStartDelay;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -117,6 +118,18 @@ class MachineControllerBlockEntityRecipeDelayTest {
         RecipeSearchResult secondResult = startableConflictResult(machineId, recipe, 31);
 
         assertThat(invokeShouldDelay(controller, secondResult, 21)).isFalse();
+    }
+
+    @Test
+    void sharedDelayHelperDelaysOnlyConflictProneRecipeWithinWindow() {
+        RecipeStartDelay delay = new RecipeStartDelay();
+        Identifier recipe = Identifier.fromNamespaceAndPath("mmcr", "single_gold");
+
+        assertThat(delay.shouldDelay(recipe, true, 100)).isTrue();
+        assertThat(delay.shouldDelay(recipe, true, 119)).isTrue();
+        assertThat(delay.shouldDelay(recipe, true, 120)).isFalse();
+        assertThat(delay.shouldDelay(recipe, false, 121)).isFalse();
+        assertThat(delay.shouldDelay(recipe, true, 122)).isTrue();
     }
 
     private static boolean invokeShouldDelay(MachineControllerBlockEntity controller,

@@ -25,6 +25,7 @@ public final class ActiveMachineRecipe {
     private int totalTick;
     private int maxParallelism;
     private int parallelism;
+    private int nextFinishRetryTick;
 
     public ActiveMachineRecipe(MachineRecipe recipe) {
         this(recipe, 1);
@@ -47,6 +48,7 @@ public final class ActiveMachineRecipe {
         this.tick = serialized.getIntOr("tick", 0);
         this.totalTick = serialized.getIntOr("totalTick", 0);
         this.data = serialized.contains("data") ? serialized.getCompoundOrEmpty("data") : new CompoundTag();
+        this.nextFinishRetryTick = serialized.getIntOr("nextFinishRetryTick", 0);
         setMaxParallelism(serialized.getIntOr("maxParallelism", 1));
         setParallelism(serialized.getIntOr("parallelism", 1));
         LOG.info("ActiveMachineRecipe#{} restored from NBT: recipe={} resolved={} tick={}/{} maxParallelism={} parallelism={}",
@@ -145,6 +147,7 @@ public final class ActiveMachineRecipe {
         tag.putInt("totalTick", this.totalTick);
         tag.putInt("maxParallelism", this.maxParallelism);
         tag.putInt("parallelism", this.parallelism);
+        tag.putInt("nextFinishRetryTick", this.nextFinishRetryTick);
         if (!data.isEmpty()) {
             tag.put("data", data);
         }
@@ -159,6 +162,7 @@ public final class ActiveMachineRecipe {
         output.putInt("totalTick", this.totalTick);
         output.putInt("maxParallelism", this.maxParallelism);
         output.putInt("parallelism", this.parallelism);
+        output.putInt("nextFinishRetryTick", this.nextFinishRetryTick);
         if (!data.isEmpty()) {
             output.store("data", CompoundTag.CODEC, data);
         }
@@ -171,6 +175,7 @@ public final class ActiveMachineRecipe {
         ActiveMachineRecipe result = new ActiveMachineRecipe(recipe, input.getIntOr("maxParallelism", 1));
         result.tick = input.getIntOr("tick", 0);
         result.totalTick = input.getIntOr("totalTick", 0);
+        result.nextFinishRetryTick = input.getIntOr("nextFinishRetryTick", 0);
         result.setParallelism(input.getIntOr("parallelism", 1));
         result.data = input.read("data", CompoundTag.CODEC).orElseGet(CompoundTag::new);
         LOG.debug("ActiveMachineRecipe#{} from(ValueInput) → recipe={} tick={}/{} maxParallelism={} parallelism={}",
@@ -208,7 +213,23 @@ public final class ActiveMachineRecipe {
         return context.canRestartCrafting(this);
     }
 
+    private int highestStartableParallelism(RecipeCraftingContext context) {
+        return Math.max(1, ParallelRecipeCalculator.maxStartableParallelism(context, recipe, maxParallelism));
+    }
+
+    public boolean shouldRetryFinish(int gameTime) {
+        return gameTime >= nextFinishRetryTick;
+    }
+
+    public void markFinishBlocked(int gameTime) {
+        nextFinishRetryTick = gameTime + 10;
+    }
+
     public TickStatus tick(RecipeCraftingContext context) {
+        return tick(context, 0);
+    }
+
+    public TickStatus tick(RecipeCraftingContext context, int gameTime) {
         if (recipe == null) {
             LOG.debug("ActiveMachineRecipe#{} tick(): no recipe attached → WAITING", instanceId);
             return TickStatus.WAITING;
@@ -221,7 +242,11 @@ public final class ActiveMachineRecipe {
         int beforeTick = getTick();
         int nextTick = Math.min(beforeTick + 1, total);
         if (nextTick >= total) {
+            if (!shouldRetryFinish(gameTime)) {
+                return TickStatus.WAITING;
+            }
             if (!context.simulateOutputs(recipe, parallelism)) {
+                markFinishBlocked(gameTime);
                 LOG.info("ActiveMachineRecipe#{} tick(): recipe {} outputs unavailable before completion → WAITING at tick {}",
                         instanceId, recipe.id(), beforeTick);
                 return TickStatus.WAITING;
@@ -243,6 +268,7 @@ public final class ActiveMachineRecipe {
         boolean outputsOk = context.finishCrafting(recipe, parallelism);
         if (!outputsOk) {
             int restored = Math.max(0, total - 1);
+            markFinishBlocked(gameTime);
             LOG.info("ActiveMachineRecipe#{} tick(): recipe {} finish failed → rollback tick {} → {} (WAITING)",
                     instanceId, recipe.id(), nextTick, restored);
             setTick(restored);
