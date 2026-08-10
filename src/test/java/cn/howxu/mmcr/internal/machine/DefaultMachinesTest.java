@@ -15,6 +15,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.Block;
 import org.nibelungorum.DefaultMachines;
+import org.nibelungorum.DefaultMachineLevels;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -148,10 +149,19 @@ class DefaultMachinesTest {
         assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(ModBlocks.BLOCKS.get("parallel_controller_4").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(net.minecraft.world.level.block.Blocks.EMERALD_BLOCK.defaultBlockState())).isFalse();
         assertThat(machine.pattern().pattern().values())
                 .contains(new BlockPredicate.OfBlock(net.minecraft.world.level.block.Blocks.REINFORCED_DEEPSLATE));
         assertThat(requirementIds(machine)).contains("energy_input_hatch>=tiny", "item_input_bus>=tiny", "item_output_bus>=tiny");
+        var levelSlots = MachineStructureRegistry.dynamicSnapshot().get(MMCR.id("thermal_smelting_furnace")).levelSlots();
+        assertThat(levelSlots)
+                .isNotEmpty()
+                .allSatisfy((position, typeId) -> assertThat(typeId).isEqualTo(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE));
+        var coilSlot = machine.pattern().get(levelSlots.keySet().iterator().next());
+        assertThat(coilSlot.matches(net.minecraft.world.level.block.Blocks.COPPER_BLOCK.defaultBlockState())).isTrue();
+        assertThat(coilSlot.matches(net.minecraft.world.level.block.Blocks.IRON_BLOCK.defaultBlockState())).isTrue();
+        assertThat(coilSlot.matches(net.minecraft.world.level.block.Blocks.GOLD_BLOCK.defaultBlockState())).isTrue();
+        assertThat(coilSlot.matches(net.minecraft.world.level.block.Blocks.DIAMOND_BLOCK.defaultBlockState())).isTrue();
+        assertThat(coilSlot.matches(net.minecraft.world.level.block.Blocks.EMERALD_BLOCK.defaultBlockState())).isFalse();
     }
 
     @Test

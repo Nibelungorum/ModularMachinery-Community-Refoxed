@@ -2,6 +2,7 @@ package org.nibelungorum;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -65,7 +66,8 @@ public final class DefaultRecipes {
 
     private static MachineRecipe createRecipe(Definition definition) {
         return new MachineRecipe(definition.id(), definition.machineId(), definition.ticks(), definition.inputs(),
-                definition.outputs(), List.of(), 0, definition.maxThreads(), true, definition.fluidOutputs(), List.of(), true);
+                definition.outputs(), List.of(), 0, definition.maxThreads(), true, definition.fluidOutputs(), List.of(), true,
+                definition.levelRequirements());
     }
 
     private static List<Definition> definitions() {
@@ -74,8 +76,25 @@ public final class DefaultRecipes {
                 alloyFurnaceDefinitions(),
                 standardDefinitions(CRACKER_ID, "cracker", new Definition(MMCR.id("cracker_coal_lapis"), CRACKER_ID, 160, List.of(itemInput(Items.COAL, 8), itemInput(Items.LAPIS_LAZULI, 1), energyInput(100)), List.of(item(Items.REDSTONE, 4)), List.of(fluidOutput(Fluids.WATER, 500)))),
                 standardDefinitions(REACTOR_ID, "reactor", new Definition(MMCR.id("reactor_diamond_water"), REACTOR_ID, 200, List.of(itemInput(Items.DIAMOND, 1), fluidInput(Fluids.WATER, 500), energyOutput(100)), List.of(item(Items.COAL, 1)), List.of(fluidOutput(Fluids.LAVA, 500)))),
-                List.of(new Definition(MMCR.id("thermal_smelting_furnace_coal_iron_to_netherite_scrap"), THERMAL_SMELTING_FURNACE_ID, 100, List.of(itemInput(Items.COAL, 1), itemInput(Items.IRON_INGOT, 1), energyInput(2_000)), List.of(item(Items.NETHERITE_SCRAP, 1)), List.of(), 4))
+                thermalSmeltingFurnaceDefinitions()
         ).stream().flatMap(List::stream).toList();
+    }
+
+    private static List<Definition> thermalSmeltingFurnaceDefinitions() {
+        List<MachineIngredient> inputs = List.of(itemInput(Items.COAL, 1), itemInput(Items.IRON_INGOT, 1), energyInput(2_000));
+        List<ItemStack> outputs = List.of(item(Items.NETHERITE_SCRAP, 1));
+        return List.of(
+                new Definition(MMCR.id("thermal_smelting_furnace_coal_iron_to_netherite_scrap"), THERMAL_SMELTING_FURNACE_ID, 100, inputs, outputs, List.of(), 4),
+                thermalSmeltingDefinition("copper", DefaultMachineLevels.COPPER_COIL, inputs, outputs),
+                thermalSmeltingDefinition("iron", DefaultMachineLevels.IRON_COIL, inputs, outputs),
+                thermalSmeltingDefinition("gold", DefaultMachineLevels.GOLD_COIL, inputs, outputs),
+                thermalSmeltingDefinition("diamond", DefaultMachineLevels.DIAMOND_COIL, inputs, outputs));
+    }
+
+    private static Definition thermalSmeltingDefinition(String level, Identifier levelId,
+                                                        List<MachineIngredient> inputs, List<ItemStack> outputs) {
+        return new Definition(MMCR.id("thermal_smelting_furnace_" + level), THERMAL_SMELTING_FURNACE_ID, 100,
+                inputs, outputs, List.of(), 4, List.of(new LevelRequirement(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE, levelId)));
     }
 
     private static List<Definition> alloyFurnaceDefinitions() {
@@ -168,10 +187,16 @@ public final class DefaultRecipes {
     }
 
     private record Definition(Identifier id, Identifier machineId, int ticks, List<MachineIngredient> inputs,
-                              List<ItemStack> outputs, List<FluidStack> fluidOutputs, int maxThreads) {
+                              List<ItemStack> outputs, List<FluidStack> fluidOutputs, int maxThreads,
+                              List<LevelRequirement> levelRequirements) {
         private Definition(Identifier id, Identifier machineId, int ticks, List<MachineIngredient> inputs,
                            List<ItemStack> outputs, List<FluidStack> fluidOutputs) {
-            this(id, machineId, ticks, inputs, outputs, fluidOutputs, 1);
+            this(id, machineId, ticks, inputs, outputs, fluidOutputs, 1, List.of());
+        }
+
+        private Definition(Identifier id, Identifier machineId, int ticks, List<MachineIngredient> inputs,
+                           List<ItemStack> outputs, List<FluidStack> fluidOutputs, int maxThreads) {
+            this(id, machineId, ticks, inputs, outputs, fluidOutputs, maxThreads, List.of());
         }
     }
 

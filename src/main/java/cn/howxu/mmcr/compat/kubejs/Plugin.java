@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import org.nibelungorum.DefaultMachineLevels;
 import dev.latvian.mods.kubejs.recipe.component.RecipeComponentTypeRegistry;
 import dev.latvian.mods.kubejs.recipe.schema.RecipeFactoryRegistry;
 import dev.latvian.mods.kubejs.recipe.schema.RecipeSchemaRegistry;
@@ -17,6 +18,7 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     public void beforeScriptsLoaded(ScriptManager manager) {
         if (manager.scriptType == ScriptType.STARTUP) {
             MachineLevelRegistry.beginRegistration();
+            DefaultMachineLevels.register();
         }
     }
 

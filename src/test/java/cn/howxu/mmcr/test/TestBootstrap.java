@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
@@ -31,6 +32,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import org.nibelungorum.BuiltinMachines;
+import org.nibelungorum.DefaultMachineLevels;
 import org.nibelungorum.DefaultRecipes;
 
 import java.lang.reflect.Field;
@@ -91,6 +93,9 @@ public final class TestBootstrap {
         bind(ModBlocks.BLOCKS.get("debug_infinite_water_source"), Blocks.STONE);
         bind(ModBlocks.BLOCKS.get("debug_infinite_lava_source"), Blocks.STONE);
         bind(ModItems.THREAD_DISPERSER, registerItem(ModItems.THREAD_DISPERSER));
+        MachineLevelRegistry.beginRegistration();
+        DefaultMachineLevels.register();
+        MachineLevelRegistry.freezeRegistration();
         restoreMachineDefinitions();
         registerRuntimeBuiltins();
         initialized = true;

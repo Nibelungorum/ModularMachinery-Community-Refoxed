@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -115,6 +116,32 @@ class DefaultRecipesTest {
     }
 
     @Test
+    void thermal_smelting_furnace_recipes_require_each_coil_level() {
+        installDefaultRuntimeContent();
+        DefaultRecipes.ensureRegistered();
+
+        assertThat(RecipeRegistry.getRecipe(MMCR.id("thermal_smelting_furnace_copper"))
+                .levelRequirements()).singleElement().satisfies(requirement -> {
+            assertThat(requirement.typeId()).isEqualTo(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE);
+            assertThat(requirement.levelId()).isEqualTo(DefaultMachineLevels.COPPER_COIL);
+        });
+        assertThat(RecipeRegistry.getRecipe(MMCR.id("thermal_smelting_furnace_iron"))
+                .levelRequirements()).singleElement().extracting(requirement -> requirement.levelId())
+                .isEqualTo(DefaultMachineLevels.IRON_COIL);
+        assertThat(RecipeRegistry.getRecipe(MMCR.id("thermal_smelting_furnace_gold"))
+                .levelRequirements()).singleElement().extracting(requirement -> requirement.levelId())
+                .isEqualTo(DefaultMachineLevels.GOLD_COIL);
+        assertThat(RecipeRegistry.getRecipe(MMCR.id("thermal_smelting_furnace_diamond"))
+                .levelRequirements()).singleElement().extracting(requirement -> requirement.levelId())
+                .isEqualTo(DefaultMachineLevels.DIAMOND_COIL);
+
+        assertThat(MachineLevelRegistry.getLevel(DefaultMachineLevels.COPPER_COIL).modifier().durationMultiplier()).isEqualTo(0.9D);
+        assertThat(MachineLevelRegistry.getLevel(DefaultMachineLevels.IRON_COIL).modifier().durationMultiplier()).isEqualTo(0.8D);
+        assertThat(MachineLevelRegistry.getLevel(DefaultMachineLevels.GOLD_COIL).modifier().durationMultiplier()).isEqualTo(0.7D);
+        assertThat(MachineLevelRegistry.getLevel(DefaultMachineLevels.DIAMOND_COIL).modifier().durationMultiplier()).isEqualTo(0.6D);
+    }
+
+    @Test
     void ensureRegistered_publishes_builtin_cracker_coal_lapis_recipe() {
         installDefaultRuntimeContent();
         DefaultRecipes.ensureRegistered();
@@ -193,7 +220,7 @@ class DefaultRecipesTest {
         assertThat(RecipeRegistry.byMachineId(MMCR.id("alloy_furnace"))).hasSize(12);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker"))).hasSize(10);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("reactor"))).hasSize(10);
-        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(43);
+        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(47);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker")))
                 .anySatisfy(recipe -> assertThat(recipe.fluidOutputs()).isNotEmpty());
         assertThat(RecipeRegistry.recipes())

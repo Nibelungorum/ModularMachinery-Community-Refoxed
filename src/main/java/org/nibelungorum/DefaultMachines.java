@@ -74,7 +74,7 @@ public final class DefaultMachines {
         structures.put(ALLOY_FURNACE_ID, structureOf(alloyFurnace(itemInput, itemOutput, energyInput)));
         structures.put(CRACKER_ID, structureOf(cracker(itemInput, itemOutput, fluidOutput, energyInput)));
         structures.put(REACTOR_ID, structureOf(reactor(itemInput, itemOutput, fluidInput, fluidOutput, energyOutput)));
-        structures.put(THERMAL_SMELTING_FURNACE_ID, structureOf(thermalSmeltingFurnace()));
+        structures.put(THERMAL_SMELTING_FURNACE_ID, thermalSmeltingFurnaceStructure());
         return Map.copyOf(structures);
     }
 
@@ -86,6 +86,32 @@ public final class DefaultMachines {
                 machine.portTierRequirements(),
                 machine.dynamicPatterns(),
                 machine instanceof DynamicMachine dynamic ? dynamic.modifierReplacements() : Map.of());
+    }
+
+    private static MachineStructureDefinition thermalSmeltingFurnaceStructure() {
+        Machine machine = thermalSmeltingFurnace();
+        Map<BlockPos, Identifier> levelSlots = new LinkedHashMap<>();
+        for (var entry : machine.pattern().pattern().entrySet()) {
+            if (isThermalSmeltingCoil(entry.getValue())) {
+                levelSlots.put(entry.getKey(), DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE);
+            }
+        }
+        return new MachineStructureDefinition(
+                machine.registryName(),
+                machine.pattern(),
+                machine.portRequirements(),
+                machine.portTierRequirements(),
+                machine.dynamicPatterns(),
+                Map.of(),
+                levelSlots);
+    }
+
+    private static boolean isThermalSmeltingCoil(BlockPredicate predicate) {
+        return predicate.matches(Blocks.COPPER_BLOCK.defaultBlockState())
+                && predicate.matches(Blocks.IRON_BLOCK.defaultBlockState())
+                && predicate.matches(Blocks.GOLD_BLOCK.defaultBlockState())
+                && predicate.matches(Blocks.DIAMOND_BLOCK.defaultBlockState())
+                && !predicate.matches(Blocks.EMERALD_BLOCK.defaultBlockState());
     }
 
     /**
@@ -332,7 +358,11 @@ public final class DefaultMachines {
                 .pattern("AAA", "XXX", "XXX", "AAA")
                 .pattern("AAA", "X X", "X X", "ADA")
                 .pattern("ABA", "XXX", "XXX", "AAA")
-                .set('X', new BlockPredicate.OfBlock(Blocks.EMERALD_BLOCK))
+                .set('X', new BlockPredicate.AnyOf(List.of(
+                        new BlockPredicate.OfBlock(Blocks.COPPER_BLOCK),
+                        new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
+                        new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
+                        new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK))))
                 .set('A', new BlockPredicate.AnyOf(basaltSlotBlocks))
                 .set('B', new BlockPredicate.OfBlock(controller))
                 .set('D', new BlockPredicate.OfBlock(Blocks.REINFORCED_DEEPSLATE))
