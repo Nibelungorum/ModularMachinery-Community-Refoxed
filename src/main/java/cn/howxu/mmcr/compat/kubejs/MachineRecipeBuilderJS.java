@@ -2,6 +2,8 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
@@ -20,6 +22,7 @@ public class MachineRecipeBuilderJS {
     public final List<ItemStack> outputs = new ArrayList<>();
     public int energyPerTick = 0;
     public boolean cancelIfPerTickFails = false;
+    public final List<LevelRequirement> levelRequirements = new ArrayList<>();
 
     private Identifier id;
 
@@ -75,6 +78,19 @@ public class MachineRecipeBuilderJS {
         return this;
     }
 
+    public MachineRecipeBuilderJS requiresLevel(String typeId, String levelId) {
+        var type = Identifier.parse(typeId);
+        var level = MachineLevelRegistry.getLevel(Identifier.parse(levelId));
+        if (level == null) {
+            throw new IllegalArgumentException("Machine level not found: " + levelId);
+        }
+        if (!level.typeId().equals(type)) {
+            throw new IllegalArgumentException("Machine level " + levelId + " does not belong to type " + typeId);
+        }
+        levelRequirements.add(new LevelRequirement(type, level.id()));
+        return this;
+    }
+
     public void build() {
         if (machineId == null) {
             throw new IllegalStateException("machine() not called");
@@ -86,6 +102,7 @@ public class MachineRecipeBuilderJS {
             recipeInputs.add(new MachineIngredient.EnergyIngredient(energyPerTick));
         }
 
-        RecipeRegistry.register(new MachineRecipe(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(outputs), List.of(), 0, 1, cancelIfPerTickFails));
+        RecipeRegistry.register(new MachineRecipe(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(outputs), List.of(), 0, 1,
+                cancelIfPerTickFails, List.of(), List.of(), false, List.copyOf(levelRequirements)));
     }
 }
