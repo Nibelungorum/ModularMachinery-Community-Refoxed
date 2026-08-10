@@ -227,7 +227,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         List<MachineIngredient> inputs = new ArrayList<>();
         for (MachineRequirement requirement : requirements) {
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT) {
-                inputs.add(new MachineIngredient.ItemIngredient(item.item(), item.count()));
+                inputs.add(new MachineIngredient.ItemIngredient(item.item(), item.count(), item.components(), item.consumeChance()));
             } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.INPUT) {
                 inputs.add(new MachineIngredient.FluidIngredient(fluid.fluid(), fluid.amount()));
             } else if (requirement instanceof EnergyRequirement energy && energy.io() == RecipeModifier.IOType.INPUT) {
@@ -360,12 +360,12 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         if (requirement instanceof ItemRequirement item) {
             if (item.io() == RecipeModifier.IOType.INPUT) {
                 int count = IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyItemInput(effectiveModifiers, item.count()));
-                return new ItemRequirement(item.io(), item.item(), count, item.stack(), item.chance(), item.tags());
+                return new ItemRequirement(item.io(), item.item(), count, item.stack(), item.chance(), item.tags(), item.components(), item.consumeChance());
             }
             ItemStack stack = item.stack().copy();
             stack.setCount(IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyItemOutput(effectiveModifiers, stack.getCount())));
             float chance = IntegrationTypeHelper.applyItemOutputChance(effectiveModifiers, item.chance());
-            return new ItemRequirement(item.io(), item.item(), item.count(), stack, chance, item.tags());
+            return new ItemRequirement(item.io(), item.item(), item.count(), stack, chance, item.tags(), item.components(), item.consumeChance());
         }
         if (requirement instanceof FluidRequirement fluid) {
             if (fluid.io() == RecipeModifier.IOType.INPUT) {

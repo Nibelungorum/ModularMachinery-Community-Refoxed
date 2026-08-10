@@ -16,7 +16,11 @@ import cn.howxu.mmcr.datagen.Translations;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.data.registries.VanillaRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -36,6 +40,10 @@ class MachineRecipeDisplayTest {
     @BeforeAll
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
+        bindItemComponents(
+                Items.COAL, Items.IRON_INGOT, Items.GOLD_INGOT, Items.IRON_NUGGET, Items.GOLD_NUGGET,
+                Items.DIAMOND_SWORD
+        );
     }
 
     @Test
@@ -63,7 +71,7 @@ class MachineRecipeDisplayTest {
         assertThat(display.machineId()).isEqualTo(MMCR.id("blast_furnace"));
         assertThat(display.durationTicks()).isEqualTo(120);
         assertThat(display.itemInputs()).hasSize(1);
-        assertThat(display.itemInputCounts()).containsExactly(8);
+        assertThat(display.itemInputs()).extracting(MachineRecipeDisplay.ItemInputDisplay::count).containsExactly(8);
         assertThat(display.itemOutputs()).singleElement().satisfies(output -> {
             assertThat(output.is(Items.IRON_NUGGET)).isTrue();
             assertThat(output.getCount()).isEqualTo(4);
@@ -92,6 +100,25 @@ class MachineRecipeDisplayTest {
 
         assertThat(display.outputs()).hasOnlyElementsOfType(MachineOutput.ItemOutput.class);
         assertThat(display.itemOutputs()).extracting(ItemStack::getCount).containsExactly(6);
+    }
+
+    @Test
+    void displayPreservesOutputComponents() {
+        ItemStack namedSharpnessFourSword = namedSharpnessFourSword();
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("component_output_display"),
+                MMCR.id("alloy_furnace"),
+                40,
+                List.of(),
+                List.of(namedSharpnessFourSword)
+        );
+
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+
+        ItemStack output = display.itemOutputs().getFirst();
+        assertThat(output.getHoverName().getString()).isEqualTo("Better钻石剑");
+        assertThat(output.get(DataComponents.ENCHANTMENTS))
+                .isEqualTo(namedSharpnessFourSword.get(DataComponents.ENCHANTMENTS));
     }
 
     @Test
@@ -225,5 +252,21 @@ class MachineRecipeDisplayTest {
         MachineLevelRegistry.registerLevel(new MachineLevel(id, typeId, priority,
                 new BlockPredicate.OfBlockState(block.defaultBlockState()),
                 new ItemStack(Holder.direct(block.asItem(), DataComponentMap.EMPTY)), LevelModifier.IDENTITY));
+    }
+
+    private static ItemStack namedSharpnessFourSword() {
+        ItemStack stack = new ItemStack(Items.DIAMOND_SWORD);
+        stack.set(DataComponents.CUSTOM_NAME, Component.literal("Better钻石剑"));
+        var enchantments = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
+        enchantments.set(VanillaRegistries.createLookup()
+                .lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT)
+                .getOrThrow(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.ENCHANTMENT,
+                        Identifier.parse("minecraft:sharpness"))), 4);
+        stack.set(DataComponents.ENCHANTMENTS, enchantments.toImmutable());
+        return stack;
+    }
+
+    private static void bindItemComponents(net.minecraft.world.item.Item... items) {
+        for (var item : items) item.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
     }
 }

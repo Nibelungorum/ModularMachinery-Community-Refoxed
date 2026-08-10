@@ -261,6 +261,8 @@ public final class Translations {
                     Map.entry("jei.mmcr.machine_recipe.input_overflow", "Additional ingredients:"),
                     Map.entry("jei.mmcr.machine_recipe.output_overflow", "Additional outputs:"),
                     Map.entry("jei.mmcr.machine_recipe.overflow_entry", "%s x %s"),
+                    Map.entry("jei.mmcr.machine_recipe.keep", "Keep"),
+                    Map.entry("jei.mmcr.machine_recipe.consume_chance", "Consumed: %s"),
                     Map.entry("jei.mmcr.transfer.fluid_energy_not_supported", "Only item inputs can be transferred. Fluids and energy must be supplied by hatches."),
                     Map.entry("jei.mmcr.transfer.no_item_inputs", "This recipe has no item inputs to transfer."),
                     Map.entry("jei.mmcr.transfer.not_enough_slots", "Not enough item bus slots for this recipe"))),
@@ -505,6 +507,8 @@ Map.entry("zh_cn", Map.ofEntries(
                     Map.entry("jei.mmcr.machine_recipe.energy_in", "能量输入：%s FE/t"),
                     Map.entry("jei.mmcr.machine_recipe.energy_out", "能量输出：%s FE/t"),
                     Map.entry("jei.mmcr.machine_recipe.level_requirement", "%s：%s 或更高"),
+                    Map.entry("jei.mmcr.machine_recipe.keep", "不消耗"),
+                    Map.entry("jei.mmcr.machine_recipe.consume_chance", "消耗概率：%s"),
                     Map.entry("jei.mmcr.transfer.fluid_energy_not_supported", "仅支持转移物品输入；流体和能量需要通过对应端口供应。"),
                     Map.entry("jei.mmcr.transfer.no_item_inputs", "该配方没有可转移的物品输入。"),
                     Map.entry("jei.mmcr.transfer.not_enough_slots", "该配方的物品总线槽位不足")))

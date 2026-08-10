@@ -13,6 +13,8 @@ import dev.latvian.mods.kubejs.script.ScriptManager;
 import dev.latvian.mods.kubejs.script.ScriptType;
 
 public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
+    static final String RECIPE_BUILDER_BINDING = "MMCR_RECIPE_BUILDER";
+    static final Class<MachineRecipeBuilderJS> RECIPE_BUILDER_CLASS = MachineRecipeBuilderJS.class;
 
     @Override
     public void beforeScriptsLoaded(ScriptManager manager) {
@@ -38,6 +40,7 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
         bindings.add("MMCR_LEVEL_TYPE_BUILDER", LevelTypeBuilderJS.class);
         bindings.add("MMCR_MACHINE_LEVEL_BUILDER", MachineLevelBuilderJS.class);
         bindings.add("MMCR", new Bindings());
+        bindings.add(RECIPE_BUILDER_BINDING, RECIPE_BUILDER_CLASS);
     }
 
     @Override

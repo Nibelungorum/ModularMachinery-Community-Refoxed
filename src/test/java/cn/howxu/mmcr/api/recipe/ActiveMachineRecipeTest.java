@@ -133,6 +133,50 @@ class ActiveMachineRecipeTest {
     }
 
     @Test
+    void inputConsumptionPlanPersistsConsumedBatchCounts() {
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("active_consumption_plan"),
+                MMCR.id("blast_furnace"),
+                20,
+                List.of(),
+                List.of());
+        RecipeRegistry.register(recipe);
+        ActiveMachineRecipe.InputConsumptionPlan plan = new ActiveMachineRecipe.InputConsumptionPlan(List.of(2));
+        CompoundTag serialized = new CompoundTag();
+        serialized.putString("recipeName", recipe.id().toString());
+        serialized.put("inputConsumptionPlan", plan.serialize());
+
+        ActiveMachineRecipe restored = new ActiveMachineRecipe(serialized);
+
+        assertThat(restored.inputConsumptionPlan().consumedBatches(0)).isEqualTo(2);
+        assertThat(restored.inputConsumptionPlan().consumedBatches(1)).isZero();
+    }
+
+    @Test
+    void persistedConsumptionPlanExtractsOnlyItsConsumedParallelBatches() throws Exception {
+        ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
+        bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(3));
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("active_consumption_batches"),
+                MMCR.id("blast_furnace"),
+                20,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
+                        ItemStack.EMPTY, 1F, List.of(), null, 0.5F)),
+                true);
+        RecipeCraftingContext context = new RecipeCraftingContext(controllerWithComponents(bus));
+
+        assertThat(context.startCrafting(recipe, 3, new ActiveMachineRecipe.InputConsumptionPlan(List.of(2)))).isTrue();
+        assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+    }
+
+    @Test
     void startPromotesParallelismToHighestFeasibleCraftAmount() throws Exception {
         ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
         bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(8));

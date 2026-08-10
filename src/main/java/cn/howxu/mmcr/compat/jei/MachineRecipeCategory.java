@@ -23,7 +23,6 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.jspecify.annotations.Nullable;
 
@@ -123,6 +122,11 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
         drawOverflowSlot(layout.inputs().overflowSlot(), guiGraphics, slotBackground);
         drawOverflowSlot(layout.outputs().overflowSlot(), guiGraphics, slotBackground);
+        for (MachineRecipeLayout.SlotPlan slot : layout.inputs().slots()) {
+            if (slot.entry().kind() == MachineRecipeLayout.Kind.ITEM) {
+                drawInputOverlay(guiGraphics, slot, recipe.itemInputs().get(slot.entry().index()).consumeChance());
+            }
+        }
     }
 
     @Override
@@ -144,10 +148,9 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         return String.format(Locale.ROOT, "%.1f", ticks / 20.0F);
     }
 
-    static List<ItemStack> itemStacks(Ingredient ingredient, int count) {
-        return ingredient.items()
-                .map(item -> item.value().getDefaultInstance().copyWithCount(count))
-                .toList();
+    static String inputOverlayText(float consumeChance, String language) {
+        if (consumeChance == 0F) return language.startsWith("zh") ? "不消耗" : "Keep";
+        return consumeChance < 1F ? Math.round(consumeChance * 100F) + "%" : "";
     }
 
     static Component overflowEntry(int amount, Component displayName) {
@@ -214,7 +217,9 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private static void addItem(IRecipeSlotBuilder jeiSlot, MachineRecipeDisplay recipe,
             MachineRecipeLayout.EntryPlan entry, boolean input) {
         if (input) {
-            jeiSlot.addItemStacks(itemStacks(recipe.itemInputs().get(entry.index()), recipe.itemInputCounts().get(entry.index())));
+            MachineRecipeDisplay.ItemInputDisplay item = recipe.itemInputs().get(entry.index());
+            jeiSlot.addItemStacks(item.stacks());
+            jeiSlot.addRichTooltipCallback((view, tooltip) -> appendInputTooltip(tooltip, item));
         } else {
             jeiSlot.add(normalizeOutputStack(recipe.itemOutputs().get(entry.index())));
         }
@@ -241,12 +246,12 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         for (MachineRecipeLayout.EntryPlan entry : hiddenEntries) {
             if (entry.kind() == MachineRecipeLayout.Kind.ITEM) {
                 if (input) {
-                    int amount = recipe.itemInputCounts().get(entry.index());
-                    Component displayName = itemStacks(recipe.itemInputs().get(entry.index()), amount).stream()
+                    MachineRecipeDisplay.ItemInputDisplay item = recipe.itemInputs().get(entry.index());
+                    Component displayName = item.stacks().stream()
                             .findFirst()
                             .map(ItemStack::getHoverName)
                             .orElse(Component.empty());
-                    tooltip.add(overflowEntry(amount, displayName));
+                    tooltip.add(overflowEntry(item.count(), displayName));
                 } else {
                     ItemStack stack = recipe.itemOutputs().get(entry.index());
                     tooltip.add(overflowEntry(stack.getCount(), outputStackName(stack)));
@@ -273,6 +278,25 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             slotBackground.draw(guiGraphics, slot.x() - 1, slot.y() - 1);
             guiGraphics.text(Minecraft.getInstance().font, "...", slot.x() + OVERFLOW_TEXT_OFFSET_X, slot.y() + 4, 0xFF404040, false);
         }
+    }
+
+    private static void drawInputOverlay(GuiGraphicsExtractor graphics, MachineRecipeLayout.SlotPlan slot, float consumeChance) {
+        String text = consumeChance == 0F ? Component.translatable("jei.mmcr.machine_recipe.keep").getString()
+                : consumeChance < 1F ? Math.round(consumeChance * 100F) + "%" : "";
+        if (!text.isEmpty()) {
+            graphics.text(Minecraft.getInstance().font, text,
+                    slot.x() + 16 - Minecraft.getInstance().font.width(text), slot.y() + 8, 0xFFFF4040, false);
+        }
+    }
+
+    private static void appendInputTooltip(ITooltipBuilder tooltip, MachineRecipeDisplay.ItemInputDisplay item) {
+        if (item.consumeChance() == 0F) {
+            tooltip.add(Component.translatable("jei.mmcr.machine_recipe.keep"));
+        } else if (item.consumeChance() < 1F) {
+            tooltip.add(Component.translatable("jei.mmcr.machine_recipe.consume_chance",
+                    Math.round(item.consumeChance() * 100F) + "%"));
+        }
+        item.tooltipPredicates().forEach(predicate -> tooltip.add(Component.literal("Requires: " + predicate)));
     }
 
     private static boolean isMouseOver(@Nullable OverflowSlotPlan slot, double mouseX, double mouseY) {

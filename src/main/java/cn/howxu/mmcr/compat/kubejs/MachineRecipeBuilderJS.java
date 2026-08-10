@@ -7,8 +7,15 @@ import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.mojang.serialization.JsonOps;
+import dev.latvian.mods.kubejs.recipe.RecipesKubeEvent;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 
@@ -25,9 +32,10 @@ public class MachineRecipeBuilderJS {
     public final List<LevelRequirement> levelRequirements = new ArrayList<>();
 
     private Identifier id;
+    private final List<ComponentOutput> componentOutputs = new ArrayList<>();
 
     public MachineRecipeBuilderJS(String id) {
-        this.id = Identifier.parse(id);
+        this(Identifier.parse(id));
     }
 
     public MachineRecipeBuilderJS(Identifier id) {
@@ -57,14 +65,39 @@ public class MachineRecipeBuilderJS {
     }
 
     public MachineRecipeBuilderJS itemInput(String itemId, int count) {
-        var item = BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId));
-        inputs.add(new MachineIngredient.ItemIngredient(Ingredient.of(item), count));
-        return this;
+        return addItemInput(Ingredient.of(item(itemId)), count, DataComponentPredicateSet.EMPTY, 1F);
+    }
+
+    public MachineRecipeBuilderJS tagInput(String tagId, int count) {
+        return addItemInput(Ingredient.of(BuiltInRegistries.ITEM.getOrThrow(TagKey.create(Registries.ITEM, Identifier.parse(tagId)))), count,
+                DataComponentPredicateSet.EMPTY, 1F);
+    }
+
+    public MachineRecipeBuilderJS itemInputWithComponents(String itemId, int count, JsonElement components) {
+        return addItemInput(Ingredient.of(item(itemId)), count,
+                DataComponentPredicateSet.CODEC.parse(JsonOps.INSTANCE, components).getOrThrow(), 1F);
+    }
+
+    public MachineRecipeBuilderJS notConsumableItemInput(String itemId, int count) {
+        return addItemInput(Ingredient.of(item(itemId)), count, DataComponentPredicateSet.EMPTY, 0F);
+    }
+
+    public MachineRecipeBuilderJS chancedItemInput(String itemId, int count, float consumeChance) {
+        return addItemInput(Ingredient.of(item(itemId)), count, DataComponentPredicateSet.EMPTY, consumeChance);
     }
 
     public MachineRecipeBuilderJS itemOutput(String itemId, int count) {
         var item = BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId));
         outputs.add(new ItemStack(item, count));
+        return this;
+    }
+
+    public MachineRecipeBuilderJS itemOutputWithComponents(String itemId, int count, JsonElement components) {
+        JsonObject stack = new JsonObject();
+        stack.addProperty("id", itemId);
+        stack.addProperty("count", count);
+        stack.add("components", components.deepCopy());
+        componentOutputs.add(new ComponentOutput(outputs.size(), stack));
         return this;
     }
 
@@ -91,6 +124,15 @@ public class MachineRecipeBuilderJS {
         return this;
     }
 
+    private MachineRecipeBuilderJS addItemInput(Ingredient item, int count, DataComponentPredicateSet components, float consumeChance) {
+        inputs.add(new MachineIngredient.ItemIngredient(item, count, components, consumeChance));
+        return this;
+    }
+
+    private net.minecraft.world.item.Item item(String itemId) {
+        return BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId));
+    }
+
     public void build() {
         if (machineId == null) {
             throw new IllegalStateException("machine() not called");
@@ -102,7 +144,24 @@ public class MachineRecipeBuilderJS {
             recipeInputs.add(new MachineIngredient.EnergyIngredient(energyPerTick));
         }
 
-        RecipeRegistry.register(new MachineRecipe(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(outputs), List.of(), 0, 1,
+        var recipeOutputs = new ArrayList<>(outputs);
+
+        if (!componentOutputs.isEmpty()) {
+            if (!RecipesKubeEvent.INSTANCE.isBound()) {
+                throw new IllegalStateException("Component item outputs must be built during the KubeJS recipe event");
+            }
+
+            var ops = RecipesKubeEvent.INSTANCE.get().ops.json();
+            for (int index = 0; index < componentOutputs.size(); index++) {
+                var output = componentOutputs.get(index);
+                recipeOutputs.add(output.index() + index, ItemStack.CODEC.parse(ops, output.stack()).getOrThrow());
+            }
+        }
+
+        RecipeRegistry.register(new MachineRecipe(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(recipeOutputs), List.of(), 0, 1,
                 cancelIfPerTickFails, List.of(), List.of(), false, List.copyOf(levelRequirements)));
+    }
+
+    private record ComponentOutput(int index, JsonObject stack) {
     }
 }

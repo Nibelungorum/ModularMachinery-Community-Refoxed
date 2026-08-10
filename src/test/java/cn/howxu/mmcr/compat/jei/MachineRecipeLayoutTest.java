@@ -25,6 +25,9 @@ class MachineRecipeLayoutTest {
     @BeforeAll
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
+        Items.IRON_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+        Items.GOLD_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+        Items.COPPER_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
     }
 
     @Test

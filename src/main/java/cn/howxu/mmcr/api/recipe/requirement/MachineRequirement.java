@@ -3,10 +3,12 @@ package cn.howxu.mmcr.api.recipe.requirement;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.DynamicOps;
+import com.mojang.serialization.Dynamic;
 import com.mojang.datafixers.util.Pair;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -43,7 +45,8 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
 
     static MachineRequirement fromInput(MachineIngredient ingredient) {
         if (ingredient instanceof MachineIngredient.ItemIngredient item) {
-            return new ItemRequirement(RecipeModifier.IOType.INPUT, item.item(), item.count(), ItemStack.EMPTY);
+            return new ItemRequirement(RecipeModifier.IOType.INPUT, item.item(), item.count(), ItemStack.EMPTY,
+                    1F, List.of(), item.components(), item.consumeChance());
         }
         if (ingredient instanceof MachineIngredient.FluidIngredient fluid) {
             return new FluidRequirement(RecipeModifier.IOType.INPUT, fluid.fluid(), fluid.amount(), FluidStack.EMPTY);
@@ -71,10 +74,12 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
         }
         if (requirement instanceof ItemRequirement item) {
             if (item.io() == RecipeModifier.IOType.INPUT) {
-                return builder
+                builder = builder
                         .add("item", item.item(), net.minecraft.world.item.crafting.Ingredient.CODEC)
-                        .add("count", ops.createInt(item.count()))
-                        .build(prefix);
+                        .add("count", ops.createInt(item.count()));
+                if (!item.components().isEmpty()) builder = builder.add("components", item.components(), DataComponentPredicateSet.CODEC);
+                if (item.consumeChance() != 1F) builder = builder.add("consume_chance", ops.createFloat(item.consumeChance()));
+                return builder.build(prefix);
             }
             var itemBuilder = builder.add("stack", item.stack(), ItemStack.CODEC);
             if (item.chance() != 1F) itemBuilder = itemBuilder.add("chance", ops.createFloat(item.chance()));
@@ -136,7 +141,8 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
                     .flatMap(value -> net.minecraft.world.item.crafting.Ingredient.CODEC.parse(ops, value))
                     .flatMap(item -> ops.get(input, "count")
                             .flatMap(ops::getNumberValue)
-                            .map(count -> new ItemRequirement(io, item, count.intValue(), ItemStack.EMPTY, tags)));
+                            .flatMap(count -> decodeComponents(ops, input).map(components -> new ItemRequirement(io, item,
+                                    count.intValue(), ItemStack.EMPTY, 1F, tags, components, decodeConsumeChance(ops, input)))));
         });
     }
 
@@ -165,6 +171,20 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
 
     private static <T> float decodeChance(DynamicOps<T> ops, T input) {
         return ops.get(input, "chance")
+                .flatMap(ops::getNumberValue)
+                .map(Number::floatValue)
+                .result()
+                .orElse(1F);
+    }
+
+    private static <T> DataResult<DataComponentPredicateSet> decodeComponents(DynamicOps<T> ops, T input) {
+        return new Dynamic<>(ops, input).get("components").result()
+                .map(value -> DataComponentPredicateSet.CODEC.parse(value))
+                .orElseGet(() -> DataResult.success(DataComponentPredicateSet.EMPTY));
+    }
+
+    private static <T> float decodeConsumeChance(DynamicOps<T> ops, T input) {
+        return ops.get(input, "consume_chance")
                 .flatMap(ops::getNumberValue)
                 .map(Number::floatValue)
                 .result()

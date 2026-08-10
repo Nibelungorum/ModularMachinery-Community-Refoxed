@@ -16,6 +16,7 @@ import com.google.gson.JsonObject;
 import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.Identifier;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
@@ -24,6 +25,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.RegistryOps;
+import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -69,6 +71,33 @@ class MachineRecipeTest {
         var back = MachineRecipe.CODEC.codec().parse(JsonOps.INSTANCE, json).getOrThrow();
 
         assertThat(back).isEqualTo(recipe);
+    }
+
+    @Test
+    void outputs_roundtrip_native_component_stack() {
+        bindItemComponents(Items.DIAMOND_SWORD);
+        var root = new JsonObject();
+        root.addProperty("id", "mmcr:better_diamond_sword");
+        root.addProperty("machine", "mmcr:alloy_furnace");
+        root.addProperty("tick_time", 40);
+        var output = new JsonObject();
+        output.addProperty("id", "minecraft:diamond_sword");
+        output.addProperty("count", 1);
+        var components = new JsonObject();
+        var customName = new JsonObject();
+        customName.addProperty("text", "Better钻石剑");
+        components.add("minecraft:custom_name", customName);
+        var enchantments = new JsonObject();
+        enchantments.addProperty("minecraft:sharpness", 4);
+        components.add("minecraft:enchantments", enchantments);
+        output.add("components", components);
+        root.add("outputs", itemOutputs(output));
+
+        MachineRecipe recipe = MachineRecipe.CODEC.codec().parse(componentJsonOps(), root).getOrThrow();
+
+        ItemStack outputStack = recipe.outputs().getFirst();
+        assertThat(outputStack.getHoverName().getString()).isEqualTo("Better钻石剑");
+        assertThat(outputStack.get(DataComponents.ENCHANTMENTS).getLevel(enchantment("minecraft:sharpness"))).isEqualTo(4);
     }
 
     @Test
@@ -465,6 +494,12 @@ class MachineRecipeTest {
         return outputs;
     }
 
+    private static JsonArray itemOutputs(JsonObject output) {
+        var outputs = new JsonArray();
+        outputs.add(output);
+        return outputs;
+    }
+
     private static JsonArray requirements(JsonObject... values) {
         var requirements = new JsonArray();
         for (JsonObject value : values) requirements.add(value);
@@ -521,5 +556,15 @@ class MachineRecipeTest {
 
     private static DynamicOps<JsonElement> jsonOps() {
         return RegistryOps.create(JsonOps.INSTANCE, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+    }
+
+    private static net.minecraft.core.Holder<net.minecraft.world.item.enchantment.Enchantment> enchantment(String id) {
+        return VanillaRegistries.createLookup().lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT)
+                .getOrThrow(net.minecraft.resources.ResourceKey.create(
+                        net.minecraft.core.registries.Registries.ENCHANTMENT, Identifier.parse(id)));
+    }
+
+    private static DynamicOps<JsonElement> componentJsonOps() {
+        return RegistryOps.create(JsonOps.INSTANCE, VanillaRegistries.createLookup());
     }
 }
