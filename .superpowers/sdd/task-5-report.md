@@ -23,5 +23,4 @@ Result: `BUILD SUCCESSFUL` with 62 tests completed.
 
 ## Commits
 
-- Implementation commit: pending
-- Report commit: pending
+- Implementation and report commit: `5b526f3 feat: coordinate shared recipe starts`
