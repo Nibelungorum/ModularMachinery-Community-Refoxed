@@ -129,6 +129,32 @@ class DefaultMachinesTest {
     }
 
     @Test
+    void structures_install_thermal_smelting_furnace_with_replaceable_basalt_slots() {
+        installDefaultStructures();
+
+        var machine = MachineRegistry.getMachine(MMCR.id("thermal_smelting_furnace"));
+
+        assertThat(machine).isNotNull();
+        assertThat(machine.localizedName()).isEqualTo("热能冶炼炉");
+        assertThat(machine.parallelizable()).isTrue();
+        assertThat(machine.hasFactory()).isTrue();
+        assertThat(machine.maxParallelism()).isEqualTo(Integer.MAX_VALUE);
+        assertThat(machine.controller().id()).isEqualTo(MMCR.id("thermal_smelting_furnace_controller"));
+        assertThat(machine.pattern().get(BlockPos.ZERO))
+                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine.registryName()).get()));
+        assertThat(machine.pattern().get(new BlockPos(-1, -1, -1)).matches(net.minecraft.world.level.block.Blocks.SMOOTH_BASALT.defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, -1, -1)).matches(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, -1, -1)).matches(ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, -1, -1)).matches(ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, -1, -1)).matches(ModBlocks.BLOCKS.get("parallel_controller_4").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, -1, -1)).matches(ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, -1, -1)).matches(net.minecraft.world.level.block.Blocks.EMERALD_BLOCK.defaultBlockState())).isFalse();
+        assertThat(machine.pattern().pattern().values())
+                .contains(new BlockPredicate.OfBlock(net.minecraft.world.level.block.Blocks.REINFORCED_DEEPSLATE));
+        assertThat(requirementIds(machine)).contains("energy_input_hatch>=tiny", "item_input_bus>=tiny", "item_output_bus>=tiny");
+    }
+
+    @Test
     void structures_install_default_cracker_once() {
         installDefaultStructures();
         installDefaultStructures();

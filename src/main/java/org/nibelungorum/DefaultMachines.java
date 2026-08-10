@@ -51,6 +51,7 @@ public final class DefaultMachines {
     private static final Identifier ALLOY_FURNACE_ID = MMCR.id("alloy_furnace");
     private static final Identifier CRACKER_ID = MMCR.id("cracker");
     private static final Identifier REACTOR_ID = MMCR.id("reactor");
+    private static final Identifier THERMAL_SMELTING_FURNACE_ID = MMCR.id("thermal_smelting_furnace");
 
     private DefaultMachines() {
     }
@@ -73,6 +74,7 @@ public final class DefaultMachines {
         structures.put(ALLOY_FURNACE_ID, structureOf(alloyFurnace(itemInput, itemOutput, energyInput)));
         structures.put(CRACKER_ID, structureOf(cracker(itemInput, itemOutput, fluidOutput, energyInput)));
         structures.put(REACTOR_ID, structureOf(reactor(itemInput, itemOutput, fluidInput, fluidOutput, energyOutput)));
+        structures.put(THERMAL_SMELTING_FURNACE_ID, structureOf(thermalSmeltingFurnace()));
         return Map.copyOf(structures);
     }
 
@@ -312,6 +314,49 @@ public final class DefaultMachines {
                 tierRequirements,
                 List.of(),
                 Map.of());
+    }
+
+    public static Machine thermalSmeltingFurnace() {
+        Block controller = ModBlocks.controllerFor(THERMAL_SMELTING_FURNACE_ID).get();
+        List<BlockPredicate> basaltSlotBlocks = new ArrayList<>(List.of(
+                new BlockPredicate.OfBlock(Blocks.SMOOTH_BASALT),
+                portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.ITEM),
+                portFamily(IOType.OUTPUT, PortTierRequirementSpec.PortCategory.ITEM),
+                portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.ENERGY),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get())));
+        for (ParallelTier tier : ParallelTier.values()) {
+            basaltSlotBlocks.add(new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get(tier.idSuffix()).get()));
+        }
+
+        BlockArray pattern = BlockArray.builder()
+                .pattern("AAA", "XXX", "XXX", "AAA")
+                .pattern("AAA", "X X", "X X", "ADA")
+                .pattern("AAA", "XBX", "XXX", "AAA")
+                .set('X', new BlockPredicate.OfBlock(Blocks.EMERALD_BLOCK))
+                .set('A', new BlockPredicate.AnyOf(basaltSlotBlocks))
+                .set('B', new BlockPredicate.OfBlock(controller))
+                .set('D', new BlockPredicate.OfBlock(Blocks.REINFORCED_DEEPSLATE))
+                .controller('B')
+                .build();
+
+        return new DynamicMachine(
+                THERMAL_SMELTING_FURNACE_ID,
+                "热能冶炼炉",
+                pattern,
+                MachineControllerSpec.defaultsFor(THERMAL_SMELTING_FURNACE_ID),
+                MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("smooth_basalt")),
+                PortRequirementSpec.none(),
+                PortTierRequirementSpec.builder()
+                        .anyItemInput()
+                        .anyItemOutput()
+                        .anyEnergyInput()
+                        .build(),
+                List.of(),
+                Map.of(),
+                Integer.MAX_VALUE,
+                true,
+                true,
+                4);
     }
 
     private static BlockPredicate portFamily(IOType ioType, PortTierRequirementSpec.PortCategory category) {

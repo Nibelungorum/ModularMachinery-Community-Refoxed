@@ -17,6 +17,7 @@ public final class BuiltinMachines {
     private static final Identifier ALLOY_FURNACE_ID = MMCR.id("alloy_furnace");
     private static final Identifier CRACKER_ID = MMCR.id("cracker");
     private static final Identifier REACTOR_ID = MMCR.id("reactor");
+    private static final Identifier THERMAL_SMELTING_FURNACE_ID = MMCR.id("thermal_smelting_furnace");
 
     private BuiltinMachines() {
     }
@@ -101,6 +102,17 @@ public final class BuiltinMachines {
                     .appearance(MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("blue_ice")))
                     .recipeFamilyId(REACTOR_ID)
                     .allowModifiers(false)
+                    .build();
+        });
+        MachineDefinitions.addBuiltinSupplier(() -> {
+            return MachineRegistration.builder(THERMAL_SMELTING_FURNACE_ID)
+                    .localizedName("热能冶炼炉")
+                    .appearance(MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("smooth_basalt")))
+                    .recipeFamilyId(THERMAL_SMELTING_FURNACE_ID)
+                    .allowModifiers(false)
+                    .allowMultithreading(true)
+                    .allowParallelism(true)
+                    .maxParallelAmount(Integer.MAX_VALUE)
                     .build();
         });
     }

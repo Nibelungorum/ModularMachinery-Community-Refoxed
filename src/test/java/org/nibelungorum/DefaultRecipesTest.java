@@ -90,6 +90,31 @@ class DefaultRecipesTest {
     }
 
     @Test
+    void ensureRegistered_publishes_thermal_smelting_furnace_recipe_with_four_thread_limit() {
+        installDefaultRuntimeContent();
+        DefaultRecipes.ensureRegistered();
+
+        var recipe = RecipeRegistry.getRecipe(MMCR.id("thermal_smelting_furnace_coal_iron_to_netherite_scrap"));
+
+        assertThat(recipe.machineId()).isEqualTo(MMCR.id("thermal_smelting_furnace"));
+        assertThat(recipe.tickTime()).isEqualTo(100);
+        assertThat(recipe.maxThreads()).isEqualTo(4);
+        assertThat(recipe.inputs()).hasSize(3);
+        assertThat(recipe.inputs().get(0)).isInstanceOf(MachineIngredient.ItemIngredient.class);
+        assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(0)).item().items().toList().getFirst().value()).isEqualTo(Items.COAL);
+        assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(0)).count()).isEqualTo(1);
+        assertThat(recipe.inputs().get(1)).isInstanceOf(MachineIngredient.ItemIngredient.class);
+        assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(1)).item().items().toList().getFirst().value()).isEqualTo(Items.IRON_INGOT);
+        assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(1)).count()).isEqualTo(1);
+        assertThat(recipe.inputs().get(2)).isInstanceOf(MachineIngredient.EnergyIngredient.class);
+        assertThat(((MachineIngredient.EnergyIngredient) recipe.inputs().get(2)).fePerTick()).isEqualTo(2_000);
+        assertThat(recipe.outputs()).singleElement().satisfies(stack -> {
+            assertThat(stack.getItem()).isEqualTo(Items.NETHERITE_SCRAP);
+            assertThat(stack.getCount()).isEqualTo(1);
+        });
+    }
+
+    @Test
     void ensureRegistered_publishes_builtin_cracker_coal_lapis_recipe() {
         installDefaultRuntimeContent();
         DefaultRecipes.ensureRegistered();
@@ -168,7 +193,7 @@ class DefaultRecipesTest {
         assertThat(RecipeRegistry.byMachineId(MMCR.id("alloy_furnace"))).hasSize(12);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker"))).hasSize(10);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("reactor"))).hasSize(10);
-        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(42);
+        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(43);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker")))
                 .anySatisfy(recipe -> assertThat(recipe.fluidOutputs()).isNotEmpty());
         assertThat(RecipeRegistry.recipes())

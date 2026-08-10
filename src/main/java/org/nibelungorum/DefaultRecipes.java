@@ -35,6 +35,7 @@ public final class DefaultRecipes {
     private static final Identifier ALLOY_FURNACE_NETHERITE_ID = MMCR.id("alloy_furnace_netherite");
     private static final Identifier CRACKER_ID = MMCR.id("cracker");
     private static final Identifier REACTOR_ID = MMCR.id("reactor");
+    private static final Identifier THERMAL_SMELTING_FURNACE_ID = MMCR.id("thermal_smelting_furnace");
 
     private DefaultRecipes() {
     }
@@ -64,7 +65,7 @@ public final class DefaultRecipes {
 
     private static MachineRecipe createRecipe(Definition definition) {
         return new MachineRecipe(definition.id(), definition.machineId(), definition.ticks(), definition.inputs(),
-                definition.outputs(), List.of(), 0, 1, true, definition.fluidOutputs(), List.of(), true);
+                definition.outputs(), List.of(), 0, definition.maxThreads(), true, definition.fluidOutputs(), List.of(), true);
     }
 
     private static List<Definition> definitions() {
@@ -72,7 +73,8 @@ public final class DefaultRecipes {
                 standardDefinitions(BLAST_FURNACE_ID, "blast_furnace", new Definition(MMCR.id("blast_furnace_iron_to_nugget"), BLAST_FURNACE_ID, 200, List.of(itemInput(Items.IRON_INGOT, 1), energyInput(1)), List.of(item(Items.IRON_NUGGET, 1)), List.of())),
                 alloyFurnaceDefinitions(),
                 standardDefinitions(CRACKER_ID, "cracker", new Definition(MMCR.id("cracker_coal_lapis"), CRACKER_ID, 160, List.of(itemInput(Items.COAL, 8), itemInput(Items.LAPIS_LAZULI, 1), energyInput(100)), List.of(item(Items.REDSTONE, 4)), List.of(fluidOutput(Fluids.WATER, 500)))),
-                standardDefinitions(REACTOR_ID, "reactor", new Definition(MMCR.id("reactor_diamond_water"), REACTOR_ID, 200, List.of(itemInput(Items.DIAMOND, 1), fluidInput(Fluids.WATER, 500), energyOutput(100)), List.of(item(Items.COAL, 1)), List.of(fluidOutput(Fluids.LAVA, 500))))
+                standardDefinitions(REACTOR_ID, "reactor", new Definition(MMCR.id("reactor_diamond_water"), REACTOR_ID, 200, List.of(itemInput(Items.DIAMOND, 1), fluidInput(Fluids.WATER, 500), energyOutput(100)), List.of(item(Items.COAL, 1)), List.of(fluidOutput(Fluids.LAVA, 500)))),
+                List.of(new Definition(MMCR.id("thermal_smelting_furnace_coal_iron_to_netherite_scrap"), THERMAL_SMELTING_FURNACE_ID, 100, List.of(itemInput(Items.COAL, 1), itemInput(Items.IRON_INGOT, 1), energyInput(2_000)), List.of(item(Items.NETHERITE_SCRAP, 1)), List.of(), 4))
         ).stream().flatMap(List::stream).toList();
     }
 
@@ -166,7 +168,11 @@ public final class DefaultRecipes {
     }
 
     private record Definition(Identifier id, Identifier machineId, int ticks, List<MachineIngredient> inputs,
-                              List<ItemStack> outputs, List<FluidStack> fluidOutputs) {
+                              List<ItemStack> outputs, List<FluidStack> fluidOutputs, int maxThreads) {
+        private Definition(Identifier id, Identifier machineId, int ticks, List<MachineIngredient> inputs,
+                           List<ItemStack> outputs, List<FluidStack> fluidOutputs) {
+            this(id, machineId, ticks, inputs, outputs, fluidOutputs, 1);
+        }
     }
 
     private static Holder<Fluid> boundFluid(Fluid fluid) {
