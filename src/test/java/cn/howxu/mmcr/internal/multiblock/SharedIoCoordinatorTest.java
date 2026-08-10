@@ -33,6 +33,43 @@ class SharedIoCoordinatorTest {
     }
 
     @Test
+    void requeuedStartRequestsResumeAfterTheLastSuccessfulLane() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = new StructureClaimRegistry.ResourceDomain(5L, 1L, Set.of(A, B));
+        List<String> committed = new ArrayList<>();
+
+        enqueueStartRequests(coordinator, domain, committed);
+        coordinator.resolve(domain);
+        committed.clear();
+
+        enqueueStartRequests(coordinator, domain, committed);
+        coordinator.resolve(domain);
+
+        assertThat(committed).containsExactly("A", "B");
+    }
+
+    @Test
+    void startTickAndFinishRequestsUseIndependentCursors() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = new StructureClaimRegistry.ResourceDomain(6L, 1L, Set.of(A, B));
+        List<String> committed = new ArrayList<>();
+
+        coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, new SharedIoCoordinator.LaneKey(A, "base"), 1L, 1,
+                ignored -> 1, ignored -> committed.add("initial-start")));
+        coordinator.enqueue(new SharedIoCoordinator.TickRequest(domain, new SharedIoCoordinator.LaneKey(B, "base"), 1L,
+                () -> { committed.add("initial-tick"); return true; }, () -> true));
+        coordinator.enqueue(new SharedIoCoordinator.FinishRequest(domain, new SharedIoCoordinator.LaneKey(A, "base"), 1L,
+                () -> { committed.add("initial-finish"); return true; }, () -> true));
+        coordinator.resolve(domain);
+        committed.clear();
+
+        enqueueAllRequestTypes(coordinator, domain, committed);
+        coordinator.resolve(domain);
+
+        assertThat(committed).containsExactly("start:B", "start:A", "tick:A", "tick:B", "finish:B", "finish:A");
+    }
+
+    @Test
     void staleGenerationNeverCallsTheCommitter() {
         SharedIoCoordinator coordinator = new SharedIoCoordinator();
         AtomicBoolean committed = new AtomicBoolean();
@@ -42,5 +79,27 @@ class SharedIoCoordinatorTest {
         coordinator.resolve(new StructureClaimRegistry.ResourceDomain(2L, 4L, Set.of(A)));
 
         assertThat(committed).isFalse();
+    }
+
+    private static void enqueueStartRequests(SharedIoCoordinator coordinator, StructureClaimRegistry.ResourceDomain domain,
+                                             List<String> committed) {
+        coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, new SharedIoCoordinator.LaneKey(A, "base"), 1L, 1,
+                ignored -> 1, ignored -> committed.add("A")));
+        coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, new SharedIoCoordinator.LaneKey(B, "base"), 1L, 1,
+                ignored -> 1, ignored -> committed.add("B")));
+    }
+
+    private static void enqueueAllRequestTypes(SharedIoCoordinator coordinator, StructureClaimRegistry.ResourceDomain domain,
+                                               List<String> committed) {
+        for (BlockPos pos : List.of(A, B)) {
+            String lane = pos.equals(A) ? "A" : "B";
+            SharedIoCoordinator.LaneKey laneKey = new SharedIoCoordinator.LaneKey(pos, "base");
+            coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, laneKey, 1L, 1,
+                    ignored -> 1, ignored -> committed.add("start:" + lane)));
+            coordinator.enqueue(new SharedIoCoordinator.TickRequest(domain, laneKey, 1L,
+                    () -> { committed.add("tick:" + lane); return true; }, () -> true));
+            coordinator.enqueue(new SharedIoCoordinator.FinishRequest(domain, laneKey, 1L,
+                    () -> { committed.add("finish:" + lane); return true; }, () -> true));
+        }
     }
 }
