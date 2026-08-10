@@ -94,14 +94,16 @@ class SharedIoCoordinatorTest {
     void staleStructureVersionNeverCallsTheCommitter() {
         SharedIoCoordinator coordinator = new SharedIoCoordinator();
         StructureClaimRegistry.ResourceDomain domain = new StructureClaimRegistry.ResourceDomain(7L, 1L, Set.of(A));
+        AtomicBoolean transactionInvoked = new AtomicBoolean();
         AtomicBoolean committed = new AtomicBoolean();
         AtomicLong currentStructureVersion = new AtomicLong(3L);
         coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, new SharedIoCoordinator.LaneKey(A, "base"), 3L, 1,
-                ignored -> 1, ignored -> committed.set(true), () -> true, currentStructureVersion::get));
+                ignored -> { transactionInvoked.set(true); return 1; }, ignored -> committed.set(true), () -> true, currentStructureVersion::get));
         currentStructureVersion.incrementAndGet();
 
         coordinator.resolve(domain);
 
+        assertThat(transactionInvoked).isFalse();
         assertThat(committed).isFalse();
     }
 

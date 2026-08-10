@@ -80,3 +80,9 @@ BUILD SUCCESSFUL in 7s
 - Requests now require a current controller-structure-version supplier. `Request.isStillValid()` requires the captured version to equal the supplied current version before evaluating the existing request validator. No always-true version validation path remains.
 - Added a direct stale structure-version start test. Incrementing the supplied current version before resolution proves the transaction and committer callback do not execute.
 - No Task 5 recipe behavior was integrated.
+
+## Final Test Coverage Fix
+
+- Updated `staleStructureVersionNeverCallsTheCommitter` with an independent transaction-callback invocation flag.
+- The stale request now explicitly proves that neither the transaction callback nor the committer executes.
+- `./gradlew test --tests cn.howxu.mmcr.internal.multiblock.SharedIoCoordinatorTest --no-daemon`: `BUILD SUCCESSFUL in 13s`.
