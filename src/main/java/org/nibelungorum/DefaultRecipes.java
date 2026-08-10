@@ -81,20 +81,20 @@ public final class DefaultRecipes {
     }
 
     private static List<Definition> thermalSmeltingFurnaceDefinitions() {
-        List<MachineIngredient> inputs = List.of(itemInput(Items.COAL, 1), itemInput(Items.IRON_INGOT, 1), energyInput(2_000));
-        List<ItemStack> outputs = List.of(item(Items.NETHERITE_SCRAP, 1));
         return List.of(
-                new Definition(MMCR.id("thermal_smelting_furnace_coal_iron_to_netherite_scrap"), THERMAL_SMELTING_FURNACE_ID, 100, inputs, outputs, List.of(), 4),
-                thermalSmeltingDefinition("copper", DefaultMachineLevels.COPPER_COIL, inputs, outputs),
-                thermalSmeltingDefinition("iron", DefaultMachineLevels.IRON_COIL, inputs, outputs),
-                thermalSmeltingDefinition("gold", DefaultMachineLevels.GOLD_COIL, inputs, outputs),
-                thermalSmeltingDefinition("diamond", DefaultMachineLevels.DIAMOND_COIL, inputs, outputs));
+                new Definition(MMCR.id("thermal_smelting_furnace_coal_iron_to_netherite_scrap"), THERMAL_SMELTING_FURNACE_ID, 80,
+                        List.of(itemInput(Items.COAL, 1), itemInput(Items.RAW_IRON, 1), energyInput(200)), List.of(item(Items.IRON_INGOT, 1)), List.of(), 4),
+                thermalSmeltingDefinition("copper", DefaultMachineLevels.COPPER_COIL, 120, Items.RAW_COPPER, Items.COPPER_INGOT, 400),
+                thermalSmeltingDefinition("iron", DefaultMachineLevels.IRON_COIL, 160, Items.IRON_INGOT, Items.GOLD_INGOT, 800),
+                thermalSmeltingDefinition("gold", DefaultMachineLevels.GOLD_COIL, 200, Items.GOLD_INGOT, Items.DIAMOND, 1_200),
+                thermalSmeltingDefinition("diamond", DefaultMachineLevels.DIAMOND_COIL, 240, Items.DIAMOND, Items.NETHERITE_INGOT, 2_000));
     }
 
-    private static Definition thermalSmeltingDefinition(String level, Identifier levelId,
-                                                        List<MachineIngredient> inputs, List<ItemStack> outputs) {
-        return new Definition(MMCR.id("thermal_smelting_furnace_" + level), THERMAL_SMELTING_FURNACE_ID, 100,
-                inputs, outputs, List.of(), 4, List.of(new LevelRequirement(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE, levelId)));
+    private static Definition thermalSmeltingDefinition(String level, Identifier levelId, int ticks,
+                                                        net.minecraft.world.item.Item input, net.minecraft.world.item.Item output, int energy) {
+        return new Definition(MMCR.id("thermal_smelting_furnace_" + level), THERMAL_SMELTING_FURNACE_ID, ticks,
+                List.of(itemInput(Items.COAL, 1), itemInput(input, 1), energyInput(energy)), List.of(item(output, 1)), List.of(), 4,
+                List.of(new LevelRequirement(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE, levelId)));
     }
 
     private static List<Definition> alloyFurnaceDefinitions() {

@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -18,6 +20,7 @@ import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.api.recipe.types.IRecipeType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
@@ -91,18 +94,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     @Override
     public void createRecipeExtras(IRecipeExtrasBuilder builder, MachineRecipeDisplay recipe, IFocusGroup focuses) {
         builder.addAnimatedRecipeArrow(200).setPosition(RECIPE_ARROW_X, RECIPE_ARROW_Y);
-        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
-        List<LevelRequirementDisplay> levelRequirements = levelRequirements(recipe.recipe());
-        for (int index = 0; index < levelRequirements.size(); index++) {
-            LevelRequirementDisplay requirement = levelRequirements.get(index);
-            int textX = layout.durationTextX();
-            int y = layout.levelRequirementY(recipe, index);
-            if (!requirement.representative().isEmpty()) {
-                builder.addDrawable(guiHelper.createDrawableItemStack(requirement.representative()), textX, y - 4);
-                textX += 18;
-            }
-            builder.addText(requirement.text(), textX, y);
-        }
     }
 
     @Override
@@ -122,6 +113,12 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         for (EnergyIngredient energy : recipe.energyOutputs()) {
             guiGraphics.text(Minecraft.getInstance().font,
                     Component.translatable("jei.mmcr.machine_recipe.energy_out", energy.fePerTick()),
+                    layout.durationTextX(), y, 0xFF404040, false);
+            y += 10;
+        }
+        long gameTime = Minecraft.getInstance().level == null ? 0L : Minecraft.getInstance().level.getGameTime();
+        for (LevelRequirement requirement : sortedLevelRequirements(recipe.recipe())) {
+            guiGraphics.text(Minecraft.getInstance().font, levelRequirement(requirement, gameTime),
                     layout.durationTextX(), y, 0xFF404040, false);
             y += 10;
         }
@@ -166,22 +163,33 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         return Component.translatable(stack.getItem().getDescriptionId());
     }
 
-    static List<LevelRequirementDisplay> levelRequirements(MachineRecipe recipe) {
+    static Component levelRequirement(LevelRequirement requirement, long gameTime) {
+        MachineLevel required = MachineLevelRegistry.getLevel(requirement.levelId());
+        var type = MachineLevelRegistry.getType(requirement.typeId());
+        if (required == null || type == null) return Component.empty();
+        List<MachineLevel> eligible = MachineLevelRegistry.levelsForType(requirement.typeId()).stream()
+                .filter(level -> level.priority() >= required.priority())
+                .sorted(Comparator.comparingInt(MachineLevel::priority))
+                .toList();
+        if (eligible.isEmpty()) return Component.empty();
+        int cycleLength = eligible.size() * 2 - 2;
+        int index = cycleLength == 0 ? 0 : (int) ((gameTime / 20) % cycleLength);
+        if (index >= eligible.size()) index = cycleLength - index;
+        MachineLevel selected = eligible.get(index);
+        Component levelName = selected.statePredicate() instanceof BlockPredicate.OfBlockState predicate
+                ? predicate.state().getBlock().getName()
+                : selected.representative().getHoverName();
+        return type.displayName().copy().withStyle(ChatFormatting.GREEN)
+                .append(Component.literal(": "))
+                .append(levelName);
+    }
+
+    private static List<LevelRequirement> sortedLevelRequirements(MachineRecipe recipe) {
         return recipe.levelRequirements().stream()
                 .sorted(Comparator.comparing((LevelRequirement requirement) -> requirement.typeId().toString())
                         .thenComparing(requirement -> requirement.levelId().toString()))
-                .map(requirement -> {
-                    var level = MachineLevelRegistry.getLevel(requirement.levelId());
-                    Component typeName = Component.translatable(requirement.typeId().toLanguageKey());
-                    Component levelName = Component.translatable(requirement.levelId().toLanguageKey());
-                    ItemStack representative = level == null ? ItemStack.EMPTY : level.representative();
-                    return new LevelRequirementDisplay(representative,
-                            Component.translatable("jei.mmcr.machine_recipe.level_requirement", typeName, levelName));
-                })
                 .toList();
     }
-
-    record LevelRequirementDisplay(ItemStack representative, Component text) {}
 
     private static void addRegion(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe,
             MachineRecipeLayout.RegionPlan region, boolean input) {

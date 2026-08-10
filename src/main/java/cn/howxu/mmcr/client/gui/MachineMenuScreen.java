@@ -1,6 +1,9 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
 import cn.howxu.mmcr.internal.menu.FactorySchedulerMenu;
 import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
@@ -347,6 +350,12 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
                 controllerStatusColor(menu.isFormed(), active));
         scaledY = nextControllerDetailY(scaledY);
 
+        if (owner != null) {
+            for (MachineLevel level : owner.getFoundLevels().values()) {
+                scaledY = renderScaledWrappedLine(g, levelLine(level), scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
+            }
+        }
+
         if (failure != null) {
             Component failureLine = Component.translatable("gui.mmcr.controller.last_failure", Component.translatable(failure));
             scaledY = renderScaledWrappedLine(g, failureLine, scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
@@ -405,6 +414,14 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         }
 
         g.pose().popMatrix();
+    }
+
+    static Component levelLine(MachineLevel level) {
+        var type = MachineLevelRegistry.getType(level.typeId());
+        if (type == null || !(level.statePredicate() instanceof BlockPredicate.OfBlockState predicate)) return Component.empty();
+        return type.displayName().copy()
+                .append(Component.literal(": "))
+                .append(predicate.state().getBlock().getName());
     }
 
     static Component parallelLine(int parallelism, int maxParallelism) {

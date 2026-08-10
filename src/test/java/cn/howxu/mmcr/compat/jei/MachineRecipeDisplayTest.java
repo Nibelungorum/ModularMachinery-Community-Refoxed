@@ -179,28 +179,28 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
-    void levelRequirementUsesRepresentativeItemAndLocalizedOrHigherText() {
+    void levelRequirementCyclesEligibleLevelsEverySecond() {
         var typeId = MMCR.id("coil");
-        var levelId = MMCR.id("kanthal");
+        var copperId = MMCR.id("copper");
+        var ironId = MMCR.id("iron");
+        var goldId = MMCR.id("gold");
+        var diamondId = MMCR.id("diamond");
         MachineLevelRegistry.beginRegistration();
         MachineLevelRegistry.registerType(new LevelType(typeId, Component.literal("Coils")));
-        MachineLevelRegistry.registerLevel(new MachineLevel(levelId, typeId, 1,
-                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()),
-                new ItemStack(Holder.direct(Items.IRON_INGOT, DataComponentMap.EMPTY), 1), LevelModifier.IDENTITY));
+        registerLevel(copperId, typeId, 0, Blocks.COPPER_BLOCK);
+        registerLevel(ironId, typeId, 1, Blocks.IRON_BLOCK);
+        registerLevel(goldId, typeId, 2, Blocks.GOLD_BLOCK);
+        registerLevel(diamondId, typeId, 3, Blocks.DIAMOND_BLOCK);
         MachineLevelRegistry.freezeRegistration();
-        MachineRecipe recipe = new MachineRecipe(
-                MMCR.id("jei_level_display"), MMCR.id("blast_furnace"), 100,
-                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
-                List.of(new LevelRequirement(typeId, levelId)));
+        LevelRequirement requirement = new LevelRequirement(typeId, ironId);
 
-        assertThat(MachineRecipeCategory.levelRequirements(recipe))
-                .singleElement()
-                .satisfies(requirement -> {
-                    assertThat(requirement.representative().is(Items.IRON_INGOT)).isTrue();
-                    assertThat(requirement.text().getString()).isEqualTo("jei.mmcr.machine_recipe.level_requirement");
-                });
-        assertThat(Translations.ALL.get("en_us").get("jei.mmcr.machine_recipe.level_requirement"))
-                .contains("or higher");
+        assertThat(MachineRecipeCategory.levelRequirement(requirement, 0).getString()).isEqualTo("Coils: Block of Iron");
+        assertThat(MachineRecipeCategory.levelRequirement(requirement, 20).getString()).isEqualTo("Coils: Block of Gold");
+        assertThat(MachineRecipeCategory.levelRequirement(requirement, 40).getString()).isEqualTo("Coils: Block of Diamond");
+        assertThat(MachineRecipeCategory.levelRequirement(requirement, 60).getString()).isEqualTo("Coils: Block of Gold");
+        assertThat(MachineRecipeCategory.levelRequirement(requirement, 80).getString()).isEqualTo("Coils: Block of Iron");
+        assertThat(MachineRecipeCategory.levelRequirement(requirement, 0).getStyle().getColor())
+                .isEqualTo(net.minecraft.network.chat.TextColor.fromLegacyFormat(net.minecraft.ChatFormatting.GREEN));
     }
 
     private static MachineRecipe recipe(String id, String machine, int priority) {
@@ -214,5 +214,12 @@ class MachineRecipeDisplayTest {
                 priority,
                 1
         );
+    }
+
+    private static void registerLevel(net.minecraft.resources.Identifier id, net.minecraft.resources.Identifier typeId,
+                                      int priority, net.minecraft.world.level.block.Block block) {
+        MachineLevelRegistry.registerLevel(new MachineLevel(id, typeId, priority,
+                new BlockPredicate.OfBlockState(block.defaultBlockState()),
+                new ItemStack(Holder.direct(block.asItem(), DataComponentMap.EMPTY)), LevelModifier.IDENTITY));
     }
 }

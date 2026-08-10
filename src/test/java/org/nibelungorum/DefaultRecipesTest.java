@@ -98,21 +98,36 @@ class DefaultRecipesTest {
         var recipe = RecipeRegistry.getRecipe(MMCR.id("thermal_smelting_furnace_coal_iron_to_netherite_scrap"));
 
         assertThat(recipe.machineId()).isEqualTo(MMCR.id("thermal_smelting_furnace"));
-        assertThat(recipe.tickTime()).isEqualTo(100);
+        assertThat(recipe.tickTime()).isEqualTo(80);
         assertThat(recipe.maxThreads()).isEqualTo(4);
         assertThat(recipe.inputs()).hasSize(3);
         assertThat(recipe.inputs().get(0)).isInstanceOf(MachineIngredient.ItemIngredient.class);
         assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(0)).item().items().toList().getFirst().value()).isEqualTo(Items.COAL);
         assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(0)).count()).isEqualTo(1);
         assertThat(recipe.inputs().get(1)).isInstanceOf(MachineIngredient.ItemIngredient.class);
-        assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(1)).item().items().toList().getFirst().value()).isEqualTo(Items.IRON_INGOT);
+        assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(1)).item().items().toList().getFirst().value()).isEqualTo(Items.RAW_IRON);
         assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(1)).count()).isEqualTo(1);
         assertThat(recipe.inputs().get(2)).isInstanceOf(MachineIngredient.EnergyIngredient.class);
-        assertThat(((MachineIngredient.EnergyIngredient) recipe.inputs().get(2)).fePerTick()).isEqualTo(2_000);
+        assertThat(((MachineIngredient.EnergyIngredient) recipe.inputs().get(2)).fePerTick()).isEqualTo(200);
         assertThat(recipe.outputs()).singleElement().satisfies(stack -> {
-            assertThat(stack.getItem()).isEqualTo(Items.NETHERITE_SCRAP);
+            assertThat(stack.getItem()).isEqualTo(Items.IRON_INGOT);
             assertThat(stack.getCount()).isEqualTo(1);
         });
+    }
+
+    @Test
+    void thermal_smelting_furnace_recipes_are_progressively_distinct() {
+        installDefaultRuntimeContent();
+        var recipes = DefaultRecipes.recipes().values().stream()
+                .filter(recipe -> recipe.machineId().equals(MMCR.id("thermal_smelting_furnace")))
+                .toList();
+
+        assertThat(recipes).hasSize(5);
+        assertThat(recipes).extracting(recipe -> recipe.tickTime()).containsExactlyInAnyOrder(80, 120, 160, 200, 240);
+        assertThat(recipes).extracting(recipe -> ((MachineIngredient.EnergyIngredient) recipe.inputs().get(2)).fePerTick())
+                .containsExactlyInAnyOrder(200, 400, 800, 1_200, 2_000);
+        assertThat(recipes).extracting(recipe -> recipe.outputs().getFirst().getItem())
+                .containsExactlyInAnyOrder(Items.IRON_INGOT, Items.COPPER_INGOT, Items.GOLD_INGOT, Items.DIAMOND, Items.NETHERITE_INGOT);
     }
 
     @Test
@@ -268,6 +283,9 @@ class DefaultRecipesTest {
     }
 
     private static void installDefaultRuntimeContent() {
+        MachineLevelRegistry.beginRegistration();
+        DefaultMachineLevels.register();
+        MachineLevelRegistry.freezeRegistration();
         MachineStructureRegistry.replaceDynamic(DefaultMachines.structures());
     }
 }

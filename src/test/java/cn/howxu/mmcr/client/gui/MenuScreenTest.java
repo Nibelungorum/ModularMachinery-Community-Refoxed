@@ -1,11 +1,21 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.menu.FactorySchedulerMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
+import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeAll;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -13,6 +23,11 @@ import java.lang.reflect.Method;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MenuScreenTest {
+
+    @BeforeAll
+    static void bootstrap() throws Exception {
+        TestBootstrap.bootstrap();
+    }
 
     @Test
     void hatchBarAtlasCoordinatesMatchMmce() {
@@ -111,6 +126,20 @@ class MenuScreenTest {
     void controller_detail_lines_use_factory_controller_spacing() {
         assertThat(MachineMenuScreen.controllerDetailScale()).isEqualTo(1.0F);
         assertThat(MachineMenuScreen.nextControllerDetailY(20)).isEqualTo(34);
+    }
+
+    @Test
+    void levelLineUsesRegisteredTypeAndMatchedBlockName() {
+        var typeId = MMCR.id("test_coil");
+        MachineLevelRegistry.beginRegistration();
+        MachineLevelRegistry.registerType(new LevelType(typeId, net.minecraft.network.chat.Component.literal("Coils")));
+        MachineLevel level = new MachineLevel(MMCR.id("test_iron_coil"), typeId, 0,
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()),
+                new net.minecraft.world.item.ItemStack(Holder.direct(Blocks.IRON_BLOCK.asItem(), DataComponentMap.EMPTY)), LevelModifier.IDENTITY);
+        MachineLevelRegistry.registerLevel(level);
+        MachineLevelRegistry.freezeRegistration();
+
+        assertThat(MachineMenuScreen.levelLine(level).getString()).isEqualTo("Coils: Block of Iron");
     }
 
     @Test
