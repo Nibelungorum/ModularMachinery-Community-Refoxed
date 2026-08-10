@@ -42,3 +42,13 @@ Completed and committed as `f6de162` (`feat: claim multiblock components during 
 ## Review Follow-up Test Result
 
 - `./gradlew test --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest --no-daemon`: PASS, 66 tests, 0 failures (fresh run; existing deprecation and Unsafe runtime warnings only).
+
+## Important Bug Fix Follow-up
+
+- `MachineControllerBlockEntity.resourceDomain()` now resolves the current domain from the server level's `StructureClaimRegistry`; the formation-time cache remains the fallback when no server level is available.
+- Extended the real two-controller shared-port formation test to assert that both controllers observe the merged domain after the second claim, and that the surviving controller observes a one-owner domain after the other resets.
+- RED command failed at the new first-controller assertion because it returned the stale one-owner cached domain. GREEN command passed after the accessor change.
+
+## Important Bug Fix Test Result
+
+- `./gradlew test --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest --no-daemon`: PASS, 66 tests, 0 failures (fresh run; existing deprecation and Unsafe runtime warnings only).

@@ -598,6 +598,8 @@ class MachineControllerBlockEntityTest {
 
         assertThat(invokeTryFormMachine(fixture.first(), firstMachine, Direction.SOUTH)).isTrue();
         assertThat(invokeTryFormMachine(fixture.second(), secondMachine, Direction.SOUTH)).isTrue();
+        assertThat(fixture.first().resourceDomain().controllers())
+                .containsExactlyInAnyOrder(firstControllerPos, secondControllerPos);
         assertThat(fixture.second().resourceDomain().controllers())
                 .containsExactlyInAnyOrder(firstControllerPos, secondControllerPos);
         assertThat(StructureClaimRegistry.get(fixture.level()).domainFor(firstControllerPos))
@@ -611,6 +613,7 @@ class MachineControllerBlockEntityTest {
         assertThat(fixture.second().isFormed()).isTrue();
         assertThat(fixture.second().hasLinkedPort(shared.getBlockPos())).isTrue();
         assertThat(StructureClaimRegistry.get(fixture.level()).ownersOf(sharedPortPos)).containsExactly(secondControllerPos);
+        assertThat(fixture.second().resourceDomain().controllers()).containsExactly(secondControllerPos);
         assertThat(StructureClaimRegistry.get(fixture.level()).domainFor(secondControllerPos).controllers()).containsExactly(secondControllerPos);
 
         fixture.second().setRemoved();

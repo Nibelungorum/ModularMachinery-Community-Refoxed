@@ -162,7 +162,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     public @Nullable PortRequirementSpec.Failure getLastFormationFailure() { return lastFormationFailure; }
 
-    public @Nullable StructureClaimRegistry.ResourceDomain resourceDomain() { return resourceDomain; }
+    public @Nullable StructureClaimRegistry.ResourceDomain resourceDomain() {
+        if (level instanceof ServerLevel serverLevel) {
+            return StructureClaimRegistry.get(serverLevel).domainFor(getBlockPos());
+        }
+        return resourceDomain;
+    }
 
     public void onStructureBlockChanged(BlockPos changedPos) {
         if (!isFormed() || foundCompiledPattern == null || controllerFacing == null) return;
