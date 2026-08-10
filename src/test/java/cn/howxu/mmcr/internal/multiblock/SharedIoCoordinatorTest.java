@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -23,9 +24,9 @@ class SharedIoCoordinatorTest {
         List<String> committed = new ArrayList<>();
 
         coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, new SharedIoCoordinator.LaneKey(A, "base"), 17L, 8,
-                maximum -> Math.min(maximum, 8), granted -> committed.add("A:" + granted)));
+                maximum -> Math.min(maximum, 8), granted -> committed.add("A:" + granted), () -> true, () -> 17L));
         coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, new SharedIoCoordinator.LaneKey(B, "base"), 21L, 8,
-                maximum -> Math.min(maximum, 2), granted -> committed.add("B:" + granted)));
+                maximum -> Math.min(maximum, 2), granted -> committed.add("B:" + granted), () -> true, () -> 21L));
 
         coordinator.resolve(domain);
 
@@ -40,16 +41,14 @@ class SharedIoCoordinatorTest {
         List<String> committed = new ArrayList<>();
 
         coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, new SharedIoCoordinator.LaneKey(A, "base"), 1L, 1,
-                ignored -> 1, ignored -> committed.add("A")));
-        coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, new SharedIoCoordinator.LaneKey(B, "base"), 1L, 1,
-                ignored -> 0, ignored -> committed.add("B")));
+                ignored -> 1, ignored -> committed.add("A"), () -> true, () -> 1L));
         coordinator.resolve(domain);
         committed.clear();
 
         coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, new SharedIoCoordinator.LaneKey(A, "base"), 1L, 1,
-                ignored -> 1, ignored -> committed.add("A")));
+                ignored -> 1, ignored -> committed.add("A"), () -> true, () -> 1L));
         coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, new SharedIoCoordinator.LaneKey(B, "base"), 1L, 1,
-                ignored -> 1, ignored -> committed.add("B")));
+                ignored -> 1, ignored -> committed.add("B"), () -> true, () -> 1L));
         coordinator.resolve(domain);
 
         assertThat(committed).containsExactly("B", "A");
@@ -62,11 +61,11 @@ class SharedIoCoordinatorTest {
         List<String> committed = new ArrayList<>();
 
         coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, new SharedIoCoordinator.LaneKey(A, "base"), 1L, 1,
-                ignored -> 1, ignored -> committed.add("initial-start")));
+                ignored -> 1, ignored -> committed.add("initial-start"), () -> true, () -> 1L));
         coordinator.enqueue(new SharedIoCoordinator.TickRequest(domain, new SharedIoCoordinator.LaneKey(B, "base"), 1L,
-                () -> { committed.add("initial-tick"); return true; }, () -> true));
+                () -> { committed.add("initial-tick"); return true; }, () -> true, () -> 1L));
         coordinator.enqueue(new SharedIoCoordinator.FinishRequest(domain, new SharedIoCoordinator.LaneKey(C, "base"), 1L,
-                () -> { committed.add("initial-finish"); return true; }, () -> true));
+                () -> { committed.add("initial-finish"); return true; }, () -> true, () -> 1L));
         coordinator.resolve(domain);
         committed.clear();
 
@@ -84,9 +83,24 @@ class SharedIoCoordinatorTest {
         SharedIoCoordinator coordinator = new SharedIoCoordinator();
         AtomicBoolean committed = new AtomicBoolean();
         coordinator.enqueue(new SharedIoCoordinator.StartRequest(new StructureClaimRegistry.ResourceDomain(2L, 3L, Set.of(A)),
-                new SharedIoCoordinator.LaneKey(A, "base"), 7L, 4, ignored -> 4, ignored -> committed.set(true)));
+                new SharedIoCoordinator.LaneKey(A, "base"), 7L, 4, ignored -> 4, ignored -> committed.set(true), () -> true, () -> 7L));
 
         coordinator.resolve(new StructureClaimRegistry.ResourceDomain(2L, 4L, Set.of(A)));
+
+        assertThat(committed).isFalse();
+    }
+
+    @Test
+    void staleStructureVersionNeverCallsTheCommitter() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = new StructureClaimRegistry.ResourceDomain(7L, 1L, Set.of(A));
+        AtomicBoolean committed = new AtomicBoolean();
+        AtomicLong currentStructureVersion = new AtomicLong(3L);
+        coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, new SharedIoCoordinator.LaneKey(A, "base"), 3L, 1,
+                ignored -> 1, ignored -> committed.set(true), () -> true, currentStructureVersion::get));
+        currentStructureVersion.incrementAndGet();
+
+        coordinator.resolve(domain);
 
         assertThat(committed).isFalse();
     }
@@ -97,11 +111,11 @@ class SharedIoCoordinatorTest {
             String lane = pos.equals(A) ? "A" : pos.equals(B) ? "B" : "C";
             SharedIoCoordinator.LaneKey laneKey = new SharedIoCoordinator.LaneKey(pos, "base");
             coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, laneKey, 1L, 1,
-                    ignored -> 1, ignored -> committed.add("start:" + lane)));
+                    ignored -> 1, ignored -> committed.add("start:" + lane), () -> true, () -> 1L));
             coordinator.enqueue(new SharedIoCoordinator.TickRequest(domain, laneKey, 1L,
-                    () -> { committed.add("tick:" + lane); return true; }, () -> true));
+                    () -> { committed.add("tick:" + lane); return true; }, () -> true, () -> 1L));
             coordinator.enqueue(new SharedIoCoordinator.FinishRequest(domain, laneKey, 1L,
-                    () -> { committed.add("finish:" + lane); return true; }, () -> true));
+                    () -> { committed.add("finish:" + lane); return true; }, () -> true, () -> 1L));
         }
     }
 }

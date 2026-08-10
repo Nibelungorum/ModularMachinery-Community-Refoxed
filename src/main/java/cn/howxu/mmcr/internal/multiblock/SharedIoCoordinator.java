@@ -15,6 +15,7 @@ import java.util.WeakHashMap;
 import java.util.function.BooleanSupplier;
 import java.util.function.IntConsumer;
 import java.util.function.IntUnaryOperator;
+import java.util.function.LongSupplier;
 
 /**
  * Resolves shared multiblock IO requests once at the end of each server-level tick.
@@ -105,7 +106,16 @@ public final class SharedIoCoordinator {
 
         LaneKey laneKey();
 
-        boolean isStillValid();
+        long controllerStructureVersion();
+
+        LongSupplier controllerStructureVersionSupplier();
+
+        BooleanSupplier validator();
+
+        default boolean isStillValid() {
+            return controllerStructureVersion() == controllerStructureVersionSupplier().getAsLong()
+                    && validator().getAsBoolean();
+        }
 
         boolean tryCommit();
     }
@@ -128,15 +138,10 @@ public final class SharedIoCoordinator {
 
     public record StartRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey, long controllerStructureVersion,
                                int maximumParallelism, IntUnaryOperator transaction, IntConsumer committer,
-                               BooleanSupplier validator) implements Request {
-        public StartRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey, long controllerStructureVersion,
-                            int maximumParallelism, IntUnaryOperator transaction, IntConsumer committer) {
-            this(domain, laneKey, controllerStructureVersion, maximumParallelism, transaction, committer, () -> true);
-        }
+                               BooleanSupplier validator, LongSupplier controllerStructureVersionSupplier) implements Request {
 
         @Override public long domainId() { return domain.id(); }
         @Override public long domainGeneration() { return domain.generation(); }
-        @Override public boolean isStillValid() { return validator.getAsBoolean(); }
         @Override public boolean tryCommit() {
             int granted = transaction.applyAsInt(maximumParallelism);
             if (granted <= 0) return false;
@@ -146,18 +151,18 @@ public final class SharedIoCoordinator {
     }
 
     public record TickRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey, long controllerStructureVersion,
-                              BooleanSupplier transaction, BooleanSupplier validator) implements Request {
+                              BooleanSupplier transaction, BooleanSupplier validator,
+                              LongSupplier controllerStructureVersionSupplier) implements Request {
         @Override public long domainId() { return domain.id(); }
         @Override public long domainGeneration() { return domain.generation(); }
-        @Override public boolean isStillValid() { return validator.getAsBoolean(); }
         @Override public boolean tryCommit() { return transaction.getAsBoolean(); }
     }
 
     public record FinishRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey, long controllerStructureVersion,
-                                BooleanSupplier transaction, BooleanSupplier validator) implements Request {
+                                BooleanSupplier transaction, BooleanSupplier validator,
+                                LongSupplier controllerStructureVersionSupplier) implements Request {
         @Override public long domainId() { return domain.id(); }
         @Override public long domainGeneration() { return domain.generation(); }
-        @Override public boolean isStillValid() { return validator.getAsBoolean(); }
         @Override public boolean tryCommit() { return transaction.getAsBoolean(); }
     }
 }
