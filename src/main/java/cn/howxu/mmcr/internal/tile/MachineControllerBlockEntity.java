@@ -342,8 +342,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
         // 1.21+ exposes the old strong-power query through SignalGetter's direct signal helper.
         boolean powered = level.getDirectSignalTo(getBlockPos()) > 0;
-        redstonePaused = powered;
         if (powered) {
+            redstonePaused = true;
             stopFactoryController();
             if (active != null) {
                 pausedActive = active;
@@ -1068,7 +1068,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         }
         ActiveMachineRecipe.TickStatus status = active.tick(context, (int) Math.min(Integer.MAX_VALUE, Math.max(0L, currentGameTime())));
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
-            lastFailureUnloc = null;
             returnContext(context);
             active = null;
             context = null;
@@ -1081,8 +1080,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 context = null;
                 setActiveState(false);
             }
-        } else {
-            lastFailureUnloc = null;
         }
         setChanged();
     }
@@ -1181,11 +1178,13 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
         if (active != null) {
-            output.putBoolean("has_active", true);
+            output.putString("recipe_state", "active");
             active.serialize(output.child("active_recipe"));
-        } else {
-            output.putBoolean("has_active", false);
+        } else if (pausedActive != null) {
+            output.putString("recipe_state", "paused");
+            pausedActive.serialize(output.child("active_recipe"));
         }
+        if (lastFailureUnloc != null) output.putString("last_failure_unloc", lastFailureUnloc);
     }
 
     @Override
@@ -1194,23 +1193,30 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         pausedActive = null;
         pausedContext = null;
         redstonePaused = false;
-        if (!input.getBooleanOr("has_active", false)) {
-            active = null;
-            context = null;
-            return;
-        }
+        active = null;
+        context = null;
+        String savedFailure = input.getStringOr("last_failure_unloc", "");
+        lastFailureUnloc = savedFailure.isEmpty() ? null : savedFailure;
+        String recipeState = input.getStringOr("recipe_state", input.getBooleanOr("has_active", false) ? "active" : "");
+        if (recipeState.isEmpty()) return;
         ActiveMachineRecipe restored = ActiveMachineRecipe.from(input.childOrEmpty("active_recipe"));
         if (restored.getRecipe() == null) {
             Identifier missing = restored.getRegistryName() == null ? null : Identifier.parse(restored.getRegistryName());
             LOG.warn("[Ctrl#{}] loadAdditional: stored recipe {} not found in registry; clearing slot", instanceId, missing);
-            active = null;
-            context = null;
             return;
         }
-        active = restored;
-        context = new RecipeCraftingContext(this);
+        if ("paused".equals(recipeState)) {
+            pausedActive = restored;
+            pausedContext = new RecipeCraftingContext(this);
+        } else if ("active".equals(recipeState)) {
+            active = restored;
+            context = new RecipeCraftingContext(this);
+        } else {
+            LOG.warn("[Ctrl#{}] loadAdditional: stored recipe state {} is invalid; clearing slot", instanceId, recipeState);
+            return;
+        }
         structureDirty = true;
-        LOG.info("[Ctrl#{}] loadAdditional: pos={} restored active recipe={} tick={}/{}", instanceId, getBlockPos(), restored.getRecipe().id(), restored.getTick(), restored.getTotalTick());
+        LOG.info("[Ctrl#{}] loadAdditional: pos={} restored {} recipe={} tick={}/{}", instanceId, getBlockPos(), recipeState, restored.getRecipe().id(), restored.getTick(), restored.getTotalTick());
         setChanged();
     }
 }
