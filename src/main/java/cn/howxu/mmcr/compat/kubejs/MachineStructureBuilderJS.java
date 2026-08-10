@@ -4,10 +4,7 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
-<<<<<<< HEAD
-=======
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
->>>>>>> ab47585 (feat: expose machine levels to kubejs)
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;

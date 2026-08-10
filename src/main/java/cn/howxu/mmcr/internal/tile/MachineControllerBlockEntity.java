@@ -305,7 +305,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         for (ProcessingComponent component : components) {
             if (component.getContainer() instanceof ParallelControllerBlockEntity parallel) {
                 max += parallel.currentParallelism();
-                if (max >= machine.maxParallelism()) return machine.maxParallelism();
             }
         }
         int base = Math.max(1, (int) max);
@@ -1285,6 +1284,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
+        ValueOutput.TypedOutputList<String> levels = output.list("found_levels", com.mojang.serialization.Codec.STRING);
+        for (MachineLevel foundLevel : foundLevels.values()) {
+            levels.add(foundLevel.id().toString());
+        }
         if (active != null && context != null) {
             output.putString("recipe_state", "active");
             output.putBoolean("has_recipe_context", true);
@@ -1307,6 +1310,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         redstonePaused = false;
         active = null;
         context = null;
+        Map<Identifier, MachineLevel> restoredLevels = new LinkedHashMap<>();
+        input.listOrEmpty("found_levels", com.mojang.serialization.Codec.STRING).forEach(id -> {
+            MachineLevel foundLevel = cn.howxu.mmcr.api.machine.level.MachineLevelRegistry.getLevel(Identifier.parse(id));
+            if (foundLevel != null) restoredLevels.put(foundLevel.typeId(), foundLevel);
+        });
+        foundLevels = Map.copyOf(restoredLevels);
         String savedFailure = input.getStringOr("last_failure_unloc", "");
         lastFailureUnloc = savedFailure.isEmpty() ? null : savedFailure;
         String recipeState = input.getStringOr("recipe_state", input.getBooleanOr("has_active", false) ? "active" : "");
