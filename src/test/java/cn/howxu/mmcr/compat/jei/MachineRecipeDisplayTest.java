@@ -194,13 +194,17 @@ class MachineRecipeDisplayTest {
         MachineLevelRegistry.freezeRegistration();
         LevelRequirement requirement = new LevelRequirement(typeId, ironId);
 
-        assertThat(MachineRecipeCategory.levelRequirement(requirement, 0).getString()).isEqualTo("Coils: Block of Iron");
+        assertThat(MachineRecipeCategory.levelRequirement(requirement, 0).getString())
+                .isEqualTo("Coils: Block of Ironjei.mmcr.machine_recipe.minimum_level");
         assertThat(MachineRecipeCategory.levelRequirement(requirement, 20).getString()).isEqualTo("Coils: Block of Gold");
         assertThat(MachineRecipeCategory.levelRequirement(requirement, 40).getString()).isEqualTo("Coils: Block of Diamond");
         assertThat(MachineRecipeCategory.levelRequirement(requirement, 60).getString()).isEqualTo("Coils: Block of Gold");
-        assertThat(MachineRecipeCategory.levelRequirement(requirement, 80).getString()).isEqualTo("Coils: Block of Iron");
-        assertThat(MachineRecipeCategory.levelRequirement(requirement, 0).getStyle().getColor())
-                .isEqualTo(net.minecraft.network.chat.TextColor.fromLegacyFormat(net.minecraft.ChatFormatting.GREEN));
+        assertThat(MachineRecipeCategory.levelRequirement(requirement, 80).getString())
+                .isEqualTo("Coils: Block of Ironjei.mmcr.machine_recipe.minimum_level");
+        assertThat(Translations.ALL.get("en_us").get("jei.mmcr.machine_recipe.minimum_level"))
+                .isEqualTo(" (minimum level)");
+        assertThat(Translations.ALL.get("zh_cn").get("jei.mmcr.machine_recipe.minimum_level"))
+                .isEqualTo(" (最低等级)");
     }
 
     private static MachineRecipe recipe(String id, String machine, int priority) {

@@ -419,9 +419,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     static Component levelLine(MachineLevel level) {
         var type = MachineLevelRegistry.getType(level.typeId());
         if (type == null || !(level.statePredicate() instanceof BlockPredicate.OfBlockState predicate)) return Component.empty();
-        return type.displayName().copy()
-                .append(Component.literal(": "))
-                .append(predicate.state().getBlock().getName());
+        return Component.translatable("gui.mmcr.controller.level", type.displayName(), predicate.state().getBlock().getName());
     }
 
     static Component parallelLine(int parallelism, int maxParallelism) {

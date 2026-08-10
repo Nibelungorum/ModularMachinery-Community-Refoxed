@@ -33,6 +33,11 @@ import cn.howxu.mmcr.internal.recipe.RecipeStartDelay;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
@@ -42,6 +47,7 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.storage.ValueInput;
@@ -213,7 +219,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     public boolean isRedstonePaused() { return redstonePaused; }
 
-    public void applyClientState(String recipeName, boolean formed, boolean active) {
+    public void applyClientState(String recipeName, boolean formed, boolean active, List<String> foundLevelIds) {
         if (level == null || !level.isClientSide()) return;
         if (isFormed() != formed) {
             level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.FORMED, formed), 3);
@@ -222,6 +228,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.ACTIVE, active), 3);
         }
         this.clientActive = active;
+        Map<Identifier, MachineLevel> levels = new LinkedHashMap<>();
+        for (String id : foundLevelIds) {
+            MachineLevel foundLevel = cn.howxu.mmcr.api.machine.level.MachineLevelRegistry.getLevel(Identifier.parse(id));
+            if (foundLevel != null) levels.put(foundLevel.typeId(), foundLevel);
+        }
+        this.foundLevels = Map.copyOf(levels);
     }
 
     public boolean hasClientActiveRecipe() { return clientActive; }
@@ -723,6 +735,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         lastFormationFailure = null;
         lastStructureError = null;
         setChanged();
+        syncLevelState();
     }
 
     private void collectFoundModifiers(Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
@@ -874,6 +887,13 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         structureDirty = true;
         pauseActiveForUnloadedStructure();
         setChanged();
+        syncLevelState();
+    }
+
+    private void syncLevelState() {
+        if (level != null && !level.isClientSide()) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
+        }
     }
 
     private boolean compiledBoundsTouchesChunk(ChunkPos chunkPos) {
@@ -990,7 +1010,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         lastBroadcastActive = activeNow;
         if (!(level instanceof ServerLevel sl)) return;
         String name = active == null ? "" : active.getRecipe().id().toString();
-        var pkt = new PktMachineStatePayload(getBlockPos(), name, formed, activeNow);
+        var pkt = new PktMachineStatePayload(getBlockPos(), name, formed, activeNow,
+                foundLevels.values().stream().map(foundLevel -> foundLevel.id().toString()).toList());
         for (var player : sl.getPlayers(p -> p.distanceToSqr(getBlockPos().getCenter()) < 64 * 64)) {
             ((ServerPlayer) player).connection.send(new ClientboundCustomPayloadPacket(pkt));
         }
@@ -1343,5 +1364,15 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         structureDirty = true;
         LOG.info("[Ctrl#{}] loadAdditional: pos={} restored {} recipe={} tick={}/{}", instanceId, getBlockPos(), recipeState, restored.getRecipe().id(), restored.getTick(), restored.getTotalTick());
         setChanged();
+    }
+
+    @Override
+    public net.minecraft.nbt.CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+        return saveCustomOnly(registries);
+    }
+
+    @Override
+    public Packet<ClientGamePacketListener> getUpdatePacket() {
+        return ClientboundBlockEntityDataPacket.create(this);
     }
 }

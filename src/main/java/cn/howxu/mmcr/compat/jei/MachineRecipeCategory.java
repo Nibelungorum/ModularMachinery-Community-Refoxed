@@ -20,7 +20,6 @@ import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.api.recipe.types.IRecipeType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
@@ -179,9 +178,13 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         Component levelName = selected.statePredicate() instanceof BlockPredicate.OfBlockState predicate
                 ? predicate.state().getBlock().getName()
                 : selected.representative().getHoverName();
-        return type.displayName().copy().withStyle(ChatFormatting.GREEN)
+        Component suffix = selected.id().equals(required.id())
+                ? Component.translatable("jei.mmcr.machine_recipe.minimum_level")
+                : Component.empty();
+        return type.displayName().copy()
                 .append(Component.literal(": "))
-                .append(levelName);
+                .append(levelName)
+                .append(suffix);
     }
 
     private static List<LevelRequirement> sortedLevelRequirements(MachineRecipe recipe) {

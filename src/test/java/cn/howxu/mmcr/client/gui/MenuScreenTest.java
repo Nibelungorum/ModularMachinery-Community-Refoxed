@@ -139,7 +139,7 @@ class MenuScreenTest {
         MachineLevelRegistry.registerLevel(level);
         MachineLevelRegistry.freezeRegistration();
 
-        assertThat(MachineMenuScreen.levelLine(level).getString()).isEqualTo("Coils: Block of Iron");
+        assertThat(MachineMenuScreen.levelLine(level).getString()).isEqualTo("gui.mmcr.controller.level");
     }
 
     @Test
