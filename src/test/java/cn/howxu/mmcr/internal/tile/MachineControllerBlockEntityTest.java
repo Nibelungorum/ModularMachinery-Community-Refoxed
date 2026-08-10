@@ -30,6 +30,8 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
+import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
+import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
@@ -553,6 +555,48 @@ class MachineControllerBlockEntityTest {
 
         assertThat(formed).isTrue();
         assertThat(port.appearanceBaseTexture()).isEqualTo(formedTexture);
+    }
+
+    @Test
+    void exclusive_component_claim_prevents_second_controller_from_forming() {
+        StructureClaimRegistry registry = new StructureClaimRegistry();
+        BlockPos componentPos = new BlockPos(1, 64, 0);
+        BlockPos firstControllerPos = new BlockPos(0, 64, 0);
+        BlockPos secondControllerPos = new BlockPos(4, 64, 0);
+
+        assertThat(registry.claim(firstControllerPos,
+                List.of(new StructureClaimRegistry.Claim(componentPos, ComponentClaimPolicy.EXCLUSIVE))).accepted()).isTrue();
+
+        StructureClaimRegistry.ClaimResult result = registry.claim(secondControllerPos,
+                List.of(new StructureClaimRegistry.Claim(componentPos, ComponentClaimPolicy.EXCLUSIVE)));
+
+        assertThat(result.accepted()).isFalse();
+        assertThat(result.conflict()).isNotNull();
+        assertThat(result.conflict().componentPos()).isEqualTo(componentPos);
+        assertThat(result.conflict().ownerPos()).isEqualTo(firstControllerPos);
+    }
+
+    @Test
+    void shared_port_remains_linked_when_one_of_its_controllers_resets() throws Exception {
+        BlockPos sharedPortPos = new BlockPos(1, 64, 0);
+        ItemInputBusBlockEntity shared = itemInputBus(sharedPortPos);
+        DynamicMachine firstMachine = portAppearanceMachine(
+                "first_shared_port_machine",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()),
+                Identifier.parse("kubejs:block/first_formed_casing"));
+        MachineControllerBlockEntity first = controllerForFormation(firstMachine, new BlockPos(0, 64, 0), shared);
+        MachineControllerBlockEntity second = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        BlockPos secondControllerPos = new BlockPos(4, 64, 0);
+        setField(BlockEntity.class, second, "worldPosition", secondControllerPos);
+        setField(MachineControllerBlockEntity.class, second, "linkedPortPositions", new java.util.HashSet<>(List.of(sharedPortPos)));
+
+        assertThat(invokeTryFormMachine(first, firstMachine, Direction.SOUTH)).isTrue();
+        shared.linkControllerAppearance(secondControllerPos, Identifier.parse("kubejs:block/second_formed_casing"));
+
+        invokeResetMachine(first);
+
+        assertThat(shared.linkedControllerPositions()).containsExactly(secondControllerPos);
+        assertThat(second.hasLinkedPort(shared.getBlockPos())).isTrue();
     }
 
     @Test
@@ -1576,6 +1620,7 @@ class MachineControllerBlockEntityTest {
                     .findFirst()
                     .orElseThrow());
             setField(EnergyHatchBlockEntity.class, hatch, "storage", new EnergyStorage(1000, 1000, 1000));
+            initializePortAppearance(hatch);
             return hatch;
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate energy hatch", e);
@@ -1593,6 +1638,7 @@ class MachineControllerBlockEntityTest {
             setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
             setField(ItemInputBusBlockEntity.class, bus, "kind", PortKinds.ITEM_INPUT);
             setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
+            initializePortAppearance(bus);
             return bus;
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate item input bus", e);
@@ -1609,6 +1655,7 @@ class MachineControllerBlockEntityTest {
             setField(BlockEntity.class, bus, "worldPosition", pos);
             setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
             setField(ItemOutputBusBlockEntity.class, bus, "kind", PortKinds.ITEM_OUTPUT);
+            initializePortAppearance(bus);
             return bus;
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate item output bus", e);
@@ -1628,6 +1675,7 @@ class MachineControllerBlockEntityTest {
             setField(FluidHatchBlockEntity.class, hatch, "tank", new FluidTank(8000) {
                 @Override protected void onContentsChanged() { }
             });
+            initializePortAppearance(hatch);
             return hatch;
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate fluid input hatch", e);
@@ -1647,6 +1695,7 @@ class MachineControllerBlockEntityTest {
             setField(FluidHatchBlockEntity.class, hatch, "tank", new FluidTank(8000) {
                 @Override protected void onContentsChanged() { }
             });
+            initializePortAppearance(hatch);
             return hatch;
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate fluid output hatch", e);
@@ -1659,6 +1708,10 @@ class MachineControllerBlockEntityTest {
         componentsField.setAccessible(true);
         List<ProcessingComponent> list = (List<ProcessingComponent>) componentsField.get(controller);
         list.add(new ProcessingComponent(null, parallel, parallel.getBlockPos(), BlockPos.ZERO, List.of(), null));
+    }
+
+    private static void initializePortAppearance(IOPortBlockEntity port) throws ReflectiveOperationException {
+        setField(IOPortBlockEntity.class, port, "linkedControllers", new java.util.TreeMap<>(BlockPos::compareTo));
     }
 
     private static ParallelControllerBlockEntity parallelController(ParallelTier tier, BlockPos pos) {

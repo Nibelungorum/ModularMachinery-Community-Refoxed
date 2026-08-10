@@ -21,6 +21,8 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
+import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.recipe.RecipeStartDelay;
@@ -96,6 +98,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private long lastRecipeStructureVersion = Long.MIN_VALUE;
     private long lastRecipeModifierSnapshotVersion = Long.MIN_VALUE;
     private boolean recipeDirty = true;
+    private @Nullable StructureClaimRegistry.ResourceDomain resourceDomain;
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
@@ -158,6 +161,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     public @Nullable String getLastFailureUnloc() { return lastFailureUnloc; }
 
     public @Nullable PortRequirementSpec.Failure getLastFormationFailure() { return lastFormationFailure; }
+
+    public @Nullable StructureClaimRegistry.ResourceDomain resourceDomain() { return resourceDomain; }
 
     public void onStructureBlockChanged(BlockPos changedPos) {
         if (!isFormed() || foundCompiledPattern == null || controllerFacing == null) return;
@@ -228,7 +233,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     public void resetLinkedPortAppearances() {
-        resetLinkedPorts();
+        unlinkLinkedPorts();
     }
 
     public long totalStoredEnergy() {
@@ -540,6 +545,18 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             return false;
         }
 
+        if (level instanceof ServerLevel serverLevel) {
+            StructureClaimRegistry.ClaimResult result = StructureClaimRegistry.get(serverLevel)
+                    .claim(getBlockPos(), componentClaims(rotatedPattern, compiled, facing));
+            if (!result.accepted()) {
+                StructureClaimRegistry.Conflict conflict = result.conflict();
+                lastFormationFailure = new PortRequirementSpec.Failure(
+                        "component_claim_conflict component=" + conflict.componentPos() + " owner=" + conflict.ownerPos(),
+                        0, 1, java.util.OptionalInt.empty(), PortRequirementSpec.FailureReason.MISSING);
+                return false;
+            }
+        }
+
         lastFormationFailure = null;
         lastStructureMismatchDiagnostic = null;
         onStructureFormed(candidate, rotatedPattern, compiled, facing, replacements);
@@ -623,6 +640,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         foundCompiledPattern = compiledPattern;
         controllerFacing = facing;
         machine = matchedMachine;
+        if (level instanceof ServerLevel serverLevel) {
+            resourceDomain = StructureClaimRegistry.get(serverLevel).domainFor(getBlockPos());
+        }
         collectFoundModifiers(replacements);
         FORMED_CONTROLLERS.add(this);
         structureVersion++;
@@ -637,6 +657,22 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 counts.itemInputs(), counts.itemOutputs(), counts.fluidInputs(), counts.fluidOutputs(), counts.energyInputs(), counts.energyOutputs());
         lastFormationFailure = null;
         setChanged();
+    }
+
+    private List<StructureClaimRegistry.Claim> componentClaims(BlockArray pattern,
+                                                                 @Nullable CompiledMachinePattern compiled,
+                                                                 Direction facing) {
+        List<StructureClaimRegistry.Claim> claims = new ArrayList<>();
+        if (level == null) return claims;
+        for (BlockPos relativePos : componentPositions(pattern, compiled, facing)) {
+            BlockEntity entity = level.getBlockEntity(getBlockPos().offset(relativePos));
+            if (entity instanceof MachineComponentTile tile) {
+                claims.add(new StructureClaimRegistry.Claim(entity.getBlockPos(), tile.claimPolicy()));
+            } else if (entity instanceof ParallelControllerBlockEntity || entity instanceof FactorySchedulerBlockEntity) {
+                claims.add(new StructureClaimRegistry.Claim(entity.getBlockPos(), ComponentClaimPolicy.EXCLUSIVE));
+            }
+        }
+        return claims;
     }
 
     private void collectFoundModifiers(Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
@@ -669,7 +705,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         components.clear();
         if (level == null || foundMachine == null || foundPattern == null) return;
 
-        resetLinkedPorts();
+        unlinkLinkedPorts();
 
         for (BlockPos relativePos : componentPositions()) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
@@ -685,7 +721,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
             if (tile instanceof IOPortBlockEntity port) {
                 Identifier formedTexture = foundMachine.appearance().formedPortBaseTexture();
-                port.bindControllerAppearance(getBlockPos(), formedTexture);
+                port.linkControllerAppearance(getBlockPos(), formedTexture);
                 linkedPortPositions().add(worldPos.immutable());
             }
             var component = tile.provideComponent();
@@ -694,29 +730,26 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         }
     }
 
-    private void resetLinkedPorts() {
+    private void unlinkLinkedPorts() {
         Set<BlockPos> linkedPortPositions = linkedPortPositions();
         if (level == null) {
             linkedPortPositions.clear();
             return;
         }
-        resetPortsAtCurrentStructurePositions();
+        if (foundPattern != null) {
+            for (BlockPos relativePos : componentPositions()) {
+                BlockEntity entity = level.getBlockEntity(getBlockPos().offset(relativePos));
+                if (entity instanceof IOPortBlockEntity port) {
+                    port.unlinkControllerAppearance(getBlockPos());
+                }
+            }
+        }
         for (BlockPos portPos : linkedPortPositions) {
             if (level.getBlockEntity(portPos) instanceof IOPortBlockEntity port) {
-                port.resetAppearanceBaseTexture();
+                port.unlinkControllerAppearance(getBlockPos());
             }
         }
         linkedPortPositions.clear();
-    }
-
-    private void resetPortsAtCurrentStructurePositions() {
-        if (level == null || foundPattern == null) return;
-        for (BlockPos relativePos : componentPositions()) {
-            BlockPos worldPos = getBlockPos().offset(relativePos);
-            if (level.getBlockEntity(worldPos) instanceof IOPortBlockEntity port) {
-                port.resetAppearanceBaseTexture();
-            }
-        }
     }
 
     private Set<BlockPos> linkedPortPositions() {
@@ -729,6 +762,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             return foundCompiledPattern.componentPositions(controllerFacing);
         }
         return new ArrayList<>(foundPattern.pattern().keySet());
+    }
+
+    private static List<BlockPos> componentPositions(BlockArray pattern, @Nullable CompiledMachinePattern compiled, Direction facing) {
+        return compiled == null ? new ArrayList<>(pattern.pattern().keySet()) : compiled.componentPositions(facing);
     }
 
     private PortRequirementSpec.PortCounts countPorts(BlockArray rotatedPattern, @Nullable CompiledMachinePattern compiledPattern, Direction facing) {
@@ -852,7 +889,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         Identifier dropped = foundMachine == null ? null : foundMachine.registryName();
         boolean hadActive = active != null;
         Identifier activeRecipe = hadActive ? active.getRecipe().id() : null;
-        resetLinkedPorts();
+        releaseStructureClaims();
+        unlinkLinkedPorts();
         stopFactoryController();
         foundMachine = null;
         foundPattern = null;
@@ -884,6 +922,13 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             LOG.info("[Ctrl#{}] resetMachine: pos={} dropped={} clearedActiveRecipe={} wasFormed={}", instanceId, getBlockPos(), dropped, activeRecipe, wasFormed);
         }
         setChanged();
+    }
+
+    public void releaseStructureClaims() {
+        if (level instanceof ServerLevel serverLevel) {
+            StructureClaimRegistry.get(serverLevel).release(getBlockPos());
+        }
+        resourceDomain = null;
     }
 
     private void stopFactoryController() {
@@ -1096,7 +1141,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     @Override
     public void setRemoved() {
-        stopFactoryController();
+        if (level != null && !level.isClientSide()) resetMachine();
         super.setRemoved();
     }
 

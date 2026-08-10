@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.multiblock;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayDeque;
@@ -11,6 +12,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 
 /**
  * Server-thread ownership graph for formed multiblock components.
@@ -18,11 +20,16 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public final class StructureClaimRegistry {
+    private static final Map<ServerLevel, StructureClaimRegistry> REGISTRIES = new WeakHashMap<>();
     private final Map<BlockPos, Set<BlockPos>> ownersByComponent = new LinkedHashMap<>();
     private final Map<BlockPos, Set<Claim>> claimsByController = new LinkedHashMap<>();
     private final Map<BlockPos, ResourceDomain> domainsByController = new HashMap<>();
     private long nextDomainId;
     private long nextGeneration;
+
+    public static synchronized StructureClaimRegistry get(ServerLevel level) {
+        return REGISTRIES.computeIfAbsent(level, ignored -> new StructureClaimRegistry());
+    }
 
     public ClaimResult claim(BlockPos controllerPos, List<Claim> requested) {
         BlockPos immutableControllerPos = controllerPos.immutable();
