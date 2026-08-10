@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.DynamicOps;
+import com.mojang.serialization.Dynamic;
 import com.mojang.datafixers.util.Pair;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -140,8 +141,8 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
                     .flatMap(value -> net.minecraft.world.item.crafting.Ingredient.CODEC.parse(ops, value))
                     .flatMap(item -> ops.get(input, "count")
                             .flatMap(ops::getNumberValue)
-                            .map(count -> new ItemRequirement(io, item, count.intValue(), ItemStack.EMPTY,
-                                    1F, tags, decodeComponents(ops, input), decodeConsumeChance(ops, input))));
+                            .flatMap(count -> decodeComponents(ops, input).map(components -> new ItemRequirement(io, item,
+                                    count.intValue(), ItemStack.EMPTY, 1F, tags, components, decodeConsumeChance(ops, input)))));
         });
     }
 
@@ -176,11 +177,10 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
                 .orElse(1F);
     }
 
-    private static <T> DataComponentPredicateSet decodeComponents(DynamicOps<T> ops, T input) {
-        return ops.get(input, "components")
-                .flatMap(value -> DataComponentPredicateSet.CODEC.parse(ops, value))
-                .result()
-                .orElse(DataComponentPredicateSet.EMPTY);
+    private static <T> DataResult<DataComponentPredicateSet> decodeComponents(DynamicOps<T> ops, T input) {
+        return new Dynamic<>(ops, input).get("components").result()
+                .map(value -> DataComponentPredicateSet.CODEC.parse(value))
+                .orElseGet(() -> DataResult.success(DataComponentPredicateSet.EMPTY));
     }
 
     private static <T> float decodeConsumeChance(DynamicOps<T> ops, T input) {

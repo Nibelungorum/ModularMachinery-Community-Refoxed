@@ -183,7 +183,7 @@ public final class RecipeCraftingContext {
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT) {
-                boolean consume = plan == null ? item.consumeChance() > 0F : plan.consumes(requirementIndex);
+                boolean consume = plan == null ? item.consumeChance() > 0F : plan.consumedBatches(requirementIndex) > 0;
                 if (!simulateItemInput(requirementIndex, item, consume)) return false;
                 continue;
             }
@@ -244,14 +244,21 @@ public final class RecipeCraftingContext {
     }
 
     private List<MachineRequirement> scaledRequirements(MachineRecipe recipe, int parallelism) {
+        return scaledRequirements(recipe, parallelism, null);
+    }
+
+    private List<MachineRequirement> scaledRequirements(MachineRecipe recipe, int parallelism,
+                                                         @Nullable ActiveMachineRecipe.InputConsumptionPlan plan) {
         List<MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
-        if (parallelism <= 1) return requirements;
+        if (parallelism <= 1 && plan == null) return requirements;
         try {
             List<MachineRequirement> scaled = new ArrayList<>(requirements.size());
             for (MachineRequirement requirement : requirements) {
                 if (requirement instanceof ItemRequirement item) {
                     if (item.io() == RecipeModifier.IOType.INPUT) {
-                        int count = item.consumeChance() <= 0F ? item.count() : Math.multiplyExact(item.count(), parallelism);
+                        int batches = plan == null ? (item.consumeChance() <= 0F ? 0 : parallelism)
+                                : plan.consumedBatches(scaled.size());
+                        int count = batches == 0 ? item.count() : Math.multiplyExact(item.count(), batches);
                         scaled.add(new ItemRequirement(item.io(), item.item(), count, item.stack(), item.chance(), item.tags(), item.components(), item.consumeChance()));
                     } else {
                         ItemStack stack = item.stack().copy();
@@ -447,21 +454,24 @@ public final class RecipeCraftingContext {
     }
 
     public boolean startCrafting(MachineRecipe recipe, int parallelism, ActiveMachineRecipe.InputConsumptionPlan plan) {
-        List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism);
+        List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism, plan);
         if (!simulateInputs(requirements, plan)) return false;
         if (!simulateOutputs(requirements)) return false;
         return commitInputs(requirements);
     }
 
     public ActiveMachineRecipe.InputConsumptionPlan createInputConsumptionPlan(MachineRecipe recipe, int parallelism) {
-        List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism);
-        List<Integer> consumed = new ArrayList<>();
+        List<MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
+        List<Integer> consumed = new ArrayList<>(requirements.size());
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
-            if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT
-                    && shouldConsume(item.consumeChance())) {
-                consumed.add(requirementIndex);
+            int consumedBatches = 0;
+            if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT) {
+                for (int batch = 0; batch < parallelism; batch++) {
+                    if (shouldConsume(item.consumeChance())) consumedBatches++;
+                }
             }
+            consumed.add(consumedBatches);
         }
         return new ActiveMachineRecipe.InputConsumptionPlan(consumed);
     }

@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.DynamicOps;
+import com.mojang.serialization.Dynamic;
 import com.mojang.datafixers.util.Pair;
 import net.minecraft.world.item.crafting.Ingredient;
 
@@ -48,11 +49,12 @@ public sealed interface MachineIngredient {
 
     private static <T> DataResult<MachineIngredient> decodeByType(String type, DynamicOps<T> ops, T input) {
         return switch (type) {
-            case "item" -> ops.get(input, "item")
-                    .flatMap(value -> Ingredient.CODEC.parse(ops, value))
-                    .flatMap(item -> ops.get(input, "count")
-                            .flatMap(ops::getNumberValue)
-                            .map(count -> new ItemIngredient(item, count.intValue(), decodeComponents(ops, input), decodeConsumeChance(ops, input))));
+              case "item" -> ops.get(input, "item")
+                      .flatMap(value -> Ingredient.CODEC.parse(ops, value))
+                      .flatMap(item -> ops.get(input, "count")
+                              .flatMap(ops::getNumberValue)
+                            .flatMap(count -> decodeComponents(ops, input)
+                                    .map(components -> new ItemIngredient(item, count.intValue(), components, decodeConsumeChance(ops, input)))));
             case "fluid" -> ops.get(input, "fluid")
                     .flatMap(value -> net.neoforged.neoforge.fluids.crafting.FluidIngredient.CODEC.parse(ops, value))
                     .flatMap(fluid -> ops.get(input, "amount")
@@ -73,11 +75,10 @@ public sealed interface MachineIngredient {
         };
     }
 
-    private static <T> DataComponentPredicateSet decodeComponents(DynamicOps<T> ops, T input) {
-        return ops.get(input, "components")
-                .flatMap(value -> DataComponentPredicateSet.CODEC.parse(ops, value))
-                .result()
-                .orElse(DataComponentPredicateSet.EMPTY);
+    private static <T> DataResult<DataComponentPredicateSet> decodeComponents(DynamicOps<T> ops, T input) {
+        return new Dynamic<>(ops, input).get("components").result()
+                .map(value -> DataComponentPredicateSet.CODEC.parse(value))
+                .orElseGet(() -> DataResult.success(DataComponentPredicateSet.EMPTY));
     }
 
     private static <T> float decodeConsumeChance(DynamicOps<T> ops, T input) {

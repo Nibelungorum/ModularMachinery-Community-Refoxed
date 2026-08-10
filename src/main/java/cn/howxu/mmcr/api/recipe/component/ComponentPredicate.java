@@ -154,19 +154,18 @@ public sealed interface ComponentPredicate permits ComponentPredicate.Exact, Com
         public boolean matches(Dynamic<?> candidate) {
             var stream = candidate.asStreamOpt().result();
             if (stream.isEmpty()) return false;
-            List<Dynamic<?>> remaining = new ArrayList<>(stream.get().toList());
-            for (ComponentPredicate required : values) {
-                int index = -1;
-                for (int i = 0; i < remaining.size(); i++) {
-                    if (required.matches(remaining.get(i))) {
-                        index = i;
-                        break;
-                    }
-                }
-                if (index < 0) return false;
-                remaining.remove(index);
+            return matches(values, new ArrayList<>(stream.get().toList()), 0);
+        }
+
+        private static boolean matches(List<ComponentPredicate> required, List<Dynamic<?>> candidates, int index) {
+            if (index == required.size()) return true;
+            for (int candidateIndex = 0; candidateIndex < candidates.size(); candidateIndex++) {
+                if (!required.get(index).matches(candidates.get(candidateIndex))) continue;
+                Dynamic<?> candidate = candidates.remove(candidateIndex);
+                if (matches(required, candidates, index + 1)) return true;
+                candidates.add(candidateIndex, candidate);
             }
-            return true;
+            return false;
         }
     }
 

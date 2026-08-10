@@ -1,59 +1,24 @@
-# Task 4 Report: Factory Controller Scheduler
+# Task 4 Report
 
-## Status
+## Implementation
 
-DONE
-
-## Modified Files
-
-- `src/main/java/cn/howxu/mmcr/internal/block/FactoryControllerBlock.java`
-- `src/main/java/cn/howxu/mmcr/internal/tile/FactoryControllerBlockEntity.java`
-- `src/main/java/cn/howxu/mmcr/internal/recipe/FactoryRecipeScheduler.java`
-- `src/main/java/cn/howxu/mmcr/internal/tile/MachineControllerBlockEntity.java`
-- `src/main/java/cn/howxu/mmcr/registry/ModBlocks.java`
-- `src/main/java/cn/howxu/mmcr/registry/ModBlockEntities.java`
-- `src/main/java/cn/howxu/mmcr/datagen/Translations.java`
-- `src/main/java/cn/howxu/mmcr/datagen/ModelGen.java`
-- `src/test/java/cn/howxu/mmcr/internal/recipe/FactoryRecipeSchedulerTest.java`
-- `src/test/java/cn/howxu/mmcr/registry/FactoryControllerRegistrationTest.java`
-- `src/test/java/cn/howxu/mmcr/internal/tile/MachineControllerBlockEntityTest.java`
-- `src/test/java/cn/howxu/mmcr/test/TestBootstrap.java`
-
-## Commit
-
-- `fdc7ba856f6b7b0ae1fe58b11f97745d9c4198b8` - `feat(stage5): add factory scheduler foundation`
+- Added narrow KubeJS item-input builder methods: `itemInput`, `tagInput`, `itemInputWithComponents`, `notConsumableItemInput`, and `chancedItemInput`.
+- Routed every method through one private `addItemInput` helper that constructs the existing `MachineIngredient.ItemIngredient` with its component predicates and consumption chance.
+- `itemInputWithComponents` accepts the schema-exposed raw `JsonElement` and decodes it through `DataComponentPredicateSet.CODEC` with `JsonOps.INSTANCE`, matching JSON recipe decoding without a KubeJS-specific component grammar.
+- Kept `MachineRecipeSchema` unchanged: its `inputs` key already exposes raw `JsonElement` values through `JSON_ELEMENT`, which is the required schema surface for component objects.
+- Used `BuiltInRegistries.ITEM.getOrThrow(TagKey)` for tag inputs because this project's NeoForge API does not provide `Ingredient.of(TagKey<Item>)`.
 
 ## Verification
 
-- `./gradlew test --tests cn.howxu.mmcr.internal.recipe.FactoryRecipeSchedulerTest --tests cn.howxu.mmcr.registry.FactoryControllerRegistrationTest --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest --no-daemon`
-- Result: PASS / `BUILD SUCCESSFUL`
+- `./gradlew compileJava --no-daemon` passed.
+- Per user instruction, no tests were added or run.
+
+## Self Review
+
+- Confirmed only `MachineRecipeBuilderJS.java` is included in the task commit.
+- Confirmed component parsing uses the existing `DataComponentPredicateSet.CODEC`; no alternate syntax or codec was added.
+- Confirmed existing unrelated modification `.superpowers/sdd/task-1-report.md` remains uncommitted.
 
 ## Concerns
 
-- None for Task 4 scope.
-- Existing unrelated modified files remain in the worktree and were not touched or committed: `.superpowers/sdd/task-1-report.md`, `.superpowers/sdd/task-3-report.md`.
-
-## Important Review Fix: Stop Factory Lanes On Unload
-
-### Status
-
-DONE
-
-### Modified Files
-
-- `src/main/java/cn/howxu/mmcr/api/machine/MachinePatternCompiler.java`
-- `src/main/java/cn/howxu/mmcr/internal/tile/MachineControllerBlockEntity.java`
-- `src/test/java/cn/howxu/mmcr/internal/tile/MachineControllerBlockEntityTest.java`
-
-### Verification
-
-- `./gradlew test --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest --tests cn.howxu.mmcr.internal.recipe.FactoryRecipeSchedulerTest --tests cn.howxu.mmcr.registry.FactoryControllerRegistrationTest --no-daemon`
-- Result: PASS / `BUILD SUCCESSFUL in 7s`
-
-### Commit
-
-- Pending until commit is created.
-
-### Concerns
-
-- Existing unrelated modified files remain in the worktree and were not touched or committed: `.superpowers/sdd/task-1-report.md`, `.superpowers/sdd/task-3-report.md`.
+- No automated authoring API tests were run, per the explicit task constraint.

@@ -29,13 +29,33 @@ public final class ActiveMachineRecipe {
     private int nextFinishRetryTick;
     private @Nullable InputConsumptionPlan inputConsumptionPlan;
 
-    public record InputConsumptionPlan(List<Integer> consumedInputRequirementIndices) {
+    public record InputConsumptionPlan(List<Integer> consumedInputBatches) {
         public InputConsumptionPlan {
-            consumedInputRequirementIndices = List.copyOf(consumedInputRequirementIndices);
+            consumedInputBatches = List.copyOf(consumedInputBatches);
         }
 
-        public boolean consumes(int requirementIndex) {
-            return consumedInputRequirementIndices.contains(requirementIndex);
+        public int consumedBatches(int requirementIndex) {
+            return requirementIndex < consumedInputBatches.size() ? consumedInputBatches.get(requirementIndex) : 0;
+        }
+
+        public CompoundTag serialize() {
+            CompoundTag tag = new CompoundTag();
+            tag.putIntArray("consumedInputBatches", consumedInputBatches.stream().mapToInt(Integer::intValue).toArray());
+            return tag;
+        }
+
+        public static InputConsumptionPlan deserialize(CompoundTag tag) {
+            if (tag.contains("consumedInputRequirementIndices")) {
+                int maxIndex = java.util.Arrays.stream(tag.getIntArray("consumedInputRequirementIndices")
+                        .orElseGet(() -> new int[0])).max().orElse(-1);
+                int[] batches = new int[maxIndex + 1];
+                for (int index : tag.getIntArray("consumedInputRequirementIndices").orElseGet(() -> new int[0])) {
+                    batches[index] = 1;
+                }
+                return new InputConsumptionPlan(java.util.Arrays.stream(batches).boxed().toList());
+            }
+            return new InputConsumptionPlan(java.util.Arrays.stream(tag.getIntArray("consumedInputBatches")
+                    .orElseGet(() -> new int[0])).boxed().toList());
         }
     }
 
@@ -62,12 +82,7 @@ public final class ActiveMachineRecipe {
         this.data = serialized.contains("data") ? serialized.getCompoundOrEmpty("data") : new CompoundTag();
         this.nextFinishRetryTick = serialized.getIntOr("nextFinishRetryTick", 0);
         if (serialized.contains("inputConsumptionPlan")) {
-            this.inputConsumptionPlan = new InputConsumptionPlan(
-                    java.util.Arrays.stream(serialized.getCompoundOrEmpty("inputConsumptionPlan")
-                                    .getIntArray("consumedInputRequirementIndices")
-                                    .orElseGet(() -> new int[0]))
-                            .boxed()
-                            .toList());
+            this.inputConsumptionPlan = InputConsumptionPlan.deserialize(serialized.getCompoundOrEmpty("inputConsumptionPlan"));
         }
         setMaxParallelism(serialized.getIntOr("maxParallelism", 1));
         setParallelism(serialized.getIntOr("parallelism", 1));
@@ -170,11 +185,7 @@ public final class ActiveMachineRecipe {
         tag.putInt("parallelism", this.parallelism);
         tag.putInt("nextFinishRetryTick", this.nextFinishRetryTick);
         if (inputConsumptionPlan != null) {
-            CompoundTag plan = new CompoundTag();
-            plan.putIntArray("consumedInputRequirementIndices", inputConsumptionPlan.consumedInputRequirementIndices().stream()
-                    .mapToInt(Integer::intValue)
-                    .toArray());
-            tag.put("inputConsumptionPlan", plan);
+            tag.put("inputConsumptionPlan", inputConsumptionPlan.serialize());
         }
         if (!data.isEmpty()) {
             tag.put("data", data);
@@ -192,11 +203,7 @@ public final class ActiveMachineRecipe {
         output.putInt("parallelism", this.parallelism);
         output.putInt("nextFinishRetryTick", this.nextFinishRetryTick);
         if (inputConsumptionPlan != null) {
-            CompoundTag plan = new CompoundTag();
-            plan.putIntArray("consumedInputRequirementIndices", inputConsumptionPlan.consumedInputRequirementIndices().stream()
-                    .mapToInt(Integer::intValue)
-                    .toArray());
-            output.store("inputConsumptionPlan", CompoundTag.CODEC, plan);
+            output.store("inputConsumptionPlan", CompoundTag.CODEC, inputConsumptionPlan.serialize());
         }
         if (!data.isEmpty()) {
             output.store("data", CompoundTag.CODEC, data);
@@ -212,12 +219,7 @@ public final class ActiveMachineRecipe {
         result.totalTick = input.getIntOr("totalTick", 0);
         result.nextFinishRetryTick = input.getIntOr("nextFinishRetryTick", 0);
         result.inputConsumptionPlan = input.read("inputConsumptionPlan", CompoundTag.CODEC)
-                .map(plan -> new InputConsumptionPlan(java.util.Arrays.stream(
-                        plan.getIntArray("consumedInputRequirementIndices")
-                                .orElseGet(() -> new int[0]))
-                        .boxed()
-                        .toList()))
-                .orElse(null);
+                .map(InputConsumptionPlan::deserialize).orElse(null);
         result.setParallelism(input.getIntOr("parallelism", 1));
         result.data = input.read("data", CompoundTag.CODEC).orElseGet(CompoundTag::new);
         LOG.debug("ActiveMachineRecipe#{} from(ValueInput) → recipe={} tick={}/{} maxParallelism={} parallelism={}",

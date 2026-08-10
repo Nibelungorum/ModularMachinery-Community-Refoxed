@@ -42,6 +42,27 @@ class MachineIngredientCodecTest {
         assertThat(back).isEqualTo(ing);
     }
 
+    @Test void invalidItemIngredientComponentsProduceAnError() {
+        var json = new com.google.gson.JsonObject();
+        json.addProperty("type", "item");
+        json.add("item", Ingredient.CODEC.encodeStart(jsonOps(), Ingredient.of(Items.IRON_INGOT)).getOrThrow());
+        json.addProperty("count", 1);
+        json.addProperty("components", "invalid");
+
+        assertThat(MachineIngredient.CODEC.parse(jsonOps(), json).error()).isPresent();
+    }
+
+    @Test void invalidItemRequirementComponentsProduceAnError() {
+        var json = new com.google.gson.JsonObject();
+        json.addProperty("type", "item");
+        json.addProperty("io", "input");
+        json.add("item", Ingredient.CODEC.encodeStart(jsonOps(), Ingredient.of(Items.IRON_INGOT)).getOrThrow());
+        json.addProperty("count", 1);
+        json.addProperty("components", "invalid");
+
+        assertThat(MachineRequirement.CODEC.parse(jsonOps(), json).error()).isPresent();
+    }
+
     @Test void energyIngredient_roundtrip() {
         var ing = new MachineIngredient.EnergyIngredient(80);
         var json = MachineIngredient.CODEC.encodeStart(jsonOps(), ing).getOrThrow();
