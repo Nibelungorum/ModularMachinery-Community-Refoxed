@@ -31,6 +31,10 @@ public final class StructureClaimRegistry {
         return REGISTRIES.computeIfAbsent(level, ignored -> new StructureClaimRegistry());
     }
 
+    public static synchronized void discard(ServerLevel level) {
+        REGISTRIES.remove(level);
+    }
+
     public ClaimResult claim(BlockPos controllerPos, List<Claim> requested) {
         BlockPos immutableControllerPos = controllerPos.immutable();
         List<Claim> normalized = requested.stream().distinct().toList();

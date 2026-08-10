@@ -11,6 +11,7 @@ import cn.howxu.mmcr.internal.command.ReloadCommand;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.event.StructureDirtyEvents;
+import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.network.PktMachineAppearancePayload;
 import cn.howxu.mmcr.internal.network.PktControllerSpecsPayload;
@@ -72,6 +73,8 @@ public class MMCR {
         NeoForge.EVENT_BUS.addListener(StructureDirtyEvents::onFluidPlaced);
         NeoForge.EVENT_BUS.addListener(StructureDirtyEvents::onBlockBroken);
         NeoForge.EVENT_BUS.addListener(StructureDirtyEvents::onChunkUnloaded);
+        NeoForge.EVENT_BUS.addListener(SharedIoEvents::onLevelTick);
+        NeoForge.EVENT_BUS.addListener(SharedIoEvents::onLevelUnload);
         NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedInEvent event) -> {
             if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
                 cn.howxu.mmcr.internal.network.ControllerSpecSync.sendTo(player);
