@@ -31,6 +31,7 @@ public final class FactoryRecipeScheduler {
     private final List<Lane> lanes = new ArrayList<>();
     private final List<FactoryRecipeThread> threads = new ArrayList<>();
     private final RecipeCraftingContextPool contextPool;
+    private long nextFactoryLaneId;
 
     public FactoryRecipeScheduler(int threadLimit) {
         this(threadLimit, RecipeCraftingContextPool.global());
@@ -232,7 +233,8 @@ public final class FactoryRecipeScheduler {
         while (threads.size() < threadLimit && availableParallelism() > 0) {
             List<MachineRecipe> availableCandidates = availableCandidates(candidates);
             if (availableCandidates.isEmpty()) break;
-            FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, contextPool == null ? this.contextPool : contextPool);
+            FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, contextPool == null ? this.contextPool : contextPool,
+                    "factory-" + nextFactoryLaneId++);
             threads.add(thread);
             if (!thread.searchAndStartRecipe(availableCandidates, availableParallelism(), structureVersion)) break;
         }

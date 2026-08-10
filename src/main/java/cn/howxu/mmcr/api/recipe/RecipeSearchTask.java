@@ -38,38 +38,15 @@ public final class RecipeSearchTask {
     }
 
     public RecipeSearchResult compute() {
-        @Nullable String bestFailureUnloc = null;
-        @Nullable RequirementFailure bestFailure = null;
-        float bestValidity = 0.0F;
         List<MachineRecipe> ordered = orderedCandidates();
-
-        for (int recipeIndex = 0; recipeIndex < ordered.size(); recipeIndex++) {
-            MachineRecipe recipe = ordered.get(recipeIndex);
+        for (MachineRecipe recipe : ordered) {
             ActiveMachineRecipe activeRecipe = new ActiveMachineRecipe(recipe, maxParallelism);
-            RecipeCraftingContext context = null;
-            context = contextPool.borrow(activeRecipe, controller);
-            if (activeRecipe.canStartCrafting(context)) {
-                LOG.info("[ParallelSearch] machine={} recipe={} recipeParallelized={} searchMaxParallelism={} selectedParallelism={} structureVersion={}",
-                        machineId,
-                        recipe.id(),
-                        recipe.isParallelized(),
-                        maxParallelism,
-                        activeRecipe.getParallelism(),
-                        structureVersion);
-                boolean conflictProne = hasMoreSpecificPendingInputCandidate(recipe, recipeIndex, ordered);
-                return RecipeSearchResult.success(activeRecipe, context, machineId, structureVersion, conflictProne);
-            }
-
-            float validity = validity(context.getLastFailureUnloc(), context.getLastRequirementFailure());
-            if (validity > bestValidity) {
-                bestValidity = validity;
-                bestFailureUnloc = context.getLastFailureUnloc();
-                bestFailure = context.getLastRequirementFailure();
-            }
-            contextPool.returnContext(context);
+            RecipeCraftingContext context = contextPool.borrow(activeRecipe, controller);
+            LOG.info("[ParallelSearch] machine={} recipe={} recipeParallelized={} searchMaxParallelism={} structureVersion={}",
+                    machineId, recipe.id(), recipe.isParallelized(), maxParallelism, structureVersion);
+            return RecipeSearchResult.success(activeRecipe, context, machineId, structureVersion, false);
         }
-
-        return RecipeSearchResult.failure(machineId, structureVersion, bestFailureUnloc, bestFailure, bestValidity);
+        return RecipeSearchResult.failure(machineId, structureVersion, null, null, 0.0F);
     }
 
     private List<MachineRecipe> orderedCandidates() {
@@ -78,27 +55,6 @@ public final class RecipeSearchTask {
                         .thenComparing(Comparator.comparingInt(MachineRecipe::inputRequirementCount).reversed())
                         .thenComparing(MachineRecipe::id))
                 .toList();
-    }
-
-    private boolean hasMoreSpecificPendingInputCandidate(MachineRecipe selectedRecipe,
-                                                         int selectedRecipeIndex,
-                                                         List<MachineRecipe> ordered) {
-        for (int i = 0; i < selectedRecipeIndex; i++) {
-            MachineRecipe earlier = ordered.get(i);
-            if (earlier.priority() != selectedRecipe.priority()) continue;
-            if (earlier.inputRequirementCount() <= selectedRecipe.inputRequirementCount()) continue;
-            if (!earlier.hasOverlappingInputs(selectedRecipe)) continue;
-            ActiveMachineRecipe activeRecipe = new ActiveMachineRecipe(earlier, maxParallelism);
-            RecipeCraftingContext context = contextPool.borrow(activeRecipe, controller);
-            boolean missingInputs = !context.simulateInputs(earlier);
-            String failureUnloc = context.getLastFailureUnloc();
-            boolean outputAvailable = context.simulateOutputs(earlier);
-            contextPool.returnContext(context);
-            if (missingInputs && outputAvailable && RecipeCraftingContext.FAILURE_MISSING_INPUT.equals(failureUnloc)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     public static float validity(@Nullable String failureUnloc, @Nullable RequirementFailure failure) {

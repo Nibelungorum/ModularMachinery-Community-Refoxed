@@ -306,6 +306,18 @@ class FactoryRecipeSchedulerTest {
     }
 
     @Test
+    void factoryLaneIdsAreStableAndDistinct() throws Exception {
+        MachineControllerBlockEntity controller = controller(MMCR.id("factory_lane_id_machine"));
+        MachineRecipe recipe = parallelizedRecipe("factory_lane_id_recipe", 0);
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(3, new RecipeCraftingContextPool());
+
+        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 1, new RecipeCraftingContextPool());
+
+        assertThat(scheduler.allThreads()).extracting(FactoryRecipeThread::laneId)
+                .containsExactly("base", "factory-0", "factory-1");
+    }
+
+    @Test
     void factory_threads_prioritize_private_cache_and_invalidate_on_structure_change() throws Exception {
         MachineControllerBlockEntity controller = controller(MMCR.id("factory_cache_invalidation_machine"));
         MachineRecipe cached = recipe("factory_cache_invalidation_cached", 0);

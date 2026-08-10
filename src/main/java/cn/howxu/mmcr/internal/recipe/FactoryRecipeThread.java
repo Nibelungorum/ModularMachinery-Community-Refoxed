@@ -25,6 +25,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     private final boolean coreThread;
     private final boolean baseThread;
     private final String threadName;
+    private final String laneId;
     private final Set<MachineRecipe> recipeSet = new LinkedHashSet<>();
     private int idleTicks;
     private @Nullable MachineRecipe lastRecipe;
@@ -32,15 +33,21 @@ public final class FactoryRecipeThread extends RecipeThread {
     private long lastRecipeModifierSnapshotVersion = Long.MIN_VALUE;
 
     private FactoryRecipeThread(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool,
-                                 boolean coreThread, boolean baseThread, String threadName) {
+                                  boolean coreThread, boolean baseThread, String threadName) {
         super(controller, contextPool);
         this.coreThread = coreThread;
         this.baseThread = baseThread;
         this.threadName = threadName == null ? "" : threadName;
+        this.laneId = baseThread ? "base" : coreThread ? "core-" + this.threadName
+                : this.threadName.startsWith("factory-") ? this.threadName : "factory";
     }
 
     public static FactoryRecipeThread simple(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
-        return new FactoryRecipeThread(controller, contextPool, false, false, "");
+        return simple(controller, contextPool, "factory");
+    }
+
+    public static FactoryRecipeThread simple(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool, String laneId) {
+        return new FactoryRecipeThread(controller, contextPool, false, false, laneId);
     }
 
     public static FactoryRecipeThread base(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
@@ -71,18 +78,21 @@ public final class FactoryRecipeThread extends RecipeThread {
     public boolean isCoreThread() { return coreThread; }
     public boolean isBaseThread() { return baseThread; }
     public String threadName() { return threadName; }
+    @Override public String laneId() { return laneId; }
     public boolean isTimedOut() { return !baseThread && !coreThread && isIdle() && idleTicks >= IDLE_TIMEOUT_TICKS; }
     public void tickIdle() { idleTicks = isIdle() ? idleTicks + 1 : 0; }
 
-    @Override protected void onStarted() { idleTicks = 0; }
+    @Override protected void onStarted() {
+        idleTicks = 0;
+        if (activeRecipe != null && controller != null) {
+            rememberLastRecipe(activeRecipe.getRecipe(), controller.getStructureVersion(), controller.getModifierSnapshotVersion());
+        }
+    }
     @Override protected void onFinished() { idleTicks = 0; }
 
     @Override
     public boolean searchAndStartRecipe(List<MachineRecipe> candidates, int availableParallelism, long structureVersion) {
-        List<MachineRecipe> threadCandidates = candidatesFor(candidates);
-        if (!super.searchAndStartRecipe(threadCandidates, availableParallelism, structureVersion)) return false;
-        rememberLastRecipe(activeRecipe.getRecipe(), structureVersion, controller.getModifierSnapshotVersion());
-        return true;
+        return super.searchAndStartRecipe(candidatesFor(candidates), availableParallelism, structureVersion);
     }
 
     public boolean tryRestartLastRecipe(List<MachineRecipe> candidates, int availableParallelism,

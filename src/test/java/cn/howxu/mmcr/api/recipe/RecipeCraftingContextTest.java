@@ -44,6 +44,7 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.TreeMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -138,6 +139,26 @@ class RecipeCraftingContextTest {
 
         assertThat(context.simulateInputs(recipe)).isTrue();
         assertThat(context.commitInputs(recipe)).isTrue();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+    }
+
+    @Test
+    void sharedInputStartsOnlyTheParallelismThatCanBeCommitted() {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(10));
+        MachineControllerBlockEntity first = controllerWithComponents(input);
+        MachineControllerBlockEntity second = controllerWithComponents(input);
+        MachineRecipe recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "shared_start"),
+                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                20, List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)), true);
+
+        int firstParallel = new RecipeCraftingContext(first).commitStart(recipe, 8);
+        int secondParallel = new RecipeCraftingContext(second).commitStart(recipe, 8);
+
+        assertThat(firstParallel + secondParallel).isEqualTo(10);
         assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
     }
 
@@ -1007,6 +1028,7 @@ class RecipeCraftingContextTest {
             setField(BlockEntity.class, bus, "type", null);
             setField(BlockEntity.class, bus, "worldPosition", pos);
             setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
+            setField(cn.howxu.mmcr.internal.tile.IOPortBlockEntity.class, bus, "linkedControllers", new TreeMap<>(BlockPos::compareTo));
             setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
             return bus;
         } catch (ReflectiveOperationException e) {

@@ -419,6 +419,27 @@ public final class RecipeCraftingContext {
         return commitInputs(requirements);
     }
 
+    /**
+     * Rebuilds routes from live handlers and commits the largest viable start.
+     */
+    public int commitStart(MachineRecipe recipe, int requestedParallelism) {
+        if (recipe == null || requestedParallelism <= 0) return 0;
+        int parallelism = Math.max(0, Math.min(requestedParallelism, maxInputParallelism(recipe, requestedParallelism)));
+        while (parallelism > 0) {
+            ActiveMachineRecipe activeRecipe = new ActiveMachineRecipe(recipe, parallelism);
+            if (canStartCrafting(activeRecipe)) {
+                int granted = activeRecipe.getParallelism();
+                if (simulateInputs(recipe, granted)
+                        && simulateOutputs(recipe, granted)
+                        && startCrafting(recipe, granted)) {
+                    return granted;
+                }
+            }
+            parallelism--;
+        }
+        return 0;
+    }
+
     public boolean canStartCrafting(ActiveMachineRecipe activeRecipe) {
         if (activeRecipe == null || activeRecipe.getRecipe() == null) return false;
         int parallelism = ParallelRecipeCalculator.maxStartableParallelism(

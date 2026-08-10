@@ -7,7 +7,9 @@ import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerLevel;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +32,8 @@ public abstract class RecipeThread {
     protected @Nullable RecipeCraftingContext context;
     protected Status status = Status.IDLE;
     protected @Nullable String lastFailureUnloc;
+    private boolean startPending;
+    private @Nullable RecipeCraftingContext pendingStartContext;
 
     protected RecipeThread(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
         this.controller = controller;
@@ -49,6 +53,9 @@ public abstract class RecipeThread {
         }
         ActiveMachineRecipe next = result.activeRecipe();
         RecipeCraftingContext nextContext = result.context();
+        if (controller.getLevel() instanceof ServerLevel serverLevel && controller.resourceDomain() != null) {
+            return requestStart(serverLevel, controller.resourceDomain(), next, nextContext, structureVersion);
+        }
         int searchedParallelism = next.getParallelism();
         if (!next.canStartCrafting(nextContext) || !next.start(nextContext)) {
             contextPool.returnContext(nextContext);
@@ -76,7 +83,48 @@ public abstract class RecipeThread {
         return true;
     }
 
+    private boolean requestStart(ServerLevel level, cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.ResourceDomain domain,
+                                 ActiveMachineRecipe next, RecipeCraftingContext nextContext, long structureVersion) {
+        startPending = true;
+        pendingStartContext = nextContext;
+        SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.StartRequest(
+                domain,
+                new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
+                structureVersion,
+                next.getMaxParallelism(),
+                requested -> {
+                    if (!startPending) return 0;
+                    int granted = nextContext.commitStart(next.getRecipe(), requested);
+                    if (granted <= 0) {
+                        startPending = false;
+                        pendingStartContext = null;
+                        contextPool.returnContext(nextContext);
+                    }
+                    return granted;
+                },
+                granted -> {
+                    startPending = false;
+                    pendingStartContext = null;
+                    next.setParallelism(granted);
+                    next.refreshTotalTick(nextContext);
+                    activeRecipe = next;
+                    context = nextContext;
+                    status = Status.WORKING;
+                    lastFailureUnloc = null;
+                    onStarted();
+                },
+                () -> startPending && controller != null && controller.resourceDomain() != null && controller.resourceDomain().equals(domain),
+                controller::getStructureVersion
+        ));
+        return true;
+    }
+
     public void tick() {
+        if (startPending && pendingStartContext != null && !pendingStartContext.isStructureVersionCurrent()) {
+            contextPool.returnContext(pendingStartContext);
+            pendingStartContext = null;
+            startPending = false;
+        }
         if (activeRecipe == null || context == null) return;
         ActiveMachineRecipe.TickStatus tickStatus = activeRecipe.tick(context);
         if (tickStatus == ActiveMachineRecipe.TickStatus.FINISHED) {
@@ -95,9 +143,12 @@ public abstract class RecipeThread {
 
     public void invalidate() {
         if (context != null) contextPool.returnContext(context);
+        if (pendingStartContext != null) contextPool.returnContext(pendingStartContext);
         activeRecipe = null;
         context = null;
+        pendingStartContext = null;
         status = Status.IDLE;
+        startPending = false;
     }
 
     public void bindController(MachineControllerBlockEntity controller) {
@@ -110,10 +161,12 @@ public abstract class RecipeThread {
 
     protected abstract void onStarted();
     protected abstract void onFinished();
+    protected String laneId() { return "base"; }
 
     public @Nullable ActiveMachineRecipe getActiveRecipe() { return activeRecipe; }
     public Status getStatus() { return status; }
     public @Nullable String getLastFailureUnloc() { return lastFailureUnloc; }
-    public boolean isIdle() { return activeRecipe == null && context == null; }
+    public boolean isIdle() { return !startPending && activeRecipe == null && context == null; }
+    public boolean isStartPending() { return startPending; }
     public int usedParallelism() { return activeRecipe == null ? 0 : activeRecipe.getParallelism(); }
 }
