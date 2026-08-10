@@ -7,6 +7,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.random.WeightedList;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.flag.FeatureFlagSet;
 import net.minecraft.world.TickRateManager;
 import net.minecraft.world.attribute.EnvironmentAttributeSystem;
@@ -192,6 +193,7 @@ public final class LevelStub {
         @Override public boolean hasChunk(int chunkX, int chunkZ) {
             return loadedChunks == null || loadedChunks.contains(chunkKey(chunkX, chunkZ));
         }
+        @Override public RandomSource getRandom() { return RandomSource.create(0L); }
         @Override public int getSeaLevel() { return 0; }
         @Override public FeatureFlagSet enabledFeatures() { return FeatureFlagSet.of(); }
         @Override public Holder<net.minecraft.world.level.biome.Biome> getUncachedNoiseBiome(int x, int y, int z) { return null; }
