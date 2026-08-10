@@ -171,6 +171,10 @@ public final class RecipeCraftingContext {
     }
 
     private boolean simulateInputs(List<MachineRequirement> requirements) {
+        return simulateInputs(requirements, null);
+    }
+
+    private boolean simulateInputs(List<MachineRequirement> requirements, @Nullable ActiveMachineRecipe.InputConsumptionPlan plan) {
         lastFailureUnloc = null;
         lastRequirementFailure = null;
         itemInputRoutes = emptyItemInputRoutes(requirements.size());
@@ -178,6 +182,11 @@ public final class RecipeCraftingContext {
 
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
+            if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT) {
+                boolean consume = plan == null ? item.consumeChance() > 0F : plan.consumes(requirementIndex);
+                if (!simulateItemInput(requirementIndex, item, consume)) return false;
+                continue;
+            }
             if (requirement.io() == RecipeModifier.IOType.INPUT && !requirement.simulate(this, requirementIndex)) return false;
         }
         return true;
@@ -242,7 +251,8 @@ public final class RecipeCraftingContext {
             for (MachineRequirement requirement : requirements) {
                 if (requirement instanceof ItemRequirement item) {
                     if (item.io() == RecipeModifier.IOType.INPUT) {
-                        scaled.add(new ItemRequirement(item.io(), item.item(), Math.multiplyExact(item.count(), parallelism), item.stack(), item.chance(), item.tags(), item.components(), item.consumeChance()));
+                        int count = item.consumeChance() <= 0F ? item.count() : Math.multiplyExact(item.count(), parallelism);
+                        scaled.add(new ItemRequirement(item.io(), item.item(), count, item.stack(), item.chance(), item.tags(), item.components(), item.consumeChance()));
                     } else {
                         ItemStack stack = item.stack().copy();
                         stack.setCount(Math.multiplyExact(stack.getCount(), parallelism));
@@ -269,15 +279,31 @@ public final class RecipeCraftingContext {
     }
 
     public boolean simulateItemInput(int requirementIndex, ItemRequirement item) {
-        if (!shouldProduce(item.consumeChance())) {
-            itemInputRoutes.set(requirementIndex, new ItemInputRoute(List.of()));
-            return true;
-        }
+        return simulateItemInput(requirementIndex, item, item.consumeChance() > 0F);
+    }
+
+    private boolean simulateItemInput(int requirementIndex, ItemRequirement item, boolean consume) {
         List<ItemInputState> itemStates = itemInputStates(item.tags());
         List<ItemBusBlockEntity> taggedOut = excludedLiveComponents(ItemBusBlockEntity.class, IOType.INPUT, item.tags());
         List<ItemBusBlockEntity> itemHatches = liveComponents(ItemBusBlockEntity.class, IOType.INPUT, item.tags());
-        List<ItemInputTransfer> transfers = new ArrayList<>();
         MachineIngredient.ItemIngredient ingredient = new MachineIngredient.ItemIngredient(item.item(), item.count(), item.components(), item.consumeChance());
+        if (!consume) {
+            int available = 0;
+            List<ItemBusBlockEntity> matched = new ArrayList<>();
+            for (ItemInputState state : itemStates) {
+                if (!state.matches(ingredient)) continue;
+                available += state.stack().getCount();
+                if (state.bus() != null) matched.add(state.bus());
+            }
+            if (available >= item.count()) {
+                itemInputRoutes.set(requirementIndex, new ItemInputRoute(List.of()));
+                return true;
+            }
+            setFailure(FAILURE_MISSING_INPUT, buildMissingInputFailure(
+                    requirementIndex, item.count(), Math.max(0, item.count() - available), itemHatches, matched, taggedOut));
+            return false;
+        }
+        List<ItemInputTransfer> transfers = new ArrayList<>();
         int remaining = item.count();
         List<ItemBusBlockEntity> matched = new ArrayList<>();
         for (ItemInputState state : itemStates) {
@@ -417,10 +443,27 @@ public final class RecipeCraftingContext {
     }
 
     public boolean startCrafting(MachineRecipe recipe, int parallelism) {
+        return startCrafting(recipe, parallelism, null);
+    }
+
+    public boolean startCrafting(MachineRecipe recipe, int parallelism, ActiveMachineRecipe.InputConsumptionPlan plan) {
         List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism);
-        if (!simulateInputs(requirements)) return false;
+        if (!simulateInputs(requirements, plan)) return false;
         if (!simulateOutputs(requirements)) return false;
         return commitInputs(requirements);
+    }
+
+    public ActiveMachineRecipe.InputConsumptionPlan createInputConsumptionPlan(MachineRecipe recipe, int parallelism) {
+        List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism);
+        List<Integer> consumed = new ArrayList<>();
+        for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
+            MachineRequirement requirement = requirements.get(requirementIndex);
+            if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT
+                    && shouldConsume(item.consumeChance())) {
+                consumed.add(requirementIndex);
+            }
+        }
+        return new ActiveMachineRecipe.InputConsumptionPlan(consumed);
     }
 
     public boolean canStartCrafting(ActiveMachineRecipe activeRecipe) {
@@ -532,6 +575,13 @@ public final class RecipeCraftingContext {
     }
 
     private boolean shouldProduce(float chance) {
+        if (chance >= 1F) return true;
+        if (chance <= 0F) return false;
+        var level = controller.getLevel();
+        return (level == null ? Math.random() : level.getRandom().nextFloat()) < chance;
+    }
+
+    private boolean shouldConsume(float chance) {
         if (chance >= 1F) return true;
         if (chance <= 0F) return false;
         var level = controller.getLevel();
@@ -694,6 +744,18 @@ public final class RecipeCraftingContext {
             if (!(requirement instanceof ItemRequirement item) || item.io() != RecipeModifier.IOType.INPUT) continue;
             ItemInputRoute route = requirementIndex < itemInputRoutes.size() ? itemInputRoutes.get(requirementIndex) : null;
             if (route == null) return new RequirementFailure(requirementIndex, RequirementFailure.Kind.MISSING_INPUT, item.count(), 0);
+            if (route.transfers().isEmpty()) {
+                int available = 0;
+                MachineIngredient.ItemIngredient ingredient = new MachineIngredient.ItemIngredient(
+                        item.item(), item.count(), item.components(), item.consumeChance());
+                for (ItemInputState state : itemInputStates(item.tags())) {
+                    if (state.matches(ingredient)) available += state.stack().getCount();
+                }
+                if (available < item.count()) {
+                    return new RequirementFailure(requirementIndex, RequirementFailure.Kind.MISSING_INPUT, item.count(), available);
+                }
+                continue;
+            }
             int available = 0;
             for (ItemInputTransfer transfer : route.transfers()) {
                 ItemInputState state = itemInputState(states, transfer);
@@ -1041,12 +1103,16 @@ public final class RecipeCraftingContext {
         }
 
         private int extract(MachineIngredient.ItemIngredient ingredient, int remaining, List<ItemInputTransfer> transfers) {
-            if (remaining <= 0 || !ingredient.item().test(stack) || !ingredient.components().matches(stack)) return remaining;
+            if (remaining <= 0 || !matches(ingredient)) return remaining;
             int taken = Math.min(remaining, stack.getCount());
             if (taken <= 0) return remaining;
             transfers.add(new ItemInputTransfer(handler, slot, ingredient, taken));
             stack.shrink(taken);
             return remaining - taken;
+        }
+
+        private boolean matches(MachineIngredient.ItemIngredient ingredient) {
+            return ingredient.item().test(stack) && ingredient.components().matches(stack);
         }
 
         private ItemBusBlockEntity bus() {
