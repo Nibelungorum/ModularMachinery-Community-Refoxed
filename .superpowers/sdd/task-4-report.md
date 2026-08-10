@@ -67,3 +67,9 @@ BUILD SUCCESSFUL in 7s
 
 - CodeGraph is indexed only for the parent worktree, not this worktree. Its event API context was used alongside direct worktree reads; source-specific checks were performed against this worktree.
 - The targeted Gradle test task emits pre-existing deprecation warnings when it recompiles the full test source set; the final cached run had no warning output.
+
+## Important Review Fix: Discriminating Cursor Coverage
+
+- Updated only `SharedIoCoordinatorTest` production-adjacent coverage. The cross-tick start test now leaves B pending after A alone succeeds in the first pass, then proves the next successful order is B, A. A cursor reset therefore fails.
+- The independent-cursor test now seeds start, tick, and finish cursors at A, B, and C respectively. Its following pass expects B, C, A; C, A, B; and A, B, C, so sharing any two cursor maps fails.
+- `./gradlew test --tests cn.howxu.mmcr.internal.multiblock.SharedIoCoordinatorTest --no-daemon`: `BUILD SUCCESSFUL in 11s` (4 tests completed).
