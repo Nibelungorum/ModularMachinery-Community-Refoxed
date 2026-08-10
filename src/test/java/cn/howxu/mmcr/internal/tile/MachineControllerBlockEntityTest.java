@@ -612,6 +612,7 @@ class MachineControllerBlockEntityTest {
 
         assertThat(shared.linkedControllerPositions()).containsExactly(secondControllerPos);
         assertThat(fixture.second().isFormed()).isTrue();
+        assertThat(fixture.second().getComponents()).extracting(ProcessingComponent::getContainer).containsExactly(shared);
         assertThat(fixture.second().hasLinkedPort(shared.getBlockPos())).isTrue();
         assertThat(StructureClaimRegistry.get(fixture.level()).ownersOf(sharedPortPos)).containsExactly(secondControllerPos);
         assertThat(fixture.second().resourceDomain().controllers()).containsExactly(secondControllerPos);
