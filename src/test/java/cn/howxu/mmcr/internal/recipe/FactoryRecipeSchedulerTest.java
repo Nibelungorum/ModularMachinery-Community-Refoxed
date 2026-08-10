@@ -399,6 +399,42 @@ class FactoryRecipeSchedulerTest {
     }
 
     @Test
+    void invalidatedSharedStartCannotCommitOrReplaceANewerPendingStart() throws Exception {
+        Items.IRON_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 64).build());
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 1));
+        BlockPos controllerPos = new BlockPos(0, 64, 0);
+        MachineControllerBlockEntity controller = controllerWithInput(MMCR.id("factory_stale_start"), controllerPos, input);
+        ServerLevel level = serverLevel(List.of(controller, input));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, input, "level", level);
+        StructureClaimRegistry registry = StructureClaimRegistry.get(level);
+        registry.claim(controllerPos, List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
+                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)));
+        StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
+        MachineRecipe oldRecipe = new MachineRecipe(MMCR.id("factory_stale_start_old"), MMCR.id("factory_stale_start"),
+                20, List.of(), List.of(), List.of(), 0, 0, false, List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)), true);
+        MachineRecipe newRecipe = new MachineRecipe(MMCR.id("factory_stale_start_new"), MMCR.id("factory_stale_start"),
+                20, List.of(), List.of(), List.of(), 0, 0, false, List.of(), List.of(), true);
+        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, pool);
+
+        assertThat(thread.searchAndStartRecipe(List.of(oldRecipe), 1, controller.getStructureVersion())).isTrue();
+        thread.invalidate();
+        assertThat(thread.searchAndStartRecipe(List.of(newRecipe), 1, controller.getStructureVersion())).isTrue();
+
+        SharedIoCoordinator.get(level).resolve(domain);
+
+        assertThat(thread.getActiveRecipe()).isNotNull();
+        assertThat(thread.getActiveRecipe().getRecipe()).isSameAs(newRecipe);
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+        SharedIoCoordinator.discard(level);
+        StructureClaimRegistry.discard(level);
+    }
+
+    @Test
     void factory_threads_prioritize_private_cache_and_invalidate_on_structure_change() throws Exception {
         MachineControllerBlockEntity controller = controller(MMCR.id("factory_cache_invalidation_machine"));
         MachineRecipe cached = recipe("factory_cache_invalidation_cached", 0);

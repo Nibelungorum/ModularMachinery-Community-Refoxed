@@ -36,3 +36,9 @@ Result: `BUILD SUCCESSFUL` with 62 tests completed.
 
 - `./gradlew test --tests cn.howxu.mmcr.api.recipe.RecipeCraftingContextTest --tests cn.howxu.mmcr.internal.recipe.FactoryRecipeSchedulerTest --no-daemon`: `BUILD SUCCESSFUL`, 64 tests completed.
 - `./gradlew test --tests cn.howxu.mmcr.api.recipe.RecipeSearchTaskTest --no-daemon`: `BUILD SUCCESSFUL`, 6 tests completed.
+
+## Important Review Follow-up: Stale Start Requests
+
+- Assigned every pending shared start a monotonically increasing token and bound the queued validator, transaction, committer, and pending cleanup to both that token and the exact borrowed context instance.
+- Invalidating a pending start now makes its queued request invalid at the coordinator boundary. A same-structure-version replacement request cannot be cleared, committed, or replaced by its stale predecessor.
+- Added direct scheduler integration coverage: queue an input-consuming request, invalidate it, queue a no-input replacement at the same structure version, then resolve. Only the replacement installs and the old transaction leaves the input untouched.

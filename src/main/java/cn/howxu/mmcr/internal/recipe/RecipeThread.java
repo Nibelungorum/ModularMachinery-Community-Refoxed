@@ -34,6 +34,8 @@ public abstract class RecipeThread {
     protected @Nullable String lastFailureUnloc;
     private boolean startPending;
     private @Nullable RecipeCraftingContext pendingStartContext;
+    private long nextStartToken;
+    private long pendingStartToken;
 
     protected RecipeThread(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
         this.controller = controller;
@@ -94,26 +96,27 @@ public abstract class RecipeThread {
 
     private boolean requestStart(ServerLevel level, cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.ResourceDomain domain,
                                  ActiveMachineRecipe next, RecipeCraftingContext nextContext, long structureVersion) {
+        long startToken = ++nextStartToken;
         startPending = true;
         pendingStartContext = nextContext;
+        pendingStartToken = startToken;
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.StartRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
                 structureVersion,
                 next.getMaxParallelism(),
                 requested -> {
-                    if (!startPending) return 0;
+                    if (!isPendingStart(startToken, nextContext)) return 0;
                     int granted = nextContext.commitStart(next.getRecipe(), requested);
                     if (granted <= 0) {
-                        startPending = false;
-                        pendingStartContext = null;
+                        clearPendingStart(startToken, nextContext);
                         contextPool.returnContext(nextContext);
                     }
                     return granted;
                 },
                 granted -> {
-                    startPending = false;
-                    pendingStartContext = null;
+                    if (!isPendingStart(startToken, nextContext)) return;
+                    clearPendingStart(startToken, nextContext);
                     next.setParallelism(granted);
                     next.refreshTotalTick(nextContext);
                     activeRecipe = next;
@@ -122,17 +125,29 @@ public abstract class RecipeThread {
                     lastFailureUnloc = null;
                     onStarted();
                 },
-                () -> startPending && controller != null && controller.resourceDomain() != null && controller.resourceDomain().equals(domain),
+                () -> isPendingStart(startToken, nextContext) && controller != null
+                        && controller.resourceDomain() != null && controller.resourceDomain().equals(domain),
                 controller::getStructureVersion
         ));
         return true;
     }
 
+    private boolean isPendingStart(long startToken, RecipeCraftingContext startContext) {
+        return startPending && pendingStartToken == startToken && pendingStartContext == startContext;
+    }
+
+    private void clearPendingStart(long startToken, RecipeCraftingContext startContext) {
+        if (!isPendingStart(startToken, startContext)) return;
+        startPending = false;
+        pendingStartContext = null;
+        pendingStartToken = 0L;
+    }
+
     public void tick() {
         if (startPending && pendingStartContext != null && !pendingStartContext.isStructureVersionCurrent()) {
-            contextPool.returnContext(pendingStartContext);
-            pendingStartContext = null;
-            startPending = false;
+            RecipeCraftingContext pendingContext = pendingStartContext;
+            clearPendingStart(pendingStartToken, pendingContext);
+            contextPool.returnContext(pendingContext);
         }
         if (activeRecipe == null || context == null) return;
         ActiveMachineRecipe.TickStatus tickStatus = activeRecipe.tick(context);
@@ -152,12 +167,14 @@ public abstract class RecipeThread {
 
     public void invalidate() {
         if (context != null) contextPool.returnContext(context);
-        if (pendingStartContext != null) contextPool.returnContext(pendingStartContext);
+        if (pendingStartContext != null) {
+            RecipeCraftingContext pendingContext = pendingStartContext;
+            clearPendingStart(pendingStartToken, pendingContext);
+            contextPool.returnContext(pendingContext);
+        }
         activeRecipe = null;
         context = null;
-        pendingStartContext = null;
         status = Status.IDLE;
-        startPending = false;
     }
 
     public void bindController(MachineControllerBlockEntity controller) {
