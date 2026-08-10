@@ -32,3 +32,16 @@ Status: fixed.
 Verification:
 - `./gradlew test --tests cn.howxu.mmcr.internal.multiblock.SharedIoCoordinatorTest --tests cn.howxu.mmcr.api.recipe.RecipeCraftingContextTest --tests cn.howxu.mmcr.api.recipe.ActiveMachineRecipeTest --no-daemon`
 - Result: `BUILD SUCCESSFUL` (17 actionable tasks: 2 executed, 15 up-to-date).
+
+## Final Review Follow-up
+
+Status: fixed.
+
+- `RecipeThread` now records the explicit `finishPending` state after a successful final `commitIoTick`. While it is set, the thread observes the finish retry cooldown and enqueues only a `FinishRequest`; it never repeats the final tick's IO commit.
+- Output commits rebuild live output routes before committing, so a shared handler that becomes full after planning blocks correctly.
+- Added a `RecipeThread -> SharedIoCoordinator -> ResourceDomain` regression with real item input, energy, and output ports. It proves blocked output consumes the final-tick input and 10 FE once, then succeeds after cooldown without a second consumption.
+- Added a coordinator regression proving a successful tick callback that enqueues a finish request resolves that finish in the same domain pass.
+
+Verification:
+- `./gradlew test --tests cn.howxu.mmcr.internal.multiblock.SharedIoCoordinatorTest --tests cn.howxu.mmcr.api.recipe.RecipeCraftingContextTest --tests cn.howxu.mmcr.internal.recipe.FactoryRecipeSchedulerTest --no-daemon`
+- Result: `BUILD SUCCESSFUL` (17 actionable tasks: 1 executed, 16 up-to-date).

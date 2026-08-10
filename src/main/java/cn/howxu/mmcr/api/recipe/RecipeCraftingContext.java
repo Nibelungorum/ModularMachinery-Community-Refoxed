@@ -522,7 +522,7 @@ public final class RecipeCraftingContext {
     }
 
     public boolean finishCrafting(MachineRecipe recipe, int parallelism) {
-        return commitOutputs(scaledRequirements(recipe, parallelism));
+        return commitOutputs(recipe, parallelism);
     }
 
     public boolean commitInputs(MachineRecipe recipe) {
@@ -562,7 +562,8 @@ public final class RecipeCraftingContext {
     }
 
     public boolean commitOutputs(MachineRecipe recipe) {
-        return commitOutputs(recipe.runtimeRequirements(structureModifiers));
+        List<MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
+        return simulateOutputs(requirements) && commitOutputs(requirements);
     }
 
     public boolean commitOutputs(MachineRecipe recipe, int parallelism) {

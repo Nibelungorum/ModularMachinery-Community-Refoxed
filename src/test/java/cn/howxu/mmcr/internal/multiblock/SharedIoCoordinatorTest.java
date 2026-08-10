@@ -98,6 +98,25 @@ class SharedIoCoordinatorTest {
     }
 
     @Test
+    void finishEnqueuedByTickCommitRunsInTheSameDomainPass() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = new StructureClaimRegistry.ResourceDomain(9L, 1L, Set.of(A));
+        List<String> committed = new ArrayList<>();
+        SharedIoCoordinator.LaneKey lane = new SharedIoCoordinator.LaneKey(A, "base");
+
+        coordinator.enqueue(new SharedIoCoordinator.TickRequest(domain, lane, 1L, () -> {
+            committed.add("tick");
+            coordinator.enqueue(new SharedIoCoordinator.FinishRequest(domain, lane, 1L,
+                    () -> { committed.add("finish"); return true; }, () -> true, () -> 1L));
+            return true;
+        }, () -> true, () -> 1L));
+
+        coordinator.resolve(domain);
+
+        assertThat(committed).containsExactly("tick", "finish");
+    }
+
+    @Test
     void staleGenerationNeverCallsTheCommitter() {
         SharedIoCoordinator coordinator = new SharedIoCoordinator();
         AtomicBoolean committed = new AtomicBoolean();

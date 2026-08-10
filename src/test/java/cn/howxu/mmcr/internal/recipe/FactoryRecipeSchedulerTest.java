@@ -12,12 +12,16 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
+import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
+import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
@@ -435,6 +439,69 @@ class FactoryRecipeSchedulerTest {
     }
 
     @Test
+    void sharedFinalOutputRetryDoesNotRepeatItsLastTickIo() throws Exception {
+        Items.IRON_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 64).build());
+        Items.COBBLESTONE.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 64).build());
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 2));
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(2, 64, 0));
+        for (int slot = 0; slot < output.getItemStackHandler(null).getSlots(); slot++) {
+            output.getItemStackHandler(null).setStackInSlot(slot, new ItemStack(Items.COBBLESTONE, 64));
+        }
+        EnergyInputHatchBlockEntity energy = energyInputHatch(new BlockPos(3, 64, 0));
+        energy.getMutableEnergyStorage(null).receiveEnergy(20, false);
+        BlockPos controllerPos = new BlockPos(0, 64, 0);
+        MachineControllerBlockEntity controller = controllerWithComponents(MMCR.id("shared_finish_retry"), controllerPos, input, output, energy);
+        ServerLevel level = serverLevel(List.of(controller, input, output, energy));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, input, "level", level);
+        setField(BlockEntity.class, output, "level", level);
+        setField(BlockEntity.class, energy, "level", level);
+        StructureClaimRegistry registry = StructureClaimRegistry.get(level);
+        registry.claim(controllerPos, List.of(
+                new StructureClaimRegistry.Claim(input.getBlockPos(), cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED),
+                new StructureClaimRegistry.Claim(output.getBlockPos(), cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED),
+                new StructureClaimRegistry.Claim(energy.getBlockPos(), cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)
+        ));
+        StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
+        setField(MachineControllerBlockEntity.class, controller, "resourceDomain", domain);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("shared_finish_retry_recipe"), MMCR.id("shared_finish_retry"),
+                1, List.of(), List.of(), List.of(), 0, 0, false, List.of(), List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
+                new EnergyRequirement(10),
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.IRON_INGOT))
+        ));
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
+        active.setTick(active.getTotalTick() - 1);
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 1));
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+        thread.setActiveRecipeForTesting(active);
+        setField(RecipeThread.class, thread, "context", new RecipeCraftingContext(controller));
+
+        assertThat(new RecipeCraftingContext(controller).commitOutputs(recipe, 1)).isFalse();
+        thread.tick();
+        SharedIoCoordinator.get(level).resolve(domain);
+
+        assertThat(thread.getStatus()).isEqualTo(RecipeThread.Status.WAITING);
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+
+        output.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
+        ((TestServerLevel) level).gameTime = 10L;
+        thread.tick();
+        SharedIoCoordinator.get(level).resolve(domain);
+
+        assertThat(thread.isIdle()).isTrue();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getItem()).isEqualTo(Items.IRON_INGOT);
+        SharedIoCoordinator.discard(level);
+        StructureClaimRegistry.discard(level);
+    }
+
+    @Test
     void factory_threads_prioritize_private_cache_and_invalidate_on_structure_change() throws Exception {
         MachineControllerBlockEntity controller = controller(MMCR.id("factory_cache_invalidation_machine"));
         MachineRecipe cached = recipe("factory_cache_invalidation_cached", 0);
@@ -526,12 +593,19 @@ class FactoryRecipeSchedulerTest {
     }
 
     private static MachineControllerBlockEntity controllerWithInput(Identifier machineId, BlockPos pos,
-                                                                     ItemInputBusBlockEntity input) throws Exception {
+                                                                      ItemInputBusBlockEntity input) throws Exception {
+        return controllerWithComponents(machineId, pos, input);
+    }
+
+    private static MachineControllerBlockEntity controllerWithComponents(Identifier machineId, BlockPos pos,
+                                                                           BlockEntity... components) throws Exception {
         MachineControllerBlockEntity controller = controller(machineId);
         setField(BlockEntity.class, controller, "worldPosition", pos);
-        setField(MachineControllerBlockEntity.class, controller, "components", new ArrayList<>(List.of(
-                new ProcessingComponent(new MachineComponent(cn.howxu.mmcr.registry.PortKinds.ITEM_INPUT,
-                        cn.howxu.mmcr.util.IOType.INPUT), input, input.getBlockPos(), BlockPos.ZERO, (String) null))));
+        List<ProcessingComponent> processingComponents = new ArrayList<>();
+        for (BlockEntity component : components) {
+            processingComponents.add(new ProcessingComponent(componentFor(component), component, component.getBlockPos(), BlockPos.ZERO, (String) null));
+        }
+        setField(MachineControllerBlockEntity.class, controller, "components", processingComponents);
         return controller;
     }
 
@@ -544,8 +618,51 @@ class FactoryRecipeSchedulerTest {
         setField(BlockEntity.class, bus, "worldPosition", pos);
         setField(BlockEntity.class, bus, "blockState", Blocks.CHEST.defaultBlockState());
         setField(cn.howxu.mmcr.internal.tile.IOPortBlockEntity.class, bus, "linkedControllers", new TreeMap<>(BlockPos::compareTo));
-        setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
+        setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6) {
+            @Override protected void onContentsChanged(int slot) { }
+        });
         return bus;
+    }
+
+    private static ItemOutputBusBlockEntity itemOutputBus(BlockPos pos) throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        ItemOutputBusBlockEntity bus = (ItemOutputBusBlockEntity) ((sun.misc.Unsafe) unsafeField.get(null))
+                .allocateInstance(ItemOutputBusBlockEntity.class);
+        setField(BlockEntity.class, bus, "type", null);
+        setField(BlockEntity.class, bus, "worldPosition", pos);
+        setField(BlockEntity.class, bus, "blockState", Blocks.CHEST.defaultBlockState());
+        setField(cn.howxu.mmcr.internal.tile.IOPortBlockEntity.class, bus, "linkedControllers", new TreeMap<>(BlockPos::compareTo));
+        setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6) {
+            @Override protected void onContentsChanged(int slot) { }
+        });
+        return bus;
+    }
+
+    private static EnergyInputHatchBlockEntity energyInputHatch(BlockPos pos) throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        EnergyInputHatchBlockEntity hatch = (EnergyInputHatchBlockEntity) ((sun.misc.Unsafe) unsafeField.get(null))
+                .allocateInstance(EnergyInputHatchBlockEntity.class);
+        setField(BlockEntity.class, hatch, "type", null);
+        setField(BlockEntity.class, hatch, "worldPosition", pos);
+        setField(BlockEntity.class, hatch, "blockState", Blocks.CHEST.defaultBlockState());
+        setField(cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity.class, hatch, "storage",
+                new net.neoforged.neoforge.energy.EnergyStorage(100, 100, 100));
+        return hatch;
+    }
+
+    private static MachineComponent componentFor(BlockEntity component) {
+        if (component instanceof ItemInputBusBlockEntity) {
+            return new MachineComponent(cn.howxu.mmcr.registry.PortKinds.ITEM_INPUT, cn.howxu.mmcr.util.IOType.INPUT);
+        }
+        if (component instanceof ItemOutputBusBlockEntity) {
+            return new MachineComponent(cn.howxu.mmcr.registry.PortKinds.ITEM_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT);
+        }
+        if (component instanceof EnergyInputHatchBlockEntity) {
+            return new MachineComponent(cn.howxu.mmcr.registry.PortKinds.ENERGY_INPUT, cn.howxu.mmcr.util.IOType.INPUT);
+        }
+        throw new IllegalArgumentException("Unsupported test component: " + component.getClass().getSimpleName());
     }
 
     private static ServerLevel serverLevel(List<BlockEntity> blockEntities) throws Exception {
@@ -567,6 +684,7 @@ class FactoryRecipeSchedulerTest {
     private static final class TestServerLevel extends ServerLevel {
         private Map<BlockPos, BlockState> blocks;
         private Map<BlockPos, BlockEntity> blockEntities;
+        private long gameTime;
 
         private TestServerLevel() {
             super(null, null, null, null, null, null, false, 0L, List.of(), false);
@@ -579,6 +697,7 @@ class FactoryRecipeSchedulerTest {
         @Override public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) { }
         @Override public boolean hasChunk(int chunkX, int chunkZ) { return true; }
         @Override public void invalidateCapabilities(BlockPos pos) { }
+        @Override public long getGameTime() { return gameTime; }
     }
 
     private static final class FakeLane implements FactoryRecipeScheduler.Lane {
