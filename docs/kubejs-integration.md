@@ -20,6 +20,24 @@ event.recipes.mmcr.machineRecipe('example:blazing_tool')
     .build()
 ```
 
+输入组件和输出组件使用不同的 JSON 语法。输入对象是用于匹配已有物品的组件谓词 grammar，输出对象则是要写入生成物品的原生 `ItemStack` 精确组件值 map：
+
+```js
+event.recipes.mmcr.machineRecipe('example:sharp_sword_upgrade')
+    .machine('mmcr:alloy_furnace')
+    .itemInputWithComponents('minecraft:diamond_sword', 1, {
+        'minecraft:enchantments': {
+            type: 'map',
+            values: { levels: { type: 'map', values: { 'minecraft:sharpness': { type: 'range', min: 3, max: 3 } } } }
+        }
+    })
+    .itemOutputWithComponents('minecraft:diamond_sword', 1, {
+        'minecraft:custom_name': { text: 'Better钻石剑' },
+        'minecraft:enchantments': { levels: { 'minecraft:sharpness': 4 } }
+    })
+    .build()
+```
+
 可用方法如下：
 
 | 方法 | 作用 |
@@ -30,6 +48,7 @@ event.recipes.mmcr.machineRecipe('example:blazing_tool')
 | `notConsumableItemInput(itemId, count)` | 添加不消耗的物品输入。 |
 | `chancedItemInput(itemId, count, consumeChance)` | 添加按 `consumeChance` 消耗的物品输入。 |
 | `itemOutput(itemId, count)` | 添加普通物品输出。 |
+| `itemOutputWithComponents(itemId, count, components)` | 添加带原生 Data Component 值的物品输出。`components` 是精确的 `ItemStack` 组件值 map，不使用输入谓词的 `range` 或 `text` 模式。 |
 
 `consumeChance` 的值会限制在 `0` 到 `1`。`notConsumableItemInput` 等价于消耗概率为 `0`，普通 `itemInput`、`tagInput` 和 `itemInputWithComponents` 的消耗概率为 `1`。
 

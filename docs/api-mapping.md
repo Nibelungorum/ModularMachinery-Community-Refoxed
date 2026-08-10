@@ -49,17 +49,20 @@
 
 ## 物品输出
 
-机器配方的 `outputs` 字段使用完整的 `ItemStack` 编码，而不是只保存物品 ID 与数量。因此输出中提供的 Data Components 会随 `ItemStack` 一起解码、保存和产出。例如，以下输出保留自定义名称组件：
+机器配方的 `outputs` 字段使用完整的 `ItemStack` 编码，而不是只保存物品 ID 与数量。因此输出中提供的 Data Components 会随 `ItemStack` 一起解码、保存和产出。例如，以下输出会生成带自定义名称和锋利 IV 附魔的钻石剑：
 
 ```json
 {
-  "id": "minecraft:diamond",
+  "id": "minecraft:diamond_sword",
   "count": 1,
   "components": {
-    "minecraft:custom_name": { "text": "烈焰结晶" }
+    "minecraft:custom_name": { "text": "Better钻石剑" },
+    "minecraft:enchantments": { "levels": { "minecraft:sharpness": 4 } }
   }
 }
 ```
+
+`outputs` 由 `ItemStack.CODEC` 解码，并产生声明的精确组件值。它可以与要求普通锋利 III 钻石剑的输入谓词配对；输出组件是值，绝不是输入谓词中的 `range` 或 `text` 模式。JEI 展示和输出插入都会保留生成物品的原生 tooltip 及组件数据。
 
 ## KubeJS 对应关系
 
@@ -70,5 +73,6 @@
 | `item`、`count`、`components` | `itemInputWithComponents(itemId, count, components)` |
 | `consume_chance: 0` | `notConsumableItemInput(itemId, count)` |
 | `consume_chance` | `chancedItemInput(itemId, count, consumeChance)` |
+| 完整 `ItemStack` 输出及 `components` | `itemOutputWithComponents(itemId, count, components)` |
 
-KubeJS 的 `itemOutput(itemId, count)` 创建普通 `ItemStack` 输出；带 Data Components 的完整输出可通过配方 JSON 的 `outputs` 字段表达。
+KubeJS 的 `itemOutput(itemId, count)` 创建普通 `ItemStack` 输出；`itemOutputWithComponents(itemId, count, components)` 使用 registry-aware JSON ops 将原生组件值解码为完整 `ItemStack`，语义与配方 JSON 的 `outputs` 字段一致。
