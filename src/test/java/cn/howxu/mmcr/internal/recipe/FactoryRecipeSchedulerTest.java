@@ -445,11 +445,21 @@ class FactoryRecipeSchedulerTest {
         Items.COBBLESTONE.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
                 .set(DataComponents.MAX_STACK_SIZE, 64).build());
         ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
-        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 2));
         ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(2, 64, 0));
-        for (int slot = 0; slot < output.getItemStackHandler(null).getSlots(); slot++) {
-            output.getItemStackHandler(null).setStackInSlot(slot, new ItemStack(Items.COBBLESTONE, 64));
-        }
+        setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, input, "handler", new ItemStackHandler(6) {
+            @Override
+            public ItemStack extractItem(int slot, int amount, boolean simulate) {
+                ItemStack extracted = super.extractItem(slot, amount, simulate);
+                if (!simulate && !extracted.isEmpty()) {
+                    for (int outputSlot = 0; outputSlot < output.getItemStackHandler(null).getSlots(); outputSlot++) {
+                        output.getItemStackHandler(null).setStackInSlot(outputSlot, new ItemStack(Items.COBBLESTONE, 64));
+                    }
+                }
+                return extracted;
+            }
+
+            @Override protected void onContentsChanged(int slot) { }
+        });
         EnergyInputHatchBlockEntity energy = energyInputHatch(new BlockPos(3, 64, 0));
         energy.getMutableEnergyStorage(null).receiveEnergy(20, false);
         BlockPos controllerPos = new BlockPos(0, 64, 0);
@@ -480,7 +490,6 @@ class FactoryRecipeSchedulerTest {
         thread.setActiveRecipeForTesting(active);
         setField(RecipeThread.class, thread, "context", new RecipeCraftingContext(controller));
 
-        assertThat(new RecipeCraftingContext(controller).commitSynchronousOutputs(recipe, 1)).isFalse();
         thread.tick();
         SharedIoCoordinator.get(level).resolve(domain);
 
@@ -500,6 +509,65 @@ class FactoryRecipeSchedulerTest {
         assertThat(itemCount(output, Items.IRON_INGOT)).isEqualTo(1);
         SharedIoCoordinator.discard(level);
         StructureClaimRegistry.discard(level);
+    }
+
+    @Test
+    void privateFactoryLaneFinalOutputRetryDoesNotRepeatItsLastTickIo() throws Exception {
+        Items.IRON_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 64).build());
+        Items.COBBLESTONE.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 64).build());
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(2, 64, 0));
+        setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, input, "handler", new ItemStackHandler(6) {
+            @Override
+            public ItemStack extractItem(int slot, int amount, boolean simulate) {
+                ItemStack extracted = super.extractItem(slot, amount, simulate);
+                if (!simulate && !extracted.isEmpty()) {
+                    for (int outputSlot = 0; outputSlot < output.getItemStackHandler(null).getSlots(); outputSlot++) {
+                        output.getItemStackHandler(null).setStackInSlot(outputSlot, new ItemStack(Items.COBBLESTONE, 64));
+                    }
+                }
+                return extracted;
+            }
+
+            @Override protected void onContentsChanged(int slot) { }
+        });
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 1));
+        EnergyInputHatchBlockEntity energy = energyInputHatch(new BlockPos(3, 64, 0));
+        energy.getMutableEnergyStorage(null).receiveEnergy(20, false);
+        MachineControllerBlockEntity controller = controllerWithComponents(MMCR.id("private_factory_finish_retry"),
+                new BlockPos(0, 64, 0), input, output, energy);
+        ServerLevel level = serverLevel(List.of(controller, input, output, energy));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, input, "level", level);
+        setField(BlockEntity.class, output, "level", level);
+        setField(BlockEntity.class, energy, "level", level);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("private_factory_finish_retry_recipe"),
+                MMCR.id("private_factory_finish_retry"), 1, List.of(), List.of(), List.of(), 0, 0, false, List.of(), List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
+                new EnergyRequirement(10),
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.IRON_INGOT))
+        ));
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
+        FactoryRecipeLane lane = new FactoryRecipeLane(active, new RecipeCraftingContext(controller), ignored -> { });
+
+        assertThat(lane.tick(0)).isFalse();
+
+        assertThat(active.isFinishPending()).isTrue();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+        assertThat(itemCount(output, Items.IRON_INGOT)).isZero();
+
+        assertThat(lane.tick(1)).isFalse();
+        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+
+        output.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
+
+        assertThat(lane.tick(10)).isTrue();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+        assertThat(itemCount(output, Items.IRON_INGOT)).isEqualTo(1);
     }
 
     @Test

@@ -65,9 +65,25 @@ public final class FactoryRecipeLane implements FactoryRecipeScheduler.Lane {
     public boolean tick(long gameTime) {
         if (closed) return true;
         int tickTime = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, gameTime));
-        if (recipe.needsFinishCommit() && !recipe.shouldRetryFinish(tickTime)) return false;
+        if (recipe.isFinishPending()) {
+            if (!recipe.shouldRetryFinish(tickTime)) return false;
+            ActiveMachineRecipe.TickStatus status = recipe.applyTickGrant(true,
+                    context.commitSynchronousOutputs(recipe.getRecipe(), recipe.getParallelism()), tickTime);
+            if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
+                close();
+                return true;
+            }
+            lastFailureUnloc = context.getLastFailureUnloc();
+            return false;
+        }
+        boolean finalTick = recipe.needsFinishCommit();
+        if (finalTick && !context.simulateOutputs(recipe.getRecipe(), recipe.getParallelism())) {
+            recipe.applyTickGrant(true, false, tickTime);
+            lastFailureUnloc = context.getLastFailureUnloc();
+            return false;
+        }
         boolean resourcesGranted = context.commitSynchronousIoTick(recipe.getRecipe(), recipe.getParallelism());
-        boolean outputsCommitted = resourcesGranted && recipe.needsFinishCommit()
+        boolean outputsCommitted = resourcesGranted && finalTick
                 && context.commitSynchronousOutputs(recipe.getRecipe(), recipe.getParallelism());
         ActiveMachineRecipe.TickStatus status = recipe.applyTickGrant(resourcesGranted, outputsCommitted, tickTime);
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {

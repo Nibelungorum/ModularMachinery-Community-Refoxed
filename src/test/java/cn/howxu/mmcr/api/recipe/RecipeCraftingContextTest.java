@@ -252,7 +252,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(15);
         assertThat(output.getItemStackHandler(null).getStackInSlot(1).isEmpty()).isTrue();
     }
@@ -278,7 +278,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getItem()).isEqualTo(Items.IRON_NUGGET);
         assertThat(output.getItemStackHandler(null).getStackInSlot(1).getItem()).isEqualTo(Items.GOLD_NUGGET);
         assertThat(output.getItemStackHandler(null).getStackInSlot(2).getItem()).isEqualTo(Items.COPPER_NUGGET);
@@ -302,7 +302,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
         assertThat(output.getItemStackHandler(null).getStackInSlot(1).isEmpty()).isTrue();
     }
@@ -319,7 +319,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
     }
 
@@ -335,7 +335,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
     }
 
@@ -355,7 +355,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getItem()).isEqualTo(Items.COBBLESTONE);
     }
 
@@ -371,7 +371,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(3);
     }
 
@@ -387,7 +387,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getFluidTank(null).getFluidAmount()).isZero();
     }
 
@@ -405,7 +405,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getFluidTank(null).getFluid().getFluid()).isEqualTo(Fluids.LAVA);
     }
 
@@ -421,7 +421,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getFluidTank(null).getFluid()).satisfies(stack -> {
             assertThat(stack.getFluid()).isEqualTo(Fluids.WATER);
             assertThat(stack.getAmount()).isEqualTo(1000);
@@ -492,7 +492,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(6);
         assertThat(recipe.outputs().getFirst().getCount()).isEqualTo(2);
     }
@@ -633,7 +633,7 @@ class RecipeCraftingContextTest {
         );
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
-        assertThat(context.commitIoTick(recipe, 1)).isFalse();
+        assertThat(context.commitSynchronousIoTick(recipe, 1)).isFalse();
         assertThat(hatch.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(25);
     }
 
@@ -649,7 +649,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
         ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
 
-        assertThat(context.commitIoTick(recipe, active.getParallelism())).isFalse();
+        assertThat(context.commitSynchronousIoTick(recipe, active.getParallelism())).isFalse();
         assertThat(active.applyTickGrant(false, false, 0)).isEqualTo(ActiveMachineRecipe.TickStatus.WAITING);
         assertThat(active.getTick()).isZero();
         assertThat(hatch.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(30);
@@ -683,14 +683,14 @@ class RecipeCraftingContextTest {
         ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
         active.setTick(active.getTotalTick() - 1);
 
-        assertThat(context.commitOutputs(recipe, active.getParallelism())).isFalse();
+        assertThat(context.commitSynchronousOutputs(recipe, active.getParallelism())).isFalse();
         assertThat(active.applyTickGrant(true, false, 0)).isEqualTo(ActiveMachineRecipe.TickStatus.WAITING);
         assertThat(active.getTick()).isEqualTo(active.getTotalTick() - 1);
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getItem()).isEqualTo(Items.COBBLESTONE);
 
         output.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
 
-        assertThat(context.commitOutputs(recipe, active.getParallelism())).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, active.getParallelism())).isTrue();
         assertThat(active.applyTickGrant(true, true, 10)).isEqualTo(ActiveMachineRecipe.TickStatus.FINISHED);
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
     }

@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 public final class RecipeCraftingContext {
 
@@ -158,8 +159,13 @@ public final class RecipeCraftingContext {
     /**
      * Revalidates every requirement before allowing any per-tick live IO mutation.
      */
-    public boolean commitIoTick(MachineRecipe recipe, int parallelism) {
+    private boolean commitIoTick(MachineRecipe recipe, int parallelism) {
         return commitAtomicIoTick(recipe, parallelism);
+    }
+
+    /** Supplies the coordinator-only per-tick commit callback. */
+    public BooleanSupplier coordinatorIoTick(MachineRecipe recipe, int parallelism) {
+        return () -> commitIoTick(recipe, parallelism);
     }
 
     /**
@@ -533,7 +539,7 @@ public final class RecipeCraftingContext {
     }
 
     public boolean finishCrafting(MachineRecipe recipe, int parallelism) {
-        return commitOutputs(recipe, parallelism);
+        return commitSynchronousOutputs(recipe, parallelism);
     }
 
     public boolean commitInputs(MachineRecipe recipe) {
@@ -572,12 +578,13 @@ public final class RecipeCraftingContext {
         return true;
     }
 
-    public boolean commitOutputs(MachineRecipe recipe) {
-        return commitAtomicOutputs(recipe, 1);
+    private boolean commitOutputs(MachineRecipe recipe, int parallelism) {
+        return commitAtomicOutputs(recipe, parallelism);
     }
 
-    public boolean commitOutputs(MachineRecipe recipe, int parallelism) {
-        return commitAtomicOutputs(recipe, parallelism);
+    /** Supplies the coordinator-only final-output commit callback. */
+    public BooleanSupplier coordinatorOutputs(MachineRecipe recipe, int parallelism) {
+        return () -> commitOutputs(recipe, parallelism);
     }
 
     /**

@@ -177,7 +177,7 @@ public abstract class RecipeThread {
                 structureVersion,
                 () -> {
                     if (!isActive(recipe, recipeContext, domain)) return false;
-                    boolean granted = recipeContext.commitIoTick(recipe.getRecipe(), recipe.getParallelism());
+                    boolean granted = recipeContext.coordinatorIoTick(recipe.getRecipe(), recipe.getParallelism()).getAsBoolean();
                     if (!granted) {
                         applyTick(recipe, recipeContext, false, false, gameTime);
                         tickPending = true;
@@ -204,7 +204,7 @@ public abstract class RecipeThread {
                 () -> {
                     if (!isActive(recipe, recipeContext, domain)) return false;
                     applyTick(recipe, recipeContext, true,
-                            recipeContext.commitOutputs(recipe.getRecipe(), recipe.getParallelism()), gameTime);
+                            recipeContext.coordinatorOutputs(recipe.getRecipe(), recipe.getParallelism()).getAsBoolean(), gameTime);
                     return true;
                 },
                 () -> isActive(recipe, recipeContext, domain),

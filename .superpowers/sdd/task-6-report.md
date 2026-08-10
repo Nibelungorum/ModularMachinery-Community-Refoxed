@@ -1,6 +1,6 @@
 ## Task 6 Report
 
-Status: committed.
+Status: completed; commit follows this report update.
 
 TDD:
 - Added a finite-energy round-robin regression in `SharedIoCoordinatorTest`; it initially exposed the missing runtime commit API.
@@ -69,3 +69,18 @@ Status: fixed.
 Verification:
 - `./gradlew test --tests cn.howxu.mmcr.internal.multiblock.SharedIoCoordinatorTest --tests cn.howxu.mmcr.api.recipe.RecipeCraftingContextTest --tests cn.howxu.mmcr.internal.recipe.FactoryRecipeSchedulerTest --no-daemon`
 - Result: `BUILD SUCCESSFUL` (17 actionable tasks: 1 executed, 16 up-to-date).
+
+## Completion Follow-up
+
+Status: fixed.
+
+- `ActiveMachineRecipe` persists an explicit `finishPending` state. Once a final output is blocked after final-tick IO commits, no-domain execution retries only outputs and observes the ten-tick finish cooldown.
+- `FactoryRecipeLane` and `MachineControllerBlockEntity` now preflight final outputs before synchronous IO, then use the finish-only path after a post-IO output block. This prevents both the preflight case from consuming IO and the post-IO retry from consuming it twice.
+- `RecipeCraftingContext.commitIoTick` and `commitOutputs` are private implementation methods. Shared `RecipeThread` receives coordinator callbacks through `coordinatorIoTick` and `coordinatorOutputs`; no-domain execution uses `commitSynchronousIoTick` and `commitSynchronousOutputs`. Legacy `finishCrafting` uses the synchronous output wrapper.
+- Added direct private factory-lane and controller regressions. Each causes final-tick input consumption to fill outputs, confirms cooldown skips IO, then frees capacity and verifies one final output with no second input or energy consumption.
+- Corrected the existing shared-output regression fixture so it blocks after final synchronous IO rather than before the required output preflight.
+
+Verification:
+- `./gradlew test --tests cn.howxu.mmcr.internal.recipe.FactoryRecipeSchedulerTest --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest --tests cn.howxu.mmcr.api.recipe.RecipeCraftingContextTest --no-daemon`
+- Result: `BUILD SUCCESSFUL in 17s` (17 actionable tasks: 2 executed, 15 up-to-date).
+- `git diff --check` completed without output.

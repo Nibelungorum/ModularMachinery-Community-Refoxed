@@ -1123,9 +1123,31 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             }
         }
         int gameTime = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, currentGameTime()));
-        if (active.needsFinishCommit() && !active.shouldRetryFinish(gameTime)) return;
+        if (active.isFinishPending()) {
+            if (!active.shouldRetryFinish(gameTime)) return;
+            ActiveMachineRecipe.TickStatus status = active.applyTickGrant(true,
+                    context.commitSynchronousOutputs(active.getRecipe(), active.getParallelism()), gameTime);
+            if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
+                lastFailureUnloc = null;
+                returnContext(context);
+                active = null;
+                context = null;
+                setActiveState(false);
+            } else {
+                lastFailureUnloc = context.getLastFailureUnloc();
+            }
+            setChanged();
+            return;
+        }
+        boolean finalTick = active.needsFinishCommit();
+        if (finalTick && !context.simulateOutputs(active.getRecipe(), active.getParallelism())) {
+            active.applyTickGrant(true, false, gameTime);
+            lastFailureUnloc = context.getLastFailureUnloc();
+            setChanged();
+            return;
+        }
         boolean resourcesGranted = context.commitSynchronousIoTick(active.getRecipe(), active.getParallelism());
-        boolean outputsCommitted = resourcesGranted && active.needsFinishCommit()
+        boolean outputsCommitted = resourcesGranted && finalTick
                 && context.commitSynchronousOutputs(active.getRecipe(), active.getParallelism());
         ActiveMachineRecipe.TickStatus status = active.applyTickGrant(resourcesGranted, outputsCommitted, gameTime);
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {

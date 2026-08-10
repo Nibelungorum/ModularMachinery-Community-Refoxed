@@ -29,6 +29,7 @@ import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.registry.PortKinds;
@@ -1182,6 +1183,74 @@ class MachineControllerBlockEntityTest {
         assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "context")).isSameAs(activeContext);
         assertThat(activeContext.isStructureVersionCurrent()).isTrue();
         assertThat(controller.getTickCounter()).isEqualTo(1);
+    }
+
+    @Test
+    void privateControllerFinalOutputRetryDoesNotRepeatItsLastTickIo() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.COBBLESTONE);
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 0, 0));
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(2, 0, 0));
+        setField(ItemBusBlockEntity.class, output, "handler", new ItemStackHandler(6));
+        setField(ItemBusBlockEntity.class, input, "handler", new ItemStackHandler(6) {
+            @Override
+            public ItemStack extractItem(int slot, int amount, boolean simulate) {
+                ItemStack extracted = super.extractItem(slot, amount, simulate);
+                if (!simulate && !extracted.isEmpty()) {
+                    for (int outputSlot = 0; outputSlot < output.getItemStackHandler(null).getSlots(); outputSlot++) {
+                        output.getItemStackHandler(null).setStackInSlot(outputSlot, new ItemStack(Items.COBBLESTONE, 64));
+                    }
+                }
+                return extracted;
+            }
+
+            @Override protected void onContentsChanged(int slot) { }
+        });
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 1));
+        EnergyInputHatchBlockEntity energy = energyHatch(new BlockPos(3, 0, 0));
+        energy.getMutableEnergyStorage(null).receiveEnergy(20, false);
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
+        DynamicMachine stateMachine = new DynamicMachine(MMCR.id("private_controller_state"), "Private Controller State", new BlockArray(Map.of()));
+        setField(BlockEntity.class, controller, "blockState", testControllerBlock(stateMachine).defaultBlockState());
+        Level level = LevelStub.createWithBlockEntities(List.of(input, output, energy));
+        setField(Level.class, level, "isClientSide", true);
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, input, "level", level);
+        setField(BlockEntity.class, output, "level", level);
+        setField(BlockEntity.class, energy, "level", level);
+        addItemInputComponent(controller, input);
+        addItemOutputComponent(controller, output);
+        addComponent(controller, new MachineComponent(PortKinds.ENERGY_INPUT, IOType.INPUT), energy);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("private_controller_finish_retry"), MMCR.id("private_controller"),
+                1, List.of(), List.of(), List.of(), 0, 0, false, List.of(), List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
+                new EnergyRequirement(10),
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.IRON_INGOT))
+        ));
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
+        setField(MachineControllerBlockEntity.class, controller, "active", active);
+        setField(MachineControllerBlockEntity.class, controller, "context", new RecipeCraftingContext(controller));
+
+        invokeTickActiveRecipe(controller);
+
+        assertThat(active.isFinishPending()).isTrue();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+
+        invokeTickActiveRecipe(controller);
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+
+        output.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
+        setField(ActiveMachineRecipe.class, active, "nextFinishRetryTick", 0);
+        invokeTickActiveRecipe(controller);
+
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "active")).isNull();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getItem()).isEqualTo(Items.IRON_INGOT);
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
     }
 
     @Test

@@ -26,6 +26,7 @@ public final class ActiveMachineRecipe {
     private int maxParallelism;
     private int parallelism;
     private int nextFinishRetryTick;
+    private boolean finishPending;
 
     public ActiveMachineRecipe(MachineRecipe recipe) {
         this(recipe, 1);
@@ -49,6 +50,7 @@ public final class ActiveMachineRecipe {
         this.totalTick = serialized.getIntOr("totalTick", 0);
         this.data = serialized.contains("data") ? serialized.getCompoundOrEmpty("data") : new CompoundTag();
         this.nextFinishRetryTick = serialized.getIntOr("nextFinishRetryTick", 0);
+        this.finishPending = serialized.getBooleanOr("finishPending", false);
         setMaxParallelism(serialized.getIntOr("maxParallelism", 1));
         setParallelism(serialized.getIntOr("parallelism", 1));
         LOG.info("ActiveMachineRecipe#{} restored from NBT: recipe={} resolved={} tick={}/{} maxParallelism={} parallelism={}",
@@ -148,6 +150,7 @@ public final class ActiveMachineRecipe {
         tag.putInt("maxParallelism", this.maxParallelism);
         tag.putInt("parallelism", this.parallelism);
         tag.putInt("nextFinishRetryTick", this.nextFinishRetryTick);
+        tag.putBoolean("finishPending", this.finishPending);
         if (!data.isEmpty()) {
             tag.put("data", data);
         }
@@ -163,6 +166,7 @@ public final class ActiveMachineRecipe {
         output.putInt("maxParallelism", this.maxParallelism);
         output.putInt("parallelism", this.parallelism);
         output.putInt("nextFinishRetryTick", this.nextFinishRetryTick);
+        output.putBoolean("finishPending", this.finishPending);
         if (!data.isEmpty()) {
             output.store("data", CompoundTag.CODEC, data);
         }
@@ -176,6 +180,7 @@ public final class ActiveMachineRecipe {
         result.tick = input.getIntOr("tick", 0);
         result.totalTick = input.getIntOr("totalTick", 0);
         result.nextFinishRetryTick = input.getIntOr("nextFinishRetryTick", 0);
+        result.finishPending = input.getBooleanOr("finishPending", false);
         result.setParallelism(input.getIntOr("parallelism", 1));
         result.data = input.read("data", CompoundTag.CODEC).orElseGet(CompoundTag::new);
         LOG.debug("ActiveMachineRecipe#{} from(ValueInput) → recipe={} tick={}/{} maxParallelism={} parallelism={}",
@@ -216,6 +221,10 @@ public final class ActiveMachineRecipe {
         return gameTime >= nextFinishRetryTick;
     }
 
+    public boolean isFinishPending() {
+        return finishPending;
+    }
+
     public void markFinishBlocked(int gameTime) {
         nextFinishRetryTick = gameTime + 10;
     }
@@ -236,10 +245,12 @@ public final class ActiveMachineRecipe {
         }
         if (!outputsCommitted) {
             tick = Math.max(0, totalTick - 1);
+            finishPending = true;
             markFinishBlocked(gameTime);
             return TickStatus.WAITING;
         }
         tick = nextTick;
+        finishPending = false;
         return TickStatus.FINISHED;
     }
 
