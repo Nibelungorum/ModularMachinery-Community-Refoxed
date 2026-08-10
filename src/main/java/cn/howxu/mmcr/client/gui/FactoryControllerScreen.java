@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -12,6 +13,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * MMCE-style two-column factory controller display backed only by synchronized menu data.
@@ -74,6 +76,10 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
 
     static int selectedParallelism(FactoryControllerMenu menu) {
         return menu.currentParallelism();
+    }
+
+    static List<Component> levelLines(Map<?, MachineLevel> levels) {
+        return levels.values().stream().map(MachineMenuScreen::levelLine).toList();
     }
 
     static int elementTextureWidth() { return ELEMENT_TEXTURE_WIDTH; }
@@ -164,6 +170,13 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
                 x + font.width(Component.translatable("gui.mmcr.controller.status_label")) + 4, lineY,
                 MachineMenuScreen.controllerStatusColor(menu.isFormed(), selected.active()), true);
         lineY = nextDetailY(lineY);
+        var owner = menu.resolvedOwner();
+        if (owner != null) {
+            for (Component levelLine : levelLines(owner.getFoundLevels())) {
+                graphics.text(font, levelLine, x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
+                lineY = nextDetailY(lineY);
+            }
+        }
         String failure = menu.lastFailureUnloc();
         if (!failure.isEmpty()) {
             graphics.text(font, Component.translatable("gui.mmcr.controller.last_failure", Component.translatable(failure)),

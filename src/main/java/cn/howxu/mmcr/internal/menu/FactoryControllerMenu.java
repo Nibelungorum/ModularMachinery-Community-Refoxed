@@ -12,6 +12,8 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
 
 import java.util.List;
 
@@ -27,6 +29,7 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
     private final ControllerMenuState state;
     private final MachineControllerBlockEntity owner;
     private final ServerPlayer player;
+    private final Level level;
     private FactoryControllerSnapshot snapshot;
     private FactoryControllerSnapshot lastSentSnapshot;
     private int selectedThreadIndex;
@@ -35,6 +38,7 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
         super(ModUIs.FACTORY_CONTROLLER.get(), containerId);
         this.owner = owner;
         this.player = player;
+        this.level = inventory.player == null ? null : inventory.player.level();
         controllerPos = owner == null ? BlockPos.ZERO : owner.getBlockPos();
         state = new ControllerMenuState(this, owner);
         ControllerMenuState.addControllerPlayerSlots(this, inventory, FACTORY_PLAYER_INVENTORY_X);
@@ -57,6 +61,7 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
         super(ModUIs.FACTORY_CONTROLLER.get(), containerId);
         this.owner = null;
         this.player = null;
+        this.level = inventory.player == null ? null : inventory.player.level();
         this.controllerPos = controllerPos;
         state = new ControllerMenuState(this, null);
         ControllerMenuState.addControllerPlayerSlots(this, inventory, FACTORY_PLAYER_INVENTORY_X);
@@ -72,6 +77,12 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
     }
 
     public BlockPos controllerPos() { return controllerPos; }
+    public MachineControllerBlockEntity resolvedOwner() {
+        if (owner != null) return owner;
+        if (level == null) return null;
+        BlockEntity blockEntity = level.getBlockEntity(controllerPos);
+        return blockEntity instanceof MachineControllerBlockEntity controller ? controller : null;
+    }
     public boolean isFormed() { return snapshot.formed() || state.formed.get() != 0; }
     public boolean isRedstonePaused() { return snapshot.redstonePaused() || state.redstonePaused.get() != 0; }
     public int activeThreadCount() { return snapshot.activeThreadCount(); }

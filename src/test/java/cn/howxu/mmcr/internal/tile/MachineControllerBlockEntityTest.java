@@ -528,6 +528,26 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void save_and_load_discards_last_failure_reason() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        controller.setLastFailureUnloc("gui.mmcr.controller.failure.level_insufficient");
+
+        TagValueOutput saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        invokeSaveAdditional(controller, saved);
+
+        assertThat(saved.buildResult().toString()).doesNotContain("last_failure_unloc");
+
+        MachineControllerBlockEntity loaded = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(loaded);
+        invokeLoadAdditional(loaded, TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()), saved.buildResult()));
+
+        assertThat(loaded.getLastFailureUnloc()).isNull();
+    }
+
+    @Test
     void load_discards_serialized_recipe_without_its_context_pair() throws Exception {
         MachineRecipe recipe = new MachineRecipe(MMCR.id("orphaned_load_recipe"), MMCR.id("orphaned_load_machine"), 20,
                 List.of(), List.of());

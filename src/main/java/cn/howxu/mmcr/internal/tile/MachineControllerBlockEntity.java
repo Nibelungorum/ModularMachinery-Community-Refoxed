@@ -1320,7 +1320,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             pausedActive.serialize(output.child("active_recipe"));
             pausedContext.serialize(output.child("active_context"));
         }
-        if (lastFailureUnloc != null) output.putString("last_failure_unloc", lastFailureUnloc);
     }
 
     @Override
@@ -1337,8 +1336,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             if (foundLevel != null) restoredLevels.put(foundLevel.typeId(), foundLevel);
         });
         foundLevels = Map.copyOf(restoredLevels);
-        String savedFailure = input.getStringOr("last_failure_unloc", "");
-        lastFailureUnloc = savedFailure.isEmpty() ? null : savedFailure;
+        lastFailureUnloc = null;
         String recipeState = input.getStringOr("recipe_state", input.getBooleanOr("has_active", false) ? "active" : "");
         if (recipeState.isEmpty()) return;
         if (!input.getBooleanOr("has_recipe_context", false)) {

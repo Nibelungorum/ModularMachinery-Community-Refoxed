@@ -254,6 +254,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         if ("gui.mmcr.controller.failure.missing_input".equals(key)) return 1;
         if ("gui.mmcr.controller.failure.missing_output".equals(key)) return 2;
         if ("gui.mmcr.controller.failure.missing_energy".equals(key)) return 3;
+        if ("gui.mmcr.controller.failure.level_insufficient".equals(key)) return 4;
         return 0;
     }
 
@@ -262,6 +263,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
             case 1 -> "gui.mmcr.controller.failure.missing_input";
             case 2 -> "gui.mmcr.controller.failure.missing_output";
             case 3 -> "gui.mmcr.controller.failure.missing_energy";
+            case 4 -> "gui.mmcr.controller.failure.level_insufficient";
             default -> null;
         };
     }

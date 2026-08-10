@@ -85,6 +85,15 @@ class MachineControllerMenuTest {
     }
 
     @Test
+    void client_menu_decodes_level_failure_from_synced_data_slot() {
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory());
+
+        menu.setData(4, 4);
+
+        assertThat(menu.lastFailureMessage()).isEqualTo("gui.mmcr.controller.failure.level_insufficient");
+    }
+
+    @Test
     void client_menu_updates_parallel_display_from_synced_data_slots() {
         MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory());
 

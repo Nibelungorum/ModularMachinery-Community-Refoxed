@@ -137,7 +137,6 @@ public final class FactoryRecipeThread extends RecipeThread {
             context.serialize(output.child("active_context"));
         }
         output.putString("status", status.name());
-        if (lastFailureUnloc != null) output.putString("last_failure_unloc", lastFailureUnloc);
     }
 
     public static FactoryRecipeThread load(ValueInput input, MachineControllerBlockEntity controller,
@@ -159,8 +158,6 @@ public final class FactoryRecipeThread extends RecipeThread {
         } catch (IllegalArgumentException ignored) {
             thread.status = Status.IDLE;
         }
-        String failure = input.getStringOr("last_failure_unloc", "");
-        thread.lastFailureUnloc = failure.isEmpty() ? null : failure;
         if (input.getBooleanOr("has_active", false)) {
             thread.activeRecipe = ActiveMachineRecipe.from(input.childOrEmpty("active_recipe"));
             if (thread.activeRecipe.getRecipe() == null) thread.activeRecipe = null;

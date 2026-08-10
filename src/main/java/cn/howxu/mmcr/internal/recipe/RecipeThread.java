@@ -43,7 +43,9 @@ public abstract class RecipeThread {
         RecipeSearchResult result = new RecipeSearchTask(controller, machineId, structureVersion,
                 availableParallelism, candidates, contextPool).compute();
         if (!result.success()) {
-            lastFailureUnloc = result.failureUnloc();
+            lastFailureUnloc = result.levelFailure() == null
+                    ? result.failureUnloc()
+                    : "gui.mmcr.controller.failure.level_insufficient";
             status = Status.FAILED;
             return false;
         }

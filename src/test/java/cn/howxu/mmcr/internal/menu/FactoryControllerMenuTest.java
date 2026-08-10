@@ -79,6 +79,15 @@ class FactoryControllerMenuTest {
     }
 
     @Test
+    void data_slot_exposes_level_failure_when_factory_snapshot_has_no_failure() {
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+
+        menu.setData(2, 4);
+
+        assertThat(menu.lastFailureUnloc()).isEqualTo("gui.mmcr.controller.failure.level_insufficient");
+    }
+
+    @Test
     void absent_failure_is_exposed_as_an_empty_key() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
 

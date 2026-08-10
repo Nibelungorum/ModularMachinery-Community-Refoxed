@@ -110,8 +110,7 @@ public final class DefaultMachines {
         return predicate.matches(Blocks.COPPER_BLOCK.defaultBlockState())
                 && predicate.matches(Blocks.IRON_BLOCK.defaultBlockState())
                 && predicate.matches(Blocks.GOLD_BLOCK.defaultBlockState())
-                && predicate.matches(Blocks.DIAMOND_BLOCK.defaultBlockState())
-                && !predicate.matches(Blocks.EMERALD_BLOCK.defaultBlockState());
+                && predicate.matches(Blocks.DIAMOND_BLOCK.defaultBlockState());
     }
 
     /**

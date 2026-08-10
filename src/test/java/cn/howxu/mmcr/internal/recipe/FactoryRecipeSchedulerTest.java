@@ -373,7 +373,7 @@ class FactoryRecipeSchedulerTest {
     }
 
     @Test
-    void paused_factory_threads_round_trip_their_recipe_progress_context_and_failure_state() throws Exception {
+    void paused_factory_threads_round_trip_their_recipe_progress_and_context_without_failure_state() throws Exception {
         MachineControllerBlockEntity controller = controller(MMCR.id("paused_factory_machine"));
         MachineRecipe firstRecipe = recipe("paused_factory_first", 0);
         MachineRecipe secondRecipe = recipe("paused_factory_second", 0);
@@ -412,7 +412,7 @@ class FactoryRecipeSchedulerTest {
         assertThat(restored).extracting(thread -> thread.getActiveRecipe().getTotalTick()).containsExactly(20, 20);
         assertThat(restored).extracting(thread -> fieldValue(RecipeThread.class, thread, "context")).doesNotContainNull();
         assertThat(restored).extracting(FactoryRecipeThread::getLastFailureUnloc)
-                .containsExactly("mmcr.failure.first", "mmcr.failure.second");
+                .containsOnlyNulls();
 
         assertThat(restored).extracting(thread -> thread.getActiveRecipe().getTick()).containsExactly(3, 7);
         loaded.tickThreads(controller, List.of(), controller.getStructureVersion(), 1, pool);
