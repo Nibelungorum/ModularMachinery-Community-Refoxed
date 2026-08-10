@@ -29,6 +29,7 @@ import net.minecraft.world.item.crafting.Ingredient;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class SharedMultiblockIoGameTest {
 
@@ -85,27 +86,33 @@ public class SharedMultiblockIoGameTest {
         MachineControllerBlockEntity second = placeController(helper, new BlockPos(4, 2, 2), sharedEnergy, "shared_tick_second");
         helper.setBlock(sharedEnergy, ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState());
 
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        MachineRecipe recipe = energyRecipe("shared_energy_tick");
+        AtomicInteger firstTicks = new AtomicInteger();
+        AtomicInteger secondTicks = new AtomicInteger();
+        AtomicReference<StructureClaimRegistry.ResourceDomain> domain = new AtomicReference<>();
+        AtomicReference<EnergyInputHatchBlockEntity> energy = new AtomicReference<>();
         helper.runAtTickTime(4, () -> {
             first.serverTick();
             second.serverTick();
-            EnergyInputHatchBlockEntity energy = helper.getBlockEntity(sharedEnergy, EnergyInputHatchBlockEntity.class);
-            MachineRecipe recipe = energyRecipe("shared_energy_tick");
-            StructureClaimRegistry.ResourceDomain domain = first.resourceDomain();
-            SharedIoCoordinator coordinator = new SharedIoCoordinator();
-            AtomicInteger firstTicks = new AtomicInteger();
-            AtomicInteger secondTicks = new AtomicInteger();
-
-            energy.getMutableEnergyStorage(null).receiveEnergy(15, false);
-            enqueueTick(coordinator, domain, first, recipe, firstTicks);
-            enqueueTick(coordinator, domain, second, recipe, secondTicks);
-            coordinator.resolve(domain);
-            energy.getMutableEnergyStorage(null).receiveEnergy(15, false);
-            enqueueTick(coordinator, domain, first, recipe, firstTicks);
-            enqueueTick(coordinator, domain, second, recipe, secondTicks);
-            coordinator.resolve(domain);
+            energy.set(helper.getBlockEntity(sharedEnergy, EnergyInputHatchBlockEntity.class));
+            domain.set(first.resourceDomain());
+            energy.get().getMutableEnergyStorage(null).receiveEnergy(15, false);
+            enqueueTick(coordinator, domain.get(), first, recipe, firstTicks);
+            enqueueTick(coordinator, domain.get(), second, recipe, secondTicks);
+            coordinator.resolve(domain.get());
 
             helper.assertTrue(firstTicks.get() == 1, "first lane receives exactly one full energy grant");
-            helper.assertTrue(secondTicks.get() == 1, "second lane receives the next full energy grant");
+            helper.assertTrue(secondTicks.get() == 0, "second lane cannot receive a second finite energy grant in the same tick");
+        });
+        helper.runAtTickTime(5, () -> {
+            energy.get().getMutableEnergyStorage(null).receiveEnergy(15, false);
+            enqueueTick(coordinator, domain.get(), first, recipe, firstTicks);
+            enqueueTick(coordinator, domain.get(), second, recipe, secondTicks);
+            coordinator.resolve(domain.get());
+
+            helper.assertTrue(firstTicks.get() == 1, "first lane advances only once across consecutive finite-energy ticks");
+            helper.assertTrue(secondTicks.get() == 1, "second lane receives the next tick's full energy grant");
             helper.succeed();
         });
     }
