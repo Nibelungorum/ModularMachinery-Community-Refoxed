@@ -8,9 +8,8 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.JsonOps;
-import dev.latvian.mods.kubejs.util.RegistryAccessContainer;
+import dev.latvian.mods.kubejs.recipe.RecipesKubeEvent;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -30,19 +29,14 @@ public class MachineRecipeBuilderJS {
     public boolean cancelIfPerTickFails = false;
 
     private Identifier id;
-    private final DynamicOps<JsonElement> itemStackOps;
+    private final List<ComponentOutput> componentOutputs = new ArrayList<>();
 
     public MachineRecipeBuilderJS(String id) {
         this(Identifier.parse(id));
     }
 
     public MachineRecipeBuilderJS(Identifier id) {
-        this(id, RegistryAccessContainer.current.json());
-    }
-
-    MachineRecipeBuilderJS(Identifier id, DynamicOps<JsonElement> itemStackOps) {
         this.id = id;
-        this.itemStackOps = itemStackOps;
     }
 
     public MachineRecipeBuilderJS id(String id) {
@@ -100,7 +94,7 @@ public class MachineRecipeBuilderJS {
         stack.addProperty("id", itemId);
         stack.addProperty("count", count);
         stack.add("components", components.deepCopy());
-        outputs.add(ItemStack.CODEC.parse(itemStackOps, stack).getOrThrow());
+        componentOutputs.add(new ComponentOutput(outputs.size(), stack));
         return this;
     }
 
@@ -134,6 +128,23 @@ public class MachineRecipeBuilderJS {
             recipeInputs.add(new MachineIngredient.EnergyIngredient(energyPerTick));
         }
 
-        RecipeRegistry.register(new MachineRecipe(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(outputs), List.of(), 0, 1, cancelIfPerTickFails));
+        var recipeOutputs = new ArrayList<>(outputs);
+
+        if (!componentOutputs.isEmpty()) {
+            if (!RecipesKubeEvent.INSTANCE.isBound()) {
+                throw new IllegalStateException("Component item outputs must be built during the KubeJS recipe event");
+            }
+
+            var ops = RecipesKubeEvent.INSTANCE.get().ops.json();
+            for (int index = 0; index < componentOutputs.size(); index++) {
+                var output = componentOutputs.get(index);
+                recipeOutputs.add(output.index() + index, ItemStack.CODEC.parse(ops, output.stack()).getOrThrow());
+            }
+        }
+
+        RecipeRegistry.register(new MachineRecipe(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(recipeOutputs), List.of(), 0, 1, cancelIfPerTickFails));
+    }
+
+    private record ComponentOutput(int index, JsonObject stack) {
     }
 }

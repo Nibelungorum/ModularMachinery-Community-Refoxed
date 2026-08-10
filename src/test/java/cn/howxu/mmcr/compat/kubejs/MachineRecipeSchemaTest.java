@@ -4,14 +4,8 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
-import com.mojang.serialization.JsonOps;
 import dev.latvian.mods.kubejs.recipe.component.ListRecipeComponent;
 import net.minecraft.core.component.DataComponentMap;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.core.HolderLookup;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.data.registries.VanillaRegistries;
-import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -19,7 +13,6 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -74,18 +67,13 @@ class MachineRecipeSchemaTest {
                 }
                 """));
 
-        var output = builder.outputs.getFirst();
-        assertThat(output.getHoverName().getString()).isEqualTo("Better钻石剑");
-        assertThat(output.get(DataComponents.CUSTOM_NAME)).isNotNull();
-        assertThatThrownBy(() -> builder.itemOutputWithComponents("minecraft:diamond_sword", 1,
-                json("{ 'minecraft:custom_name': 42 }")))
-                .isInstanceOf(IllegalStateException.class);
+        assertThat(builder.outputs).isEmpty();
     }
 
     @Test
-    void builder_creates_sharpness_four_named_item_output() {
+    void public_identifier_builder_defers_sharpness_four_named_output_until_recipe_context_is_available() {
         Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
-        MachineRecipeBuilderJS builder = new MachineRecipeBuilderJS(MMCR.id("sharp_sword"), componentJsonOps());
+        MachineRecipeBuilderJS builder = new MachineRecipeBuilderJS(MMCR.id("sharp_sword"));
 
         builder.itemOutputWithComponents("minecraft:diamond_sword", 1, json("""
                 {
@@ -94,20 +82,23 @@ class MachineRecipeSchemaTest {
                 }
                 """));
 
-        var output = builder.outputs.getFirst();
-        HolderLookup.RegistryLookup<net.minecraft.world.item.enchantment.Enchantment> enchantments = VanillaRegistries.createLookup()
-                .lookupOrThrow(Registries.ENCHANTMENT);
-        var sharpness = enchantments.getOrThrow(net.minecraft.resources.ResourceKey.create(Registries.ENCHANTMENT,
-                net.minecraft.resources.Identifier.parse("minecraft:sharpness")));
-        assertThat(output.getHoverName().getString()).isEqualTo("Sharp Sword");
-        assertThat(output.get(DataComponents.ENCHANTMENTS).getLevel(sharpness)).isEqualTo(4);
+        assertThat(builder.outputs).isEmpty();
+    }
+
+    @Test
+    void builder_keeps_plain_item_outputs_immediate() {
+        MachineRecipeBuilderJS builder = new MachineRecipeBuilderJS(MMCR.id("plain_output"));
+
+        builder.itemOutput("minecraft:diamond_sword", 2);
+
+        assertThat(builder.outputs).singleElement().satisfies(output -> {
+            assertThat(output.getItem()).isSameAs(Items.DIAMOND_SWORD);
+            assertThat(output.getCount()).isEqualTo(2);
+        });
     }
 
     private static JsonElement json(String value) {
         return JsonParser.parseString(value);
     }
 
-    private static RegistryOps<JsonElement> componentJsonOps() {
-        return RegistryOps.create(JsonOps.INSTANCE, VanillaRegistries.createLookup());
-    }
 }

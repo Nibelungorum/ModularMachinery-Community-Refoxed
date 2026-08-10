@@ -57,7 +57,7 @@
   "count": 1,
   "components": {
     "minecraft:custom_name": { "text": "Better钻石剑" },
-    "minecraft:enchantments": { "levels": { "minecraft:sharpness": 4 } }
+    "minecraft:enchantments": { "minecraft:sharpness": 4 }
   }
 }
 ```
@@ -75,4 +75,4 @@
 | `consume_chance` | `chancedItemInput(itemId, count, consumeChance)` |
 | 完整 `ItemStack` 输出及 `components` | `itemOutputWithComponents(itemId, count, components)` |
 
-KubeJS 的 `itemOutput(itemId, count)` 创建普通 `ItemStack` 输出；`itemOutputWithComponents(itemId, count, components)` 使用 registry-aware JSON ops 将原生组件值解码为完整 `ItemStack`，语义与配方 JSON 的 `outputs` 字段一致。
+KubeJS 的 `itemOutput(itemId, count)` 创建普通 `ItemStack` 输出；`itemOutputWithComponents(itemId, count, components)` 会在 KubeJS 配方事件的服务器 registry context 中使用原生组件值解码完整 `ItemStack`，语义与配方 JSON 的 `outputs` 字段一致。

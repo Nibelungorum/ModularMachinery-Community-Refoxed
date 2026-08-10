@@ -33,7 +33,7 @@ event.recipes.mmcr.machineRecipe('example:sharp_sword_upgrade')
     })
     .itemOutputWithComponents('minecraft:diamond_sword', 1, {
         'minecraft:custom_name': { text: 'Better钻石剑' },
-        'minecraft:enchantments': { levels: { 'minecraft:sharpness': 4 } }
+        'minecraft:enchantments': { 'minecraft:sharpness': 4 }
     })
     .build()
 ```
