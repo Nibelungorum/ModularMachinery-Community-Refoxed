@@ -202,9 +202,9 @@ class MachineRecipeDisplayTest {
         assertThat(MachineRecipeCategory.levelRequirement(requirement, 80).getString())
                 .isEqualTo("Coils: Block of Ironjei.mmcr.machine_recipe.minimum_level");
         assertThat(Translations.ALL.get("en_us").get("jei.mmcr.machine_recipe.minimum_level"))
-                .isEqualTo(" (minimum level)");
+                .isEqualTo("(minimum level)");
         assertThat(Translations.ALL.get("zh_cn").get("jei.mmcr.machine_recipe.minimum_level"))
-                .isEqualTo(" (最低等级)");
+                .isEqualTo("(最低等级)");
     }
 
     private static MachineRecipe recipe(String id, String machine, int priority) {

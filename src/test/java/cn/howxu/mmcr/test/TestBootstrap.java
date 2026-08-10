@@ -110,12 +110,21 @@ public final class TestBootstrap {
 
     public static void registerRuntimeBuiltins() {
         restoreMachineDefinitions();
+        registerDefaultMachineLevels();
         DynamicContentReloadService.reload(candidate -> {
             org.nibelungorum.DefaultMachines.structures().values().forEach(candidate::registerStructure);
             MMCR.registerGameTestMachineStructures(candidate);
         });
         DefaultRecipes.registerStatic(DefaultRecipes.recipes().values().stream().toList());
         MachineRegistry.rebuildCompiledCache();
+    }
+
+    private static void registerDefaultMachineLevels() {
+        if (MachineLevelRegistry.getType(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE) != null) return;
+
+        MachineLevelRegistry.beginRegistration();
+        DefaultMachineLevels.register();
+        MachineLevelRegistry.freezeRegistration();
     }
 
     private static void addTestMachineSuppliers() {
