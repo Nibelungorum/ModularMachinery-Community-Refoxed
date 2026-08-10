@@ -242,11 +242,11 @@ public final class RecipeCraftingContext {
             for (MachineRequirement requirement : requirements) {
                 if (requirement instanceof ItemRequirement item) {
                     if (item.io() == RecipeModifier.IOType.INPUT) {
-                        scaled.add(new ItemRequirement(item.io(), item.item(), Math.multiplyExact(item.count(), parallelism), item.stack(), item.chance(), item.tags()));
+                        scaled.add(new ItemRequirement(item.io(), item.item(), Math.multiplyExact(item.count(), parallelism), item.stack(), item.chance(), item.tags(), item.components(), item.consumeChance()));
                     } else {
                         ItemStack stack = item.stack().copy();
                         stack.setCount(Math.multiplyExact(stack.getCount(), parallelism));
-                        scaled.add(new ItemRequirement(item.io(), item.item(), item.count(), stack, item.chance(), item.tags()));
+                        scaled.add(new ItemRequirement(item.io(), item.item(), item.count(), stack, item.chance(), item.tags(), item.components(), item.consumeChance()));
                     }
                 } else if (requirement instanceof FluidRequirement fluid) {
                     if (fluid.io() == RecipeModifier.IOType.INPUT) {
@@ -269,11 +269,15 @@ public final class RecipeCraftingContext {
     }
 
     public boolean simulateItemInput(int requirementIndex, ItemRequirement item) {
+        if (!shouldProduce(item.consumeChance())) {
+            itemInputRoutes.set(requirementIndex, new ItemInputRoute(List.of()));
+            return true;
+        }
         List<ItemInputState> itemStates = itemInputStates(item.tags());
         List<ItemBusBlockEntity> taggedOut = excludedLiveComponents(ItemBusBlockEntity.class, IOType.INPUT, item.tags());
         List<ItemBusBlockEntity> itemHatches = liveComponents(ItemBusBlockEntity.class, IOType.INPUT, item.tags());
         List<ItemInputTransfer> transfers = new ArrayList<>();
-        MachineIngredient.ItemIngredient ingredient = new MachineIngredient.ItemIngredient(item.item(), item.count());
+        MachineIngredient.ItemIngredient ingredient = new MachineIngredient.ItemIngredient(item.item(), item.count(), item.components(), item.consumeChance());
         int remaining = item.count();
         List<ItemBusBlockEntity> matched = new ArrayList<>();
         for (ItemInputState state : itemStates) {
@@ -1037,7 +1041,7 @@ public final class RecipeCraftingContext {
         }
 
         private int extract(MachineIngredient.ItemIngredient ingredient, int remaining, List<ItemInputTransfer> transfers) {
-            if (remaining <= 0 || !ingredient.item().test(stack)) return remaining;
+            if (remaining <= 0 || !ingredient.item().test(stack) || !ingredient.components().matches(stack)) return remaining;
             int taken = Math.min(remaining, stack.getCount());
             if (taken <= 0) return remaining;
             transfers.add(new ItemInputTransfer(handler, slot, ingredient, taken));

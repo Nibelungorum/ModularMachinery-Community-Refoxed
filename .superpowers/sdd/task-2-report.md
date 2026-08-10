@@ -1,54 +1,43 @@
 # Task 2 Report
 
-## Files
+## Changes
 
-- Updated `ModelGen` to skip controller and I/O port blockstate/item model output while retaining static casing/debug models, wrench/detector flat items, and language generation.
-- Removed `MachineControllerVariants` and its obsolete test.
-- Removed static controller/port overlay model assets.
-- Moved overlay texture-name resolution into `DynamicOverlayBakedModel` and retained runtime coverage in `DynamicOverlayModelTest`.
-- Updated `ModelGenTest` and `BasicIOVariantResourceTest` for the no-generated-model behavior.
-- Removed stale ignored generated controller/port blockstate and item model files under `src/generated/resources`.
+- Extended `MachineIngredient.ItemIngredient` with data component predicates and input-only `consumeChance`, retaining the two-argument constructor's empty-predicate, certain-consumption behavior.
+- Added JSON codecs for data component predicate maps, keyed by registered data component identifiers. Item inputs emit `components` only when non-empty and `consume_chance` only when it differs from `1`.
+- Propagated both fields through `MachineRequirement`, `ItemRequirement`, runtime modifiers, parallel scaling, and `MachineRecipe#inputs`.
+- Applied component predicates while locating input item stacks. Input consumption is probabilistically skipped before routing; output `chance` remains separate.
+- Made `ItemRequirement#maxInputParallelism` return its upper limit for zero consumption chance; component-constrained and port-tagged inputs retain the existing conservative calculation.
 
-## Tests
+## Self-Review
 
-- Initial target test run failed at test compilation because the new `generatedDynamicBlocks()` test interface was not implemented yet, confirming the test-first red phase.
-- The next target run reached the new resource assertions and failed because stale generated controller/port assets were still present.
-- Final command passed:
+- Legacy constructors, legacy JSON, and all default values retain empty component predicates and `consumeChance == 1F`.
+- Derived display stacks are not serialized as recipe input data; the authoritative JSON representation remains `Ingredient` plus predicates.
+- Item requirement reconstructions during modifier application and parallel scaling retain component predicates and consumption chance.
+- Component conditions now affect actual input matching instead of only codec round-trips.
 
-  `./gradlew test --no-daemon --tests cn.howxu.mmcr.datagen.ModelGenTest --tests cn.howxu.mmcr.resources.BasicIOVariantResourceTest --tests cn.howxu.mmcr.client.model.DynamicOverlayModelTest`
+## Verification
 
-  Result: `BUILD SUCCESSFUL`, 7 tests completed.
+Command:
 
-- `git diff --check` passed.
+```bash
+./gradlew compileJava --no-daemon
+```
 
-## Commit History
+Output summary:
 
-- Initial Task 2 implementation: `dca35fe refactor: remove dynamic machine models from datagen`.
-- Task 2 follow-up: `26fbd6e fix: complete Task 2 model generation follow-up`.
-- Report update: `c267c94 docs: record Task 2 follow-up commit`.
-- Test coverage repair: `77c3955 fix: test ModelGen registration output`.
+```text
+> Task :compileJava
+BUILD SUCCESSFUL in 16s
+14 actionable tasks: 1 executed, 13 up-to-date
+```
+
+No tests were added or run, as explicitly requested. The task brief listed focused codec and recipe tests, but the user instruction overrides it with compile-only verification.
+
+## Commit
+
+Pending.
 
 ## Concerns
 
-- The generated assets are ignored by Git, so their cleanup is local working-tree cleanup rather than a tracked diff.
-- The initial implementation's final target run completed 7 tests. The follow-up run completed 8 tests after adding the additional resource assertions.
-- `cube_all_overlay.json` had no remaining static model references and is removed by the follow-up fix; dynamic runtime model assets, overlay textures, and language resources remain.
-
-## Follow-up Review Fix
-
-- Replaced the independently filtered `generatedDynamicBlocks()` test path with a collector driven by the same registration routine used by `registerModels()`; the collector records the blockstate and item model outputs that the production path requests.
-- Added default controller blockstate/item model absence and translation-key assertions; port assertions remain unchanged.
-- Removed the unreferenced `cube_all_overlay.json` resource.
-- The first follow-up verification exposed that `ModelGenTest` needed the existing `TestBootstrap` before touching NeoForge registries; the test now performs that initialization.
-- Verification before this fix: `./gradlew test --no-daemon --tests cn.howxu.mmcr.datagen.ModelGenTest --tests cn.howxu.mmcr.resources.BasicIOVariantResourceTest --tests cn.howxu.mmcr.client.model.DynamicOverlayModelTest` passed; `BUILD SUCCESSFUL`, 8 tests completed. `git diff --check` passed.
-- This repair verification: the same three targeted test classes passed; `BUILD SUCCESSFUL`, 8 tests completed. `git diff --check` passed.
-- The repair test now records blockstate/item model requests from the shared registration path; it no longer calls an independent generated-name filter.
-- Follow-up implementation commit: `26fbd6e fix: complete Task 2 model generation follow-up`.
-
-## Important Finding Repair
-
-- Updated `ModelGenTest` to derive every controller ID from `MachineDefinitions.allRegistrations()` and every port ID from `PortKinds.all()`.
-- The test now uses the complete shared collector record and separately asserts that neither `GeneratedModel.Kind.BLOCKSTATE` nor `GeneratedModel.Kind.ITEM` contains any derived controller or port ID.
-- No independent production filtering logic was added.
-- Final repair verification: `./gradlew test --no-daemon --tests cn.howxu.mmcr.datagen.ModelGenTest --tests cn.howxu.mmcr.resources.BasicIOVariantResourceTest --tests cn.howxu.mmcr.client.model.DynamicOverlayModelTest` passed; `BUILD SUCCESSFUL`, 8 tests completed. `git diff --check` passed.
-- Repair commit: current commit, `test: cover all Task 2 model exclusions`.
+- The required JSON round-trip and runtime probability behavior are compile-verified only, because no tests were requested.
+- The project reports 84 pre-existing removal/deprecation warnings during compilation; this task does not add warnings.
