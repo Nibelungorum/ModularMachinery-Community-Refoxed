@@ -165,6 +165,39 @@ class MachineControllerMenuTest {
         assertThat(MenuSupport.controllerStillPresentAndFormed(controller)).isFalse();
     }
 
+    @Test
+    void unformed_controller_menu_remains_valid_until_formation_is_observed() throws Exception {
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        controller.setLevel(LevelStub.createWithBlockEntities(List.of(controller)));
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory(), controller);
+
+        assertThat(menu.wasFormedDuringSession()).isFalse();
+    }
+
+    @Test
+    void controller_menu_becomes_invalid_after_formed_structure_unforms() throws Exception {
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        controller.setLevel(LevelStub.createWithBlockEntities(List.of(controller)));
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory(), controller);
+
+        controller.getLevel().setBlock(controller.getBlockPos(), controller.getBlockState().setValue(MachineControllerBlock.FORMED, true), 3);
+        assertThat(menu.wasFormedDuringSession()).isTrue();
+        controller.getLevel().setBlock(controller.getBlockPos(), controller.getBlockState().setValue(MachineControllerBlock.FORMED, false), 3);
+
+        assertThat(MenuSupport.controllerStillPresentAndFormed(controller)).isFalse();
+    }
+
+    @Test
+    void formed_controller_menu_records_formation_on_open() throws Exception {
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        controller.setLevel(LevelStub.createWithBlockEntities(List.of(controller)));
+        controller.getLevel().setBlock(controller.getBlockPos(), controller.getBlockState().setValue(MachineControllerBlock.FORMED, true), 3);
+
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory(), controller);
+
+        assertThat(menu.wasFormedDuringSession()).isTrue();
+    }
+
     private static Inventory emptyInventory() {
         return new Inventory(null, null);
     }

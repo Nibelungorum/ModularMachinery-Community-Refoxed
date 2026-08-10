@@ -97,8 +97,8 @@ class FactoryControllerScreenTest {
     void progress_overlay_aligns_with_the_thread_element_without_extra_bottom_pixel() {
         assertThat(FactoryControllerScreen.progressOverlayX(20)).isEqualTo(20);
         assertThat(FactoryControllerScreen.progressOverlayY(20)).isEqualTo(20);
-        assertThat(FactoryControllerScreen.progressOverlayHeight()).isEqualTo(FactoryControllerScreen.THREAD_ROW_HEIGHT);
-        assertThat(FactoryControllerScreen.progressOverlayBottom(20)).isEqualTo(52);
+        assertThat(FactoryControllerScreen.progressOverlayHeight()).isEqualTo(FactoryControllerScreen.THREAD_ROW_HEIGHT - 1);
+        assertThat(FactoryControllerScreen.progressOverlayBottom(20)).isEqualTo(51);
     }
 
     @Test

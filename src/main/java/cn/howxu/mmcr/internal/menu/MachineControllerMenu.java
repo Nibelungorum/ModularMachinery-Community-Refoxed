@@ -20,6 +20,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     private final MachineControllerBlockEntity owner;
     private final Level level;
+    private boolean wasFormedDuringSession;
     private final BlockPos pos;
     private final DataSlot formed;
     private final DataSlot active;
@@ -39,6 +40,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.owner = owner;
         this.level = playerInv.player == null ? null : playerInv.player.level();
         this.pos = owner == null ? BlockPos.ZERO : owner.getBlockPos();
+        wasFormedDuringSession = owner != null && owner.isFormed();
         this.formed = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
             @Override public int get() { return owner.isFormed() ? 1 : 0; }
             @Override public void set(int value) {}
@@ -161,6 +163,11 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         return controller == null ? formed.get() != 0 : controller.isFormed();
     }
 
+    boolean wasFormedDuringSession() {
+        if (owner != null && owner.isFormed()) wasFormedDuringSession = true;
+        return wasFormedDuringSession;
+    }
+
     public boolean hasActiveRecipe() {
         MachineControllerBlockEntity controller = resolvedOwner();
         return controller == null ? active.get() != 0 : controller.isRuntimeActive() || controller.hasClientActiveRecipe() || active.get() != 0;
@@ -266,7 +273,8 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     @Override
     public boolean stillValid(Player player) {
-        return owner == null || (MenuSupport.stillValidWithin(player, owner.getBlockPos())
-                && MenuSupport.controllerStillPresentAndFormed(owner));
+        if (owner == null) return true;
+        if (!MenuSupport.stillValidWithin(player, owner.getBlockPos())) return false;
+        return !wasFormedDuringSession() || MenuSupport.controllerStillPresentAndFormed(owner);
     }
 }
