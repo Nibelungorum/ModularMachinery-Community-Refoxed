@@ -82,6 +82,11 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
         return levels.values().stream().map(MachineMenuScreen::levelLine).toList();
     }
 
+    static String selectedFailureUnloc(FactoryControllerMenu menu) {
+        String threadFailure = menu.selectedThread().lastFailureUnloc();
+        return threadFailure.isEmpty() ? menu.lastFailureUnloc() : threadFailure;
+    }
+
     static int elementTextureWidth() { return ELEMENT_TEXTURE_WIDTH; }
     static int elementTextureHeight() { return ELEMENT_TEXTURE_HEIGHT; }
     static int threadElementY(int y) { return y + THREAD_ELEMENT_Y_OFFSET; }
@@ -177,7 +182,7 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
                 lineY = nextDetailY(lineY);
             }
         }
-        String failure = menu.lastFailureUnloc();
+        String failure = selectedFailureUnloc(menu);
         if (!failure.isEmpty()) {
             graphics.text(font, Component.translatable("gui.mmcr.controller.last_failure", Component.translatable(failure)),
                     x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);

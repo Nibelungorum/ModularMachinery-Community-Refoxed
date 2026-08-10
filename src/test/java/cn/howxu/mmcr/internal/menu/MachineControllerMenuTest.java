@@ -4,7 +4,13 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
+import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
+import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModUIs;
@@ -51,6 +57,40 @@ class MachineControllerMenuTest {
         menu.setData(1, 1);
         menu.setData(2, 35);
         menu.setData(3, 100);
+
+        assertThat(menu.hasActiveRecipe()).isTrue();
+        assertThat(menu.activeRecipeTick()).isEqualTo(35);
+        assertThat(menu.activeRecipeTotalTick()).isEqualTo(100);
+    }
+
+    @Test
+    void client_menu_uses_synced_progress_when_the_client_controller_has_an_active_recipe() throws Exception {
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        setField(MachineControllerBlockEntity.class, controller, "active", activeRecipe(MMCR.id("blast_furnace"), 0));
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory());
+        setField(MachineControllerMenu.class, menu, "level", LevelStub.createWithBlockEntities(List.of(controller)));
+
+        menu.setData(1, 1);
+        menu.setData(2, 35);
+        menu.setData(3, 100);
+
+        assertThat(menu.hasActiveRecipe()).isTrue();
+        assertThat(menu.activeRecipeTick()).isEqualTo(35);
+        assertThat(menu.activeRecipeTotalTick()).isEqualTo(100);
+    }
+
+    @Test
+    void server_menu_syncs_factory_base_thread_progress_when_controller_has_no_local_active_recipe() throws Exception {
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        FactorySchedulerBlockEntity factory = new FactorySchedulerBlockEntity(net.minecraft.core.BlockPos.ZERO,
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        setField(MachineControllerBlockEntity.class, controller, "machine", factoryMachine(MMCR.id("blast_furnace")));
+        setField(MachineControllerBlockEntity.class, controller, "components", List.of(new ProcessingComponent(
+                null, factory, net.minecraft.core.BlockPos.ZERO, net.minecraft.core.BlockPos.ZERO, List.of())));
+        setField(FactorySchedulerBlockEntity.class, factory, "scheduler", schedulerWithActiveBaseThread(MMCR.id("blast_furnace")));
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory(), controller);
+
+        menu.broadcastChanges();
 
         assertThat(menu.hasActiveRecipe()).isTrue();
         assertThat(menu.activeRecipeTick()).isEqualTo(35);
@@ -221,6 +261,29 @@ class MachineControllerMenuTest {
         setField(MachineControllerBlockEntity.class, controller, "machine", new DynamicMachine(id, "machine." + id.getPath(), new BlockArray(Map.of())));
         setField(MachineControllerBlockEntity.class, controller, "components", List.of());
         return controller;
+    }
+
+    private static DynamicMachine factoryMachine(net.minecraft.resources.Identifier id) {
+        return new DynamicMachine(id, "machine." + id.getPath(), new BlockArray(Map.of()),
+                cn.howxu.mmcr.api.machine.MachineControllerSpec.defaultsFor(id),
+                cn.howxu.mmcr.api.machine.MachineAppearanceSpec.defaults(),
+                cn.howxu.mmcr.api.machine.PortRequirementSpec.none(),
+                cn.howxu.mmcr.api.machine.PortTierRequirementSpec.none(), List.of(), Map.of(),
+                16, true, true, 1, List.of());
+    }
+
+    private static FactoryRecipeScheduler schedulerWithActiveBaseThread(net.minecraft.resources.Identifier machineId) throws Exception {
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1, new RecipeCraftingContextPool());
+        ActiveMachineRecipe active = activeRecipe(machineId, 35);
+        scheduler.allThreads().getFirst().setActiveRecipeForTesting(active);
+        return scheduler;
+    }
+
+    private static ActiveMachineRecipe activeRecipe(net.minecraft.resources.Identifier machineId, int tick) {
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("menu_progress_test"), machineId, 100, List.of(), List.of());
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, 16);
+        active.setTick(tick);
+        return active;
     }
 
     private static void setField(Class<?> type, Object target, String name, Object value) throws Exception {

@@ -152,6 +152,32 @@ class FactoryControllerScreenTest {
                 .containsExactly(MachineMenuScreen.levelLine(level));
     }
 
+    @Test
+    void detail_failure_prefers_the_selected_thread_failure() {
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        menu.applySnapshot(new FactoryControllerSnapshot(BlockPos.ZERO, true, false, 0, 2, 0, 1,
+                "Factory", 0, "gui.mmcr.controller.failure.missing_input", List.of(
+                new FactoryRecipeScheduler.ThreadSnapshot(0, true, false, false, "", 0, 0, 1, ""),
+                new FactoryRecipeScheduler.ThreadSnapshot(1, false, false, false, "", 0, 0, 1,
+                        "gui.mmcr.controller.failure.level_insufficient"))));
+
+        menu.selectThread(1);
+
+        assertThat(FactoryControllerScreen.selectedFailureUnloc(menu))
+                .isEqualTo("gui.mmcr.controller.failure.level_insufficient");
+    }
+
+    @Test
+    void detail_failure_falls_back_to_controller_failure_when_selected_thread_has_none() {
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        menu.applySnapshot(new FactoryControllerSnapshot(BlockPos.ZERO, true, false, 0, 1, 0, 1,
+                "Factory", 0, "gui.mmcr.controller.failure.missing_output",
+                List.of(new FactoryRecipeScheduler.ThreadSnapshot(0, true, false, false, "", 0, 0, 1, ""))));
+
+        assertThat(FactoryControllerScreen.selectedFailureUnloc(menu))
+                .isEqualTo("gui.mmcr.controller.failure.missing_output");
+    }
+
     private static FactoryRecipeScheduler.ThreadSnapshot thread(int index) {
         return new FactoryRecipeScheduler.ThreadSnapshot(index, false, false, false, "", 0, 0, 1);
     }

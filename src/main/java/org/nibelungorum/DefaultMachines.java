@@ -173,7 +173,8 @@ public final class DefaultMachines {
                 Integer.MAX_VALUE,
                 true,
                 true,
-                4);
+                4,
+                List.of());
     }
 
     public static Machine alloyFurnace(Block itemInput, Block itemOutput, Block energyInput) {
@@ -385,7 +386,8 @@ public final class DefaultMachines {
                 Integer.MAX_VALUE,
                 true,
                 true,
-                4);
+                4,
+                List.of());
     }
 
     private static BlockPredicate portFamily(IOType ioType, PortTierRequirementSpec.PortCategory category) {

@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -50,11 +51,11 @@ public class MachineControllerMenu extends AbstractMachineMenu {
             @Override public void set(int value) {}
         });
         this.activeTick = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return owner.getTickCounter(); }
+            @Override public int get() { return activeRecipeTick(owner); }
             @Override public void set(int value) {}
         });
         this.activeTotalTick = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return owner.getActive() == null ? 0 : owner.getActive().getTotalTick(); }
+            @Override public int get() { return activeRecipeTotalTick(owner); }
             @Override public void set(int value) {}
         });
         this.lastFailure = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
@@ -175,12 +176,35 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     public int activeRecipeTick() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null || controller.getActiveRecipe() == null ? activeTick.get() : controller.getTickCounter();
+        return owner == null ? activeTick.get() : activeRecipeTick(controller);
     }
 
     public int activeRecipeTotalTick() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null || controller.getActive() == null ? activeTotalTick.get() : controller.getActive().getTotalTick();
+        return owner == null ? activeTotalTick.get() : activeRecipeTotalTick(controller);
+    }
+
+    private static int activeRecipeTick(@Nullable MachineControllerBlockEntity controller) {
+        if (controller == null) return 0;
+        if (controller.getActiveRecipe() != null) return controller.getTickCounter();
+        FactoryRecipeScheduler.ThreadSnapshot thread = activeFactoryThread(controller);
+        return thread == null ? 0 : thread.tick();
+    }
+
+    private static int activeRecipeTotalTick(@Nullable MachineControllerBlockEntity controller) {
+        if (controller == null) return 0;
+        if (controller.getActive() != null) return controller.getActive().getTotalTick();
+        FactoryRecipeScheduler.ThreadSnapshot thread = activeFactoryThread(controller);
+        return thread == null ? 0 : thread.totalTick();
+    }
+
+    private static @Nullable FactoryRecipeScheduler.ThreadSnapshot activeFactoryThread(MachineControllerBlockEntity controller) {
+        var factory = controller.getFactoryController();
+        if (factory == null) return null;
+        return factory.threadSnapshots(controller).stream()
+                .filter(FactoryRecipeScheduler.ThreadSnapshot::active)
+                .findFirst()
+                .orElse(null);
     }
 
     public @Nullable String lastFailureMessage() {

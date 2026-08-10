@@ -372,14 +372,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     public int factorySchedulerThreadCount() {
-        long total = 0L;
         for (ProcessingComponent component : components) {
             if (component.getContainer() instanceof FactorySchedulerBlockEntity scheduler) {
-                total += scheduler.threadCount();
-                if (total >= Integer.MAX_VALUE) return Integer.MAX_VALUE;
+                return scheduler.threadCount();
             }
         }
-        return (int) total;
+        return 0;
     }
 
     public void serverTick() {
@@ -503,6 +501,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                     resetMachine(false);
                     return;
                 }
+                failure = validateFactoryControllerCount(foundMachine, foundPattern, foundCompiledPattern, facing);
+                if (failure.isPresent()) {
+                    recordFormationFailure(foundMachine, failure.get());
+                    resetMachine(false);
+                    return;
+                }
                 if (!isFormed()) setFormed(true);
                 foundLevels = levels.foundLevels();
                 updateComponents();
@@ -608,6 +612,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         }
 
         failure = validatePortTiers(candidate, rotatedPattern, compiled, facing);
+        if (failure.isPresent()) {
+            recordFormationFailure(candidate, failure.get());
+            return false;
+        }
+
+        failure = validateFactoryControllerCount(candidate, rotatedPattern, compiled, facing);
         if (failure.isPresent()) {
             recordFormationFailure(candidate, failure.get());
             return false;
@@ -867,6 +877,31 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                         1,
                         java.util.OptionalInt.empty(),
                         PortRequirementSpec.FailureReason.MISSING));
+    }
+
+    private java.util.Optional<PortRequirementSpec.Failure> validateFactoryControllerCount(
+            Machine candidate, BlockArray rotatedPattern, @Nullable CompiledMachinePattern compiledPattern, Direction facing) {
+        int count = countFactoryControllers(rotatedPattern, compiledPattern, facing);
+        if (count <= 1) return java.util.Optional.empty();
+        return java.util.Optional.of(new PortRequirementSpec.Failure(
+                "factory_controller",
+                count,
+                0,
+                java.util.OptionalInt.of(1),
+                PortRequirementSpec.FailureReason.TOO_MANY));
+    }
+
+    private int countFactoryControllers(BlockArray rotatedPattern, @Nullable CompiledMachinePattern compiledPattern, Direction facing) {
+        if (level == null || rotatedPattern == null) return 0;
+
+        List<BlockPos> positions = compiledPattern == null ? new ArrayList<>(rotatedPattern.pattern().keySet()) : compiledPattern.componentPositions(facing);
+        int count = 0;
+        for (BlockPos relativePos : positions) {
+            if (level.getBlockEntity(getBlockPos().offset(relativePos)) instanceof FactorySchedulerBlockEntity && ++count > 1) {
+                return count;
+            }
+        }
+        return count;
     }
 
     private boolean isInsideCompiledBounds(BlockPos worldPos) {

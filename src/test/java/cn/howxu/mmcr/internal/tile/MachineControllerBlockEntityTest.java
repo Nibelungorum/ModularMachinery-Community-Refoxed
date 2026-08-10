@@ -334,7 +334,7 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
-    void factory_controller_threads_are_summed_and_saturated() throws Exception {
+    void factory_thread_count_uses_first_factory_controller_only() throws Exception {
         MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
         initializeComponents(controller);
         setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
@@ -344,11 +344,36 @@ class MachineControllerBlockEntityTest {
         addFactorySchedulerComponent(controller, factoryController(new BlockPos(1, 0, 0), 64));
         addFactorySchedulerComponent(controller, factoryController(new BlockPos(2, 0, 0), 3));
 
-        assertThat(controller.factorySchedulerThreadCount()).isEqualTo(69);
+        assertThat(controller.factorySchedulerThreadCount()).isEqualTo(65);
 
         addFactorySchedulerComponent(controller, factoryController(new BlockPos(3, 0, 0), Integer.MAX_VALUE));
 
-        assertThat(controller.factorySchedulerThreadCount()).isEqualTo(Integer.MAX_VALUE);
+        assertThat(controller.factorySchedulerThreadCount()).isEqualTo(65);
+    }
+
+    @Test
+    void structure_with_multiple_factory_controllers_does_not_form() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        var machine = new DynamicMachine(
+                MMCR.id("duplicate_factory_controller_machine"),
+                "Duplicate Factory Controller",
+                twoFactoryControllersPattern(),
+                MachineControllerSpec.defaultsFor(MMCR.id("duplicate_factory_controller_machine")),
+                PortRequirementSpec.none(),
+                List.of(),
+                Map.of(),
+                1,
+                false,
+                true,
+                4);
+        FactorySchedulerBlockEntity first = factoryController(controllerPos.offset(1, 0, 0));
+        FactorySchedulerBlockEntity second = factoryController(controllerPos.offset(2, 0, 0));
+        MachineControllerBlockEntity controller = controllerForFactoriesFormation(machine, controllerPos, first, second);
+
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isFalse();
+
+        assertThat(controller.isFormed()).isFalse();
+        assertThat(controller.getFactoryController()).isNull();
     }
 
     @Test
@@ -2000,6 +2025,13 @@ class MachineControllerBlockEntityTest {
         return new BlockArray(blocks);
     }
 
+    private static BlockArray twoFactoryControllersPattern() {
+        Map<BlockPos, BlockPredicate> blocks = new HashMap<>();
+        blocks.put(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("factory_controller").get()));
+        blocks.put(new BlockPos(2, 0, 0), new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("factory_controller").get()));
+        return new BlockArray(blocks);
+    }
+
     private static BlockArray itemInputOutputPattern() {
         Map<BlockPos, BlockPredicate> blocks = new HashMap<>();
         blocks.put(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()));
@@ -2264,6 +2296,31 @@ class MachineControllerBlockEntityTest {
         Level level = LevelStub.create(blocks, List.of(controller, factory));
         setField(BlockEntity.class, controller, "level", level);
         setField(BlockEntity.class, factory, "level", level);
+        return controller;
+    }
+
+    private static MachineControllerBlockEntity controllerForFactoriesFormation(
+            DynamicMachine machine,
+            BlockPos controllerPos,
+            FactorySchedulerBlockEntity first,
+            FactorySchedulerBlockEntity second) throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        var controllerBlock = testControllerBlock(machine);
+        var controllerState = controllerBlock.defaultBlockState()
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FORMED, false)
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FACING, Direction.SOUTH)
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ROLL_FACING, Direction.NORTH);
+        setField(BlockEntity.class, controller, "worldPosition", controllerPos);
+        setField(BlockEntity.class, controller, "blockState", controllerState);
+        Map<BlockPos, Block> blocks = new HashMap<>();
+        blocks.put(controllerPos, controllerBlock);
+        blocks.put(first.getBlockPos(), cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("factory_controller").get());
+        blocks.put(second.getBlockPos(), cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("factory_controller").get());
+        Level level = LevelStub.create(blocks, List.of(controller, first, second));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, first, "level", level);
+        setField(BlockEntity.class, second, "level", level);
         return controller;
     }
 
