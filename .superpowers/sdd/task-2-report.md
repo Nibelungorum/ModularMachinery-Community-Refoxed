@@ -35,7 +35,7 @@ No tests were added or run, as explicitly requested. The task brief listed focus
 
 ## Commit
 
-Pending.
+`f935a11e2103c675395ae09945b9a2dc6c2cd8f7` (`feat: enrich recipe item inputs`)
 
 ## Concerns
 
