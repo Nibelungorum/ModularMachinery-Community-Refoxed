@@ -54,11 +54,20 @@ public final class RecipeCraftingContext {
     private @Nullable RequirementFailure lastRequirementFailure;
     private @Nullable Identifier poolRecipeId;
     private List<RecipeModifier> structureModifiers = List.of();
+    private @Nullable Map<ItemMatchKey, Boolean> itemMatchCache;
 
     public RecipeCraftingContext(MachineControllerBlockEntity controller) {
         this.controller = controller;
         this.structureVersion = controller.getStructureVersion();
         this.modifierSnapshotVersion = controller.getModifierSnapshotVersion();
+    }
+
+    void setItemMatchCache(Map<ItemMatchKey, Boolean> itemMatchCache) {
+        this.itemMatchCache = itemMatchCache;
+    }
+
+    void clearItemMatchCache() {
+        this.itemMatchCache = null;
     }
 
     public void serialize(ValueOutput output) {
@@ -287,6 +296,7 @@ public final class RecipeCraftingContext {
         lastFailureUnloc = null;
         lastRequirementFailure = null;
         structureModifiers = List.of();
+        itemMatchCache = null;
     }
 
     public void setStructureModifiers(List<RecipeModifier> modifiers) {
@@ -1310,7 +1320,7 @@ public final class RecipeCraftingContext {
         }
     }
 
-    private static ItemInputState itemInputState(List<ItemInputState> states, ItemInputTransfer transfer) {
+    private ItemInputState itemInputState(List<ItemInputState> states, ItemInputTransfer transfer) {
         for (ItemInputState state : states) {
             if (state.handler == transfer.handler() && state.slot == transfer.slot()) return state;
         }
@@ -1386,7 +1396,9 @@ public final class RecipeCraftingContext {
 
     private record FluidOutputTransfer(IFluidHandler handler, @Nullable net.minecraft.core.BlockPos pos, int tank, FluidStack stack) {}
 
-    private static final class ItemInputState {
+    record ItemMatchKey(MachineIngredient.ItemIngredient ingredient, ItemStack stack) { }
+
+    private final class ItemInputState {
         private final ItemBusBlockEntity bus;
         private final IItemHandler handler;
         private final int slot;
@@ -1409,7 +1421,12 @@ public final class RecipeCraftingContext {
         }
 
         private boolean matches(MachineIngredient.ItemIngredient ingredient) {
-            return ingredient.item().test(stack) && ingredient.components().matches(stack);
+            if (!ingredient.item().test(stack)) return false;
+            if (itemMatchCache == null || ingredient.components().isEmpty()) {
+                return ingredient.components().matches(stack);
+            }
+            ItemMatchKey key = new ItemMatchKey(ingredient, stack.copyWithCount(1));
+            return itemMatchCache.computeIfAbsent(key, ignored -> ingredient.components().matches(stack));
         }
 
         private ItemBusBlockEntity bus() {

@@ -19,6 +19,7 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.LevelInsufficientFailure;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
+import cn.howxu.mmcr.api.recipe.RecipeCandidateIndex;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
@@ -106,6 +107,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private int cachedDatapackRecipeCount = -1;
     private @Nullable Identifier cachedCandidatesMachineId;
     private List<MachineRecipe> cachedCandidates = List.of();
+    private RecipeCandidateIndex cachedCandidateIndex = RecipeCandidateIndex.empty();
     private RecipeStartDelay recipeStartDelay = new RecipeStartDelay();
     private @Nullable MachineRecipe lastRecipe;
     private long lastRecipeStructureVersion = Long.MIN_VALUE;
@@ -1061,7 +1063,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         List<MachineRecipe> candidates = recipesForMachine();
         RecipeSearchResult result;
         try {
-            result = new RecipeSearchTask(this, machineId, structureVersion, getMaxParallelism(), candidates, contextPool()).compute();
+            result = new RecipeSearchTask(this, machineId, structureVersion, getMaxParallelism(), candidates,
+                    contextPool(), cachedCandidateIndex).compute();
         } catch (RuntimeException e) {
             LOG.warn("[Ctrl#{}] tryStartNewRecipe: recipe search failed at pos={}; retrying later", instanceId, getBlockPos(), e);
             clearPendingConflictStart();
@@ -1304,6 +1307,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         cachedCandidatesReloadVersion = reloadVersion;
         cachedDatapackRecipeCount = datapackCount;
         cachedCandidates = List.copyOf(recipes.values());
+        cachedCandidateIndex = RecipeCandidateIndex.build(cachedCandidates);
         return cachedCandidates;
     }
 
@@ -1325,6 +1329,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         cachedCandidatesReloadVersion = Long.MIN_VALUE;
         cachedDatapackRecipeCount = -1;
         cachedCandidates = List.of();
+        cachedCandidateIndex = RecipeCandidateIndex.empty();
         markRecipeDirty();
     }
 

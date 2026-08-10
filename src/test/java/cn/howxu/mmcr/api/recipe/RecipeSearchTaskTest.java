@@ -180,6 +180,23 @@ class RecipeSearchTaskTest {
         assertThat(result.levelFailure()).isEqualTo(new LevelInsufficientFailure(typeId, kanthal.id(), copper.id()));
     }
 
+    @Test
+    void computeWithCandidateIndexSkipsUnrelatedExactItemCandidates() throws Exception {
+        Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
+        ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
+        bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance());
+        MachineControllerBlockEntity controller = controllerWithComponents(bus);
+        MachineRecipe iron = inputRecipe("indexed_iron", machineId, Items.IRON_INGOT, 1);
+        MachineRecipe gold = inputRecipe("indexed_gold", machineId, Items.GOLD_INGOT, 1);
+        RecipeCandidateIndex index = RecipeCandidateIndex.build(List.of(iron, gold));
+
+        RecipeSearchResult result = new RecipeSearchTask(controller, machineId, 18, 1,
+                index.allCandidates(), new RecipeCraftingContextPool(), index).compute();
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.activeRecipe().getRecipe()).isEqualTo(iron);
+    }
+
     private static MachineRecipe inputRecipe(String path, Identifier machineId, Item item, int count) {
         return inputRecipe(path, machineId, List.of(itemInput(item, count)));
     }
