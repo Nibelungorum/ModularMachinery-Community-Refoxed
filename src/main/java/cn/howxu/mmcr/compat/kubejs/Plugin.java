@@ -53,6 +53,11 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
         MachineRecipeSchema.register(registry);
     }
 
+    /**
+     * Startup and server-script helpers exposed as {@code MMCR}.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
     public static class Bindings {
         public LevelTypes levelTypes() {
             return new LevelTypes();
@@ -70,7 +75,6 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
             return new LevelSlot(id);
         }
     }
-
     public static class LevelTypes {
         public LevelTypeBuilderJS create(String id) {
             return new LevelTypeBuilderJS(id);

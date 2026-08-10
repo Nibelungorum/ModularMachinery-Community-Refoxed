@@ -4,6 +4,10 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+<<<<<<< HEAD
+=======
+import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
+>>>>>>> ab47585 (feat: expose machine levels to kubejs)
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
@@ -62,8 +66,8 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
 
                 BlockPos pos = new BlockPos(x, y, 0);
                 blocks.put(pos, toPredicate(value));
-                if (value instanceof LevelSlot slot) {
-                    levelSlots.put(pos, slot.typeId());
+                if (value instanceof LevelSlot levelSlot) {
+                    levelSlots.put(pos, levelSlot.typeId());
                 }
             }
         }
@@ -81,7 +85,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
 
     @Override
     public MachineStructureDefinition createObject() {
-        return new MachineStructureDefinition(id, pattern, portRequirements, List.of(), modifierReplacements, levelSlots);
+        return new MachineStructureDefinition(id, pattern, portRequirements, PortTierRequirementSpec.none(), List.of(), modifierReplacements, levelSlots);
     }
 
     private static BlockPredicate toPredicate(Object value) {
@@ -90,17 +94,19 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
             case Block block -> new BlockPredicate.OfBlock(block);
             case BlockState state -> new BlockPredicate.OfBlockState(state);
             case BlockPredicate predicate -> predicate;
-            case LevelSlot slot -> {
-                if (MachineLevelRegistry.getType(slot.typeId()) == null) {
-                    throw new IllegalArgumentException("Unknown machine level type: " + slot.typeId());
-                }
-                var levels = MachineLevelRegistry.levelsForType(slot.typeId());
-                if (levels.isEmpty()) {
-                    throw new IllegalArgumentException("Machine level type has no registered levels: " + slot.typeId());
-                }
-                yield state -> levels.stream().anyMatch(level -> level.statePredicate().matches(state));
-            }
+            case LevelSlot levelSlot -> levelPredicate(levelSlot);
             default -> throw new IllegalArgumentException("Unknown pattern key value: " + value);
         };
+    }
+
+    private static BlockPredicate levelPredicate(LevelSlot slot) {
+        if (MachineLevelRegistry.getType(slot.typeId()) == null) {
+            throw new IllegalArgumentException("Unknown machine level type: " + slot.typeId());
+        }
+        var levels = MachineLevelRegistry.levelsForType(slot.typeId());
+        if (levels.isEmpty()) {
+            throw new IllegalArgumentException("Machine level type has no registered levels: " + slot.typeId());
+        }
+        return new BlockPredicate.AnyOf(levels.stream().map(level -> level.statePredicate()).toList());
     }
 }

@@ -52,10 +52,15 @@ public class MachineLevelBuilderJS extends BuilderBase<MachineLevel> {
 
     public MachineLevelBuilderJS modifier(Map<String, Object> modifier) {
         LevelModifier defaults = LevelModifier.IDENTITY;
-        this.modifier = new LevelModifier(
-                doubleValue(modifier, "durationMultiplier", defaults.durationMultiplier()),
-                doubleValue(modifier, "energyMultiplier", defaults.energyMultiplier()),
-                doubleValue(modifier, "outputMultiplier", defaults.outputMultiplier()),
+        double durationMultiplier = doubleValue(modifier, "durationMultiplier", defaults.durationMultiplier());
+        double energyMultiplier = doubleValue(modifier, "energyMultiplier", defaults.energyMultiplier());
+        double outputMultiplier = doubleValue(modifier, "outputMultiplier", defaults.outputMultiplier());
+        if (durationMultiplier <= 0D || energyMultiplier <= 0D || outputMultiplier <= 0D) {
+            throw new IllegalArgumentException("Machine level multiplier values must be positive: "
+                    + (durationMultiplier <= 0D ? "durationMultiplier"
+                    : energyMultiplier <= 0D ? "energyMultiplier" : "outputMultiplier"));
+        }
+        this.modifier = new LevelModifier(durationMultiplier, energyMultiplier, outputMultiplier,
                 intValue(modifier, "parallelismBonus", defaults.parallelismBonus()),
                 intValue(modifier, "factoryThreadBonus", defaults.factoryThreadBonus()));
         return this;
