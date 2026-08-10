@@ -46,6 +46,7 @@ BUILD SUCCESSFUL in 7s
 
 - Added a two-pass re-enqueue assertion proving start scheduling resumes after the last successful lane.
 - Added an assertion proving start, tick, and finish retain independent round-robin cursors.
+- `./gradlew test --tests cn.howxu.mmcr.internal.multiblock.SharedIoCoordinatorTest --no-daemon`: `BUILD SUCCESSFUL in 15s` (4 tests completed).
 
 ## Commit
 
