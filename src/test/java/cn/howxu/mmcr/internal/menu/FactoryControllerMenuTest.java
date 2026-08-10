@@ -79,6 +79,13 @@ class FactoryControllerMenuTest {
     }
 
     @Test
+    void absent_failure_is_exposed_as_an_empty_key() {
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+
+        assertThat(menu.lastFailureUnloc()).isEmpty();
+    }
+
+    @Test
     void player_inventory_is_shifted_right_of_factory_thread_list() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null), bufferAt(BlockPos.ZERO));
 

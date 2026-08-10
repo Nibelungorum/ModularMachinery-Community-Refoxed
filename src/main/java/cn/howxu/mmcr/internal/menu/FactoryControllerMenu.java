@@ -84,7 +84,9 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
     public String machineName() { return snapshot.machineName(); }
     public int parallelSlots() { return snapshot.parallelSlots(); }
     public String lastFailureUnloc() {
-        return snapshot.lastFailureUnloc().isEmpty() ? ControllerMenuState.failureKey(state.lastFailure.get()) : snapshot.lastFailureUnloc();
+        if (!snapshot.lastFailureUnloc().isEmpty()) return snapshot.lastFailureUnloc();
+        String failure = ControllerMenuState.failureKey(state.lastFailure.get());
+        return failure == null ? "" : failure;
     }
     public List<FactoryRecipeScheduler.ThreadSnapshot> threads() { return snapshot.threads(); }
 
