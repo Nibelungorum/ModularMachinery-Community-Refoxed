@@ -286,6 +286,9 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             tooltip.add(Component.translatable("jei.mmcr.machine_recipe.consume_chance",
                     Math.round(item.consumeChance() * 100F) + "%"));
         }
+        if (item.hasUnexportedComponentConstraints()) {
+            tooltip.add(Component.translatable("jei.mmcr.machine_recipe.component_constraints"));
+        }
     }
 
     private static boolean isMouseOver(@Nullable OverflowSlotPlan slot, double mouseX, double mouseY) {

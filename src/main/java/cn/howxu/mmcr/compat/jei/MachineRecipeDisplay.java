@@ -43,9 +43,13 @@ public record MachineRecipeDisplay(
 
         for (var requirement : recipe.runtimeRequirements()) {
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT) {
+                var exactPatch = item.components().exactPatch();
                 itemInputs.add(new ItemInputDisplay(item.item().items()
-                        .map(holder -> item.components().displayStack(holder.value(), item.count())).toList(),
-                        item.count(), item.consumeChance()));
+                        .map(holder -> exactPatch
+                                .map(patch -> new ItemStack(holder, item.count(), patch))
+                                .orElseGet(() -> new ItemStack(holder, item.count())))
+                        .toList(), item.count(), item.consumeChance(),
+                        item.components().hasNonExactValues() || exactPatch.isEmpty() && !item.components().isEmpty()));
             } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.INPUT) {
                 fluidInputs.add(fluid.fluid());
                 fluidInputAmounts.add(fluid.amount());
@@ -83,7 +87,12 @@ public record MachineRecipeDisplay(
         );
     }
 
-    public record ItemInputDisplay(List<ItemStack> stacks, int count, float consumeChance) {
+    public record ItemInputDisplay(List<ItemStack> stacks, int count, float consumeChance,
+                                   boolean hasUnexportedComponentConstraints) {
+        public ItemInputDisplay(List<ItemStack> stacks, int count, float consumeChance) {
+            this(stacks, count, consumeChance, false);
+        }
+
         public ItemInputDisplay {
             stacks = stacks.stream().map(ItemStack::copy).toList();
         }

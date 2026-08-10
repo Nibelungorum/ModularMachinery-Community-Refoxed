@@ -6,6 +6,7 @@ import com.mojang.serialization.DataResult;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.DynamicOps;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.resources.Identifier;
@@ -14,6 +15,7 @@ import net.minecraft.world.item.ItemStack;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -44,6 +46,21 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
 
     public boolean isEmpty() {
         return values.isEmpty();
+    }
+
+    public Optional<DataComponentPatch> exactPatch() {
+        DataComponentPatch.Builder patch = DataComponentPatch.builder();
+        for (var entry : values.entrySet()) {
+            if (!(entry.getValue() instanceof ComponentPredicate.Exact exact)) return Optional.empty();
+            Object value = ComponentPredicates.exactValue(entry.getKey(), exact);
+            if (value == null) return Optional.empty();
+            setPatchValue(patch, entry.getKey(), value);
+        }
+        return Optional.of(patch.build());
+    }
+
+    public boolean hasNonExactValues() {
+        return values.values().stream().anyMatch(predicate -> !(predicate instanceof ComponentPredicate.Exact));
     }
 
     private static <T> DataResult<T> encode(DataComponentPredicateSet predicates, DynamicOps<T> ops, T prefix) {
@@ -90,5 +107,10 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
             value = (T) text.value();
         }
         if (value != null) stack.set(type, value);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> void setPatchValue(DataComponentPatch.Builder builder, DataComponentType<T> type, Object value) {
+        builder.set(type, (T) value);
     }
 }

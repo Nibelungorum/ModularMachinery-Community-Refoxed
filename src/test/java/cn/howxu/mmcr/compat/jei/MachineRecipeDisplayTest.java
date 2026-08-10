@@ -141,8 +141,8 @@ class MachineRecipeDisplayTest {
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
 
         ItemStack input = display.itemInputs().getFirst().stacks().getFirst();
-        assertThat(input.get(DataComponents.CUSTOM_NAME)).isEqualTo(Component.literal("Required剑"));
-        assertThat(input.getHoverName().getString()).isEqualTo("Required剑");
+        assertThat(input.get(DataComponents.CUSTOM_NAME)).isNull();
+        assertThat(display.itemInputs().getFirst().hasUnexportedComponentConstraints()).isTrue();
     }
 
     @Test
@@ -169,6 +169,26 @@ class MachineRecipeDisplayTest {
         assertThat(display.itemInputs().getFirst().consumeChance()).isZero();
         assertThat(input.get(DataComponents.ENCHANTMENTS))
                 .isEqualTo(sharpnessTwoSword.get(DataComponents.ENCHANTMENTS));
+        assertThat(display.itemInputs().getFirst().hasUnexportedComponentConstraints()).isFalse();
+    }
+
+    @Test
+    void displayFallsBackToBaseStackForRangeComponentPredicates() {
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("range_component_input_display"),
+                MMCR.id("blast_furnace"),
+                40,
+                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.DIAMOND_SWORD), 1,
+                        new DataComponentPredicateSet(Map.of(DataComponents.MAX_STACK_SIZE,
+                                ComponentPredicate.range(1, 4))), 1F)),
+                List.of()
+        );
+
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+
+        ItemStack input = display.itemInputs().getFirst().stacks().getFirst();
+        assertThat(input.isComponentsPatchEmpty()).isTrue();
+        assertThat(display.itemInputs().getFirst().hasUnexportedComponentConstraints()).isTrue();
     }
 
     @Test
@@ -242,10 +262,11 @@ class MachineRecipeDisplayTest {
     void translationsIncludeOverflowTooltips() {
         assertThat(Translations.ALL.get("en_us"))
                 .containsKeys("jei.mmcr.machine_recipe.input_overflow", "jei.mmcr.machine_recipe.output_overflow",
-                        "jei.mmcr.machine_recipe.overflow_entry");
+                        "jei.mmcr.machine_recipe.overflow_entry", "jei.mmcr.machine_recipe.component_constraints");
         assertThat(Translations.ALL.get("zh_cn"))
                 .containsEntry("jei.mmcr.machine_recipe.output_overflow", "其余产物：")
-                .containsKeys("jei.mmcr.machine_recipe.input_overflow", "jei.mmcr.machine_recipe.overflow_entry");
+                .containsKeys("jei.mmcr.machine_recipe.input_overflow", "jei.mmcr.machine_recipe.overflow_entry",
+                        "jei.mmcr.machine_recipe.component_constraints");
     }
 
     @Test
