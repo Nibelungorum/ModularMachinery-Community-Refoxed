@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.helper.EnergyRecipeIo;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -28,6 +29,8 @@ import net.minecraft.world.level.storage.ValueOutput;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Comparator;
+import java.util.Map;
 
 public final class RecipeCraftingContext {
 
@@ -301,6 +304,52 @@ public final class RecipeCraftingContext {
         return List.copyOf(result);
     }
 
+    public List<MachineRequirement> runtimeRequirements(MachineRecipe recipe) {
+        double energyMultiplier = levelMultiplier(MachineLevel::modifier, LevelValue.ENERGY);
+        double outputMultiplier = levelMultiplier(MachineLevel::modifier, LevelValue.OUTPUT);
+        return recipe.runtimeRequirements(structureModifiers, energyMultiplier, outputMultiplier);
+    }
+
+    public int levelModifiedDuration(MachineRecipe recipe) {
+        double duration = recipe.getRecipeTotalTickTime() * levelMultiplier(MachineLevel::modifier, LevelValue.DURATION);
+        return IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyDuration(effectiveModifiers(recipe), floorNonNegative(duration)));
+    }
+
+    public int levelModifiedParallelism(int base, int maximum) {
+        int bonus = sortedLevels().stream().mapToInt(level -> level.modifier().parallelismBonus()).sum();
+        return Math.max(1, Math.min(maximum, base + bonus));
+    }
+
+    private List<MachineLevel> sortedLevels() {
+        Map<Identifier, MachineLevel> foundLevels = controller.getFoundLevels();
+        if (foundLevels == null || foundLevels.isEmpty()) return List.of();
+        return foundLevels.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(Comparator.comparing(Identifier::toString)))
+                .map(Map.Entry::getValue)
+                .toList();
+    }
+
+    private double levelMultiplier(java.util.function.Function<MachineLevel, cn.howxu.mmcr.api.machine.level.LevelModifier> accessor,
+                                   LevelValue value) {
+        double multiplier = 1D;
+        for (MachineLevel level : sortedLevels()) {
+            var modifier = accessor.apply(level);
+            multiplier *= switch (value) {
+                case DURATION -> modifier.durationMultiplier();
+                case ENERGY -> modifier.energyMultiplier();
+                case OUTPUT -> modifier.outputMultiplier();
+            };
+        }
+        return multiplier;
+    }
+
+    private static int floorNonNegative(double value) {
+        if (value <= 0D) return 0;
+        return value >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.floor(value);
+    }
+
+    private enum LevelValue { DURATION, ENERGY, OUTPUT }
+
     void setPoolRecipeId(Identifier recipeId) {
         this.poolRecipeId = recipeId;
     }
@@ -394,7 +443,7 @@ public final class RecipeCraftingContext {
     public int maxInputParallelism(MachineRecipe recipe, int limit) {
         int max = Math.max(1, limit);
         int best = max;
-        for (MachineRequirement requirement : recipe.runtimeRequirements(structureModifiers)) {
+        for (MachineRequirement requirement : runtimeRequirements(recipe)) {
             if (requirement.io() != RecipeModifier.IOType.INPUT) continue;
             int requirementMax = requirement.maxInputParallelism(this, max);
             if (requirementMax < 0) return -1;
@@ -435,7 +484,7 @@ public final class RecipeCraftingContext {
     }
 
     private List<MachineRequirement> scaledRequirements(MachineRecipe recipe, int parallelism) {
-        List<MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
+        List<MachineRequirement> requirements = runtimeRequirements(recipe);
         if (parallelism <= 1) return requirements;
         try {
             List<MachineRequirement> scaled = new ArrayList<>(requirements.size());
@@ -652,7 +701,7 @@ public final class RecipeCraftingContext {
     }
 
     public boolean commitInputs(MachineRecipe recipe) {
-        return commitInputs(recipe.runtimeRequirements(structureModifiers));
+        return commitInputs(runtimeRequirements(recipe));
     }
 
     private boolean commitInputs(List<MachineRequirement> requirements) {
@@ -688,7 +737,7 @@ public final class RecipeCraftingContext {
     }
 
     public boolean commitOutputs(MachineRecipe recipe) {
-        return commitOutputs(recipe.runtimeRequirements(structureModifiers));
+        return commitOutputs(runtimeRequirements(recipe));
     }
 
     private boolean commitOutputs(List<MachineRequirement> requirements) {

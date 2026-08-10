@@ -288,13 +288,48 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
      * The argument must contain only structure/runtime modifiers; recipe-local modifiers are added here.
      */
     public List<MachineRequirement> runtimeRequirements(List<RecipeModifier> extraModifiers) {
+        return runtimeRequirements(extraModifiers, 1D, 1D);
+    }
+
+    /**
+     * Returns runtime requirements after applying independent machine-level multipliers before normal modifiers.
+     */
+    public List<MachineRequirement> runtimeRequirements(List<RecipeModifier> extraModifiers,
+                                                        double energyMultiplier, double outputMultiplier) {
         List<RecipeModifier> effective = combineModifiers(extraModifiers);
-        if (effective.isEmpty()) return requirements;
         List<MachineRequirement> derived = new ArrayList<>(requirements.size());
         for (MachineRequirement requirement : requirements) {
-            derived.add(applyModifiers(requirement, effective));
+            derived.add(applyModifiers(applyLevelModifiers(requirement, energyMultiplier, outputMultiplier), effective));
         }
         return List.copyOf(derived);
+    }
+
+    private static MachineRequirement applyLevelModifiers(MachineRequirement requirement,
+                                                          double energyMultiplier, double outputMultiplier) {
+        if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
+            ItemStack stack = item.stack().copy();
+            stack.setCount(levelOutputCount(stack.getCount(), outputMultiplier));
+            return new ItemRequirement(item.io(), item.item(), item.count(), stack, item.chance(), item.tags());
+        }
+        if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT) {
+            FluidStack stack = fluid.stack().copy();
+            stack.setAmount(levelOutputCount(stack.getAmount(), outputMultiplier));
+            return new FluidRequirement(fluid.io(), fluid.fluid(), fluid.amount(), stack, fluid.chance(), fluid.tags());
+        }
+        if (requirement instanceof EnergyRequirement energy) {
+            return new EnergyRequirement(energy.io(), floorNonNegative(energy.fePerTick() * energyMultiplier), energy.tags());
+        }
+        return requirement;
+    }
+
+    private static int levelOutputCount(int original, double multiplier) {
+        int result = floorNonNegative(original * multiplier);
+        return original > 0 ? Math.max(1, result) : result;
+    }
+
+    private static int floorNonNegative(double value) {
+        if (value <= 0D) return 0;
+        return value >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.floor(value);
     }
 
     public List<MachineOutput> runtimeMachineOutputs() {

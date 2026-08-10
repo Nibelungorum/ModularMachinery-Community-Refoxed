@@ -16,6 +16,7 @@ public record RecipeSearchResult(
         @Nullable RecipeCraftingContext context,
         @Nullable String failureUnloc,
         @Nullable RequirementFailure requirementFailure,
+        @Nullable LevelInsufficientFailure levelFailure,
         float validity,
         boolean hasMoreSpecificPendingInputCandidate) {
 
@@ -24,7 +25,7 @@ public record RecipeSearchResult(
         if (success) {
             Objects.requireNonNull(activeRecipe, "activeRecipe");
             Objects.requireNonNull(context, "context");
-            if (failureUnloc != null || requirementFailure != null) {
+            if (failureUnloc != null || requirementFailure != null || levelFailure != null) {
                 throw new IllegalArgumentException("Successful recipe search results must not carry a failure");
             }
         } else if (activeRecipe != null || context != null) {
@@ -37,7 +38,7 @@ public record RecipeSearchResult(
                                              Identifier machineId,
                                              long structureVersion,
                                              boolean hasMoreSpecificPendingInputCandidate) {
-        return new RecipeSearchResult(true, machineId, structureVersion, activeRecipe, context, null, null, 1.0F, hasMoreSpecificPendingInputCandidate);
+        return new RecipeSearchResult(true, machineId, structureVersion, activeRecipe, context, null, null, null, 1.0F, hasMoreSpecificPendingInputCandidate);
     }
 
     public static RecipeSearchResult success(ActiveMachineRecipe activeRecipe, RecipeCraftingContext context, Identifier machineId, long structureVersion) {
@@ -49,6 +50,11 @@ public record RecipeSearchResult(
                                              @Nullable String failureUnloc,
                                              @Nullable RequirementFailure requirementFailure,
                                              float validity) {
-        return new RecipeSearchResult(false, machineId, structureVersion, null, null, failureUnloc, requirementFailure, validity, false);
+        return new RecipeSearchResult(false, machineId, structureVersion, null, null, failureUnloc, requirementFailure, null, validity, false);
+    }
+
+    public static RecipeSearchResult levelFailure(Identifier machineId, long structureVersion,
+                                                  LevelInsufficientFailure levelFailure) {
+        return new RecipeSearchResult(false, machineId, structureVersion, null, null, null, null, levelFailure, 1.0F, false);
     }
 }

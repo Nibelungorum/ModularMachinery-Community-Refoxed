@@ -3,6 +3,8 @@ package cn.howxu.mmcr.api.recipe;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
+import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
@@ -31,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -166,6 +169,30 @@ class ActiveMachineRecipeTest {
         assertThat(active.tick(context)).isEqualTo(ActiveMachineRecipe.TickStatus.CANCELLED);
         assertThat(active.getTick()).isZero();
         assertThat(context.getLastFailureUnloc()).isEqualTo(RecipeCraftingContext.FAILURE_MISSING_OUTPUT);
+    }
+
+    @Test
+    void levelEffectsApplyBeforeOrdinaryModifiersAndKeepPositiveOutput() throws Exception {
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("level_effects"), MMCR.id("blast_furnace"), 20,
+                List.of(), List.of(),
+                List.of(new RecipeModifier("duration", RecipeModifier.IOType.INPUT, 2F, RecipeModifier.Operation.MULTIPLY, false),
+                        new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 0.5F, RecipeModifier.Operation.MULTIPLY, false)),
+                0, 1, false, List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, Ingredient.of(Items.IRON_INGOT), 1,
+                        Items.IRON_INGOT.getDefaultInstance(), 1F, List.of())), false);
+        MachineControllerBlockEntity controller = controllerWithComponents();
+        MachineLevel level = new MachineLevel(MMCR.id("level"), MMCR.id("coil"), 1,
+                new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState(net.minecraft.world.level.block.Blocks.IRON_BLOCK.defaultBlockState()),
+                ItemStack.EMPTY, new LevelModifier(0.5D, 1D, 0.5D, 0, 0));
+        setField(MachineControllerBlockEntity.class, controller, "foundLevels", Map.of(level.typeId(), level));
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
+
+        active.refreshTotalTick(context);
+
+        assertThat(active.getTotalTick()).isEqualTo(20);
+        assertThat(context.runtimeRequirements(recipe)).singleElement().satisfies(requirement ->
+                assertThat(((ItemRequirement) requirement).stack().getCount()).isEqualTo(1));
     }
 
     private static MachineRecipe inputRecipe(String path, net.minecraft.resources.Identifier machineId, Item item, int count) {

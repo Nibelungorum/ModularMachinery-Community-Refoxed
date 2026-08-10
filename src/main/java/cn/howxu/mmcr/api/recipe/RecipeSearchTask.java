@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -48,6 +50,13 @@ public final class RecipeSearchTask {
             ActiveMachineRecipe activeRecipe = new ActiveMachineRecipe(recipe, maxParallelism);
             RecipeCraftingContext context = null;
             context = contextPool.borrow(activeRecipe, controller);
+            if (context.simulateInputs(recipe)) {
+                LevelInsufficientFailure levelFailure = levelFailure(recipe);
+                if (levelFailure != null) {
+                    contextPool.returnContext(context);
+                    return RecipeSearchResult.levelFailure(machineId, structureVersion, levelFailure);
+                }
+            }
             if (activeRecipe.canStartCrafting(context)) {
                 LOG.info("[ParallelSearch] machine={} recipe={} recipeParallelized={} searchMaxParallelism={} selectedParallelism={} structureVersion={}",
                         machineId,
@@ -70,6 +79,18 @@ public final class RecipeSearchTask {
         }
 
         return RecipeSearchResult.failure(machineId, structureVersion, bestFailureUnloc, bestFailure, bestValidity);
+    }
+
+    private @Nullable LevelInsufficientFailure levelFailure(MachineRecipe recipe) {
+        for (LevelRequirement requirement : recipe.levelRequirements()) {
+            MachineLevel required = MachineLevelRegistry.getLevel(requirement.levelId());
+            MachineLevel actual = controller.getFoundLevels().get(requirement.typeId());
+            if (required == null || actual == null || actual.priority() < required.priority()) {
+                return new LevelInsufficientFailure(requirement.typeId(), requirement.levelId(),
+                        actual == null ? null : actual.id());
+            }
+        }
+        return null;
     }
 
     private List<MachineRecipe> orderedCandidates() {

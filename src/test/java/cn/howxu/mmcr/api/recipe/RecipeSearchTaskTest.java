@@ -1,6 +1,10 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -24,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -148,6 +153,33 @@ class RecipeSearchTaskTest {
         assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(6);
     }
 
+    @Test
+    void computeBlocksLowerPriorityFallbackWhenFirstInputMatchHasInsufficientLevel() throws Exception {
+        Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
+        Identifier typeId = Identifier.fromNamespaceAndPath("test", "coil");
+        MachineLevel copper = level("task5:copper", typeId, 1, net.minecraft.world.level.block.Blocks.COPPER_BLOCK);
+        MachineLevel kanthal = level("task5:kanthal", typeId, 2, net.minecraft.world.level.block.Blocks.IRON_BLOCK);
+        MachineLevelRegistry.beginRegistration();
+        MachineLevelRegistry.registerType(new LevelType(typeId, net.minecraft.network.chat.Component.literal("Coils")));
+        MachineLevelRegistry.registerLevel(copper);
+        MachineLevelRegistry.registerLevel(kanthal);
+        MachineLevelRegistry.freezeRegistration();
+
+        ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
+        bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance());
+        MachineControllerBlockEntity controller = controllerWithComponents(bus);
+        setField(MachineControllerBlockEntity.class, controller, "foundLevels", Map.of(typeId, copper));
+        MachineRecipe highPriority = recipeWithLevels("high_priority", machineId, Items.IRON_INGOT, 0,
+                List.of(new LevelRequirement(typeId, kanthal.id())));
+        MachineRecipe lowerPriority = recipeWithLevels("lower_priority", machineId, Items.IRON_INGOT, 1, List.of());
+
+        RecipeSearchResult result = new RecipeSearchTask(controller, machineId, 17, 1,
+                List.of(lowerPriority, highPriority), new RecipeCraftingContextPool()).compute();
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.levelFailure()).isEqualTo(new LevelInsufficientFailure(typeId, kanthal.id(), copper.id()));
+    }
+
     private static MachineRecipe inputRecipe(String path, Identifier machineId, Item item, int count) {
         return inputRecipe(path, machineId, List.of(itemInput(item, count)));
     }
@@ -174,6 +206,20 @@ class RecipeSearchTaskTest {
 
     private static ItemRequirement itemInput(Item item, int count) {
         return new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(item), count, ItemStack.EMPTY);
+    }
+
+    private static MachineRecipe recipeWithLevels(String path, Identifier machineId, Item item, int priority,
+                                                  List<LevelRequirement> levelRequirements) {
+        return new MachineRecipe(Identifier.fromNamespaceAndPath("mmcr", path), machineId, 20,
+                List.of(), List.of(), List.of(), priority, 1, false, List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(item), 1, ItemStack.EMPTY)),
+                false, levelRequirements);
+    }
+
+    private static MachineLevel level(String id, Identifier typeId, int priority, net.minecraft.world.level.block.Block block) {
+        return new MachineLevel(Identifier.parse(id), typeId, priority,
+                new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState(block.defaultBlockState()),
+                ItemStack.EMPTY, LevelModifier.IDENTITY);
     }
 
     private static ItemInputBusBlockEntity itemInputBus(BlockPos pos) throws Exception {

@@ -16,6 +16,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.LevelInsufficientFailure;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
@@ -84,6 +85,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private Boolean lastBroadcastFormed;
     private boolean lastBroadcastActive;
     private @Nullable String lastFailureUnloc;
+    private @Nullable LevelInsufficientFailure recipeFailure;
     private @Nullable PortRequirementSpec.Failure lastFormationFailure;
     private @Nullable String lastStructureMismatchDiagnostic;
     private @Nullable Object lastStructureError;
@@ -172,6 +174,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     public long getModifierSnapshotVersion() { return modifierSnapshotVersion; }
 
     public @Nullable String getLastFailureUnloc() { return lastFailureUnloc; }
+
+    public @Nullable LevelInsufficientFailure getRecipeFailure() { return recipeFailure; }
 
     public @Nullable PortRequirementSpec.Failure getLastFormationFailure() { return lastFormationFailure; }
 
@@ -304,7 +308,13 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 if (max >= machine.maxParallelism()) return machine.maxParallelism();
             }
         }
-        return Math.max(1, (int) max);
+        int base = Math.max(1, (int) max);
+        int levelBonus = foundLevels == null ? 0 : foundLevels.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(java.util.Comparator.comparing(Identifier::toString)))
+                .map(Map.Entry::getValue)
+                .mapToInt(foundLevel -> foundLevel.modifier().parallelismBonus())
+                .sum();
+        return Math.max(1, Math.min(machine.maxParallelism(), base + levelBonus));
     }
 
     public int parallelControllerCount() {
@@ -341,7 +351,13 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     public int effectiveFactoryThreadLimit() {
         if (machine == null || !machine.hasFactory()) return 1;
         int aggregatedThreads = factorySchedulerThreadCount();
-        return aggregatedThreads <= 0 ? 1 : aggregatedThreads;
+        int levelBonus = foundLevels == null ? 0 : foundLevels.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(java.util.Comparator.comparing(Identifier::toString)))
+                .map(Map.Entry::getValue)
+                .mapToInt(foundLevel -> foundLevel.modifier().factoryThreadBonus())
+                .sum();
+        long effective = Math.max(1, aggregatedThreads) + levelBonus;
+        return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, effective));
     }
 
     public int factorySchedulerThreadCount() {
@@ -425,6 +441,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         factory.syncCoreThreads(this, machine, candidates, pool);
         factory.tickScheduler(this, candidates, structureVersion, maxParallelism, pool);
         setActiveState(factory.activeThreadCount() > 0);
+        if (factory.activeThreadCount() > 0) {
+            lastFailureUnloc = null;
+            recipeFailure = null;
+        }
     }
 
     @Override
@@ -942,6 +962,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         returnContext(pausedContext);
         pausedContext = null;
         lastFailureUnloc = null;
+        recipeFailure = null;
         if (clearFormationFailure) lastFormationFailure = null;
         if (clearFormationFailure) lastStructureError = null;
         redstonePaused = false;
@@ -991,6 +1012,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             clearPendingConflictStart();
             recipeSearchRetryCounter++;
             lastFailureUnloc = RecipeCraftingContext.FAILURE_SEARCH_EXCEPTION;
+            recipeFailure = null;
             return false;
         }
         if (result.success()) {
@@ -999,6 +1021,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         clearPendingConflictStart();
         recipeSearchRetryCounter++;
         lastFailureUnloc = result.failureUnloc();
+        recipeFailure = result.levelFailure();
+        if (recipeFailure != null) {
+            lastFailureUnloc = "gui.mmcr.controller.failure.level_insufficient";
+        }
         return false;
     }
 
@@ -1050,6 +1076,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         rememberLastRecipe(next.getRecipe());
         recipeSearchRetryCounter = 0;
         lastFailureUnloc = null;
+        recipeFailure = null;
         setChanged();
         return true;
     }
@@ -1103,6 +1130,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             setActiveState(true);
             recipeSearchRetryCounter = 0;
             lastFailureUnloc = null;
+            recipeFailure = null;
             setChanged();
             return true;
         } finally {
@@ -1137,6 +1165,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         }
         ActiveMachineRecipe.TickStatus status = active.tick(context, (int) Math.min(Integer.MAX_VALUE, Math.max(0L, currentGameTime())));
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
+            lastFailureUnloc = null;
+            recipeFailure = null;
             returnContext(context);
             active = null;
             context = null;
@@ -1155,6 +1185,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 context = null;
                 setActiveState(false);
             }
+        } else {
+            lastFailureUnloc = null;
+            recipeFailure = null;
         }
         setChanged();
     }

@@ -79,9 +79,7 @@ public final class ActiveMachineRecipe {
     }
 
     public void refreshTotalTick(RecipeCraftingContext context) {
-        this.totalTick = IntegrationTypeHelper.asInt(
-                IntegrationTypeHelper.applyDuration(
-                        context.effectiveModifiers(recipe), recipe.getRecipeTotalTickTime()));
+        this.totalTick = context.levelModifiedDuration(recipe);
     }
 
     public int getMaxParallelism() {
