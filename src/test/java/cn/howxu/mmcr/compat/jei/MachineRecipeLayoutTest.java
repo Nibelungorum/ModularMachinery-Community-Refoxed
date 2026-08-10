@@ -181,4 +181,17 @@ class MachineRecipeLayoutTest {
         assertThat(MachineRecipeCategory.RECIPE_ARROW_X).isEqualTo(64);
         assertThat(MachineRecipeCategory.RECIPE_ARROW_Y).isEqualTo(8);
     }
+
+    @Test
+    void levelRequirementRowsFollowTheEnergyRows() {
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("jei_level_layout"), MMCR.id("blast_furnace"), 100,
+                List.of(new MachineIngredient.EnergyIngredient(40)), List.of(), List.of(), 0, 1,
+                false, List.of());
+        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(MachineRecipeDisplay.from(recipe));
+
+        assertThat(layout.levelRequirementY(MachineRecipeDisplay.from(recipe), 0))
+                .isEqualTo(layout.durationTextY() + 20);
+    }
+
 }

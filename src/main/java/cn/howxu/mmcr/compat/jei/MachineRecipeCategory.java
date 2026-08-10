@@ -1,6 +1,9 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.recipe.LevelRequirement;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.compat.jei.MachineRecipeLayout.OverflowSlotPlan;
 import cn.howxu.mmcr.registry.ModBlocks;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
@@ -24,6 +27,7 @@ import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Comparator;
 
 /**
  * JEI category for MMCR machine recipes.
@@ -41,8 +45,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private final IRecipeType<MachineRecipeDisplay> recipeType;
     private final IDrawable icon;
     private final IDrawable slotBackground;
+    private final IGuiHelper guiHelper;
 
     public MachineRecipeCategory(IGuiHelper guiHelper, Machine machine) {
+        this.guiHelper = guiHelper;
         this.machine = machine;
         this.recipeType = JeiMachineRecipeTypes.forMachine(machine.registryName());
         this.icon = guiHelper.createDrawableItemLike(ModBlocks.controllerFor(machine.registryName()).get());
@@ -85,6 +91,18 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     @Override
     public void createRecipeExtras(IRecipeExtrasBuilder builder, MachineRecipeDisplay recipe, IFocusGroup focuses) {
         builder.addAnimatedRecipeArrow(200).setPosition(RECIPE_ARROW_X, RECIPE_ARROW_Y);
+        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
+        List<LevelRequirementDisplay> levelRequirements = levelRequirements(recipe.recipe());
+        for (int index = 0; index < levelRequirements.size(); index++) {
+            LevelRequirementDisplay requirement = levelRequirements.get(index);
+            int textX = layout.durationTextX();
+            int y = layout.levelRequirementY(recipe, index);
+            if (!requirement.representative().isEmpty()) {
+                builder.addDrawable(guiHelper.createDrawableItemStack(requirement.representative()), textX, y - 4);
+                textX += 18;
+            }
+            builder.addText(requirement.text(), textX, y);
+        }
     }
 
     @Override
@@ -147,6 +165,23 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
         return Component.translatable(stack.getItem().getDescriptionId());
     }
+
+    static List<LevelRequirementDisplay> levelRequirements(MachineRecipe recipe) {
+        return recipe.levelRequirements().stream()
+                .sorted(Comparator.comparing((LevelRequirement requirement) -> requirement.typeId().toString())
+                        .thenComparing(requirement -> requirement.levelId().toString()))
+                .map(requirement -> {
+                    var level = MachineLevelRegistry.getLevel(requirement.levelId());
+                    Component typeName = Component.translatable(requirement.typeId().toLanguageKey());
+                    Component levelName = Component.translatable(requirement.levelId().toLanguageKey());
+                    ItemStack representative = level == null ? ItemStack.EMPTY : level.representative();
+                    return new LevelRequirementDisplay(representative,
+                            Component.translatable("jei.mmcr.machine_recipe.level_requirement", typeName, levelName));
+                })
+                .toList();
+    }
+
+    record LevelRequirementDisplay(ItemStack representative, Component text) {}
 
     private static void addRegion(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe,
             MachineRecipeLayout.RegionPlan region, boolean input) {

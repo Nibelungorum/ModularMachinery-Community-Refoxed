@@ -254,6 +254,7 @@ public final class Translations {
                     Map.entry("jei.mmcr.machine_recipe.duration", "Duration: %s t %s s"),
                     Map.entry("jei.mmcr.machine_recipe.energy_in", "Energy Input: %s FE/t"),
                     Map.entry("jei.mmcr.machine_recipe.energy_out", "Energy Output: %s FE/t"),
+                    Map.entry("jei.mmcr.machine_recipe.level_requirement", "%s: %s or higher"),
                     Map.entry("jei.mmcr.machine_recipe.input_overflow", "Additional ingredients:"),
                     Map.entry("jei.mmcr.machine_recipe.output_overflow", "Additional outputs:"),
                     Map.entry("jei.mmcr.machine_recipe.overflow_entry", "%s x %s"),
@@ -497,6 +498,7 @@ Map.entry("zh_cn", Map.ofEntries(
                     Map.entry("jei.mmcr.machine_recipe.duration", "耗时：%s tick %s 秒"),
                     Map.entry("jei.mmcr.machine_recipe.energy_in", "能量输入：%s FE/t"),
                     Map.entry("jei.mmcr.machine_recipe.energy_out", "能量输出：%s FE/t"),
+                    Map.entry("jei.mmcr.machine_recipe.level_requirement", "%s：%s 或更高"),
                     Map.entry("jei.mmcr.transfer.fluid_energy_not_supported", "仅支持转移物品输入；流体和能量需要通过对应端口供应。"),
                     Map.entry("jei.mmcr.transfer.no_item_inputs", "该配方没有可转移的物品输入。"),
                     Map.entry("jei.mmcr.transfer.not_enough_slots", "该配方的物品总线槽位不足")))

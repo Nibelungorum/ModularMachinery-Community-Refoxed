@@ -1,18 +1,26 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.datagen.Translations;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
@@ -168,6 +176,31 @@ class MachineRecipeDisplayTest {
         ItemStack stack = new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 3);
 
         assertThat(MachineRecipeCategory.outputStackName(stack).getString()).isNotEmpty();
+    }
+
+    @Test
+    void levelRequirementUsesRepresentativeItemAndLocalizedOrHigherText() {
+        var typeId = MMCR.id("coil");
+        var levelId = MMCR.id("kanthal");
+        MachineLevelRegistry.beginRegistration();
+        MachineLevelRegistry.registerType(new LevelType(typeId, Component.literal("Coils")));
+        MachineLevelRegistry.registerLevel(new MachineLevel(levelId, typeId, 1,
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()),
+                new ItemStack(Holder.direct(Items.IRON_INGOT, DataComponentMap.EMPTY), 1), LevelModifier.IDENTITY));
+        MachineLevelRegistry.freezeRegistration();
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("jei_level_display"), MMCR.id("blast_furnace"), 100,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
+                List.of(new LevelRequirement(typeId, levelId)));
+
+        assertThat(MachineRecipeCategory.levelRequirements(recipe))
+                .singleElement()
+                .satisfies(requirement -> {
+                    assertThat(requirement.representative().is(Items.IRON_INGOT)).isTrue();
+                    assertThat(requirement.text().getString()).isEqualTo("jei.mmcr.machine_recipe.level_requirement");
+                });
+        assertThat(Translations.ALL.get("en_us").get("jei.mmcr.machine_recipe.level_requirement"))
+                .contains("or higher");
     }
 
     private static MachineRecipe recipe(String id, String machine, int priority) {

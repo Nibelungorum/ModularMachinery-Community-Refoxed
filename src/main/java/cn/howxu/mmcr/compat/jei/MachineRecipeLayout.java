@@ -100,6 +100,10 @@ public record MachineRecipeLayout(
         return !outputs.hiddenEntries().isEmpty();
     }
 
+    public int levelRequirementY(MachineRecipeDisplay display, int index) {
+        return durationTextY + 10 * (1 + display.energyInputs().size() + display.energyOutputs().size() + index);
+    }
+
     public enum Kind { ITEM, FLUID }
 
     public record EntryPlan(Kind kind, int index) {}
