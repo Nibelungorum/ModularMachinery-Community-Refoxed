@@ -84,3 +84,22 @@ Verification:
 - `./gradlew test --tests cn.howxu.mmcr.internal.recipe.FactoryRecipeSchedulerTest --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest --tests cn.howxu.mmcr.api.recipe.RecipeCraftingContextTest --no-daemon`
 - Result: `BUILD SUCCESSFUL in 17s` (17 actionable tasks: 2 executed, 15 up-to-date).
 - `git diff --check` completed without output.
+
+## Final Important Follow-up
+
+Status: fixed.
+
+- Shared-domain `RecipeThread` now performs a live `simulateOutputs` preflight inside its final `TickRequest` transaction before calling `coordinatorIoTick`.
+- A failed preflight is treated as an ungranted tick: it leaves the active recipe at its prior tick, retains inputs and energy, and does not enter `finishPending`.
+- Added `sharedFinalTickPreflightsFullOutputBeforeConsumingIo`, a real shared-domain integration regression using item input, energy input, and item output ports. It starts with every output slot full, proves the old implementation's forbidden consumption is prevented, then frees one slot and proves exactly one subsequent input/energy consumption and output production.
+- The existing post-IO output-block regression remains unchanged, preserving finish-only retry behavior when IO side effects make an initially valid output unavailable.
+
+TDD failure evidence:
+
+- Before the preflight implementation, `./gradlew test --tests cn.howxu.mmcr.internal.recipe.FactoryRecipeSchedulerTest --no-daemon` failed with `sharedFinalTickPreflightsFullOutputBeforeConsumingIo()`.
+
+Verification:
+
+- `./gradlew test --tests cn.howxu.mmcr.internal.recipe.FactoryRecipeSchedulerTest --tests cn.howxu.mmcr.internal.multiblock.SharedIoCoordinatorTest --tests cn.howxu.mmcr.api.recipe.RecipeCraftingContextTest --no-daemon`
+- Result: `BUILD SUCCESSFUL in 20s` (17 actionable tasks: 2 executed, 15 up-to-date).
+- `git diff --check` completed without output.

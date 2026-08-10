@@ -512,6 +512,69 @@ class FactoryRecipeSchedulerTest {
     }
 
     @Test
+    void sharedFinalTickPreflightsFullOutputBeforeConsumingIo() throws Exception {
+        Items.IRON_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 64).build());
+        Items.COBBLESTONE.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 64).build());
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(2, 64, 0));
+        EnergyInputHatchBlockEntity energy = energyInputHatch(new BlockPos(3, 64, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 1));
+        for (int slot = 0; slot < output.getItemStackHandler(null).getSlots(); slot++) {
+            output.getItemStackHandler(null).setStackInSlot(slot, new ItemStack(Items.COBBLESTONE, 64));
+        }
+        energy.getMutableEnergyStorage(null).receiveEnergy(20, false);
+        BlockPos controllerPos = new BlockPos(0, 64, 0);
+        MachineControllerBlockEntity controller = controllerWithComponents(MMCR.id("shared_final_output_preflight"),
+                controllerPos, input, output, energy);
+        ServerLevel level = serverLevel(List.of(controller, input, output, energy));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, input, "level", level);
+        setField(BlockEntity.class, output, "level", level);
+        setField(BlockEntity.class, energy, "level", level);
+        StructureClaimRegistry registry = StructureClaimRegistry.get(level);
+        registry.claim(controllerPos, List.of(
+                new StructureClaimRegistry.Claim(input.getBlockPos(), cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED),
+                new StructureClaimRegistry.Claim(output.getBlockPos(), cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED),
+                new StructureClaimRegistry.Claim(energy.getBlockPos(), cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)
+        ));
+        StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
+        setField(MachineControllerBlockEntity.class, controller, "resourceDomain", domain);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("shared_final_output_preflight_recipe"), MMCR.id("shared_final_output_preflight"),
+                1, List.of(), List.of(), List.of(), 0, 0, false, List.of(), List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
+                new EnergyRequirement(10),
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.IRON_INGOT))
+        ));
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+        thread.setActiveRecipeForTesting(active);
+        setField(RecipeThread.class, thread, "context", new RecipeCraftingContext(controller));
+
+        thread.tick();
+        SharedIoCoordinator.get(level).resolve(domain);
+
+        assertThat(thread.getStatus()).isEqualTo(RecipeThread.Status.WAITING);
+        assertThat(thread.getActiveRecipe()).isSameAs(active);
+        assertThat(active.getTick()).isZero();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(20);
+        assertThat(itemCount(output, Items.IRON_INGOT)).isZero();
+
+        output.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
+        thread.tick();
+        SharedIoCoordinator.get(level).resolve(domain);
+
+        assertThat(thread.isIdle()).isTrue();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+        assertThat(itemCount(output, Items.IRON_INGOT)).isEqualTo(1);
+        SharedIoCoordinator.discard(level);
+        StructureClaimRegistry.discard(level);
+    }
+
+    @Test
     void privateFactoryLaneFinalOutputRetryDoesNotRepeatItsLastTickIo() throws Exception {
         Items.IRON_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
                 .set(DataComponents.MAX_STACK_SIZE, 64).build());
