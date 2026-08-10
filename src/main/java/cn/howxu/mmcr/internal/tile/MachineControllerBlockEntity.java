@@ -345,20 +345,23 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (powered) {
             redstonePaused = true;
             stopFactoryController();
-            if (active != null) {
+            if (active != null && context != null) {
                 pausedActive = active;
                 pausedContext = context;
                 active = null;
                 context = null;
                 setActiveState(false);
                 broadcastStateIfChanged(true);
+            } else if (active != null || context != null) {
+                active = null;
+                context = null;
             }
             structureDirty = true;
             setChanged();
             return;
         }
         redstonePaused = false;
-        if (active == null && pausedActive != null) {
+        if (active == null && pausedActive != null && pausedContext != null) {
             active = pausedActive;
             context = pausedContext;
             pausedActive = null;
@@ -366,6 +369,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             structureDirty = true;
             markRecipeDirty();
             setActiveState(true);
+        } else if (pausedActive != null || pausedContext != null) {
+            pausedActive = null;
+            pausedContext = null;
         }
 
         if (shouldCheckStructure()) checkStructure();
@@ -810,7 +816,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private void resumePausedRecipeAfterStructureCheck() {
-        if (active != null || pausedActive == null || redstonePaused) return;
+        if (active != null || pausedActive == null || pausedContext == null || redstonePaused) return;
         active = pausedActive;
         context = pausedContext;
         pausedActive = null;
@@ -1177,14 +1183,16 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
-        if (active != null) {
+        if (active != null && context != null) {
             output.putString("recipe_state", "active");
+            output.putBoolean("has_recipe_context", true);
             active.serialize(output.child("active_recipe"));
-            if (context != null) context.serialize(output.child("active_context"));
-        } else if (pausedActive != null) {
+            context.serialize(output.child("active_context"));
+        } else if (pausedActive != null && pausedContext != null) {
             output.putString("recipe_state", "paused");
+            output.putBoolean("has_recipe_context", true);
             pausedActive.serialize(output.child("active_recipe"));
-            if (pausedContext != null) pausedContext.serialize(output.child("active_context"));
+            pausedContext.serialize(output.child("active_context"));
         }
         if (lastFailureUnloc != null) output.putString("last_failure_unloc", lastFailureUnloc);
     }
@@ -1201,6 +1209,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         lastFailureUnloc = savedFailure.isEmpty() ? null : savedFailure;
         String recipeState = input.getStringOr("recipe_state", input.getBooleanOr("has_active", false) ? "active" : "");
         if (recipeState.isEmpty()) return;
+        if (!input.getBooleanOr("has_recipe_context", false)) {
+            LOG.warn("[Ctrl#{}] loadAdditional: stored recipe state {} has no context; clearing slot", instanceId, recipeState);
+            return;
+        }
         ActiveMachineRecipe restored = ActiveMachineRecipe.from(input.childOrEmpty("active_recipe"));
         if (restored.getRecipe() == null) {
             Identifier missing = restored.getRegistryName() == null ? null : Identifier.parse(restored.getRegistryName());

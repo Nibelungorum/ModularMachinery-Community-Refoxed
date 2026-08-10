@@ -465,6 +465,100 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void paused_recipe_save_load_keeps_consumed_input_route_and_commits_output() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.IRON_NUGGET);
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        ItemInputBusBlockEntity input = itemInputBus(controllerPos.offset(1, 0, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT));
+        ItemOutputBusBlockEntity outputBus = itemOutputBus(controllerPos.offset(2, 0, 0));
+        setField(ItemBusBlockEntity.class, outputBus, "handler", new ItemStackHandler(6));
+        FactorySchedulerBlockEntity factory = factoryController(controllerPos.offset(3, 0, 0));
+        DynamicMachine machine = new DynamicMachine(MMCR.id("paused_route_machine"), "Paused Route",
+                factoryItemPattern());
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFactoryRuntimeFormation(machine, controllerPos, input, outputBus, factory);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        addItemInputComponent(controller, input);
+        addItemOutputComponent(controller, outputBus);
+        MachineRecipe recipe = registerItemRecipe("paused_route_recipe", machine.registryName(), 2);
+
+        controller.serverTick();
+        assertThat(countItem(input, Items.IRON_INGOT)).isZero();
+        LevelStub.setDirectSignal(levelOf(controller), controllerPos, 15);
+        controller.serverTick();
+
+        TagValueOutput saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        invokeSaveAdditional(controller, saved);
+        MachineControllerBlockEntity loaded = controllerForFactoryRuntimeFormation(machine, controllerPos, input, outputBus, factory);
+        addItemInputComponent(loaded, input);
+        addItemOutputComponent(loaded, outputBus);
+        assertThat(loaded.getComponents()).hasSize(2);
+        assertThat(loaded.getComponents().getFirst().getContainer()).isSameAs(input);
+        invokeLoadAdditional(loaded, TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()), saved.buildResult()));
+
+        RecipeCraftingContext restoredContext = (RecipeCraftingContext) fieldValue(MachineControllerBlockEntity.class, loaded, "pausedContext");
+        assertThat(restoredContext.collectItemInputRoute(0)).isTrue();
+        assertThat(restoredContext.collectItemOutputRoute(1)).isTrue();
+        invokeResumePausedRecipeAfterStructureCheck(loaded);
+        invokeTickActiveRecipe(loaded);
+        invokeTickActiveRecipe(loaded);
+        invokeTickActiveRecipe(loaded);
+
+        assertThat(loaded.getActive()).isNull();
+        assertThat(countItem(outputBus, Items.IRON_NUGGET)).isEqualTo(1);
+        assertThat(recipe.id()).isEqualTo(MMCR.id("paused_route_recipe"));
+    }
+
+    @Test
+    void save_and_load_discard_recipe_slots_without_a_complete_recipe_context_pair() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("orphaned_recipe"), MMCR.id("orphaned_machine"), 20,
+                List.of(), List.of());
+        RecipeRegistry.register(recipe);
+        setField(MachineControllerBlockEntity.class, controller, "active", new ActiveMachineRecipe(recipe));
+
+        TagValueOutput saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        invokeSaveAdditional(controller, saved);
+        assertThat(saved.buildResult().toString()).doesNotContain("recipe_state");
+
+        MachineControllerBlockEntity loaded = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(loaded);
+        invokeLoadAdditional(loaded, TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()), saved.buildResult()));
+
+        assertThat(loaded.getActive()).isNull();
+        assertThat(fieldValue(MachineControllerBlockEntity.class, loaded, "context")).isNull();
+        assertThat(fieldValue(MachineControllerBlockEntity.class, loaded, "pausedActive")).isNull();
+        assertThat(fieldValue(MachineControllerBlockEntity.class, loaded, "pausedContext")).isNull();
+    }
+
+    @Test
+    void load_discards_serialized_recipe_without_its_context_pair() throws Exception {
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("orphaned_load_recipe"), MMCR.id("orphaned_load_machine"), 20,
+                List.of(), List.of());
+        RecipeRegistry.register(recipe);
+        TagValueOutput saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        saved.putString("recipe_state", "active");
+        new ActiveMachineRecipe(recipe).serialize(saved.child("active_recipe"));
+
+        MachineControllerBlockEntity loaded = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(loaded);
+        invokeLoadAdditional(loaded, TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()), saved.buildResult()));
+
+        assertThat(loaded.getActive()).isNull();
+        assertThat(fieldValue(MachineControllerBlockEntity.class, loaded, "context")).isNull();
+        assertThat(fieldValue(MachineControllerBlockEntity.class, loaded, "pausedActive")).isNull();
+        assertThat(fieldValue(MachineControllerBlockEntity.class, loaded, "pausedContext")).isNull();
+    }
+
+    @Test
     void reset_and_removed_stop_factory_controller_lanes() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         var factoryMachine = new DynamicMachine(
@@ -1934,7 +2028,7 @@ class MachineControllerBlockEntityTest {
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY))));
     }
 
-    private static int countItem(ItemInputBusBlockEntity input, Item item) {
+    private static int countItem(ItemBusBlockEntity input, Item item) {
         int count = 0;
         for (int slot = 0; slot < input.getItemStackHandler(null).getSlots(); slot++) {
             ItemStack stack = input.getItemStackHandler(null).getStackInSlot(slot);

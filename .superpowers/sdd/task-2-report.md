@@ -21,6 +21,21 @@
 - Formatting: `git diff --check` passed.
 - GameTest: `./gradlew runGameTest --no-daemon --tests '*ControllerTickGameTest'` could not run because NeoGradle reports `The run type 'gameTest' was not found`. The build configuration was intentionally not changed.
 
+## Follow-up Review Fix
+
+- Root cause: `RecipeCraftingContext.serialize/from` preserved only the failure key. A recipe that had already consumed inputs retained no route identity after a paused save/load, so its item/fluid output routes could not be recovered from the controller components.
+- Context persistence now records route entries by requirement index. Each entry stores the stable component `BlockPos`, slot or tank index, and the transfer payload needed at completion. Loading resolves that identity only against the current controller components with matching I/O direction; an unresolved component or invalid slot/tank discards only that route.
+- Structure modifiers are persisted with their existing `RecipeModifier.CODEC`, preserving runtime requirement scaling for a paused recipe.
+- `active/context` and `pausedActive/pausedContext` are treated as indivisible pairs. Redstone transfer, save, normal resume, structure-check resume, and load reject isolated members. Save records `has_recipe_context`; load discards legacy or corrupt recipe state that lacks it.
+- Regression coverage now proves a started recipe consumes its input, pauses, saves, loads, restores both routes, resumes, completes, and emits the planned output. Separate tests cover orphaned in-memory and serialized recipe/context pairs.
+
+## Follow-up Verification
+
+- Red phase: `./gradlew test --no-daemon --tests '*MachineControllerBlockEntityTest.paused_recipe_save_load_keeps_consumed_input_route_and_commits_output'` failed as expected because the restored context had no item input route.
+- Green phase: `./gradlew test --no-daemon --tests '*MachineControllerBlockEntityTest.paused_recipe_save_load_keeps_consumed_input_route_and_commits_output'` passed after route persistence was added: `BUILD SUCCESSFUL`.
+- `./gradlew test --no-daemon --tests '*MachineControllerBlockEntityTest' --tests '*RecipeCraftingContextTest'`: `BUILD SUCCESSFUL`.
+- Formatting: `git diff --check` passed.
+
 ## Residual Risk
 
 - The GameTest runtime remains unexecuted until a `gameTest` run type is configured in a later task.
