@@ -45,3 +45,15 @@ Status: fixed.
 Verification:
 - `./gradlew test --tests cn.howxu.mmcr.internal.multiblock.SharedIoCoordinatorTest --tests cn.howxu.mmcr.api.recipe.RecipeCraftingContextTest --tests cn.howxu.mmcr.internal.recipe.FactoryRecipeSchedulerTest --no-daemon`
 - Result: `BUILD SUCCESSFUL` (17 actionable tasks: 1 executed, 16 up-to-date).
+
+## Re-review Follow-up
+
+Status: fixed.
+
+- `RecipeThread.searchAndStartRecipe()` already routes non-shared starts through `RecipeCraftingContext.commitStart`, while shared starts retain Task 5's pending request and coordinator callback path; both install the actual granted parallelism only after a successful commit.
+- `commitIoTick` now commits validated item and fluid inputs before its pre-reserved energy requirements, making real per-tick item inputs participate in the same atomic tick grant.
+- `sharedFinalOutputRetryDoesNotRepeatItsLastTickIo` now starts with exactly one real per-tick item input. Its blocked final tick consumes that input and 10 FE once; after output capacity opens, the finish-only retry consumes neither input nor energy and creates the output once.
+
+Verification:
+- `./gradlew test --tests cn.howxu.mmcr.api.recipe.RecipeCraftingContextTest --tests cn.howxu.mmcr.internal.recipe.FactoryRecipeSchedulerTest --tests cn.howxu.mmcr.internal.multiblock.SharedIoCoordinatorTest --no-daemon`
+- Result: `BUILD SUCCESSFUL` (17 actionable tasks: 2 executed, 15 up-to-date).

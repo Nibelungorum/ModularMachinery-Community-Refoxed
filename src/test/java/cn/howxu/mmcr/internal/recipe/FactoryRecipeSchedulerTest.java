@@ -485,7 +485,7 @@ class FactoryRecipeSchedulerTest {
         SharedIoCoordinator.get(level).resolve(domain);
 
         assertThat(thread.getStatus()).isEqualTo(RecipeThread.Status.WAITING);
-        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
         assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
 
         output.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
@@ -494,7 +494,7 @@ class FactoryRecipeSchedulerTest {
         SharedIoCoordinator.get(level).resolve(domain);
 
         assertThat(thread.isIdle()).isTrue();
-        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
         assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getItem()).isEqualTo(Items.IRON_INGOT);
         SharedIoCoordinator.discard(level);

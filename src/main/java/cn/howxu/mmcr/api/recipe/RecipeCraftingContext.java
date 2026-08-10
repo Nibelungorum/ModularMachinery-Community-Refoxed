@@ -179,7 +179,7 @@ public final class RecipeCraftingContext {
             if (requirement instanceof EnergyRequirement energy && energy.io() == RecipeModifier.IOType.INPUT
                     && !reserveEnergyInput(requirementIndex, energy, reservedEnergy)) return false;
         }
-        return ioTick(requirements);
+        return commitInputs(requirements) && ioTick(requirements);
     }
 
     private boolean reserveEnergyInput(int requirementIndex, EnergyRequirement energy, Map<IEnergyStorage, Integer> reservedEnergy) {
