@@ -2,11 +2,8 @@ package cn.howxu.mmcr.api.recipe.component;
 
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.DynamicOps;
-import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponentType;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.nbt.NbtOps;
-import net.minecraft.resources.RegistryOps;
+import com.mojang.serialization.JsonOps;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -14,8 +11,7 @@ import net.minecraft.world.item.ItemStack;
  */
 public final class ComponentPredicates {
 
-    private static final DynamicOps<net.minecraft.nbt.Tag> COMPONENT_OPS = RegistryOps.create(
-            NbtOps.INSTANCE, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+    private static final DynamicOps<com.google.gson.JsonElement> COMPONENT_OPS = JsonOps.INSTANCE;
 
     private ComponentPredicates() {
     }

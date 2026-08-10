@@ -8,9 +8,13 @@ import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import com.google.gson.JsonElement;
+import com.mojang.serialization.Dynamic;
+import com.mojang.serialization.JsonOps;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.network.chat.Component;
@@ -141,27 +145,25 @@ public final class DefaultRecipes {
     }
 
     private static MachineRecipe enchantedNonConsumableRecipe(Identifier machineId, String path) {
-        ItemStack sword = sharpnessSword(2);
         return componentRecipe(machineId, path,
                 List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.DIAMOND_SWORD), 1,
-                        exactPredicate(DataComponents.ENCHANTMENTS, sword.get(DataComponents.ENCHANTMENTS)), 0F)),
+                        exactEnchantmentPredicate(2), 0F)),
                 List.of());
     }
 
-    private static <T> DataComponentPredicateSet exactPredicate(net.minecraft.core.component.DataComponentType<T> type, T value) {
-        var ops = net.minecraft.resources.RegistryOps.create(com.mojang.serialization.JsonOps.INSTANCE,
-                net.minecraft.core.RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY));
-        return new DataComponentPredicateSet(Map.of(type,
-                ComponentPredicate.exact(new com.mojang.serialization.Dynamic<>(ops,
-                        type.codec().encodeStart(ops, value).getOrThrow()))));
+    private static DataComponentPredicateSet exactEnchantmentPredicate(int level) {
+        var ops = JsonOps.INSTANCE;
+        JsonElement value = ops.createMap(Map.of(
+                ops.createString("minecraft:sharpness"), ops.createInt(level)));
+        return new DataComponentPredicateSet(Map.of(DataComponents.ENCHANTMENTS,
+                ComponentPredicate.exact(new Dynamic<>(ops, value))));
     }
 
     private static ItemStack sharpnessSword(int level) {
         bindItem(Items.DIAMOND_SWORD);
         ItemStack stack = new ItemStack(Items.DIAMOND_SWORD);
         var enchantments = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
-        enchantments.set(net.minecraft.core.RegistryAccess.fromRegistryOfRegistries(
-                        net.minecraft.core.registries.BuiltInRegistries.REGISTRY)
+        enchantments.set(VanillaRegistries.createLookup()
                 .lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.SHARPNESS), level);
         stack.set(DataComponents.ENCHANTMENTS, enchantments.toImmutable());
         return stack;
