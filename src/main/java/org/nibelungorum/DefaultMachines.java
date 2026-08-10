@@ -331,7 +331,7 @@ public final class DefaultMachines {
         BlockArray pattern = BlockArray.builder()
                 .pattern("AAA", "XXX", "XXX", "AAA")
                 .pattern("AAA", "X X", "X X", "ADA")
-                .pattern("AAA", "XBX", "XXX", "AAA")
+                .pattern("ABA", "XXX", "XXX", "AAA")
                 .set('X', new BlockPredicate.OfBlock(Blocks.EMERALD_BLOCK))
                 .set('A', new BlockPredicate.AnyOf(basaltSlotBlocks))
                 .set('B', new BlockPredicate.OfBlock(controller))
