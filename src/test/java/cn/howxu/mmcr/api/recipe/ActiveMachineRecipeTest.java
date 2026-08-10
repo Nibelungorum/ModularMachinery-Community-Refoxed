@@ -80,7 +80,7 @@ class ActiveMachineRecipeTest {
     }
 
     @Test
-    void contextCheckPromotesParallelismBeforeStartCommitsInputs() throws Exception {
+    void startDoesNotMutateLiveInputs() throws Exception {
         ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
         bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(8));
         MachineControllerBlockEntity controller = controllerWithComponents(bus);
@@ -94,7 +94,7 @@ class ActiveMachineRecipeTest {
         assertThat(canStart).isTrue();
         assertThat(started).isTrue();
         assertThat(active.getParallelism()).isEqualTo(4);
-        assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isZero();
+        assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(8);
     }
 
     @Test
@@ -129,7 +129,7 @@ class ActiveMachineRecipeTest {
     }
 
     @Test
-    void startPromotesParallelismToHighestFeasibleCraftAmount() throws Exception {
+    void coordinatorStartCommitConsumesPromotedInputs() throws Exception {
         ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
         bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(8));
         MachineControllerBlockEntity controller = controllerWithComponents(bus);
@@ -138,9 +138,12 @@ class ActiveMachineRecipeTest {
 
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
         boolean canStart = active.canStartCrafting(context);
+        int granted = context.commitStart(recipe, active.getMaxParallelism());
+        active.setParallelism(granted);
         boolean started = active.start(context);
 
         assertThat(canStart).isTrue();
+        assertThat(granted).isEqualTo(4);
         assertThat(started).isTrue();
         assertThat(active.getParallelism()).isEqualTo(4);
         assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isZero();

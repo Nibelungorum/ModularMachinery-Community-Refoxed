@@ -194,13 +194,8 @@ public final class ActiveMachineRecipe {
             LOG.debug("ActiveMachineRecipe#{} start(): no recipe attached → refused", instanceId);
             return false;
         }
-        boolean started = context.startCrafting(recipe, parallelism);
-        if (started) {
-            refreshTotalTick(context);
-        }
-        LOG.info("ActiveMachineRecipe#{} start(): recipe {} started={} totalTick={} parallelism={}",
-                instanceId, recipe.id(), started, totalTick, parallelism);
-        return started;
+        refreshTotalTick(context);
+        return true;
     }
 
     public boolean canStartCrafting(RecipeCraftingContext context) {

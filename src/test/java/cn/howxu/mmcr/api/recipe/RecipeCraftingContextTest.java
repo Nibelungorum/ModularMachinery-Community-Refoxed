@@ -638,6 +638,24 @@ class RecipeCraftingContextTest {
     }
 
     @Test
+    void commitIoTickDoesNotPartiallyConsumeAcrossEnergyRequirements() {
+        EnergyInputHatchBlockEntity hatch = energyInputHatch(new BlockPos(1, 0, 0));
+        hatch.getMutableEnergyStorage(null).receiveEnergy(30, false);
+        MachineControllerBlockEntity controller = controllerWithComponents(hatch);
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "atomic_multiple_energy_tick",
+                List.of(new EnergyRequirement(20), new EnergyRequirement(20))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
+
+        assertThat(context.commitIoTick(recipe, active.getParallelism())).isFalse();
+        assertThat(active.applyTickGrant(false, false, 0)).isEqualTo(ActiveMachineRecipe.TickStatus.WAITING);
+        assertThat(active.getTick()).isZero();
+        assertThat(hatch.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(30);
+    }
+
+    @Test
     void blockedOutputKeepsCompletedRecipeAtFinalTick() {
         MachineRecipe recipe = explicitRequirementRecipe(
                 "blocked_finish_tick",
@@ -648,6 +666,33 @@ class RecipeCraftingContextTest {
 
         assertThat(active.applyTickGrant(true, false, 0)).isEqualTo(ActiveMachineRecipe.TickStatus.WAITING);
         assertThat(active.getTick()).isEqualTo(active.getTotalTick() - 1);
+    }
+
+    @Test
+    void blockedLiveOutputRetriesAndCommitsOnlyOnce() {
+        bindItemComponents(Items.IRON_NUGGET);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        for (int slot = 0; slot < output.getItemStackHandler(null).getSlots(); slot++) {
+            output.getItemStackHandler(null).setStackInSlot(slot, Items.COBBLESTONE.getDefaultInstance().copyWithCount(64));
+        }
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "blocked_live_output_retry",
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_NUGGET.getDefaultInstance()))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controllerWithComponents(output));
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
+        active.setTick(active.getTotalTick() - 1);
+
+        assertThat(context.commitOutputs(recipe, active.getParallelism())).isFalse();
+        assertThat(active.applyTickGrant(true, false, 0)).isEqualTo(ActiveMachineRecipe.TickStatus.WAITING);
+        assertThat(active.getTick()).isEqualTo(active.getTotalTick() - 1);
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getItem()).isEqualTo(Items.COBBLESTONE);
+
+        output.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
+
+        assertThat(context.commitOutputs(recipe, active.getParallelism())).isTrue();
+        assertThat(active.applyTickGrant(true, true, 10)).isEqualTo(ActiveMachineRecipe.TickStatus.FINISHED);
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
     }
 
     @Test

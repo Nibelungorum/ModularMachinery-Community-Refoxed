@@ -1018,7 +1018,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         }
         active = next;
         context = nextContext;
-        if (!next.start(nextContext)) {
+        int granted = nextContext.commitStart(next.getRecipe(), next.getMaxParallelism());
+        if (granted <= 0) {
             active = null;
             context = null;
             returnContext(nextContext);
@@ -1027,6 +1028,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             lastFailureUnloc = nextContext.getLastFailureUnloc();
             return false;
         }
+        next.setParallelism(granted);
+        next.refreshTotalTick(nextContext);
         setActiveState(true);
         rememberLastRecipe(next.getRecipe());
         recipeSearchRetryCounter = 0;
@@ -1075,12 +1078,15 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             if (!next.canStartCrafting(nextContext)) return false;
             active = next;
             context = nextContext;
-            if (!next.start(nextContext)) {
+            int granted = nextContext.commitStart(next.getRecipe(), next.getMaxParallelism());
+            if (granted <= 0) {
                 active = null;
                 context = null;
                 recipeDirty = true;
                 return false;
             }
+            next.setParallelism(granted);
+            next.refreshTotalTick(nextContext);
             setActiveState(true);
             recipeSearchRetryCounter = 0;
             lastFailureUnloc = null;

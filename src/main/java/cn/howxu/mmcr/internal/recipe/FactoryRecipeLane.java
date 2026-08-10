@@ -46,10 +46,14 @@ public final class FactoryRecipeLane implements FactoryRecipeScheduler.Lane {
     public void start() {
         if (started) return;
         started = true;
-        if (!recipe.start(context)) {
+        int granted = context.commitStart(recipe.getRecipe(), recipe.getMaxParallelism());
+        if (granted <= 0) {
             lastFailureUnloc = context.getLastFailureUnloc();
             close();
+            return;
         }
+        recipe.setParallelism(granted);
+        recipe.refreshTotalTick(context);
     }
 
     @Override

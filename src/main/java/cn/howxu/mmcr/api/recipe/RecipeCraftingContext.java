@@ -25,7 +25,9 @@ import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 
 public final class RecipeCraftingContext {
 
@@ -160,11 +162,48 @@ public final class RecipeCraftingContext {
         List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism);
         lastFailureUnloc = null;
         lastRequirementFailure = null;
+        if (!simulateInputs(requirements)) return false;
+        RequirementFailure itemFailure = firstItemInputFailure(requirements);
+        if (itemFailure != null) {
+            setFailure(FAILURE_MISSING_INPUT, itemFailure);
+            return false;
+        }
+        RequirementFailure fluidFailure = firstFluidInputFailure(requirements);
+        if (fluidFailure != null) {
+            setFailure(FAILURE_MISSING_INPUT, fluidFailure);
+            return false;
+        }
+        Map<IEnergyStorage, Integer> reservedEnergy = new IdentityHashMap<>();
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
-            if (requirement instanceof EnergyRequirement && !requirement.simulate(this, requirementIndex)) return false;
+            if (requirement instanceof EnergyRequirement energy && energy.io() == RecipeModifier.IOType.INPUT
+                    && !reserveEnergyInput(requirementIndex, energy, reservedEnergy)) return false;
         }
         return ioTick(requirements);
+    }
+
+    private boolean reserveEnergyInput(int requirementIndex, EnergyRequirement energy, Map<IEnergyStorage, Integer> reservedEnergy) {
+        int remaining = energy.fePerTick();
+        for (IEnergyStorage storage : taggedEnergyStorages(energy.tags())) {
+            int reserved = reservedEnergy.getOrDefault(storage, 0);
+            int available = Math.max(0, storage.getEnergyStored() - reserved);
+            int requested = Math.min(remaining, available);
+            if (requested <= 0 || storage.extractEnergy(requested, true) < requested) continue;
+            reservedEnergy.put(storage, reserved + requested);
+            remaining -= requested;
+            if (remaining == 0) return true;
+        }
+        long available = energy.fePerTick() - remaining;
+        setRequirementFailure(FAILURE_MISSING_ENERGY, new RequirementFailure(
+                requirementIndex,
+                RequirementFailure.Kind.MISSING_ENERGY,
+                energy.fePerTick(),
+                available,
+                remaining,
+                energyComponentTraces(energy.tags()),
+                List.of()
+        ));
+        return false;
     }
 
     private boolean ioTick(List<MachineRequirement> requirements) {

@@ -156,7 +156,10 @@ public abstract class RecipeThread {
             requestTick(level, controller.resourceDomain(), activeRecipe, context, controller.getStructureVersion());
             return;
         }
-        applyTick(activeRecipe, context, context.commitIoTick(activeRecipe.getRecipe(), activeRecipe.getParallelism()), false, 0);
+        boolean resourcesGranted = context.commitIoTick(activeRecipe.getRecipe(), activeRecipe.getParallelism());
+        boolean outputsCommitted = resourcesGranted && activeRecipe.needsFinishCommit()
+                && context.commitOutputs(activeRecipe.getRecipe(), activeRecipe.getParallelism());
+        applyTick(activeRecipe, context, resourcesGranted, outputsCommitted, 0);
     }
 
     private void requestTick(ServerLevel level, cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.ResourceDomain domain,
