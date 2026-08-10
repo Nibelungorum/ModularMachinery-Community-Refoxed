@@ -8,6 +8,8 @@ import dev.latvian.mods.kubejs.recipe.schema.RecipeSchemaRegistry;
 import dev.latvian.mods.kubejs.script.BindingRegistry;
 
 public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
+    static final String RECIPE_BUILDER_BINDING = "MMCR_RECIPE_BUILDER";
+    static final Class<MachineRecipeBuilderJS> RECIPE_BUILDER_CLASS = MachineRecipeBuilderJS.class;
 
     @Override
     public void registerBindings(BindingRegistry bindings) {
@@ -15,6 +17,7 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
         bindings.add("MMCR_RECIPES", RecipeRegistry.class);
         bindings.add("MMCR_MACHINE_BUILDER", MachineBuilderJS.class);
         bindings.add("MMCR_STRUCTURE_BUILDER", MachineStructureBuilderJS.class);
+        bindings.add(RECIPE_BUILDER_BINDING, RECIPE_BUILDER_CLASS);
     }
 
     @Override

@@ -1,9 +1,9 @@
 # KubeJS 集成
 
-`MachineRecipeBuilderJS` 的物品输入方法会创建 `type: "item"` 的机器配方输入。普通物品、标签、组件条件和消耗概率分别使用下列方法：
+在 `ServerEvents.recipes` 回调中使用 `new MMCR_RECIPE_BUILDER('namespace:recipe_id')` 创建 `MachineRecipeBuilderJS`。`.build()` 也必须在该回调中调用，这样带组件的输出才能使用 KubeJS 的服务器 registry context 解码。`MachineRecipeBuilderJS` 的物品输入方法会创建 `type: "item"` 的机器配方输入。普通物品、标签、组件条件和消耗概率分别使用下列方法：
 
 ```js
-event.recipes.mmcr.machineRecipe('example:blazing_tool')
+new MMCR_RECIPE_BUILDER('example:blazing_tool')
     .machine('mmcr:alloy_furnace')
     .itemInput('minecraft:iron_ingot', 2)
     .tagInput('c:tools', 1)
@@ -23,7 +23,7 @@ event.recipes.mmcr.machineRecipe('example:blazing_tool')
 输入组件和输出组件使用不同的 JSON 语法。输入对象是用于匹配已有物品的组件谓词 grammar，输出对象则是要写入生成物品的原生 `ItemStack` 精确组件值 map：
 
 ```js
-event.recipes.mmcr.machineRecipe('example:sharp_sword_upgrade')
+new MMCR_RECIPE_BUILDER('example:sharp_sword_upgrade')
     .machine('mmcr:alloy_furnace')
     .itemInputWithComponents('minecraft:diamond_sword', 1, {
         'minecraft:enchantments': {

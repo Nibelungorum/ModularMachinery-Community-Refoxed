@@ -66,7 +66,7 @@
 
 ## KubeJS 对应关系
 
-| JSON 概念 | KubeJS 方法 |
+| JSON 概念 | KubeJS builder 方法 |
 | --- | --- |
 | `item` 为物品、`count` | `itemInput(itemId, count)` |
 | `item` 为标签、`count` | `tagInput(tagId, count)` |
@@ -75,4 +75,4 @@
 | `consume_chance` | `chancedItemInput(itemId, count, consumeChance)` |
 | 完整 `ItemStack` 输出及 `components` | `itemOutputWithComponents(itemId, count, components)` |
 
-KubeJS 的 `itemOutput(itemId, count)` 创建普通 `ItemStack` 输出；`itemOutputWithComponents(itemId, count, components)` 会在 KubeJS 配方事件的服务器 registry context 中使用原生组件值解码完整 `ItemStack`，语义与配方 JSON 的 `outputs` 字段一致。
+在 `ServerEvents.recipes` 回调中以 `new MMCR_RECIPE_BUILDER('namespace:recipe_id')` 创建 builder，并在该回调中调用 `.build()`。KubeJS 的 `itemOutput(itemId, count)` 创建普通 `ItemStack` 输出；`itemOutputWithComponents(itemId, count, components)` 会在 KubeJS 配方事件的服务器 registry context 中使用原生组件值解码完整 `ItemStack`，语义与配方 JSON 的 `outputs` 字段一致。
