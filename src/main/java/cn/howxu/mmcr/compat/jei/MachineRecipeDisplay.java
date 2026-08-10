@@ -2,7 +2,6 @@ package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
@@ -46,8 +45,7 @@ public record MachineRecipeDisplay(
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT) {
                 itemInputs.add(new ItemInputDisplay(item.item().items()
                         .map(holder -> item.components().displayStack(holder.value(), item.count())).toList(),
-                        item.count(), item.consumeChance(), item.components().values().values().stream()
-                                .filter(predicate -> !(predicate instanceof ComponentPredicate.Exact)).toList()));
+                        item.count(), item.consumeChance()));
             } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.INPUT) {
                 fluidInputs.add(fluid.fluid());
                 fluidInputAmounts.add(fluid.amount());
@@ -85,11 +83,9 @@ public record MachineRecipeDisplay(
         );
     }
 
-    public record ItemInputDisplay(List<ItemStack> stacks, int count, float consumeChance,
-            List<ComponentPredicate> tooltipPredicates) {
+    public record ItemInputDisplay(List<ItemStack> stacks, int count, float consumeChance) {
         public ItemInputDisplay {
             stacks = stacks.stream().map(ItemStack::copy).toList();
-            tooltipPredicates = tooltipPredicates == null ? List.of() : List.copyOf(tooltipPredicates);
         }
     }
 }

@@ -1,10 +1,11 @@
 package cn.howxu.mmcr.api.recipe.component;
 
+import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.DynamicOps;
-import com.mojang.datafixers.util.Pair;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.resources.Identifier;
@@ -85,6 +86,9 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
 
     private static <T> void applyExactValue(ItemStack stack, DataComponentType<T> type, ComponentPredicate predicate) {
         T value = ComponentPredicates.exactValue(type, predicate);
+        if (value == null && type == DataComponents.CUSTOM_NAME && predicate instanceof ComponentPredicate.TextValue text) {
+            value = (T) text.value();
+        }
         if (value != null) stack.set(type, value);
     }
 }

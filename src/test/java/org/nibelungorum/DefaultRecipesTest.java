@@ -12,9 +12,14 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.Identifier;
+import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -50,7 +55,7 @@ class DefaultRecipesTest {
 
         assertThat(machine).isNotNull();
         var recipes = RecipeRegistry.byMachine(machine);
-        assertThat(recipes).hasSize(17);
+        assertThat(recipes).hasSize(18);
 
         var recipe = RecipeRegistry.getRecipe(MMCR.id("blast_furnace_iron_to_nugget"));
         assertThat(recipe.id()).isEqualTo(MMCR.id("blast_furnace_iron_to_nugget"));
@@ -236,12 +241,12 @@ class DefaultRecipesTest {
         DefaultRecipes.ensureRegistered();
         DefaultRecipes.ensureRegistered();
 
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("blast_furnace"))).hasSize(17);
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("alloy_furnace"))).hasSize(19);
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker"))).hasSize(17);
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("reactor"))).hasSize(17);
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("thermal_smelting_furnace"))).hasSize(12);
-        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(82);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("blast_furnace"))).hasSize(18);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("alloy_furnace"))).hasSize(20);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker"))).hasSize(18);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("reactor"))).hasSize(18);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("thermal_smelting_furnace"))).hasSize(13);
+        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(87);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker")))
                 .anySatisfy(recipe -> assertThat(recipe.fluidOutputs()).isNotEmpty());
         assertThat(RecipeRegistry.recipes())
@@ -296,7 +301,7 @@ class DefaultRecipesTest {
         for (String machine : java.util.List.of("blast_furnace", "alloy_furnace", "cracker", "reactor", "thermal_smelting_furnace")) {
             assertThat(RecipeRegistry.byMachineId(MMCR.id(machine)))
                     .filteredOn(recipe -> recipe.id().getPath().startsWith(machine + "_component_"))
-                    .hasSize(7);
+                    .hasSize(8);
         }
 
         MachineRecipe chanced = RecipeRegistry.getRecipe(MMCR.id("blast_furnace_component_chanced_input"));
@@ -316,6 +321,14 @@ class DefaultRecipesTest {
                 .outputs()).satisfiesExactly(
                 stack -> assertThat(stack.get(DataComponents.CUSTOM_NAME)).isEqualTo(Component.literal("Named Output")),
                 stack -> assertThat(stack.get(DataComponents.CUSTOM_NAME)).isNull());
+
+        MachineRecipe enchanted = RecipeRegistry.getRecipe(MMCR.id("blast_furnace_component_non_consumable_sharpness_input"));
+        assertThat(enchanted.tickTime()).isEqualTo(100);
+        assertThat(enchanted.outputs()).isEmpty();
+        MachineIngredient.ItemIngredient enchantedInput = (MachineIngredient.ItemIngredient) enchanted.inputs().getFirst();
+        assertThat(enchantedInput.consumeChance()).isZero();
+        assertThat(enchantedInput.components().matches(sharpnessSword(2))).isTrue();
+        assertThat(enchantedInput.components().matches(sharpnessSword(1))).isFalse();
     }
 
     private static void installDefaultRuntimeContent() {
@@ -331,6 +344,19 @@ class DefaultRecipesTest {
                 .build());
         ItemStack stack = new ItemStack(item);
         stack.set(DataComponents.CUSTOM_NAME, Component.literal(name));
+        return stack;
+    }
+
+    private static ItemStack sharpnessSword(int level) {
+        Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(net.minecraft.core.component.DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 1)
+                .build());
+        ItemStack stack = new ItemStack(Items.DIAMOND_SWORD);
+        var enchantments = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
+        enchantments.set(VanillaRegistries.createLookup()
+                .lookupOrThrow(Registries.ENCHANTMENT)
+                .getOrThrow(ResourceKey.create(Registries.ENCHANTMENT, Identifier.parse("minecraft:sharpness"))), level);
+        stack.set(DataComponents.ENCHANTMENTS, enchantments.toImmutable());
         return stack;
     }
 }

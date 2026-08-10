@@ -9,6 +9,8 @@ import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -17,8 +19,10 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.network.chat.Component;
 import net.minecraft.data.registries.VanillaRegistries;
+import net.minecraft.nbt.NbtOps;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.item.ItemStack;
@@ -32,6 +36,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -119,6 +124,51 @@ class MachineRecipeDisplayTest {
         assertThat(output.getHoverName().getString()).isEqualTo("Better钻石剑");
         assertThat(output.get(DataComponents.ENCHANTMENTS))
                 .isEqualTo(namedSharpnessFourSword.get(DataComponents.ENCHANTMENTS));
+    }
+
+    @Test
+    void displayAppliesTextComponentPredicatesToInputStacks() {
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("component_input_display"),
+                MMCR.id("alloy_furnace"),
+                40,
+                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.DIAMOND_SWORD), 1,
+                        new DataComponentPredicateSet(Map.of(DataComponents.CUSTOM_NAME,
+                                ComponentPredicate.text("Required剑", ComponentPredicate.TextMode.PLAIN))), 1F)),
+                List.of()
+        );
+
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+
+        ItemStack input = display.itemInputs().getFirst().stacks().getFirst();
+        assertThat(input.get(DataComponents.CUSTOM_NAME)).isEqualTo(Component.literal("Required剑"));
+        assertThat(input.getHoverName().getString()).isEqualTo("Required剑");
+    }
+
+    @Test
+    void displayAppliesExactEnchantmentPredicatesToInputStacks() {
+        var lookup = VanillaRegistries.createLookup();
+        ItemStack sharpnessTwoSword = namedSharpnessSword(2, null, lookup);
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("enchanted_component_input_display"),
+                MMCR.id("blast_furnace"),
+                100,
+                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.DIAMOND_SWORD), 1,
+                        new DataComponentPredicateSet(Map.of(DataComponents.ENCHANTMENTS,
+                                ComponentPredicate.exact(new com.mojang.serialization.Dynamic<>(NbtOps.INSTANCE,
+                                        DataComponents.ENCHANTMENTS.codec().encodeStart(RegistryOps.create(NbtOps.INSTANCE, lookup),
+                                                sharpnessTwoSword.get(DataComponents.ENCHANTMENTS)).getOrThrow())))), 0F)),
+                List.of()
+        );
+
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+
+        ItemStack input = display.itemInputs().getFirst().stacks().getFirst();
+        assertThat(display.durationTicks()).isEqualTo(100);
+        assertThat(display.itemOutputs()).isEmpty();
+        assertThat(display.itemInputs().getFirst().consumeChance()).isZero();
+        assertThat(input.get(DataComponents.ENCHANTMENTS))
+                .isEqualTo(sharpnessTwoSword.get(DataComponents.ENCHANTMENTS));
     }
 
     @Test
@@ -255,13 +305,16 @@ class MachineRecipeDisplayTest {
     }
 
     private static ItemStack namedSharpnessFourSword() {
+        return namedSharpnessSword(4, "Better钻石剑", VanillaRegistries.createLookup());
+    }
+
+    private static ItemStack namedSharpnessSword(int level, String name, net.minecraft.core.HolderLookup.Provider lookup) {
         ItemStack stack = new ItemStack(Items.DIAMOND_SWORD);
-        stack.set(DataComponents.CUSTOM_NAME, Component.literal("Better钻石剑"));
+        if (name != null) stack.set(DataComponents.CUSTOM_NAME, Component.literal(name));
         var enchantments = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
-        enchantments.set(VanillaRegistries.createLookup()
-                .lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT)
+        enchantments.set(lookup.lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT)
                 .getOrThrow(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.ENCHANTMENT,
-                        Identifier.parse("minecraft:sharpness"))), 4);
+                        Identifier.parse("minecraft:sharpness"))), level);
         stack.set(DataComponents.ENCHANTMENTS, enchantments.toImmutable());
         return stack;
     }

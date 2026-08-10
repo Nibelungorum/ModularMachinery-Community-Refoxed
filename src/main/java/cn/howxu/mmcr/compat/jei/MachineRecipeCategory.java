@@ -122,11 +122,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
         drawOverflowSlot(layout.inputs().overflowSlot(), guiGraphics, slotBackground);
         drawOverflowSlot(layout.outputs().overflowSlot(), guiGraphics, slotBackground);
-        for (MachineRecipeLayout.SlotPlan slot : layout.inputs().slots()) {
-            if (slot.entry().kind() == MachineRecipeLayout.Kind.ITEM) {
-                drawInputOverlay(guiGraphics, slot, recipe.itemInputs().get(slot.entry().index()).consumeChance());
-            }
-        }
     }
 
     @Override
@@ -219,6 +214,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         if (input) {
             MachineRecipeDisplay.ItemInputDisplay item = recipe.itemInputs().get(entry.index());
             jeiSlot.addItemStacks(item.stacks());
+            String overlayText = inputOverlayText(item.consumeChance(), Minecraft.getInstance().getLanguageManager().getSelected());
+            if (!overlayText.isEmpty()) {
+                jeiSlot.setOverlay(new TextOverlayDrawable(overlayText, 0xFFFF4040), 16 - Minecraft.getInstance().font.width(overlayText), 8);
+            }
             jeiSlot.addRichTooltipCallback((view, tooltip) -> appendInputTooltip(tooltip, item));
         } else {
             jeiSlot.add(normalizeOutputStack(recipe.itemOutputs().get(entry.index())));
@@ -280,15 +279,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
     }
 
-    private static void drawInputOverlay(GuiGraphicsExtractor graphics, MachineRecipeLayout.SlotPlan slot, float consumeChance) {
-        String text = consumeChance == 0F ? Component.translatable("jei.mmcr.machine_recipe.keep").getString()
-                : consumeChance < 1F ? Math.round(consumeChance * 100F) + "%" : "";
-        if (!text.isEmpty()) {
-            graphics.text(Minecraft.getInstance().font, text,
-                    slot.x() + 16 - Minecraft.getInstance().font.width(text), slot.y() + 8, 0xFFFF4040, false);
-        }
-    }
-
     private static void appendInputTooltip(ITooltipBuilder tooltip, MachineRecipeDisplay.ItemInputDisplay item) {
         if (item.consumeChance() == 0F) {
             tooltip.add(Component.translatable("jei.mmcr.machine_recipe.keep"));
@@ -296,7 +286,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             tooltip.add(Component.translatable("jei.mmcr.machine_recipe.consume_chance",
                     Math.round(item.consumeChance() * 100F) + "%"));
         }
-        item.tooltipPredicates().forEach(predicate -> tooltip.add(Component.literal("Requires: " + predicate)));
     }
 
     private static boolean isMouseOver(@Nullable OverflowSlotPlan slot, double mouseX, double mouseY) {
@@ -308,5 +297,22 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             return new ItemStack(stack.getItem(), stack.getCount());
         }
         return stack;
+    }
+
+    private record TextOverlayDrawable(String text, int color) implements IDrawable {
+        @Override
+        public int getWidth() {
+            return Minecraft.getInstance().font.width(text);
+        }
+
+        @Override
+        public int getHeight() {
+            return Minecraft.getInstance().font.lineHeight;
+        }
+
+        @Override
+        public void draw(GuiGraphicsExtractor guiGraphics, int xOffset, int yOffset) {
+            guiGraphics.text(Minecraft.getInstance().font, text, xOffset, yOffset, color, false);
+        }
     }
 }
