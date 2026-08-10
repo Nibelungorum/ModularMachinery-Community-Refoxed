@@ -28,6 +28,7 @@ public final class FactoryRecipeScheduler {
 
     private int threadLimit;
     private int perThreadParallelLimit;
+    private boolean paused;
     private final List<Lane> lanes = new ArrayList<>();
     private final List<FactoryRecipeThread> threads = new ArrayList<>();
     private final RecipeCraftingContextPool contextPool;
@@ -78,6 +79,18 @@ public final class FactoryRecipeScheduler {
         for (FactoryRecipeThread thread : threads) thread.invalidate();
         threads.clear();
         ensureBaseThread(null, contextPool);
+    }
+
+    public void pause() {
+        paused = true;
+    }
+
+    public void resume() {
+        paused = false;
+    }
+
+    public boolean isPaused() {
+        return paused;
     }
 
     public int activeLaneCount() {
@@ -210,6 +223,7 @@ public final class FactoryRecipeScheduler {
 
     public void tickThreads(MachineControllerBlockEntity controller, List<MachineRecipe> candidates,
                             long structureVersion, int parallelLimit, RecipeCraftingContextPool contextPool) {
+        if (paused) return;
         ensureBaseThread(controller, contextPool);
         this.perThreadParallelLimit = Math.max(1, parallelLimit);
         for (FactoryRecipeThread thread : List.copyOf(threads)) {
@@ -244,12 +258,16 @@ public final class FactoryRecipeScheduler {
     }
 
     public void save(ValueOutput output) {
+        output.putInt("thread_limit", threadLimit);
+        output.putBoolean("paused", paused);
         output.putInt("thread_count", threads.size());
         for (int i = 0; i < threads.size(); i++) threads.get(i).save(output.child("thread_" + i));
     }
 
     public void load(ValueInput input, MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
         threads.clear();
+        threadLimit = Math.max(1, input.getIntOr("thread_limit", threadLimit));
+        paused = input.getBooleanOr("paused", false);
         int count = Math.max(0, input.getIntOr("thread_count", 0));
         for (int i = 0; i < count; i++) {
             threads.add(FactoryRecipeThread.load(input.childOrEmpty("thread_" + i), controller,

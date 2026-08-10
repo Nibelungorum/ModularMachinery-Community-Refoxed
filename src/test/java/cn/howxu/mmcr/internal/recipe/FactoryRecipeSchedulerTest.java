@@ -389,12 +389,13 @@ class FactoryRecipeSchedulerTest {
         secondActive.setTick(7);
         first.setActiveRecipeForTesting(firstActive);
         second.setActiveRecipeForTesting(secondActive);
-        first.bindController(controller);
-        second.bindController(controller);
+        setField(RecipeThread.class, first, "context", new cn.howxu.mmcr.api.recipe.RecipeCraftingContext(controller));
+        setField(RecipeThread.class, second, "context", new cn.howxu.mmcr.api.recipe.RecipeCraftingContext(controller));
         setField(RecipeThread.class, first, "lastFailureUnloc", "mmcr.failure.first");
         setField(RecipeThread.class, second, "lastFailureUnloc", "mmcr.failure.second");
         scheduler.addThreadForTesting(first);
         scheduler.addThreadForTesting(second);
+        scheduler.pause();
 
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
                 HolderLookup.Provider.create(java.util.stream.Stream.empty()));
@@ -413,11 +414,10 @@ class FactoryRecipeSchedulerTest {
         assertThat(restored).extracting(FactoryRecipeThread::getLastFailureUnloc)
                 .containsExactly("mmcr.failure.first", "mmcr.failure.second");
 
-        setField(MachineControllerBlockEntity.class, controller, "redstonePaused", true);
         assertThat(restored).extracting(thread -> thread.getActiveRecipe().getTick()).containsExactly(3, 7);
         loaded.tickThreads(controller, List.of(), controller.getStructureVersion(), 1, pool);
         assertThat(restored).extracting(thread -> thread.getActiveRecipe().getTick()).containsExactly(3, 7);
-        setField(MachineControllerBlockEntity.class, controller, "redstonePaused", false);
+        loaded.resume();
         loaded.tickThreads(controller, List.of(), controller.getStructureVersion(), 1, pool);
         assertThat(restored).extracting(thread -> thread.getActiveRecipe().getTick()).containsExactly(4, 8);
     }

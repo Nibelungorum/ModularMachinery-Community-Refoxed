@@ -187,6 +187,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         this.lastFailureUnloc = key;
     }
 
+    public void clearLastFailureOnRecipeStart() {
+        this.lastFailureUnloc = null;
+    }
+
     public boolean isRedstonePaused() { return redstonePaused; }
 
     public void applyClientState(String recipeName, boolean formed, boolean active) {
@@ -344,7 +348,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         boolean powered = level.getDirectSignalTo(getBlockPos()) > 0;
         if (powered) {
             redstonePaused = true;
-            stopFactoryController();
+            FactorySchedulerBlockEntity factory = getFactoryController();
+            if (factory != null) factory.pause();
             if (active != null && context != null) {
                 pausedActive = active;
                 pausedContext = context;
@@ -361,6 +366,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             return;
         }
         redstonePaused = false;
+        FactorySchedulerBlockEntity factory = getFactoryController();
+        if (factory != null) factory.resume();
         if (active == null && pausedActive != null && pausedContext != null) {
             active = pausedActive;
             context = pausedContext;
@@ -376,7 +383,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
         if (shouldCheckStructure()) checkStructure();
         if (isFormed() && isStructureAreaLoaded()) {
-            FactorySchedulerBlockEntity factory = getFactoryController();
             if (factory != null) {
                 tickFactoryRecipes(factory);
             } else {
@@ -401,7 +407,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         factory.syncCoreThreads(this, machine, candidates, pool);
         factory.tickScheduler(this, candidates, structureVersion, maxParallelism, pool);
         setActiveState(factory.activeThreadCount() > 0);
-        if (factory.activeThreadCount() > 0) lastFailureUnloc = null;
     }
 
     @Override

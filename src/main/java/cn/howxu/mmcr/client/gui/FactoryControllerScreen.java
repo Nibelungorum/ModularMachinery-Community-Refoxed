@@ -164,6 +164,12 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
                 x + font.width(Component.translatable("gui.mmcr.controller.status_label")) + 4, lineY,
                 MachineMenuScreen.controllerStatusColor(menu.isFormed(), selected.active()), true);
         lineY = nextDetailY(lineY);
+        String failure = menu.lastFailureUnloc();
+        if (!failure.isEmpty()) {
+            graphics.text(font, Component.translatable("gui.mmcr.controller.last_failure", Component.translatable(failure)),
+                    x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
+            lineY = nextDetailY(lineY);
+        }
         if (menu.parallelSlots() > 0) {
             graphics.text(font, MachineMenuScreen.parallelSlotLine(menu.parallelSlots()), x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
             lineY = nextDetailY(lineY);
@@ -176,7 +182,7 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
         }
         graphics.text(font, MachineMenuScreen.factoryThreadLine(menu.activeThreadCount(), menu.threadCount()), x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
         lineY = nextDetailY(lineY);
-        if (shouldRenderProgress(selected.active(), selected.totalTick())) {
+        if (selected.totalTick() > 0) {
             int percent = progressWidth(selected.tick(), selected.totalTick()) * 100 / THREAD_ROW_WIDTH;
             graphics.text(font, Component.translatable("gui.mmcr.controller.progress", percent + "%"), x, lineY,
                     MachineMenuScreen.PROGRESS_STATUS_COLOR, true);

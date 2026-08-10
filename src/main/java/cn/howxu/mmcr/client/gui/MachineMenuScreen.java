@@ -346,12 +346,10 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
                 controllerStatusColor(menu.isFormed(), active));
         scaledY = nextControllerDetailY(scaledY);
 
-        if (!menu.isFormed() && !active) {
-            String failure = menu.lastFailureMessage();
-            if (failure != null) {
-                Component failureLine = Component.translatable("gui.mmcr.controller.last_failure", Component.translatable(failure));
-                scaledY = renderScaledWrappedLine(g, failureLine, scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
-            }
+        String failure = menu.lastFailureMessage();
+        if (failure != null) {
+            Component failureLine = Component.translatable("gui.mmcr.controller.last_failure", Component.translatable(failure));
+            scaledY = renderScaledWrappedLine(g, failureLine, scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
         }
 
         if (owner != null && owner.getMachine() != null) {

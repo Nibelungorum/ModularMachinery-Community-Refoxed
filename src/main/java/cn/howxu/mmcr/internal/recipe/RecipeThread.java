@@ -72,6 +72,7 @@ public abstract class RecipeThread {
         context = nextContext;
         status = Status.WORKING;
         lastFailureUnloc = null;
+        controller.clearLastFailureOnRecipeStart();
         onStarted();
         return true;
     }

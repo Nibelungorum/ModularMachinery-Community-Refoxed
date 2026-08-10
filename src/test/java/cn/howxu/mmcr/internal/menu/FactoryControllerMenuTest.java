@@ -68,6 +68,17 @@ class FactoryControllerMenuTest {
     }
 
     @Test
+    void snapshot_exposes_the_last_failure_key() {
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        menu.applySnapshot(new FactoryControllerSnapshot(BlockPos.ZERO, true, true, 1, 1, 1, 1,
+                "Factory", 0, "gui.mmcr.controller.failure.missing_input",
+                java.util.List.of(new FactoryRecipeScheduler.ThreadSnapshot(0, true, false, true, "mmcr:first", 4, 20, 1))));
+
+        assertThat(menu.lastFailureUnloc()).isEqualTo("gui.mmcr.controller.failure.missing_input");
+        assertThat(menu.selectedThread().tick()).isEqualTo(4);
+    }
+
+    @Test
     void player_inventory_is_shifted_right_of_factory_thread_list() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null), bufferAt(BlockPos.ZERO));
 

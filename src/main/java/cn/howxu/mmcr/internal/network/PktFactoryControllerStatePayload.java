@@ -34,6 +34,7 @@ public record PktFactoryControllerStatePayload(FactoryControllerSnapshot snapsho
         buf.writeVarInt(state.maxParallelism());
         buf.writeUtf(state.machineName());
         buf.writeVarInt(state.parallelSlots());
+        buf.writeUtf(state.lastFailureUnloc());
         buf.writeVarInt(state.threads().size());
         for (FactoryRecipeScheduler.ThreadSnapshot thread : state.threads()) {
             buf.writeVarInt(thread.index());
@@ -57,6 +58,7 @@ public record PktFactoryControllerStatePayload(FactoryControllerSnapshot snapsho
         int maxParallelism = buf.readVarInt();
         String machineName = buf.readUtf();
         int parallelSlots = buf.readVarInt();
+        String lastFailure = buf.readUtf();
         int size = buf.readVarInt();
         if (size < 0 || size > MAX_THREADS || size > Math.max(1, count)) {
             throw new IllegalArgumentException("Invalid factory thread snapshot size: " + size);
@@ -67,7 +69,7 @@ public record PktFactoryControllerStatePayload(FactoryControllerSnapshot snapsho
                     buf.readBoolean(), buf.readUtf(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt()));
         }
         return new PktFactoryControllerStatePayload(new FactoryControllerSnapshot(pos, formed, paused, active, count,
-                currentParallelism, maxParallelism, machineName, parallelSlots, threads));
+                currentParallelism, maxParallelism, machineName, parallelSlots, lastFailure, threads));
     }
 
     @Override

@@ -34,6 +34,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import net.neoforged.neoforge.items.ItemStackHandler;
@@ -44,6 +46,8 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.util.ProblemReporter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -539,6 +543,32 @@ class RecipeCraftingContextTest {
         assertThat(context.commitInputs(recipe)).isTrue();
         assertThat(first.getFluidTank(null).getFluidAmount()).isZero();
         assertThat(second.getFluidTank(null).getFluidAmount()).isZero();
+    }
+
+    @Test
+    void restoredFluidRoutesBindAfterComponentsBecomeAvailable() throws Exception {
+        bindFluidComponents(Fluids.WATER);
+        FluidInputHatchBlockEntity input = fluidInputHatch(new BlockPos(1, 0, 0));
+        input.getFluidTank(null).setFluid(new FluidStack(Fluids.WATER, 1000));
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "restored_fluid_route",
+                List.of(new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1000, FluidStack.EMPTY))
+        );
+        RecipeCraftingContext source = new RecipeCraftingContext(controllerWithComponents(input));
+        assertThat(source.simulateInputs(recipe)).isTrue();
+        TagValueOutput saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        source.serialize(saved);
+
+        MachineControllerBlockEntity restoredController = controllerWithComponents();
+        RecipeCraftingContext restored = RecipeCraftingContext.from(restoredController, TagValueInput.create(
+                ProblemReporter.DISCARDING, HolderLookup.Provider.create(java.util.stream.Stream.empty()), saved.buildResult()));
+        replaceComponents(restoredController, List.of(new ProcessingComponent(
+                new MachineComponent(PortKinds.FLUID_INPUT, cn.howxu.mmcr.util.IOType.INPUT), input,
+                input.getBlockPos(), BlockPos.ZERO, (String) null)));
+
+        assertThat(restored.commitInputs(recipe)).isTrue();
+        assertThat(input.getFluidTank(null).getFluidAmount()).isZero();
     }
 
     @Test
