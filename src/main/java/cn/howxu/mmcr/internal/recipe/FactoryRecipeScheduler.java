@@ -252,10 +252,19 @@ public final class FactoryRecipeScheduler {
 
     public void load(ValueInput input, MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
         threads.clear();
+        nextFactoryLaneId = 0;
         int count = Math.max(0, input.getIntOr("thread_count", 0));
         for (int i = 0; i < count; i++) {
             threads.add(FactoryRecipeThread.load(input.childOrEmpty("thread_" + i), controller,
                     contextPool == null ? this.contextPool : contextPool));
+        }
+        for (FactoryRecipeThread thread : threads) {
+            String laneId = thread.laneId();
+            if (!laneId.startsWith("factory-")) continue;
+            try {
+                nextFactoryLaneId = Math.max(nextFactoryLaneId, Long.parseLong(laneId.substring("factory-".length())) + 1);
+            } catch (NumberFormatException ignored) {
+            }
         }
         ensureBaseThread(controller, contextPool);
     }

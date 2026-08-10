@@ -9,20 +9,44 @@ import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
+import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
+import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.util.ProblemReporter;
+import net.neoforged.neoforge.items.ItemStackHandler;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -318,6 +342,63 @@ class FactoryRecipeSchedulerTest {
     }
 
     @Test
+    void loadedFactoryLanesAdvanceTheGeneratedLaneId() throws Exception {
+        FactoryRecipeScheduler saved = new FactoryRecipeScheduler(4, new RecipeCraftingContextPool());
+        saved.addThreadForTesting(FactoryRecipeThread.simple(null, new RecipeCraftingContextPool(), "factory-4"));
+        saved.addThreadForTesting(FactoryRecipeThread.simple(null, new RecipeCraftingContextPool(), "factory-9"));
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        saved.save(output);
+        MachineControllerBlockEntity controller = controller(MMCR.id("factory_loaded_lanes"));
+        FactoryRecipeScheduler loaded = new FactoryRecipeScheduler(4, new RecipeCraftingContextPool());
+        loaded.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()), output.buildResult()), controller,
+                new RecipeCraftingContextPool());
+
+        loaded.tickThreads(controller, List.of(parallelizedRecipe("factory_loaded_lane_recipe", 0)),
+                controller.getStructureVersion(), 1, new RecipeCraftingContextPool());
+
+        assertThat(loaded.allThreads()).extracting(FactoryRecipeThread::laneId)
+                .containsExactly("base", "factory-4", "factory-9", "factory-10");
+    }
+
+    @Test
+    void sharedFactoryStartsUseCoordinatorCallbacksAndInstallPartialParallelism() throws Exception {
+        Items.IRON_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 64).build());
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 10));
+        BlockPos controllerPos = new BlockPos(0, 64, 0);
+        MachineControllerBlockEntity controller = controllerWithInput(MMCR.id("factory_shared_start"), controllerPos, input);
+        ServerLevel level = serverLevel(List.of(controller, input));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, input, "level", level);
+        StructureClaimRegistry registry = StructureClaimRegistry.get(level);
+        registry.claim(controllerPos, List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
+                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)));
+        StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_shared_start_recipe"), MMCR.id("factory_shared_start"),
+                20, List.of(), List.of(), List.of(), 0, 0, false, List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)), true);
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2, new RecipeCraftingContextPool());
+
+        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 8, new RecipeCraftingContextPool());
+        assertThat(scheduler.allThreads()).hasSize(2);
+        assertThat(scheduler.allThreads()).allSatisfy(thread -> assertThat(thread.isStartPending()).isTrue());
+        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 8, new RecipeCraftingContextPool());
+        assertThat(scheduler.allThreads()).allSatisfy(thread -> assertThat(thread.isStartPending()).isTrue());
+
+        SharedIoCoordinator.get(level).resolve(domain);
+
+        assertThat(scheduler.allThreads()).allSatisfy(thread -> assertThat(thread.getActiveRecipe()).isNotNull());
+        assertThat(scheduler.usedParallelism()).isEqualTo(10);
+        assertThat(scheduler.allThreads()).extracting(FactoryRecipeThread::usedParallelism).containsExactly(8, 2);
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        SharedIoCoordinator.discard(level);
+        StructureClaimRegistry.discard(level);
+    }
+
+    @Test
     void factory_threads_prioritize_private_cache_and_invalidate_on_structure_change() throws Exception {
         MachineControllerBlockEntity controller = controller(MMCR.id("factory_cache_invalidation_machine"));
         MachineRecipe cached = recipe("factory_cache_invalidation_cached", 0);
@@ -406,6 +487,62 @@ class FactoryRecipeSchedulerTest {
         foundMachine.setAccessible(true);
         foundMachine.set(controller, machine);
         return controller;
+    }
+
+    private static MachineControllerBlockEntity controllerWithInput(Identifier machineId, BlockPos pos,
+                                                                     ItemInputBusBlockEntity input) throws Exception {
+        MachineControllerBlockEntity controller = controller(machineId);
+        setField(BlockEntity.class, controller, "worldPosition", pos);
+        setField(MachineControllerBlockEntity.class, controller, "components", new ArrayList<>(List.of(
+                new ProcessingComponent(new MachineComponent(cn.howxu.mmcr.registry.PortKinds.ITEM_INPUT,
+                        cn.howxu.mmcr.util.IOType.INPUT), input, input.getBlockPos(), BlockPos.ZERO, (String) null))));
+        return controller;
+    }
+
+    private static ItemInputBusBlockEntity itemInputBus(BlockPos pos) throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        ItemInputBusBlockEntity bus = (ItemInputBusBlockEntity) ((sun.misc.Unsafe) unsafeField.get(null))
+                .allocateInstance(ItemInputBusBlockEntity.class);
+        setField(BlockEntity.class, bus, "type", null);
+        setField(BlockEntity.class, bus, "worldPosition", pos);
+        setField(BlockEntity.class, bus, "blockState", Blocks.CHEST.defaultBlockState());
+        setField(cn.howxu.mmcr.internal.tile.IOPortBlockEntity.class, bus, "linkedControllers", new TreeMap<>(BlockPos::compareTo));
+        setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
+        return bus;
+    }
+
+    private static ServerLevel serverLevel(List<BlockEntity> blockEntities) throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        TestServerLevel level = (TestServerLevel) ((sun.misc.Unsafe) unsafeField.get(null)).allocateInstance(TestServerLevel.class);
+        setField(TestServerLevel.class, level, "blocks", new HashMap<>());
+        setField(TestServerLevel.class, level, "blockEntities", blockEntities.stream()
+                .collect(java.util.stream.Collectors.toMap(BlockEntity::getBlockPos, entity -> entity)));
+        return level;
+    }
+
+    private static void setField(Class<?> type, Object target, String name, Object value) throws ReflectiveOperationException {
+        Field field = type.getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+
+    private static final class TestServerLevel extends ServerLevel {
+        private Map<BlockPos, BlockState> blocks;
+        private Map<BlockPos, BlockEntity> blockEntities;
+
+        private TestServerLevel() {
+            super(null, null, null, null, null, null, false, 0L, List.of(), false);
+        }
+
+        @Override public BlockState getBlockState(BlockPos pos) { return blocks.getOrDefault(pos, Blocks.AIR.defaultBlockState()); }
+        @Override public BlockEntity getBlockEntity(BlockPos pos) { return blockEntities.get(pos); }
+        @Override public void blockEntityChanged(BlockPos pos) { }
+        @Override public boolean setBlock(BlockPos pos, BlockState state, int flags) { blocks.put(pos, state); return true; }
+        @Override public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) { }
+        @Override public boolean hasChunk(int chunkX, int chunkZ) { return true; }
+        @Override public void invalidateCapabilities(BlockPos pos) { }
     }
 
     private static final class FakeLane implements FactoryRecipeScheduler.Lane {

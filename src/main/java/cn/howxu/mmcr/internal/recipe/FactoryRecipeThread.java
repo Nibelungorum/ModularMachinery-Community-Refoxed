@@ -103,18 +103,7 @@ public final class FactoryRecipeThread extends RecipeThread {
                 || !candidatesFor(candidates).contains(lastRecipe)) return false;
         ActiveMachineRecipe next = new ActiveMachineRecipe(lastRecipe, availableParallelism);
         var nextContext = contextPool.borrow(next, controller);
-        try {
-            if (!nextContext.simulateInputs(lastRecipe) || !nextContext.simulateOutputs(lastRecipe)
-                    || !next.canStartCrafting(nextContext) || !next.start(nextContext)) return false;
-            activeRecipe = next;
-            context = nextContext;
-            status = Status.WORKING;
-            lastFailureUnloc = null;
-            onStarted();
-            return true;
-        } finally {
-            if (activeRecipe != next) contextPool.returnContext(nextContext);
-        }
+        return startRecipe(next, nextContext, structureVersion);
     }
 
     public void rememberLastRecipe(MachineRecipe recipe, long structureVersion, long modifierSnapshotVersion) {

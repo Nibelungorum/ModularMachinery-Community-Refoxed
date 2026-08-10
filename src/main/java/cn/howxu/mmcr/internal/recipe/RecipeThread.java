@@ -53,26 +53,35 @@ public abstract class RecipeThread {
         }
         ActiveMachineRecipe next = result.activeRecipe();
         RecipeCraftingContext nextContext = result.context();
-        if (controller.getLevel() instanceof ServerLevel serverLevel && controller.resourceDomain() != null) {
+        return startRecipe(next, nextContext, structureVersion);
+    }
+
+    protected boolean startRecipe(ActiveMachineRecipe next, RecipeCraftingContext nextContext, long structureVersion) {
+        Identifier machineId = controller == null || controller.getFoundMachine() == null
+                ? null : controller.getFoundMachine().registryName();
+        if (controller != null && controller.getLevel() instanceof ServerLevel serverLevel && controller.resourceDomain() != null) {
             return requestStart(serverLevel, controller.resourceDomain(), next, nextContext, structureVersion);
         }
         int searchedParallelism = next.getParallelism();
-        if (!next.canStartCrafting(nextContext) || !next.start(nextContext)) {
+        int granted = nextContext.commitStart(next.getRecipe(), next.getMaxParallelism());
+        if (granted <= 0) {
             contextPool.returnContext(nextContext);
             lastFailureUnloc = nextContext.getLastFailureUnloc();
             status = Status.FAILED;
             LOG.info("[ParallelStart] machine={} recipe={} availableParallelism={} searchedParallelism={} startFailed failure={}",
                     machineId,
                     next.getRecipe() == null ? null : next.getRecipe().id(),
-                    availableParallelism,
+                    next.getMaxParallelism(),
                     searchedParallelism,
                     lastFailureUnloc);
             return false;
         }
+        next.setParallelism(granted);
+        next.refreshTotalTick(nextContext);
         LOG.info("[ParallelStart] machine={} recipe={} availableParallelism={} searchedParallelism={} startedParallelism={}",
                 machineId,
                 next.getRecipe().id(),
-                availableParallelism,
+                next.getMaxParallelism(),
                 searchedParallelism,
                 next.getParallelism());
         activeRecipe = next;

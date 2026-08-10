@@ -24,3 +24,15 @@ Result: `BUILD SUCCESSFUL` with 62 tests completed.
 ## Commits
 
 - Implementation and report commit: `5b526f3 feat: coordinate shared recipe starts`
+
+## Review Follow-up
+
+- Routed cached factory restarts through `RecipeThread.startRecipe`, so shared-domain restarts enqueue the same `StartRequest` and commit only in the coordinator callback.
+- Restored `RecipeSearchTask` candidate feasibility scanning and its same-priority conflict metadata instead of selecting the first ordered candidate unconditionally.
+- Rebuild `nextFactoryLaneId` from loaded `factory-N` lane IDs before scheduling new factory lanes.
+- Added scheduler production-path coverage using a real item handler: two pending factory starts share ten inputs, coordinator callbacks install parallelism 8 and 2, and a second scheduler tick cannot enqueue duplicates while starts are pending.
+
+### Verification
+
+- `./gradlew test --tests cn.howxu.mmcr.api.recipe.RecipeCraftingContextTest --tests cn.howxu.mmcr.internal.recipe.FactoryRecipeSchedulerTest --no-daemon`: `BUILD SUCCESSFUL`, 64 tests completed.
+- `./gradlew test --tests cn.howxu.mmcr.api.recipe.RecipeSearchTaskTest --no-daemon`: `BUILD SUCCESSFUL`, 6 tests completed.
