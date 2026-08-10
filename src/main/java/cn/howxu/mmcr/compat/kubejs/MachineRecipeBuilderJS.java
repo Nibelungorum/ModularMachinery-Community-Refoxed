@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -83,6 +84,15 @@ public class MachineRecipeBuilderJS {
     public MachineRecipeBuilderJS itemOutput(String itemId, int count) {
         var item = BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId));
         outputs.add(new ItemStack(item, count));
+        return this;
+    }
+
+    public MachineRecipeBuilderJS itemOutputWithComponents(String itemId, int count, JsonElement components) {
+        JsonObject stack = new JsonObject();
+        stack.addProperty("id", itemId);
+        stack.addProperty("count", count);
+        stack.add("components", components.deepCopy());
+        outputs.add(ItemStack.CODEC.parse(JsonOps.INSTANCE, stack).getOrThrow());
         return this;
     }
 
