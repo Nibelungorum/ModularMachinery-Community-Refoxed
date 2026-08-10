@@ -1,59 +1,20 @@
-# Task 4 Report: Factory Controller Scheduler
+# Task 4 Report
 
-## Status
+## Completed
 
-DONE
-
-## Modified Files
-
-- `src/main/java/cn/howxu/mmcr/internal/block/FactoryControllerBlock.java`
-- `src/main/java/cn/howxu/mmcr/internal/tile/FactoryControllerBlockEntity.java`
-- `src/main/java/cn/howxu/mmcr/internal/recipe/FactoryRecipeScheduler.java`
-- `src/main/java/cn/howxu/mmcr/internal/tile/MachineControllerBlockEntity.java`
-- `src/main/java/cn/howxu/mmcr/registry/ModBlocks.java`
-- `src/main/java/cn/howxu/mmcr/registry/ModBlockEntities.java`
-- `src/main/java/cn/howxu/mmcr/datagen/Translations.java`
-- `src/main/java/cn/howxu/mmcr/datagen/ModelGen.java`
-- `src/test/java/cn/howxu/mmcr/internal/recipe/FactoryRecipeSchedulerTest.java`
-- `src/test/java/cn/howxu/mmcr/registry/FactoryControllerRegistrationTest.java`
-- `src/test/java/cn/howxu/mmcr/internal/tile/MachineControllerBlockEntityTest.java`
-- `src/test/java/cn/howxu/mmcr/test/TestBootstrap.java`
-
-## Commit
-
-- `fdc7ba856f6b7b0ae1fe58b11f97745d9c4198b8` - `feat(stage5): add factory scheduler foundation`
+- Added `LevelMismatch` formation diagnostics containing the level type, expected and actual levels, and the mismatched world position.
+- Added level-slot resolution in `StructureMatcher` after normal structure and modifier-replacement matching. Slot traversal is coordinate-stable so diagnostics consistently identify the earlier slot as expected.
+- Added controller level snapshots through `getFoundLevels()`. Snapshots are installed only on successful formation or successful cached revalidation, and cleared when the controller changes machine or the structure resets.
+- Added controller structure-error exposure through `getLastStructureError()`. Mixed levels preserve a `LevelMismatch` through the existing formation rejection path.
+- Added focused coverage for dispersed equal-level slots and mixed-level diagnostics.
 
 ## Verification
 
-- `./gradlew test --tests cn.howxu.mmcr.internal.recipe.FactoryRecipeSchedulerTest --tests cn.howxu.mmcr.registry.FactoryControllerRegistrationTest --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest --no-daemon`
-- Result: PASS / `BUILD SUCCESSFUL`
+- `./gradlew test --tests cn.howxu.mmcr.internal.tile.MachineControllerLevelTest --no-daemon` passed.
+- `./gradlew compileJava --no-daemon` passed.
+- `git diff --check` passed.
 
-## Concerns
+## Scope
 
-- None for Task 4 scope.
-- Existing unrelated modified files remain in the worktree and were not touched or committed: `.superpowers/sdd/task-1-report.md`, `.superpowers/sdd/task-3-report.md`.
-
-## Important Review Fix: Stop Factory Lanes On Unload
-
-### Status
-
-DONE
-
-### Modified Files
-
-- `src/main/java/cn/howxu/mmcr/api/machine/MachinePatternCompiler.java`
-- `src/main/java/cn/howxu/mmcr/internal/tile/MachineControllerBlockEntity.java`
-- `src/test/java/cn/howxu/mmcr/internal/tile/MachineControllerBlockEntityTest.java`
-
-### Verification
-
-- `./gradlew test --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest --tests cn.howxu.mmcr.internal.recipe.FactoryRecipeSchedulerTest --tests cn.howxu.mmcr.registry.FactoryControllerRegistrationTest --no-daemon`
-- Result: PASS / `BUILD SUCCESSFUL in 7s`
-
-### Commit
-
-- Pending until commit is created.
-
-### Concerns
-
-- Existing unrelated modified files remain in the worktree and were not touched or committed: `.superpowers/sdd/task-1-report.md`, `.superpowers/sdd/task-3-report.md`.
+- Normal modifier discovery remains unchanged.
+- No recipe selection behavior or `LevelModifier` execution was added.

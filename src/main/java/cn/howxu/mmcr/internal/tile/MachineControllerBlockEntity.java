@@ -8,6 +8,11 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
+import cn.howxu.mmcr.api.machine.BlockRotator;
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
+import cn.howxu.mmcr.api.machine.level.LevelMismatch;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -70,6 +75,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private RecipeCraftingContext context;
     private final List<ProcessingComponent> components = new ArrayList<>();
     private final Map<String, List<RecipeModifier>> foundModifiers = new LinkedHashMap<>();
+    private Map<Identifier, MachineLevel> foundLevels = Map.of();
     private long structureVersion;
     private long modifierSnapshotVersion;
     private int structureCheckCounter;
@@ -80,6 +86,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private @Nullable String lastFailureUnloc;
     private @Nullable PortRequirementSpec.Failure lastFormationFailure;
     private @Nullable String lastStructureMismatchDiagnostic;
+    private @Nullable Object lastStructureError;
     private boolean redstonePaused;
     private @Nullable ActiveMachineRecipe pausedActive;
     private @Nullable RecipeCraftingContext pausedContext;
@@ -114,6 +121,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         Identifier before = this.machine == null ? null : this.machine.registryName();
         stopFactoryController();
         clearFoundModifiers();
+        foundLevels = Map.of();
         this.machine = m;
         markRecipeDirty();
         LOG.info("[Ctrl#{}] setMachine: {} → {} at pos={}", instanceId, before, m == null ? null : m.registryName(), getBlockPos());
@@ -130,6 +138,14 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             snapshot.put(entry.getKey(), List.copyOf(entry.getValue()));
         }
         return Map.copyOf(snapshot);
+    }
+
+    public Map<Identifier, MachineLevel> getFoundLevels() {
+        return foundLevels;
+    }
+
+    public @Nullable Object getLastStructureError() {
+        return lastStructureError;
     }
 
     public List<RecipeModifier> foundModifierList() {
@@ -436,6 +452,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                     ? StructureMatcher.matchesRotated(foundPattern, level, getBlockPos(), replacements)
                     : StructureMatcher.matchesCompiled(foundCompiledPattern, facing, getBlockState().getValue(MachineControllerBlock.ROLL_FACING), level, getBlockPos());
             if (stillMatches) {
+                var levels = resolveLevels(foundMachine, facing);
+                if (levels.mismatch() != null) {
+                    recordLevelMismatch(levels.mismatch());
+                    resetMachine(false);
+                    return;
+                }
                 collectFoundModifiers(replacements);
                 resumePausedRecipeAfterStructureCheck();
                 var failure = foundMachine.portRequirements().validate(countPorts(foundPattern, foundCompiledPattern, facing));
@@ -451,6 +473,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                     return;
                 }
                 if (!isFormed()) setFormed(true);
+                foundLevels = levels.foundLevels();
                 updateComponents();
                 return;
             }
@@ -541,6 +564,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             return false;
         }
 
+        var levels = resolveLevels(candidate, facing);
+        if (levels.mismatch() != null) {
+            recordLevelMismatch(levels.mismatch());
+            return false;
+        }
+
         var failure = candidate.portRequirements().validate(countPorts(rotatedPattern, compiled, facing));
         if (failure.isPresent()) {
             recordFormationFailure(candidate, failure.get());
@@ -555,7 +584,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
         lastFormationFailure = null;
         lastStructureMismatchDiagnostic = null;
-        onStructureFormed(candidate, rotatedPattern, compiled, facing, replacements);
+        onStructureFormed(candidate, rotatedPattern, compiled, facing, replacements, levels.foundLevels());
         return true;
     }
 
@@ -629,13 +658,37 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 instanceId, getBlockPos(), candidate.registryName(), failure.portId(), failure.actual(), failure.requiredMin(), max, failure.reason());
     }
 
+    private StructureMatcher.LevelResolution resolveLevels(Machine candidate, Direction facing) {
+        MachineStructureDefinition definition = MachineStructureRegistry.dynamicSnapshot().get(candidate.registryName());
+        if (definition == null || definition.levelSlots().isEmpty()) {
+            return new StructureMatcher.LevelResolution(Map.of(), null);
+        }
+        Map<BlockPos, Identifier> slots = new LinkedHashMap<>();
+        Direction rollFacing = getBlockState().getValue(MachineControllerBlock.ROLL_FACING);
+        Direction normalizedRoll = facing.getAxis().isVertical() ? rollFacing : Direction.SOUTH;
+        for (var entry : definition.levelSlots().entrySet()) {
+            slots.put(BlockRotator.rotateSouthTo(entry.getKey(), facing, normalizedRoll), entry.getValue());
+        }
+        return StructureMatcher.resolveLevels(slots, level, getBlockPos());
+    }
+
+    private void recordLevelMismatch(LevelMismatch mismatch) {
+        lastStructureError = mismatch;
+        lastFormationFailure = null;
+        lastStructureMismatchDiagnostic = null;
+        LOG.info("[Ctrl#{}] formation rejected: level type={} expected={} actual={} worldPos={}",
+                instanceId, mismatch.typeId(), mismatch.expected().id(), mismatch.actual().id(), mismatch.worldPos());
+    }
+
     private void onStructureFormed(Machine matchedMachine, BlockArray rotatedPattern, CompiledMachinePattern compiledPattern,
-                                   Direction facing, Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
+                                   Direction facing, Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
+                                   Map<Identifier, MachineLevel> levels) {
         foundMachine = matchedMachine;
         foundPattern = rotatedPattern;
         foundCompiledPattern = compiledPattern;
         controllerFacing = facing;
         machine = matchedMachine;
+        foundLevels = levels;
         collectFoundModifiers(replacements);
         FORMED_CONTROLLERS.add(this);
         structureVersion++;
@@ -649,6 +702,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 instanceId, getBlockPos(), matchedMachine.registryName(), facing,
                 counts.itemInputs(), counts.itemOutputs(), counts.fluidInputs(), counts.fluidOutputs(), counts.energyInputs(), counts.energyOutputs());
         lastFormationFailure = null;
+        lastStructureError = null;
         setChanged();
     }
 
@@ -872,6 +926,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         foundCompiledPattern = null;
         controllerFacing = null;
         foundModifiers.clear();
+        foundLevels = Map.of();
         FORMED_CONTROLLERS.remove(this);
         components.clear();
         structureDirty = true;
@@ -888,6 +943,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         pausedContext = null;
         lastFailureUnloc = null;
         if (clearFormationFailure) lastFormationFailure = null;
+        if (clearFormationFailure) lastStructureError = null;
         redstonePaused = false;
         if (dropped != null || wasFormed || hadActive) structureVersion++;
         markRecipeDirty();
