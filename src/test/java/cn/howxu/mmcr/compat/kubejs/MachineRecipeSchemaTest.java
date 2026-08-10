@@ -4,9 +4,14 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import com.mojang.serialization.JsonOps;
 import dev.latvian.mods.kubejs.recipe.component.ListRecipeComponent;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.data.registries.VanillaRegistries;
+import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -77,7 +82,32 @@ class MachineRecipeSchemaTest {
                 .isInstanceOf(IllegalStateException.class);
     }
 
+    @Test
+    void builder_creates_sharpness_four_named_item_output() {
+        Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+        MachineRecipeBuilderJS builder = new MachineRecipeBuilderJS(MMCR.id("sharp_sword"), componentJsonOps());
+
+        builder.itemOutputWithComponents("minecraft:diamond_sword", 1, json("""
+                {
+                  'minecraft:custom_name': { text: 'Sharp Sword' },
+                  'minecraft:enchantments': { 'minecraft:sharpness': 4 }
+                }
+                """));
+
+        var output = builder.outputs.getFirst();
+        HolderLookup.RegistryLookup<net.minecraft.world.item.enchantment.Enchantment> enchantments = VanillaRegistries.createLookup()
+                .lookupOrThrow(Registries.ENCHANTMENT);
+        var sharpness = enchantments.getOrThrow(net.minecraft.resources.ResourceKey.create(Registries.ENCHANTMENT,
+                net.minecraft.resources.Identifier.parse("minecraft:sharpness")));
+        assertThat(output.getHoverName().getString()).isEqualTo("Sharp Sword");
+        assertThat(output.get(DataComponents.ENCHANTMENTS).getLevel(sharpness)).isEqualTo(4);
+    }
+
     private static JsonElement json(String value) {
         return JsonParser.parseString(value);
+    }
+
+    private static RegistryOps<JsonElement> componentJsonOps() {
+        return RegistryOps.create(JsonOps.INSTANCE, VanillaRegistries.createLookup());
     }
 }

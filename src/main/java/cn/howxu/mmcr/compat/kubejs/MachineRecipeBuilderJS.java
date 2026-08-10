@@ -8,7 +8,9 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.JsonOps;
+import dev.latvian.mods.kubejs.util.RegistryAccessContainer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -28,13 +30,19 @@ public class MachineRecipeBuilderJS {
     public boolean cancelIfPerTickFails = false;
 
     private Identifier id;
+    private final DynamicOps<JsonElement> itemStackOps;
 
     public MachineRecipeBuilderJS(String id) {
-        this.id = Identifier.parse(id);
+        this(Identifier.parse(id));
     }
 
     public MachineRecipeBuilderJS(Identifier id) {
+        this(id, RegistryAccessContainer.current.json());
+    }
+
+    MachineRecipeBuilderJS(Identifier id, DynamicOps<JsonElement> itemStackOps) {
         this.id = id;
+        this.itemStackOps = itemStackOps;
     }
 
     public MachineRecipeBuilderJS id(String id) {
@@ -92,7 +100,7 @@ public class MachineRecipeBuilderJS {
         stack.addProperty("id", itemId);
         stack.addProperty("count", count);
         stack.add("components", components.deepCopy());
-        outputs.add(ItemStack.CODEC.parse(JsonOps.INSTANCE, stack).getOrThrow());
+        outputs.add(ItemStack.CODEC.parse(itemStackOps, stack).getOrThrow());
         return this;
     }
 
