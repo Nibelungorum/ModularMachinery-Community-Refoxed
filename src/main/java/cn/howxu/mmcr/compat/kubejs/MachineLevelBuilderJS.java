@@ -70,8 +70,7 @@ public class MachineLevelBuilderJS extends BuilderBase<MachineLevel> {
     public MachineLevel createObject() {
         if (typeId == null) throw new IllegalStateException("type() not called");
         if (state == null) throw new IllegalStateException("state() not called");
-        return new MachineLevel(id, typeId, priority, new BlockPredicate.OfBlockState(state),
-                new ItemStack(state.getBlock()), modifier);
+        return new MachineLevel(id, typeId, priority, new BlockPredicate.OfBlockState(state), ItemStack.EMPTY, modifier);
     }
 
     public void registerObject() {

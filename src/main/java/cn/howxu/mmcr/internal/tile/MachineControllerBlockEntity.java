@@ -1285,7 +1285,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
         ValueOutput.TypedOutputList<String> levels = output.list("found_levels", com.mojang.serialization.Codec.STRING);
-        for (MachineLevel foundLevel : foundLevels.values()) {
+        for (MachineLevel foundLevel : (foundLevels == null ? Map.<Identifier, MachineLevel>of() : foundLevels).values()) {
             levels.add(foundLevel.id().toString());
         }
         if (active != null && context != null) {
