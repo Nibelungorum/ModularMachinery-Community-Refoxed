@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
@@ -656,6 +657,24 @@ class RecipeCraftingContextTest {
     }
 
     @Test
+    void commitIoTickDoesNotPartiallyProduceAcrossEnergyRequirements() throws Exception {
+        EnergyOutputHatchBlockEntity hatch = energyOutputHatch(new BlockPos(1, 0, 0));
+        setField(cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity.class, hatch, "storage",
+                new net.neoforged.neoforge.energy.EnergyStorage(30, 30, 30));
+        MachineControllerBlockEntity controller = controllerWithComponents(hatch);
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "atomic_multiple_energy_outputs",
+                List.of(
+                        new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 20),
+                        new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 20)
+                )
+        );
+
+        assertThat(new RecipeCraftingContext(controller).commitSynchronousIoTick(recipe, 1)).isFalse();
+        assertThat(hatch.getMutableEnergyStorage(null).getEnergyStored()).isZero();
+    }
+
+    @Test
     void blockedOutputKeepsCompletedRecipeAtFinalTick() {
         MachineRecipe recipe = explicitRequirementRecipe(
                 "blocked_finish_tick",
@@ -1063,6 +1082,10 @@ class RecipeCraftingContextTest {
         return allocateBlockEntity(EnergyInputHatchBlockEntity.class, pos);
     }
 
+    private static EnergyOutputHatchBlockEntity energyOutputHatch(BlockPos pos) {
+        return allocateBlockEntity(EnergyOutputHatchBlockEntity.class, pos);
+    }
+
     private static void bindItemComponents(Item item) {
         item.builtInRegistryHolder().bindComponents(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
     }
@@ -1179,6 +1202,7 @@ class RecipeCraftingContextTest {
         if (port instanceof FluidInputHatchBlockEntity) return new MachineComponent(PortKinds.FLUID_INPUT, cn.howxu.mmcr.util.IOType.INPUT);
         if (port instanceof FluidOutputHatchBlockEntity) return new MachineComponent(PortKinds.FLUID_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT);
         if (port instanceof EnergyInputHatchBlockEntity) return new MachineComponent(PortKinds.ENERGY_INPUT, cn.howxu.mmcr.util.IOType.INPUT);
+        if (port instanceof EnergyOutputHatchBlockEntity) return new MachineComponent(PortKinds.ENERGY_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT);
         throw new IllegalArgumentException("Unknown port: " + port.getClass().getSimpleName());
     }
 

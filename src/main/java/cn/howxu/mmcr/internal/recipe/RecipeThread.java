@@ -37,7 +37,6 @@ public abstract class RecipeThread {
     private long nextStartToken;
     private long pendingStartToken;
     private boolean tickPending;
-    private boolean finishPending;
 
     protected RecipeThread(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
         this.controller = controller;
@@ -154,7 +153,7 @@ public abstract class RecipeThread {
         if (activeRecipe == null || context == null) return;
         if (tickPending) return;
         if (controller != null && controller.getLevel() instanceof ServerLevel level && controller.resourceDomain() != null) {
-            if (finishPending) {
+            if (activeRecipe.isFinishPending()) {
                 requestFinishIfReady(level, controller.resourceDomain(), activeRecipe, context, controller.getStructureVersion());
                 return;
             }
@@ -190,7 +189,7 @@ public abstract class RecipeThread {
                         return false;
                     }
                     if (granted && recipe.needsFinishCommit()) {
-                        finishPending = true;
+                        recipe.beginFinishCommit();
                         requestFinish(level, domain, recipe, recipeContext, structureVersion, gameTime);
                     }
                     if (granted && !recipe.needsFinishCommit()) applyTick(recipe, recipeContext, true, false, gameTime);
@@ -240,7 +239,6 @@ public abstract class RecipeThread {
         tickPending = false;
         ActiveMachineRecipe.TickStatus tickStatus = recipe.applyTickGrant(resourcesGranted, outputsCommitted, gameTime);
         if (tickStatus == ActiveMachineRecipe.TickStatus.FINISHED) {
-            finishPending = false;
             onFinished();
             contextPool.returnContext(recipeContext);
             activeRecipe = null;
@@ -264,7 +262,6 @@ public abstract class RecipeThread {
         activeRecipe = null;
         context = null;
         tickPending = false;
-        finishPending = false;
         status = Status.IDLE;
     }
 

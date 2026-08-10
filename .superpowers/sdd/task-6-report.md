@@ -85,6 +85,24 @@ Verification:
 - Result: `BUILD SUCCESSFUL in 17s` (17 actionable tasks: 2 executed, 15 up-to-date).
 - `git diff --check` completed without output.
 
+## Review Fixes
+
+Status: fixed.
+
+- `RecipeCraftingContext.commitAtomicIoTick` now reserves every energy input and output by `IEnergyStorage` identity before mutating item, fluid, or energy handlers. The commit applies each aggregated reservation once, preventing partial writes across repeated requirements sharing one handler.
+- Added the 30 FE capacity regression with two 20 FE output requirements; the tick is refused and the handler remains unchanged.
+- Shared `RecipeThread` no longer owns a separate `finishPending` flag. It derives pending-finalization exclusively from the persisted `ActiveMachineRecipe` state, including immediately after `FactoryRecipeThread.load`.
+- Added a shared-thread save/restore regression that blocks final output after the last tick consumes input and energy, reloads the thread, then confirms the retry outputs once without repeating either consumption.
+
+TDD failure evidence:
+
+- Before the implementation, the focused tests failed because the first 20 FE output was written and a restored thread reran final Tick IO.
+
+Verification:
+
+- `./gradlew test --tests cn.howxu.mmcr.api.recipe.RecipeCraftingContextTest --tests cn.howxu.mmcr.internal.recipe.FactoryRecipeSchedulerTest --tests cn.howxu.mmcr.internal.multiblock.SharedIoCoordinatorTest --tests cn.howxu.mmcr.api.recipe.ActiveMachineRecipeTest --no-daemon`
+- Result: `BUILD SUCCESSFUL in 17s` (17 actionable tasks: 1 executed, 16 up-to-date).
+
 ## Final Important Follow-up
 
 Status: fixed.

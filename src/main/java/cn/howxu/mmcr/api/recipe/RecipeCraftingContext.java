@@ -190,13 +190,20 @@ public final class RecipeCraftingContext {
             setFailure(FAILURE_MISSING_INPUT, fluidFailure);
             return false;
         }
-        Map<IEnergyStorage, Integer> reservedEnergy = new IdentityHashMap<>();
+        Map<IEnergyStorage, Integer> reservedEnergyInputs = new IdentityHashMap<>();
+        Map<IEnergyStorage, Integer> reservedEnergyOutputs = new IdentityHashMap<>();
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
-            if (requirement instanceof EnergyRequirement energy && energy.io() == RecipeModifier.IOType.INPUT
-                    && !reserveEnergyInput(requirementIndex, energy, reservedEnergy)) return false;
+            if (!(requirement instanceof EnergyRequirement energy)) continue;
+            if (energy.io() == RecipeModifier.IOType.INPUT
+                    && !reserveEnergyInput(requirementIndex, energy, reservedEnergyInputs)) return false;
+            if (energy.io() == RecipeModifier.IOType.OUTPUT
+                    && !reserveEnergyOutput(requirementIndex, energy, reservedEnergyOutputs)) return false;
         }
-        return commitInputs(requirements) && ioTick(requirements);
+        if (!commitInputs(requirements)) return false;
+        commitEnergyInputs(reservedEnergyInputs);
+        commitEnergyOutputs(reservedEnergyOutputs);
+        return true;
     }
 
     private boolean reserveEnergyInput(int requirementIndex, EnergyRequirement energy, Map<IEnergyStorage, Integer> reservedEnergy) {
@@ -221,6 +228,43 @@ public final class RecipeCraftingContext {
                 List.of()
         ));
         return false;
+    }
+
+    private boolean reserveEnergyOutput(int requirementIndex, EnergyRequirement energy, Map<IEnergyStorage, Integer> reservedEnergy) {
+        int remaining = energy.fePerTick();
+        for (IEnergyStorage storage : taggedEnergyOutputs(energy.tags())) {
+            int reserved = reservedEnergy.getOrDefault(storage, 0);
+            int accepted = storage.receiveEnergy(Integer.MAX_VALUE, true);
+            int available = Math.max(0, accepted - reserved);
+            int requested = Math.min(remaining, available);
+            if (requested <= 0) continue;
+            reservedEnergy.put(storage, reserved + requested);
+            remaining -= requested;
+            if (remaining == 0) return true;
+        }
+        long available = energy.fePerTick() - remaining;
+        setRequirementFailure(FAILURE_MISSING_OUTPUT, new RequirementFailure(
+                requirementIndex,
+                RequirementFailure.Kind.MISSING_OUTPUT,
+                energy.fePerTick(),
+                available,
+                remaining,
+                energyOutputComponentTraces(energy.tags()),
+                List.of()
+        ));
+        return false;
+    }
+
+    private static void commitEnergyInputs(Map<IEnergyStorage, Integer> reservedEnergy) {
+        for (Map.Entry<IEnergyStorage, Integer> entry : reservedEnergy.entrySet()) {
+            entry.getKey().extractEnergy(entry.getValue(), false);
+        }
+    }
+
+    private static void commitEnergyOutputs(Map<IEnergyStorage, Integer> reservedEnergy) {
+        for (Map.Entry<IEnergyStorage, Integer> entry : reservedEnergy.entrySet()) {
+            entry.getKey().receiveEnergy(entry.getValue(), false);
+        }
     }
 
     private boolean ioTick(List<MachineRequirement> requirements) {

@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -505,6 +506,85 @@ class FactoryRecipeSchedulerTest {
 
         assertThat(thread.isIdle()).isTrue();
         assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+        assertThat(itemCount(output, Items.IRON_INGOT)).isEqualTo(1);
+        SharedIoCoordinator.discard(level);
+        StructureClaimRegistry.discard(level);
+    }
+
+    @Test
+    void restoredSharedFinishPendingRetriesOnlyOutputs() throws Exception {
+        Items.IRON_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 64).build());
+        Items.COBBLESTONE.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 64).build());
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(2, 64, 0));
+        setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, input, "handler", new ItemStackHandler(6) {
+            @Override
+            public ItemStack extractItem(int slot, int amount, boolean simulate) {
+                ItemStack extracted = super.extractItem(slot, amount, simulate);
+                if (!simulate && !extracted.isEmpty()) {
+                    for (int outputSlot = 0; outputSlot < output.getItemStackHandler(null).getSlots(); outputSlot++) {
+                        output.getItemStackHandler(null).setStackInSlot(outputSlot, new ItemStack(Items.COBBLESTONE, 64));
+                    }
+                }
+                return extracted;
+            }
+
+            @Override protected void onContentsChanged(int slot) { }
+        });
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 2));
+        EnergyInputHatchBlockEntity energy = energyInputHatch(new BlockPos(3, 64, 0));
+        energy.getMutableEnergyStorage(null).receiveEnergy(20, false);
+        BlockPos controllerPos = new BlockPos(0, 64, 0);
+        MachineControllerBlockEntity controller = controllerWithComponents(MMCR.id("restored_shared_finish"), controllerPos, input, output, energy);
+        ServerLevel level = serverLevel(List.of(controller, input, output, energy));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, input, "level", level);
+        setField(BlockEntity.class, output, "level", level);
+        setField(BlockEntity.class, energy, "level", level);
+        StructureClaimRegistry registry = StructureClaimRegistry.get(level);
+        registry.claim(controllerPos, List.of(
+                new StructureClaimRegistry.Claim(input.getBlockPos(), cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED),
+                new StructureClaimRegistry.Claim(output.getBlockPos(), cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED),
+                new StructureClaimRegistry.Claim(energy.getBlockPos(), cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)
+        ));
+        StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
+        setField(MachineControllerBlockEntity.class, controller, "resourceDomain", domain);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("restored_shared_finish_recipe"), MMCR.id("restored_shared_finish"),
+                1, List.of(), List.of(), List.of(), 0, 0, false, List.of(), List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
+                new EnergyRequirement(10),
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.IRON_INGOT))
+        ));
+        RecipeRegistry.register(recipe);
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
+        active.setTick(active.getTotalTick() - 1);
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+        thread.setActiveRecipeForTesting(active);
+        setField(RecipeThread.class, thread, "context", new RecipeCraftingContext(controller));
+
+        thread.tick();
+        SharedIoCoordinator.get(level).resolve(domain);
+        assertThat(active.isFinishPending()).isTrue();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+
+        TagValueOutput saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        thread.save(saved);
+        FactoryRecipeThread restored = FactoryRecipeThread.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()), saved.buildResult()), controller,
+                new RecipeCraftingContextPool());
+        output.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
+        ((TestServerLevel) level).gameTime = 10L;
+
+        restored.tick();
+        SharedIoCoordinator.get(level).resolve(domain);
+
+        assertThat(restored.isIdle()).isTrue();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
         assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
         assertThat(itemCount(output, Items.IRON_INGOT)).isEqualTo(1);
         SharedIoCoordinator.discard(level);

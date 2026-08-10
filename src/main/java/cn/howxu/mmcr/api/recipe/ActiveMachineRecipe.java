@@ -122,6 +122,7 @@ public final class ActiveMachineRecipe {
         this.parallelism = 1;
         this.maxParallelism = 1;
         this.data = new CompoundTag();
+        this.finishPending = false;
         LOG.info("ActiveMachineRecipe#{} reset: tick {} → 0; parallelism and data cleared (recipe={})",
                 instanceId, before, recipe == null ? null : recipe.id());
     }
@@ -223,6 +224,10 @@ public final class ActiveMachineRecipe {
 
     public boolean isFinishPending() {
         return finishPending;
+    }
+
+    public void beginFinishCommit() {
+        finishPending = true;
     }
 
     public void markFinishBlocked(int gameTime) {
