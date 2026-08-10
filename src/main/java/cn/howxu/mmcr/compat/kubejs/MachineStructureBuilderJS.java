@@ -4,6 +4,8 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.machine.level.LevelSlot;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
 import net.minecraft.core.BlockPos;
@@ -28,6 +30,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     public transient BlockArray pattern = new BlockArray(Map.of());
     public transient PortRequirementSpec portRequirements = PortRequirementSpec.none();
     public transient Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements = new LinkedHashMap<>();
+    public transient Map<BlockPos, Identifier> levelSlots = new LinkedHashMap<>();
 
     public MachineStructureBuilderJS(Identifier id) {
         super(id);
@@ -57,7 +60,11 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
                     continue;
                 }
 
-                blocks.put(new BlockPos(x, y, 0), toPredicate(value));
+                BlockPos pos = new BlockPos(x, y, 0);
+                blocks.put(pos, toPredicate(value));
+                if (value instanceof LevelSlot slot) {
+                    levelSlots.put(pos, slot.typeId());
+                }
             }
         }
 
@@ -74,7 +81,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
 
     @Override
     public MachineStructureDefinition createObject() {
-        return new MachineStructureDefinition(id, pattern, portRequirements, List.of(), modifierReplacements);
+        return new MachineStructureDefinition(id, pattern, portRequirements, List.of(), modifierReplacements, levelSlots);
     }
 
     private static BlockPredicate toPredicate(Object value) {
@@ -83,6 +90,16 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
             case Block block -> new BlockPredicate.OfBlock(block);
             case BlockState state -> new BlockPredicate.OfBlockState(state);
             case BlockPredicate predicate -> predicate;
+            case LevelSlot slot -> {
+                if (MachineLevelRegistry.getType(slot.typeId()) == null) {
+                    throw new IllegalArgumentException("Unknown machine level type: " + slot.typeId());
+                }
+                var levels = MachineLevelRegistry.levelsForType(slot.typeId());
+                if (levels.isEmpty()) {
+                    throw new IllegalArgumentException("Machine level type has no registered levels: " + slot.typeId());
+                }
+                yield state -> levels.stream().anyMatch(level -> level.statePredicate().matches(state));
+            }
             default -> throw new IllegalArgumentException("Unknown pattern key value: " + value);
         };
     }

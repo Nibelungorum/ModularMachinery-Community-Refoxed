@@ -18,7 +18,8 @@ public record MachineStructureDefinition(
         PortRequirementSpec portRequirements,
         PortTierRequirementSpec portTierRequirements,
         List<DynamicPatternSpec> dynamicPatterns,
-        Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements
+        Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
+        Map<BlockPos, Identifier> levelSlots
 ) {
     public MachineStructureDefinition {
         if (machineId == null) throw new IllegalArgumentException("machineId null");
@@ -27,6 +28,7 @@ public record MachineStructureDefinition(
         portTierRequirements = portTierRequirements == null ? PortTierRequirementSpec.none() : portTierRequirements;
         dynamicPatterns = List.copyOf(dynamicPatterns == null ? List.of() : dynamicPatterns);
         modifierReplacements = modifierReplacements == null ? Map.of() : Map.copyOf(modifierReplacements);
+        levelSlots = levelSlots == null ? Map.of() : Map.copyOf(levelSlots);
     }
 
     public MachineStructureDefinition(
@@ -35,6 +37,16 @@ public record MachineStructureDefinition(
             PortRequirementSpec portRequirements,
             List<DynamicPatternSpec> dynamicPatterns,
             Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements) {
-        this(machineId, pattern, portRequirements, PortTierRequirementSpec.none(), dynamicPatterns, modifierReplacements);
+        this(machineId, pattern, portRequirements, PortTierRequirementSpec.none(), dynamicPatterns, modifierReplacements, Map.of());
+    }
+
+    public MachineStructureDefinition(
+            Identifier machineId,
+            BlockArray pattern,
+            PortRequirementSpec portRequirements,
+            PortTierRequirementSpec portTierRequirements,
+            List<DynamicPatternSpec> dynamicPatterns,
+            Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements) {
+        this(machineId, pattern, portRequirements, portTierRequirements, dynamicPatterns, modifierReplacements, Map.of());
     }
 }
