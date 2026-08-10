@@ -2,13 +2,13 @@ package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 
@@ -25,8 +25,7 @@ public record MachineRecipeDisplay(
         Identifier recipeId,
         Identifier machineId,
         int durationTicks,
-        List<Ingredient> itemInputs,
-        List<Integer> itemInputCounts,
+        List<ItemInputDisplay> itemInputs,
         List<ItemStack> itemOutputs,
         List<FluidIngredient> fluidInputs,
         List<Integer> fluidInputAmounts,
@@ -37,8 +36,7 @@ public record MachineRecipeDisplay(
 ) {
 
     public static MachineRecipeDisplay from(MachineRecipe recipe) {
-        List<Ingredient> itemInputs = new ArrayList<>();
-        List<Integer> itemInputCounts = new ArrayList<>();
+        List<ItemInputDisplay> itemInputs = new ArrayList<>();
         List<FluidIngredient> fluidInputs = new ArrayList<>();
         List<Integer> fluidInputAmounts = new ArrayList<>();
         List<EnergyIngredient> energyInputs = new ArrayList<>();
@@ -46,8 +44,10 @@ public record MachineRecipeDisplay(
 
         for (var requirement : recipe.runtimeRequirements()) {
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT) {
-                itemInputs.add(item.item());
-                itemInputCounts.add(item.count());
+                itemInputs.add(new ItemInputDisplay(item.item().items()
+                        .map(holder -> item.components().displayStack(holder.value(), item.count())).toList(),
+                        item.count(), item.consumeChance(), item.components().values().values().stream()
+                                .filter(predicate -> !(predicate instanceof ComponentPredicate.Exact)).toList()));
             } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.INPUT) {
                 fluidInputs.add(fluid.fluid());
                 fluidInputAmounts.add(fluid.amount());
@@ -75,7 +75,6 @@ public record MachineRecipeDisplay(
                 recipe.machineId(),
                 recipe.tickTime(),
                 List.copyOf(itemInputs),
-                List.copyOf(itemInputCounts),
                 List.copyOf(itemOutputs),
                 List.copyOf(fluidInputs),
                 List.copyOf(fluidInputAmounts),
@@ -84,5 +83,13 @@ public record MachineRecipeDisplay(
                 List.copyOf(energyOutputs),
                 List.copyOf(outputs)
         );
+    }
+
+    public record ItemInputDisplay(List<ItemStack> stacks, int count, float consumeChance,
+            List<ComponentPredicate> tooltipPredicates) {
+        public ItemInputDisplay {
+            stacks = stacks.stream().map(ItemStack::copy).toList();
+            tooltipPredicates = tooltipPredicates == null ? List.of() : List.copyOf(tooltipPredicates);
+        }
     }
 }
