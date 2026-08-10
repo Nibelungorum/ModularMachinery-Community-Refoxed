@@ -1124,9 +1124,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         }
         int gameTime = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, currentGameTime()));
         if (active.needsFinishCommit() && !active.shouldRetryFinish(gameTime)) return;
-        boolean resourcesGranted = context.commitIoTick(active.getRecipe(), active.getParallelism());
+        boolean resourcesGranted = context.commitSynchronousIoTick(active.getRecipe(), active.getParallelism());
         boolean outputsCommitted = resourcesGranted && active.needsFinishCommit()
-                && context.commitOutputs(active.getRecipe(), active.getParallelism());
+                && context.commitSynchronousOutputs(active.getRecipe(), active.getParallelism());
         ActiveMachineRecipe.TickStatus status = active.applyTickGrant(resourcesGranted, outputsCommitted, gameTime);
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
             lastFailureUnloc = null;

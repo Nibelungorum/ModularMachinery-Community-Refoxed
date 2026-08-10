@@ -480,13 +480,14 @@ class FactoryRecipeSchedulerTest {
         thread.setActiveRecipeForTesting(active);
         setField(RecipeThread.class, thread, "context", new RecipeCraftingContext(controller));
 
-        assertThat(new RecipeCraftingContext(controller).commitOutputs(recipe, 1)).isFalse();
+        assertThat(new RecipeCraftingContext(controller).commitSynchronousOutputs(recipe, 1)).isFalse();
         thread.tick();
         SharedIoCoordinator.get(level).resolve(domain);
 
         assertThat(thread.getStatus()).isEqualTo(RecipeThread.Status.WAITING);
         assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
         assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+        assertThat(itemCount(output, Items.IRON_INGOT)).isZero();
 
         output.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
         ((TestServerLevel) level).gameTime = 10L;
@@ -496,7 +497,7 @@ class FactoryRecipeSchedulerTest {
         assertThat(thread.isIdle()).isTrue();
         assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
         assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getItem()).isEqualTo(Items.IRON_INGOT);
+        assertThat(itemCount(output, Items.IRON_INGOT)).isEqualTo(1);
         SharedIoCoordinator.discard(level);
         StructureClaimRegistry.discard(level);
     }
@@ -650,6 +651,15 @@ class FactoryRecipeSchedulerTest {
         setField(cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity.class, hatch, "storage",
                 new net.neoforged.neoforge.energy.EnergyStorage(100, 100, 100));
         return hatch;
+    }
+
+    private static int itemCount(ItemOutputBusBlockEntity output, net.minecraft.world.item.Item item) {
+        int count = 0;
+        for (int slot = 0; slot < output.getItemStackHandler(null).getSlots(); slot++) {
+            ItemStack stack = output.getItemStackHandler(null).getStackInSlot(slot);
+            if (stack.is(item)) count += stack.getCount();
+        }
+        return count;
     }
 
     private static MachineComponent componentFor(BlockEntity component) {

@@ -161,9 +161,9 @@ public abstract class RecipeThread {
             requestTick(level, controller.resourceDomain(), activeRecipe, context, controller.getStructureVersion());
             return;
         }
-        boolean resourcesGranted = context.commitIoTick(activeRecipe.getRecipe(), activeRecipe.getParallelism());
+        boolean resourcesGranted = context.commitSynchronousIoTick(activeRecipe.getRecipe(), activeRecipe.getParallelism());
         boolean outputsCommitted = resourcesGranted && activeRecipe.needsFinishCommit()
-                && context.commitOutputs(activeRecipe.getRecipe(), activeRecipe.getParallelism());
+                && context.commitSynchronousOutputs(activeRecipe.getRecipe(), activeRecipe.getParallelism());
         applyTick(activeRecipe, context, resourcesGranted, outputsCommitted, 0);
     }
 

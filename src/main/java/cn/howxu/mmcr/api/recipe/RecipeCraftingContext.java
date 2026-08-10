@@ -159,6 +159,17 @@ public final class RecipeCraftingContext {
      * Revalidates every requirement before allowing any per-tick live IO mutation.
      */
     public boolean commitIoTick(MachineRecipe recipe, int parallelism) {
+        return commitAtomicIoTick(recipe, parallelism);
+    }
+
+    /**
+     * Commits per-tick IO for a controller without a shared resource domain.
+     */
+    public boolean commitSynchronousIoTick(MachineRecipe recipe, int parallelism) {
+        return commitAtomicIoTick(recipe, parallelism);
+    }
+
+    private boolean commitAtomicIoTick(MachineRecipe recipe, int parallelism) {
         List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism);
         lastFailureUnloc = null;
         lastRequirementFailure = null;
@@ -562,11 +573,21 @@ public final class RecipeCraftingContext {
     }
 
     public boolean commitOutputs(MachineRecipe recipe) {
-        List<MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
-        return simulateOutputs(requirements) && commitOutputs(requirements);
+        return commitAtomicOutputs(recipe, 1);
     }
 
     public boolean commitOutputs(MachineRecipe recipe, int parallelism) {
+        return commitAtomicOutputs(recipe, parallelism);
+    }
+
+    /**
+     * Commits final outputs for a controller without a shared resource domain.
+     */
+    public boolean commitSynchronousOutputs(MachineRecipe recipe, int parallelism) {
+        return commitAtomicOutputs(recipe, parallelism);
+    }
+
+    private boolean commitAtomicOutputs(MachineRecipe recipe, int parallelism) {
         List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism);
         return simulateOutputs(requirements) && commitOutputs(requirements);
     }

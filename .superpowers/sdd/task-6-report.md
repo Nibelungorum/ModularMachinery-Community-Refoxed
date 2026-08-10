@@ -57,3 +57,15 @@ Status: fixed.
 Verification:
 - `./gradlew test --tests cn.howxu.mmcr.api.recipe.RecipeCraftingContextTest --tests cn.howxu.mmcr.internal.recipe.FactoryRecipeSchedulerTest --tests cn.howxu.mmcr.internal.multiblock.SharedIoCoordinatorTest --no-daemon`
 - Result: `BUILD SUCCESSFUL` (17 actionable tasks: 2 executed, 15 up-to-date).
+
+## Final Re-review Follow-up
+
+Status: fixed.
+
+- Added `commitSynchronousIoTick` and `commitSynchronousOutputs` for no-domain execution. Both delegate to the same private atomic implementations used by the coordinator APIs, preserving full live validation and output behavior without calling `commitIoTick` or `commitOutputs`.
+- Migrated the no-domain paths in `RecipeThread`, `FactoryRecipeLane`, and `MachineControllerBlockEntity` to the synchronous wrappers. The only production calls to `commitIoTick` and `commitOutputs` now remain in `RecipeThread`'s `SharedIoCoordinator.TickRequest` and `FinishRequest` callbacks.
+- Strengthened `sharedFinalOutputRetryDoesNotRepeatItsLastTickIo` to count iron ingots across every output slot: zero while blocked and exactly one after the finish-only retry.
+
+Verification:
+- `./gradlew test --tests cn.howxu.mmcr.internal.multiblock.SharedIoCoordinatorTest --tests cn.howxu.mmcr.api.recipe.RecipeCraftingContextTest --tests cn.howxu.mmcr.internal.recipe.FactoryRecipeSchedulerTest --no-daemon`
+- Result: `BUILD SUCCESSFUL` (17 actionable tasks: 1 executed, 16 up-to-date).
