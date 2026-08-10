@@ -87,7 +87,7 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     static int selectedOverlayBottom(int y) { return selectedOverlayY(y) + selectedOverlayHeight() - 1; }
     static int progressOverlayX(int x) { return x; }
     static int progressOverlayY(int y) { return threadElementY(y); }
-    static int progressOverlayHeight() { return THREAD_ROW_HEIGHT; }
+    static int progressOverlayHeight() { return THREAD_ROW_HEIGHT - 1; }
     static int progressOverlayRight(int x, int progress) { return progressOverlayX(x) + progress; }
     static int progressOverlayBottom(int y) { return progressOverlayY(y) + progressOverlayHeight(); }
     static int detailTitleY(int y) { return y; }
