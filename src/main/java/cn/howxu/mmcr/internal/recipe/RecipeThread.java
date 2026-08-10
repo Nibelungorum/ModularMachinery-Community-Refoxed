@@ -34,9 +34,11 @@ public abstract class RecipeThread {
     protected @Nullable String lastFailureUnloc;
     private boolean startPending;
     private @Nullable RecipeCraftingContext pendingStartContext;
+    private @Nullable cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.ResourceDomain pendingStartDomain;
     private long nextStartToken;
     private long pendingStartToken;
     private boolean tickPending;
+    private @Nullable cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.ResourceDomain pendingTickDomain;
 
     protected RecipeThread(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
         this.controller = controller;
@@ -100,6 +102,7 @@ public abstract class RecipeThread {
         long startToken = ++nextStartToken;
         startPending = true;
         pendingStartContext = nextContext;
+        pendingStartDomain = domain;
         pendingStartToken = startToken;
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.StartRequest(
                 domain,
@@ -141,16 +144,22 @@ public abstract class RecipeThread {
         if (!isPendingStart(startToken, startContext)) return;
         startPending = false;
         pendingStartContext = null;
+        pendingStartDomain = null;
         pendingStartToken = 0L;
     }
 
     public void tick() {
-        if (startPending && pendingStartContext != null && !pendingStartContext.isStructureVersionCurrent()) {
+        if (startPending && pendingStartContext != null
+                && (!pendingStartContext.isStructureVersionCurrent() || !isCurrentDomain(pendingStartDomain))) {
             RecipeCraftingContext pendingContext = pendingStartContext;
             clearPendingStart(pendingStartToken, pendingContext);
             contextPool.returnContext(pendingContext);
         }
         if (activeRecipe == null || context == null) return;
+        if (tickPending && !isCurrentDomain(pendingTickDomain)) {
+            tickPending = false;
+            pendingTickDomain = null;
+        }
         if (tickPending) return;
         if (controller != null && controller.getLevel() instanceof ServerLevel level && controller.resourceDomain() != null) {
             if (activeRecipe.isFinishPending()) {
@@ -170,6 +179,7 @@ public abstract class RecipeThread {
                               ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext, long structureVersion) {
         int gameTime = (int) level.getGameTime();
         tickPending = true;
+        pendingTickDomain = domain;
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.TickRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
@@ -225,6 +235,7 @@ public abstract class RecipeThread {
             return;
         }
         tickPending = true;
+        pendingTickDomain = domain;
         requestFinish(level, domain, recipe, recipeContext, structureVersion, gameTime);
     }
 
@@ -235,8 +246,9 @@ public abstract class RecipeThread {
     }
 
     private void applyTick(ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext,
-                           boolean resourcesGranted, boolean outputsCommitted, int gameTime) {
+                            boolean resourcesGranted, boolean outputsCommitted, int gameTime) {
         tickPending = false;
+        pendingTickDomain = null;
         ActiveMachineRecipe.TickStatus tickStatus = recipe.applyTickGrant(resourcesGranted, outputsCommitted, gameTime);
         if (tickStatus == ActiveMachineRecipe.TickStatus.FINISHED) {
             onFinished();
@@ -262,6 +274,7 @@ public abstract class RecipeThread {
         activeRecipe = null;
         context = null;
         tickPending = false;
+        pendingTickDomain = null;
         status = Status.IDLE;
     }
 
@@ -283,4 +296,8 @@ public abstract class RecipeThread {
     public boolean isIdle() { return !startPending && activeRecipe == null && context == null; }
     public boolean isStartPending() { return startPending; }
     public int usedParallelism() { return activeRecipe == null ? 0 : activeRecipe.getParallelism(); }
+
+    private boolean isCurrentDomain(@Nullable cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.ResourceDomain domain) {
+        return domain != null && controller != null && domain.equals(controller.resourceDomain());
+    }
 }

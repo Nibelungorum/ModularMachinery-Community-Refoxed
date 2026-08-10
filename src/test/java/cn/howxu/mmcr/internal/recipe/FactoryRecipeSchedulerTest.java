@@ -440,6 +440,41 @@ class FactoryRecipeSchedulerTest {
     }
 
     @Test
+    void sharedDomainRebuildClearsPendingStartSoTheLaneCanRetry() throws Exception {
+        Items.IRON_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 64).build());
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 1));
+        BlockPos controllerPos = new BlockPos(0, 64, 0);
+        MachineControllerBlockEntity controller = controllerWithInput(MMCR.id("factory_domain_rebuild"), controllerPos, input);
+        ServerLevel level = serverLevel(List.of(controller, input));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, input, "level", level);
+        StructureClaimRegistry registry = StructureClaimRegistry.get(level);
+        List<StructureClaimRegistry.Claim> claims = List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
+                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED));
+        registry.claim(controllerPos, claims);
+        StructureClaimRegistry.ResourceDomain originalDomain = registry.domainFor(controllerPos);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_domain_rebuild_recipe"), MMCR.id("factory_domain_rebuild"),
+                20, List.of(), List.of(), List.of(), 0, 0, false, List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)), true);
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1, controller.getStructureVersion())).isTrue();
+        assertThat(thread.isStartPending()).isTrue();
+
+        registry.release(controllerPos);
+        registry.claim(controllerPos, claims);
+        SharedIoCoordinator.get(level).resolve(originalDomain);
+        thread.tick();
+
+        assertThat(thread.isStartPending()).isFalse();
+        assertThat(thread.isIdle()).isTrue();
+        SharedIoCoordinator.discard(level);
+        StructureClaimRegistry.discard(level);
+    }
+
+    @Test
     void sharedFinalOutputRetryDoesNotRepeatItsLastTickIo() throws Exception {
         Items.IRON_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
                 .set(DataComponents.MAX_STACK_SIZE, 64).build());

@@ -22,6 +22,7 @@ import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -99,6 +100,11 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private long lastRecipeModifierSnapshotVersion = Long.MIN_VALUE;
     private boolean recipeDirty = true;
     private @Nullable StructureClaimRegistry.ResourceDomain resourceDomain;
+    private boolean sharedStartPending;
+    private @Nullable RecipeCraftingContext pendingSharedStartContext;
+    private @Nullable StructureClaimRegistry.ResourceDomain pendingSharedStartDomain;
+    private boolean sharedTickPending;
+    private @Nullable StructureClaimRegistry.ResourceDomain pendingSharedTickDomain;
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
@@ -392,7 +398,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     private void tickSingleActiveRecipe() {
         boolean startedThisTick = false;
-        if (active == null) {
+        if (sharedStartPending && !isCurrentSharedDomain(pendingSharedStartDomain)) {
+            RecipeCraftingContext pendingContext = pendingSharedStartContext;
+            clearPendingSharedStart();
+            returnContext(pendingContext);
+        }
+        if (active == null && !sharedStartPending) {
             startedThisTick = tryStartNewRecipe();
         }
         if (active != null && !startedThisTick) tickActiveRecipe();
@@ -912,6 +923,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             context = null;
             setActiveState(false);
         }
+        returnContext(pendingSharedStartContext);
+        clearPendingSharedStart();
+        sharedTickPending = false;
+        pendingSharedTickDomain = null;
         clearPendingConflictStart();
         pausedActive = null;
         returnContext(pausedContext);
@@ -1016,6 +1031,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             returnContext(nextContext);
             return false;
         }
+        if (usesSharedIoCoordinator()) {
+            requestSharedStart(next, nextContext);
+            return true;
+        }
         active = next;
         context = nextContext;
         int granted = nextContext.commitStart(next.getRecipe(), next.getMaxParallelism());
@@ -1076,6 +1095,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         RecipeCraftingContext nextContext = contextPool().borrow(next, this);
         try {
             if (!next.canStartCrafting(nextContext)) return false;
+            if (usesSharedIoCoordinator()) {
+                requestSharedStart(next, nextContext);
+                return true;
+            }
             active = next;
             context = nextContext;
             int granted = nextContext.commitStart(next.getRecipe(), next.getMaxParallelism());
@@ -1093,7 +1116,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             setChanged();
             return true;
         } finally {
-            if (active != next) returnContext(nextContext);
+            if (active != next && pendingSharedStartContext != nextContext) returnContext(nextContext);
         }
     }
 
@@ -1121,6 +1144,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 context = new RecipeCraftingContext(this);
                 context.setStructureModifiers(foundModifierList());
             }
+        }
+        if (usesSharedIoCoordinator()) {
+            tickSharedRecipe();
+            return;
         }
         int gameTime = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, currentGameTime()));
         if (active.isFinishPending()) {
@@ -1168,6 +1195,156 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             lastFailureUnloc = null;
         }
         setChanged();
+    }
+
+    private boolean usesSharedIoCoordinator() {
+        StructureClaimRegistry.ResourceDomain domain = resourceDomain();
+        return level instanceof ServerLevel && domain != null && domain.controllers().size() > 1;
+    }
+
+    private void requestSharedStart(ActiveMachineRecipe next, RecipeCraftingContext nextContext) {
+        if (!(level instanceof ServerLevel serverLevel)) return;
+        StructureClaimRegistry.ResourceDomain domain = resourceDomain();
+        if (domain == null) return;
+        sharedStartPending = true;
+        pendingSharedStartContext = nextContext;
+        pendingSharedStartDomain = domain;
+        SharedIoCoordinator.get(serverLevel).enqueue(new SharedIoCoordinator.StartRequest(
+                domain,
+                new SharedIoCoordinator.LaneKey(getBlockPos(), "base"), structureVersion,
+                next.getMaxParallelism(),
+                requested -> {
+                    if (!isPendingSharedStart(next, nextContext, domain)) return 0;
+                    int granted = nextContext.commitStart(next.getRecipe(), requested);
+                    if (granted <= 0) {
+                        clearPendingSharedStart();
+                        returnContext(nextContext);
+                        recipeSearchRetryCounter++;
+                        lastFailureUnloc = nextContext.getLastFailureUnloc();
+                    }
+                    return granted;
+                },
+                granted -> {
+                    if (!isPendingSharedStart(next, nextContext, domain)) return;
+                    clearPendingSharedStart();
+                    next.setParallelism(granted);
+                    next.refreshTotalTick(nextContext);
+                    active = next;
+                    context = nextContext;
+                    setActiveState(true);
+                    rememberLastRecipe(next.getRecipe());
+                    recipeSearchRetryCounter = 0;
+                    lastFailureUnloc = null;
+                    setChanged();
+                },
+                () -> isPendingSharedStart(next, nextContext, domain), this::getStructureVersion
+        ));
+    }
+
+    private boolean isPendingSharedStart(ActiveMachineRecipe next, RecipeCraftingContext nextContext,
+                                         StructureClaimRegistry.ResourceDomain domain) {
+        return sharedStartPending && pendingSharedStartContext == nextContext
+                && pendingSharedStartDomain != null && pendingSharedStartDomain.equals(domain)
+                && active == null && isCurrentSharedDomain(domain);
+    }
+
+    private void clearPendingSharedStart() {
+        sharedStartPending = false;
+        pendingSharedStartContext = null;
+        pendingSharedStartDomain = null;
+    }
+
+    private void tickSharedRecipe() {
+        if (!(level instanceof ServerLevel serverLevel) || active == null || context == null) return;
+        StructureClaimRegistry.ResourceDomain domain = resourceDomain();
+        if (domain == null) return;
+        if (sharedTickPending && !isCurrentSharedDomain(pendingSharedTickDomain)) {
+            sharedTickPending = false;
+            pendingSharedTickDomain = null;
+        }
+        if (sharedTickPending) return;
+        int gameTime = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, currentGameTime()));
+        ActiveMachineRecipe recipe = active;
+        RecipeCraftingContext recipeContext = context;
+        if (recipe.isFinishPending()) {
+            if (!recipe.shouldRetryFinish(gameTime)) return;
+            sharedTickPending = true;
+            pendingSharedTickDomain = domain;
+            requestSharedFinish(serverLevel, domain, recipe, recipeContext, gameTime);
+            return;
+        }
+        sharedTickPending = true;
+        pendingSharedTickDomain = domain;
+        SharedIoCoordinator.get(serverLevel).enqueue(new SharedIoCoordinator.TickRequest(
+                domain, new SharedIoCoordinator.LaneKey(getBlockPos(), "base"), structureVersion,
+                () -> {
+                    if (!isActiveSharedRecipe(recipe, recipeContext, domain)) return false;
+                    if (recipe.needsFinishCommit() && !recipeContext.simulateOutputs(recipe.getRecipe(), recipe.getParallelism())) {
+                        applySharedTick(recipe, recipeContext, false, false, gameTime);
+                        return false;
+                    }
+                    if (!recipeContext.coordinatorIoTick(recipe.getRecipe(), recipe.getParallelism()).getAsBoolean()) {
+                        applySharedTick(recipe, recipeContext, false, false, gameTime);
+                        return false;
+                    }
+                    if (recipe.needsFinishCommit()) {
+                        recipe.beginFinishCommit();
+                        requestSharedFinish(serverLevel, domain, recipe, recipeContext, gameTime);
+                    } else {
+                        applySharedTick(recipe, recipeContext, true, false, gameTime);
+                    }
+                    return true;
+                },
+                () -> isActiveSharedRecipe(recipe, recipeContext, domain), this::getStructureVersion
+        ));
+    }
+
+    private void requestSharedFinish(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
+                                     ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext, int gameTime) {
+        SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.FinishRequest(
+                domain, new SharedIoCoordinator.LaneKey(getBlockPos(), "base"), structureVersion,
+                () -> {
+                    if (!isActiveSharedRecipe(recipe, recipeContext, domain)) return false;
+                    applySharedTick(recipe, recipeContext, true,
+                            recipeContext.coordinatorOutputs(recipe.getRecipe(), recipe.getParallelism()).getAsBoolean(), gameTime);
+                    return true;
+                },
+                () -> isActiveSharedRecipe(recipe, recipeContext, domain), this::getStructureVersion
+        ));
+    }
+
+    private boolean isActiveSharedRecipe(ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext,
+                                         StructureClaimRegistry.ResourceDomain domain) {
+        return active == recipe && context == recipeContext && isCurrentSharedDomain(domain);
+    }
+
+    private void applySharedTick(ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext,
+                                 boolean resourcesGranted, boolean outputsCommitted, int gameTime) {
+        sharedTickPending = false;
+        pendingSharedTickDomain = null;
+        ActiveMachineRecipe.TickStatus status = recipe.applyTickGrant(resourcesGranted, outputsCommitted, gameTime);
+        if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
+            lastFailureUnloc = null;
+            returnContext(recipeContext);
+            active = null;
+            context = null;
+            setActiveState(false);
+        } else if (status == ActiveMachineRecipe.TickStatus.WAITING) {
+            lastFailureUnloc = recipeContext.getLastFailureUnloc();
+            if (recipe.getRecipe().doesCancelRecipeOnPerTickFailure()) {
+                returnContext(recipeContext);
+                active = null;
+                context = null;
+                setActiveState(false);
+            }
+        } else {
+            lastFailureUnloc = null;
+        }
+        setChanged();
+    }
+
+    private boolean isCurrentSharedDomain(@Nullable StructureClaimRegistry.ResourceDomain domain) {
+        return domain != null && domain.equals(resourceDomain());
     }
 
     private void setActiveState(boolean activeState) {
