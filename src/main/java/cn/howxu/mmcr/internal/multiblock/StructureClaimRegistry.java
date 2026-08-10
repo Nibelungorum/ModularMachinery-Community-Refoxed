@@ -29,11 +29,13 @@ public final class StructureClaimRegistry {
         List<Claim> normalized = requested.stream().distinct().toList();
         for (Claim claim : normalized) {
             Set<BlockPos> owners = ownersByComponent.getOrDefault(claim.componentPos(), Set.of());
-            if (claim.policy() == ComponentClaimPolicy.EXCLUSIVE) {
-                for (BlockPos owner : owners) {
-                    if (!owner.equals(immutableControllerPos)) {
-                        return ClaimResult.conflict(claim.componentPos(), owner);
-                    }
+            for (BlockPos owner : owners) {
+                if (!owner.equals(immutableControllerPos)
+                        && (claim.policy() == ComponentClaimPolicy.EXCLUSIVE
+                        || claimsByController.get(owner).stream().anyMatch(existing ->
+                        existing.componentPos().equals(claim.componentPos())
+                                && existing.policy() == ComponentClaimPolicy.EXCLUSIVE))) {
+                    return ClaimResult.conflict(claim.componentPos(), owner);
                 }
             }
         }
