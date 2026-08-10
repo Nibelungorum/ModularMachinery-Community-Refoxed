@@ -35,9 +35,11 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -48,6 +50,8 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
 import net.neoforged.neoforge.energy.EnergyStorage;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
@@ -398,6 +402,58 @@ class MachineControllerBlockEntityTest {
 
         assertThat(controller.getActive()).isNotNull();
         assertThat(controller.getFactoryController()).isNull();
+    }
+
+    @Test
+    void redstone_paused_single_recipe_round_trips_and_resumes_from_its_saved_tick() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        ItemInputBusBlockEntity input = itemInputBus(controllerPos.offset(1, 0, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 2));
+        DynamicMachine machine = new DynamicMachine(MMCR.id("paused_single_machine"), "Paused Single",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()));
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, input);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        addItemInputComponent(controller, input);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("paused_single_recipe"), machine.registryName(), 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)));
+        RecipeRegistry.register(recipe);
+
+        controller.serverTick();
+        controller.serverTick();
+        ActiveMachineRecipe active = controller.getActive();
+        assertThat(active).isNotNull();
+        assertThat(active.getTick()).isPositive();
+
+        setField(MachineControllerBlockEntity.class, controller, "pausedActive", active);
+        setField(MachineControllerBlockEntity.class, controller, "pausedContext", fieldValue(MachineControllerBlockEntity.class, controller, "context"));
+        setField(MachineControllerBlockEntity.class, controller, "active", null);
+        setField(MachineControllerBlockEntity.class, controller, "context", null);
+        setField(MachineControllerBlockEntity.class, controller, "redstonePaused", true);
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        invokeSaveAdditional(controller, output);
+        MachineControllerBlockEntity loaded = controllerForFormation(machine, controllerPos, input);
+        invokeLoadAdditional(loaded, TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()), output.buildResult()));
+
+        assertThat(fieldValue(MachineControllerBlockEntity.class, loaded, "pausedActive"))
+                .isInstanceOf(ActiveMachineRecipe.class)
+                .extracting(value -> ((ActiveMachineRecipe) value).getRecipe().id())
+                .isEqualTo(recipe.id());
+        assertThat(((ActiveMachineRecipe) fieldValue(MachineControllerBlockEntity.class, loaded, "pausedActive")).getTick())
+                .isEqualTo(active.getTick());
+
+        setField(MachineControllerBlockEntity.class, loaded, "redstonePaused", false);
+        invokeResumePausedRecipeAfterStructureCheck(loaded);
+        int savedTick = loaded.getActive().getTick();
+        invokeTickActiveRecipe(loaded);
+
+        assertThat(loaded.getActive()).isSameAs(fieldValue(MachineControllerBlockEntity.class, loaded, "active"));
+        assertThat(loaded.getActive().getTick()).isGreaterThan(savedTick);
     }
 
     @Test
@@ -2216,6 +2272,24 @@ class MachineControllerBlockEntityTest {
         Method method = MachineControllerBlockEntity.class.getDeclaredMethod("tickActiveRecipe");
         method.setAccessible(true);
         method.invoke(controller);
+    }
+
+    private static void invokeResumePausedRecipeAfterStructureCheck(MachineControllerBlockEntity controller) throws Exception {
+        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("resumePausedRecipeAfterStructureCheck");
+        method.setAccessible(true);
+        method.invoke(controller);
+    }
+
+    private static void invokeSaveAdditional(MachineControllerBlockEntity controller, TagValueOutput output) throws Exception {
+        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("saveAdditional", net.minecraft.world.level.storage.ValueOutput.class);
+        method.setAccessible(true);
+        method.invoke(controller, output);
+    }
+
+    private static void invokeLoadAdditional(MachineControllerBlockEntity controller, net.minecraft.world.level.storage.ValueInput input) throws Exception {
+        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("loadAdditional", net.minecraft.world.level.storage.ValueInput.class);
+        method.setAccessible(true);
+        method.invoke(controller, input);
     }
 
     private static void invokeTickFactoryRecipes(MachineControllerBlockEntity controller,

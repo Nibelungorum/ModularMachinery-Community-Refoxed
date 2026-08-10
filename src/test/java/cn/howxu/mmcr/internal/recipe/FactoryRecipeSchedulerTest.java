@@ -15,7 +15,11 @@ import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -368,6 +372,56 @@ class FactoryRecipeSchedulerTest {
         assertThat(scheduler.allThreads()).filteredOn(FactoryRecipeThread::isCoreThread).hasSize(1);
     }
 
+    @Test
+    void paused_factory_threads_round_trip_their_recipe_progress_context_and_failure_state() throws Exception {
+        MachineControllerBlockEntity controller = controller(MMCR.id("paused_factory_machine"));
+        MachineRecipe firstRecipe = recipe("paused_factory_first", 0);
+        MachineRecipe secondRecipe = recipe("paused_factory_second", 0);
+        cn.howxu.mmcr.api.recipe.RecipeRegistry.register(firstRecipe);
+        cn.howxu.mmcr.api.recipe.RecipeRegistry.register(secondRecipe);
+        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(3, pool);
+        FactoryRecipeThread first = FactoryRecipeThread.simple(controller, pool);
+        FactoryRecipeThread second = FactoryRecipeThread.simple(controller, pool);
+        ActiveMachineRecipe firstActive = new ActiveMachineRecipe(firstRecipe, 1);
+        ActiveMachineRecipe secondActive = new ActiveMachineRecipe(secondRecipe, 1);
+        firstActive.setTick(3);
+        secondActive.setTick(7);
+        first.setActiveRecipeForTesting(firstActive);
+        second.setActiveRecipeForTesting(secondActive);
+        first.bindController(controller);
+        second.bindController(controller);
+        setField(RecipeThread.class, first, "lastFailureUnloc", "mmcr.failure.first");
+        setField(RecipeThread.class, second, "lastFailureUnloc", "mmcr.failure.second");
+        scheduler.addThreadForTesting(first);
+        scheduler.addThreadForTesting(second);
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        scheduler.save(output);
+        FactoryRecipeScheduler loaded = new FactoryRecipeScheduler(3, pool);
+        loaded.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()), output.buildResult()), controller, pool);
+
+        assertThat(loaded.allThreads()).hasSize(3);
+        List<FactoryRecipeThread> restored = loaded.allThreads().subList(1, 3);
+        assertThat(restored).extracting(thread -> thread.getActiveRecipe().getRecipe().id())
+                .containsExactly(firstRecipe.id(), secondRecipe.id());
+        assertThat(restored).extracting(thread -> thread.getActiveRecipe().getTick()).containsExactly(3, 7);
+        assertThat(restored).extracting(thread -> thread.getActiveRecipe().getTotalTick()).containsExactly(20, 20);
+        assertThat(restored).extracting(thread -> fieldValue(RecipeThread.class, thread, "context")).doesNotContainNull();
+        assertThat(restored).extracting(FactoryRecipeThread::getLastFailureUnloc)
+                .containsExactly("mmcr.failure.first", "mmcr.failure.second");
+
+        setField(MachineControllerBlockEntity.class, controller, "redstonePaused", true);
+        assertThat(restored).extracting(thread -> thread.getActiveRecipe().getTick()).containsExactly(3, 7);
+        loaded.tickThreads(controller, List.of(), controller.getStructureVersion(), 1, pool);
+        assertThat(restored).extracting(thread -> thread.getActiveRecipe().getTick()).containsExactly(3, 7);
+        setField(MachineControllerBlockEntity.class, controller, "redstonePaused", false);
+        loaded.tickThreads(controller, List.of(), controller.getStructureVersion(), 1, pool);
+        assertThat(restored).extracting(thread -> thread.getActiveRecipe().getTick()).containsExactly(4, 8);
+    }
+
     private static ActiveMachineRecipe activeRecipeWithParallelism(int parallelism) {
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_parallel_" + parallelism), MMCR.id("factory_machine"), 20, List.of(), List.of());
         ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, parallelism);
@@ -394,6 +448,18 @@ class FactoryRecipeSchedulerTest {
         foundMachine.setAccessible(true);
         foundMachine.set(controller, machine);
         return controller;
+    }
+
+    private static void setField(Class<?> declaringClass, Object target, String name, Object value) throws ReflectiveOperationException {
+        Field field = declaringClass.getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+
+    private static Object fieldValue(Class<?> declaringClass, Object target, String name) throws ReflectiveOperationException {
+        Field field = declaringClass.getDeclaredField(name);
+        field.setAccessible(true);
+        return field.get(target);
     }
 
     private static final class FakeLane implements FactoryRecipeScheduler.Lane {
