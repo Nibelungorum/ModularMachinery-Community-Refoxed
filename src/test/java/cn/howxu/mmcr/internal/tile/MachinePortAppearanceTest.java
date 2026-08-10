@@ -1,7 +1,10 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.recipe.MachineComponent;
+import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.client.model.MachineModelDataKeys;
+import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -48,10 +51,13 @@ class MachinePortAppearanceTest {
 
         var tag = port.getUpdateTag(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
         assertThat(tag.getString("AppearanceBaseTexture")).contains(texture.toString());
-        assertThat(tag.getBooleanOr("HasLinkedController", false)).isTrue();
-        assertThat(tag.getIntOr("LinkedControllerX", 0)).isEqualTo(12);
-        assertThat(tag.getIntOr("LinkedControllerY", 0)).isEqualTo(4);
-        assertThat(tag.getIntOr("LinkedControllerZ", 0)).isEqualTo(12);
+        var linkedControllers = tag.getListOrEmpty("LinkedControllers");
+        assertThat(linkedControllers).hasSize(1);
+        var linkedController = linkedControllers.getCompound(0).orElseThrow();
+        assertThat(linkedController.getIntOr("X", 0)).isEqualTo(12);
+        assertThat(linkedController.getIntOr("Y", 0)).isEqualTo(4);
+        assertThat(linkedController.getIntOr("Z", 0)).isEqualTo(12);
+        assertThat(linkedController.getStringOr("Texture", "")).isEqualTo(texture.toString());
     }
 
     @Test
@@ -66,6 +72,34 @@ class MachinePortAppearanceTest {
 
         assertThat(restored.appearanceBaseTexture()).isEqualTo(texture);
         assertThat(restored.linkedControllerPos()).isEqualTo(controllerPos);
+    }
+
+    @Test
+    void removingOneSharedOwnerKeepsTheOtherOwnersAppearance() {
+        IOPortBlockEntity port = itemInputBus();
+        BlockPos first = new BlockPos(0, 64, 0);
+        BlockPos second = new BlockPos(4, 64, 0);
+        Identifier firstTexture = MMCR.id("block/first");
+        Identifier secondTexture = MMCR.id("block/second");
+
+        port.linkControllerAppearance(first, firstTexture);
+        port.linkControllerAppearance(second, secondTexture);
+        port.unlinkControllerAppearance(first);
+
+        assertThat(port.linkedControllerPositions()).containsExactly(second);
+        assertThat(port.linkedControllerPos()).isEqualTo(second);
+        assertThat(port.appearanceBaseTexture()).isEqualTo(secondTexture);
+    }
+
+    @Test
+    void ioPortsAreSharedSerializedButSchedulersAreExclusiveByDefault() {
+        assertThat(itemInputBus().claimPolicy()).isEqualTo(ComponentClaimPolicy.SHARED_SERIALIZED);
+        assertThat(new MachineComponentTile() {
+            @Override
+            public MachineComponent provideComponent() {
+                return null;
+            }
+        }.claimPolicy()).isEqualTo(ComponentClaimPolicy.EXCLUSIVE);
     }
 
     @Test
