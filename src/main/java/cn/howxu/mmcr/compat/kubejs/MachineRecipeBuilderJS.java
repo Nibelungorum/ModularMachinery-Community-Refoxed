@@ -5,8 +5,13 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
+import com.google.gson.JsonElement;
+import com.mojang.serialization.JsonOps;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 
@@ -54,9 +59,25 @@ public class MachineRecipeBuilderJS {
     }
 
     public MachineRecipeBuilderJS itemInput(String itemId, int count) {
-        var item = BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId));
-        inputs.add(new MachineIngredient.ItemIngredient(Ingredient.of(item), count));
-        return this;
+        return addItemInput(Ingredient.of(item(itemId)), count, DataComponentPredicateSet.EMPTY, 1F);
+    }
+
+    public MachineRecipeBuilderJS tagInput(String tagId, int count) {
+        return addItemInput(Ingredient.of(BuiltInRegistries.ITEM.getOrThrow(TagKey.create(Registries.ITEM, Identifier.parse(tagId)))), count,
+                DataComponentPredicateSet.EMPTY, 1F);
+    }
+
+    public MachineRecipeBuilderJS itemInputWithComponents(String itemId, int count, JsonElement components) {
+        return addItemInput(Ingredient.of(item(itemId)), count,
+                DataComponentPredicateSet.CODEC.parse(JsonOps.INSTANCE, components).getOrThrow(), 1F);
+    }
+
+    public MachineRecipeBuilderJS notConsumableItemInput(String itemId, int count) {
+        return addItemInput(Ingredient.of(item(itemId)), count, DataComponentPredicateSet.EMPTY, 0F);
+    }
+
+    public MachineRecipeBuilderJS chancedItemInput(String itemId, int count, float consumeChance) {
+        return addItemInput(Ingredient.of(item(itemId)), count, DataComponentPredicateSet.EMPTY, consumeChance);
     }
 
     public MachineRecipeBuilderJS itemOutput(String itemId, int count) {
@@ -73,6 +94,15 @@ public class MachineRecipeBuilderJS {
     public MachineRecipeBuilderJS cancelIfPerTickFails(boolean cancelIfPerTickFails) {
         this.cancelIfPerTickFails = cancelIfPerTickFails;
         return this;
+    }
+
+    private MachineRecipeBuilderJS addItemInput(Ingredient item, int count, DataComponentPredicateSet components, float consumeChance) {
+        inputs.add(new MachineIngredient.ItemIngredient(item, count, components, consumeChance));
+        return this;
+    }
+
+    private net.minecraft.world.item.Item item(String itemId) {
+        return BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId));
     }
 
     public void build() {
