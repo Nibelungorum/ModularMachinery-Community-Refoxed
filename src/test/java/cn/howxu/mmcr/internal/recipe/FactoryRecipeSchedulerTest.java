@@ -422,6 +422,20 @@ class FactoryRecipeSchedulerTest {
         assertThat(restored).extracting(thread -> thread.getActiveRecipe().getTick()).containsExactly(4, 8);
     }
 
+    @Test
+    void thread_snapshot_exposes_waiting_failure_without_marking_thread_running() throws Exception {
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1);
+        FactoryRecipeThread thread = FactoryRecipeThread.base(null, RecipeCraftingContextPool.global());
+        setField(RecipeThread.class, thread, "status", RecipeThread.Status.FAILED);
+        setField(RecipeThread.class, thread, "lastFailureUnloc", "gui.mmcr.controller.failure.missing_output");
+        scheduler.addThreadForTesting(thread);
+
+        FactoryRecipeScheduler.ThreadSnapshot snapshot = scheduler.threadSnapshots().get(1);
+
+        assertThat(snapshot.active()).isFalse();
+        assertThat(snapshot.lastFailureUnloc()).isEqualTo("gui.mmcr.controller.failure.missing_output");
+    }
+
     private static ActiveMachineRecipe activeRecipeWithParallelism(int parallelism) {
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_parallel_" + parallelism), MMCR.id("factory_machine"), 20, List.of(), List.of());
         ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, parallelism);

@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -146,6 +147,27 @@ class ActiveMachineRecipeTest {
         assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isZero();
     }
 
+    @Test
+    void completionWithBlockedOutputCancelsTheActiveRecipe() throws Exception {
+        bindItemComponents(Items.COBBLESTONE);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerWithComponents(output);
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("blocked_completion_output"), MMCR.id("blast_furnace"), 1,
+                List.of(), List.of(Items.IRON_INGOT.getDefaultInstance()));
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(active.start(context)).isTrue();
+        for (int slot = 0; slot < output.getItemStackHandler(null).getSlots(); slot++) {
+            output.getItemStackHandler(null).setStackInSlot(slot, Items.COBBLESTONE.getDefaultInstance().copyWithCount(64));
+        }
+
+        assertThat(active.tick(context)).isEqualTo(ActiveMachineRecipe.TickStatus.CANCELLED);
+        assertThat(active.getTick()).isZero();
+        assertThat(context.getLastFailureUnloc()).isEqualTo(RecipeCraftingContext.FAILURE_MISSING_OUTPUT);
+    }
+
     private static MachineRecipe inputRecipe(String path, net.minecraft.resources.Identifier machineId, Item item, int count) {
         return new MachineRecipe(
                 MMCR.id(path),
@@ -163,10 +185,19 @@ class ActiveMachineRecipeTest {
     }
 
     private static ItemInputBusBlockEntity itemInputBus(BlockPos pos) throws Exception {
+        return itemBus(ItemInputBusBlockEntity.class, pos);
+    }
+
+    private static ItemOutputBusBlockEntity itemOutputBus(BlockPos pos) throws Exception {
+        return itemBus(ItemOutputBusBlockEntity.class, pos);
+    }
+
+    @SuppressWarnings({"removal", "unchecked"})
+    private static <T extends cn.howxu.mmcr.internal.tile.ItemBusBlockEntity> T itemBus(Class<T> type, BlockPos pos) throws Exception {
         Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
         unsafeField.setAccessible(true);
         sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
-        ItemInputBusBlockEntity bus = (ItemInputBusBlockEntity) unsafe.allocateInstance(ItemInputBusBlockEntity.class);
+        T bus = (T) unsafe.allocateInstance(type);
         setField(BlockEntity.class, bus, "type", null);
         setField(BlockEntity.class, bus, "worldPosition", pos);
         setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
@@ -187,7 +218,8 @@ class ActiveMachineRecipeTest {
             @SuppressWarnings("unchecked")
             List<ProcessingComponent> components = (List<ProcessingComponent>) fieldValue(MachineControllerBlockEntity.class, controller, "components");
             components.add(new ProcessingComponent(
-                    new MachineComponent(PortKinds.ITEM_INPUT, cn.howxu.mmcr.util.IOType.INPUT),
+                    new MachineComponent(port instanceof ItemOutputBusBlockEntity ? PortKinds.ITEM_OUTPUT : PortKinds.ITEM_INPUT,
+                            port instanceof ItemOutputBusBlockEntity ? cn.howxu.mmcr.util.IOType.OUTPUT : cn.howxu.mmcr.util.IOType.INPUT),
                     port,
                     port.getBlockPos(),
                     BlockPos.ZERO,

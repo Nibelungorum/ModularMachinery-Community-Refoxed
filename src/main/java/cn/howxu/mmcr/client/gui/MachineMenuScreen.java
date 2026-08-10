@@ -332,6 +332,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         int textY = y + controllerStatusY(titleLabelY);
         int textX = x + controllerStatusX(titleLabelX);
         boolean active = menu.hasActiveRecipe();
+        String failure = menu.lastFailureMessage();
         var owner = menu.resolvedOwner();
 
         final float scale = controllerDetailScale();
@@ -346,7 +347,6 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
                 controllerStatusColor(menu.isFormed(), active));
         scaledY = nextControllerDetailY(scaledY);
 
-        String failure = menu.lastFailureMessage();
         if (failure != null) {
             Component failureLine = Component.translatable("gui.mmcr.controller.last_failure", Component.translatable(failure));
             scaledY = renderScaledWrappedLine(g, failureLine, scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);

@@ -86,6 +86,12 @@ public abstract class RecipeThread {
             activeRecipe = null;
             context = null;
             status = Status.IDLE;
+        } else if (tickStatus == ActiveMachineRecipe.TickStatus.CANCELLED) {
+            lastFailureUnloc = context.getLastFailureUnloc();
+            contextPool.returnContext(context);
+            activeRecipe = null;
+            context = null;
+            status = Status.FAILED;
         } else if (tickStatus == ActiveMachineRecipe.TickStatus.WAITING) {
             lastFailureUnloc = context.getLastFailureUnloc();
             status = Status.WAITING;

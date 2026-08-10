@@ -362,7 +362,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 context = null;
             }
             structureDirty = true;
+            if (shouldCheckStructure()) checkStructure();
             setChanged();
+            broadcastStateIfChanged(activeBefore);
             return;
         }
         redstonePaused = false;
@@ -1079,6 +1081,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         }
         ActiveMachineRecipe.TickStatus status = active.tick(context, (int) Math.min(Integer.MAX_VALUE, Math.max(0L, currentGameTime())));
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
+            returnContext(context);
+            active = null;
+            context = null;
+            setActiveState(false);
+        } else if (status == ActiveMachineRecipe.TickStatus.CANCELLED) {
+            lastFailureUnloc = context.getLastFailureUnloc();
             returnContext(context);
             active = null;
             context = null;

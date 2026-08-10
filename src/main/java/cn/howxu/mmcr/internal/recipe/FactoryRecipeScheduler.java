@@ -122,7 +122,7 @@ public final class FactoryRecipeScheduler {
     }
 
     public int activeThreadCount() {
-        return (int) threads.stream().filter(thread -> !thread.isIdle()).count();
+        return (int) threads.stream().filter(thread -> thread.getStatus() != RecipeThread.Status.FAILED && !thread.isIdle()).count();
     }
 
     public int usedParallelism() {
@@ -147,10 +147,10 @@ public final class FactoryRecipeScheduler {
             snapshots.add(new ThreadSnapshot(index, thread.isBaseThread(), thread.isCoreThread(), active != null,
                     active == null || active.getRecipe() == null ? "" : active.getRecipe().id().toString(),
                     active == null ? 0 : active.getTick(), active == null ? 0 : active.getTotalTick(),
-                    active == null ? 1 : active.getParallelism()));
+                    active == null ? 1 : active.getParallelism(), thread.getLastFailureUnloc()));
         }
         for (int index = snapshots.size(); index < threadLimit; index++) {
-            snapshots.add(new ThreadSnapshot(index, false, false, false, "", 0, 0, 1));
+            snapshots.add(new ThreadSnapshot(index, false, false, false, "", 0, 0, 1, ""));
         }
         return List.copyOf(snapshots);
     }
@@ -166,7 +166,7 @@ public final class FactoryRecipeScheduler {
     private Map<Identifier, Integer> activeRecipeCounts() {
         Map<Identifier, Integer> counts = new LinkedHashMap<>();
         for (FactoryRecipeThread thread : threads) {
-            if (thread.isIdle()) continue;
+            if (thread.getStatus() == RecipeThread.Status.FAILED || thread.isIdle()) continue;
             var activeRecipe = thread.getActiveRecipe();
             if (activeRecipe == null || activeRecipe.getRecipe() == null) continue;
             counts.merge(activeRecipe.getRecipe().id(), 1, Integer::sum);
@@ -326,9 +326,19 @@ public final class FactoryRecipeScheduler {
     }
 
     public record ThreadSnapshot(int index, boolean baseThread, boolean coreThread, boolean active,
-                                 String recipeId, int tick, int totalTick, int parallelism) {
+                                  String recipeId, int tick, int totalTick, int parallelism, String lastFailureUnloc) {
+        public ThreadSnapshot {
+            recipeId = recipeId == null ? "" : recipeId;
+            lastFailureUnloc = lastFailureUnloc == null ? "" : lastFailureUnloc;
+        }
+
+        public ThreadSnapshot(int index, boolean baseThread, boolean coreThread, boolean active,
+                              String recipeId, int tick, int totalTick, int parallelism) {
+            this(index, baseThread, coreThread, active, recipeId, tick, totalTick, parallelism, "");
+        }
+
         public static ThreadSnapshot idleBase() {
-            return new ThreadSnapshot(0, true, false, false, "", 0, 0, 1);
+            return new ThreadSnapshot(0, true, false, false, "", 0, 0, 1, "");
         }
     }
 }

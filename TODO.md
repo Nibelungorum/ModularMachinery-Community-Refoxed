@@ -1,20 +1,18 @@
 kubejs集成的测试
 
-共享多方块结构 和已经输入输出锁解决异步和线程问题
+[X] 共享多方块结构 和已经输入输出锁解决异步和线程问题
 
+.worktrees/shared-multiblock-io
 
-
-等级系统(实现线圈方块等级能力)
+[X] 等级系统(实现线圈方块等级能力)
 
 .worktrees/machine-level-system
 
-配方输入带数据的物品 输出带数据的物品 DataCompoment处理(?)(今天就搞)
-不消耗和概率消耗配方
+[X] 配方输入带数据的物品 输出带数据的物品 DataCompoment处理(?)(今天就搞) 不消耗和概率消耗配方
 
+.worktrees/data-component-recipe-inputs
 
-
-红石停机的上下文持久化，以及对应的正确UI渲染
-
+[X] 红石停机的上下文持久化，以及对应的正确UI渲染
 
 
 配方锁定(今天就搞)

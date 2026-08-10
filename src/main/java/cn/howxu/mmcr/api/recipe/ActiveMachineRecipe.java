@@ -186,6 +186,7 @@ public final class ActiveMachineRecipe {
     public enum TickStatus {
         CONTINUE,
         WAITING,
+        CANCELLED,
         FINISHED
     }
 
@@ -246,10 +247,10 @@ public final class ActiveMachineRecipe {
                 return TickStatus.WAITING;
             }
             if (!context.simulateOutputs(recipe, parallelism)) {
-                markFinishBlocked(gameTime);
-                LOG.info("ActiveMachineRecipe#{} tick(): recipe {} outputs unavailable before completion → WAITING at tick {}",
+                setTick(0);
+                LOG.info("ActiveMachineRecipe#{} tick(): recipe {} outputs unavailable before completion → CANCELLED at tick {}",
                         instanceId, recipe.id(), beforeTick);
-                return TickStatus.WAITING;
+                return TickStatus.CANCELLED;
             }
         }
         if (!context.ioTick(recipe, parallelism)) {
@@ -267,12 +268,9 @@ public final class ActiveMachineRecipe {
 
         boolean outputsOk = context.finishCrafting(recipe, parallelism);
         if (!outputsOk) {
-            int restored = Math.max(0, total - 1);
-            markFinishBlocked(gameTime);
-            LOG.info("ActiveMachineRecipe#{} tick(): recipe {} finish failed → rollback tick {} → {} (WAITING)",
-                    instanceId, recipe.id(), nextTick, restored);
-            setTick(restored);
-            return TickStatus.WAITING;
+            setTick(0);
+            LOG.info("ActiveMachineRecipe#{} tick(): recipe {} finish failed → CANCELLED", instanceId, recipe.id());
+            return TickStatus.CANCELLED;
         }
 
         LOG.info("ActiveMachineRecipe#{} tick(): recipe {} FINISHED at tick {} of {}; outputs committed", instanceId, recipe.id(), nextTick, total);
