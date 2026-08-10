@@ -329,7 +329,7 @@ class RecipeApiSmokeTest {
         var active = new ActiveMachineRecipe(recipe);
         active.setTick(2);
 
-        assertThat(active.tick(new RecipeCraftingContext(controllerWithoutComponents())))
+        assertThat(active.applyTickGrant(true, false, 0))
                 .isEqualTo(ActiveMachineRecipe.TickStatus.CONTINUE);
         assertThat(active.getTick()).isEqualTo(3);
     }

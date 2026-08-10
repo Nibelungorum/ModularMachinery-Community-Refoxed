@@ -1116,7 +1116,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 context.setStructureModifiers(foundModifierList());
             }
         }
-        ActiveMachineRecipe.TickStatus status = active.tick(context, (int) Math.min(Integer.MAX_VALUE, Math.max(0L, currentGameTime())));
+        int gameTime = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, currentGameTime()));
+        if (active.needsFinishCommit() && !active.shouldRetryFinish(gameTime)) return;
+        boolean resourcesGranted = context.commitIoTick(active.getRecipe(), active.getParallelism());
+        boolean outputsCommitted = resourcesGranted && active.needsFinishCommit()
+                && context.commitOutputs(active.getRecipe(), active.getParallelism());
+        ActiveMachineRecipe.TickStatus status = active.applyTickGrant(resourcesGranted, outputsCommitted, gameTime);
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
             lastFailureUnloc = null;
             returnContext(context);

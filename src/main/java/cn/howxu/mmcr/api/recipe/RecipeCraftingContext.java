@@ -153,6 +153,20 @@ public final class RecipeCraftingContext {
         return ioTick(scaledRequirements(recipe, parallelism));
     }
 
+    /**
+     * Revalidates every requirement before allowing any per-tick live IO mutation.
+     */
+    public boolean commitIoTick(MachineRecipe recipe, int parallelism) {
+        List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism);
+        lastFailureUnloc = null;
+        lastRequirementFailure = null;
+        for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
+            MachineRequirement requirement = requirements.get(requirementIndex);
+            if (requirement instanceof EnergyRequirement && !requirement.simulate(this, requirementIndex)) return false;
+        }
+        return ioTick(requirements);
+    }
+
     private boolean ioTick(List<MachineRequirement> requirements) {
         lastFailureUnloc = null;
         lastRequirementFailure = null;
@@ -510,6 +524,11 @@ public final class RecipeCraftingContext {
 
     public boolean commitOutputs(MachineRecipe recipe) {
         return commitOutputs(recipe.runtimeRequirements(structureModifiers));
+    }
+
+    public boolean commitOutputs(MachineRecipe recipe, int parallelism) {
+        List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism);
+        return simulateOutputs(requirements) && commitOutputs(requirements);
     }
 
     private boolean commitOutputs(List<MachineRequirement> requirements) {

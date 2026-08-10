@@ -78,8 +78,25 @@ public final class SharedIoCoordinator {
         Set<Request> successful = Collections.newSetFromMap(new IdentityHashMap<>());
         resolveRoundRobin(current.stream().filter(StartRequest.class::isInstance).map(StartRequest.class::cast).toList(), startCursors, domain.id(), successful);
         resolveRoundRobin(current.stream().filter(TickRequest.class::isInstance).map(TickRequest.class::cast).toList(), tickCursors, domain.id(), successful);
-        resolveRoundRobin(current.stream().filter(FinishRequest.class::isInstance).map(FinishRequest.class::cast).toList(), finishCursors, domain.id(), successful);
-        return current.stream().filter(request -> !successful.contains(request)).toList();
+        List<FinishRequest> finishRequests = new ArrayList<>(current.stream()
+                .filter(FinishRequest.class::isInstance).map(FinishRequest.class::cast).toList());
+        finishRequests.addAll(takePendingFinishRequests(domain));
+        resolveRoundRobin(finishRequests, finishCursors, domain.id(), successful);
+        List<Request> unresolved = new ArrayList<>(current.stream().filter(request -> !successful.contains(request)).toList());
+        for (FinishRequest request : finishRequests) {
+            if (!current.contains(request) && !successful.contains(request)) unresolved.add(request);
+        }
+        return unresolved;
+    }
+
+    private List<FinishRequest> takePendingFinishRequests(StructureClaimRegistry.ResourceDomain domain) {
+        List<FinishRequest> result = pending.stream()
+                .filter(FinishRequest.class::isInstance)
+                .map(FinishRequest.class::cast)
+                .filter(request -> request.domainId() == domain.id() && request.domainGeneration() == domain.generation())
+                .toList();
+        pending.removeAll(result);
+        return result;
     }
 
     private <T extends Request> void resolveRoundRobin(List<T> requests, Map<Long, LaneKey> cursors, long domainId, Set<Request> successful) {

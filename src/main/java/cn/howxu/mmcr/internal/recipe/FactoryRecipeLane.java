@@ -60,7 +60,12 @@ public final class FactoryRecipeLane implements FactoryRecipeScheduler.Lane {
     @Override
     public boolean tick(long gameTime) {
         if (closed) return true;
-        ActiveMachineRecipe.TickStatus status = recipe.tick(context, (int) Math.min(Integer.MAX_VALUE, Math.max(0L, gameTime)));
+        int tickTime = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, gameTime));
+        if (recipe.needsFinishCommit() && !recipe.shouldRetryFinish(tickTime)) return false;
+        boolean resourcesGranted = context.commitIoTick(recipe.getRecipe(), recipe.getParallelism());
+        boolean outputsCommitted = resourcesGranted && recipe.needsFinishCommit()
+                && context.commitOutputs(recipe.getRecipe(), recipe.getParallelism());
+        ActiveMachineRecipe.TickStatus status = recipe.applyTickGrant(resourcesGranted, outputsCommitted, tickTime);
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
             close();
             return true;

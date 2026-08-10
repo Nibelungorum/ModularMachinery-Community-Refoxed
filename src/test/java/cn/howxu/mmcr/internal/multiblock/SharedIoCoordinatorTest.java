@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -79,6 +80,24 @@ class SharedIoCoordinatorTest {
     }
 
     @Test
+    void finiteSharedEnergyAdvancesOnlyTheLaneGrantedFullEnergyAndRotatesNextTick() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = new StructureClaimRegistry.ResourceDomain(8L, 1L, Set.of(A, B));
+        AtomicInteger energy = new AtomicInteger(20);
+        List<String> advanced = new ArrayList<>();
+
+        enqueueEnergyTick(coordinator, domain, A, energy, advanced);
+        enqueueEnergyTick(coordinator, domain, B, energy, advanced);
+        coordinator.resolve(domain);
+        energy.addAndGet(15);
+        enqueueEnergyTick(coordinator, domain, A, energy, advanced);
+        enqueueEnergyTick(coordinator, domain, B, energy, advanced);
+        coordinator.resolve(domain);
+
+        assertThat(advanced).containsExactly("A", "B");
+    }
+
+    @Test
     void staleGenerationNeverCallsTheCommitter() {
         SharedIoCoordinator coordinator = new SharedIoCoordinator();
         AtomicBoolean committed = new AtomicBoolean();
@@ -119,5 +138,17 @@ class SharedIoCoordinatorTest {
             coordinator.enqueue(new SharedIoCoordinator.FinishRequest(domain, laneKey, 1L,
                     () -> { committed.add("finish:" + lane); return true; }, () -> true, () -> 1L));
         }
+    }
+
+    private static void enqueueEnergyTick(SharedIoCoordinator coordinator, StructureClaimRegistry.ResourceDomain domain,
+                                          BlockPos position, AtomicInteger energy, List<String> advanced) {
+        String lane = position.equals(A) ? "A" : "B";
+        coordinator.enqueue(new SharedIoCoordinator.TickRequest(domain, new SharedIoCoordinator.LaneKey(position, "base"), 1L,
+                () -> {
+                    if (energy.get() < 15) return false;
+                    energy.addAndGet(-15);
+                    advanced.add(lane);
+                    return true;
+                }, () -> true, () -> 1L));
     }
 }

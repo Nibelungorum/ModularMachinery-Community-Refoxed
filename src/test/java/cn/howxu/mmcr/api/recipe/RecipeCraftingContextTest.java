@@ -623,6 +623,34 @@ class RecipeCraftingContextTest {
     }
 
     @Test
+    void commitIoTickConsumesEnergyOnlyAfterItsFullRequirementIsAvailable() {
+        EnergyInputHatchBlockEntity hatch = energyInputHatch(new BlockPos(1, 0, 0));
+        hatch.getMutableEnergyStorage(null).receiveEnergy(25, false);
+        MachineControllerBlockEntity controller = controllerWithComponents(hatch);
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "atomic_energy_tick",
+                List.of(new EnergyRequirement(40))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.commitIoTick(recipe, 1)).isFalse();
+        assertThat(hatch.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(25);
+    }
+
+    @Test
+    void blockedOutputKeepsCompletedRecipeAtFinalTick() {
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "blocked_finish_tick",
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_INGOT.getDefaultInstance()))
+        );
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
+        active.setTick(active.getTotalTick() - 1);
+
+        assertThat(active.applyTickGrant(true, false, 0)).isEqualTo(ActiveMachineRecipe.TickStatus.WAITING);
+        assertThat(active.getTick()).isEqualTo(active.getTotalTick() - 1);
+    }
+
+    @Test
     void mixedShapeEnergyRuntimeUsesExplicitRequirements() {
         EnergyInputHatchBlockEntity hatch = energyInputHatch(new BlockPos(1, 0, 0));
         hatch.getMutableEnergyStorage(null).receiveEnergy(100, false);

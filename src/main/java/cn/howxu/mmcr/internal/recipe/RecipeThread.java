@@ -36,6 +36,7 @@ public abstract class RecipeThread {
     private @Nullable RecipeCraftingContext pendingStartContext;
     private long nextStartToken;
     private long pendingStartToken;
+    private boolean tickPending;
 
     protected RecipeThread(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
         this.controller = controller;
@@ -150,15 +151,78 @@ public abstract class RecipeThread {
             contextPool.returnContext(pendingContext);
         }
         if (activeRecipe == null || context == null) return;
-        ActiveMachineRecipe.TickStatus tickStatus = activeRecipe.tick(context);
+        if (tickPending) return;
+        if (controller != null && controller.getLevel() instanceof ServerLevel level && controller.resourceDomain() != null) {
+            requestTick(level, controller.resourceDomain(), activeRecipe, context, controller.getStructureVersion());
+            return;
+        }
+        applyTick(activeRecipe, context, context.commitIoTick(activeRecipe.getRecipe(), activeRecipe.getParallelism()), false, 0);
+    }
+
+    private void requestTick(ServerLevel level, cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.ResourceDomain domain,
+                             ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext, long structureVersion) {
+        int gameTime = (int) level.getGameTime();
+        if (recipe.needsFinishCommit() && !recipe.shouldRetryFinish(gameTime)) {
+            status = Status.WAITING;
+            return;
+        }
+        tickPending = true;
+        SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.TickRequest(
+                domain,
+                new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
+                structureVersion,
+                () -> {
+                    if (!isActive(recipe, recipeContext, domain)) return false;
+                    boolean granted = recipeContext.commitIoTick(recipe.getRecipe(), recipe.getParallelism());
+                    if (!granted) {
+                        applyTick(recipe, recipeContext, false, false, gameTime);
+                        tickPending = true;
+                        return false;
+                    }
+                    if (granted && recipe.needsFinishCommit()) requestFinish(level, domain, recipe, recipeContext, structureVersion, gameTime);
+                    if (granted && !recipe.needsFinishCommit()) applyTick(recipe, recipeContext, true, false, gameTime);
+                    return true;
+                },
+                () -> isActive(recipe, recipeContext, domain),
+                controller::getStructureVersion
+        ));
+    }
+
+    private void requestFinish(ServerLevel level, cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.ResourceDomain domain,
+                               ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext, long structureVersion, int gameTime) {
+        SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.FinishRequest(
+                domain,
+                new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
+                structureVersion,
+                () -> {
+                    if (!isActive(recipe, recipeContext, domain)) return false;
+                    applyTick(recipe, recipeContext, true,
+                            recipeContext.commitOutputs(recipe.getRecipe(), recipe.getParallelism()), gameTime);
+                    return true;
+                },
+                () -> isActive(recipe, recipeContext, domain),
+                controller::getStructureVersion
+        ));
+    }
+
+    private boolean isActive(ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext,
+                             cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.ResourceDomain domain) {
+        return activeRecipe == recipe && context == recipeContext && controller != null
+                && domain.equals(controller.resourceDomain());
+    }
+
+    private void applyTick(ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext,
+                           boolean resourcesGranted, boolean outputsCommitted, int gameTime) {
+        tickPending = false;
+        ActiveMachineRecipe.TickStatus tickStatus = recipe.applyTickGrant(resourcesGranted, outputsCommitted, gameTime);
         if (tickStatus == ActiveMachineRecipe.TickStatus.FINISHED) {
             onFinished();
-            contextPool.returnContext(context);
+            contextPool.returnContext(recipeContext);
             activeRecipe = null;
             context = null;
             status = Status.IDLE;
         } else if (tickStatus == ActiveMachineRecipe.TickStatus.WAITING) {
-            lastFailureUnloc = context.getLastFailureUnloc();
+            lastFailureUnloc = recipeContext.getLastFailureUnloc();
             status = Status.WAITING;
         } else {
             status = Status.WORKING;
@@ -174,6 +238,7 @@ public abstract class RecipeThread {
         }
         activeRecipe = null;
         context = null;
+        tickPending = false;
         status = Status.IDLE;
     }
 

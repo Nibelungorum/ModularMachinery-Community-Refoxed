@@ -225,57 +225,26 @@ public final class ActiveMachineRecipe {
         nextFinishRetryTick = gameTime + 10;
     }
 
-    public TickStatus tick(RecipeCraftingContext context) {
-        return tick(context, 0);
+    public boolean needsFinishCommit() {
+        return tick + 1 >= totalTick;
     }
 
-    public TickStatus tick(RecipeCraftingContext context, int gameTime) {
-        if (recipe == null) {
-            LOG.debug("ActiveMachineRecipe#{} tick(): no recipe attached → WAITING", instanceId);
+    public TickStatus applyTickGrant(boolean resourcesGranted, boolean outputsCommitted, int gameTime) {
+        if (!resourcesGranted) {
+            doFailureAction(RecipeFailureActions.STILL);
             return TickStatus.WAITING;
         }
-        int total = getTotalTick();
-        if (total <= 0) {
-            LOG.debug("ActiveMachineRecipe#{} tick(): recipe {} totalTick <=0 → WAITING", instanceId, recipe.id());
-            return TickStatus.WAITING;
-        }
-        int beforeTick = getTick();
-        int nextTick = Math.min(beforeTick + 1, total);
-        if (nextTick >= total) {
-            if (!shouldRetryFinish(gameTime)) {
-                return TickStatus.WAITING;
-            }
-            if (!context.simulateOutputs(recipe, parallelism)) {
-                markFinishBlocked(gameTime);
-                LOG.info("ActiveMachineRecipe#{} tick(): recipe {} outputs unavailable before completion → WAITING at tick {}",
-                        instanceId, recipe.id(), beforeTick);
-                return TickStatus.WAITING;
-            }
-        }
-        if (!context.ioTick(recipe, parallelism)) {
-            doFailureAction(context.failureAction());
-            LOG.info("ActiveMachineRecipe#{} tick(): recipe {} ioTick refused at tick {} → WAITING", instanceId, recipe.id(), beforeTick);
-            return TickStatus.WAITING;
-        }
-        setTick(nextTick);
-
-        if (!isCompleted()) {
+        int nextTick = Math.min(tick + 1, totalTick);
+        if (nextTick < totalTick) {
+            tick = nextTick;
             return TickStatus.CONTINUE;
         }
-
-        LOG.info("ActiveMachineRecipe#{} tick(): recipe {} reached completion tick {} of {}; entering final commit phase", instanceId, recipe.id(), nextTick, total);
-
-        boolean outputsOk = context.finishCrafting(recipe, parallelism);
-        if (!outputsOk) {
-            int restored = Math.max(0, total - 1);
+        if (!outputsCommitted) {
+            tick = Math.max(0, totalTick - 1);
             markFinishBlocked(gameTime);
-            LOG.info("ActiveMachineRecipe#{} tick(): recipe {} finish failed → rollback tick {} → {} (WAITING)",
-                    instanceId, recipe.id(), nextTick, restored);
-            setTick(restored);
             return TickStatus.WAITING;
         }
-
-        LOG.info("ActiveMachineRecipe#{} tick(): recipe {} FINISHED at tick {} of {}; outputs committed", instanceId, recipe.id(), nextTick, total);
+        tick = nextTick;
         return TickStatus.FINISHED;
     }
 
