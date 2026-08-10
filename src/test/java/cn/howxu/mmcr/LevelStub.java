@@ -101,10 +101,15 @@ public final class LevelStub {
         ((TestLevel) level).blockEntities.put(blockEntity.getBlockPos(), blockEntity);
     }
 
+    public static void setDirectSignal(Level level, BlockPos pos, int signal) {
+        ((TestLevel) level).directSignals.put(pos, signal);
+    }
+
     private static Level createFromStates(Map<BlockPos, BlockState> blocks) {
         try {
             var level = (TestLevel) unsafe().allocateInstance(TestLevel.class);
             level.blocks = new HashMap<>(blocks);
+            level.directSignals = new HashMap<>();
             return level;
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Unable to create level stub", e);
@@ -120,6 +125,7 @@ public final class LevelStub {
     private static final class TestLevel extends Level {
         private Map<BlockPos, BlockState> blocks;
         private Map<BlockPos, BlockEntity> blockEntities = Map.of();
+        private Map<BlockPos, Integer> directSignals = new HashMap<>();
         private Set<Long> loadedChunks;
 
         private TestLevel() {
@@ -132,6 +138,10 @@ public final class LevelStub {
 
         @Override public BlockEntity getBlockEntity(BlockPos pos) {
             return blockEntities.get(pos);
+        }
+
+        @Override public int getDirectSignalTo(BlockPos pos) {
+            return directSignals.getOrDefault(pos, 0);
         }
 
         @Override public void blockEntityChanged(BlockPos pos) {}

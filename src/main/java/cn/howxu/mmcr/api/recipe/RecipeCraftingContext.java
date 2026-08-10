@@ -23,6 +23,8 @@ import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.IItemHandlerModifiable;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -53,6 +55,17 @@ public final class RecipeCraftingContext {
         this.controller = controller;
         this.structureVersion = controller.getStructureVersion();
         this.modifierSnapshotVersion = controller.getModifierSnapshotVersion();
+    }
+
+    public void serialize(ValueOutput output) {
+        if (lastFailureUnloc != null) output.putString("last_failure_unloc", lastFailureUnloc);
+    }
+
+    public static RecipeCraftingContext from(MachineControllerBlockEntity controller, ValueInput input) {
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+        String failure = input.getStringOr("last_failure_unloc", "");
+        context.lastFailureUnloc = failure.isEmpty() ? null : failure;
+        return context;
     }
 
     public boolean isStructureVersionCurrent() {

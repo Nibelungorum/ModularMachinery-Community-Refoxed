@@ -1,54 +1,26 @@
-# Task 2 Report
+# Task 2 Report: Persist Single-Controller Paused State
 
-## Files
+## Review Fix
 
-- Updated `ModelGen` to skip controller and I/O port blockstate/item model output while retaining static casing/debug models, wrench/detector flat items, and language generation.
-- Removed `MachineControllerVariants` and its obsolete test.
-- Removed static controller/port overlay model assets.
-- Moved overlay texture-name resolution into `DynamicOverlayBakedModel` and retained runtime coverage in `DynamicOverlayModelTest`.
-- Updated `ModelGenTest` and `BasicIOVariantResourceTest` for the no-generated-model behavior.
-- Removed stale ignored generated controller/port blockstate and item model files under `src/generated/resources`.
+- Root cause: `MachineControllerBlockEntity` serialized only `ActiveMachineRecipe`; loading constructed an empty `RecipeCraftingContext`, losing its runtime failure state. The existing regression manually rearranged private fields rather than testing the redstone branch in `serverTick()`.
+- `RecipeCraftingContext` now has minimal `ValueOutput`/`ValueInput` support for `lastFailureUnloc`, the only runtime state needed to preserve the active/paused controller pair. Transient I/O routes remain unsaved because they are recalculated on the next recipe tick.
+- Controller save/load writes and restores the matching context under `active_context` for either the active or paused recipe state.
+- `LevelStub` now supports configurable direct redstone signal strength. The single-controller regression drives a real powered `serverTick()`, proves consecutive powered ticks retain the identical paused recipe/context pair and tick, then removes the signal and verifies `serverTick()` resumes progression.
 
-## Tests
+## Implementation
 
-- Initial target test run failed at test compilation because the new `generatedDynamicBlocks()` test interface was not implemented yet, confirming the test-first red phase.
-- The next target run reached the new resource assertions and failed because stale generated controller/port assets were still present.
-- Final command passed:
+- Redstone power moves the single-controller active recipe/context pair to the paused slot only when `active` is present. Later powered ticks return before recipe work, leaving the paused pair unchanged.
+- Saved controller data now records `recipe_state` as `active` or `paused`, serializes the populated `ActiveMachineRecipe` through its existing `ValueOutput` API, and persists a non-null `last_failure_unloc`.
+- Loading reconstructs the matching runtime slot and its `RecipeCraftingContext`. Invalid recipe registry entries are logged and discard only the saved pair. Legacy `has_active` data is still read as active state.
+- Normal single-controller recipe progression and completion no longer clear `lastFailureUnloc`. It is cleared by successful starts in `applySearchResult` and `tryRestartLastRecipe`.
 
-  `./gradlew test --no-daemon --tests cn.howxu.mmcr.datagen.ModelGenTest --tests cn.howxu.mmcr.resources.BasicIOVariantResourceTest --tests cn.howxu.mmcr.client.model.DynamicOverlayModelTest`
+## Verification
 
-  Result: `BUILD SUCCESSFUL`, 7 tests completed.
+- Red phase: `./gradlew test --no-daemon --tests '*MachineControllerBlockEntityTest'` failed as expected: restored paused context expected `test.pause.failure` but was `null` at `MachineControllerBlockEntityTest.java:458`.
+- Green phase: `./gradlew test --no-daemon --tests '*MachineControllerBlockEntityTest'` passed after the implementation: `BUILD SUCCESSFUL`.
+- Formatting: `git diff --check` passed.
+- GameTest: `./gradlew runGameTest --no-daemon --tests '*ControllerTickGameTest'` could not run because NeoGradle reports `The run type 'gameTest' was not found`. The build configuration was intentionally not changed.
 
-- `git diff --check` passed.
+## Residual Risk
 
-## Commit History
-
-- Initial Task 2 implementation: `dca35fe refactor: remove dynamic machine models from datagen`.
-- Task 2 follow-up: `26fbd6e fix: complete Task 2 model generation follow-up`.
-- Report update: `c267c94 docs: record Task 2 follow-up commit`.
-- Test coverage repair: `77c3955 fix: test ModelGen registration output`.
-
-## Concerns
-
-- The generated assets are ignored by Git, so their cleanup is local working-tree cleanup rather than a tracked diff.
-- The initial implementation's final target run completed 7 tests. The follow-up run completed 8 tests after adding the additional resource assertions.
-- `cube_all_overlay.json` had no remaining static model references and is removed by the follow-up fix; dynamic runtime model assets, overlay textures, and language resources remain.
-
-## Follow-up Review Fix
-
-- Replaced the independently filtered `generatedDynamicBlocks()` test path with a collector driven by the same registration routine used by `registerModels()`; the collector records the blockstate and item model outputs that the production path requests.
-- Added default controller blockstate/item model absence and translation-key assertions; port assertions remain unchanged.
-- Removed the unreferenced `cube_all_overlay.json` resource.
-- The first follow-up verification exposed that `ModelGenTest` needed the existing `TestBootstrap` before touching NeoForge registries; the test now performs that initialization.
-- Verification before this fix: `./gradlew test --no-daemon --tests cn.howxu.mmcr.datagen.ModelGenTest --tests cn.howxu.mmcr.resources.BasicIOVariantResourceTest --tests cn.howxu.mmcr.client.model.DynamicOverlayModelTest` passed; `BUILD SUCCESSFUL`, 8 tests completed. `git diff --check` passed.
-- This repair verification: the same three targeted test classes passed; `BUILD SUCCESSFUL`, 8 tests completed. `git diff --check` passed.
-- The repair test now records blockstate/item model requests from the shared registration path; it no longer calls an independent generated-name filter.
-- Follow-up implementation commit: `26fbd6e fix: complete Task 2 model generation follow-up`.
-
-## Important Finding Repair
-
-- Updated `ModelGenTest` to derive every controller ID from `MachineDefinitions.allRegistrations()` and every port ID from `PortKinds.all()`.
-- The test now uses the complete shared collector record and separately asserts that neither `GeneratedModel.Kind.BLOCKSTATE` nor `GeneratedModel.Kind.ITEM` contains any derived controller or port ID.
-- No independent production filtering logic was added.
-- Final repair verification: `./gradlew test --no-daemon --tests cn.howxu.mmcr.datagen.ModelGenTest --tests cn.howxu.mmcr.resources.BasicIOVariantResourceTest --tests cn.howxu.mmcr.client.model.DynamicOverlayModelTest` passed; `BUILD SUCCESSFUL`, 8 tests completed. `git diff --check` passed.
-- Repair commit: current commit, `test: cover all Task 2 model exclusions`.
+- The GameTest runtime remains unexecuted until a `gameTest` run type is configured in a later task.

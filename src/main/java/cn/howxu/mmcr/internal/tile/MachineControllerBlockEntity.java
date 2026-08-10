@@ -1180,9 +1180,11 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (active != null) {
             output.putString("recipe_state", "active");
             active.serialize(output.child("active_recipe"));
+            if (context != null) context.serialize(output.child("active_context"));
         } else if (pausedActive != null) {
             output.putString("recipe_state", "paused");
             pausedActive.serialize(output.child("active_recipe"));
+            if (pausedContext != null) pausedContext.serialize(output.child("active_context"));
         }
         if (lastFailureUnloc != null) output.putString("last_failure_unloc", lastFailureUnloc);
     }
@@ -1207,10 +1209,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         }
         if ("paused".equals(recipeState)) {
             pausedActive = restored;
-            pausedContext = new RecipeCraftingContext(this);
+            pausedContext = RecipeCraftingContext.from(this, input.childOrEmpty("active_context"));
         } else if ("active".equals(recipeState)) {
             active = restored;
-            context = new RecipeCraftingContext(this);
+            context = RecipeCraftingContext.from(this, input.childOrEmpty("active_context"));
         } else {
             LOG.warn("[Ctrl#{}] loadAdditional: stored recipe state {} is invalid; clearing slot", instanceId, recipeState);
             return;

@@ -426,12 +426,20 @@ class MachineControllerBlockEntityTest {
         ActiveMachineRecipe active = controller.getActive();
         assertThat(active).isNotNull();
         assertThat(active.getTick()).isPositive();
+        RecipeCraftingContext activeContext = (RecipeCraftingContext) fieldValue(MachineControllerBlockEntity.class, controller, "context");
+        activeContext.setRequirementFailure("test.pause.failure", null);
 
-        setField(MachineControllerBlockEntity.class, controller, "pausedActive", active);
-        setField(MachineControllerBlockEntity.class, controller, "pausedContext", fieldValue(MachineControllerBlockEntity.class, controller, "context"));
-        setField(MachineControllerBlockEntity.class, controller, "active", null);
-        setField(MachineControllerBlockEntity.class, controller, "context", null);
-        setField(MachineControllerBlockEntity.class, controller, "redstonePaused", true);
+        Level level = levelOf(controller);
+        LevelStub.setDirectSignal(level, controllerPos, 15);
+        controller.serverTick();
+        ActiveMachineRecipe paused = (ActiveMachineRecipe) fieldValue(MachineControllerBlockEntity.class, controller, "pausedActive");
+        RecipeCraftingContext pausedContext = (RecipeCraftingContext) fieldValue(MachineControllerBlockEntity.class, controller, "pausedContext");
+        int pausedTick = paused.getTick();
+        controller.serverTick();
+        controller.serverTick();
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "pausedActive")).isSameAs(paused);
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "pausedContext")).isSameAs(pausedContext);
+        assertThat(paused.getTick()).isEqualTo(pausedTick);
 
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
                 HolderLookup.Provider.create(java.util.stream.Stream.empty()));
@@ -445,15 +453,15 @@ class MachineControllerBlockEntityTest {
                 .extracting(value -> ((ActiveMachineRecipe) value).getRecipe().id())
                 .isEqualTo(recipe.id());
         assertThat(((ActiveMachineRecipe) fieldValue(MachineControllerBlockEntity.class, loaded, "pausedActive")).getTick())
-                .isEqualTo(active.getTick());
+                .isEqualTo(pausedTick);
+        assertThat(((RecipeCraftingContext) fieldValue(MachineControllerBlockEntity.class, loaded, "pausedContext"))
+                .getLastFailureUnloc()).isEqualTo("test.pause.failure");
 
-        setField(MachineControllerBlockEntity.class, loaded, "redstonePaused", false);
-        invokeResumePausedRecipeAfterStructureCheck(loaded);
-        int savedTick = loaded.getActive().getTick();
-        invokeTickActiveRecipe(loaded);
+        LevelStub.setDirectSignal(levelOf(loaded), controllerPos, 0);
+        loaded.serverTick();
 
         assertThat(loaded.getActive()).isSameAs(fieldValue(MachineControllerBlockEntity.class, loaded, "active"));
-        assertThat(loaded.getActive().getTick()).isGreaterThan(savedTick);
+        assertThat(loaded.getActive().getTick()).isGreaterThan(pausedTick);
     }
 
     @Test
