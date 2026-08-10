@@ -143,6 +143,7 @@ public final class RecipeSearchTask {
                 if (!stack.isEmpty()) inputItems.add(stack.getItem());
             }
         }
+        if (inputItems.isEmpty()) return candidates;
         return candidateIndex.candidates(inputItems);
     }
 

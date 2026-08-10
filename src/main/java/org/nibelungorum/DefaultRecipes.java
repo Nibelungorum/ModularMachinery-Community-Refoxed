@@ -1,6 +1,8 @@
 package org.nibelungorum;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -8,7 +10,10 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -51,6 +56,9 @@ public final class DefaultRecipes {
             MachineRecipe recipe = createRecipe(definition);
             recipes.put(recipe.id(), recipe);
         }
+        for (MachineRecipe recipe : componentExampleRecipes()) {
+            recipes.put(recipe.id(), recipe);
+        }
         return Map.copyOf(recipes);
     }
 
@@ -78,6 +86,58 @@ public final class DefaultRecipes {
                 standardDefinitions(REACTOR_ID, "reactor", new Definition(MMCR.id("reactor_diamond_water"), REACTOR_ID, 200, List.of(itemInput(Items.DIAMOND, 1), fluidInput(Fluids.WATER, 500), energyOutput(100)), List.of(item(Items.COAL, 1)), List.of(fluidOutput(Fluids.LAVA, 500)))),
                 thermalSmeltingFurnaceDefinitions()
         ).stream().flatMap(List::stream).toList();
+    }
+
+    private static List<MachineRecipe> componentExampleRecipes() {
+        return List.of(
+                BLAST_FURNACE_ID,
+                ALLOY_FURNACE_ID,
+                CRACKER_ID,
+                REACTOR_ID,
+                THERMAL_SMELTING_FURNACE_ID
+        ).stream().flatMap(machineId -> componentExampleRecipes(machineId).stream()).toList();
+    }
+
+    private static List<MachineRecipe> componentExampleRecipes(Identifier machineId) {
+        String prefix = machineId.getPath() + "_component_";
+        return List.of(
+                componentRecipe(machineId, prefix + "chanced_input",
+                        List.of(componentItemInput(Items.DIAMOND, 1, "Chance", 0.5F)),
+                        List.of(item(Items.EMERALD, 1))),
+                componentRecipe(machineId, prefix + "non_consumable_input",
+                        List.of(componentItemInput(Items.DIAMOND, 1, "Keep", 0F)),
+                        List.of(item(Items.EMERALD, 1))),
+                componentRecipe(machineId, prefix + "input_to_plain_output",
+                        List.of(componentItemInput(Items.DIAMOND, 1, "Input Only", 1F)),
+                        List.of(item(Items.EMERALD, 1))),
+                componentRecipe(machineId, prefix + "plain_input_to_output",
+                        List.of(itemInput(Items.IRON_INGOT, 1)),
+                        List.of(namedItem(Items.GOLD_INGOT, 1, "Output Only"))),
+                componentRecipe(machineId, prefix + "input_to_output",
+                        List.of(componentItemInput(Items.DIAMOND, 1, "Input", 1F)),
+                        List.of(namedItem(Items.GOLD_INGOT, 1, "Output"))),
+                componentRecipe(machineId, prefix + "mixed_inputs",
+                        List.of(componentItemInput(Items.DIAMOND, 1, "Named", 1F), itemInput(Items.IRON_INGOT, 1)),
+                        List.of(item(Items.EMERALD, 1))),
+                componentRecipe(machineId, prefix + "mixed_outputs",
+                        List.of(itemInput(Items.IRON_INGOT, 1)),
+                        List.of(namedItem(Items.GOLD_INGOT, 1, "Named Output"), item(Items.EMERALD, 1)))
+        );
+    }
+
+    private static MachineRecipe componentRecipe(Identifier machineId, String path,
+                                                 List<MachineIngredient> inputs, List<ItemStack> outputs) {
+        return new MachineRecipe(MMCR.id(path), machineId, 20, inputs, outputs,
+                List.of(), 0, 1, true, List.of(), List.of(), true, List.of());
+    }
+
+    private static MachineIngredient componentItemInput(Item item, int count, String name, float consumeChance) {
+        return new MachineIngredient.ItemIngredient(Ingredient.of(item), count, namedPredicate(name), consumeChance);
+    }
+
+    private static DataComponentPredicateSet namedPredicate(String name) {
+        return new DataComponentPredicateSet(Map.of(DataComponents.CUSTOM_NAME,
+                ComponentPredicate.text(name, ComponentPredicate.TextMode.PLAIN)));
     }
 
     private static List<Definition> thermalSmeltingFurnaceDefinitions() {
@@ -166,6 +226,13 @@ public final class DefaultRecipes {
         return new ItemStack(Holder.direct(item, DataComponentMap.EMPTY), count);
     }
 
+    private static ItemStack namedItem(Item item, int count, String name) {
+        bindItem(item);
+        ItemStack stack = new ItemStack(item, count);
+        stack.set(DataComponents.CUSTOM_NAME, Component.literal(name));
+        return stack;
+    }
+
     private static MachineIngredient itemInput(net.minecraft.world.item.Item item, int count) {
         return new MachineIngredient.ItemIngredient(Ingredient.of(item), count);
     }
@@ -204,6 +271,12 @@ public final class DefaultRecipes {
         var holder = fluid.builtInRegistryHolder();
         holder.bindComponents(DataComponentMap.EMPTY);
         return holder;
+    }
+
+    private static void bindItem(Item item) {
+        item.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 64)
+                .build());
     }
 
     private static void register(MachineRecipe recipe) {

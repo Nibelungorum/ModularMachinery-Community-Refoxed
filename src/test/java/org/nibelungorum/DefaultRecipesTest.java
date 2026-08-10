@@ -6,10 +6,14 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.AfterEach;
@@ -46,7 +50,7 @@ class DefaultRecipesTest {
 
         assertThat(machine).isNotNull();
         var recipes = RecipeRegistry.byMachine(machine);
-        assertThat(recipes).hasSize(10);
+        assertThat(recipes).hasSize(17);
 
         var recipe = RecipeRegistry.getRecipe(MMCR.id("blast_furnace_iron_to_nugget"));
         assertThat(recipe.id()).isEqualTo(MMCR.id("blast_furnace_iron_to_nugget"));
@@ -120,6 +124,7 @@ class DefaultRecipesTest {
         installDefaultRuntimeContent();
         var recipes = DefaultRecipes.recipes().values().stream()
                 .filter(recipe -> recipe.machineId().equals(MMCR.id("thermal_smelting_furnace")))
+                .filter(recipe -> !recipe.id().getPath().contains("_component_"))
                 .toList();
 
         assertThat(recipes).hasSize(5);
@@ -231,11 +236,12 @@ class DefaultRecipesTest {
         DefaultRecipes.ensureRegistered();
         DefaultRecipes.ensureRegistered();
 
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("blast_furnace"))).hasSize(10);
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("alloy_furnace"))).hasSize(12);
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker"))).hasSize(10);
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("reactor"))).hasSize(10);
-        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(47);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("blast_furnace"))).hasSize(17);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("alloy_furnace"))).hasSize(19);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker"))).hasSize(17);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("reactor"))).hasSize(17);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("thermal_smelting_furnace"))).hasSize(12);
+        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(82);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker")))
                 .anySatisfy(recipe -> assertThat(recipe.fluidOutputs()).isNotEmpty());
         assertThat(RecipeRegistry.recipes())
@@ -282,10 +288,49 @@ class DefaultRecipesTest {
         assertThat(recipe.outputs()).hasSize(25);
     }
 
+    @Test
+    void default_recipes_include_data_component_examples_for_every_default_machine() {
+        installDefaultRuntimeContent();
+        DefaultRecipes.ensureRegistered();
+
+        for (String machine : java.util.List.of("blast_furnace", "alloy_furnace", "cracker", "reactor", "thermal_smelting_furnace")) {
+            assertThat(RecipeRegistry.byMachineId(MMCR.id(machine)))
+                    .filteredOn(recipe -> recipe.id().getPath().startsWith(machine + "_component_"))
+                    .hasSize(7);
+        }
+
+        MachineRecipe chanced = RecipeRegistry.getRecipe(MMCR.id("blast_furnace_component_chanced_input"));
+        MachineIngredient.ItemIngredient chancedInput = (MachineIngredient.ItemIngredient) chanced.inputs().getFirst();
+        assertThat(chancedInput.consumeChance()).isEqualTo(0.5F);
+        assertThat(chancedInput.components().matches(namedStack(Items.DIAMOND, "Chance"))).isTrue();
+        assertThat(chancedInput.components().matches(new ItemStack(Items.DIAMOND))).isFalse();
+
+        MachineIngredient.ItemIngredient keptInput = (MachineIngredient.ItemIngredient) RecipeRegistry
+                .getRecipe(MMCR.id("blast_furnace_component_non_consumable_input"))
+                .inputs().getFirst();
+        assertThat(keptInput.consumeChance()).isZero();
+
+        assertThat(RecipeRegistry.getRecipe(MMCR.id("blast_furnace_component_plain_input_to_output"))
+                .outputs().getFirst().get(DataComponents.CUSTOM_NAME)).isEqualTo(Component.literal("Output Only"));
+        assertThat(RecipeRegistry.getRecipe(MMCR.id("blast_furnace_component_mixed_outputs"))
+                .outputs()).satisfiesExactly(
+                stack -> assertThat(stack.get(DataComponents.CUSTOM_NAME)).isEqualTo(Component.literal("Named Output")),
+                stack -> assertThat(stack.get(DataComponents.CUSTOM_NAME)).isNull());
+    }
+
     private static void installDefaultRuntimeContent() {
         MachineLevelRegistry.beginRegistration();
         DefaultMachineLevels.register();
         MachineLevelRegistry.freezeRegistration();
         MachineStructureRegistry.replaceDynamic(DefaultMachines.structures());
+    }
+
+    private static ItemStack namedStack(net.minecraft.world.item.Item item, String name) {
+        item.builtInRegistryHolder().bindComponents(net.minecraft.core.component.DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 64)
+                .build());
+        ItemStack stack = new ItemStack(item);
+        stack.set(DataComponents.CUSTOM_NAME, Component.literal(name));
+        return stack;
     }
 }
