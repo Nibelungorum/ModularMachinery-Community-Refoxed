@@ -44,6 +44,7 @@ public final class RecipeCraftingContext {
     private List<ItemOutputRoute> itemOutputRoutes = List.of();
     private List<FluidInputRoute> fluidInputRoutes = List.of();
     private List<FluidOutputRoute> fluidOutputRoutes = List.of();
+    private List<List<PersistedFluidTransfer>> restoredFluidInputRoutes = List.of();
     private @Nullable List<ItemOutputState> simulatedItemOutputStates;
     private @Nullable List<FluidOutputState> simulatedFluidOutputStates;
     private @Nullable String lastFailureUnloc;
@@ -77,7 +78,7 @@ public final class RecipeCraftingContext {
         context.setStructureModifiers(modifiers);
         context.itemInputRoutes = context.readItemInputRoutes(input);
         context.itemOutputRoutes = context.readItemOutputRoutes(input);
-        context.fluidInputRoutes = context.readFluidInputRoutes(input);
+        context.restoredFluidInputRoutes = context.readFluidInputRoutes(input);
         context.fluidOutputRoutes = context.readFluidOutputRoutes(input);
         return context;
     }
@@ -205,25 +206,27 @@ public final class RecipeCraftingContext {
         return routes;
     }
 
-    private List<FluidInputRoute> readFluidInputRoutes(ValueInput input) {
-        List<FluidInputRoute> routes = emptyFluidInputRoutes(Math.max(0, input.getIntOr("fluid_input_route_count", 0)));
+    private List<List<PersistedFluidTransfer>> readFluidInputRoutes(ValueInput input) {
+        List<List<PersistedFluidTransfer>> routes = new ArrayList<>();
+        int routeCount = Math.max(0, input.getIntOr("fluid_input_route_count", 0));
+        for (int i = 0; i < routeCount; i++) routes.add(null);
         for (int i = 0; i < routes.size(); i++) {
             ValueInput routeInput = input.childOrEmpty("fluid_input_route_" + i);
             if (!routeInput.getBooleanOr("present", false)) continue;
-            List<FluidInputTransfer> transfers = new ArrayList<>();
+            List<PersistedFluidTransfer> transfers = new ArrayList<>();
             boolean valid = true;
             for (int j = 0; j < Math.max(0, routeInput.getIntOr("transfer_count", 0)); j++) {
                 ValueInput transferInput = routeInput.childOrEmpty("transfer_" + j);
-                FluidHatchBlockEntity hatch = fluidHatchAt(net.minecraft.core.BlockPos.of(transferInput.getLongOr("pos", Long.MIN_VALUE)), IOType.INPUT);
+                net.minecraft.core.BlockPos pos = net.minecraft.core.BlockPos.of(transferInput.getLongOr("pos", Long.MIN_VALUE));
                 FluidStack stack = transferInput.read("stack", FluidStack.CODEC).orElse(FluidStack.EMPTY);
                 int tank = transferInput.getIntOr("tank", -1);
-                if (hatch == null || stack.isEmpty() || tank < 0 || tank >= hatch.getFluidHandler(null).getTanks()) {
+                if (stack.isEmpty() || tank < 0) {
                     valid = false;
                     break;
                 }
-                transfers.add(new FluidInputTransfer(hatch.getFluidHandler(null), hatch.getBlockPos(), tank, stack));
+                transfers.add(new PersistedFluidTransfer(pos, tank, stack));
             }
-            if (valid) routes.set(i, new FluidInputRoute(List.copyOf(transfers)));
+            if (valid) routes.set(i, List.copyOf(transfers));
         }
         return routes;
     }
@@ -277,6 +280,7 @@ public final class RecipeCraftingContext {
         itemOutputRoutes = List.of();
         fluidInputRoutes = List.of();
         fluidOutputRoutes = List.of();
+        restoredFluidInputRoutes = List.of();
         lastFailureUnloc = null;
         lastRequirementFailure = null;
         structureModifiers = List.of();
@@ -925,6 +929,7 @@ public final class RecipeCraftingContext {
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
             if (!(requirement instanceof FluidRequirement fluid) || fluid.io() != RecipeModifier.IOType.INPUT) continue;
+            restoreFluidInputRoute(requirementIndex);
             FluidInputRoute route = requirementIndex < fluidInputRoutes.size() ? fluidInputRoutes.get(requirementIndex) : null;
             if (route == null) return new RequirementFailure(requirementIndex, RequirementFailure.Kind.MISSING_INPUT, fluid.amount(), 0);
             int available = 0;
@@ -970,7 +975,25 @@ public final class RecipeCraftingContext {
     }
 
     public boolean collectFluidInputRoute(int requirementIndex) {
+        restoreFluidInputRoute(requirementIndex);
         return requirementIndex < fluidInputRoutes.size() && fluidInputRoutes.get(requirementIndex) != null;
+    }
+
+    private void restoreFluidInputRoute(int requirementIndex) {
+        if (requirementIndex < fluidInputRoutes.size() && fluidInputRoutes.get(requirementIndex) != null) return;
+        if (requirementIndex >= restoredFluidInputRoutes.size()) return;
+        List<PersistedFluidTransfer> persisted = restoredFluidInputRoutes.get(requirementIndex);
+        if (persisted == null) return;
+        List<FluidInputTransfer> transfers = new ArrayList<>();
+        for (PersistedFluidTransfer transfer : persisted) {
+            FluidHatchBlockEntity hatch = fluidHatchAt(transfer.pos(), IOType.INPUT);
+            if (hatch == null || transfer.tank() >= hatch.getFluidHandler(null).getTanks()) return;
+            transfers.add(new FluidInputTransfer(hatch.getFluidHandler(null), hatch.getBlockPos(), transfer.tank(), transfer.stack()));
+        }
+        List<FluidInputRoute> routes = new ArrayList<>(fluidInputRoutes);
+        while (routes.size() <= requirementIndex) routes.add(null);
+        routes.set(requirementIndex, new FluidInputRoute(List.copyOf(transfers)));
+        fluidInputRoutes = routes;
     }
 
     public boolean collectFluidOutputRoute(int requirementIndex) {
@@ -1233,6 +1256,8 @@ public final class RecipeCraftingContext {
     private record ItemOutputTransfer(IItemHandler handler, @Nullable net.minecraft.core.BlockPos pos, int slot, ItemStack stack) {}
 
     private record FluidInputTransfer(IFluidHandler handler, @Nullable net.minecraft.core.BlockPos pos, int tank, FluidStack stack) {}
+
+    private record PersistedFluidTransfer(net.minecraft.core.BlockPos pos, int tank, FluidStack stack) {}
 
     private record FluidOutputTransfer(IFluidHandler handler, @Nullable net.minecraft.core.BlockPos pos, int tank, FluidStack stack) {}
 

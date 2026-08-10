@@ -142,13 +142,13 @@ class DefaultMachinesTest {
         assertThat(machine.controller().id()).isEqualTo(MMCR.id("thermal_smelting_furnace_controller"));
         assertThat(machine.pattern().get(BlockPos.ZERO))
                 .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine.registryName()).get()));
-        assertThat(machine.pattern().get(new BlockPos(-1, -1, -1)).matches(net.minecraft.world.level.block.Blocks.SMOOTH_BASALT.defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(-1, -1, -1)).matches(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(-1, -1, -1)).matches(ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(-1, -1, -1)).matches(ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(-1, -1, -1)).matches(ModBlocks.BLOCKS.get("parallel_controller_4").get().defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(-1, -1, -1)).matches(ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(-1, -1, -1)).matches(net.minecraft.world.level.block.Blocks.EMERALD_BLOCK.defaultBlockState())).isFalse();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(net.minecraft.world.level.block.Blocks.SMOOTH_BASALT.defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(ModBlocks.BLOCKS.get("parallel_controller_4").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(net.minecraft.world.level.block.Blocks.EMERALD_BLOCK.defaultBlockState())).isFalse();
         assertThat(machine.pattern().pattern().values())
                 .contains(new BlockPredicate.OfBlock(net.minecraft.world.level.block.Blocks.REINFORCED_DEEPSLATE));
         assertThat(requirementIds(machine)).contains("energy_input_hatch>=tiny", "item_input_bus>=tiny", "item_output_bus>=tiny");
