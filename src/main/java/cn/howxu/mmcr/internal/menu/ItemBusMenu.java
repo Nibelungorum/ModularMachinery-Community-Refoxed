@@ -59,7 +59,7 @@ public class ItemBusMenu extends AbstractMachineMenu {
         this.busSlotCount = slotCount(resolved);
         this.busRows = rowsForSize(busSize);
         this.busColumns = columnsForSize(busSize);
-        addBusSlots(resolved);
+        addBusSlots(null);
         addPlayerSlots(playerInv);
     }
 
