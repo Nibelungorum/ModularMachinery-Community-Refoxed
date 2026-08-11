@@ -13,8 +13,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
 import dev.latvian.mods.kubejs.recipe.RecipesKubeEvent;
-import net.minecraft.core.Holder;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -91,13 +89,13 @@ public class MachineRecipeBuilderJS {
     }
 
     public MachineRecipeBuilderJS itemOutput(String itemId, int count) {
-        outputs.add(new ItemStack(Holder.direct(item(itemId), DataComponentMap.EMPTY), count));
+        outputs.add(new ItemStack(item(itemId), count));
         outputChances.add(1F);
         return this;
     }
 
     public MachineRecipeBuilderJS chancedItemOutput(String itemId, int count, float chance) {
-        outputs.add(new ItemStack(Holder.direct(item(itemId), DataComponentMap.EMPTY), count));
+        outputs.add(new ItemStack(item(itemId), count));
         outputChances.add(chance);
         return this;
     }

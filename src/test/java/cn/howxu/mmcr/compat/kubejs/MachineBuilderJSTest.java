@@ -34,6 +34,20 @@ class MachineBuilderJSTest {
     }
 
     @Test
+    void item_outputs_use_registry_backed_holders() {
+        var builder = new MachineRecipeBuilderJS(MMCR.id("holder_test"))
+                .itemOutput("mmcr:item_output_bus", 1)
+                .chancedItemOutput("mmcr:item_input_bus", 2, 0.5F);
+
+        assertThat(builder.outputs)
+                .extracting(stack -> stack.typeHolder().unwrapKey())
+                .allMatch(java.util.Optional::isPresent);
+        assertThat(builder.outputs)
+                .extracting(stack -> stack.typeHolder().unwrapKey().orElseThrow().identifier())
+                .containsExactly(MMCR.id("item_output_bus"), MMCR.id("item_input_bus"));
+    }
+
+    @Test
     void controller_textures_sets_front_and_all_other_faces() {
         var machine = new MachineBuilderJS(MMCR.id("arc_furnace"))
                 .controllerTextures(MMCR.id("block/arc_front"), MMCR.id("block/arc_side"))
