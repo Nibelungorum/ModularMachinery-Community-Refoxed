@@ -8,12 +8,17 @@ import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import com.google.gson.JsonElement;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.component.DataComponentType;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
@@ -125,7 +130,8 @@ public final class DefaultRecipes {
                         List.of(item(Items.EMERALD, 1))),
                 componentRecipe(machineId, prefix + "mixed_outputs",
                         List.of(itemInput(Items.IRON_INGOT, 1)),
-                        List.of(namedItem(Items.GOLD_INGOT, 1, "Named Output"), item(Items.EMERALD, 1)))
+                        List.of(namedItem(Items.GOLD_INGOT, 1, "Named Output"), item(Items.EMERALD, 1))),
+                chancedOutputRecipe(machineId, prefix + "chanced_outputs")
         );
     }
 
@@ -141,17 +147,39 @@ public final class DefaultRecipes {
 
     private static MachineRecipe enchantedNonConsumableRecipe(Identifier machineId, String path) {
         return new MachineRecipe(MMCR.id(path), machineId, 100,
-                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.DIAMOND_SWORD), 1,
-                        exactEnchantmentPredicate(2), 0F)),
+                List.of(itemInputFromData("""
+                        {components: {"minecraft:enchantments": {"minecraft:sharpness": 2}, "minecraft:repair_cost": 1}, count: 1, id: "minecraft:diamond_sword"}
+                        """, 0F)),
                 List.of(), List.of(), 0, 1, true, List.of(), List.of(), true, List.of());
     }
 
-    private static DataComponentPredicateSet exactEnchantmentPredicate(int level) {
+    private static MachineRecipe chancedOutputRecipe(Identifier machineId, String path) {
+        return new MachineRecipe(MMCR.id(path), machineId, 20, List.of(itemInput(Items.IRON_INGOT, 1)), List.of(),
+                List.of(), 0, 1, true, List.of(), List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.APPLE), 1, ItemStack.EMPTY),
+                MachineRequirement.itemOutput(item(Items.EMERALD, 1)),
+                MachineRequirement.itemOutput(item(Items.DIAMOND, 1), 0.5F),
+                MachineRequirement.fluidOutput(fluidOutput(Fluids.LAVA, 250), 0.25F)), true, List.of());
+    }
+
+    private static MachineIngredient.ItemIngredient itemInputFromData(String itemData, float consumeChance) {
+        JsonObject root = JsonParser.parseString(itemData).getAsJsonObject();
+        Identifier id = Identifier.parse(root.get("id").getAsString());
+        int count = root.has("count") ? root.get("count").getAsInt() : 1;
+        return new MachineIngredient.ItemIngredient(Ingredient.of(BuiltInRegistries.ITEM.getValue(id)), count,
+                componentsFromData(root), consumeChance);
+    }
+
+    private static DataComponentPredicateSet componentsFromData(JsonObject root) {
         var ops = JsonOps.INSTANCE;
-        JsonElement value = ops.createMap(Map.of(
-                ops.createString("minecraft:sharpness"), ops.createInt(level)));
-        return new DataComponentPredicateSet(Map.of(DataComponents.ENCHANTMENTS,
-                ComponentPredicate.exact(new Dynamic<>(ops, value))));
+        JsonObject components = root.getAsJsonObject("components");
+        Map<DataComponentType<?>, ComponentPredicate> predicates = new java.util.LinkedHashMap<>();
+        for (var entry : components.entrySet()) {
+            DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(Identifier.parse(entry.getKey()));
+            if (type == null) throw new IllegalArgumentException("Unknown data component type " + entry.getKey());
+            predicates.put(type, ComponentPredicate.exact(new Dynamic<>(ops, entry.getValue())));
+        }
+        return new DataComponentPredicateSet(predicates);
     }
 
     private static DataComponentPredicateSet namedPredicate(String name) {

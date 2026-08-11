@@ -50,6 +50,13 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
+    void outputOverlayTextShowsChanceBelowFull() {
+        assertThat(MachineRecipeCategory.outputOverlayText(1F)).isEmpty();
+        assertThat(MachineRecipeCategory.outputOverlayText(0.5F)).isEqualTo("50%");
+        assertThat(MachineRecipeCategory.outputOverlayText(0.25F)).isEqualTo("25%");
+    }
+
+    @Test
     void itemOverlayUsesReducedScaleAtSlotTopLeft() {
         assertThat(MachineRecipeCategory.ITEM_OVERLAY_SCALE).isEqualTo(0.6F);
         assertThat(MachineRecipeCategory.ITEM_OVERLAY_X).isEqualTo(-3);
@@ -92,8 +99,8 @@ class MachineRecipeDisplayTest {
         assertThat(display.itemInputs()).hasSize(1);
         assertThat(display.itemInputs()).extracting(MachineRecipeDisplay.ItemInputDisplay::count).containsExactly(8);
         assertThat(display.itemOutputs()).singleElement().satisfies(output -> {
-            assertThat(output.is(Items.IRON_NUGGET)).isTrue();
-            assertThat(output.getCount()).isEqualTo(4);
+            assertThat(output.stack().is(Items.IRON_NUGGET)).isTrue();
+            assertThat(output.stack().getCount()).isEqualTo(4);
         });
         assertThat(display.fluidInputs()).hasSize(1);
         assertThat(display.fluidInputAmounts()).containsExactly(250);
@@ -118,7 +125,8 @@ class MachineRecipeDisplayTest {
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
 
         assertThat(display.outputs()).hasOnlyElementsOfType(MachineOutput.ItemOutput.class);
-        assertThat(display.itemOutputs()).extracting(ItemStack::getCount).containsExactly(6);
+        assertThat(display.itemOutputs()).extracting(MachineRecipeDisplay.ItemOutputDisplay::stack)
+                .extracting(ItemStack::getCount).containsExactly(6);
     }
 
     @Test
@@ -149,6 +157,7 @@ class MachineRecipeDisplayTest {
     @Test
     void displayPreservesOutputComponents() {
         ItemStack namedSharpnessFourSword = namedSharpnessFourSword();
+        namedSharpnessFourSword.setCount(2);
         MachineRecipe recipe = new MachineRecipe(
                 MMCR.id("component_output_display"),
                 MMCR.id("alloy_furnace"),
@@ -159,8 +168,9 @@ class MachineRecipeDisplayTest {
 
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
 
-        ItemStack output = display.itemOutputs().getFirst();
+        ItemStack output = display.itemOutputs().getFirst().stack();
         assertThat(output.getHoverName().getString()).isEqualTo("Better钻石剑");
+        assertThat(output.getCount()).isEqualTo(2);
         assertThat(output.get(DataComponents.ENCHANTMENTS))
                 .isEqualTo(namedSharpnessFourSword.get(DataComponents.ENCHANTMENTS));
     }
@@ -180,7 +190,7 @@ class MachineRecipeDisplayTest {
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
 
         ItemStack input = display.itemInputs().getFirst().stacks().getFirst();
-        assertThat(input.get(DataComponents.CUSTOM_NAME)).isNull();
+        assertThat(input.get(DataComponents.CUSTOM_NAME)).isEqualTo(Component.literal("Required剑"));
         assertThat(display.itemInputs().getFirst().hasUnexportedComponentConstraints()).isTrue();
     }
 
@@ -345,11 +355,14 @@ class MachineRecipeDisplayTest {
         ItemStack stack = new ItemStack(Items.DIAMOND_SWORD);
         if (name != null) stack.set(DataComponents.CUSTOM_NAME, Component.literal(name));
         var enchantments = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
-        enchantments.set(lookup.lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT)
-                .getOrThrow(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.ENCHANTMENT,
-                        Identifier.parse("minecraft:sharpness"))), level);
+        enchantments.set(lookup.lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT).getOrThrow(sharpnessKey()), level);
         stack.set(DataComponents.ENCHANTMENTS, enchantments.toImmutable());
         return stack;
+    }
+
+    private static net.minecraft.resources.ResourceKey<net.minecraft.world.item.enchantment.Enchantment> sharpnessKey() {
+        return net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.ENCHANTMENT,
+                Identifier.parse("minecraft:sharpness"));
     }
 
     private static void bindItemComponents(net.minecraft.world.item.Item... items) {

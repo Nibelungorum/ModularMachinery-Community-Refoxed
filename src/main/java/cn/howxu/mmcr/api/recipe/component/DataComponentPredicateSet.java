@@ -38,10 +38,23 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
 
     public ItemStack displayStack(Item item, int count) {
         ItemStack stack = new ItemStack(item, count);
+        applyTo(stack);
+        return stack;
+    }
+
+    /**
+     * Write every exact-valued component onto {@code stack} via {@link ItemStack#set}.
+     * Mirrors the vanilla anvil approach where JEI slots are built by mutating a real
+     * {@code ItemStack} with the recipe's data, then handed to the renderer as-is.
+     * <p>
+     * Components whose predicate is not {@link ComponentPredicate.Exact}, or whose exact
+     * value cannot be decoded without registry access, are silently skipped; callers can
+     * detect that case through {@link #exactPatch()}.
+     */
+    public void applyTo(ItemStack stack) {
         for (var entry : values.entrySet()) {
             applyExactValue(stack, entry.getKey(), entry.getValue());
         }
-        return stack;
     }
 
     public boolean isEmpty() {

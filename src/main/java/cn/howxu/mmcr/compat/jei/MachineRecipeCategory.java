@@ -41,8 +41,8 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private static final int OVERFLOW_TEXT_OFFSET_X = 5;
     static final int RECIPE_ARROW_X = 64;
     static final int RECIPE_ARROW_Y = 8;
-    static final int ITEM_OVERLAY_X = -3;
-    static final int ITEM_OVERLAY_Y = -3;
+    static final int ITEM_OVERLAY_X = 0;
+    static final int ITEM_OVERLAY_Y = 0;
     static final float ITEM_OVERLAY_SCALE = 0.6F;
 
     private final Machine machine;
@@ -151,6 +151,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         return consumeChance < 1F ? Math.round(consumeChance * 100F) + "%" : "";
     }
 
+    static String outputOverlayText(float chance) {
+        return chance < 1F ? Math.round(chance * 100F) + "%" : "";
+    }
+
     static Component overflowEntry(int amount, Component displayName) {
         return Component.translatable("jei.mmcr.machine_recipe.overflow_entry", amount, displayName);
     }
@@ -216,15 +220,23 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             MachineRecipeLayout.EntryPlan entry, boolean input) {
         if (input) {
             MachineRecipeDisplay.ItemInputDisplay item = recipe.itemInputs().get(entry.index());
-            jeiSlot.addItemStacks(item.stacks());
+            List<ItemStack> stacks = item.stacks();
             String overlayText = inputOverlayText(item.consumeChance(), Minecraft.getInstance().getLanguageManager().getSelected());
             if (!overlayText.isEmpty()) {
                 jeiSlot.setOverlay(new TextOverlayDrawable(overlayText, 0xFFFF4040, ITEM_OVERLAY_SCALE),
                         ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
             }
             jeiSlot.addRichTooltipCallback((view, tooltip) -> appendInputTooltip(tooltip, item));
+            jeiSlot.addItemStacks(stacks);
         } else {
-            ItemStack stack = recipe.itemOutputs().get(entry.index());
+            MachineRecipeDisplay.ItemOutputDisplay output = recipe.itemOutputs().get(entry.index());
+            ItemStack stack = output.stack();
+            String overlayText = outputOverlayText(output.chance());
+            if (!overlayText.isEmpty()) {
+                jeiSlot.setOverlay(new TextOverlayDrawable(overlayText, 0xFFFF4040, ITEM_OVERLAY_SCALE),
+                        ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
+            }
+            jeiSlot.addRichTooltipCallback((view, tooltip) -> appendOutputTooltip(tooltip, output));
             jeiSlot.add(new ItemStack(stack.getItem().builtInRegistryHolder(), stack.getCount(), stack.getComponentsPatch()));
         }
     }
@@ -257,7 +269,8 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                             .orElse(Component.empty());
                     tooltip.add(overflowEntry(item.count(), displayName));
                 } else {
-                    ItemStack stack = recipe.itemOutputs().get(entry.index());
+                    MachineRecipeDisplay.ItemOutputDisplay output = recipe.itemOutputs().get(entry.index());
+                    ItemStack stack = output.stack();
                     tooltip.add(overflowEntry(stack.getCount(), outputStackName(stack)));
                 }
             } else {
@@ -296,6 +309,13 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
     }
 
+    private static void appendOutputTooltip(ITooltipBuilder tooltip, MachineRecipeDisplay.ItemOutputDisplay output) {
+        if (output.chance() < 1F) {
+            tooltip.add(Component.translatable("jei.mmcr.machine_recipe.output_chance",
+                    Math.round(output.chance() * 100F) + "%"));
+        }
+    }
+
     private static boolean isMouseOver(@Nullable OverflowSlotPlan slot, double mouseX, double mouseY) {
         return slot != null && mouseX >= slot.x() && mouseX < slot.x() + 16 && mouseY >= slot.y() && mouseY < slot.y() + 16;
     }
@@ -314,7 +334,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         @Override
         public void draw(GuiGraphicsExtractor guiGraphics, int xOffset, int yOffset) {
             guiGraphics.pose().pushMatrix();
-            guiGraphics.pose().translate(xOffset / scale, yOffset / scale);
+            guiGraphics.pose().translate(xOffset, yOffset);
             guiGraphics.pose().scale(scale, scale);
             guiGraphics.text(Minecraft.getInstance().font, text, 0, 0, color, false);
             guiGraphics.pose().popMatrix();
