@@ -241,7 +241,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         List<ItemStack> outputs = new ArrayList<>();
         for (MachineRequirement requirement : requirements) {
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
-                outputs.add(item.stack().copy());
+                outputs.add(item.resolvedStack());
             }
         }
         return List.copyOf(outputs);
@@ -261,7 +261,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         List<MachineOutput> outputs = new ArrayList<>();
         for (MachineRequirement requirement : requirements) {
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
-                outputs.add(new MachineOutput.ItemOutput(item.stack(), item.chance()));
+                outputs.add(new MachineOutput.ItemOutput(item.resolvedStack(), item.chance()));
             } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT) {
                 outputs.add(new MachineOutput.FluidOutput(fluid.stack(), fluid.chance()));
             }
@@ -309,7 +309,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
             ItemStack stack = item.stack().copy();
             stack.setCount(levelOutputCount(stack.getCount(), outputMultiplier));
-            return new ItemRequirement(item.io(), item.item(), item.count(), stack, item.chance(), item.tags());
+            return new ItemRequirement(item.io(), item.item(), item.count(), stack, item.chance(), item.tags(), item.components(), item.consumeChance());
         }
         if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT) {
             FluidStack stack = fluid.stack().copy();

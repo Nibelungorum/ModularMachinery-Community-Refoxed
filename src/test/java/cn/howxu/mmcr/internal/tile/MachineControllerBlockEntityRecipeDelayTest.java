@@ -8,6 +8,8 @@ import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
+import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
@@ -23,14 +25,22 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.RegistryOps;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import com.google.gson.JsonObject;
+import com.mojang.serialization.Dynamic;
+import com.mojang.serialization.JsonOps;
 import net.neoforged.neoforge.items.ItemStackHandler;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -38,6 +48,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -51,6 +62,7 @@ class MachineControllerBlockEntityRecipeDelayTest {
         TestBootstrap.bootstrap();
         bindItemComponents(Items.GOLD_INGOT);
         bindItemComponents(Items.NETHERITE_SCRAP);
+        bindItemComponents(Items.DIAMOND_SWORD);
     }
 
     @Test
@@ -151,6 +163,21 @@ class MachineControllerBlockEntityRecipeDelayTest {
     }
 
     @Test
+    void enchantedInputRecipeRejectsWrongRuntimeEnchantments() throws Exception {
+        Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
+        ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
+        bus.getItemStackHandler(null).setStackInSlot(0, enchantedSword("minecraft:sharpness", 1));
+        MachineControllerBlockEntity controller = formedController(machineId, bus);
+        MachineRecipe recipe = inputRecipe("sharpness_two", machineId, List.of(enchantedInput(2)));
+
+        assertThat(new ActiveMachineRecipe(recipe).canStartCrafting(new RecipeCraftingContext(controller))).isFalse();
+
+        bus.getItemStackHandler(null).setStackInSlot(0, enchantedSword("minecraft:unbreaking", 3));
+
+        assertThat(new ActiveMachineRecipe(recipe).canStartCrafting(new RecipeCraftingContext(controller))).isFalse();
+    }
+
+    @Test
     void sharedDelayHelperDelaysOnlyConflictProneRecipeWithinWindow() {
         RecipeStartDelay delay = new RecipeStartDelay();
         Identifier recipe = Identifier.fromNamespaceAndPath("mmcr", "single_gold");
@@ -228,6 +255,30 @@ class MachineControllerBlockEntityRecipeDelayTest {
 
     private static ItemRequirement itemInput(Item item, int count) {
         return new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(item), count, ItemStack.EMPTY);
+    }
+
+    private static ItemRequirement enchantedInput(int sharpnessLevel) {
+        var enchantments = new JsonObject();
+        enchantments.addProperty("minecraft:sharpness", sharpnessLevel);
+        var predicates = new DataComponentPredicateSet(Map.of(
+                DataComponents.ENCHANTMENTS,
+                ComponentPredicate.exact(new Dynamic<>(RegistryOps.create(JsonOps.INSTANCE, VanillaRegistries.createLookup()), enchantments)),
+                DataComponents.REPAIR_COST,
+                ComponentPredicate.exact(new Dynamic<>(JsonOps.INSTANCE, new com.google.gson.JsonPrimitive(1)))));
+        return new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.DIAMOND_SWORD), 1,
+                ItemStack.EMPTY, 1F, List.of(), predicates, 0F);
+    }
+
+    private static ItemStack enchantedSword(String enchantmentId, int level) {
+        var lookup = VanillaRegistries.createLookup();
+        var enchantment = lookup.lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(ResourceKey.create(
+                Registries.ENCHANTMENT, Identifier.parse(enchantmentId)));
+        ItemStack sword = new ItemStack(Items.DIAMOND_SWORD);
+        var enchantments = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
+        enchantments.set(enchantment, level);
+        sword.set(DataComponents.ENCHANTMENTS, enchantments.toImmutable());
+        sword.set(DataComponents.REPAIR_COST, 1);
+        return sword;
     }
 
     private static ItemInputBusBlockEntity itemInputBus(BlockPos pos) throws Exception {

@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import com.mojang.serialization.DynamicOps;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import org.jetbrains.annotations.Nullable;
@@ -39,6 +40,19 @@ public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient ite
     @Override
     public String type() {
         return "item";
+    }
+
+    public ItemStack stack(DynamicOps<?> ops) {
+        ItemStack copy = stack.copy();
+        if (!components.isEmpty()) {
+            if (ops == null) components.applyTo(copy);
+            else components.applyTo(copy, ops);
+        }
+        return copy;
+    }
+
+    public ItemStack resolvedStack() {
+        return stack(null);
     }
 
     @Override

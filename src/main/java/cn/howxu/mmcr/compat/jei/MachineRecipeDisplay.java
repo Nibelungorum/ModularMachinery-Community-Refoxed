@@ -8,6 +8,9 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import net.minecraft.resources.Identifier;
+import com.mojang.serialization.DynamicOps;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
@@ -37,37 +40,44 @@ public record MachineRecipeDisplay(
 ) {
 
     public static MachineRecipeDisplay from(MachineRecipe recipe) {
+        return from(recipe, null);
+    }
+
+    public static MachineRecipeDisplay from(MachineRecipe recipe, RegistryAccess registryAccess) {
+        DynamicOps<com.google.gson.JsonElement> componentOps = registryAccess == null
+                ? com.mojang.serialization.JsonOps.INSTANCE
+                : RegistryOps.create(com.mojang.serialization.JsonOps.INSTANCE, registryAccess);
         List<ItemInputDisplay> itemInputs = new ArrayList<>();
         List<FluidIngredient> fluidInputs = new ArrayList<>();
         List<Integer> fluidInputAmounts = new ArrayList<>();
         List<EnergyIngredient> energyInputs = new ArrayList<>();
         List<EnergyIngredient> energyOutputs = new ArrayList<>();
+        List<ItemOutputDisplay> itemOutputs = new ArrayList<>();
+        List<FluidStack> fluidOutputs = new ArrayList<>();
 
+        List<MachineOutput> outputs = new ArrayList<>();
         for (var requirement : recipe.runtimeRequirements()) {
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT) {
                 DataComponentPredicateSet components = item.components();
                 List<ItemStack> baseStacks = item.item().items()
                         .map(holder -> new ItemStack(holder.value(), item.count()))
                         .toList();
-                itemInputs.add(new ItemInputDisplay(baseStacks, item.count(), item.consumeChance(), components));
+                itemInputs.add(new ItemInputDisplay(baseStacks, item.count(), item.consumeChance(), components, componentOps));
+            } else if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
+                ItemStack stack = item.stack(componentOps);
+                itemOutputs.add(new ItemOutputDisplay(stack, item.chance()));
+                outputs.add(new MachineOutput.ItemOutput(stack, item.chance()));
             } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.INPUT) {
                 fluidInputs.add(fluid.fluid());
                 fluidInputAmounts.add(fluid.amount());
+            } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT) {
+                FluidStack stack = fluid.stack().copy();
+                fluidOutputs.add(stack);
+                outputs.add(new MachineOutput.FluidOutput(stack, fluid.chance()));
             } else if (requirement instanceof EnergyRequirement energy) {
                 EnergyIngredient ingredient = new EnergyIngredient(energy.fePerTick(), energy.io() == RecipeModifier.IOType.INPUT);
                 if (ingredient.input()) energyInputs.add(ingredient);
                 else energyOutputs.add(ingredient);
-            }
-        }
-
-        List<MachineOutput> outputs = recipe.runtimeMachineOutputs();
-        List<ItemOutputDisplay> itemOutputs = new ArrayList<>();
-        List<FluidStack> fluidOutputs = new ArrayList<>();
-        for (MachineOutput output : outputs) {
-            if (output instanceof MachineOutput.ItemOutput item) {
-                itemOutputs.add(new ItemOutputDisplay(item.stack(), item.chance()));
-            } else if (output instanceof MachineOutput.FluidOutput fluid) {
-                fluidOutputs.add(fluid.stack().copy());
             }
         }
 
@@ -99,22 +109,24 @@ public record MachineRecipeDisplay(
             List<ItemStack> baseStacks,
             int count,
             float consumeChance,
-            DataComponentPredicateSet components
+            DataComponentPredicateSet components,
+            DynamicOps<?> componentOps
     ) {
         public ItemInputDisplay {
             baseStacks = baseStacks.stream().map(ItemStack::copy).toList();
             components = components == null ? DataComponentPredicateSet.EMPTY : components;
+            componentOps = componentOps == null ? com.mojang.serialization.JsonOps.INSTANCE : componentOps;
         }
 
         public ItemInputDisplay(List<ItemStack> baseStacks, int count, float consumeChance) {
-            this(baseStacks, count, consumeChance, DataComponentPredicateSet.EMPTY);
+            this(baseStacks, count, consumeChance, DataComponentPredicateSet.EMPTY, com.mojang.serialization.JsonOps.INSTANCE);
         }
 
         public List<ItemStack> stacks() {
             return baseStacks.stream()
                     .map(stack -> {
                         ItemStack copy = stack.copy();
-                        components.applyTo(copy);
+                        components.applyTo(copy, componentOps);
                         return copy;
                     })
                     .toList();

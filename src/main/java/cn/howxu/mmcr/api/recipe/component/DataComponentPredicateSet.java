@@ -30,8 +30,11 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
     }
 
     public boolean matches(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return values.isEmpty();
+        ItemStack expected = new ItemStack(stack.getItem().builtInRegistryHolder(), Math.max(1, stack.getCount()));
+        applyTo(expected);
         for (var entry : values.entrySet()) {
-            if (!matches(stack, entry.getKey(), entry.getValue())) return false;
+            if (!matches(stack, expected, entry.getKey(), entry.getValue())) return false;
         }
         return true;
     }
@@ -39,6 +42,12 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
     public ItemStack displayStack(Item item, int count) {
         ItemStack stack = new ItemStack(item, count);
         applyTo(stack);
+        return stack;
+    }
+
+    public ItemStack displayStack(Item item, int count, DynamicOps<?> ops) {
+        ItemStack stack = new ItemStack(item, count);
+        applyTo(stack, ops);
         return stack;
     }
 
@@ -57,6 +66,12 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
         }
     }
 
+    public void applyTo(ItemStack stack, DynamicOps<?> ops) {
+        for (var entry : values.entrySet()) {
+            applyExactValue(stack, entry.getKey(), entry.getValue(), ops);
+        }
+    }
+
     public boolean isEmpty() {
         return values.isEmpty();
     }
@@ -65,7 +80,7 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
         DataComponentPatch.Builder patch = DataComponentPatch.builder();
         for (var entry : values.entrySet()) {
             if (!(entry.getValue() instanceof ComponentPredicate.Exact exact)) return Optional.empty();
-            Object value = ComponentPredicates.exactValue(entry.getKey(), exact);
+            Object value = ComponentPredicates.exactValue(entry.getKey(), exact, ItemStack.EMPTY);
             if (value == null) return Optional.empty();
             setPatchValue(patch, entry.getKey(), value);
         }
@@ -93,7 +108,8 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
             Map<DataComponentType<?>, ComponentPredicate> decoded = new LinkedHashMap<>();
             for (var entry : values.toList()) {
                 var key = entry.getFirst().asString().result();
-                var predicate = ComponentPredicate.CODEC.parse(entry.getSecond()).result();
+                var predicate = ComponentPredicate.CODEC.parse(entry.getSecond()).result()
+                        .or(() -> Optional.of(ComponentPredicate.exact(entry.getSecond())));
                 if (key.isEmpty() || predicate.isEmpty()) return DataResult.error(() -> "Invalid data component predicate");
                 Identifier id;
                 try {
@@ -109,13 +125,23 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
         });
     }
 
-    private static <T> boolean matches(ItemStack stack, DataComponentType<T> type, ComponentPredicate predicate) {
-        T value = stack.get(type);
-        return value != null && ComponentPredicates.matches(type, value, predicate);
+    private static <T> boolean matches(ItemStack actual, ItemStack expected, DataComponentType<T> type, ComponentPredicate predicate) {
+        T actualValue = actual.get(type);
+        if (actualValue == null) return false;
+        if (predicate instanceof ComponentPredicate.Exact) {
+            T expectedValue = expected.get(type);
+            return expectedValue != null ? expectedValue.equals(actualValue) : ComponentPredicates.matches(type, actualValue, predicate);
+        }
+        return ComponentPredicates.matches(type, actualValue, predicate);
     }
 
     private static <T> void applyExactValue(ItemStack stack, DataComponentType<T> type, ComponentPredicate predicate) {
-        T value = ComponentPredicates.exactValue(type, predicate);
+        applyExactValue(stack, type, predicate, null);
+    }
+
+    private static <T> void applyExactValue(ItemStack stack, DataComponentType<T> type, ComponentPredicate predicate,
+            DynamicOps<?> ops) {
+        T value = ComponentPredicates.exactValue(type, predicate, stack, ops);
         if (value == null && type == DataComponents.CUSTOM_NAME && predicate instanceof ComponentPredicate.TextValue text) {
             value = (T) text.value();
         }

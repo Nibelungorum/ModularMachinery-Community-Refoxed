@@ -101,6 +101,86 @@ class MachineRecipeTest {
     }
 
     @Test
+    void enchanted_output_components_use_bound_enchantment_holders_for_tooltips() {
+        bindItemComponents(Items.DIAMOND_SWORD);
+        var root = new JsonObject();
+        root.addProperty("id", "mmcr:tooltip_safe_enchanted_output");
+        root.addProperty("machine", "mmcr:machine");
+        root.addProperty("tick_time", 20);
+        var output = new JsonObject();
+        output.addProperty("id", "minecraft:diamond_sword");
+        var components = new JsonObject();
+        var enchantments = new JsonObject();
+        enchantments.addProperty("minecraft:sharpness", 2);
+        components.add("minecraft:enchantments", enchantments);
+        output.add("components", components);
+        root.add("outputs", itemOutputs(output));
+
+        MachineRecipe recipe = MachineRecipe.CODEC.codec().parse(componentJsonOps(), root).getOrThrow();
+
+        ItemRequirement outputRequirement = (ItemRequirement) recipe.requirements().stream()
+                .filter(ItemRequirement.class::isInstance)
+                .map(ItemRequirement.class::cast)
+                .filter(requirement -> requirement.io() == RecipeModifier.IOType.OUTPUT)
+                .findFirst().orElseThrow();
+        ItemStack stack = outputRequirement.stack(componentJsonOps());
+        var enchantment = stack.get(DataComponents.ENCHANTMENTS).keySet().iterator().next();
+        assertThat(enchantment.unwrapKey().orElseThrow().identifier()).isEqualTo(Identifier.parse("minecraft:sharpness"));
+    }
+
+    @Test
+    void input_requirement_components_match_runtime_stack_from_standard_json() {
+        bindItemComponents(Items.DIAMOND_SWORD);
+        var root = new JsonObject();
+        root.addProperty("id", "mmcr:component_input");
+        root.addProperty("machine", "mmcr:machine");
+        root.addProperty("tick_time", 20);
+        var input = itemRequirement("input", itemId(Items.DIAMOND_SWORD), 1);
+        var components = new JsonObject();
+        var enchantments = new JsonObject();
+        enchantments.addProperty("minecraft:sharpness", 2);
+        components.add("minecraft:enchantments", enchantments);
+        components.addProperty("minecraft:repair_cost", 1);
+        input.add("components", components);
+        root.add("requirements", requirements(input));
+
+        MachineRecipe recipe = MachineRecipe.CODEC.codec().parse(componentJsonOps(), root).getOrThrow();
+        ItemRequirement requirement = (ItemRequirement) recipe.requirements().getFirst();
+        ItemStack actual = new ItemStack(Items.DIAMOND_SWORD);
+        requirement.components().applyTo(actual, componentJsonOps());
+
+        assertThat(requirement.components().matches(actual)).isTrue();
+        assertThat(actual.get(DataComponents.ENCHANTMENTS).getLevel(enchantment("minecraft:sharpness"))).isEqualTo(2);
+        assertThat(actual.get(DataComponents.ENCHANTMENTS).keySet().iterator().next().unwrapKey().orElseThrow().identifier())
+                .isEqualTo(Identifier.parse("minecraft:sharpness"));
+        assertThat(actual.get(DataComponents.REPAIR_COST)).isEqualTo(1);
+    }
+
+    @Test
+    void output_requirement_components_roundtrip_from_standard_json() {
+        bindItemComponents(Items.DIAMOND_SWORD);
+        var root = new JsonObject();
+        root.addProperty("id", "mmcr:component_output");
+        root.addProperty("machine", "mmcr:machine");
+        root.addProperty("tick_time", 20);
+        var output = itemOutputRequirement(itemId(Items.DIAMOND_SWORD), 1);
+        var stack = output.getAsJsonObject("stack");
+        var components = new JsonObject();
+        var enchantments = new JsonObject();
+        enchantments.addProperty("minecraft:sharpness", 2);
+        components.add("minecraft:enchantments", enchantments);
+        components.addProperty("minecraft:repair_cost", 1);
+        stack.add("components", components);
+        root.add("requirements", requirements(output));
+
+        MachineRecipe recipe = MachineRecipe.CODEC.codec().parse(componentJsonOps(), root).getOrThrow();
+        ItemStack actual = recipe.outputs().getFirst();
+
+        assertThat(actual.get(DataComponents.ENCHANTMENTS).getLevel(enchantment("minecraft:sharpness"))).isEqualTo(2);
+        assertThat(actual.get(DataComponents.REPAIR_COST)).isEqualTo(1);
+    }
+
+    @Test
     void recipe_codec_roundtrips_parallelized_and_equality_includes_flag() {
         bindItemComponents(Items.IRON_BLOCK);
         MachineRecipe serial = new MachineRecipe(

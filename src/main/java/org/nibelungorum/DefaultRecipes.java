@@ -175,12 +175,15 @@ public final class DefaultRecipes {
     }
 
     private static MachineRecipe enchantedOutputRecipe(Identifier machineId, String path) {
+        var input = itemInput(Items.IRON_SWORD, 1);
         return new MachineRecipe(MMCR.id(path), machineId, 100,
-                List.of(itemInput(Items.IRON_SWORD, 1)),
-                List.of(itemOutputFromData("""
-                        {components: {"minecraft:enchantments": {"minecraft:sharpness": 2}, "minecraft:repair_cost": 1}, count: 1, id: "minecraft:iron_sword"}
-                        """)),
-                List.of(), 0, 1, true, List.of(), List.of(), true, List.of());
+                List.of(input),
+                List.of(),
+                List.of(), 0, 1, true, List.of(), List.of(
+                        MachineRequirement.fromInput(input),
+                        itemOutputRequirementFromData("""
+                                {components: {"minecraft:enchantments": {"minecraft:sharpness": 2}, "minecraft:repair_cost": 1}, count: 1, id: "minecraft:iron_sword"}
+                                """)), true, List.of());
     }
 
     private static MachineRecipe chancedOutputRecipe(Identifier machineId, String path) {
@@ -200,23 +203,21 @@ public final class DefaultRecipes {
                 componentsFromData(root), consumeChance);
     }
 
-    private static ItemStack itemOutputFromData(String itemData) {
+    private static MachineRequirement itemOutputRequirementFromData(String itemData) {
         JsonObject root = JsonParser.parseString(itemData).getAsJsonObject();
         Identifier id = Identifier.parse(root.get("id").getAsString());
         int count = root.has("count") ? root.get("count").getAsInt() : 1;
         ItemStack stack = new ItemStack(Holder.direct(BuiltInRegistries.ITEM.getValue(id), DataComponentMap.EMPTY), count);
-        componentsFromData(root).applyTo(stack);
-        return stack;
+        return new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, stack, 1F, List.of(), componentsFromData(root), 1F);
     }
 
     private static DataComponentPredicateSet componentsFromData(JsonObject root) {
-        var ops = JsonOps.INSTANCE;
         JsonObject components = root.getAsJsonObject("components");
         Map<DataComponentType<?>, ComponentPredicate> predicates = new java.util.LinkedHashMap<>();
         for (var entry : components.entrySet()) {
             DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(Identifier.parse(entry.getKey()));
             if (type == null) throw new IllegalArgumentException("Unknown data component type " + entry.getKey());
-            predicates.put(type, ComponentPredicate.exact(new Dynamic<>(ops, entry.getValue())));
+            predicates.put(type, ComponentPredicate.exact(new Dynamic<>(JsonOps.INSTANCE, entry.getValue())));
         }
         return new DataComponentPredicateSet(predicates);
     }

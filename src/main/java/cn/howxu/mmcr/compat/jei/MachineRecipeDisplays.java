@@ -2,7 +2,9 @@ package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
+import net.minecraft.core.RegistryAccess;
 
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -26,12 +28,13 @@ public final class MachineRecipeDisplays {
     }
 
     public static MachineRecipeDisplay forRecipe(MachineRecipe recipe) {
-        return MachineRecipeDisplay.from(recipe);
+        return MachineRecipeDisplay.from(recipe, registryAccess());
     }
 
     public static List<MachineRecipeDisplay> all() {
+        RegistryAccess registryAccess = registryAccess();
         return RecipeRegistry.recipes().stream()
-                .map(MachineRecipeDisplay::from)
+                .map(recipe -> MachineRecipeDisplay.from(recipe, registryAccess))
                 .sorted(ORDER)
                 .toList();
     }
@@ -41,5 +44,10 @@ public final class MachineRecipeDisplays {
                 MachineRecipeDisplay::machineId,
                 LinkedHashMap::new,
                 Collectors.toList()));
+    }
+
+    private static RegistryAccess registryAccess() {
+        Minecraft minecraft = Minecraft.getInstance();
+        return minecraft == null || minecraft.level == null ? null : minecraft.level.registryAccess();
     }
 }

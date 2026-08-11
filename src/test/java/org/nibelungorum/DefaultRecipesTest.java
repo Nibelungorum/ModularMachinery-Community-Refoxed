@@ -16,10 +16,15 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
+import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -363,6 +368,9 @@ class DefaultRecipesTest {
                 .getAsJsonObject()
                 .getAsJsonObject("minecraft:repair_cost");
         assertThat(repairCost.get("value").getAsInt()).isEqualTo(1);
+        assertThat(enchantedInput.components().matches(enchantedSword("minecraft:sharpness", 2))).isTrue();
+        assertThat(enchantedInput.components().matches(enchantedSword("minecraft:sharpness", 1))).isFalse();
+        assertThat(enchantedInput.components().matches(enchantedSword("minecraft:unbreaking", 3))).isFalse();
     }
 
     @Test
@@ -403,6 +411,21 @@ class DefaultRecipesTest {
                 .build());
         ItemStack stack = new ItemStack(item);
         stack.set(DataComponents.CUSTOM_NAME, Component.literal(name));
+        return stack;
+    }
+
+    private static ItemStack enchantedSword(String enchantmentId, int level) {
+        Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 1)
+                .build());
+        var lookup = net.minecraft.data.registries.VanillaRegistries.createLookup();
+        var enchantment = lookup.lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(ResourceKey.create(
+                Registries.ENCHANTMENT, Identifier.parse(enchantmentId)));
+        ItemStack stack = new ItemStack(Items.DIAMOND_SWORD);
+        var enchantments = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
+        enchantments.set(enchantment, level);
+        stack.set(DataComponents.ENCHANTMENTS, enchantments.toImmutable());
+        stack.set(DataComponents.REPAIR_COST, 1);
         return stack;
     }
 

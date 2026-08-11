@@ -5,6 +5,8 @@ import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.DynamicOps;
@@ -58,11 +60,11 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
     }
 
     static MachineRequirement itemOutput(ItemStack stack) {
-        return new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, stack.copy());
+        return itemOutput(stack, 1F);
     }
 
     static MachineRequirement itemOutput(ItemStack stack, float chance) {
-        return new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, stack.copy(), chance, List.of());
+        return new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, stack, chance, List.of(), DataComponentPredicateSet.EMPTY, 1F);
     }
 
     static MachineRequirement fluidOutput(FluidStack stack) {
@@ -89,7 +91,8 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
                 if (item.consumeChance() != 1F) builder = builder.add("consume_chance", ops.createFloat(item.consumeChance()));
                 return builder.build(prefix);
             }
-            var itemBuilder = builder.add("stack", item.stack(), ItemStack.CODEC);
+            ItemStack stack = item.stack(ops);
+            var itemBuilder = builder.add("stack", stack, ItemStack.CODEC);
             if (item.chance() != 1F) itemBuilder = itemBuilder.add("chance", ops.createFloat(item.chance()));
             return itemBuilder.build(prefix);
         }
@@ -142,8 +145,7 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
             List<String> tags = decodeTags(ops, input);
             if (io == RecipeModifier.IOType.OUTPUT) {
                 return ops.get(input, "stack")
-                        .flatMap(value -> ItemStack.CODEC.parse(ops, value))
-                        .map(stack -> new ItemRequirement(io, null, 0, stack, decodeChance(ops, input), tags));
+                        .flatMap(value -> decodeItemOutputStack(ops, value, io, decodeChance(ops, input), tags));
             }
             return ops.get(input, "item")
                     .flatMap(value -> net.minecraft.world.item.crafting.Ingredient.CODEC.parse(ops, value))
@@ -189,6 +191,25 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
         return new Dynamic<>(ops, input).get("components").result()
                 .map(value -> DataComponentPredicateSet.CODEC.parse(value))
                 .orElseGet(() -> DataResult.success(DataComponentPredicateSet.EMPTY));
+    }
+
+    private static <T> DataResult<MachineRequirement> decodeItemOutputStack(DynamicOps<T> ops, T stackInput,
+            RecipeModifier.IOType io, float chance, List<String> tags) {
+        Dynamic<T> stack = new Dynamic<>(ops, stackInput);
+        return stack.get("id").asString().flatMap(id -> {
+            Identifier itemId;
+            try {
+                itemId = Identifier.parse(id);
+            } catch (IllegalArgumentException e) {
+                return DataResult.error(() -> "Invalid item id " + id);
+            }
+            var item = BuiltInRegistries.ITEM.getValue(itemId);
+            if (item == null) return DataResult.error(() -> "Unknown item " + itemId);
+            int count = stack.get("count").asNumber().result().map(Number::intValue).orElse(1);
+            ItemStack baseStack = new ItemStack(item, count);
+            return decodeComponents(ops, stackInput)
+                    .map(components -> new ItemRequirement(io, null, 0, baseStack, chance, tags, components, 1F));
+        });
     }
 
     private static <T> float decodeConsumeChance(DynamicOps<T> ops, T input) {

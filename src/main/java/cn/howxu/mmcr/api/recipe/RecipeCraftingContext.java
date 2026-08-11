@@ -17,6 +17,9 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import com.mojang.serialization.DynamicOps;
+import com.mojang.serialization.JsonOps;
+import net.minecraft.resources.RegistryOps;
 import net.neoforged.neoforge.energy.IEnergyStorage;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
@@ -615,7 +618,7 @@ public final class RecipeCraftingContext {
         List<ItemBusBlockEntity> taggedOut = excludedLiveComponents(ItemBusBlockEntity.class, IOType.OUTPUT, item.tags());
         List<ItemBusBlockEntity> itemHatches = liveComponents(ItemBusBlockEntity.class, IOType.OUTPUT, item.tags());
         List<ItemOutputTransfer> transfers = new ArrayList<>();
-        ItemStack output = item.stack();
+        ItemStack output = item.stack(componentOps());
         ItemStack remaining = normalizeRecipeOutput(output);
         List<ItemBusBlockEntity> matched = new ArrayList<>();
         for (ItemOutputState state : itemStates) {
@@ -1045,14 +1048,15 @@ public final class RecipeCraftingContext {
             if (!(requirement instanceof ItemRequirement item) || item.io() != RecipeModifier.IOType.OUTPUT) continue;
             if (item.chance() <= 0F) continue;
             ItemOutputRoute route = requirementIndex < itemOutputRoutes.size() ? itemOutputRoutes.get(requirementIndex) : null;
-            if (route == null) return new RequirementFailure(requirementIndex, RequirementFailure.Kind.MISSING_OUTPUT, item.stack().getCount(), 0);
+            ItemStack output = item.stack(componentOps());
+            if (route == null) return new RequirementFailure(requirementIndex, RequirementFailure.Kind.MISSING_OUTPUT, output.getCount(), 0);
             int available = 0;
             for (ItemOutputTransfer transfer : route.transfers()) {
                 ItemOutputState state = itemOutputState(states, transfer);
                 ItemStack remaining = state.insert(transfer.stack(), new ArrayList<>());
                 available += transfer.stack().getCount() - remaining.getCount();
                 if (!remaining.isEmpty()) {
-                    return new RequirementFailure(requirementIndex, RequirementFailure.Kind.MISSING_OUTPUT, item.stack().getCount(), available);
+                    return new RequirementFailure(requirementIndex, RequirementFailure.Kind.MISSING_OUTPUT, output.getCount(), available);
                 }
             }
         }
@@ -1288,6 +1292,11 @@ public final class RecipeCraftingContext {
             normalizeSlotBeforeInsert(transfer.handler(), transfer.slot(), stack);
             transfer.handler().insertItem(transfer.slot(), stack, false);
         }
+    }
+
+    private DynamicOps<com.google.gson.JsonElement> componentOps() {
+        var level = controller.getLevel();
+        return level == null ? JsonOps.INSTANCE : RegistryOps.create(JsonOps.INSTANCE, level.registryAccess());
     }
 
     private static boolean canDrain(List<FluidInputTransfer> transfers) {
