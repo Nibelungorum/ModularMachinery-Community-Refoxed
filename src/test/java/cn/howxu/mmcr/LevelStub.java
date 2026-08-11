@@ -2,6 +2,8 @@ package cn.howxu.mmcr;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.sounds.SoundEvent;
@@ -111,6 +113,9 @@ public final class LevelStub {
             var level = (TestLevel) unsafe().allocateInstance(TestLevel.class);
             level.blocks = new HashMap<>(blocks);
             level.directSignals = new HashMap<>();
+            Field registryAccess = Level.class.getDeclaredField("registryAccess");
+            registryAccess.setAccessible(true);
+            registryAccess.set(level, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
             return level;
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Unable to create level stub", e);

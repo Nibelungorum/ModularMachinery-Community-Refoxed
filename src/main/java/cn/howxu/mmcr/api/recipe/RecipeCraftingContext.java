@@ -1432,10 +1432,10 @@ public final class RecipeCraftingContext {
         private boolean matches(MachineIngredient.ItemIngredient ingredient) {
             if (!ingredient.item().test(stack)) return false;
             if (itemMatchCache == null || ingredient.components().isEmpty()) {
-                return ingredient.components().matches(stack);
+                return ingredient.components().matches(stack, componentOps());
             }
             ItemMatchKey key = new ItemMatchKey(ingredient, stack.copyWithCount(1));
-            return itemMatchCache.computeIfAbsent(key, ignored -> ingredient.components().matches(stack));
+            return itemMatchCache.computeIfAbsent(key, ignored -> ingredient.components().matches(stack, componentOps()));
         }
 
         private ItemBusBlockEntity bus() {
