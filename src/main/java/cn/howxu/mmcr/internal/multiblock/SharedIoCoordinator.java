@@ -104,7 +104,8 @@ public final class SharedIoCoordinator {
         LaneKey cursor = cursors.get(domainId);
         int start = 0;
         if (cursor != null) {
-            while (start < requests.size() && requests.get(start).laneKey().compareTo(cursor) <= 0) start++;
+            while (start < requests.size()
+                    && compareControllerPos(requests.get(start).laneKey().controllerPos(), cursor.controllerPos()) <= 0) start++;
             if (start == requests.size()) start = 0;
         }
         for (int offset = 0; offset < requests.size(); offset++) {
@@ -114,6 +115,13 @@ public final class SharedIoCoordinator {
                 successful.add(request);
             }
         }
+    }
+
+    private static int compareControllerPos(BlockPos first, BlockPos second) {
+        int result = Integer.compare(first.getX(), second.getX());
+        if (result != 0) return result;
+        result = Integer.compare(first.getY(), second.getY());
+        return result != 0 ? result : Integer.compare(first.getZ(), second.getZ());
     }
 
     public sealed interface Request permits StartRequest, TickRequest, FinishRequest {

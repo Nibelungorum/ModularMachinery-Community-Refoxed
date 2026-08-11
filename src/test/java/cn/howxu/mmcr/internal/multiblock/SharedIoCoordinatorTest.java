@@ -56,6 +56,30 @@ class SharedIoCoordinatorTest {
     }
 
     @Test
+    void baseLaneStartsBeforeOtherLanesOfTheSameController() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = new StructureClaimRegistry.ResourceDomain(10L, 1L, Set.of(A));
+        List<String> committed = new ArrayList<>();
+
+        coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain,
+                new SharedIoCoordinator.LaneKey(A, "base"), 1L, 1,
+                ignored -> 1, ignored -> committed.add("base"), () -> true, () -> 1L));
+        coordinator.resolve(domain);
+        committed.clear();
+
+        coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain,
+                new SharedIoCoordinator.LaneKey(A, "base"), 1L, 1,
+                ignored -> 1, ignored -> committed.add("base"), () -> true, () -> 1L));
+        coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain,
+                new SharedIoCoordinator.LaneKey(A, "factory-0"), 1L, 1,
+                ignored -> 1, ignored -> committed.add("factory-0"), () -> true, () -> 1L));
+
+        coordinator.resolve(domain);
+
+        assertThat(committed).containsExactly("base", "factory-0");
+    }
+
+    @Test
     void startTickAndFinishRequestsUseIndependentCursors() {
         SharedIoCoordinator coordinator = new SharedIoCoordinator();
         StructureClaimRegistry.ResourceDomain domain = new StructureClaimRegistry.ResourceDomain(6L, 1L, Set.of(A, B, C));
