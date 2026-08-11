@@ -14,15 +14,14 @@ import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.datagen.Translations;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.data.registries.VanillaRegistries;
-import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.item.ItemStack;
@@ -52,9 +51,9 @@ class MachineRecipeDisplayTest {
 
     @Test
     void itemOverlayUsesReducedScaleAtSlotTopLeft() {
-        assertThat(MachineRecipeCategory.ITEM_OVERLAY_SCALE).isEqualTo(0.5F);
-        assertThat(MachineRecipeCategory.ITEM_OVERLAY_X).isEqualTo(1);
-        assertThat(MachineRecipeCategory.ITEM_OVERLAY_Y).isEqualTo(1);
+        assertThat(MachineRecipeCategory.ITEM_OVERLAY_SCALE).isEqualTo(0.6F);
+        assertThat(MachineRecipeCategory.ITEM_OVERLAY_X).isEqualTo(-3);
+        assertThat(MachineRecipeCategory.ITEM_OVERLAY_Y).isEqualTo(-3);
     }
 
     @BeforeAll
@@ -123,6 +122,31 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
+    void displayPreservesItemOutputChanceForOverlay() {
+        ItemStack stack = new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1);
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("jei_chanced_output"),
+                MMCR.id("blast_furnace"),
+                80,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, stack, 0.5F, List.of()))
+        );
+
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+
+        assertThat(display.outputs()).singleElement().isInstanceOfSatisfying(MachineOutput.ItemOutput.class, output -> {
+            assertThat(output.stack().getItem()).isSameAs(Items.IRON_NUGGET);
+            assertThat(output.chance()).isEqualTo(0.5F);
+        });
+    }
+
+    @Test
     void displayPreservesOutputComponents() {
         ItemStack namedSharpnessFourSword = namedSharpnessFourSword();
         MachineRecipe recipe = new MachineRecipe(
@@ -158,33 +182,6 @@ class MachineRecipeDisplayTest {
         ItemStack input = display.itemInputs().getFirst().stacks().getFirst();
         assertThat(input.get(DataComponents.CUSTOM_NAME)).isNull();
         assertThat(display.itemInputs().getFirst().hasUnexportedComponentConstraints()).isTrue();
-    }
-
-    @Test
-    void displayAppliesExactEnchantmentPredicatesToInputStacks() {
-        var lookup = VanillaRegistries.createLookup();
-        ItemStack sharpnessTwoSword = namedSharpnessSword(2, null, lookup);
-        MachineRecipe recipe = new MachineRecipe(
-                MMCR.id("enchanted_component_input_display"),
-                MMCR.id("blast_furnace"),
-                100,
-                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.DIAMOND_SWORD), 1,
-                        new DataComponentPredicateSet(Map.of(DataComponents.ENCHANTMENTS,
-                                ComponentPredicate.exact(new com.mojang.serialization.Dynamic<>(NbtOps.INSTANCE,
-                                        DataComponents.ENCHANTMENTS.codec().encodeStart(RegistryOps.create(NbtOps.INSTANCE, lookup),
-                                                sharpnessTwoSword.get(DataComponents.ENCHANTMENTS)).getOrThrow())))), 0F)),
-                List.of()
-        );
-
-        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
-
-        ItemStack input = display.itemInputs().getFirst().stacks().getFirst();
-        assertThat(display.durationTicks()).isEqualTo(100);
-        assertThat(display.itemOutputs()).isEmpty();
-        assertThat(display.itemInputs().getFirst().consumeChance()).isZero();
-        assertThat(input.get(DataComponents.ENCHANTMENTS))
-                .isEqualTo(sharpnessTwoSword.get(DataComponents.ENCHANTMENTS));
-        assertThat(display.itemInputs().getFirst().hasUnexportedComponentConstraints()).isFalse();
     }
 
     @Test

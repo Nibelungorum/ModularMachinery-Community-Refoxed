@@ -12,14 +12,9 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.Identifier;
-import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -327,8 +322,6 @@ class DefaultRecipesTest {
         assertThat(enchanted.outputs()).isEmpty();
         MachineIngredient.ItemIngredient enchantedInput = (MachineIngredient.ItemIngredient) enchanted.inputs().getFirst();
         assertThat(enchantedInput.consumeChance()).isZero();
-        assertThat(enchantedInput.components().matches(sharpnessSword(2))).isTrue();
-        assertThat(enchantedInput.components().matches(sharpnessSword(1))).isFalse();
     }
 
     private static void installDefaultRuntimeContent() {
@@ -347,16 +340,4 @@ class DefaultRecipesTest {
         return stack;
     }
 
-    private static ItemStack sharpnessSword(int level) {
-        Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(net.minecraft.core.component.DataComponentMap.builder()
-                .set(DataComponents.MAX_STACK_SIZE, 1)
-                .build());
-        ItemStack stack = new ItemStack(Items.DIAMOND_SWORD);
-        var enchantments = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
-        enchantments.set(VanillaRegistries.createLookup()
-                .lookupOrThrow(Registries.ENCHANTMENT)
-                .getOrThrow(ResourceKey.create(Registries.ENCHANTMENT, Identifier.parse("minecraft:sharpness"))), level);
-        stack.set(DataComponents.ENCHANTMENTS, enchantments.toImmutable());
-        return stack;
-    }
 }

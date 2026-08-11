@@ -14,16 +14,11 @@ import com.mojang.serialization.JsonOps;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.data.registries.VanillaRegistries;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.enchantment.ItemEnchantments;
-import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.Fluids;
@@ -145,10 +140,10 @@ public final class DefaultRecipes {
     }
 
     private static MachineRecipe enchantedNonConsumableRecipe(Identifier machineId, String path) {
-        return componentRecipe(machineId, path,
+        return new MachineRecipe(MMCR.id(path), machineId, 100,
                 List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.DIAMOND_SWORD), 1,
                         exactEnchantmentPredicate(2), 0F)),
-                List.of());
+                List.of(), List.of(), 0, 1, true, List.of(), List.of(), true, List.of());
     }
 
     private static DataComponentPredicateSet exactEnchantmentPredicate(int level) {
@@ -157,16 +152,6 @@ public final class DefaultRecipes {
                 ops.createString("minecraft:sharpness"), ops.createInt(level)));
         return new DataComponentPredicateSet(Map.of(DataComponents.ENCHANTMENTS,
                 ComponentPredicate.exact(new Dynamic<>(ops, value))));
-    }
-
-    private static ItemStack sharpnessSword(int level) {
-        bindItem(Items.DIAMOND_SWORD);
-        ItemStack stack = new ItemStack(Items.DIAMOND_SWORD);
-        var enchantments = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
-        enchantments.set(VanillaRegistries.createLookup()
-                .lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.SHARPNESS), level);
-        stack.set(DataComponents.ENCHANTMENTS, enchantments.toImmutable());
-        return stack;
     }
 
     private static DataComponentPredicateSet namedPredicate(String name) {

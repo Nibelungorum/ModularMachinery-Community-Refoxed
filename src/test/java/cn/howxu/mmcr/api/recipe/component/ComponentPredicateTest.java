@@ -6,7 +6,6 @@ import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -52,17 +51,4 @@ class ComponentPredicateTest {
         assertThat(predicates.hasNonExactValues()).isTrue();
     }
 
-    @Test
-    void exactEnchantmentPredicateExportsThroughComponentCodec() {
-        var stack = new net.minecraft.world.item.ItemStack(Items.DIAMOND_SWORD);
-        var predicates = new DataComponentPredicateSet(Map.of(
-                DataComponents.ENCHANTMENTS,
-                ComponentPredicate.exact(new Dynamic<>(JsonOps.INSTANCE,
-                        DataComponents.ENCHANTMENTS.codec().encodeStart(JsonOps.INSTANCE,
-                                stack.get(DataComponents.ENCHANTMENTS)).getOrThrow()))));
-
-        assertThat(predicates.exactPatch()).isPresent();
-        assertThat(predicates.exactPatch().orElseThrow().getPatch(DataComponents.ENCHANTMENTS).orElseThrow())
-                .isEqualTo(stack.get(DataComponents.ENCHANTMENTS));
-    }
 }

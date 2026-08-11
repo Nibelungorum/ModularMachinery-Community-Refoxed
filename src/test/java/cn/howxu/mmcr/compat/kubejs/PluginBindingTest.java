@@ -2,6 +2,8 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
@@ -62,6 +64,23 @@ class PluginBindingTest {
             assertThat(output.getCount()).isEqualTo(1);
             assertThat(output.getHoverName().getString()).isEqualTo("Better钻石剑");
         });
+    }
+
+    @Test
+    void public_recipe_builder_creates_chanced_item_output_requirement() {
+        new MachineRecipeBuilderJS("mmcr:chanced_diamond")
+                .machine("mmcr:alloy_furnace")
+                .chancedItemOutput("minecraft:diamond", 1, 0.5F)
+                .build();
+
+        assertThat(RecipeRegistry.getRecipe(MMCR.id("chanced_diamond")).requirements())
+                .singleElement()
+                .isInstanceOfSatisfying(ItemRequirement.class, output -> {
+                    assertThat(output.io()).isEqualTo(RecipeModifier.IOType.OUTPUT);
+                    assertThat(output.stack().getItem()).isSameAs(Items.DIAMOND);
+                    assertThat(output.stack().getCount()).isEqualTo(1);
+                    assertThat(output.chance()).isEqualTo(0.5F);
+                });
     }
 
     private static Object allocate(Class<?> type) {

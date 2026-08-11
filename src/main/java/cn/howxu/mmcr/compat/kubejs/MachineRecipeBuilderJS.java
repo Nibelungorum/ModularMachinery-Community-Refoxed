@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
@@ -12,6 +13,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
 import dev.latvian.mods.kubejs.recipe.RecipesKubeEvent;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -27,6 +30,7 @@ public class MachineRecipeBuilderJS {
     public int tickTime = 40;
     public final List<MachineIngredient> inputs = new ArrayList<>();
     public final List<ItemStack> outputs = new ArrayList<>();
+    private final List<Float> outputChances = new ArrayList<>();
     public int energyPerTick = 0;
     public boolean cancelIfPerTickFails = false;
     public final List<LevelRequirement> levelRequirements = new ArrayList<>();
@@ -87,8 +91,14 @@ public class MachineRecipeBuilderJS {
     }
 
     public MachineRecipeBuilderJS itemOutput(String itemId, int count) {
-        var item = BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId));
-        outputs.add(new ItemStack(item, count));
+        outputs.add(new ItemStack(Holder.direct(item(itemId), DataComponentMap.EMPTY), count));
+        outputChances.add(1F);
+        return this;
+    }
+
+    public MachineRecipeBuilderJS chancedItemOutput(String itemId, int count, float chance) {
+        outputs.add(new ItemStack(Holder.direct(item(itemId), DataComponentMap.EMPTY), count));
+        outputChances.add(chance);
         return this;
     }
 
@@ -145,6 +155,7 @@ public class MachineRecipeBuilderJS {
         }
 
         var recipeOutputs = new ArrayList<>(outputs);
+        var recipeOutputChances = new ArrayList<>(outputChances);
 
         if (!componentOutputs.isEmpty()) {
             if (!RecipesKubeEvent.INSTANCE.isBound()) {
@@ -155,11 +166,18 @@ public class MachineRecipeBuilderJS {
             for (int index = 0; index < componentOutputs.size(); index++) {
                 var output = componentOutputs.get(index);
                 recipeOutputs.add(output.index() + index, ItemStack.CODEC.parse(ops, output.stack()).getOrThrow());
+                recipeOutputChances.add(output.index() + index, 1F);
             }
         }
 
+        var requirements = new ArrayList<MachineRequirement>();
+        for (MachineIngredient input : recipeInputs) requirements.add(MachineRequirement.fromInput(input));
+        for (int index = 0; index < recipeOutputs.size(); index++) {
+            requirements.add(MachineRequirement.itemOutput(recipeOutputs.get(index), recipeOutputChances.get(index)));
+        }
+
         RecipeRegistry.register(new MachineRecipe(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(recipeOutputs), List.of(), 0, 1,
-                cancelIfPerTickFails, List.of(), List.of(), false, List.copyOf(levelRequirements)));
+                cancelIfPerTickFails, List.of(), List.copyOf(requirements), false, List.copyOf(levelRequirements)));
     }
 
     private record ComponentOutput(int index, JsonObject stack) {

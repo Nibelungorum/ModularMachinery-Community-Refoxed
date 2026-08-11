@@ -61,8 +61,16 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
         return new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, stack.copy());
     }
 
+    static MachineRequirement itemOutput(ItemStack stack, float chance) {
+        return new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, stack.copy(), chance, List.of());
+    }
+
     static MachineRequirement fluidOutput(FluidStack stack) {
         return new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, stack.copy());
+    }
+
+    static MachineRequirement fluidOutput(FluidStack stack, float chance) {
+        return new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, stack.copy(), chance, List.of());
     }
 
     private static <T> DataResult<T> encode(MachineRequirement requirement, DynamicOps<T> ops, T prefix) {
