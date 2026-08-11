@@ -41,6 +41,9 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private static final int OVERFLOW_TEXT_OFFSET_X = 5;
     static final int RECIPE_ARROW_X = 64;
     static final int RECIPE_ARROW_Y = 8;
+    static final int ITEM_OVERLAY_X = -3;
+    static final int ITEM_OVERLAY_Y = -3;
+    static final float ITEM_OVERLAY_SCALE = 0.6F;
 
     private final Machine machine;
     private final IRecipeType<MachineRecipeDisplay> recipeType;
@@ -216,11 +219,13 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             jeiSlot.addItemStacks(item.stacks());
             String overlayText = inputOverlayText(item.consumeChance(), Minecraft.getInstance().getLanguageManager().getSelected());
             if (!overlayText.isEmpty()) {
-                jeiSlot.setOverlay(new TextOverlayDrawable(overlayText, 0xFFFF4040), 16 - Minecraft.getInstance().font.width(overlayText), 8);
+                jeiSlot.setOverlay(new TextOverlayDrawable(overlayText, 0xFFFF4040, ITEM_OVERLAY_SCALE),
+                        ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
             }
             jeiSlot.addRichTooltipCallback((view, tooltip) -> appendInputTooltip(tooltip, item));
         } else {
-            jeiSlot.add(normalizeOutputStack(recipe.itemOutputs().get(entry.index())));
+            ItemStack stack = recipe.itemOutputs().get(entry.index());
+            jeiSlot.add(new ItemStack(stack.getItem().builtInRegistryHolder(), stack.getCount(), stack.getComponentsPatch()));
         }
     }
 
@@ -295,27 +300,24 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         return slot != null && mouseX >= slot.x() && mouseX < slot.x() + 16 && mouseY >= slot.y() && mouseY < slot.y() + 16;
     }
 
-    private static ItemStack normalizeOutputStack(ItemStack stack) {
-        if (stack.isComponentsPatchEmpty()) {
-            return new ItemStack(stack.getItem(), stack.getCount());
-        }
-        return stack;
-    }
-
-    private record TextOverlayDrawable(String text, int color) implements IDrawable {
+    private record TextOverlayDrawable(String text, int color, float scale) implements IDrawable {
         @Override
         public int getWidth() {
-            return Minecraft.getInstance().font.width(text);
+            return (int) Math.ceil(Minecraft.getInstance().font.width(text) * scale);
         }
 
         @Override
         public int getHeight() {
-            return Minecraft.getInstance().font.lineHeight;
+            return (int) Math.ceil(Minecraft.getInstance().font.lineHeight * scale);
         }
 
         @Override
         public void draw(GuiGraphicsExtractor guiGraphics, int xOffset, int yOffset) {
-            guiGraphics.text(Minecraft.getInstance().font, text, xOffset, yOffset, color, false);
+            guiGraphics.pose().pushMatrix();
+            guiGraphics.pose().translate(xOffset / scale, yOffset / scale);
+            guiGraphics.pose().scale(scale, scale);
+            guiGraphics.text(Minecraft.getInstance().font, text, 0, 0, color, false);
+            guiGraphics.pose().popMatrix();
         }
     }
 }

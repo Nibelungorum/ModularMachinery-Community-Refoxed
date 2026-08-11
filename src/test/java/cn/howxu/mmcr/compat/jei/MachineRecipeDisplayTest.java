@@ -42,6 +42,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class MachineRecipeDisplayTest {
 
+    @Test
+    void inputOverlayTextUsesKeepAndChanceLabels() {
+        assertThat(MachineRecipeCategory.inputOverlayText(0F, "zh_cn")).isEqualTo("不消耗");
+        assertThat(MachineRecipeCategory.inputOverlayText(0F, "en_us")).isEqualTo("Keep");
+        assertThat(MachineRecipeCategory.inputOverlayText(0.5F, "en_us")).isEqualTo("50%");
+        assertThat(MachineRecipeCategory.inputOverlayText(1F, "en_us")).isEmpty();
+    }
+
+    @Test
+    void itemOverlayUsesReducedScaleAtSlotTopLeft() {
+        assertThat(MachineRecipeCategory.ITEM_OVERLAY_SCALE).isEqualTo(0.5F);
+        assertThat(MachineRecipeCategory.ITEM_OVERLAY_X).isEqualTo(1);
+        assertThat(MachineRecipeCategory.ITEM_OVERLAY_Y).isEqualTo(1);
+    }
+
     @BeforeAll
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
