@@ -55,7 +55,7 @@ class DefaultRecipesTest {
 
         assertThat(machine).isNotNull();
         var recipes = RecipeRegistry.byMachine(machine);
-        assertThat(recipes).hasSize(20);
+        assertThat(recipes).hasSize(21);
 
         var recipe = RecipeRegistry.getRecipe(MMCR.id("blast_furnace_iron_to_nugget"));
         assertThat(recipe.id()).isEqualTo(MMCR.id("blast_furnace_iron_to_nugget"));
@@ -261,12 +261,12 @@ class DefaultRecipesTest {
         DefaultRecipes.ensureRegistered();
         DefaultRecipes.ensureRegistered();
 
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("blast_furnace"))).hasSize(20);
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("alloy_furnace"))).hasSize(22);
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker"))).hasSize(20);
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("reactor"))).hasSize(20);
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("thermal_smelting_furnace"))).hasSize(15);
-        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(97);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("blast_furnace"))).hasSize(21);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("alloy_furnace"))).hasSize(23);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker"))).hasSize(21);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("reactor"))).hasSize(21);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("thermal_smelting_furnace"))).hasSize(16);
+        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(102);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker")))
                 .anySatisfy(recipe -> assertThat(recipe.fluidOutputs()).isNotEmpty());
         assertThat(RecipeRegistry.recipes())
@@ -321,7 +321,7 @@ class DefaultRecipesTest {
         for (String machine : java.util.List.of("blast_furnace", "alloy_furnace", "cracker", "reactor", "thermal_smelting_furnace")) {
             assertThat(RecipeRegistry.byMachineId(MMCR.id(machine)))
                     .filteredOn(recipe -> recipe.id().getPath().startsWith(machine + "_component_"))
-                    .hasSize(10);
+                    .hasSize(11);
         }
 
         MachineRecipe chanced = RecipeRegistry.getRecipe(MMCR.id("blast_furnace_component_chanced_input"));
@@ -363,6 +363,11 @@ class DefaultRecipesTest {
                 .getAsJsonObject()
                 .getAsJsonObject("minecraft:repair_cost");
         assertThat(repairCost.get("value").getAsInt()).isEqualTo(1);
+    }
+
+    @Test
+    void recipesCanBuildBeforeVanillaDefaultComponentsAreBound() {
+        assertThat(DefaultRecipes.recipes()).containsKey(MMCR.id("blast_furnace_component_enchanted_output"));
     }
 
     @Test

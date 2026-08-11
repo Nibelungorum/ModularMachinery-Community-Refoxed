@@ -25,7 +25,7 @@ public sealed interface ComponentPredicate permits ComponentPredicate.Exact, Com
     boolean matches(Dynamic<?> candidate);
 
     static <T> ComponentPredicate exact(Dynamic<T> value) {
-        return new Exact(new Dynamic<>(JsonOps.INSTANCE, value.convert(JsonOps.INSTANCE).getValue()));
+        return new Exact(value);
     }
 
     static ComponentPredicate map(Map<String, ComponentPredicate> values) {
@@ -129,7 +129,7 @@ public sealed interface ComponentPredicate permits ComponentPredicate.Exact, Com
     record Exact(Dynamic<?> value) implements ComponentPredicate {
         @Override
         public boolean matches(Dynamic<?> candidate) {
-            return new Dynamic<>(JsonOps.INSTANCE, candidate.convert(JsonOps.INSTANCE).getValue()).equals(value);
+            return candidate.convert(JsonOps.INSTANCE).getValue().equals(value.convert(JsonOps.INSTANCE).getValue());
         }
     }
 

@@ -116,6 +116,7 @@ public final class DefaultRecipes {
                         List.of(componentItemInput(Items.DIAMOND, 1, "Keep", 0F)),
                         List.of(item(Items.EMERALD, 1))),
                 enchantedNonConsumableRecipe(machineId, prefix + "non_consumable_sharpness_input"),
+                enchantedOutputRecipe(machineId, prefix + "enchanted_output"),
                 componentRecipe(machineId, prefix + "input_to_plain_output",
                         List.of(componentItemInput(Items.DIAMOND, 1, "Input Only", 1F)),
                         List.of(item(Items.EMERALD, 1))),
@@ -173,6 +174,15 @@ public final class DefaultRecipes {
                 List.of(), List.of(), 0, 1, true, List.of(), List.of(), true, List.of());
     }
 
+    private static MachineRecipe enchantedOutputRecipe(Identifier machineId, String path) {
+        return new MachineRecipe(MMCR.id(path), machineId, 100,
+                List.of(itemInput(Items.IRON_SWORD, 1)),
+                List.of(itemOutputFromData("""
+                        {components: {"minecraft:enchantments": {"minecraft:sharpness": 2}, "minecraft:repair_cost": 1}, count: 1, id: "minecraft:iron_sword"}
+                        """)),
+                List.of(), 0, 1, true, List.of(), List.of(), true, List.of());
+    }
+
     private static MachineRecipe chancedOutputRecipe(Identifier machineId, String path) {
         return new MachineRecipe(MMCR.id(path), machineId, 20, List.of(itemInput(Items.IRON_INGOT, 1)), List.of(),
                 List.of(), 0, 1, true, List.of(), List.of(
@@ -188,6 +198,15 @@ public final class DefaultRecipes {
         int count = root.has("count") ? root.get("count").getAsInt() : 1;
         return new MachineIngredient.ItemIngredient(Ingredient.of(BuiltInRegistries.ITEM.getValue(id)), count,
                 componentsFromData(root), consumeChance);
+    }
+
+    private static ItemStack itemOutputFromData(String itemData) {
+        JsonObject root = JsonParser.parseString(itemData).getAsJsonObject();
+        Identifier id = Identifier.parse(root.get("id").getAsString());
+        int count = root.has("count") ? root.get("count").getAsInt() : 1;
+        ItemStack stack = new ItemStack(Holder.direct(BuiltInRegistries.ITEM.getValue(id), DataComponentMap.EMPTY), count);
+        componentsFromData(root).applyTo(stack);
+        return stack;
     }
 
     private static DataComponentPredicateSet componentsFromData(JsonObject root) {

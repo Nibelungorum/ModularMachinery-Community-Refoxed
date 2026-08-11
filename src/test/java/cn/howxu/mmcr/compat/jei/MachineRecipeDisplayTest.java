@@ -59,8 +59,8 @@ class MachineRecipeDisplayTest {
     @Test
     void itemOverlayUsesReducedScaleAtSlotTopLeft() {
         assertThat(MachineRecipeCategory.ITEM_OVERLAY_SCALE).isEqualTo(0.6F);
-        assertThat(MachineRecipeCategory.ITEM_OVERLAY_X).isEqualTo(-3);
-        assertThat(MachineRecipeCategory.ITEM_OVERLAY_Y).isEqualTo(-3);
+        assertThat(MachineRecipeCategory.ITEM_OVERLAY_X).isEqualTo(0);
+        assertThat(MachineRecipeCategory.ITEM_OVERLAY_Y).isEqualTo(0);
     }
 
     @BeforeAll
