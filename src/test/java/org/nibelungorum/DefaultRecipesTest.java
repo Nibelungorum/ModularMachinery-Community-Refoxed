@@ -7,10 +7,12 @@ import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
@@ -53,7 +55,7 @@ class DefaultRecipesTest {
 
         assertThat(machine).isNotNull();
         var recipes = RecipeRegistry.byMachine(machine);
-        assertThat(recipes).hasSize(19);
+        assertThat(recipes).hasSize(20);
 
         var recipe = RecipeRegistry.getRecipe(MMCR.id("blast_furnace_iron_to_nugget"));
         assertThat(recipe.id()).isEqualTo(MMCR.id("blast_furnace_iron_to_nugget"));
@@ -259,12 +261,12 @@ class DefaultRecipesTest {
         DefaultRecipes.ensureRegistered();
         DefaultRecipes.ensureRegistered();
 
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("blast_furnace"))).hasSize(19);
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("alloy_furnace"))).hasSize(21);
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker"))).hasSize(19);
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("reactor"))).hasSize(19);
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("thermal_smelting_furnace"))).hasSize(14);
-        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(92);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("blast_furnace"))).hasSize(20);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("alloy_furnace"))).hasSize(22);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker"))).hasSize(20);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("reactor"))).hasSize(20);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("thermal_smelting_furnace"))).hasSize(15);
+        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(97);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker")))
                 .anySatisfy(recipe -> assertThat(recipe.fluidOutputs()).isNotEmpty());
         assertThat(RecipeRegistry.recipes())
@@ -319,7 +321,7 @@ class DefaultRecipesTest {
         for (String machine : java.util.List.of("blast_furnace", "alloy_furnace", "cracker", "reactor", "thermal_smelting_furnace")) {
             assertThat(RecipeRegistry.byMachineId(MMCR.id(machine)))
                     .filteredOn(recipe -> recipe.id().getPath().startsWith(machine + "_component_"))
-                    .hasSize(9);
+                    .hasSize(10);
         }
 
         MachineRecipe chanced = RecipeRegistry.getRecipe(MMCR.id("blast_furnace_component_chanced_input"));
@@ -361,6 +363,26 @@ class DefaultRecipesTest {
                 .getAsJsonObject()
                 .getAsJsonObject("minecraft:repair_cost");
         assertThat(repairCost.get("value").getAsInt()).isEqualTo(1);
+    }
+
+    @Test
+    void complex_recipe_registers_three_inputs_and_three_outputs_with_correct_chances() {
+        installDefaultRuntimeContent();
+        DefaultRecipes.ensureRegistered();
+
+        MachineRecipe recipe = RecipeRegistry.getRecipe(MMCR.id("blast_furnace_component_complex"));
+        assertThat(recipe).isNotNull();
+        assertThat(recipe.inputs()).hasSize(3);
+        assertThat(recipe.outputs()).hasSize(3);
+
+        assertThat(recipe.requirements())
+                .filteredOn(r -> r instanceof ItemRequirement itemReq && r.io() == RecipeModifier.IOType.INPUT)
+                .hasSize(3)
+                .extracting(r -> ((ItemRequirement) r).consumeChance())
+                .containsExactly(0F, 0.5F, 0.25F);
+        assertThat(recipe.machineOutputs())
+                .extracting(MachineOutput::chance)
+                .containsExactly(1F, 0.5F, 0.25F);
     }
 
     private static void installDefaultRuntimeContent() {

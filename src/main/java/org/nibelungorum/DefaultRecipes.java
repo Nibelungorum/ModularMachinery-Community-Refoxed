@@ -131,8 +131,28 @@ public final class DefaultRecipes {
                 componentRecipe(machineId, prefix + "mixed_outputs",
                         List.of(itemInput(Items.IRON_INGOT, 1)),
                         List.of(namedItem(Items.GOLD_INGOT, 1, "Named Output"), item(Items.EMERALD, 1))),
-                chancedOutputRecipe(machineId, prefix + "chanced_outputs")
+                chancedOutputRecipe(machineId, prefix + "chanced_outputs"),
+                complexRecipe(machineId, prefix + "complex")
         );
+    }
+
+    private static MachineRecipe complexRecipe(Identifier machineId, String path) {
+        var stick = new MachineIngredient.ItemIngredient(Ingredient.of(Items.STICK), 1, DataComponentPredicateSet.EMPTY, 0F);
+        var ironNugget = new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_NUGGET), 1, DataComponentPredicateSet.EMPTY, 0.5F);
+        var goldNugget = new MachineIngredient.ItemIngredient(Ingredient.of(Items.GOLD_NUGGET), 1, DataComponentPredicateSet.EMPTY, 0.25F);
+        return new MachineRecipe(MMCR.id(path), machineId, 20,
+                List.of(stick, ironNugget, goldNugget),
+                List.of(item(Items.EMERALD, 1), item(Items.DIAMOND, 1), item(Items.REDSTONE, 1)),
+                List.of(), 0, 1, true,
+                List.of(),
+                List.of(
+                        MachineRequirement.fromInput(stick),
+                        MachineRequirement.fromInput(ironNugget),
+                        MachineRequirement.fromInput(goldNugget),
+                        MachineRequirement.itemOutput(item(Items.EMERALD, 1), 1F),
+                        MachineRequirement.itemOutput(item(Items.DIAMOND, 1), 0.5F),
+                        MachineRequirement.itemOutput(item(Items.REDSTONE, 1), 0.25F)),
+                true, List.of());
     }
 
     private static MachineRecipe componentRecipe(Identifier machineId, String path,

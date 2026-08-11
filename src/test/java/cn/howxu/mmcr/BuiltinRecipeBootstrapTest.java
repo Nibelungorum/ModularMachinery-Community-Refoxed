@@ -29,7 +29,7 @@ class BuiltinRecipeBootstrapTest {
         TestBootstrap.registerRuntimeBuiltins();
 
         assertThat(RecipeRegistry.byMachineId(MMCR.id("blast_furnace")))
-                .hasSize(19)
+                .hasSize(20)
                 .extracting(recipe -> recipe.id())
                 .contains(MMCR.id("blast_furnace_iron_to_nugget"));
     }
