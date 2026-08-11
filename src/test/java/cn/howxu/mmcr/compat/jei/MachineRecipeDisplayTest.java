@@ -188,6 +188,24 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
+    void displayResolvesComponentsFromExplicitItemOutputRequirements() {
+        DataComponentPredicateSet components = new DataComponentPredicateSet(Map.of(
+                DataComponents.REPAIR_COST, ComponentPredicate.exact(
+                        new com.mojang.serialization.Dynamic<>(com.mojang.serialization.JsonOps.INSTANCE,
+                                new com.google.gson.JsonPrimitive(1)))));
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("explicit_component_output_display"), MMCR.id("alloy_furnace"), 40,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.IRON_SWORD),
+                        1F, List.of(), components, 1F)
+        ));
+
+        ItemStack output = MachineRecipeDisplay.from(recipe).itemOutputs().getFirst().stack();
+
+        assertThat(output.get(DataComponents.REPAIR_COST)).isEqualTo(1);
+    }
+
+    @Test
     void displayAppliesTextComponentPredicatesToInputStacks() {
         MachineRecipe recipe = new MachineRecipe(
                 MMCR.id("component_input_display"),

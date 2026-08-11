@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import net.minecraft.resources.Identifier;
 import com.mojang.serialization.DynamicOps;
 import net.minecraft.core.RegistryAccess;
@@ -52,7 +53,8 @@ public record MachineRecipeDisplay(
         List<Integer> fluidInputAmounts = new ArrayList<>();
         List<EnergyIngredient> energyInputs = new ArrayList<>();
         List<EnergyIngredient> energyOutputs = new ArrayList<>();
-        for (var requirement : recipe.runtimeRequirements()) {
+        List<MachineRequirement> requirements = recipe.runtimeRequirements();
+        for (var requirement : requirements) {
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT) {
                 DataComponentPredicateSet components = item.components();
                 List<ItemStack> baseStacks = item.item().items()
@@ -69,14 +71,18 @@ public record MachineRecipeDisplay(
             }
         }
 
-        List<MachineOutput> outputs = recipe.runtimeMachineOutputs();
+        List<MachineOutput> outputs = new ArrayList<>();
         List<ItemOutputDisplay> itemOutputs = new ArrayList<>();
         List<FluidStack> fluidOutputs = new ArrayList<>();
-        for (MachineOutput output : outputs) {
-            if (output instanceof MachineOutput.ItemOutput item) {
-                itemOutputs.add(new ItemOutputDisplay(item.stack(), item.chance()));
-            } else if (output instanceof MachineOutput.FluidOutput fluid) {
-                fluidOutputs.add(fluid.stack().copy());
+        for (MachineRequirement requirement : requirements) {
+            if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
+                ItemStack stack = item.stack(componentOps);
+                itemOutputs.add(new ItemOutputDisplay(stack, item.chance()));
+                outputs.add(new MachineOutput.ItemOutput(stack, item.chance()));
+            } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT) {
+                FluidStack stack = fluid.stack().copy();
+                fluidOutputs.add(stack);
+                outputs.add(new MachineOutput.FluidOutput(stack, fluid.chance()));
             }
         }
         return new MachineRecipeDisplay(
