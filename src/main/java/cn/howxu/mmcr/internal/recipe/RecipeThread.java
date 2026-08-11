@@ -99,15 +99,17 @@ public abstract class RecipeThread {
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
                 structureVersion,
                 next.getMaxParallelism(),
-                requested -> {
-                    if (!isPendingStart(startToken, nextContext)) return 0;
-                    int granted = nextContext.commitStart(next, requested);
-                    if (granted <= 0) {
-                        clearPendingStart(startToken, nextContext);
-                        contextPool.returnContext(nextContext);
-                    }
-                    return granted;
-                },
+requested -> {
+            if (!isPendingStart(startToken, nextContext)) return 0;
+            int granted = nextContext.commitStart(next, requested);
+            if (granted <= 0) {
+                lastFailureUnloc = nextContext.getLastFailureUnloc();
+                status = Status.FAILED;
+                clearPendingStart(startToken, nextContext);
+                contextPool.returnContext(nextContext);
+            }
+            return granted;
+        },
                 granted -> {
                     if (!isPendingStart(startToken, nextContext)) return;
                     clearPendingStart(startToken, nextContext);
@@ -138,11 +140,16 @@ public abstract class RecipeThread {
     }
 
     public void tick() {
-        if (startPending && pendingStartContext != null
-                && (!pendingStartContext.isStructureVersionCurrent() || !isCurrentDomain(pendingStartDomain))) {
-            RecipeCraftingContext pendingContext = pendingStartContext;
-            clearPendingStart(pendingStartToken, pendingContext);
-            contextPool.returnContext(pendingContext);
+        if (startPending) {
+            if (pendingStartContext == null) {
+                startPending = false;
+                pendingStartDomain = null;
+                pendingStartToken = 0L;
+            } else if (!pendingStartContext.isStructureVersionCurrent() || !isCurrentDomain(pendingStartDomain)) {
+                RecipeCraftingContext pendingContext = pendingStartContext;
+                clearPendingStart(pendingStartToken, pendingContext);
+                contextPool.returnContext(pendingContext);
+            }
         }
         if (activeRecipe == null || context == null) return;
         if (tickPending && !isCurrentDomain(pendingTickDomain)) {
@@ -245,6 +252,7 @@ public abstract class RecipeThread {
             activeRecipe = null;
             context = null;
             status = Status.IDLE;
+            lastFailureUnloc = null;
         } else if (tickStatus == ActiveMachineRecipe.TickStatus.CANCELLED) {
             lastFailureUnloc = context.getLastFailureUnloc();
             contextPool.returnContext(context);

@@ -937,6 +937,65 @@ class FactoryRecipeSchedulerTest {
         assertThat(snapshot.lastFailureUnloc()).isEqualTo("gui.mmcr.controller.failure.missing_output");
     }
 
+    @Test
+    void activeThreadCountOnlyCountsThreadsWithAnActiveRecipe() throws Exception {
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2);
+        FactoryRecipeThread pendingThread = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());
+        FactoryRecipeThread workingThread = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());
+        setField(RecipeThread.class, pendingThread, "startPending", true);
+        workingThread.setActiveRecipeForTesting(activeRecipeWithParallelism(1));
+        scheduler.addThreadForTesting(pendingThread);
+        scheduler.addThreadForTesting(workingThread);
+
+        assertThat(scheduler.activeThreadCount()).isEqualTo(1);
+    }
+
+    @Test
+    void tickClearsStartPendingWhenContextHasBeenReleasedWithoutClearingTheFlag() throws Exception {
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());
+        setField(RecipeThread.class, thread, "startPending", true);
+        setField(RecipeThread.class, thread, "pendingStartDomain",
+                new cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.ResourceDomain(1L, 1L, Set.of()));
+
+        thread.tick();
+
+        assertThat(thread.isStartPending()).isFalse();
+        assertThat(thread.isIdle()).isTrue();
+    }
+
+    @Test
+    void asyncStartFailureSurfacesTheLastFailureUnloc() throws Exception {
+        // The base lane must commit its shared start so a single-thread controller
+        // can still pick up recipes that other shared components have not yet drained.
+        Items.IRON_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 64).build());
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 1));
+        BlockPos controllerPos = new BlockPos(0, 64, 0);
+        MachineControllerBlockEntity controller = controllerWithInput(MMCR.id("factory_async_failure"), controllerPos, input);
+        ServerLevel level = serverLevel(List.of(controller, input));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, input, "level", level);
+        StructureClaimRegistry registry = StructureClaimRegistry.get(level);
+        registry.claim(controllerPos, List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
+                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)));
+        StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_async_failure_recipe"), MMCR.id("factory_async_failure"),
+                20, List.of(), List.of(), List.of(), 0, 0, false, List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)), true);
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1, controller.getStructureVersion())).isTrue();
+        assertThat(thread.isStartPending()).isTrue();
+
+        SharedIoCoordinator.get(level).resolve(domain);
+
+        assertThat(thread.isStartPending()).isFalse();
+        assertThat(thread.getActiveRecipe()).isNotNull();
+        SharedIoCoordinator.discard(level);
+        StructureClaimRegistry.discard(level);
+    }
+
     private static ActiveMachineRecipe activeRecipeWithParallelism(int parallelism) {
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_parallel_" + parallelism), MMCR.id("factory_machine"), 20, List.of(), List.of());
         ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, parallelism);

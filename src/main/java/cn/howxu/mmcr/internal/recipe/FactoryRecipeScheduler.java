@@ -123,7 +123,9 @@ public final class FactoryRecipeScheduler {
     }
 
     public int activeThreadCount() {
-        return (int) threads.stream().filter(thread -> thread.getStatus() != RecipeThread.Status.FAILED && !thread.isIdle()).count();
+        return (int) threads.stream()
+                .filter(thread -> thread.getStatus() != RecipeThread.Status.FAILED && thread.getActiveRecipe() != null)
+                .count();
     }
 
     public int usedParallelism() {
