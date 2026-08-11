@@ -42,6 +42,11 @@ import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.util.ProblemReporter;
 import net.neoforged.neoforge.items.ItemStackHandler;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -811,6 +816,70 @@ class FactoryRecipeSchedulerTest {
         assertThat(scheduler.allThreads()).filteredOn(FactoryRecipeThread::isCoreThread).hasSize(1);
     }
 
+    @Test
+    void paused_factory_threads_round_trip_their_recipe_progress_and_context_without_failure_state() throws Exception {
+        MachineControllerBlockEntity controller = controller(MMCR.id("paused_factory_machine"));
+        MachineRecipe firstRecipe = recipe("paused_factory_first", 0);
+        MachineRecipe secondRecipe = recipe("paused_factory_second", 0);
+        cn.howxu.mmcr.api.recipe.RecipeRegistry.register(firstRecipe);
+        cn.howxu.mmcr.api.recipe.RecipeRegistry.register(secondRecipe);
+        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(3, pool);
+        FactoryRecipeThread first = FactoryRecipeThread.simple(controller, pool);
+        FactoryRecipeThread second = FactoryRecipeThread.simple(controller, pool);
+        ActiveMachineRecipe firstActive = new ActiveMachineRecipe(firstRecipe, 1);
+        ActiveMachineRecipe secondActive = new ActiveMachineRecipe(secondRecipe, 1);
+        firstActive.setTick(3);
+        secondActive.setTick(7);
+        first.setActiveRecipeForTesting(firstActive);
+        second.setActiveRecipeForTesting(secondActive);
+        setField(RecipeThread.class, first, "context", new cn.howxu.mmcr.api.recipe.RecipeCraftingContext(controller));
+        setField(RecipeThread.class, second, "context", new cn.howxu.mmcr.api.recipe.RecipeCraftingContext(controller));
+        setField(RecipeThread.class, first, "lastFailureUnloc", "mmcr.failure.first");
+        setField(RecipeThread.class, second, "lastFailureUnloc", "mmcr.failure.second");
+        scheduler.addThreadForTesting(first);
+        scheduler.addThreadForTesting(second);
+        scheduler.pause();
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        scheduler.save(output);
+        FactoryRecipeScheduler loaded = new FactoryRecipeScheduler(3, pool);
+        loaded.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()), output.buildResult()), controller, pool);
+
+        assertThat(loaded.allThreads()).hasSize(3);
+        List<FactoryRecipeThread> restored = loaded.allThreads().subList(1, 3);
+        assertThat(restored).extracting(thread -> thread.getActiveRecipe().getRecipe().id())
+                .containsExactly(firstRecipe.id(), secondRecipe.id());
+        assertThat(restored).extracting(thread -> thread.getActiveRecipe().getTick()).containsExactly(3, 7);
+        assertThat(restored).extracting(thread -> thread.getActiveRecipe().getTotalTick()).containsExactly(20, 20);
+        assertThat(restored).extracting(thread -> fieldValue(RecipeThread.class, thread, "context")).doesNotContainNull();
+        assertThat(restored).extracting(FactoryRecipeThread::getLastFailureUnloc)
+                .containsOnlyNulls();
+
+        assertThat(restored).extracting(thread -> thread.getActiveRecipe().getTick()).containsExactly(3, 7);
+        loaded.tickThreads(controller, List.of(), controller.getStructureVersion(), 1, pool);
+        assertThat(restored).extracting(thread -> thread.getActiveRecipe().getTick()).containsExactly(3, 7);
+        loaded.resume();
+        loaded.tickThreads(controller, List.of(), controller.getStructureVersion(), 1, pool);
+        assertThat(restored).extracting(thread -> thread.getActiveRecipe().getTick()).containsExactly(4, 8);
+    }
+
+    @Test
+    void thread_snapshot_exposes_waiting_failure_without_marking_thread_running() throws Exception {
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1);
+        FactoryRecipeThread thread = FactoryRecipeThread.base(null, RecipeCraftingContextPool.global());
+        setField(RecipeThread.class, thread, "status", RecipeThread.Status.FAILED);
+        setField(RecipeThread.class, thread, "lastFailureUnloc", "gui.mmcr.controller.failure.missing_output");
+        scheduler.addThreadForTesting(thread);
+
+        FactoryRecipeScheduler.ThreadSnapshot snapshot = scheduler.threadSnapshots().get(1);
+
+        assertThat(snapshot.active()).isFalse();
+        assertThat(snapshot.lastFailureUnloc()).isEqualTo("gui.mmcr.controller.failure.missing_output");
+    }
+
     private static ActiveMachineRecipe activeRecipeWithParallelism(int parallelism) {
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_parallel_" + parallelism), MMCR.id("factory_machine"), 20, List.of(), List.of());
         ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, parallelism);
@@ -954,6 +1023,13 @@ class FactoryRecipeSchedulerTest {
         @Override public boolean hasChunk(int chunkX, int chunkZ) { return true; }
         @Override public void invalidateCapabilities(BlockPos pos) { }
         @Override public long getGameTime() { return gameTime; }
+
+    }
+
+    private static Object fieldValue(Class<?> declaringClass, Object target, String name) throws ReflectiveOperationException {
+        Field field = declaringClass.getDeclaredField(name);
+        field.setAccessible(true);
+        return field.get(target);
     }
 
     private static final class FakeLane implements FactoryRecipeScheduler.Lane {

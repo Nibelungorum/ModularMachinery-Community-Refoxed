@@ -52,7 +52,9 @@ public abstract class RecipeThread {
         RecipeSearchResult result = new RecipeSearchTask(controller, machineId, structureVersion,
                 availableParallelism, candidates, contextPool).compute();
         if (!result.success()) {
-            lastFailureUnloc = result.failureUnloc();
+            lastFailureUnloc = result.levelFailure() == null
+                    ? result.failureUnloc()
+                    : "gui.mmcr.controller.failure.level_insufficient";
             status = Status.FAILED;
             return false;
         }
@@ -93,6 +95,7 @@ public abstract class RecipeThread {
         context = nextContext;
         status = Status.WORKING;
         lastFailureUnloc = null;
+        controller.clearLastFailureOnRecipeStart();
         onStarted();
         return true;
     }
@@ -256,6 +259,12 @@ public abstract class RecipeThread {
             activeRecipe = null;
             context = null;
             status = Status.IDLE;
+        } else if (tickStatus == ActiveMachineRecipe.TickStatus.CANCELLED) {
+            lastFailureUnloc = context.getLastFailureUnloc();
+            contextPool.returnContext(context);
+            activeRecipe = null;
+            context = null;
+            status = Status.FAILED;
         } else if (tickStatus == ActiveMachineRecipe.TickStatus.WAITING) {
             lastFailureUnloc = recipeContext.getLastFailureUnloc();
             status = Status.WAITING;

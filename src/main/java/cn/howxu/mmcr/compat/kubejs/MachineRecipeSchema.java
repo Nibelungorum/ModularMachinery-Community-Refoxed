@@ -14,6 +14,8 @@ import dev.latvian.mods.kubejs.recipe.component.RecipeComponentType;
 import dev.latvian.mods.kubejs.recipe.component.StringComponent;
 import dev.latvian.mods.kubejs.recipe.schema.RecipeSchema;
 import dev.latvian.mods.kubejs.recipe.schema.RecipeSchemaRegistry;
+import dev.latvian.mods.kubejs.recipe.schema.function.RecipeFunctionInstance;
+import dev.latvian.mods.kubejs.recipe.schema.function.ResolvedRecipeSchemaFunction;
 import dev.latvian.mods.kubejs.util.JsonUtils;
 import dev.latvian.mods.rhino.type.TypeInfo;
 import net.minecraft.resources.ResourceKey;
@@ -55,13 +57,40 @@ public final class MachineRecipeSchema {
             new RecipeKey<>(BooleanComponent.BOOLEAN, "cancelIfPerTickFails", ComponentRole.OTHER).optional(false);
 
     public static final RecipeSchema SCHEMA = new RecipeSchema(MACHINE, TICK_TIME, INPUTS, ENERGY_PER_TICK, OUTPUTS, MODIFIERS, MAX_THREADS, PARALLELIZED, CANCEL_IF_PER_TICK_FAILS)
-            .factory(MachineRecipeFactory.INSTANCE);
+            .factory(MachineRecipeFactory.INSTANCE)
+            .function(new RecipeFunctionInstance("requiresLevel", List.of(StringComponent.ID, StringComponent.ID),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() {
+                            return List.of(StringComponent.ID, StringComponent.ID);
+                        }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            var typeId = (String) args.get(0);
+                            var levelId = (String) args.get(1);
+                            var level = cn.howxu.mmcr.api.machine.level.MachineLevelRegistry.getLevel(net.minecraft.resources.Identifier.parse(levelId));
+                            if (level == null || !level.typeId().equals(net.minecraft.resources.Identifier.parse(typeId))) {
+                                throw new IllegalArgumentException("Machine level " + levelId + " does not belong to type " + typeId);
+                            }
+                            var levels = cx.recipe().json.getAsJsonArray("level_requirements");
+                            if (levels == null) {
+                                levels = new com.google.gson.JsonArray();
+                                cx.recipe().json.add("level_requirements", levels);
+                            }
+                            var requirement = new com.google.gson.JsonObject();
+                            requirement.addProperty("type", typeId);
+                            requirement.addProperty("level", levelId);
+                            levels.add(requirement);
+                            cx.recipe().save();
+                        }
+                    }));
 
     private MachineRecipeSchema() {
     }
 
     public static void register(RecipeSchemaRegistry registry) {
-        registry.register(MMCR.id("machine_recipe"), SCHEMA);
+        registry.register(MachineRecipeFactory.TYPE, SCHEMA);
     }
 
     private record JsonElementComponent() implements RecipeComponent<JsonElement> {

@@ -15,6 +15,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.Block;
 import org.nibelungorum.DefaultMachines;
+import org.nibelungorum.DefaultMachineLevels;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -126,6 +127,41 @@ class DefaultMachinesTest {
             assertThat(mod.getOperation()).isEqualTo(cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.Operation.MULTIPLY);
             assertThat(mod.getModifier()).isEqualTo(2.0F);
         });
+    }
+
+    @Test
+    void structures_install_thermal_smelting_furnace_with_replaceable_basalt_slots() {
+        installDefaultStructures();
+
+        var machine = MachineRegistry.getMachine(MMCR.id("thermal_smelting_furnace"));
+
+        assertThat(machine).isNotNull();
+        assertThat(machine.localizedName()).isEqualTo("热能冶炼炉");
+        assertThat(machine.parallelizable()).isTrue();
+        assertThat(machine.hasFactory()).isTrue();
+        assertThat(machine.maxParallelism()).isEqualTo(Integer.MAX_VALUE);
+        assertThat(machine.controller().id()).isEqualTo(MMCR.id("thermal_smelting_furnace_controller"));
+        assertThat(machine.pattern().get(BlockPos.ZERO))
+                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine.registryName()).get()));
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(net.minecraft.world.level.block.Blocks.SMOOTH_BASALT.defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(ModBlocks.BLOCKS.get("parallel_controller_4").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().pattern().values())
+                .contains(new BlockPredicate.OfBlock(net.minecraft.world.level.block.Blocks.REINFORCED_DEEPSLATE));
+        assertThat(requirementIds(machine)).contains("energy_input_hatch>=tiny", "item_input_bus>=tiny", "item_output_bus>=tiny");
+        var levelSlots = MachineStructureRegistry.dynamicSnapshot().get(MMCR.id("thermal_smelting_furnace")).levelSlots();
+        assertThat(levelSlots)
+                .isNotEmpty()
+                .allSatisfy((position, typeId) -> assertThat(typeId).isEqualTo(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE));
+        var coilSlot = machine.pattern().get(levelSlots.keySet().iterator().next());
+        assertThat(coilSlot.matches(net.minecraft.world.level.block.Blocks.COPPER_BLOCK.defaultBlockState())).isTrue();
+        assertThat(coilSlot.matches(net.minecraft.world.level.block.Blocks.IRON_BLOCK.defaultBlockState())).isTrue();
+        assertThat(coilSlot.matches(net.minecraft.world.level.block.Blocks.GOLD_BLOCK.defaultBlockState())).isTrue();
+        assertThat(coilSlot.matches(net.minecraft.world.level.block.Blocks.DIAMOND_BLOCK.defaultBlockState())).isTrue();
+        assertThat(coilSlot.matches(net.minecraft.world.level.block.Blocks.EMERALD_BLOCK.defaultBlockState())).isFalse();
     }
 
     @Test

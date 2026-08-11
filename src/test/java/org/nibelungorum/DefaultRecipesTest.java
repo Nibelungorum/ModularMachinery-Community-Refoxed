@@ -4,11 +4,21 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
+import com.google.gson.JsonObject;
+import com.mojang.serialization.JsonOps;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.AfterEach;
@@ -45,7 +55,7 @@ class DefaultRecipesTest {
 
         assertThat(machine).isNotNull();
         var recipes = RecipeRegistry.byMachine(machine);
-        assertThat(recipes).hasSize(10);
+        assertThat(recipes).hasSize(21);
 
         var recipe = RecipeRegistry.getRecipe(MMCR.id("blast_furnace_iron_to_nugget"));
         assertThat(recipe.id()).isEqualTo(MMCR.id("blast_furnace_iron_to_nugget"));
@@ -59,6 +69,26 @@ class DefaultRecipesTest {
         assertThat(recipe.outputs().getFirst().getItem()).isEqualTo(net.minecraft.world.item.Items.IRON_NUGGET);
         assertThat(recipe.outputs().getFirst().getCount()).isEqualTo(1);
         assertThat(recipe.isParallelized()).isTrue();
+    }
+
+    @Test
+    void component_recipe_includes_chanced_item_and_fluid_outputs() {
+        installDefaultRuntimeContent();
+        DefaultRecipes.ensureRegistered();
+
+        var recipe = RecipeRegistry.getRecipe(MMCR.id("blast_furnace_component_chanced_outputs"));
+
+        assertThat(recipe).isNotNull();
+        assertThat(recipe.machineOutputs()).hasSize(3);
+        assertThat(recipe.machineOutputs().get(0).chance()).isEqualTo(1F);
+        assertThat(recipe.machineOutputs().get(1).chance()).isEqualTo(0.5F);
+        assertThat(recipe.machineOutputs().get(2).chance()).isEqualTo(0.25F);
+        assertThat(recipe.outputs()).extracting(stack -> stack.getItem())
+                .containsExactly(Items.EMERALD, Items.DIAMOND);
+        assertThat(recipe.fluidOutputs()).singleElement().satisfies(stack -> {
+            assertThat(stack.getFluid()).isEqualTo(Fluids.LAVA);
+            assertThat(stack.getAmount()).isEqualTo(250);
+        });
     }
 
     @Test
@@ -87,6 +117,73 @@ class DefaultRecipesTest {
             assertThat(stack.getItem()).isEqualTo(Items.NETHERITE_INGOT);
             assertThat(stack.getCount()).isEqualTo(1);
         });
+    }
+
+    @Test
+    void ensureRegistered_publishes_thermal_smelting_furnace_recipe_with_four_thread_limit() {
+        installDefaultRuntimeContent();
+        DefaultRecipes.ensureRegistered();
+
+        var recipe = RecipeRegistry.getRecipe(MMCR.id("thermal_smelting_furnace_coal_iron_to_netherite_scrap"));
+
+        assertThat(recipe.machineId()).isEqualTo(MMCR.id("thermal_smelting_furnace"));
+        assertThat(recipe.tickTime()).isEqualTo(80);
+        assertThat(recipe.maxThreads()).isEqualTo(4);
+        assertThat(recipe.inputs()).hasSize(3);
+        assertThat(recipe.inputs().get(0)).isInstanceOf(MachineIngredient.ItemIngredient.class);
+        assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(0)).item().items().toList().getFirst().value()).isEqualTo(Items.COAL);
+        assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(0)).count()).isEqualTo(1);
+        assertThat(recipe.inputs().get(1)).isInstanceOf(MachineIngredient.ItemIngredient.class);
+        assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(1)).item().items().toList().getFirst().value()).isEqualTo(Items.RAW_IRON);
+        assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(1)).count()).isEqualTo(1);
+        assertThat(recipe.inputs().get(2)).isInstanceOf(MachineIngredient.EnergyIngredient.class);
+        assertThat(((MachineIngredient.EnergyIngredient) recipe.inputs().get(2)).fePerTick()).isEqualTo(200);
+        assertThat(recipe.outputs()).singleElement().satisfies(stack -> {
+            assertThat(stack.getItem()).isEqualTo(Items.IRON_INGOT);
+            assertThat(stack.getCount()).isEqualTo(1);
+        });
+    }
+
+    @Test
+    void thermal_smelting_furnace_recipes_are_progressively_distinct() {
+        installDefaultRuntimeContent();
+        var recipes = DefaultRecipes.recipes().values().stream()
+                .filter(recipe -> recipe.machineId().equals(MMCR.id("thermal_smelting_furnace")))
+                .filter(recipe -> !recipe.id().getPath().contains("_component_"))
+                .toList();
+
+        assertThat(recipes).hasSize(5);
+        assertThat(recipes).extracting(recipe -> recipe.tickTime()).containsExactlyInAnyOrder(80, 120, 160, 200, 240);
+        assertThat(recipes).extracting(recipe -> ((MachineIngredient.EnergyIngredient) recipe.inputs().get(2)).fePerTick())
+                .containsExactlyInAnyOrder(200, 400, 800, 1_200, 2_000);
+        assertThat(recipes).extracting(recipe -> recipe.outputs().getFirst().getItem())
+                .containsExactlyInAnyOrder(Items.IRON_INGOT, Items.COPPER_INGOT, Items.GOLD_INGOT, Items.DIAMOND, Items.NETHERITE_INGOT);
+    }
+
+    @Test
+    void thermal_smelting_furnace_recipes_require_each_coil_level() {
+        installDefaultRuntimeContent();
+        DefaultRecipes.ensureRegistered();
+
+        assertThat(RecipeRegistry.getRecipe(MMCR.id("thermal_smelting_furnace_copper"))
+                .levelRequirements()).singleElement().satisfies(requirement -> {
+            assertThat(requirement.typeId()).isEqualTo(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE);
+            assertThat(requirement.levelId()).isEqualTo(DefaultMachineLevels.COPPER_COIL);
+        });
+        assertThat(RecipeRegistry.getRecipe(MMCR.id("thermal_smelting_furnace_iron"))
+                .levelRequirements()).singleElement().extracting(requirement -> requirement.levelId())
+                .isEqualTo(DefaultMachineLevels.IRON_COIL);
+        assertThat(RecipeRegistry.getRecipe(MMCR.id("thermal_smelting_furnace_gold"))
+                .levelRequirements()).singleElement().extracting(requirement -> requirement.levelId())
+                .isEqualTo(DefaultMachineLevels.GOLD_COIL);
+        assertThat(RecipeRegistry.getRecipe(MMCR.id("thermal_smelting_furnace_diamond"))
+                .levelRequirements()).singleElement().extracting(requirement -> requirement.levelId())
+                .isEqualTo(DefaultMachineLevels.DIAMOND_COIL);
+
+        assertThat(MachineLevelRegistry.getLevel(DefaultMachineLevels.COPPER_COIL).modifier().durationMultiplier()).isEqualTo(0.9D);
+        assertThat(MachineLevelRegistry.getLevel(DefaultMachineLevels.IRON_COIL).modifier().durationMultiplier()).isEqualTo(0.8D);
+        assertThat(MachineLevelRegistry.getLevel(DefaultMachineLevels.GOLD_COIL).modifier().durationMultiplier()).isEqualTo(0.7D);
+        assertThat(MachineLevelRegistry.getLevel(DefaultMachineLevels.DIAMOND_COIL).modifier().durationMultiplier()).isEqualTo(0.6D);
     }
 
     @Test
@@ -164,11 +261,12 @@ class DefaultRecipesTest {
         DefaultRecipes.ensureRegistered();
         DefaultRecipes.ensureRegistered();
 
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("blast_furnace"))).hasSize(10);
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("alloy_furnace"))).hasSize(12);
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker"))).hasSize(10);
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("reactor"))).hasSize(10);
-        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(42);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("blast_furnace"))).hasSize(21);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("alloy_furnace"))).hasSize(23);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker"))).hasSize(21);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("reactor"))).hasSize(21);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("thermal_smelting_furnace"))).hasSize(16);
+        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(102);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker")))
                 .anySatisfy(recipe -> assertThat(recipe.fluidOutputs()).isNotEmpty());
         assertThat(RecipeRegistry.recipes())
@@ -215,7 +313,97 @@ class DefaultRecipesTest {
         assertThat(recipe.outputs()).hasSize(25);
     }
 
+    @Test
+    void default_recipes_include_data_component_examples_for_every_default_machine() {
+        installDefaultRuntimeContent();
+        DefaultRecipes.ensureRegistered();
+
+        for (String machine : java.util.List.of("blast_furnace", "alloy_furnace", "cracker", "reactor", "thermal_smelting_furnace")) {
+            assertThat(RecipeRegistry.byMachineId(MMCR.id(machine)))
+                    .filteredOn(recipe -> recipe.id().getPath().startsWith(machine + "_component_"))
+                    .hasSize(11);
+        }
+
+        MachineRecipe chanced = RecipeRegistry.getRecipe(MMCR.id("blast_furnace_component_chanced_input"));
+        MachineIngredient.ItemIngredient chancedInput = (MachineIngredient.ItemIngredient) chanced.inputs().getFirst();
+        assertThat(chancedInput.consumeChance()).isEqualTo(0.5F);
+        assertThat(chancedInput.components().matches(namedStack(Items.DIAMOND, "Chance"))).isTrue();
+        assertThat(chancedInput.components().matches(new ItemStack(Items.DIAMOND))).isFalse();
+
+        MachineIngredient.ItemIngredient keptInput = (MachineIngredient.ItemIngredient) RecipeRegistry
+                .getRecipe(MMCR.id("blast_furnace_component_non_consumable_input"))
+                .inputs().getFirst();
+        assertThat(keptInput.consumeChance()).isZero();
+
+        assertThat(RecipeRegistry.getRecipe(MMCR.id("blast_furnace_component_plain_input_to_output"))
+                .outputs().getFirst().get(DataComponents.CUSTOM_NAME)).isEqualTo(Component.literal("Output Only"));
+        assertThat(RecipeRegistry.getRecipe(MMCR.id("blast_furnace_component_mixed_outputs"))
+                .outputs()).satisfiesExactly(
+                stack -> assertThat(stack.get(DataComponents.CUSTOM_NAME)).isEqualTo(Component.literal("Named Output")),
+                stack -> assertThat(stack.get(DataComponents.CUSTOM_NAME)).isNull());
+
+        MachineRecipe enchanted = RecipeRegistry.getRecipe(MMCR.id("blast_furnace_component_non_consumable_sharpness_input"));
+        assertThat(enchanted.tickTime()).isEqualTo(100);
+        assertThat(enchanted.outputs()).isEmpty();
+        MachineIngredient.ItemIngredient enchantedInput = (MachineIngredient.ItemIngredient) enchanted.inputs().getFirst();
+        assertThat(enchantedInput.item().items().map(holder -> holder.value()).toList()).containsExactly(Items.DIAMOND_SWORD);
+        assertThat(enchantedInput.count()).isEqualTo(1);
+        assertThat(enchantedInput.consumeChance()).isZero();
+        JsonObject enchantments = DataComponentPredicateSet.CODEC.encodeStart(JsonOps.INSTANCE, enchantedInput.components())
+                .getOrThrow()
+                .getAsJsonObject()
+                .getAsJsonObject("minecraft:enchantments")
+                .getAsJsonObject("value");
+        assertThat(enchantments.get("minecraft:sharpness").getAsInt()).isEqualTo(2);
+        assertThat(enchantments.has("levels")).isFalse();
+        assertThat(enchantments.has("show_in_tooltip")).isFalse();
+        assertThat(enchantedInput.components().values()).containsOnlyKeys(DataComponents.ENCHANTMENTS, DataComponents.REPAIR_COST);
+        JsonObject repairCost = DataComponentPredicateSet.CODEC.encodeStart(JsonOps.INSTANCE, enchantedInput.components())
+                .getOrThrow()
+                .getAsJsonObject()
+                .getAsJsonObject("minecraft:repair_cost");
+        assertThat(repairCost.get("value").getAsInt()).isEqualTo(1);
+    }
+
+    @Test
+    void recipesCanBuildBeforeVanillaDefaultComponentsAreBound() {
+        assertThat(DefaultRecipes.recipes()).containsKey(MMCR.id("blast_furnace_component_enchanted_output"));
+    }
+
+    @Test
+    void complex_recipe_registers_three_inputs_and_three_outputs_with_correct_chances() {
+        installDefaultRuntimeContent();
+        DefaultRecipes.ensureRegistered();
+
+        MachineRecipe recipe = RecipeRegistry.getRecipe(MMCR.id("blast_furnace_component_complex"));
+        assertThat(recipe).isNotNull();
+        assertThat(recipe.inputs()).hasSize(3);
+        assertThat(recipe.outputs()).hasSize(3);
+
+        assertThat(recipe.requirements())
+                .filteredOn(r -> r instanceof ItemRequirement itemReq && r.io() == RecipeModifier.IOType.INPUT)
+                .hasSize(3)
+                .extracting(r -> ((ItemRequirement) r).consumeChance())
+                .containsExactly(0F, 0.5F, 0.25F);
+        assertThat(recipe.machineOutputs())
+                .extracting(MachineOutput::chance)
+                .containsExactly(1F, 0.5F, 0.25F);
+    }
+
     private static void installDefaultRuntimeContent() {
+        MachineLevelRegistry.beginRegistration();
+        DefaultMachineLevels.register();
+        MachineLevelRegistry.freezeRegistration();
         MachineStructureRegistry.replaceDynamic(DefaultMachines.structures());
     }
+
+    private static ItemStack namedStack(net.minecraft.world.item.Item item, String name) {
+        item.builtInRegistryHolder().bindComponents(net.minecraft.core.component.DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 64)
+                .build());
+        ItemStack stack = new ItemStack(item);
+        stack.set(DataComponents.CUSTOM_NAME, Component.literal(name));
+        return stack;
+    }
+
 }

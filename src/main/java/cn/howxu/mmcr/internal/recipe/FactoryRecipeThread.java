@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -127,8 +128,13 @@ public final class FactoryRecipeThread extends RecipeThread {
             output.putLong("last_structure_version", lastRecipeStructureVersion);
             output.putLong("last_modifier_snapshot_version", lastRecipeModifierSnapshotVersion);
         }
-        output.putBoolean("has_active", activeRecipe != null);
-        if (activeRecipe != null) activeRecipe.serialize(output.child("active_recipe"));
+        boolean hasActive = activeRecipe != null && context != null;
+        output.putBoolean("has_active", hasActive);
+        if (hasActive) {
+            activeRecipe.serialize(output.child("active_recipe"));
+            context.serialize(output.child("active_context"));
+        }
+        output.putString("status", status.name());
     }
 
     public static FactoryRecipeThread load(ValueInput input, MachineControllerBlockEntity controller,
@@ -145,11 +151,19 @@ public final class FactoryRecipeThread extends RecipeThread {
                 thread.lastRecipeModifierSnapshotVersion = input.getLongOr("last_modifier_snapshot_version", Long.MIN_VALUE);
             }
         }
+        try {
+            thread.status = Status.valueOf(input.getStringOr("status", Status.IDLE.name()));
+        } catch (IllegalArgumentException ignored) {
+            thread.status = Status.IDLE;
+        }
         if (input.getBooleanOr("has_active", false)) {
             thread.activeRecipe = ActiveMachineRecipe.from(input.childOrEmpty("active_recipe"));
             if (thread.activeRecipe.getRecipe() == null) thread.activeRecipe = null;
         }
-        if (thread.activeRecipe != null && controller != null) thread.context = contextPool.borrow(thread.activeRecipe, controller);
+        if (thread.activeRecipe != null && controller != null) {
+            thread.context = RecipeCraftingContext.from(controller, input.childOrEmpty("active_context"));
+        }
+        if (thread.activeRecipe == null) thread.status = Status.IDLE;
         return thread;
     }
 }

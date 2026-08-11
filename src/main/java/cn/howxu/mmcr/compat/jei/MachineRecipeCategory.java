@@ -1,6 +1,11 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.recipe.LevelRequirement;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.compat.jei.MachineRecipeLayout.OverflowSlotPlan;
 import cn.howxu.mmcr.registry.ModBlocks;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
@@ -18,12 +23,12 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Comparator;
 
 /**
  * JEI category for MMCR machine recipes.
@@ -36,13 +41,18 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private static final int OVERFLOW_TEXT_OFFSET_X = 5;
     static final int RECIPE_ARROW_X = 64;
     static final int RECIPE_ARROW_Y = 8;
+    static final int ITEM_OVERLAY_X = 0;
+    static final int ITEM_OVERLAY_Y = 0;
+    static final float ITEM_OVERLAY_SCALE = 0.6F;
 
     private final Machine machine;
     private final IRecipeType<MachineRecipeDisplay> recipeType;
     private final IDrawable icon;
     private final IDrawable slotBackground;
+    private final IGuiHelper guiHelper;
 
     public MachineRecipeCategory(IGuiHelper guiHelper, Machine machine) {
+        this.guiHelper = guiHelper;
         this.machine = machine;
         this.recipeType = JeiMachineRecipeTypes.forMachine(machine.registryName());
         this.icon = guiHelper.createDrawableItemLike(ModBlocks.controllerFor(machine.registryName()).get());
@@ -107,6 +117,12 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                     layout.durationTextX(), y, 0xFF404040, false);
             y += 10;
         }
+        long gameTime = Minecraft.getInstance().level == null ? 0L : Minecraft.getInstance().level.getGameTime();
+        for (LevelRequirement requirement : sortedLevelRequirements(recipe.recipe())) {
+            guiGraphics.text(Minecraft.getInstance().font, levelRequirement(requirement, gameTime),
+                    layout.durationTextX(), y, 0xFF404040, false);
+            y += 10;
+        }
         drawOverflowSlot(layout.inputs().overflowSlot(), guiGraphics, slotBackground);
         drawOverflowSlot(layout.outputs().overflowSlot(), guiGraphics, slotBackground);
     }
@@ -130,10 +146,13 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         return String.format(Locale.ROOT, "%.1f", ticks / 20.0F);
     }
 
-    static List<ItemStack> itemStacks(Ingredient ingredient, int count) {
-        return ingredient.items()
-                .map(item -> item.value().getDefaultInstance().copyWithCount(count))
-                .toList();
+    static String inputOverlayText(float consumeChance, String language) {
+        if (consumeChance == 0F) return language.startsWith("zh") ? "不消耗" : "Keep";
+        return consumeChance < 1F ? Math.round(consumeChance * 100F) + "%" : "";
+    }
+
+    static String outputOverlayText(float chance) {
+        return chance < 1F ? Math.round(chance * 100F) + "%" : "";
     }
 
     static Component overflowEntry(int amount, Component displayName) {
@@ -146,6 +165,38 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             return hoverName;
         }
         return Component.translatable(stack.getItem().getDescriptionId());
+    }
+
+    static Component levelRequirement(LevelRequirement requirement, long gameTime) {
+        MachineLevel required = MachineLevelRegistry.getLevel(requirement.levelId());
+        var type = MachineLevelRegistry.getType(requirement.typeId());
+        if (required == null || type == null) return Component.empty();
+        List<MachineLevel> eligible = MachineLevelRegistry.levelsForType(requirement.typeId()).stream()
+                .filter(level -> level.priority() >= required.priority())
+                .sorted(Comparator.comparingInt(MachineLevel::priority))
+                .toList();
+        if (eligible.isEmpty()) return Component.empty();
+        int cycleLength = eligible.size() * 2 - 2;
+        int index = cycleLength == 0 ? 0 : (int) ((gameTime / 20) % cycleLength);
+        if (index >= eligible.size()) index = cycleLength - index;
+        MachineLevel selected = eligible.get(index);
+        Component levelName = selected.statePredicate() instanceof BlockPredicate.OfBlockState predicate
+                ? predicate.state().getBlock().getName()
+                : selected.representative().getHoverName();
+        Component suffix = selected.id().equals(required.id())
+                ? Component.translatable("jei.mmcr.machine_recipe.minimum_level")
+                : Component.empty();
+        return type.displayName().copy()
+                .append(Component.literal(": "))
+                .append(levelName)
+                .append(suffix);
+    }
+
+    private static List<LevelRequirement> sortedLevelRequirements(MachineRecipe recipe) {
+        return recipe.levelRequirements().stream()
+                .sorted(Comparator.comparing((LevelRequirement requirement) -> requirement.typeId().toString())
+                        .thenComparing(requirement -> requirement.levelId().toString()))
+                .toList();
     }
 
     private static void addRegion(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe,
@@ -168,9 +219,25 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private static void addItem(IRecipeSlotBuilder jeiSlot, MachineRecipeDisplay recipe,
             MachineRecipeLayout.EntryPlan entry, boolean input) {
         if (input) {
-            jeiSlot.addItemStacks(itemStacks(recipe.itemInputs().get(entry.index()), recipe.itemInputCounts().get(entry.index())));
+            MachineRecipeDisplay.ItemInputDisplay item = recipe.itemInputs().get(entry.index());
+            List<ItemStack> stacks = item.stacks();
+            String overlayText = inputOverlayText(item.consumeChance(), Minecraft.getInstance().getLanguageManager().getSelected());
+            if (!overlayText.isEmpty()) {
+                jeiSlot.setOverlay(new TextOverlayDrawable(overlayText, 0xFFFF4040, ITEM_OVERLAY_SCALE),
+                        ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
+            }
+            jeiSlot.addRichTooltipCallback((view, tooltip) -> appendInputTooltip(tooltip, item));
+            jeiSlot.addItemStacks(stacks);
         } else {
-            jeiSlot.add(normalizeOutputStack(recipe.itemOutputs().get(entry.index())));
+            MachineRecipeDisplay.ItemOutputDisplay output = recipe.itemOutputs().get(entry.index());
+            ItemStack stack = output.stack();
+            String overlayText = outputOverlayText(output.chance());
+            if (!overlayText.isEmpty()) {
+                jeiSlot.setOverlay(new TextOverlayDrawable(overlayText, 0xFFFF4040, ITEM_OVERLAY_SCALE),
+                        ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
+            }
+            jeiSlot.addRichTooltipCallback((view, tooltip) -> appendOutputTooltip(tooltip, output));
+            jeiSlot.add(new ItemStack(stack.getItem().builtInRegistryHolder(), stack.getCount(), stack.getComponentsPatch()));
         }
     }
 
@@ -195,14 +262,15 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         for (MachineRecipeLayout.EntryPlan entry : hiddenEntries) {
             if (entry.kind() == MachineRecipeLayout.Kind.ITEM) {
                 if (input) {
-                    int amount = recipe.itemInputCounts().get(entry.index());
-                    Component displayName = itemStacks(recipe.itemInputs().get(entry.index()), amount).stream()
+                    MachineRecipeDisplay.ItemInputDisplay item = recipe.itemInputs().get(entry.index());
+                    Component displayName = item.stacks().stream()
                             .findFirst()
                             .map(ItemStack::getHoverName)
                             .orElse(Component.empty());
-                    tooltip.add(overflowEntry(amount, displayName));
+                    tooltip.add(overflowEntry(item.count(), displayName));
                 } else {
-                    ItemStack stack = recipe.itemOutputs().get(entry.index());
+                    MachineRecipeDisplay.ItemOutputDisplay output = recipe.itemOutputs().get(entry.index());
+                    ItemStack stack = output.stack();
                     tooltip.add(overflowEntry(stack.getCount(), outputStackName(stack)));
                 }
             } else {
@@ -229,14 +297,47 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
     }
 
+    private static void appendInputTooltip(ITooltipBuilder tooltip, MachineRecipeDisplay.ItemInputDisplay item) {
+        if (item.consumeChance() == 0F) {
+            tooltip.add(Component.translatable("jei.mmcr.machine_recipe.keep"));
+        } else if (item.consumeChance() < 1F) {
+            tooltip.add(Component.translatable("jei.mmcr.machine_recipe.consume_chance",
+                    Math.round(item.consumeChance() * 100F) + "%"));
+        }
+        if (item.hasUnexportedComponentConstraints()) {
+            tooltip.add(Component.translatable("jei.mmcr.machine_recipe.component_constraints"));
+        }
+    }
+
+    private static void appendOutputTooltip(ITooltipBuilder tooltip, MachineRecipeDisplay.ItemOutputDisplay output) {
+        if (output.chance() < 1F) {
+            tooltip.add(Component.translatable("jei.mmcr.machine_recipe.output_chance",
+                    Math.round(output.chance() * 100F) + "%"));
+        }
+    }
+
     private static boolean isMouseOver(@Nullable OverflowSlotPlan slot, double mouseX, double mouseY) {
         return slot != null && mouseX >= slot.x() && mouseX < slot.x() + 16 && mouseY >= slot.y() && mouseY < slot.y() + 16;
     }
 
-    private static ItemStack normalizeOutputStack(ItemStack stack) {
-        if (stack.isComponentsPatchEmpty()) {
-            return new ItemStack(stack.getItem(), stack.getCount());
+    private record TextOverlayDrawable(String text, int color, float scale) implements IDrawable {
+        @Override
+        public int getWidth() {
+            return (int) Math.ceil(Minecraft.getInstance().font.width(text) * scale);
         }
-        return stack;
+
+        @Override
+        public int getHeight() {
+            return (int) Math.ceil(Minecraft.getInstance().font.lineHeight * scale);
+        }
+
+        @Override
+        public void draw(GuiGraphicsExtractor guiGraphics, int xOffset, int yOffset) {
+            guiGraphics.pose().pushMatrix();
+            guiGraphics.pose().translate(xOffset, yOffset);
+            guiGraphics.pose().scale(scale, scale);
+            guiGraphics.text(Minecraft.getInstance().font, text, 0, 0, color, false);
+            guiGraphics.pose().popMatrix();
+        }
     }
 }

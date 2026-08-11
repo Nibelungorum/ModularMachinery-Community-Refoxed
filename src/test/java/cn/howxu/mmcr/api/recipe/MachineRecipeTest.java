@@ -1,6 +1,11 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -11,17 +16,21 @@ import com.google.gson.JsonObject;
 import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.Identifier;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.RegistryOps;
+import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -65,6 +74,33 @@ class MachineRecipeTest {
     }
 
     @Test
+    void outputs_roundtrip_native_component_stack() {
+        bindItemComponents(Items.DIAMOND_SWORD);
+        var root = new JsonObject();
+        root.addProperty("id", "mmcr:better_diamond_sword");
+        root.addProperty("machine", "mmcr:alloy_furnace");
+        root.addProperty("tick_time", 40);
+        var output = new JsonObject();
+        output.addProperty("id", "minecraft:diamond_sword");
+        output.addProperty("count", 1);
+        var components = new JsonObject();
+        var customName = new JsonObject();
+        customName.addProperty("text", "Better钻石剑");
+        components.add("minecraft:custom_name", customName);
+        var enchantments = new JsonObject();
+        enchantments.addProperty("minecraft:sharpness", 4);
+        components.add("minecraft:enchantments", enchantments);
+        output.add("components", components);
+        root.add("outputs", itemOutputs(output));
+
+        MachineRecipe recipe = MachineRecipe.CODEC.codec().parse(componentJsonOps(), root).getOrThrow();
+
+        ItemStack outputStack = recipe.outputs().getFirst();
+        assertThat(outputStack.getHoverName().getString()).isEqualTo("Better钻石剑");
+        assertThat(outputStack.get(DataComponents.ENCHANTMENTS).getLevel(enchantment("minecraft:sharpness"))).isEqualTo(4);
+    }
+
+    @Test
     void recipe_codec_roundtrips_parallelized_and_equality_includes_flag() {
         bindItemComponents(Items.IRON_BLOCK);
         MachineRecipe serial = new MachineRecipe(
@@ -103,6 +139,53 @@ class MachineRecipeTest {
         assertThat(decoded.maxThreads()).isEqualTo(3);
         assertThat(decoded).isNotEqualTo(nonParallel);
         assertThat(decoded.hashCode()).isNotEqualTo(nonParallel.hashCode());
+    }
+
+    @Test
+    void codec_roundtrips_level_requirements() {
+        var coilType = Identifier.parse("test:coil");
+        var kanthal = Identifier.parse("test:kanthal");
+        MachineLevelRegistry.beginRegistration();
+        MachineLevelRegistry.registerType(new LevelType(coilType, Component.literal("Coils")));
+        MachineLevelRegistry.registerLevel(new MachineLevel(kanthal, coilType, 1,
+                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
+        var recipe = new MachineRecipe(
+                Identifier.parse("test:levelled"),
+                Identifier.parse("test:machine"),
+                20,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                List.of(),
+                false,
+                List.of(new LevelRequirement(coilType, kanthal)));
+
+        var decoded = MachineRecipe.CODEC.codec().parse(jsonOps(),
+                MachineRecipe.CODEC.codec().encodeStart(jsonOps(), recipe).getOrThrow()).getOrThrow();
+
+        assertThat(decoded.levelRequirements()).containsExactlyElementsOf(recipe.levelRequirements());
+    }
+
+    @Test
+    void rejects_duplicate_level_requirement_types() {
+        var coilType = Identifier.parse("test:coil");
+        MachineLevelRegistry.beginRegistration();
+        MachineLevelRegistry.registerType(new LevelType(coilType, Component.literal("Coils")));
+        MachineLevelRegistry.registerLevel(new MachineLevel(Identifier.parse("test:kanthal"), coilType, 1,
+                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
+        MachineLevelRegistry.registerLevel(new MachineLevel(Identifier.parse("test:nichrome"), coilType, 2,
+                new BlockPredicate.OfBlockState(Blocks.GOLD_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
+
+        assertThatThrownBy(() -> new MachineRecipe(
+                Identifier.parse("test:duplicate_levels"), Identifier.parse("test:machine"), 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
+                List.of(new LevelRequirement(coilType, Identifier.parse("test:kanthal")),
+                        new LevelRequirement(coilType, Identifier.parse("test:nichrome")))))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -411,6 +494,12 @@ class MachineRecipeTest {
         return outputs;
     }
 
+    private static JsonArray itemOutputs(JsonObject output) {
+        var outputs = new JsonArray();
+        outputs.add(output);
+        return outputs;
+    }
+
     private static JsonArray requirements(JsonObject... values) {
         var requirements = new JsonArray();
         for (JsonObject value : values) requirements.add(value);
@@ -467,5 +556,15 @@ class MachineRecipeTest {
 
     private static DynamicOps<JsonElement> jsonOps() {
         return RegistryOps.create(JsonOps.INSTANCE, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+    }
+
+    private static net.minecraft.core.Holder<net.minecraft.world.item.enchantment.Enchantment> enchantment(String id) {
+        return VanillaRegistries.createLookup().lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT)
+                .getOrThrow(net.minecraft.resources.ResourceKey.create(
+                        net.minecraft.core.registries.Registries.ENCHANTMENT, Identifier.parse(id)));
+    }
+
+    private static DynamicOps<JsonElement> componentJsonOps() {
+        return RegistryOps.create(JsonOps.INSTANCE, VanillaRegistries.createLookup());
     }
 }

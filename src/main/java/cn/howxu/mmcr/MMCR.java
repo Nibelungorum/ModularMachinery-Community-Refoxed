@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.command.BuildCommand;
 import cn.howxu.mmcr.internal.command.ExportCommand;
@@ -25,6 +26,7 @@ import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.registry.ModRecipeTypes;
 import org.nibelungorum.BuiltinMachines;
 import org.nibelungorum.DefaultMachines;
+import org.nibelungorum.DefaultMachineLevels;
 import org.nibelungorum.DefaultRecipes;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -127,12 +129,21 @@ public class MMCR {
     }
 
     public static void registerRuntimeBuiltins() {
+        registerDefaultMachineLevels();
         DynamicContentReloadService.reload(candidate -> {
             DefaultMachines.structures().values().forEach(candidate::registerStructure);
             registerGameTestMachineStructuresIfPresent(candidate);
         });
         DefaultRecipes.registerStatic(DefaultRecipes.recipes().values().stream().toList());
         MachineRegistry.rebuildCompiledCache();
+    }
+
+    private static void registerDefaultMachineLevels() {
+        if (MachineLevelRegistry.getType(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE) != null) return;
+
+        MachineLevelRegistry.beginRegistration();
+        DefaultMachineLevels.register();
+        MachineLevelRegistry.freezeRegistration();
     }
 
     private static void onCommonSetup(FMLCommonSetupEvent event) {

@@ -133,6 +133,17 @@ public class FactorySchedulerBlockEntity extends BlockEntity {
         lastSyncedSnapshot = null;
     }
 
+    public void pause() {
+        scheduler.pause();
+        lastSyncedSnapshot = null;
+        setChanged();
+    }
+
+    public void resume() {
+        scheduler.resume();
+        lastSyncedSnapshot = null;
+    }
+
     public void ensureBaseThreadFor(MachineControllerBlockEntity controller) {
         scheduler.ensureBaseThread(controller, null);
     }
@@ -155,7 +166,7 @@ public class FactorySchedulerBlockEntity extends BlockEntity {
         return new FactoryControllerSnapshot(controller.getBlockPos(), controller.isFormed(), controller.isRedstonePaused(),
                 activeThreadCount(), threadLimit(), usedParallelism(), controller.getMaxParallelism(),
                 controller.getMachine() == null ? "" : controller.getMachine().localizedName(),
-                controller.parallelControllerCount(), scheduler.threadSnapshots());
+                controller.parallelControllerCount(), controller.getLastFailureUnloc(), scheduler.threadSnapshots());
     }
 
     public void sendSnapshot(ServerPlayer player, MachineControllerBlockEntity controller) {

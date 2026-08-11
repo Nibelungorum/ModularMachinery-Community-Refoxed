@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -20,6 +21,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     private final MachineControllerBlockEntity owner;
     private final Level level;
+    private boolean wasFormedDuringSession;
     private final BlockPos pos;
     private final DataSlot formed;
     private final DataSlot active;
@@ -39,6 +41,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.owner = owner;
         this.level = playerInv.player == null ? null : playerInv.player.level();
         this.pos = owner == null ? BlockPos.ZERO : owner.getBlockPos();
+        wasFormedDuringSession = owner != null && owner.isFormed();
         this.formed = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
             @Override public int get() { return owner.isFormed() ? 1 : 0; }
             @Override public void set(int value) {}
@@ -48,11 +51,11 @@ public class MachineControllerMenu extends AbstractMachineMenu {
             @Override public void set(int value) {}
         });
         this.activeTick = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return owner.getTickCounter(); }
+            @Override public int get() { return activeRecipeTick(owner); }
             @Override public void set(int value) {}
         });
         this.activeTotalTick = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return owner.getActive() == null ? 0 : owner.getActive().getTotalTick(); }
+            @Override public int get() { return activeRecipeTotalTick(owner); }
             @Override public void set(int value) {}
         });
         this.lastFailure = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
@@ -161,6 +164,11 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         return controller == null ? formed.get() != 0 : controller.isFormed();
     }
 
+    boolean wasFormedDuringSession() {
+        if (owner != null && owner.isFormed()) wasFormedDuringSession = true;
+        return wasFormedDuringSession;
+    }
+
     public boolean hasActiveRecipe() {
         MachineControllerBlockEntity controller = resolvedOwner();
         return controller == null ? active.get() != 0 : controller.isRuntimeActive() || controller.hasClientActiveRecipe() || active.get() != 0;
@@ -168,12 +176,35 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     public int activeRecipeTick() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null || controller.getActiveRecipe() == null ? activeTick.get() : controller.getTickCounter();
+        return owner == null ? activeTick.get() : activeRecipeTick(controller);
     }
 
     public int activeRecipeTotalTick() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null || controller.getActive() == null ? activeTotalTick.get() : controller.getActive().getTotalTick();
+        return owner == null ? activeTotalTick.get() : activeRecipeTotalTick(controller);
+    }
+
+    private static int activeRecipeTick(@Nullable MachineControllerBlockEntity controller) {
+        if (controller == null) return 0;
+        if (controller.getActiveRecipe() != null) return controller.getTickCounter();
+        FactoryRecipeScheduler.ThreadSnapshot thread = activeFactoryThread(controller);
+        return thread == null ? 0 : thread.tick();
+    }
+
+    private static int activeRecipeTotalTick(@Nullable MachineControllerBlockEntity controller) {
+        if (controller == null) return 0;
+        if (controller.getActive() != null) return controller.getActive().getTotalTick();
+        FactoryRecipeScheduler.ThreadSnapshot thread = activeFactoryThread(controller);
+        return thread == null ? 0 : thread.totalTick();
+    }
+
+    private static @Nullable FactoryRecipeScheduler.ThreadSnapshot activeFactoryThread(MachineControllerBlockEntity controller) {
+        var factory = controller.getFactoryController();
+        if (factory == null) return null;
+        return factory.threadSnapshots(controller).stream()
+                .filter(FactoryRecipeScheduler.ThreadSnapshot::active)
+                .findFirst()
+                .orElse(null);
     }
 
     public @Nullable String lastFailureMessage() {
@@ -247,6 +278,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         if ("gui.mmcr.controller.failure.missing_input".equals(key)) return 1;
         if ("gui.mmcr.controller.failure.missing_output".equals(key)) return 2;
         if ("gui.mmcr.controller.failure.missing_energy".equals(key)) return 3;
+        if ("gui.mmcr.controller.failure.level_insufficient".equals(key)) return 4;
         return 0;
     }
 
@@ -255,6 +287,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
             case 1 -> "gui.mmcr.controller.failure.missing_input";
             case 2 -> "gui.mmcr.controller.failure.missing_output";
             case 3 -> "gui.mmcr.controller.failure.missing_energy";
+            case 4 -> "gui.mmcr.controller.failure.level_insufficient";
             default -> null;
         };
     }
@@ -266,7 +299,8 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     @Override
     public boolean stillValid(Player player) {
-        return owner == null || (MenuSupport.stillValidWithin(player, owner.getBlockPos())
-                && MenuSupport.controllerStillPresentAndFormed(owner));
+        if (owner == null) return true;
+        if (!MenuSupport.stillValidWithin(player, owner.getBlockPos())) return false;
+        return !wasFormedDuringSession() || MenuSupport.controllerStillPresentAndFormed(owner);
     }
 }

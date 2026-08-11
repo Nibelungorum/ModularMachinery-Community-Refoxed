@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
@@ -31,6 +32,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import org.nibelungorum.BuiltinMachines;
+import org.nibelungorum.DefaultMachineLevels;
 import org.nibelungorum.DefaultRecipes;
 
 import java.lang.reflect.Field;
@@ -79,6 +81,7 @@ public final class TestBootstrap {
         bindController(id("alloy_furnace"));
         bindController(id("cracker"));
         bindController(id("reactor"));
+        bindController(id("thermal_smelting_furnace"));
         bindController(id("test_cube"));
         bindController(id("controller_tick"));
         bindController(id("iron_compressor"));
@@ -90,6 +93,9 @@ public final class TestBootstrap {
         bind(ModBlocks.BLOCKS.get("debug_infinite_water_source"), Blocks.STONE);
         bind(ModBlocks.BLOCKS.get("debug_infinite_lava_source"), Blocks.STONE);
         bind(ModItems.THREAD_DISPERSER, registerItem(ModItems.THREAD_DISPERSER));
+        MachineLevelRegistry.beginRegistration();
+        DefaultMachineLevels.register();
+        MachineLevelRegistry.freezeRegistration();
         restoreMachineDefinitions();
         registerRuntimeBuiltins();
         initialized = true;
@@ -104,12 +110,21 @@ public final class TestBootstrap {
 
     public static void registerRuntimeBuiltins() {
         restoreMachineDefinitions();
+        registerDefaultMachineLevels();
         DynamicContentReloadService.reload(candidate -> {
             org.nibelungorum.DefaultMachines.structures().values().forEach(candidate::registerStructure);
             MMCR.registerGameTestMachineStructures(candidate);
         });
         DefaultRecipes.registerStatic(DefaultRecipes.recipes().values().stream().toList());
         MachineRegistry.rebuildCompiledCache();
+    }
+
+    private static void registerDefaultMachineLevels() {
+        if (MachineLevelRegistry.getType(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE) != null) return;
+
+        MachineLevelRegistry.beginRegistration();
+        DefaultMachineLevels.register();
+        MachineLevelRegistry.freezeRegistration();
     }
 
     private static void addTestMachineSuppliers() {

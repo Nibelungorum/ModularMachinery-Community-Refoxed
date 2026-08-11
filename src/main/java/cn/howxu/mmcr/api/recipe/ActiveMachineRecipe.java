@@ -9,6 +9,7 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -27,6 +28,37 @@ public final class ActiveMachineRecipe {
     private int parallelism;
     private int nextFinishRetryTick;
     private boolean finishPending;
+    private @Nullable InputConsumptionPlan inputConsumptionPlan;
+
+    public record InputConsumptionPlan(List<Integer> consumedInputBatches) {
+        public InputConsumptionPlan {
+            consumedInputBatches = List.copyOf(consumedInputBatches);
+        }
+
+        public int consumedBatches(int requirementIndex) {
+            return requirementIndex < consumedInputBatches.size() ? consumedInputBatches.get(requirementIndex) : 0;
+        }
+
+        public CompoundTag serialize() {
+            CompoundTag tag = new CompoundTag();
+            tag.putIntArray("consumedInputBatches", consumedInputBatches.stream().mapToInt(Integer::intValue).toArray());
+            return tag;
+        }
+
+        public static InputConsumptionPlan deserialize(CompoundTag tag) {
+            if (tag.contains("consumedInputRequirementIndices")) {
+                int maxIndex = java.util.Arrays.stream(tag.getIntArray("consumedInputRequirementIndices")
+                        .orElseGet(() -> new int[0])).max().orElse(-1);
+                int[] batches = new int[maxIndex + 1];
+                for (int index : tag.getIntArray("consumedInputRequirementIndices").orElseGet(() -> new int[0])) {
+                    batches[index] = 1;
+                }
+                return new InputConsumptionPlan(java.util.Arrays.stream(batches).boxed().toList());
+            }
+            return new InputConsumptionPlan(java.util.Arrays.stream(tag.getIntArray("consumedInputBatches")
+                    .orElseGet(() -> new int[0])).boxed().toList());
+        }
+    }
 
     public ActiveMachineRecipe(MachineRecipe recipe) {
         this(recipe, 1);
@@ -51,6 +83,9 @@ public final class ActiveMachineRecipe {
         this.data = serialized.contains("data") ? serialized.getCompoundOrEmpty("data") : new CompoundTag();
         this.nextFinishRetryTick = serialized.getIntOr("nextFinishRetryTick", 0);
         this.finishPending = serialized.getBooleanOr("finishPending", false);
+        if (serialized.contains("inputConsumptionPlan")) {
+            this.inputConsumptionPlan = InputConsumptionPlan.deserialize(serialized.getCompoundOrEmpty("inputConsumptionPlan"));
+        }
         setMaxParallelism(serialized.getIntOr("maxParallelism", 1));
         setParallelism(serialized.getIntOr("parallelism", 1));
         LOG.info("ActiveMachineRecipe#{} restored from NBT: recipe={} resolved={} tick={}/{} maxParallelism={} parallelism={}",
@@ -81,9 +116,7 @@ public final class ActiveMachineRecipe {
     }
 
     public void refreshTotalTick(RecipeCraftingContext context) {
-        this.totalTick = IntegrationTypeHelper.asInt(
-                IntegrationTypeHelper.applyDuration(
-                        context.effectiveModifiers(recipe), recipe.getRecipeTotalTickTime()));
+        this.totalTick = context.levelModifiedDuration(recipe);
     }
 
     public int getMaxParallelism() {
@@ -123,6 +156,7 @@ public final class ActiveMachineRecipe {
         this.maxParallelism = 1;
         this.data = new CompoundTag();
         this.finishPending = false;
+        this.inputConsumptionPlan = null;
         LOG.info("ActiveMachineRecipe#{} reset: tick {} → 0; parallelism and data cleared (recipe={})",
                 instanceId, before, recipe == null ? null : recipe.id());
     }
@@ -152,6 +186,10 @@ public final class ActiveMachineRecipe {
         tag.putInt("parallelism", this.parallelism);
         tag.putInt("nextFinishRetryTick", this.nextFinishRetryTick);
         tag.putBoolean("finishPending", this.finishPending);
+        if (inputConsumptionPlan != null) {
+            tag.put("inputConsumptionPlan", inputConsumptionPlan.serialize());
+        }
+        tag.putBoolean("finishPending", this.finishPending);
         if (!data.isEmpty()) {
             tag.put("data", data);
         }
@@ -168,6 +206,10 @@ public final class ActiveMachineRecipe {
         output.putInt("parallelism", this.parallelism);
         output.putInt("nextFinishRetryTick", this.nextFinishRetryTick);
         output.putBoolean("finishPending", this.finishPending);
+        if (inputConsumptionPlan != null) {
+            output.store("inputConsumptionPlan", CompoundTag.CODEC, inputConsumptionPlan.serialize());
+        }
+        output.putBoolean("finishPending", this.finishPending);
         if (!data.isEmpty()) {
             output.store("data", CompoundTag.CODEC, data);
         }
@@ -182,6 +224,9 @@ public final class ActiveMachineRecipe {
         result.totalTick = input.getIntOr("totalTick", 0);
         result.nextFinishRetryTick = input.getIntOr("nextFinishRetryTick", 0);
         result.finishPending = input.getBooleanOr("finishPending", false);
+        result.inputConsumptionPlan = input.read("inputConsumptionPlan", CompoundTag.CODEC)
+                .map(InputConsumptionPlan::deserialize).orElse(null);
+        result.finishPending = input.getBooleanOr("finishPending", false);
         result.setParallelism(input.getIntOr("parallelism", 1));
         result.data = input.read("data", CompoundTag.CODEC).orElseGet(CompoundTag::new);
         LOG.debug("ActiveMachineRecipe#{} from(ValueInput) → recipe={} tick={}/{} maxParallelism={} parallelism={}",
@@ -192,6 +237,7 @@ public final class ActiveMachineRecipe {
     public enum TickStatus {
         CONTINUE,
         WAITING,
+        CANCELLED,
         FINISHED
     }
 
@@ -200,8 +246,20 @@ public final class ActiveMachineRecipe {
             LOG.debug("ActiveMachineRecipe#{} start(): no recipe attached → refused", instanceId);
             return false;
         }
-        refreshTotalTick(context);
-        return true;
+        if (inputConsumptionPlan == null) {
+            inputConsumptionPlan = context.createInputConsumptionPlan(recipe, parallelism);
+        }
+        boolean started = context.startCrafting(recipe, parallelism, inputConsumptionPlan);
+        if (started) {
+            refreshTotalTick(context);
+        }
+        LOG.info("ActiveMachineRecipe#{} start(): recipe {} started={} totalTick={} parallelism={}",
+                instanceId, recipe.id(), started, totalTick, parallelism);
+        return started;
+    }
+
+    public InputConsumptionPlan inputConsumptionPlan() {
+        return inputConsumptionPlan == null ? new InputConsumptionPlan(List.of()) : inputConsumptionPlan;
     }
 
     public boolean canStartCrafting(RecipeCraftingContext context) {
@@ -268,11 +326,12 @@ public final class ActiveMachineRecipe {
                 && maxParallelism == that.maxParallelism
                 && parallelism == that.parallelism
                 && Objects.equals(recipe, that.recipe)
-                && Objects.equals(data, that.data);
+                && Objects.equals(data, that.data)
+                && Objects.equals(inputConsumptionPlan, that.inputConsumptionPlan);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(recipe, tick, totalTick, maxParallelism, parallelism, data);
+        return Objects.hash(recipe, tick, totalTick, maxParallelism, parallelism, data, inputConsumptionPlan);
     }
 }

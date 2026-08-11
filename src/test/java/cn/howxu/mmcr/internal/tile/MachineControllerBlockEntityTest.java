@@ -37,10 +37,12 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -51,6 +53,8 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
 import net.neoforged.neoforge.energy.EnergyStorage;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
@@ -333,7 +337,7 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
-    void factory_controller_threads_are_summed_and_saturated() throws Exception {
+    void factory_thread_count_uses_first_factory_controller_only() throws Exception {
         MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
         initializeComponents(controller);
         setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
@@ -343,11 +347,36 @@ class MachineControllerBlockEntityTest {
         addFactorySchedulerComponent(controller, factoryController(new BlockPos(1, 0, 0), 64));
         addFactorySchedulerComponent(controller, factoryController(new BlockPos(2, 0, 0), 3));
 
-        assertThat(controller.factorySchedulerThreadCount()).isEqualTo(69);
+        assertThat(controller.factorySchedulerThreadCount()).isEqualTo(65);
 
         addFactorySchedulerComponent(controller, factoryController(new BlockPos(3, 0, 0), Integer.MAX_VALUE));
 
-        assertThat(controller.factorySchedulerThreadCount()).isEqualTo(Integer.MAX_VALUE);
+        assertThat(controller.factorySchedulerThreadCount()).isEqualTo(65);
+    }
+
+    @Test
+    void structure_with_multiple_factory_controllers_does_not_form() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        var machine = new DynamicMachine(
+                MMCR.id("duplicate_factory_controller_machine"),
+                "Duplicate Factory Controller",
+                twoFactoryControllersPattern(),
+                MachineControllerSpec.defaultsFor(MMCR.id("duplicate_factory_controller_machine")),
+                PortRequirementSpec.none(),
+                List.of(),
+                Map.of(),
+                1,
+                false,
+                true,
+                4);
+        FactorySchedulerBlockEntity first = factoryController(controllerPos.offset(1, 0, 0));
+        FactorySchedulerBlockEntity second = factoryController(controllerPos.offset(2, 0, 0));
+        MachineControllerBlockEntity controller = controllerForFactoriesFormation(machine, controllerPos, first, second);
+
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isFalse();
+
+        assertThat(controller.isFormed()).isFalse();
+        assertThat(controller.getFactoryController()).isNull();
     }
 
     @Test
@@ -401,6 +430,170 @@ class MachineControllerBlockEntityTest {
 
         assertThat(controller.getActive()).isNotNull();
         assertThat(controller.getFactoryController()).isNull();
+    }
+
+    @Test
+    void redstone_paused_single_recipe_round_trips_and_resumes_from_its_saved_tick() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        ItemInputBusBlockEntity input = itemInputBus(controllerPos.offset(1, 0, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 2));
+        DynamicMachine machine = new DynamicMachine(MMCR.id("paused_single_machine"), "Paused Single",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()));
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, input);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        addItemInputComponent(controller, input);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("paused_single_recipe"), machine.registryName(), 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)));
+        RecipeRegistry.register(recipe);
+
+        controller.serverTick();
+        controller.serverTick();
+        ActiveMachineRecipe active = controller.getActive();
+        assertThat(active).isNotNull();
+        assertThat(active.getTick()).isPositive();
+        RecipeCraftingContext activeContext = (RecipeCraftingContext) fieldValue(MachineControllerBlockEntity.class, controller, "context");
+        activeContext.setRequirementFailure("test.pause.failure", null);
+
+        Level level = levelOf(controller);
+        LevelStub.setDirectSignal(level, controllerPos, 15);
+        controller.serverTick();
+        ActiveMachineRecipe paused = (ActiveMachineRecipe) fieldValue(MachineControllerBlockEntity.class, controller, "pausedActive");
+        RecipeCraftingContext pausedContext = (RecipeCraftingContext) fieldValue(MachineControllerBlockEntity.class, controller, "pausedContext");
+        int pausedTick = paused.getTick();
+        controller.serverTick();
+        controller.serverTick();
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "pausedActive")).isSameAs(paused);
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "pausedContext")).isSameAs(pausedContext);
+        assertThat(paused.getTick()).isEqualTo(pausedTick);
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        invokeSaveAdditional(controller, output);
+        MachineControllerBlockEntity loaded = controllerForFormation(machine, controllerPos, input);
+        invokeLoadAdditional(loaded, TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()), output.buildResult()));
+
+        assertThat(fieldValue(MachineControllerBlockEntity.class, loaded, "pausedActive"))
+                .isInstanceOf(ActiveMachineRecipe.class)
+                .extracting(value -> ((ActiveMachineRecipe) value).getRecipe().id())
+                .isEqualTo(recipe.id());
+        assertThat(((ActiveMachineRecipe) fieldValue(MachineControllerBlockEntity.class, loaded, "pausedActive")).getTick())
+                .isEqualTo(pausedTick);
+        assertThat(((RecipeCraftingContext) fieldValue(MachineControllerBlockEntity.class, loaded, "pausedContext"))
+                .getLastFailureUnloc()).isEqualTo("test.pause.failure");
+
+        LevelStub.setDirectSignal(levelOf(loaded), controllerPos, 0);
+        loaded.serverTick();
+
+        assertThat(loaded.getActive()).isSameAs(fieldValue(MachineControllerBlockEntity.class, loaded, "active"));
+        assertThat(loaded.getActive().getTick()).isGreaterThan(pausedTick);
+    }
+
+    @Test
+    void paused_recipe_save_load_keeps_consumed_input_route_and_commits_output() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.IRON_NUGGET);
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        ItemInputBusBlockEntity input = itemInputBus(controllerPos.offset(1, 0, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT));
+        ItemOutputBusBlockEntity outputBus = itemOutputBus(controllerPos.offset(2, 0, 0));
+        setField(ItemBusBlockEntity.class, outputBus, "handler", new ItemStackHandler(6));
+        DynamicMachine machine = new DynamicMachine(MMCR.id("paused_route_machine"), "Paused Route",
+                itemInputOutputPattern());
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForItemRuntimeFormation(machine, controllerPos, input, outputBus);
+        MachineRecipe recipe = registerItemRecipe("paused_route_recipe", machine.registryName(), 2);
+
+        controller.serverTick();
+        assertThat(countItem(input, Items.IRON_INGOT)).isZero();
+        LevelStub.setDirectSignal(levelOf(controller), controllerPos, 15);
+        controller.serverTick();
+
+        TagValueOutput saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        invokeSaveAdditional(controller, saved);
+        MachineControllerBlockEntity loaded = controllerForItemRuntimeFormation(machine, controllerPos, input, outputBus);
+        assertThat(loaded.getComponents()).isEmpty();
+        invokeLoadAdditional(loaded, TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()), saved.buildResult()));
+
+        LevelStub.setDirectSignal(levelOf(loaded), controllerPos, 0);
+        loaded.serverTick();
+        loaded.serverTick();
+        loaded.serverTick();
+
+        assertThat(loaded.getActive()).isNull();
+        assertThat(countItem(outputBus, Items.IRON_NUGGET)).isEqualTo(1);
+        assertThat(recipe.id()).isEqualTo(MMCR.id("paused_route_recipe"));
+    }
+
+    @Test
+    void save_and_load_discard_recipe_slots_without_a_complete_recipe_context_pair() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("orphaned_recipe"), MMCR.id("orphaned_machine"), 20,
+                List.of(), List.of());
+        RecipeRegistry.register(recipe);
+        setField(MachineControllerBlockEntity.class, controller, "active", new ActiveMachineRecipe(recipe));
+
+        TagValueOutput saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        invokeSaveAdditional(controller, saved);
+        assertThat(saved.buildResult().toString()).doesNotContain("recipe_state");
+
+        MachineControllerBlockEntity loaded = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(loaded);
+        invokeLoadAdditional(loaded, TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()), saved.buildResult()));
+
+        assertThat(loaded.getActive()).isNull();
+        assertThat(fieldValue(MachineControllerBlockEntity.class, loaded, "context")).isNull();
+        assertThat(fieldValue(MachineControllerBlockEntity.class, loaded, "pausedActive")).isNull();
+        assertThat(fieldValue(MachineControllerBlockEntity.class, loaded, "pausedContext")).isNull();
+    }
+
+    @Test
+    void save_and_load_discards_last_failure_reason() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        controller.setLastFailureUnloc("gui.mmcr.controller.failure.level_insufficient");
+
+        TagValueOutput saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        invokeSaveAdditional(controller, saved);
+
+        assertThat(saved.buildResult().toString()).doesNotContain("last_failure_unloc");
+
+        MachineControllerBlockEntity loaded = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(loaded);
+        invokeLoadAdditional(loaded, TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()), saved.buildResult()));
+
+        assertThat(loaded.getLastFailureUnloc()).isNull();
+    }
+
+    @Test
+    void load_discards_serialized_recipe_without_its_context_pair() throws Exception {
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("orphaned_load_recipe"), MMCR.id("orphaned_load_machine"), 20,
+                List.of(), List.of());
+        RecipeRegistry.register(recipe);
+        TagValueOutput saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        saved.putString("recipe_state", "active");
+        new ActiveMachineRecipe(recipe).serialize(saved.child("active_recipe"));
+
+        MachineControllerBlockEntity loaded = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(loaded);
+        invokeLoadAdditional(loaded, TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()), saved.buildResult()));
+
+        assertThat(loaded.getActive()).isNull();
+        assertThat(fieldValue(MachineControllerBlockEntity.class, loaded, "context")).isNull();
+        assertThat(fieldValue(MachineControllerBlockEntity.class, loaded, "pausedActive")).isNull();
+        assertThat(fieldValue(MachineControllerBlockEntity.class, loaded, "pausedContext")).isNull();
     }
 
     @Test
@@ -1978,6 +2171,20 @@ class MachineControllerBlockEntityTest {
         return new BlockArray(blocks);
     }
 
+    private static BlockArray twoFactoryControllersPattern() {
+        Map<BlockPos, BlockPredicate> blocks = new HashMap<>();
+        blocks.put(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("factory_controller").get()));
+        blocks.put(new BlockPos(2, 0, 0), new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("factory_controller").get()));
+        return new BlockArray(blocks);
+    }
+
+    private static BlockArray itemInputOutputPattern() {
+        Map<BlockPos, BlockPredicate> blocks = new HashMap<>();
+        blocks.put(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()));
+        blocks.put(new BlockPos(2, 0, 0), new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_output_bus").get()));
+        return new BlockArray(blocks);
+    }
+
     private static MachineRecipe registerItemRecipe(String path, Identifier machineId, int ticks) {
         return registerItemRecipe(path, machineId, ticks, 1);
     }
@@ -2016,7 +2223,7 @@ class MachineControllerBlockEntityTest {
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY))));
     }
 
-    private static int countItem(ItemInputBusBlockEntity input, Item item) {
+    private static int countItem(ItemBusBlockEntity input, Item item) {
         int count = 0;
         for (int slot = 0; slot < input.getItemStackHandler(null).getSlots(); slot++) {
             ItemStack stack = input.getItemStackHandler(null).getStackInSlot(slot);
@@ -2286,6 +2493,31 @@ class MachineControllerBlockEntityTest {
         return controller;
     }
 
+    private static MachineControllerBlockEntity controllerForFactoriesFormation(
+            DynamicMachine machine,
+            BlockPos controllerPos,
+            FactorySchedulerBlockEntity first,
+            FactorySchedulerBlockEntity second) throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        var controllerBlock = testControllerBlock(machine);
+        var controllerState = controllerBlock.defaultBlockState()
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FORMED, false)
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FACING, Direction.SOUTH)
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ROLL_FACING, Direction.NORTH);
+        setField(BlockEntity.class, controller, "worldPosition", controllerPos);
+        setField(BlockEntity.class, controller, "blockState", controllerState);
+        Map<BlockPos, Block> blocks = new HashMap<>();
+        blocks.put(controllerPos, controllerBlock);
+        blocks.put(first.getBlockPos(), cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("factory_controller").get());
+        blocks.put(second.getBlockPos(), cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("factory_controller").get());
+        Level level = LevelStub.create(blocks, List.of(controller, first, second));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, first, "level", level);
+        setField(BlockEntity.class, second, "level", level);
+        return controller;
+    }
+
     private static MachineControllerBlockEntity controllerForFactoryRuntimeFormation(
             DynamicMachine machine,
             BlockPos controllerPos,
@@ -2311,6 +2543,31 @@ class MachineControllerBlockEntityTest {
         setField(BlockEntity.class, input, "level", level);
         setField(BlockEntity.class, output, "level", level);
         setField(BlockEntity.class, factory, "level", level);
+        return controller;
+    }
+
+    private static MachineControllerBlockEntity controllerForItemRuntimeFormation(
+            DynamicMachine machine,
+            BlockPos controllerPos,
+            ItemInputBusBlockEntity input,
+            ItemOutputBusBlockEntity output) throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        var controllerBlock = testControllerBlock(machine);
+        var controllerState = controllerBlock.defaultBlockState()
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FORMED, false)
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FACING, Direction.SOUTH)
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ROLL_FACING, Direction.NORTH);
+        setField(BlockEntity.class, controller, "worldPosition", controllerPos);
+        setField(BlockEntity.class, controller, "blockState", controllerState);
+        Map<BlockPos, Block> blocks = new HashMap<>();
+        blocks.put(controllerPos, controllerBlock);
+        blocks.put(input.getBlockPos(), cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
+        blocks.put(output.getBlockPos(), cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_output_bus").get());
+        Level level = LevelStub.create(blocks, List.of(controller, input, output));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, input, "level", level);
+        setField(BlockEntity.class, output, "level", level);
         return controller;
     }
 
@@ -2410,6 +2667,24 @@ class MachineControllerBlockEntityTest {
         Method method = MachineControllerBlockEntity.class.getDeclaredMethod("tickActiveRecipe");
         method.setAccessible(true);
         method.invoke(controller);
+    }
+
+    private static void invokeResumePausedRecipeAfterStructureCheck(MachineControllerBlockEntity controller) throws Exception {
+        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("resumePausedRecipeAfterStructureCheck");
+        method.setAccessible(true);
+        method.invoke(controller);
+    }
+
+    private static void invokeSaveAdditional(MachineControllerBlockEntity controller, TagValueOutput output) throws Exception {
+        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("saveAdditional", net.minecraft.world.level.storage.ValueOutput.class);
+        method.setAccessible(true);
+        method.invoke(controller, output);
+    }
+
+    private static void invokeLoadAdditional(MachineControllerBlockEntity controller, net.minecraft.world.level.storage.ValueInput input) throws Exception {
+        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("loadAdditional", net.minecraft.world.level.storage.ValueInput.class);
+        method.setAccessible(true);
+        method.invoke(controller, input);
     }
 
     private static void invokeTickFactoryRecipes(MachineControllerBlockEntity controller,

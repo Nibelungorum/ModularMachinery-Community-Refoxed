@@ -1,8 +1,12 @@
 package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
+import cn.howxu.mmcr.api.machine.level.LevelMismatch;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -11,6 +15,7 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Comparator;
 
 public final class StructureMatcher {
 
@@ -76,6 +81,24 @@ public final class StructureMatcher {
         return Optional.empty();
     }
 
+    public static LevelResolution resolveLevels(Map<BlockPos, Identifier> levelSlots, Level level, BlockPos ctrlPos) {
+        Map<Identifier, MachineLevel> foundLevels = new LinkedHashMap<>();
+        for (var entry : levelSlots.entrySet().stream()
+                .sorted(Comparator.comparingInt((Map.Entry<BlockPos, Identifier> entry) -> entry.getKey().getX())
+                        .thenComparingInt(entry -> entry.getKey().getY())
+                        .thenComparingInt(entry -> entry.getKey().getZ()))
+                .toList()) {
+            BlockPos worldPos = ctrlPos.offset(entry.getKey());
+            MachineLevel actual = MachineLevelRegistry.findLevel(level.getBlockState(worldPos))
+                    .orElseThrow(() -> new IllegalStateException("Level slot did not resolve: " + worldPos));
+            MachineLevel expected = foundLevels.putIfAbsent(entry.getValue(), actual);
+            if (expected != null && !expected.equals(actual)) {
+                return new LevelResolution(Map.of(), new LevelMismatch(entry.getValue(), expected, actual, worldPos));
+            }
+        }
+        return new LevelResolution(Map.copyOf(foundLevels), null);
+    }
+
     private static boolean matchesEntry(
             BlockPredicate expected,
             BlockState actual,
@@ -103,5 +126,11 @@ public final class StructureMatcher {
     }
 
     public record Mismatch(BlockPos relativePos, BlockPos worldPos, BlockPredicate expected, BlockState actualState) {
+    }
+
+    public record LevelResolution(Map<Identifier, MachineLevel> foundLevels, LevelMismatch mismatch) {
+        public LevelResolution {
+            foundLevels = Map.copyOf(foundLevels);
+        }
     }
 }

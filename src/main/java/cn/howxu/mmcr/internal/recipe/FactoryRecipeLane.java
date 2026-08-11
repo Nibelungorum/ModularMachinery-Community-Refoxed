@@ -90,6 +90,11 @@ public final class FactoryRecipeLane implements FactoryRecipeScheduler.Lane {
             close();
             return true;
         }
+        if (status == ActiveMachineRecipe.TickStatus.CANCELLED) {
+            lastFailureUnloc = context.getLastFailureUnloc();
+            close();
+            return true;
+        }
         if (status == ActiveMachineRecipe.TickStatus.WAITING) {
             lastFailureUnloc = context.getLastFailureUnloc();
         } else {

@@ -1,13 +1,27 @@
 package org.nibelungorum;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.mojang.serialization.Dynamic;
+import com.mojang.serialization.JsonOps;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.component.DataComponentType;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -35,6 +49,7 @@ public final class DefaultRecipes {
     private static final Identifier ALLOY_FURNACE_NETHERITE_ID = MMCR.id("alloy_furnace_netherite");
     private static final Identifier CRACKER_ID = MMCR.id("cracker");
     private static final Identifier REACTOR_ID = MMCR.id("reactor");
+    private static final Identifier THERMAL_SMELTING_FURNACE_ID = MMCR.id("thermal_smelting_furnace");
 
     private DefaultRecipes() {
     }
@@ -47,6 +62,9 @@ public final class DefaultRecipes {
         Map<Identifier, MachineRecipe> recipes = new java.util.LinkedHashMap<>();
         for (Definition definition : definitions()) {
             MachineRecipe recipe = createRecipe(definition);
+            recipes.put(recipe.id(), recipe);
+        }
+        for (MachineRecipe recipe : componentExampleRecipes()) {
             recipes.put(recipe.id(), recipe);
         }
         return Map.copyOf(recipes);
@@ -64,7 +82,8 @@ public final class DefaultRecipes {
 
     private static MachineRecipe createRecipe(Definition definition) {
         return new MachineRecipe(definition.id(), definition.machineId(), definition.ticks(), definition.inputs(),
-                definition.outputs(), List.of(), 0, 1, true, definition.fluidOutputs(), List.of(), true);
+                definition.outputs(), List.of(), 0, definition.maxThreads(), true, definition.fluidOutputs(), List.of(), true,
+                definition.levelRequirements());
     }
 
     private static List<Definition> definitions() {
@@ -72,8 +91,156 @@ public final class DefaultRecipes {
                 standardDefinitions(BLAST_FURNACE_ID, "blast_furnace", new Definition(MMCR.id("blast_furnace_iron_to_nugget"), BLAST_FURNACE_ID, 200, List.of(itemInput(Items.IRON_INGOT, 1), energyInput(1)), List.of(item(Items.IRON_NUGGET, 1)), List.of())),
                 alloyFurnaceDefinitions(),
                 standardDefinitions(CRACKER_ID, "cracker", new Definition(MMCR.id("cracker_coal_lapis"), CRACKER_ID, 160, List.of(itemInput(Items.COAL, 8), itemInput(Items.LAPIS_LAZULI, 1), energyInput(100)), List.of(item(Items.REDSTONE, 4)), List.of(fluidOutput(Fluids.WATER, 500)))),
-                standardDefinitions(REACTOR_ID, "reactor", new Definition(MMCR.id("reactor_diamond_water"), REACTOR_ID, 200, List.of(itemInput(Items.DIAMOND, 1), fluidInput(Fluids.WATER, 500), energyOutput(100)), List.of(item(Items.COAL, 1)), List.of(fluidOutput(Fluids.LAVA, 500))))
+                standardDefinitions(REACTOR_ID, "reactor", new Definition(MMCR.id("reactor_diamond_water"), REACTOR_ID, 200, List.of(itemInput(Items.DIAMOND, 1), fluidInput(Fluids.WATER, 500), energyOutput(100)), List.of(item(Items.COAL, 1)), List.of(fluidOutput(Fluids.LAVA, 500)))),
+                thermalSmeltingFurnaceDefinitions()
         ).stream().flatMap(List::stream).toList();
+    }
+
+    private static List<MachineRecipe> componentExampleRecipes() {
+        return List.of(
+                BLAST_FURNACE_ID,
+                ALLOY_FURNACE_ID,
+                CRACKER_ID,
+                REACTOR_ID,
+                THERMAL_SMELTING_FURNACE_ID
+        ).stream().flatMap(machineId -> componentExampleRecipes(machineId).stream()).toList();
+    }
+
+    private static List<MachineRecipe> componentExampleRecipes(Identifier machineId) {
+        String prefix = machineId.getPath() + "_component_";
+        return List.of(
+                componentRecipe(machineId, prefix + "chanced_input",
+                        List.of(componentItemInput(Items.DIAMOND, 1, "Chance", 0.5F)),
+                        List.of(item(Items.EMERALD, 1))),
+                componentRecipe(machineId, prefix + "non_consumable_input",
+                        List.of(componentItemInput(Items.DIAMOND, 1, "Keep", 0F)),
+                        List.of(item(Items.EMERALD, 1))),
+                enchantedNonConsumableRecipe(machineId, prefix + "non_consumable_sharpness_input"),
+                enchantedOutputRecipe(machineId, prefix + "enchanted_output"),
+                componentRecipe(machineId, prefix + "input_to_plain_output",
+                        List.of(componentItemInput(Items.DIAMOND, 1, "Input Only", 1F)),
+                        List.of(item(Items.EMERALD, 1))),
+                componentRecipe(machineId, prefix + "plain_input_to_output",
+                        List.of(itemInput(Items.IRON_INGOT, 1)),
+                        List.of(namedItem(Items.GOLD_INGOT, 1, "Output Only"))),
+                componentRecipe(machineId, prefix + "input_to_output",
+                        List.of(componentItemInput(Items.DIAMOND, 1, "Input", 1F)),
+                        List.of(namedItem(Items.GOLD_INGOT, 1, "Output"))),
+                componentRecipe(machineId, prefix + "mixed_inputs",
+                        List.of(componentItemInput(Items.DIAMOND, 1, "Named", 1F), itemInput(Items.IRON_INGOT, 1)),
+                        List.of(item(Items.EMERALD, 1))),
+                componentRecipe(machineId, prefix + "mixed_outputs",
+                        List.of(itemInput(Items.IRON_INGOT, 1)),
+                        List.of(namedItem(Items.GOLD_INGOT, 1, "Named Output"), item(Items.EMERALD, 1))),
+                chancedOutputRecipe(machineId, prefix + "chanced_outputs"),
+                complexRecipe(machineId, prefix + "complex")
+        );
+    }
+
+    private static MachineRecipe complexRecipe(Identifier machineId, String path) {
+        var stick = new MachineIngredient.ItemIngredient(Ingredient.of(Items.STICK), 1, DataComponentPredicateSet.EMPTY, 0F);
+        var ironNugget = new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_NUGGET), 1, DataComponentPredicateSet.EMPTY, 0.5F);
+        var goldNugget = new MachineIngredient.ItemIngredient(Ingredient.of(Items.GOLD_NUGGET), 1, DataComponentPredicateSet.EMPTY, 0.25F);
+        return new MachineRecipe(MMCR.id(path), machineId, 20,
+                List.of(stick, ironNugget, goldNugget),
+                List.of(item(Items.EMERALD, 1), item(Items.DIAMOND, 1), item(Items.REDSTONE, 1)),
+                List.of(), 0, 1, true,
+                List.of(),
+                List.of(
+                        MachineRequirement.fromInput(stick),
+                        MachineRequirement.fromInput(ironNugget),
+                        MachineRequirement.fromInput(goldNugget),
+                        MachineRequirement.itemOutput(item(Items.EMERALD, 1), 1F),
+                        MachineRequirement.itemOutput(item(Items.DIAMOND, 1), 0.5F),
+                        MachineRequirement.itemOutput(item(Items.REDSTONE, 1), 0.25F)),
+                true, List.of());
+    }
+
+    private static MachineRecipe componentRecipe(Identifier machineId, String path,
+                                                 List<MachineIngredient> inputs, List<ItemStack> outputs) {
+        return new MachineRecipe(MMCR.id(path), machineId, 20, inputs, outputs,
+                List.of(), 0, 1, true, List.of(), List.of(), true, List.of());
+    }
+
+    private static MachineIngredient componentItemInput(Item item, int count, String name, float consumeChance) {
+        return new MachineIngredient.ItemIngredient(Ingredient.of(item), count, namedPredicate(name), consumeChance);
+    }
+
+    private static MachineRecipe enchantedNonConsumableRecipe(Identifier machineId, String path) {
+        return new MachineRecipe(MMCR.id(path), machineId, 100,
+                List.of(itemInputFromData("""
+                        {components: {"minecraft:enchantments": {"minecraft:sharpness": 2}, "minecraft:repair_cost": 1}, count: 1, id: "minecraft:diamond_sword"}
+                        """, 0F)),
+                List.of(), List.of(), 0, 1, true, List.of(), List.of(), true, List.of());
+    }
+
+    private static MachineRecipe enchantedOutputRecipe(Identifier machineId, String path) {
+        return new MachineRecipe(MMCR.id(path), machineId, 100,
+                List.of(itemInput(Items.IRON_SWORD, 1)),
+                List.of(itemOutputFromData("""
+                        {components: {"minecraft:enchantments": {"minecraft:sharpness": 2}, "minecraft:repair_cost": 1}, count: 1, id: "minecraft:iron_sword"}
+                        """)),
+                List.of(), 0, 1, true, List.of(), List.of(), true, List.of());
+    }
+
+    private static MachineRecipe chancedOutputRecipe(Identifier machineId, String path) {
+        return new MachineRecipe(MMCR.id(path), machineId, 20, List.of(itemInput(Items.IRON_INGOT, 1)), List.of(),
+                List.of(), 0, 1, true, List.of(), List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.APPLE), 1, ItemStack.EMPTY),
+                MachineRequirement.itemOutput(item(Items.EMERALD, 1)),
+                MachineRequirement.itemOutput(item(Items.DIAMOND, 1), 0.5F),
+                MachineRequirement.fluidOutput(fluidOutput(Fluids.LAVA, 250), 0.25F)), true, List.of());
+    }
+
+    private static MachineIngredient.ItemIngredient itemInputFromData(String itemData, float consumeChance) {
+        JsonObject root = JsonParser.parseString(itemData).getAsJsonObject();
+        Identifier id = Identifier.parse(root.get("id").getAsString());
+        int count = root.has("count") ? root.get("count").getAsInt() : 1;
+        return new MachineIngredient.ItemIngredient(Ingredient.of(BuiltInRegistries.ITEM.getValue(id)), count,
+                componentsFromData(root), consumeChance);
+    }
+
+    private static ItemStack itemOutputFromData(String itemData) {
+        JsonObject root = JsonParser.parseString(itemData).getAsJsonObject();
+        Identifier id = Identifier.parse(root.get("id").getAsString());
+        int count = root.has("count") ? root.get("count").getAsInt() : 1;
+        ItemStack stack = new ItemStack(Holder.direct(BuiltInRegistries.ITEM.getValue(id), DataComponentMap.EMPTY), count);
+        componentsFromData(root).applyTo(stack);
+        return stack;
+    }
+
+    private static DataComponentPredicateSet componentsFromData(JsonObject root) {
+        var ops = JsonOps.INSTANCE;
+        JsonObject components = root.getAsJsonObject("components");
+        Map<DataComponentType<?>, ComponentPredicate> predicates = new java.util.LinkedHashMap<>();
+        for (var entry : components.entrySet()) {
+            DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(Identifier.parse(entry.getKey()));
+            if (type == null) throw new IllegalArgumentException("Unknown data component type " + entry.getKey());
+            predicates.put(type, ComponentPredicate.exact(new Dynamic<>(ops, entry.getValue())));
+        }
+        return new DataComponentPredicateSet(predicates);
+    }
+
+    private static DataComponentPredicateSet namedPredicate(String name) {
+        return new DataComponentPredicateSet(Map.of(DataComponents.CUSTOM_NAME,
+                ComponentPredicate.text(name, ComponentPredicate.TextMode.PLAIN)));
+    }
+
+    private static List<Definition> thermalSmeltingFurnaceDefinitions() {
+        return List.of(
+                new Definition(MMCR.id("thermal_smelting_furnace_coal_iron_to_netherite_scrap"), THERMAL_SMELTING_FURNACE_ID, 80,
+                        List.of(itemInput(Items.COAL, 1), itemInput(Items.RAW_IRON, 1), energyInput(200)), List.of(item(Items.IRON_INGOT, 1)), List.of(), 4),
+                thermalSmeltingDefinition("copper", DefaultMachineLevels.COPPER_COIL, 120, Items.RAW_COPPER, Items.COPPER_INGOT, 400),
+                thermalSmeltingDefinition("iron", DefaultMachineLevels.IRON_COIL, 160, Items.IRON_INGOT, Items.GOLD_INGOT, 800),
+                thermalSmeltingDefinition("gold", DefaultMachineLevels.GOLD_COIL, 200, Items.GOLD_INGOT, Items.DIAMOND, 1_200),
+                thermalSmeltingDefinition("diamond", DefaultMachineLevels.DIAMOND_COIL, 240, Items.DIAMOND, Items.NETHERITE_INGOT, 2_000));
+    }
+
+    private static Definition thermalSmeltingDefinition(String level, Identifier levelId, int ticks,
+                                                        net.minecraft.world.item.Item input, net.minecraft.world.item.Item output, int energy) {
+        return new Definition(MMCR.id("thermal_smelting_furnace_" + level), THERMAL_SMELTING_FURNACE_ID, ticks,
+                List.of(itemInput(Items.COAL, 1), itemInput(input, 1), energyInput(energy)), List.of(item(output, 1)), List.of(), 4,
+                List.of(new LevelRequirement(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE, levelId)));
     }
 
     private static List<Definition> alloyFurnaceDefinitions() {
@@ -145,6 +312,13 @@ public final class DefaultRecipes {
         return new ItemStack(Holder.direct(item, DataComponentMap.EMPTY), count);
     }
 
+    private static ItemStack namedItem(Item item, int count, String name) {
+        bindItem(item);
+        ItemStack stack = new ItemStack(item, count);
+        stack.set(DataComponents.CUSTOM_NAME, Component.literal(name));
+        return stack;
+    }
+
     private static MachineIngredient itemInput(net.minecraft.world.item.Item item, int count) {
         return new MachineIngredient.ItemIngredient(Ingredient.of(item), count);
     }
@@ -166,13 +340,29 @@ public final class DefaultRecipes {
     }
 
     private record Definition(Identifier id, Identifier machineId, int ticks, List<MachineIngredient> inputs,
-                              List<ItemStack> outputs, List<FluidStack> fluidOutputs) {
+                              List<ItemStack> outputs, List<FluidStack> fluidOutputs, int maxThreads,
+                              List<LevelRequirement> levelRequirements) {
+        private Definition(Identifier id, Identifier machineId, int ticks, List<MachineIngredient> inputs,
+                           List<ItemStack> outputs, List<FluidStack> fluidOutputs) {
+            this(id, machineId, ticks, inputs, outputs, fluidOutputs, 1, List.of());
+        }
+
+        private Definition(Identifier id, Identifier machineId, int ticks, List<MachineIngredient> inputs,
+                           List<ItemStack> outputs, List<FluidStack> fluidOutputs, int maxThreads) {
+            this(id, machineId, ticks, inputs, outputs, fluidOutputs, maxThreads, List.of());
+        }
     }
 
     private static Holder<Fluid> boundFluid(Fluid fluid) {
         var holder = fluid.builtInRegistryHolder();
         holder.bindComponents(DataComponentMap.EMPTY);
         return holder;
+    }
+
+    private static void bindItem(Item item) {
+        item.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 64)
+                .build());
     }
 
     private static void register(MachineRecipe recipe) {

@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.helper.EnergyRecipeIo;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -23,8 +24,11 @@ import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.IItemHandlerModifiable;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,17 +49,223 @@ public final class RecipeCraftingContext {
     private List<ItemOutputRoute> itemOutputRoutes = List.of();
     private List<FluidInputRoute> fluidInputRoutes = List.of();
     private List<FluidOutputRoute> fluidOutputRoutes = List.of();
+    private List<List<PersistedFluidTransfer>> restoredFluidInputRoutes = List.of();
     private @Nullable List<ItemOutputState> simulatedItemOutputStates;
     private @Nullable List<FluidOutputState> simulatedFluidOutputStates;
     private @Nullable String lastFailureUnloc;
     private @Nullable RequirementFailure lastRequirementFailure;
     private @Nullable Identifier poolRecipeId;
     private List<RecipeModifier> structureModifiers = List.of();
+    private @Nullable Map<ItemMatchKey, Boolean> itemMatchCache;
 
     public RecipeCraftingContext(MachineControllerBlockEntity controller) {
         this.controller = controller;
         this.structureVersion = controller.getStructureVersion();
         this.modifierSnapshotVersion = controller.getModifierSnapshotVersion();
+    }
+
+    void setItemMatchCache(Map<ItemMatchKey, Boolean> itemMatchCache) {
+        this.itemMatchCache = itemMatchCache;
+    }
+
+    void clearItemMatchCache() {
+        this.itemMatchCache = null;
+    }
+
+    public void serialize(ValueOutput output) {
+        output.putInt("context_version", 1);
+        if (lastFailureUnloc != null) output.putString("last_failure_unloc", lastFailureUnloc);
+        ValueOutput.TypedOutputList<RecipeModifier> modifiers = output.list("structure_modifiers", RecipeModifier.CODEC);
+        for (RecipeModifier modifier : structureModifiers) modifiers.add(modifier);
+        serializeItemInputRoutes(output);
+        serializeItemOutputRoutes(output);
+        serializeFluidInputRoutes(output);
+        serializeFluidOutputRoutes(output);
+    }
+
+    public static RecipeCraftingContext from(MachineControllerBlockEntity controller, ValueInput input) {
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+        String failure = input.getStringOr("last_failure_unloc", "");
+        context.lastFailureUnloc = failure.isEmpty() ? null : failure;
+        List<RecipeModifier> modifiers = new ArrayList<>();
+        input.listOrEmpty("structure_modifiers", RecipeModifier.CODEC).forEach(modifiers::add);
+        context.setStructureModifiers(modifiers);
+        context.itemInputRoutes = context.readItemInputRoutes(input);
+        context.itemOutputRoutes = context.readItemOutputRoutes(input);
+        context.restoredFluidInputRoutes = context.readFluidInputRoutes(input);
+        context.fluidOutputRoutes = context.readFluidOutputRoutes(input);
+        return context;
+    }
+
+    private void serializeItemInputRoutes(ValueOutput output) {
+        output.putInt("item_input_route_count", itemInputRoutes.size());
+        for (int i = 0; i < itemInputRoutes.size(); i++) {
+            ItemInputRoute route = itemInputRoutes.get(i);
+            if (route == null) continue;
+            ValueOutput routeOutput = output.child("item_input_route_" + i);
+            routeOutput.putBoolean("present", true);
+            routeOutput.putInt("transfer_count", route.transfers().size());
+            for (int j = 0; j < route.transfers().size(); j++) {
+                ItemInputTransfer transfer = route.transfers().get(j);
+                ValueOutput transferOutput = routeOutput.child("transfer_" + j);
+                if (transfer.pos() == null) continue;
+                transferOutput.putLong("pos", transfer.pos().asLong());
+                transferOutput.putInt("slot", transfer.slot());
+                transferOutput.putInt("amount", transfer.amount());
+            }
+        }
+    }
+
+    private void serializeItemOutputRoutes(ValueOutput output) {
+        output.putInt("item_output_route_count", itemOutputRoutes.size());
+        for (int i = 0; i < itemOutputRoutes.size(); i++) {
+            ItemOutputRoute route = itemOutputRoutes.get(i);
+            if (route == null) continue;
+            ValueOutput routeOutput = output.child("item_output_route_" + i);
+            routeOutput.putBoolean("present", true);
+            routeOutput.putInt("transfer_count", route.transfers().size());
+            for (int j = 0; j < route.transfers().size(); j++) {
+                ItemOutputTransfer transfer = route.transfers().get(j);
+                ValueOutput transferOutput = routeOutput.child("transfer_" + j);
+                if (transfer.pos() == null) continue;
+                transferOutput.putLong("pos", transfer.pos().asLong());
+                transferOutput.putInt("slot", transfer.slot());
+                transferOutput.store("stack", ItemStack.CODEC, transfer.stack());
+            }
+        }
+    }
+
+    private void serializeFluidInputRoutes(ValueOutput output) {
+        output.putInt("fluid_input_route_count", fluidInputRoutes.size());
+        for (int i = 0; i < fluidInputRoutes.size(); i++) {
+            FluidInputRoute route = fluidInputRoutes.get(i);
+            if (route == null) continue;
+            ValueOutput routeOutput = output.child("fluid_input_route_" + i);
+            routeOutput.putBoolean("present", true);
+            routeOutput.putInt("transfer_count", route.transfers().size());
+            for (int j = 0; j < route.transfers().size(); j++) {
+                FluidInputTransfer transfer = route.transfers().get(j);
+                ValueOutput transferOutput = routeOutput.child("transfer_" + j);
+                if (transfer.pos() == null) continue;
+                transferOutput.putLong("pos", transfer.pos().asLong());
+                transferOutput.putInt("tank", transfer.tank());
+                transferOutput.store("stack", FluidStack.CODEC, transfer.stack());
+            }
+        }
+    }
+
+    private void serializeFluidOutputRoutes(ValueOutput output) {
+        output.putInt("fluid_output_route_count", fluidOutputRoutes.size());
+        for (int i = 0; i < fluidOutputRoutes.size(); i++) {
+            FluidOutputRoute route = fluidOutputRoutes.get(i);
+            if (route == null) continue;
+            ValueOutput routeOutput = output.child("fluid_output_route_" + i);
+            routeOutput.putBoolean("present", true);
+            routeOutput.putInt("transfer_count", route.transfers().size());
+            for (int j = 0; j < route.transfers().size(); j++) {
+                FluidOutputTransfer transfer = route.transfers().get(j);
+                ValueOutput transferOutput = routeOutput.child("transfer_" + j);
+                if (transfer.pos() == null) continue;
+                transferOutput.putLong("pos", transfer.pos().asLong());
+                transferOutput.putInt("tank", transfer.tank());
+                transferOutput.store("stack", FluidStack.CODEC, transfer.stack());
+            }
+        }
+    }
+
+    private List<ItemInputRoute> readItemInputRoutes(ValueInput input) {
+        List<ItemInputRoute> routes = emptyItemInputRoutes(Math.max(0, input.getIntOr("item_input_route_count", 0)));
+        for (int i = 0; i < routes.size(); i++) {
+            ValueInput routeInput = input.childOrEmpty("item_input_route_" + i);
+            if (!routeInput.getBooleanOr("present", false)) continue;
+            List<ItemInputTransfer> transfers = new ArrayList<>();
+            boolean valid = true;
+            for (int j = 0; j < Math.max(0, routeInput.getIntOr("transfer_count", 0)); j++) {
+                ValueInput transferInput = routeInput.childOrEmpty("transfer_" + j);
+                ItemBusBlockEntity bus = itemBusAt(net.minecraft.core.BlockPos.of(transferInput.getLongOr("pos", Long.MIN_VALUE)), IOType.INPUT);
+                int slot = transferInput.getIntOr("slot", -1);
+                if (bus == null || slot < 0 || slot >= bus.getItemHandler(null).getSlots()) {
+                    valid = false;
+                    break;
+                }
+                transfers.add(new ItemInputTransfer(bus.getItemHandler(null), bus.getBlockPos(), slot,
+                        null,
+                        transferInput.getIntOr("amount", 0)));
+            }
+            if (valid) routes.set(i, new ItemInputRoute(List.copyOf(transfers)));
+        }
+        return routes;
+    }
+
+    private List<ItemOutputRoute> readItemOutputRoutes(ValueInput input) {
+        List<ItemOutputRoute> routes = emptyItemOutputRoutes(Math.max(0, input.getIntOr("item_output_route_count", 0)));
+        for (int i = 0; i < routes.size(); i++) {
+            ValueInput routeInput = input.childOrEmpty("item_output_route_" + i);
+            if (!routeInput.getBooleanOr("present", false)) continue;
+            List<ItemOutputTransfer> transfers = new ArrayList<>();
+            boolean valid = true;
+            for (int j = 0; j < Math.max(0, routeInput.getIntOr("transfer_count", 0)); j++) {
+                ValueInput transferInput = routeInput.childOrEmpty("transfer_" + j);
+                ItemBusBlockEntity bus = itemBusAt(net.minecraft.core.BlockPos.of(transferInput.getLongOr("pos", Long.MIN_VALUE)), IOType.OUTPUT);
+                ItemStack stack = transferInput.read("stack", ItemStack.CODEC).orElse(ItemStack.EMPTY);
+                int slot = transferInput.getIntOr("slot", -1);
+                if (bus == null || stack.isEmpty() || slot < 0 || slot >= bus.getItemHandler(null).getSlots()) {
+                    valid = false;
+                    break;
+                }
+                transfers.add(new ItemOutputTransfer(bus.getItemHandler(null), bus.getBlockPos(), slot, stack));
+            }
+            if (valid) routes.set(i, new ItemOutputRoute(List.copyOf(transfers)));
+        }
+        return routes;
+    }
+
+    private List<List<PersistedFluidTransfer>> readFluidInputRoutes(ValueInput input) {
+        List<List<PersistedFluidTransfer>> routes = new ArrayList<>();
+        int routeCount = Math.max(0, input.getIntOr("fluid_input_route_count", 0));
+        for (int i = 0; i < routeCount; i++) routes.add(null);
+        for (int i = 0; i < routes.size(); i++) {
+            ValueInput routeInput = input.childOrEmpty("fluid_input_route_" + i);
+            if (!routeInput.getBooleanOr("present", false)) continue;
+            List<PersistedFluidTransfer> transfers = new ArrayList<>();
+            boolean valid = true;
+            for (int j = 0; j < Math.max(0, routeInput.getIntOr("transfer_count", 0)); j++) {
+                ValueInput transferInput = routeInput.childOrEmpty("transfer_" + j);
+                net.minecraft.core.BlockPos pos = net.minecraft.core.BlockPos.of(transferInput.getLongOr("pos", Long.MIN_VALUE));
+                FluidStack stack = transferInput.read("stack", FluidStack.CODEC).orElse(FluidStack.EMPTY);
+                int tank = transferInput.getIntOr("tank", -1);
+                if (stack.isEmpty() || tank < 0) {
+                    valid = false;
+                    break;
+                }
+                transfers.add(new PersistedFluidTransfer(pos, tank, stack));
+            }
+            if (valid) routes.set(i, List.copyOf(transfers));
+        }
+        return routes;
+    }
+
+    private List<FluidOutputRoute> readFluidOutputRoutes(ValueInput input) {
+        List<FluidOutputRoute> routes = emptyFluidOutputRoutes(Math.max(0, input.getIntOr("fluid_output_route_count", 0)));
+        for (int i = 0; i < routes.size(); i++) {
+            ValueInput routeInput = input.childOrEmpty("fluid_output_route_" + i);
+            if (!routeInput.getBooleanOr("present", false)) continue;
+            List<FluidOutputTransfer> transfers = new ArrayList<>();
+            boolean valid = true;
+            for (int j = 0; j < Math.max(0, routeInput.getIntOr("transfer_count", 0)); j++) {
+                ValueInput transferInput = routeInput.childOrEmpty("transfer_" + j);
+                FluidHatchBlockEntity hatch = fluidHatchAt(net.minecraft.core.BlockPos.of(transferInput.getLongOr("pos", Long.MIN_VALUE)), IOType.OUTPUT);
+                FluidStack stack = transferInput.read("stack", FluidStack.CODEC).orElse(FluidStack.EMPTY);
+                int tank = transferInput.getIntOr("tank", -1);
+                if (hatch == null || stack.isEmpty() || tank < 0 || tank >= hatch.getFluidHandler(null).getTanks()) {
+                    valid = false;
+                    break;
+                }
+                transfers.add(new FluidOutputTransfer(hatch.getFluidHandler(null), hatch.getBlockPos(), tank, stack));
+            }
+            if (valid) routes.set(i, new FluidOutputRoute(List.copyOf(transfers)));
+        }
+        return routes;
     }
 
     public boolean isStructureVersionCurrent() {
@@ -84,9 +294,11 @@ public final class RecipeCraftingContext {
         itemOutputRoutes = List.of();
         fluidInputRoutes = List.of();
         fluidOutputRoutes = List.of();
+        restoredFluidInputRoutes = List.of();
         lastFailureUnloc = null;
         lastRequirementFailure = null;
         structureModifiers = List.of();
+        itemMatchCache = null;
     }
 
     public void setStructureModifiers(List<RecipeModifier> modifiers) {
@@ -103,6 +315,52 @@ public final class RecipeCraftingContext {
         result.addAll(structureModifiers);
         return List.copyOf(result);
     }
+
+    public List<MachineRequirement> runtimeRequirements(MachineRecipe recipe) {
+        double energyMultiplier = levelMultiplier(MachineLevel::modifier, LevelValue.ENERGY);
+        double outputMultiplier = levelMultiplier(MachineLevel::modifier, LevelValue.OUTPUT);
+        return recipe.runtimeRequirements(structureModifiers, energyMultiplier, outputMultiplier);
+    }
+
+    public int levelModifiedDuration(MachineRecipe recipe) {
+        double duration = recipe.getRecipeTotalTickTime() * levelMultiplier(MachineLevel::modifier, LevelValue.DURATION);
+        return IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyDuration(effectiveModifiers(recipe), floorNonNegative(duration)));
+    }
+
+    public int levelModifiedParallelism(int base, int maximum) {
+        int bonus = sortedLevels().stream().mapToInt(level -> level.modifier().parallelismBonus()).sum();
+        return Math.max(1, Math.min(maximum, base + bonus));
+    }
+
+    private List<MachineLevel> sortedLevels() {
+        Map<Identifier, MachineLevel> foundLevels = controller.getFoundLevels();
+        if (foundLevels == null || foundLevels.isEmpty()) return List.of();
+        return foundLevels.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(Comparator.comparing(Identifier::toString)))
+                .map(Map.Entry::getValue)
+                .toList();
+    }
+
+    private double levelMultiplier(java.util.function.Function<MachineLevel, cn.howxu.mmcr.api.machine.level.LevelModifier> accessor,
+                                   LevelValue value) {
+        double multiplier = 1D;
+        for (MachineLevel level : sortedLevels()) {
+            var modifier = accessor.apply(level);
+            multiplier *= switch (value) {
+                case DURATION -> modifier.durationMultiplier();
+                case ENERGY -> modifier.energyMultiplier();
+                case OUTPUT -> modifier.outputMultiplier();
+            };
+        }
+        return multiplier;
+    }
+
+    private static int floorNonNegative(double value) {
+        if (value <= 0D) return 0;
+        return value >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.floor(value);
+    }
+
+    private enum LevelValue { DURATION, ENERGY, OUTPUT }
 
     void setPoolRecipeId(Identifier recipeId) {
         this.poolRecipeId = recipeId;
@@ -285,6 +543,10 @@ public final class RecipeCraftingContext {
     }
 
     private boolean simulateInputs(List<MachineRequirement> requirements) {
+        return simulateInputs(requirements, null);
+    }
+
+    private boolean simulateInputs(List<MachineRequirement> requirements, @Nullable ActiveMachineRecipe.InputConsumptionPlan plan) {
         lastFailureUnloc = null;
         lastRequirementFailure = null;
         itemInputRoutes = emptyItemInputRoutes(requirements.size());
@@ -292,6 +554,11 @@ public final class RecipeCraftingContext {
 
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
+            if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT) {
+                boolean consume = plan == null ? item.consumeChance() > 0F : plan.consumedBatches(requirementIndex) > 0;
+                if (!simulateItemInput(requirementIndex, item, consume)) return false;
+                continue;
+            }
             if (requirement.io() == RecipeModifier.IOType.INPUT && !requirement.simulate(this, requirementIndex)) return false;
         }
         return true;
@@ -308,7 +575,7 @@ public final class RecipeCraftingContext {
     public int maxInputParallelism(MachineRecipe recipe, int limit) {
         int max = Math.max(1, limit);
         int best = max;
-        for (MachineRequirement requirement : recipe.runtimeRequirements(structureModifiers)) {
+        for (MachineRequirement requirement : runtimeRequirements(recipe)) {
             if (requirement.io() != RecipeModifier.IOType.INPUT) continue;
             int requirementMax = requirement.maxInputParallelism(this, max);
             if (requirementMax < 0) return -1;
@@ -349,18 +616,26 @@ public final class RecipeCraftingContext {
     }
 
     private List<MachineRequirement> scaledRequirements(MachineRecipe recipe, int parallelism) {
-        List<MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
-        if (parallelism <= 1) return requirements;
+        return scaledRequirements(recipe, parallelism, null);
+    }
+
+    private List<MachineRequirement> scaledRequirements(MachineRecipe recipe, int parallelism,
+                                                          @Nullable ActiveMachineRecipe.InputConsumptionPlan plan) {
+        List<MachineRequirement> requirements = runtimeRequirements(recipe);
+        if (parallelism <= 1 && plan == null) return requirements;
         try {
             List<MachineRequirement> scaled = new ArrayList<>(requirements.size());
             for (MachineRequirement requirement : requirements) {
                 if (requirement instanceof ItemRequirement item) {
                     if (item.io() == RecipeModifier.IOType.INPUT) {
-                        scaled.add(new ItemRequirement(item.io(), item.item(), Math.multiplyExact(item.count(), parallelism), item.stack(), item.chance(), item.tags()));
+                        int batches = plan == null ? (item.consumeChance() <= 0F ? 0 : parallelism)
+                                : plan.consumedBatches(scaled.size());
+                        int count = batches == 0 ? item.count() : Math.multiplyExact(item.count(), batches);
+                        scaled.add(new ItemRequirement(item.io(), item.item(), count, item.stack(), item.chance(), item.tags(), item.components(), item.consumeChance()));
                     } else {
                         ItemStack stack = item.stack().copy();
                         stack.setCount(Math.multiplyExact(stack.getCount(), parallelism));
-                        scaled.add(new ItemRequirement(item.io(), item.item(), item.count(), stack, item.chance(), item.tags()));
+                        scaled.add(new ItemRequirement(item.io(), item.item(), item.count(), stack, item.chance(), item.tags(), item.components(), item.consumeChance()));
                     }
                 } else if (requirement instanceof FluidRequirement fluid) {
                     if (fluid.io() == RecipeModifier.IOType.INPUT) {
@@ -383,11 +658,31 @@ public final class RecipeCraftingContext {
     }
 
     public boolean simulateItemInput(int requirementIndex, ItemRequirement item) {
+        return simulateItemInput(requirementIndex, item, item.consumeChance() > 0F);
+    }
+
+    private boolean simulateItemInput(int requirementIndex, ItemRequirement item, boolean consume) {
         List<ItemInputState> itemStates = itemInputStates(item.tags());
         List<ItemBusBlockEntity> taggedOut = excludedLiveComponents(ItemBusBlockEntity.class, IOType.INPUT, item.tags());
         List<ItemBusBlockEntity> itemHatches = liveComponents(ItemBusBlockEntity.class, IOType.INPUT, item.tags());
+        MachineIngredient.ItemIngredient ingredient = new MachineIngredient.ItemIngredient(item.item(), item.count(), item.components(), item.consumeChance());
+        if (!consume) {
+            int available = 0;
+            List<ItemBusBlockEntity> matched = new ArrayList<>();
+            for (ItemInputState state : itemStates) {
+                if (!state.matches(ingredient)) continue;
+                available += state.stack().getCount();
+                if (state.bus() != null) matched.add(state.bus());
+            }
+            if (available >= item.count()) {
+                itemInputRoutes.set(requirementIndex, new ItemInputRoute(List.of()));
+                return true;
+            }
+            setFailure(FAILURE_MISSING_INPUT, buildMissingInputFailure(
+                    requirementIndex, item.count(), Math.max(0, item.count() - available), itemHatches, matched, taggedOut));
+            return false;
+        }
         List<ItemInputTransfer> transfers = new ArrayList<>();
-        MachineIngredient.ItemIngredient ingredient = new MachineIngredient.ItemIngredient(item.item(), item.count());
         int remaining = item.count();
         List<ItemBusBlockEntity> matched = new ArrayList<>();
         for (ItemInputState state : itemStates) {
@@ -527,8 +822,12 @@ public final class RecipeCraftingContext {
     }
 
     public boolean startCrafting(MachineRecipe recipe, int parallelism) {
-        List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism);
-        if (!simulateInputs(requirements)) return false;
+        return startCrafting(recipe, parallelism, null);
+    }
+
+    public boolean startCrafting(MachineRecipe recipe, int parallelism, ActiveMachineRecipe.InputConsumptionPlan plan) {
+        List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism, plan);
+        if (!simulateInputs(requirements, plan)) return false;
         if (!simulateOutputs(requirements)) return false;
         return commitInputs(requirements);
     }
@@ -552,6 +851,22 @@ public final class RecipeCraftingContext {
             parallelism--;
         }
         return 0;
+    }
+
+    public ActiveMachineRecipe.InputConsumptionPlan createInputConsumptionPlan(MachineRecipe recipe, int parallelism) {
+        List<MachineRequirement> requirements = runtimeRequirements(recipe);
+        List<Integer> consumed = new ArrayList<>(requirements.size());
+        for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
+            MachineRequirement requirement = requirements.get(requirementIndex);
+            int consumedBatches = 0;
+            if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT) {
+                for (int batch = 0; batch < parallelism; batch++) {
+                    if (shouldConsume(item.consumeChance())) consumedBatches++;
+                }
+            }
+            consumed.add(consumedBatches);
+        }
+        return new ActiveMachineRecipe.InputConsumptionPlan(consumed);
     }
 
     public boolean canStartCrafting(ActiveMachineRecipe activeRecipe) {
@@ -587,7 +902,7 @@ public final class RecipeCraftingContext {
     }
 
     public boolean commitInputs(MachineRecipe recipe) {
-        return commitInputs(recipe.runtimeRequirements(structureModifiers));
+        return commitInputs(runtimeRequirements(recipe));
     }
 
     private boolean commitInputs(List<MachineRequirement> requirements) {
@@ -643,6 +958,10 @@ public final class RecipeCraftingContext {
         return simulateOutputs(requirements) && commitOutputs(requirements);
     }
 
+    public boolean commitOutputs(MachineRecipe recipe) {
+        return commitOutputs(runtimeRequirements(recipe));
+    }
+
     private boolean commitOutputs(List<MachineRequirement> requirements) {
         List<ItemOutputTransfer> itemTransfers = new ArrayList<>();
         List<FluidOutputTransfer> fluidTransfers = new ArrayList<>();
@@ -680,6 +999,13 @@ public final class RecipeCraftingContext {
     }
 
     private boolean shouldProduce(float chance) {
+        if (chance >= 1F) return true;
+        if (chance <= 0F) return false;
+        var level = controller.getLevel();
+        return (level == null ? Math.random() : level.getRandom().nextFloat()) < chance;
+    }
+
+    private boolean shouldConsume(float chance) {
         if (chance >= 1F) return true;
         if (chance <= 0F) return false;
         var level = controller.getLevel();
@@ -842,6 +1168,18 @@ public final class RecipeCraftingContext {
             if (!(requirement instanceof ItemRequirement item) || item.io() != RecipeModifier.IOType.INPUT) continue;
             ItemInputRoute route = requirementIndex < itemInputRoutes.size() ? itemInputRoutes.get(requirementIndex) : null;
             if (route == null) return new RequirementFailure(requirementIndex, RequirementFailure.Kind.MISSING_INPUT, item.count(), 0);
+            if (route.transfers().isEmpty()) {
+                int available = 0;
+                MachineIngredient.ItemIngredient ingredient = new MachineIngredient.ItemIngredient(
+                        item.item(), item.count(), item.components(), item.consumeChance());
+                for (ItemInputState state : itemInputStates(item.tags())) {
+                    if (state.matches(ingredient)) available += state.stack().getCount();
+                }
+                if (available < item.count()) {
+                    return new RequirementFailure(requirementIndex, RequirementFailure.Kind.MISSING_INPUT, item.count(), available);
+                }
+                continue;
+            }
             int available = 0;
             for (ItemInputTransfer transfer : route.transfers()) {
                 ItemInputState state = itemInputState(states, transfer);
@@ -881,6 +1219,7 @@ public final class RecipeCraftingContext {
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
             if (!(requirement instanceof FluidRequirement fluid) || fluid.io() != RecipeModifier.IOType.INPUT) continue;
+            restoreFluidInputRoute(requirementIndex);
             FluidInputRoute route = requirementIndex < fluidInputRoutes.size() ? fluidInputRoutes.get(requirementIndex) : null;
             if (route == null) return new RequirementFailure(requirementIndex, RequirementFailure.Kind.MISSING_INPUT, fluid.amount(), 0);
             int available = 0;
@@ -926,7 +1265,25 @@ public final class RecipeCraftingContext {
     }
 
     public boolean collectFluidInputRoute(int requirementIndex) {
+        restoreFluidInputRoute(requirementIndex);
         return requirementIndex < fluidInputRoutes.size() && fluidInputRoutes.get(requirementIndex) != null;
+    }
+
+    private void restoreFluidInputRoute(int requirementIndex) {
+        if (requirementIndex < fluidInputRoutes.size() && fluidInputRoutes.get(requirementIndex) != null) return;
+        if (requirementIndex >= restoredFluidInputRoutes.size()) return;
+        List<PersistedFluidTransfer> persisted = restoredFluidInputRoutes.get(requirementIndex);
+        if (persisted == null) return;
+        List<FluidInputTransfer> transfers = new ArrayList<>();
+        for (PersistedFluidTransfer transfer : persisted) {
+            FluidHatchBlockEntity hatch = fluidHatchAt(transfer.pos(), IOType.INPUT);
+            if (hatch == null || transfer.tank() >= hatch.getFluidHandler(null).getTanks()) return;
+            transfers.add(new FluidInputTransfer(hatch.getFluidHandler(null), hatch.getBlockPos(), transfer.tank(), transfer.stack()));
+        }
+        List<FluidInputRoute> routes = new ArrayList<>(fluidInputRoutes);
+        while (routes.size() <= requirementIndex) routes.add(null);
+        routes.set(requirementIndex, new FluidInputRoute(List.copyOf(transfers)));
+        fluidInputRoutes = routes;
     }
 
     public boolean collectFluidOutputRoute(int requirementIndex) {
@@ -973,6 +1330,22 @@ public final class RecipeCraftingContext {
         if (entity instanceof FluidHatchBlockEntity hatch) return hatch.ioType() == ioType;
         if (entity instanceof EnergyHatchBlockEntity hatch) return hatch.ioType() == ioType;
         return false;
+    }
+
+    private @Nullable ItemBusBlockEntity itemBusAt(net.minecraft.core.BlockPos pos, IOType ioType) {
+        for (ProcessingComponent component : controller.getComponents()) {
+            if (!(component.getContainer() instanceof ItemBusBlockEntity bus)) continue;
+            if (bus.ioType() == ioType && component.getPos().equals(pos)) return bus;
+        }
+        return null;
+    }
+
+    private @Nullable FluidHatchBlockEntity fluidHatchAt(net.minecraft.core.BlockPos pos, IOType ioType) {
+        for (ProcessingComponent component : controller.getComponents()) {
+            if (!(component.getContainer() instanceof FluidHatchBlockEntity hatch)) continue;
+            if (hatch.ioType() == ioType && component.getPos().equals(pos)) return hatch;
+        }
+        return null;
     }
 
     private static boolean tagsMatch(List<String> required, List<String> componentTags) {
@@ -1102,7 +1475,7 @@ public final class RecipeCraftingContext {
         }
     }
 
-    private static ItemInputState itemInputState(List<ItemInputState> states, ItemInputTransfer transfer) {
+    private ItemInputState itemInputState(List<ItemInputState> states, ItemInputTransfer transfer) {
         for (ItemInputState state : states) {
             if (state.handler == transfer.handler() && state.slot == transfer.slot()) return state;
         }
@@ -1167,15 +1540,20 @@ public final class RecipeCraftingContext {
 
     private record FluidOutputRoute(List<FluidOutputTransfer> transfers) {}
 
-    private record ItemInputTransfer(IItemHandler handler, int slot, MachineIngredient.ItemIngredient ingredient, int amount) {}
+    private record ItemInputTransfer(IItemHandler handler, @Nullable net.minecraft.core.BlockPos pos, int slot,
+                                     MachineIngredient.ItemIngredient ingredient, int amount) {}
 
-    private record ItemOutputTransfer(IItemHandler handler, int slot, ItemStack stack) {}
+    private record ItemOutputTransfer(IItemHandler handler, @Nullable net.minecraft.core.BlockPos pos, int slot, ItemStack stack) {}
 
-    private record FluidInputTransfer(IFluidHandler handler, int tank, FluidStack stack) {}
+    private record FluidInputTransfer(IFluidHandler handler, @Nullable net.minecraft.core.BlockPos pos, int tank, FluidStack stack) {}
 
-    private record FluidOutputTransfer(IFluidHandler handler, int tank, FluidStack stack) {}
+    private record PersistedFluidTransfer(net.minecraft.core.BlockPos pos, int tank, FluidStack stack) {}
 
-    private static final class ItemInputState {
+    private record FluidOutputTransfer(IFluidHandler handler, @Nullable net.minecraft.core.BlockPos pos, int tank, FluidStack stack) {}
+
+    record ItemMatchKey(MachineIngredient.ItemIngredient ingredient, ItemStack stack) { }
+
+    private final class ItemInputState {
         private final ItemBusBlockEntity bus;
         private final IItemHandler handler;
         private final int slot;
@@ -1189,12 +1567,21 @@ public final class RecipeCraftingContext {
         }
 
         private int extract(MachineIngredient.ItemIngredient ingredient, int remaining, List<ItemInputTransfer> transfers) {
-            if (remaining <= 0 || !ingredient.item().test(stack)) return remaining;
+            if (remaining <= 0 || !matches(ingredient)) return remaining;
             int taken = Math.min(remaining, stack.getCount());
             if (taken <= 0) return remaining;
-            transfers.add(new ItemInputTransfer(handler, slot, ingredient, taken));
+            transfers.add(new ItemInputTransfer(handler, bus == null ? null : bus.getBlockPos(), slot, ingredient, taken));
             stack.shrink(taken);
             return remaining - taken;
+        }
+
+        private boolean matches(MachineIngredient.ItemIngredient ingredient) {
+            if (!ingredient.item().test(stack)) return false;
+            if (itemMatchCache == null || ingredient.components().isEmpty()) {
+                return ingredient.components().matches(stack);
+            }
+            ItemMatchKey key = new ItemMatchKey(ingredient, stack.copyWithCount(1));
+            return itemMatchCache.computeIfAbsent(key, ignored -> ingredient.components().matches(stack));
         }
 
         private ItemBusBlockEntity bus() {
@@ -1239,7 +1626,7 @@ public final class RecipeCraftingContext {
             int inserted = Math.min(room, input.getCount());
             if (inserted <= 0) return input;
             ItemStack insertedStack = input.copyWithCount(inserted);
-            transfers.add(new ItemOutputTransfer(handler, slot, insertedStack));
+            transfers.add(new ItemOutputTransfer(handler, bus == null ? null : bus.getBlockPos(), slot, insertedStack));
             if (stack.isEmpty()) {
                 stack = insertedStack.copy();
             } else {
@@ -1286,7 +1673,7 @@ public final class RecipeCraftingContext {
             if (drained <= 0) return remaining;
             FluidStack transfer = stack.copy();
             transfer.setAmount(drained);
-            transfers.add(new FluidInputTransfer(handler, tank, transfer));
+            transfers.add(new FluidInputTransfer(handler, hatch == null ? null : hatch.getBlockPos(), tank, transfer));
             stack.shrink(drained);
             return remaining - drained;
         }
@@ -1325,7 +1712,7 @@ public final class RecipeCraftingContext {
             if (filled <= 0) return remaining;
             FluidStack transfer = input.copy();
             transfer.setAmount(filled);
-            transfers.add(new FluidOutputTransfer(handler, tank, transfer));
+            transfers.add(new FluidOutputTransfer(handler, hatch == null ? null : hatch.getBlockPos(), tank, transfer));
             if (stack.isEmpty()) {
                 stack = transfer.copy();
             } else {

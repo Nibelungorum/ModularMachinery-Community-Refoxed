@@ -11,12 +11,13 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public record FactoryControllerSnapshot(BlockPos controllerPos, boolean formed, boolean redstonePaused,
-                                        int activeThreadCount, int threadCount, int currentParallelism,
-                                        int maxParallelism, String machineName, int parallelSlots,
-                                        List<FactoryRecipeScheduler.ThreadSnapshot> threads) {
+                                         int activeThreadCount, int threadCount, int currentParallelism,
+                                         int maxParallelism, String machineName, int parallelSlots,
+                                         String lastFailureUnloc, List<FactoryRecipeScheduler.ThreadSnapshot> threads) {
     public FactoryControllerSnapshot {
         controllerPos = controllerPos == null ? BlockPos.ZERO : controllerPos.immutable();
         machineName = machineName == null ? "" : machineName;
+        lastFailureUnloc = lastFailureUnloc == null ? "" : lastFailureUnloc;
         threads = List.copyOf(threads == null ? List.of() : threads);
     }
 
@@ -24,11 +25,19 @@ public record FactoryControllerSnapshot(BlockPos controllerPos, boolean formed, 
                                      int activeThreadCount, int threadCount, int currentParallelism,
                                      int maxParallelism, List<FactoryRecipeScheduler.ThreadSnapshot> threads) {
         this(controllerPos, formed, redstonePaused, activeThreadCount, threadCount, currentParallelism,
-                maxParallelism, "", 0, threads);
+                maxParallelism, "", 0, "", threads);
+    }
+
+    public FactoryControllerSnapshot(BlockPos controllerPos, boolean formed, boolean redstonePaused,
+                                     int activeThreadCount, int threadCount, int currentParallelism,
+                                     int maxParallelism, String machineName, int parallelSlots,
+                                     List<FactoryRecipeScheduler.ThreadSnapshot> threads) {
+        this(controllerPos, formed, redstonePaused, activeThreadCount, threadCount, currentParallelism,
+                maxParallelism, machineName, parallelSlots, "", threads);
     }
 
     public static FactoryControllerSnapshot empty(BlockPos controllerPos) {
-        return new FactoryControllerSnapshot(controllerPos, false, false, 0, 1, 0, 1, "", 0,
+        return new FactoryControllerSnapshot(controllerPos, false, false, 0, 1, 0, 1, "", 0, "",
                 List.of(FactoryRecipeScheduler.ThreadSnapshot.idleBase()));
     }
 }

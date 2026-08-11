@@ -1,56 +1,41 @@
-# Task 2 Report
+# Task 2 Report: Persist Single-Controller Paused State
 
-## Changes
+## Review Fix
 
-- Added `MachineComponentTile.claimPolicy()` with the exclusive default from Task 1's `ComponentClaimPolicy`.
-- Marked IO ports as `SHARED_SERIALIZED`.
-- Replaced singular IO port controller appearance ownership with a `TreeMap<BlockPos, Identifier>`, ordered by `BlockPos::compareTo`.
-- Added owner-specific link/unlink APIs, immutable owner-position snapshots, and deterministic `linkedControllerPos()` compatibility access.
-- Persisted every owner and texture under the `LinkedControllers` list NBT child; loading refreshes the deterministic active appearance.
-- Made controller-link maintenance remove only invalid owners and retain the deprecated `bindControllerAppearance` compatibility delegate.
-- Extended `MachinePortAppearanceTest` for owner-specific unlinking, policy defaults, and the new list NBT format.
+- Root cause: `MachineControllerBlockEntity` serialized only `ActiveMachineRecipe`; loading constructed an empty `RecipeCraftingContext`, losing its runtime failure state. The existing regression manually rearranged private fields rather than testing the redstone branch in `serverTick()`.
+- `RecipeCraftingContext` now has minimal `ValueOutput`/`ValueInput` support for `lastFailureUnloc`, the only runtime state needed to preserve the active/paused controller pair. Transient I/O routes remain unsaved because they are recalculated on the next recipe tick.
+- Controller save/load writes and restores the matching context under `active_context` for either the active or paused recipe state.
+- `LevelStub` now supports configurable direct redstone signal strength. The single-controller regression drives a real powered `serverTick()`, proves consecutive powered ticks retain the identical paused recipe/context pair and tick, then removes the signal and verifies `serverTick()` resumes progression.
 
-## TDD Evidence
+## Implementation
 
-1. RED: ran `./gradlew test --tests cn.howxu.mmcr.internal.tile.MachinePortAppearanceTest --no-daemon` after adding the requested tests. It failed during test compilation because `linkControllerAppearance`, `unlinkControllerAppearance`, `linkedControllerPositions`, and `claimPolicy` did not exist. The anonymous default-policy fixture also correctly identified the existing required `provideComponent()` method.
-2. GREEN: implemented the requested APIs and storage model in the three task files. The first green attempt exposed an incorrect test assumption: `ListTag.getCompound(int)` returns `Optional<CompoundTag>` in this NeoForge version. Updated the test to unwrap it, then reran successfully.
-3. Final verification: reran the same directed test command successfully after diff and behavior self-review.
+- Redstone power moves the single-controller active recipe/context pair to the paused slot only when `active` is present. Later powered ticks return before recipe work, leaving the paused pair unchanged.
+- Saved controller data now records `recipe_state` as `active` or `paused`, serializes the populated `ActiveMachineRecipe` through its existing `ValueOutput` API, and persists a non-null `last_failure_unloc`.
+- Loading reconstructs the matching runtime slot and its `RecipeCraftingContext`. Invalid recipe registry entries are logged and discard only the saved pair. Legacy `has_active` data is still read as active state.
+- Normal single-controller recipe progression and completion no longer clear `lastFailureUnloc`. It is cleared by successful starts in `applySearchResult` and `tryRestartLastRecipe`.
 
-## Tests
+## Verification
 
-Command:
+- Red phase: `./gradlew test --no-daemon --tests '*MachineControllerBlockEntityTest'` failed as expected: restored paused context expected `test.pause.failure` but was `null` at `MachineControllerBlockEntityTest.java:458`.
+- Green phase: `./gradlew test --no-daemon --tests '*MachineControllerBlockEntityTest'` passed after the implementation: `BUILD SUCCESSFUL`.
+- Formatting: `git diff --check` passed.
+- GameTest: `./gradlew runGameTest --no-daemon --tests '*ControllerTickGameTest'` could not run because NeoGradle reports `The run type 'gameTest' was not found`. The build configuration was intentionally not changed.
 
-```bash
-./gradlew test --tests cn.howxu.mmcr.internal.tile.MachinePortAppearanceTest --no-daemon
-```
+## Follow-up Review Fix
 
-Result: `BUILD SUCCESSFUL` (`17 actionable tasks: 17 up-to-date`).
+- Root cause: `RecipeCraftingContext.serialize/from` preserved only the failure key. A recipe that had already consumed inputs retained no route identity after a paused save/load, so its item/fluid output routes could not be recovered from the controller components.
+- Context persistence now records route entries by requirement index. Each entry stores the stable component `BlockPos`, slot or tank index, and the transfer payload needed at completion. Loading resolves that identity only against the current controller components with matching I/O direction; an unresolved component or invalid slot/tank discards only that route.
+- Structure modifiers are persisted with their existing `RecipeModifier.CODEC`, preserving runtime requirement scaling for a paused recipe.
+- `active/context` and `pausedActive/pausedContext` are treated as indivisible pairs. Redstone transfer, save, normal resume, structure-check resume, and load reject isolated members. Save records `has_recipe_context`; load discards legacy or corrupt recipe state that lacks it.
+- Regression coverage now proves a started recipe consumes its input, pauses, saves, loads, restores both routes, resumes, completes, and emits the planned output. Separate tests cover orphaned in-memory and serialized recipe/context pairs.
 
-## Commit
+## Follow-up Verification
 
-`60ff722 feat: support shared IO port appearances`
+- Red phase: `./gradlew test --no-daemon --tests '*MachineControllerBlockEntityTest.paused_recipe_save_load_keeps_consumed_input_route_and_commits_output'` failed as expected because the restored context had no item input route.
+- Green phase: `./gradlew test --no-daemon --tests '*MachineControllerBlockEntityTest.paused_recipe_save_load_keeps_consumed_input_route_and_commits_output'` passed after route persistence was added: `BUILD SUCCESSFUL`.
+- `./gradlew test --no-daemon --tests '*MachineControllerBlockEntityTest' --tests '*RecipeCraftingContextTest'`: `BUILD SUCCESSFUL`.
+- Formatting: `git diff --check` passed.
 
-## Self-Review
+## Residual Risk
 
-- Only the three files named in the task brief are staged for the task commit.
-- `linkedControllerPos()` deterministically returns the first position in `BlockPos::compareTo` order.
-- Unlinking one owner leaves other owner texture state intact; periodic maintenance removes only invalid owners and refreshes once only when the map changes.
-- NBT uses the requested `LinkedControllers` list and stores each owner position with its own texture.
-- Existing `bindControllerAppearance` remains a deprecated delegate for the still-unmigrated internal caller, as required until Task 3.
-- Existing project-wide deprecation warnings remain; the directed test passes.
-
-## Important Finding Repair
-
-- Extended `MachinePortAppearanceTest` with a two-owner `LinkedControllers` NBT round trip that asserts every owner, the deterministic first owner, and its appearance texture are restored.
-- Added a mixed-validity controller maintenance test using the existing `LevelStub`: an unformed controller is removed while a formed controller that still links the port remains, including its appearance texture.
-- No production behavior was changed.
-
-## Repair Verification
-
-Command:
-
-```bash
-./gradlew test --tests cn.howxu.mmcr.internal.tile.MachinePortAppearanceTest --no-daemon
-```
-
-Result: `BUILD SUCCESSFUL` (`17 actionable tasks: 2 executed, 15 up-to-date`).
+- The GameTest runtime remains unexecuted until a `gameTest` run type is configured in a later task.

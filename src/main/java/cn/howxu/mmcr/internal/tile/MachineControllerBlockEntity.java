@@ -8,11 +8,18 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
+import cn.howxu.mmcr.api.machine.BlockRotator;
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
+import cn.howxu.mmcr.api.machine.level.LevelMismatch;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.LevelInsufficientFailure;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
+import cn.howxu.mmcr.api.recipe.RecipeCandidateIndex;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
@@ -30,6 +37,11 @@ import cn.howxu.mmcr.internal.recipe.RecipeStartDelay;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
@@ -39,6 +51,7 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.storage.ValueInput;
@@ -73,6 +86,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private RecipeCraftingContext context;
     private final List<ProcessingComponent> components = new ArrayList<>();
     private final Map<String, List<RecipeModifier>> foundModifiers = new LinkedHashMap<>();
+    private Map<Identifier, MachineLevel> foundLevels = Map.of();
     private long structureVersion;
     private long modifierSnapshotVersion;
     private int structureCheckCounter;
@@ -81,8 +95,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private Boolean lastBroadcastFormed;
     private boolean lastBroadcastActive;
     private @Nullable String lastFailureUnloc;
+    private @Nullable LevelInsufficientFailure recipeFailure;
     private @Nullable PortRequirementSpec.Failure lastFormationFailure;
     private @Nullable String lastStructureMismatchDiagnostic;
+    private @Nullable Object lastStructureError;
     private boolean redstonePaused;
     private @Nullable ActiveMachineRecipe pausedActive;
     private @Nullable RecipeCraftingContext pausedContext;
@@ -94,6 +110,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private int cachedDatapackRecipeCount = -1;
     private @Nullable Identifier cachedCandidatesMachineId;
     private List<MachineRecipe> cachedCandidates = List.of();
+    private RecipeCandidateIndex cachedCandidateIndex = RecipeCandidateIndex.empty();
     private RecipeStartDelay recipeStartDelay = new RecipeStartDelay();
     private @Nullable MachineRecipe lastRecipe;
     private long lastRecipeStructureVersion = Long.MIN_VALUE;
@@ -123,6 +140,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         Identifier before = this.machine == null ? null : this.machine.registryName();
         stopFactoryController();
         clearFoundModifiers();
+        foundLevels = Map.of();
         this.machine = m;
         markRecipeDirty();
         LOG.info("[Ctrl#{}] setMachine: {} → {} at pos={}", instanceId, before, m == null ? null : m.registryName(), getBlockPos());
@@ -139,6 +157,14 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             snapshot.put(entry.getKey(), List.copyOf(entry.getValue()));
         }
         return Map.copyOf(snapshot);
+    }
+
+    public Map<Identifier, MachineLevel> getFoundLevels() {
+        return foundLevels;
+    }
+
+    public @Nullable Object getLastStructureError() {
+        return lastStructureError;
     }
 
     public List<RecipeModifier> foundModifierList() {
@@ -165,6 +191,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     public long getModifierSnapshotVersion() { return modifierSnapshotVersion; }
 
     public @Nullable String getLastFailureUnloc() { return lastFailureUnloc; }
+
+    public @Nullable LevelInsufficientFailure getRecipeFailure() { return recipeFailure; }
 
     public @Nullable PortRequirementSpec.Failure getLastFormationFailure() { return lastFormationFailure; }
 
@@ -203,9 +231,13 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         this.lastFailureUnloc = key;
     }
 
+    public void clearLastFailureOnRecipeStart() {
+        this.lastFailureUnloc = null;
+    }
+
     public boolean isRedstonePaused() { return redstonePaused; }
 
-    public void applyClientState(String recipeName, boolean formed, boolean active) {
+    public void applyClientState(String recipeName, boolean formed, boolean active, List<String> foundLevelIds) {
         if (level == null || !level.isClientSide()) return;
         if (isFormed() != formed) {
             level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.FORMED, formed), 3);
@@ -214,6 +246,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.ACTIVE, active), 3);
         }
         this.clientActive = active;
+        Map<Identifier, MachineLevel> levels = new LinkedHashMap<>();
+        for (String id : foundLevelIds) {
+            MachineLevel foundLevel = cn.howxu.mmcr.api.machine.level.MachineLevelRegistry.getLevel(Identifier.parse(id));
+            if (foundLevel != null) levels.put(foundLevel.typeId(), foundLevel);
+        }
+        this.foundLevels = Map.copyOf(levels);
     }
 
     public boolean hasClientActiveRecipe() { return clientActive; }
@@ -297,10 +335,15 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         for (ProcessingComponent component : components) {
             if (component.getContainer() instanceof ParallelControllerBlockEntity parallel) {
                 max += parallel.currentParallelism();
-                if (max >= machine.maxParallelism()) return machine.maxParallelism();
             }
         }
-        return Math.max(1, (int) max);
+        int base = Math.max(1, (int) max);
+        int levelBonus = foundLevels == null ? 0 : foundLevels.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(java.util.Comparator.comparing(Identifier::toString)))
+                .map(Map.Entry::getValue)
+                .mapToInt(foundLevel -> foundLevel.modifier().parallelismBonus())
+                .sum();
+        return Math.max(1, Math.min(machine.maxParallelism(), base + levelBonus));
     }
 
     public int parallelControllerCount() {
@@ -337,18 +380,22 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     public int effectiveFactoryThreadLimit() {
         if (machine == null || !machine.hasFactory()) return 1;
         int aggregatedThreads = factorySchedulerThreadCount();
-        return aggregatedThreads <= 0 ? 1 : aggregatedThreads;
+        int levelBonus = foundLevels == null ? 0 : foundLevels.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(java.util.Comparator.comparing(Identifier::toString)))
+                .map(Map.Entry::getValue)
+                .mapToInt(foundLevel -> foundLevel.modifier().factoryThreadBonus())
+                .sum();
+        long effective = Math.max(1, aggregatedThreads) + levelBonus;
+        return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, effective));
     }
 
     public int factorySchedulerThreadCount() {
-        long total = 0L;
         for (ProcessingComponent component : components) {
             if (component.getContainer() instanceof FactorySchedulerBlockEntity scheduler) {
-                total += scheduler.threadCount();
-                if (total >= Integer.MAX_VALUE) return Integer.MAX_VALUE;
+                return scheduler.threadCount();
             }
         }
-        return (int) total;
+        return 0;
     }
 
     public void serverTick() {
@@ -358,23 +405,31 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
         // 1.21+ exposes the old strong-power query through SignalGetter's direct signal helper.
         boolean powered = level.getDirectSignalTo(getBlockPos()) > 0;
-        redstonePaused = powered;
         if (powered) {
-            stopFactoryController();
-            if (active != null) {
+            redstonePaused = true;
+            FactorySchedulerBlockEntity factory = getFactoryController();
+            if (factory != null) factory.pause();
+            if (active != null && context != null) {
                 pausedActive = active;
                 pausedContext = context;
                 active = null;
                 context = null;
                 setActiveState(false);
                 broadcastStateIfChanged(true);
+            } else if (active != null || context != null) {
+                active = null;
+                context = null;
             }
             structureDirty = true;
+            if (shouldCheckStructure()) checkStructure();
             setChanged();
+            broadcastStateIfChanged(activeBefore);
             return;
         }
         redstonePaused = false;
-        if (active == null && pausedActive != null) {
+        FactorySchedulerBlockEntity factory = getFactoryController();
+        if (factory != null) factory.resume();
+        if (active == null && pausedActive != null && pausedContext != null) {
             active = pausedActive;
             context = pausedContext;
             pausedActive = null;
@@ -382,11 +437,13 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             structureDirty = true;
             markRecipeDirty();
             setActiveState(true);
+        } else if (pausedActive != null || pausedContext != null) {
+            pausedActive = null;
+            pausedContext = null;
         }
 
         if (shouldCheckStructure()) checkStructure();
         if (isFormed() && isStructureAreaLoaded()) {
-            FactorySchedulerBlockEntity factory = getFactoryController();
             if (factory != null) {
                 tickFactoryRecipes(factory);
             } else {
@@ -416,7 +473,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         factory.syncCoreThreads(this, machine, candidates, pool);
         factory.tickScheduler(this, candidates, structureVersion, maxParallelism, pool);
         setActiveState(factory.activeThreadCount() > 0);
-        if (factory.activeThreadCount() > 0) lastFailureUnloc = null;
+        if (factory.activeThreadCount() > 0) {
+            lastFailureUnloc = null;
+            recipeFailure = null;
+        }
     }
 
     @Override
@@ -444,6 +504,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                     ? StructureMatcher.matchesRotated(foundPattern, level, getBlockPos(), replacements)
                     : StructureMatcher.matchesCompiled(foundCompiledPattern, facing, getBlockState().getValue(MachineControllerBlock.ROLL_FACING), level, getBlockPos());
             if (stillMatches) {
+                var levels = resolveLevels(foundMachine, facing);
+                if (levels.mismatch() != null) {
+                    recordLevelMismatch(levels.mismatch());
+                    resetMachine(false);
+                    return;
+                }
                 collectFoundModifiers(replacements);
                 resumePausedRecipeAfterStructureCheck();
                 var failure = foundMachine.portRequirements().validate(countPorts(foundPattern, foundCompiledPattern, facing));
@@ -458,7 +524,14 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                     resetMachine(false);
                     return;
                 }
+                failure = validateFactoryControllerCount(foundMachine, foundPattern, foundCompiledPattern, facing);
+                if (failure.isPresent()) {
+                    recordFormationFailure(foundMachine, failure.get());
+                    resetMachine(false);
+                    return;
+                }
                 if (!isFormed()) setFormed(true);
+                foundLevels = levels.foundLevels();
                 updateComponents();
                 return;
             }
@@ -549,6 +622,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             return false;
         }
 
+        var levels = resolveLevels(candidate, facing);
+        if (levels.mismatch() != null) {
+            recordLevelMismatch(levels.mismatch());
+            return false;
+        }
+
         var failure = candidate.portRequirements().validate(countPorts(rotatedPattern, compiled, facing));
         if (failure.isPresent()) {
             recordFormationFailure(candidate, failure.get());
@@ -556,6 +635,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         }
 
         failure = validatePortTiers(candidate, rotatedPattern, compiled, facing);
+        if (failure.isPresent()) {
+            recordFormationFailure(candidate, failure.get());
+            return false;
+        }
+
+        failure = validateFactoryControllerCount(candidate, rotatedPattern, compiled, facing);
         if (failure.isPresent()) {
             recordFormationFailure(candidate, failure.get());
             return false;
@@ -575,7 +660,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
         lastFormationFailure = null;
         lastStructureMismatchDiagnostic = null;
-        onStructureFormed(candidate, rotatedPattern, compiled, facing, replacements);
+        onStructureFormed(candidate, rotatedPattern, compiled, facing, replacements, levels.foundLevels());
         return true;
     }
 
@@ -649,8 +734,31 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 instanceId, getBlockPos(), candidate.registryName(), failure.portId(), failure.actual(), failure.requiredMin(), max, failure.reason());
     }
 
+    private StructureMatcher.LevelResolution resolveLevels(Machine candidate, Direction facing) {
+        MachineStructureDefinition definition = MachineStructureRegistry.dynamicSnapshot().get(candidate.registryName());
+        if (definition == null || definition.levelSlots().isEmpty()) {
+            return new StructureMatcher.LevelResolution(Map.of(), null);
+        }
+        Map<BlockPos, Identifier> slots = new LinkedHashMap<>();
+        Direction rollFacing = getBlockState().getValue(MachineControllerBlock.ROLL_FACING);
+        Direction normalizedRoll = facing.getAxis().isVertical() ? rollFacing : Direction.SOUTH;
+        for (var entry : definition.levelSlots().entrySet()) {
+            slots.put(BlockRotator.rotateSouthTo(entry.getKey(), facing, normalizedRoll), entry.getValue());
+        }
+        return StructureMatcher.resolveLevels(slots, level, getBlockPos());
+    }
+
+    private void recordLevelMismatch(LevelMismatch mismatch) {
+        lastStructureError = mismatch;
+        lastFormationFailure = null;
+        lastStructureMismatchDiagnostic = null;
+        LOG.info("[Ctrl#{}] formation rejected: level type={} expected={} actual={} worldPos={}",
+                instanceId, mismatch.typeId(), mismatch.expected().id(), mismatch.actual().id(), mismatch.worldPos());
+    }
+
     private void onStructureFormed(Machine matchedMachine, BlockArray rotatedPattern, CompiledMachinePattern compiledPattern,
-                                   Direction facing, Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
+                                   Direction facing, Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
+                                   Map<Identifier, MachineLevel> levels) {
         foundMachine = matchedMachine;
         foundPattern = rotatedPattern;
         foundCompiledPattern = compiledPattern;
@@ -659,6 +767,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (level instanceof ServerLevel serverLevel) {
             resourceDomain = StructureClaimRegistry.get(serverLevel).domainFor(getBlockPos());
         }
+        foundLevels = levels;
         collectFoundModifiers(replacements);
         FORMED_CONTROLLERS.add(this);
         structureVersion++;
@@ -672,7 +781,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 instanceId, getBlockPos(), matchedMachine.registryName(), facing,
                 counts.itemInputs(), counts.itemOutputs(), counts.fluidInputs(), counts.fluidOutputs(), counts.energyInputs(), counts.energyOutputs());
         lastFormationFailure = null;
+        lastStructureError = null;
         setChanged();
+        syncLevelState();
     }
 
     private List<StructureClaimRegistry.Claim> componentClaims(BlockArray pattern,
@@ -823,6 +934,31 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                         PortRequirementSpec.FailureReason.MISSING));
     }
 
+    private java.util.Optional<PortRequirementSpec.Failure> validateFactoryControllerCount(
+            Machine candidate, BlockArray rotatedPattern, @Nullable CompiledMachinePattern compiledPattern, Direction facing) {
+        int count = countFactoryControllers(rotatedPattern, compiledPattern, facing);
+        if (count <= 1) return java.util.Optional.empty();
+        return java.util.Optional.of(new PortRequirementSpec.Failure(
+                "factory_controller",
+                count,
+                0,
+                java.util.OptionalInt.of(1),
+                PortRequirementSpec.FailureReason.TOO_MANY));
+    }
+
+    private int countFactoryControllers(BlockArray rotatedPattern, @Nullable CompiledMachinePattern compiledPattern, Direction facing) {
+        if (level == null || rotatedPattern == null) return 0;
+
+        List<BlockPos> positions = compiledPattern == null ? new ArrayList<>(rotatedPattern.pattern().keySet()) : compiledPattern.componentPositions(facing);
+        int count = 0;
+        for (BlockPos relativePos : positions) {
+            if (level.getBlockEntity(getBlockPos().offset(relativePos)) instanceof FactorySchedulerBlockEntity && ++count > 1) {
+                return count;
+            }
+        }
+        return count;
+    }
+
     private boolean isInsideCompiledBounds(BlockPos worldPos) {
         if (foundCompiledPattern == null || controllerFacing == null) return false;
         BoundingBox box = foundCompiledPattern.boundingBox(controllerFacing);
@@ -841,6 +977,13 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         structureDirty = true;
         pauseActiveForUnloadedStructure();
         setChanged();
+        syncLevelState();
+    }
+
+    private void syncLevelState() {
+        if (level != null && !level.isClientSide()) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
+        }
     }
 
     private boolean compiledBoundsTouchesChunk(ChunkPos chunkPos) {
@@ -863,7 +1006,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private void resumePausedRecipeAfterStructureCheck() {
-        if (active != null || pausedActive == null || redstonePaused) return;
+        if (active != null || pausedActive == null || pausedContext == null || redstonePaused) return;
         active = pausedActive;
         context = pausedContext;
         pausedActive = null;
@@ -913,6 +1056,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         foundCompiledPattern = null;
         controllerFacing = null;
         foundModifiers.clear();
+        foundLevels = Map.of();
         FORMED_CONTROLLERS.remove(this);
         components.clear();
         structureDirty = true;
@@ -932,7 +1076,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         returnContext(pausedContext);
         pausedContext = null;
         lastFailureUnloc = null;
+        recipeFailure = null;
         if (clearFormationFailure) lastFormationFailure = null;
+        if (clearFormationFailure) lastStructureError = null;
         redstonePaused = false;
         if (dropped != null || wasFormed || hadActive) structureVersion++;
         markRecipeDirty();
@@ -966,7 +1112,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         lastBroadcastActive = activeNow;
         if (!(level instanceof ServerLevel sl)) return;
         String name = active == null ? "" : active.getRecipe().id().toString();
-        var pkt = new PktMachineStatePayload(getBlockPos(), name, formed, activeNow);
+        var pkt = new PktMachineStatePayload(getBlockPos(), name, formed, activeNow,
+                foundLevels.values().stream().map(foundLevel -> foundLevel.id().toString()).toList());
         for (var player : sl.getPlayers(p -> p.distanceToSqr(getBlockPos().getCenter()) < 64 * 64)) {
             ((ServerPlayer) player).connection.send(new ClientboundCustomPayloadPacket(pkt));
         }
@@ -981,12 +1128,14 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         List<MachineRecipe> candidates = recipesForMachine();
         RecipeSearchResult result;
         try {
-            result = new RecipeSearchTask(this, machineId, structureVersion, getMaxParallelism(), candidates, contextPool()).compute();
+            result = new RecipeSearchTask(this, machineId, structureVersion, getMaxParallelism(), candidates,
+                    contextPool(), cachedCandidateIndex).compute();
         } catch (RuntimeException e) {
             LOG.warn("[Ctrl#{}] tryStartNewRecipe: recipe search failed at pos={}; retrying later", instanceId, getBlockPos(), e);
             clearPendingConflictStart();
             recipeSearchRetryCounter++;
             lastFailureUnloc = RecipeCraftingContext.FAILURE_SEARCH_EXCEPTION;
+            recipeFailure = null;
             return false;
         }
         if (result.success()) {
@@ -995,6 +1144,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         clearPendingConflictStart();
         recipeSearchRetryCounter++;
         lastFailureUnloc = result.failureUnloc();
+        recipeFailure = result.levelFailure();
+        if (recipeFailure != null) {
+            lastFailureUnloc = "gui.mmcr.controller.failure.level_insufficient";
+        }
         return false;
     }
 
@@ -1053,6 +1206,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         rememberLastRecipe(next.getRecipe());
         recipeSearchRetryCounter = 0;
         lastFailureUnloc = null;
+        recipeFailure = null;
         setChanged();
         return true;
     }
@@ -1113,6 +1267,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             setActiveState(true);
             recipeSearchRetryCounter = 0;
             lastFailureUnloc = null;
+            recipeFailure = null;
             setChanged();
             return true;
         } finally {
@@ -1179,6 +1334,13 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         ActiveMachineRecipe.TickStatus status = active.applyTickGrant(resourcesGranted, outputsCommitted, gameTime);
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
             lastFailureUnloc = null;
+            recipeFailure = null;
+            returnContext(context);
+            active = null;
+            context = null;
+            setActiveState(false);
+        } else if (status == ActiveMachineRecipe.TickStatus.CANCELLED) {
+            lastFailureUnloc = context.getLastFailureUnloc();
             returnContext(context);
             active = null;
             context = null;
@@ -1193,6 +1355,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             }
         } else {
             lastFailureUnloc = null;
+            recipeFailure = null;
         }
         setChanged();
     }
@@ -1404,6 +1567,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         cachedCandidatesReloadVersion = reloadVersion;
         cachedDatapackRecipeCount = datapackCount;
         cachedCandidates = List.copyOf(recipes.values());
+        cachedCandidateIndex = RecipeCandidateIndex.build(cachedCandidates);
         return cachedCandidates;
     }
 
@@ -1425,6 +1589,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         cachedCandidatesReloadVersion = Long.MIN_VALUE;
         cachedDatapackRecipeCount = -1;
         cachedCandidates = List.of();
+        cachedCandidateIndex = RecipeCandidateIndex.empty();
         markRecipeDirty();
     }
 
@@ -1440,11 +1605,20 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
-        if (active != null) {
-            output.putBoolean("has_active", true);
+        ValueOutput.TypedOutputList<String> levels = output.list("found_levels", com.mojang.serialization.Codec.STRING);
+        for (MachineLevel foundLevel : (foundLevels == null ? Map.<Identifier, MachineLevel>of() : foundLevels).values()) {
+            levels.add(foundLevel.id().toString());
+        }
+        if (active != null && context != null) {
+            output.putString("recipe_state", "active");
+            output.putBoolean("has_recipe_context", true);
             active.serialize(output.child("active_recipe"));
-        } else {
-            output.putBoolean("has_active", false);
+            context.serialize(output.child("active_context"));
+        } else if (pausedActive != null && pausedContext != null) {
+            output.putString("recipe_state", "paused");
+            output.putBoolean("has_recipe_context", true);
+            pausedActive.serialize(output.child("active_recipe"));
+            pausedContext.serialize(output.child("active_context"));
         }
     }
 
@@ -1454,23 +1628,49 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         pausedActive = null;
         pausedContext = null;
         redstonePaused = false;
-        if (!input.getBooleanOr("has_active", false)) {
-            active = null;
-            context = null;
+        active = null;
+        context = null;
+        Map<Identifier, MachineLevel> restoredLevels = new LinkedHashMap<>();
+        input.listOrEmpty("found_levels", com.mojang.serialization.Codec.STRING).forEach(id -> {
+            MachineLevel foundLevel = cn.howxu.mmcr.api.machine.level.MachineLevelRegistry.getLevel(Identifier.parse(id));
+            if (foundLevel != null) restoredLevels.put(foundLevel.typeId(), foundLevel);
+        });
+        foundLevels = Map.copyOf(restoredLevels);
+        lastFailureUnloc = null;
+        String recipeState = input.getStringOr("recipe_state", input.getBooleanOr("has_active", false) ? "active" : "");
+        if (recipeState.isEmpty()) return;
+        if (!input.getBooleanOr("has_recipe_context", false)) {
+            LOG.warn("[Ctrl#{}] loadAdditional: stored recipe state {} has no context; clearing slot", instanceId, recipeState);
             return;
         }
         ActiveMachineRecipe restored = ActiveMachineRecipe.from(input.childOrEmpty("active_recipe"));
         if (restored.getRecipe() == null) {
             Identifier missing = restored.getRegistryName() == null ? null : Identifier.parse(restored.getRegistryName());
             LOG.warn("[Ctrl#{}] loadAdditional: stored recipe {} not found in registry; clearing slot", instanceId, missing);
-            active = null;
-            context = null;
             return;
         }
-        active = restored;
-        context = new RecipeCraftingContext(this);
+        if ("paused".equals(recipeState)) {
+            pausedActive = restored;
+            pausedContext = RecipeCraftingContext.from(this, input.childOrEmpty("active_context"));
+        } else if ("active".equals(recipeState)) {
+            active = restored;
+            context = RecipeCraftingContext.from(this, input.childOrEmpty("active_context"));
+        } else {
+            LOG.warn("[Ctrl#{}] loadAdditional: stored recipe state {} is invalid; clearing slot", instanceId, recipeState);
+            return;
+        }
         structureDirty = true;
-        LOG.info("[Ctrl#{}] loadAdditional: pos={} restored active recipe={} tick={}/{}", instanceId, getBlockPos(), restored.getRecipe().id(), restored.getTick(), restored.getTotalTick());
+        LOG.info("[Ctrl#{}] loadAdditional: pos={} restored {} recipe={} tick={}/{}", instanceId, getBlockPos(), recipeState, restored.getRecipe().id(), restored.getTick(), restored.getTotalTick());
         setChanged();
+    }
+
+    @Override
+    public net.minecraft.nbt.CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+        return saveCustomOnly(registries);
+    }
+
+    @Override
+    public Packet<ClientGamePacketListener> getUpdatePacket() {
+        return ClientboundBlockEntityDataPacket.create(this);
     }
 }

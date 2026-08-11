@@ -7,6 +7,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.random.WeightedList;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.flag.FeatureFlagSet;
 import net.minecraft.world.TickRateManager;
 import net.minecraft.world.attribute.EnvironmentAttributeSystem;
@@ -101,10 +102,15 @@ public final class LevelStub {
         ((TestLevel) level).blockEntities.put(blockEntity.getBlockPos(), blockEntity);
     }
 
+    public static void setDirectSignal(Level level, BlockPos pos, int signal) {
+        ((TestLevel) level).directSignals.put(pos, signal);
+    }
+
     private static Level createFromStates(Map<BlockPos, BlockState> blocks) {
         try {
             var level = (TestLevel) unsafe().allocateInstance(TestLevel.class);
             level.blocks = new HashMap<>(blocks);
+            level.directSignals = new HashMap<>();
             return level;
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Unable to create level stub", e);
@@ -120,6 +126,7 @@ public final class LevelStub {
     private static final class TestLevel extends Level {
         private Map<BlockPos, BlockState> blocks;
         private Map<BlockPos, BlockEntity> blockEntities = Map.of();
+        private Map<BlockPos, Integer> directSignals = new HashMap<>();
         private Set<Long> loadedChunks;
 
         private TestLevel() {
@@ -132,6 +139,10 @@ public final class LevelStub {
 
         @Override public BlockEntity getBlockEntity(BlockPos pos) {
             return blockEntities.get(pos);
+        }
+
+        @Override public int getDirectSignalTo(BlockPos pos) {
+            return directSignals.getOrDefault(pos, 0);
         }
 
         @Override public void blockEntityChanged(BlockPos pos) {}
@@ -182,6 +193,7 @@ public final class LevelStub {
         @Override public boolean hasChunk(int chunkX, int chunkZ) {
             return loadedChunks == null || loadedChunks.contains(chunkKey(chunkX, chunkZ));
         }
+        @Override public RandomSource getRandom() { return RandomSource.create(0L); }
         @Override public int getSeaLevel() { return 0; }
         @Override public FeatureFlagSet enabledFeatures() { return FeatureFlagSet.of(); }
         @Override public Holder<net.minecraft.world.level.biome.Biome> getUncachedNoiseBiome(int x, int y, int z) { return null; }

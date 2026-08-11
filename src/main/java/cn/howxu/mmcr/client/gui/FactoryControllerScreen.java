@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -12,6 +13,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * MMCE-style two-column factory controller display backed only by synchronized menu data.
@@ -74,6 +76,15 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
 
     static int selectedParallelism(FactoryControllerMenu menu) {
         return menu.currentParallelism();
+    }
+
+    static List<Component> levelLines(Map<?, MachineLevel> levels) {
+        return levels.values().stream().map(MachineMenuScreen::levelLine).toList();
+    }
+
+    static String selectedFailureUnloc(FactoryControllerMenu menu) {
+        String threadFailure = menu.selectedThread().lastFailureUnloc();
+        return threadFailure.isEmpty() ? menu.lastFailureUnloc() : threadFailure;
     }
 
     static int elementTextureWidth() { return ELEMENT_TEXTURE_WIDTH; }
@@ -164,6 +175,19 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
                 x + font.width(Component.translatable("gui.mmcr.controller.status_label")) + 4, lineY,
                 MachineMenuScreen.controllerStatusColor(menu.isFormed(), selected.active()), true);
         lineY = nextDetailY(lineY);
+        var owner = menu.resolvedOwner();
+        if (owner != null) {
+            for (Component levelLine : levelLines(owner.getFoundLevels())) {
+                graphics.text(font, levelLine, x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
+                lineY = nextDetailY(lineY);
+            }
+        }
+        String failure = selectedFailureUnloc(menu);
+        if (!failure.isEmpty()) {
+            graphics.text(font, Component.translatable("gui.mmcr.controller.last_failure", Component.translatable(failure)),
+                    x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
+            lineY = nextDetailY(lineY);
+        }
         if (menu.parallelSlots() > 0) {
             graphics.text(font, MachineMenuScreen.parallelSlotLine(menu.parallelSlots()), x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
             lineY = nextDetailY(lineY);
@@ -176,7 +200,7 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
         }
         graphics.text(font, MachineMenuScreen.factoryThreadLine(menu.activeThreadCount(), menu.threadCount()), x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
         lineY = nextDetailY(lineY);
-        if (shouldRenderProgress(selected.active(), selected.totalTick())) {
+        if (selected.totalTick() > 0) {
             int percent = progressWidth(selected.tick(), selected.totalTick()) * 100 / THREAD_ROW_WIDTH;
             graphics.text(font, Component.translatable("gui.mmcr.controller.progress", percent + "%"), x, lineY,
                     MachineMenuScreen.PROGRESS_STATUS_COLOR, true);

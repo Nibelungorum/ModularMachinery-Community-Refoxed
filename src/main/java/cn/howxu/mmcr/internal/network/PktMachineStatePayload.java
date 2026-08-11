@@ -9,7 +9,11 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
-public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean formed, boolean active) implements CustomPacketPayload {
+import java.util.ArrayList;
+import java.util.List;
+
+public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean formed, boolean active,
+                                     List<String> foundLevelIds) implements CustomPacketPayload {
 
     public static final Type<PktMachineStatePayload> TYPE = new Type<>(MMCR.id("machine_state"));
 
@@ -19,6 +23,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                     ByteBufCodecs.STRING_UTF8, PktMachineStatePayload::recipeName,
                     ByteBufCodecs.BOOL, PktMachineStatePayload::formed,
                     ByteBufCodecs.BOOL, PktMachineStatePayload::active,
+                    ByteBufCodecs.collection(ArrayList::new, ByteBufCodecs.STRING_UTF8), PktMachineStatePayload::foundLevelIds,
                     PktMachineStatePayload::new);
 
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
@@ -28,7 +33,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
             var player = ctx.player();
             if (player == null) return;
             if (player.level().getBlockEntity(pos) instanceof MachineControllerBlockEntity controller) {
-                controller.applyClientState(recipeName, formed, active);
+                controller.applyClientState(recipeName, formed, active, foundLevelIds);
             }
         });
     }

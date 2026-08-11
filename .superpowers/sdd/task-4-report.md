@@ -1,88 +1,20 @@
-# Task 4 Report: Fair Resource-Domain Request Resolution
+# Task 4 Report
 
-## Changes
+## Completed
 
-- Added `SharedIoCoordinator`, a per-`ServerLevel` coordinator that queues start, tick, and finish requests; validates domain ID, domain generation, and request validator; resolves each request at most once per level tick; and preserves independent round-robin cursors.
-- Start callbacks receive their maximum parallelism and commit only positive partial/full grants. Tick and finish callbacks commit only after their transaction reports success. Failed requests remain pending for the next level tick.
-- Added `SharedIoEvents`, registering end-of-level server ticks and server-level unload cleanup in `MMCR`.
-- Added `StructureClaimRegistry.discard(ServerLevel)` so level unload removes both level-scoped registries.
-- Added only the brief-specified coordinator tests for partial start grants, rotation, and stale generations.
-
-## TDD Failure Evidence
-
-The RED command was run before `SharedIoCoordinator` existed:
-
-```text
-./gradlew test --tests cn.howxu.mmcr.internal.multiblock.SharedIoCoordinatorTest --no-daemon
-```
-
-It failed at `:compileTestJava` with 11 expected errors, including:
-
-```text
-SharedIoCoordinatorTest.java:20: error: cannot find symbol
-        SharedIoCoordinator coordinator = new SharedIoCoordinator();
-        ^
-  symbol:   class SharedIoCoordinator
-```
-
-The full RED output is retained at `/home/howxu/.local/share/rtk/tee/1786323496_gradlew_test.log`.
+- Added `LevelMismatch` formation diagnostics containing the level type, expected and actual levels, and the mismatched world position.
+- Added level-slot resolution in `StructureMatcher` after normal structure and modifier-replacement matching. Slot traversal is coordinate-stable so diagnostics consistently identify the earlier slot as expected.
+- Added controller level snapshots through `getFoundLevels()`. Snapshots are installed only on successful formation or successful cached revalidation, and cleared when the controller changes machine or the structure resets.
+- Added controller structure-error exposure through `getLastStructureError()`. Mixed levels preserve a `LevelMismatch` through the existing formation rejection path.
+- Added focused coverage for dispersed equal-level slots and mixed-level diagnostics.
 
 ## Verification
 
-Command:
+- `./gradlew test --tests cn.howxu.mmcr.internal.tile.MachineControllerLevelTest --no-daemon` passed.
+- `./gradlew compileJava --no-daemon` passed.
+- `git diff --check` passed.
 
-```text
-./gradlew test --tests cn.howxu.mmcr.internal.multiblock.SharedIoCoordinatorTest --no-daemon
-```
+## Scope
 
-Complete final output:
-
-```text
-BUILD SUCCESSFUL in 7s
-17 actionable tasks: 17 up-to-date
-```
-
-## Follow-up Test Coverage
-
-- Added a two-pass re-enqueue assertion proving start scheduling resumes after the last successful lane.
-- Added an assertion proving start, tick, and finish retain independent round-robin cursors.
-- `./gradlew test --tests cn.howxu.mmcr.internal.multiblock.SharedIoCoordinatorTest --no-daemon`: `BUILD SUCCESSFUL in 15s` (4 tests completed).
-
-## Commit
-
-`aa14cab feat: schedule shared multiblock IO fairly`
-
-## Self-Check
-
-- Start, tick, and finish use separate cursor maps.
-- Current domain ID/generation and request validity are checked before callbacks.
-- Each request is attempted no more than once during a resolver pass.
-- Cursors advance only after a successful grant/transaction.
-- Insufficient or failed requests remain queued until a later level tick.
-- Callbacks execute only from `LevelTickEvent.Post`; no worker or block-entity tick invokes them.
-- No Task 5 recipe integration was added.
-- `git show --check HEAD` reported no whitespace errors.
-
-## Concerns
-
-- CodeGraph is indexed only for the parent worktree, not this worktree. Its event API context was used alongside direct worktree reads; source-specific checks were performed against this worktree.
-- The targeted Gradle test task emits pre-existing deprecation warnings when it recompiles the full test source set; the final cached run had no warning output.
-
-## Important Review Fix: Discriminating Cursor Coverage
-
-- Updated only `SharedIoCoordinatorTest` production-adjacent coverage. The cross-tick start test now leaves B pending after A alone succeeds in the first pass, then proves the next successful order is B, A. A cursor reset therefore fails.
-- The independent-cursor test now seeds start, tick, and finish cursors at A, B, and C respectively. Its following pass expects B, C, A; C, A, B; and A, B, C, so sharing any two cursor maps fails.
-- `./gradlew test --tests cn.howxu.mmcr.internal.multiblock.SharedIoCoordinatorTest --no-daemon`: `BUILD SUCCESSFUL in 11s` (4 tests completed).
-
-## Task 4 Re-review Fixes
-
-- Revised the cross-tick fairness test so its first pass enqueues and commits only A, leaving the start cursor at A without a pending B. The second pass enqueues A and B and requires commit order B, A; resetting the cursor therefore fails the test.
-- Requests now require a current controller-structure-version supplier. `Request.isStillValid()` requires the captured version to equal the supplied current version before evaluating the existing request validator. No always-true version validation path remains.
-- Added a direct stale structure-version start test. Incrementing the supplied current version before resolution proves the transaction and committer callback do not execute.
-- No Task 5 recipe behavior was integrated.
-
-## Final Test Coverage Fix
-
-- Updated `staleStructureVersionNeverCallsTheCommitter` with an independent transaction-callback invocation flag.
-- The stale request now explicitly proves that neither the transaction callback nor the committer executes.
-- `./gradlew test --tests cn.howxu.mmcr.internal.multiblock.SharedIoCoordinatorTest --no-daemon`: `BUILD SUCCESSFUL in 13s`.
+- Normal modifier discovery remains unchanged.
+- No recipe selection behavior or `LevelModifier` execution was added.
