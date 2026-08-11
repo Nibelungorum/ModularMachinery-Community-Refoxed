@@ -133,21 +133,24 @@ public final class DefaultMachines {
                 portFamily(IOType.OUTPUT, PortTierRequirementSpec.PortCategory.FLUID),
                 portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.ENERGY),
                 portFamily(IOType.OUTPUT, PortTierRequirementSpec.PortCategory.ENERGY)));
+        BlockPredicate casingOrIoPort = new BlockPredicate.AnyOf(List.of(new BlockPredicate.OfBlock(casing), ioPort));
         List<BlockPredicate> parallelSlotBlocks = new ArrayList<>();
         parallelSlotBlocks.add(new BlockPredicate.OfBlock(casing));
+        parallelSlotBlocks.add(ioPort);
         for (ParallelTier tier : ParallelTier.values()) {
             parallelSlotBlocks.add(new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get(tier.idSuffix()).get()));
         }
         BlockPredicate casingOrParallelController = new BlockPredicate.AnyOf(parallelSlotBlocks);
         BlockPredicate casingOrFactoryController = new BlockPredicate.AnyOf(List.of(
                 new BlockPredicate.OfBlock(casing),
+                ioPort,
                 new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get())));
 
         BlockArray pattern = BlockArray.builder()
                 .pattern("AXA", "XIX", "XXX")
                 .pattern("XXX", "I I", "XBX")
                 .pattern("AXA", "XCX", "XXX")
-                .set('X', new BlockPredicate.OfBlock(casing))
+                .set('X', casingOrIoPort)
                 .set('A', casingOrParallelController)
                 .set('B', casingOrFactoryController)
                 .set('C', new BlockPredicate.OfBlock(controller))

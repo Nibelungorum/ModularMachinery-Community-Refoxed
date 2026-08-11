@@ -28,9 +28,12 @@ class DynamicOverlayTexturesTest {
     @Test
     void parallel_and_factory_overlay_texture_resources_exist() {
         assertThat(textureResource("overlay_parallel_controller_normal.png")).isNotNull();
+        assertThat(textureResource("overlay_parallel_controller_plus.png")).isNotNull();
         assertThat(textureResource("overlay_parallel_controller_reinforced.png")).isNotNull();
-        assertThat(textureResource("overlay_parallel_controller_super.png")).isNotNull();
+        assertThat(textureResource("overlay_parallel_controller_pro.png")).isNotNull();
         assertThat(textureResource("overlay_parallel_controller_elite.png")).isNotNull();
+        assertThat(textureResource("overlay_parallel_controller_fantasy.png")).isNotNull();
+        assertThat(textureResource("overlay_parallel_controller_max.png")).isNotNull();
         assertThat(textureResource("overlay_parallel_controller_ultimate.png")).isNotNull();
         assertThat(textureResource("overlay_factory_controller.png")).isNotNull();
     }

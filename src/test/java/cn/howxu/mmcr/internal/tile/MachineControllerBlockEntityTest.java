@@ -132,7 +132,7 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.getMaxParallelism()).isEqualTo(1);
 
         setField(MachineControllerBlockEntity.class, controller, "machine", parallelMachine);
-        addParallelComponent(controller, ParallelTier.X16);
+        addParallelComponent(controller, ParallelTier.PLUS);
         assertThat(controller.getMaxParallelism()).isEqualTo(16);
         assertThat(controller.parallelControllerCount()).isEqualTo(1);
         assertThat(controller.currentParallelism()).isZero();
@@ -165,8 +165,8 @@ class MachineControllerBlockEntityTest {
                 1);
 
         setField(MachineControllerBlockEntity.class, controller, "machine", parallelMachine);
-        addParallelComponent(controller, ParallelTier.X4);
-        addParallelComponent(controller, ParallelTier.X4);
+        addParallelComponent(controller, ParallelTier.NORMAL);
+        addParallelComponent(controller, ParallelTier.NORMAL);
 
         assertThat(controller.parallelControllerCount()).isEqualTo(2);
         assertThat(controller.getMaxParallelism()).isEqualTo(8);
@@ -178,7 +178,7 @@ class MachineControllerBlockEntityTest {
         initializeComponents(controller);
         setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
         addFactorySchedulerComponent(controller, factoryController(new BlockPos(1, 0, 0), 4));
-        addParallelComponent(controller, ParallelTier.X16);
+        addParallelComponent(controller, ParallelTier.PLUS);
 
         var threadsOnly = new DynamicMachine(
                 MMCR.id("threads_only_runtime_machine"),
@@ -220,7 +220,7 @@ class MachineControllerBlockEntityTest {
         var machine = new DynamicMachine(
                 MMCR.id("formed_parallel_test_machine"),
                 "Formed Parallel Test",
-                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get()),
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get(ParallelTier.PLUS.idSuffix()).get()),
                 MachineControllerSpec.defaultsFor(MMCR.id("formed_parallel_test_machine")),
                 PortRequirementSpec.none(),
                 List.of(),
@@ -232,7 +232,7 @@ class MachineControllerBlockEntityTest {
         MachineControllerBlockEntity controller = controllerForParallelFormation(
                 machine,
                 controllerPos,
-                parallelController(ParallelTier.X16, controllerPos.offset(1, 0, 0)));
+                parallelController(ParallelTier.PLUS, controllerPos.offset(1, 0, 0)));
 
         assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
 
@@ -756,13 +756,13 @@ class MachineControllerBlockEntityTest {
         BlockPos firstControllerPos = new BlockPos(0, 64, 0);
         BlockPos secondControllerPos = new BlockPos(2, 64, 0);
         BlockPos componentPos = new BlockPos(1, 64, 0);
-        ParallelControllerBlockEntity component = parallelController(ParallelTier.X16, componentPos);
+        ParallelControllerBlockEntity component = parallelController(ParallelTier.PLUS, componentPos);
         DynamicMachine firstMachine = new DynamicMachine(
                 MMCR.id("exclusive_first_machine"), "Exclusive First",
-                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get()));
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get(ParallelTier.PLUS.idSuffix()).get()));
         DynamicMachine secondMachine = new DynamicMachine(
                 MMCR.id("exclusive_second_machine"), "Exclusive Second",
-                new BlockArray(Map.of(new BlockPos(-1, 0, 0), new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get()))));
+                new BlockArray(Map.of(new BlockPos(-1, 0, 0), new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get(ParallelTier.PLUS.idSuffix()).get()))));
         ControllerPairFixture fixture = controllerPair(firstMachine, firstControllerPos, secondMachine, secondControllerPos, component);
 
         assertThat(invokeTryFormMachine(fixture.first(), firstMachine, Direction.SOUTH)).isTrue();
@@ -2422,7 +2422,7 @@ class MachineControllerBlockEntityTest {
         blocks.put(secondControllerPos, secondBlock);
         blocks.put(component.getBlockPos(), component instanceof IOPortBlockEntity port
                 ? blockForPort(port)
-                : cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get());
+                : cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get(ParallelTier.PLUS.idSuffix()).get());
         ServerLevel level = serverLevel(blocks, List.of(first, second, component));
         setField(BlockEntity.class, first, "level", level);
         setField(BlockEntity.class, second, "level", level);
@@ -2464,7 +2464,7 @@ class MachineControllerBlockEntityTest {
         setField(BlockEntity.class, controller, "blockState", controllerState);
         Map<BlockPos, Block> blocks = new HashMap<>();
         blocks.put(controllerPos, controllerBlock);
-        blocks.put(parallel.getBlockPos(), cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get());
+        blocks.put(parallel.getBlockPos(), cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get(ParallelTier.PLUS.idSuffix()).get());
         Level level = LevelStub.create(blocks, List.of(controller, parallel));
         setField(BlockEntity.class, controller, "level", level);
         setField(BlockEntity.class, parallel, "level", level);

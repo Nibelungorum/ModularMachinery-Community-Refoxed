@@ -123,12 +123,12 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
 
         String status() {
             if (!formed) return "unformed";
-            if (active) return "working";
+            if (hasActiveWork()) return "working";
             return "idle";
         }
 
         boolean hasProgress() {
-            return active && totalTick > 0;
+            return hasActiveWork() && totalTick > 0;
         }
 
         int progressPercent() {
@@ -150,6 +150,10 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
 
         boolean shouldShowFactoryLanes() {
             return factoryPresent;
+        }
+
+        private boolean hasActiveWork() {
+            return !activeRecipe.isEmpty() || factoryLanes > 0;
         }
     }
 }

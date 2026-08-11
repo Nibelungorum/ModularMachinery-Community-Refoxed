@@ -54,6 +54,18 @@ class MachineControllerComponentProviderSnapshotTest {
     }
 
     @Test
+    void ignores_stale_active_flag_when_no_recipe_or_factory_threads_are_present() {
+        CompoundTag tag = new CompoundTag();
+        tag.putBoolean("formed", true);
+        tag.putBoolean("active", true);
+
+        MachineControllerComponentProvider.Snapshot snapshot = MachineControllerComponentProvider.Snapshot.from(tag);
+
+        assertThat(snapshot.status()).isEqualTo("idle");
+        assertThat(snapshot.hasProgress()).isFalse();
+    }
+
+    @Test
     void keeps_backward_safe_parallel_and_factory_defaults() {
         MachineControllerComponentProvider.Snapshot snapshot = MachineControllerComponentProvider.Snapshot.from(new CompoundTag());
 

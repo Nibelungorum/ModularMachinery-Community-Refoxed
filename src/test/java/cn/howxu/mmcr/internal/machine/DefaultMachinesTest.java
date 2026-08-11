@@ -57,10 +57,8 @@ class DefaultMachinesTest {
         assertThat(machine.pattern().get(BlockPos.ZERO))
                 .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine.registryName()).get()));
         assertThat(machine.pattern().get(new BlockPos(0, 0, -1))).isNull();
-        assertThat(machine.pattern().get(new BlockPos(0, -1, -1)))
-                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.CASING.get()));
-        assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)))
-                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.CASING.get()));
+        assertThat(machine.pattern().get(new BlockPos(0, -1, -1)).matches(ModBlocks.CASING.get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(ModBlocks.CASING.get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("item_input_bus_ludicrous").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(0, 0, -2)).matches(ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState())).isTrue();
@@ -147,7 +145,7 @@ class DefaultMachinesTest {
         assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(ModBlocks.BLOCKS.get("parallel_controller_4").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(ModBlocks.BLOCKS.get("parallel_controller_normal").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().pattern().values())
                 .contains(new BlockPredicate.OfBlock(net.minecraft.world.level.block.Blocks.REINFORCED_DEEPSLATE));
@@ -263,7 +261,7 @@ class DefaultMachinesTest {
         assertThat(machine.pattern().get(BlockPos.ZERO))
                 .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine.registryName()).get()));
         assertThat(machine.pattern().get(new BlockPos(-1, -1, -2)).matches(ModBlocks.CASING.get().defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(-1, -1, -2)).matches(ModBlocks.BLOCKS.get("parallel_controller_4").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, -1, -2)).matches(ModBlocks.BLOCKS.get("parallel_controller_normal").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(0, 1, -1)).matches(ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState())).isTrue();
     }
 
@@ -279,10 +277,32 @@ class DefaultMachinesTest {
                 ModBlocks.BLOCKS.get("energy_output_hatch").get());
 
         assertThat(machine.pattern().get(new BlockPos(-1, -1, -2)).matches(ModBlocks.CASING.get().defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(-1, -1, -2)).matches(ModBlocks.BLOCKS.get("parallel_controller_max").get().defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, -1, -2)).matches(ModBlocks.BLOCKS.get("parallel_controller_ultimate").get().defaultBlockState())).isTrue();
         assertThat(machine.pattern().get(new BlockPos(0, 1, -1)).matches(ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState())).isTrue();
         assertThat(machine.parallelizable()).isTrue();
         assertThat(machine.hasFactory()).isTrue();
+    }
+
+    @Test
+    void default_blast_furnace_casing_slots_accept_shared_io_ports() {
+        Machine machine = DefaultMachines.blastFurnace(
+                ModBlocks.CASING.get(),
+                ModBlocks.BLOCKS.get("item_input_bus").get(),
+                ModBlocks.BLOCKS.get("item_output_bus").get(),
+                ModBlocks.BLOCKS.get("fluid_input_hatch").get(),
+                ModBlocks.BLOCKS.get("fluid_output_hatch").get(),
+                ModBlocks.BLOCKS.get("energy_input_hatch").get(),
+                ModBlocks.BLOCKS.get("energy_output_hatch").get());
+
+        BlockPredicate casingSlot = machine.pattern().get(new BlockPos(-1, 0, -2));
+
+        assertThat(casingSlot.matches(ModBlocks.CASING.get().defaultBlockState())).isTrue();
+        assertThat(casingSlot.matches(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue();
+        assertThat(casingSlot.matches(ModBlocks.BLOCKS.get("item_output_bus_ludicrous").get().defaultBlockState())).isTrue();
+        assertThat(casingSlot.matches(ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState())).isTrue();
+        assertThat(casingSlot.matches(ModBlocks.BLOCKS.get("fluid_output_hatch_huge").get().defaultBlockState())).isTrue();
+        assertThat(casingSlot.matches(ModBlocks.BLOCKS.get("energy_input_hatch_ludicrous").get().defaultBlockState())).isTrue();
+        assertThat(casingSlot.matches(ModBlocks.BLOCKS.get("energy_output_hatch_ultimate").get().defaultBlockState())).isTrue();
     }
 
     @Test

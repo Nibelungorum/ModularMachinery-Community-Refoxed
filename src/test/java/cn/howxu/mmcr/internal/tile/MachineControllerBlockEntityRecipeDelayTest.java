@@ -147,7 +147,7 @@ class MachineControllerBlockEntityRecipeDelayTest {
                 List.of(), java.util.Map.of(), 16, true, false, 1);
         setField(MachineControllerBlockEntity.class, controller, "machine", machine);
         setField(MachineControllerBlockEntity.class, controller, "foundMachine", machine);
-        addParallelComponent(controller, ParallelTier.X16);
+        addParallelComponent(controller, ParallelTier.PLUS);
         MachineRecipe recipe = parallelizedInputRecipe("parallel_gold", machineId, Items.GOLD_INGOT, 1);
         setField(MachineControllerBlockEntity.class, controller, "lastRecipe", recipe);
         setField(MachineControllerBlockEntity.class, controller, "lastRecipeStructureVersion", 31L);

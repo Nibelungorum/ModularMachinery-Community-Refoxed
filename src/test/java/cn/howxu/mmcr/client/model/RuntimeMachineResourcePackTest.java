@@ -45,8 +45,8 @@ class RuntimeMachineResourcePackTest {
 
         assertResourcesMatchDefinition(resources, "blast_furnace_controller", ModBlocks.CONTROLLER.get());
         assertResourcesMatchDefinition(resources, "item_input_bus", ModBlocks.BLOCKS.get("item_input_bus").get());
-        assertResourcesMatchDefinition(resources, ParallelTier.X16.idSuffix(),
-                ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get());
+        assertResourcesMatchDefinition(resources, ParallelTier.PLUS.idSuffix(),
+                ModBlocks.BLOCKS.get(ParallelTier.PLUS.idSuffix()).get());
         assertResourcesMatchDefinition(resources, "factory_controller", ModBlocks.BLOCKS.get("factory_controller").get());
     }
 

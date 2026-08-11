@@ -25,15 +25,39 @@ class TranslationsTest {
     void parallel_controllers_have_block_and_item_display_names() {
         for (ParallelTier tier : ParallelTier.values()) {
             String id = tier.idSuffix();
-            assertEquals("Parallel Controller " + tier.maxParallelism() + "x",
-                    Translations.ALL.get("en_us").get("block.mmcr." + id));
-            assertEquals("Parallel Controller " + tier.maxParallelism() + "x",
-                    Translations.ALL.get("en_us").get("item.mmcr." + id));
-            assertEquals("并行控制器 " + tier.maxParallelism() + "x",
-                    Translations.ALL.get("zh_cn").get("block.mmcr." + id));
-            assertEquals("并行控制器 " + tier.maxParallelism() + "x",
-                    Translations.ALL.get("zh_cn").get("item.mmcr." + id));
+            String en = enDisplayName(tier);
+            String zh = zhDisplayName(tier);
+            assertEquals(en, Translations.ALL.get("en_us").get("block.mmcr." + id));
+            assertEquals(en, Translations.ALL.get("en_us").get("item.mmcr." + id));
+            assertEquals(zh, Translations.ALL.get("zh_cn").get("block.mmcr." + id));
+            assertEquals(zh, Translations.ALL.get("zh_cn").get("item.mmcr." + id));
         }
+    }
+
+    private static String enDisplayName(ParallelTier tier) {
+        return switch (tier) {
+            case NORMAL -> "Normal Parallel Controller 4x";
+            case PLUS -> "Plus Parallel Controller 16x";
+            case REINFORCED -> "Reinforced Parallel Controller 64x";
+            case PRO -> "Pro Parallel Controller 256x";
+            case ELITE -> "Elite Parallel Controller 1024x";
+            case FANTASY -> "Fantasy Parallel Controller 4096x";
+            case MAX -> "Max Parallel Controller 16384x";
+            case ULTIMATE -> "Ultimate Parallel Controller 2147483647x";
+        };
+    }
+
+    private static String zhDisplayName(ParallelTier tier) {
+        return switch (tier) {
+            case NORMAL -> "普通并行器 4x";
+            case PLUS -> "进阶并行器 16x";
+            case REINFORCED -> "强化并行器 64x";
+            case PRO -> "专业并行器 256x";
+            case ELITE -> "精英并行器 1024x";
+            case FANTASY -> "幻想并行器 4096x";
+            case MAX -> "极限并行器 16384x";
+            case ULTIMATE -> "终极并行器 2147483647x";
+        };
     }
 
     @Test

@@ -33,15 +33,15 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     static final int SCROLLBAR_Y = 8;
     static final int SCROLLBAR_HEIGHT = 197;
     static final int SCROLLBAR_HANDLE_WIDTH = 12;
-    static final int SCROLLBAR_HANDLE_HEIGHT = 16;
+    static final int SCROLLBAR_HANDLE_HEIGHT = 32;
     private static final int ELEMENT_TEXTURE_WIDTH = 256;
     private static final int ELEMENT_TEXTURE_HEIGHT = 256;
     private static final int THREAD_ELEMENT_Y_OFFSET = 0;
-    private static final int SCROLLBAR_HANDLE_COLOR = 0xFF000000;
     private static final int SELECTED_THREAD_OVERLAY = 0x66A8D8FF;
     private static final int DETAIL_LINE_SPACING = 14;
     private static final Identifier BACKGROUND = MMCR.id("textures/gui/guifactory.png");
     private static final Identifier ELEMENTS = MMCR.id("textures/gui/guifactoryelements.png");
+    private static final Identifier SCROLLER = MMCR.id("textures/gui/scroller.png");
     private int scrollOffset;
     private boolean draggingScrollbar;
     private int scrollbarDragOffsetY;
@@ -108,7 +108,8 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     static int clampScrollOffset(int scrollOffset, int threadCount) {
         return Math.max(0, Math.min(Math.max(0, threadCount - VISIBLE_THREADS), scrollOffset));
     }
-    static boolean shouldRenderScrollbar(int threadCount) { return threadCount > VISIBLE_THREADS; }
+    static boolean shouldRenderScrollbar(int threadCount) { return true; }
+    static boolean isScrollbarInteractive(int threadCount) { return threadCount > VISIBLE_THREADS; }
     static int scrollbarHandleY(int scrollOffset, int threadCount) {
         int range = Math.max(0, threadCount - VISIBLE_THREADS);
         if (range == 0) return SCROLLBAR_Y;
@@ -160,9 +161,8 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
         if (shouldRenderScrollbar(menu.threads().size())) {
             int scrollbarX = leftPos + SCROLLBAR_X;
             int scrollbarY = topPos + scrollbarHandleY(scrollOffset, menu.threads().size());
-            graphics.fill(scrollbarX, scrollbarY,
-                    scrollbarX + SCROLLBAR_HANDLE_WIDTH, scrollbarY + SCROLLBAR_HANDLE_HEIGHT,
-                    SCROLLBAR_HANDLE_COLOR);
+            graphics.blit(RenderPipelines.GUI_TEXTURED, SCROLLER, scrollbarX, scrollbarY, 0, 0,
+                    SCROLLBAR_HANDLE_WIDTH, SCROLLBAR_HANDLE_HEIGHT, 32, 32);
         }
         FactoryRecipeScheduler.ThreadSnapshot selected = menu.selectedThread();
         int x = leftPos + 113;
@@ -256,7 +256,7 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     }
 
     private boolean mouseOverScrollbar(int mouseX, int mouseY) {
-        return shouldRenderScrollbar(menu.threads().size())
+        return isScrollbarInteractive(menu.threads().size())
                 && mouseX >= leftPos + SCROLLBAR_X
                 && mouseX < leftPos + SCROLLBAR_X + SCROLLBAR_HANDLE_WIDTH
                 && mouseY >= topPos + SCROLLBAR_Y

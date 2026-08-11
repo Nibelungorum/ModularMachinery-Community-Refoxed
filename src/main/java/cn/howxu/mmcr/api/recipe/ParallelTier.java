@@ -1,15 +1,20 @@
 package cn.howxu.mmcr.api.recipe;
 
 /**
+ * 并行控制器等级。等级名按优雅分级排列,数量按 4 的幂次递增,
+ * 最高级 (Ultimate) 使用 {@link Integer#MAX_VALUE} 代表 ~2.1G 倍并行。
+ *
  * @author howxu <dev@howxu.cn>
  */
 public enum ParallelTier {
-    X4(4, "parallel_controller_4"),
-    X16(16, "parallel_controller_16"),
-    X64(64, "parallel_controller_64"),
-    X256(256, "parallel_controller_256"),
-    X512(512, "parallel_controller_512"),
-    MAX(Integer.MAX_VALUE, "parallel_controller_max");
+    NORMAL(4, "parallel_controller_normal"),
+    PLUS(16, "parallel_controller_plus"),
+    REINFORCED(64, "parallel_controller_reinforced"),
+    PRO(256, "parallel_controller_pro"),
+    ELITE(1024, "parallel_controller_elite"),
+    FANTASY(4096, "parallel_controller_fantasy"),
+    MAX(16384, "parallel_controller_max"),
+    ULTIMATE(Integer.MAX_VALUE, "parallel_controller_ultimate");
 
     private final int maxParallelism;
     private final String idSuffix;

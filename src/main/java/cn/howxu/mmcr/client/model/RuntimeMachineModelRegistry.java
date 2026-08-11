@@ -167,11 +167,14 @@ public final class RuntimeMachineModelRegistry {
 
     private static Identifier parallelControllerOverlayTexture(ParallelTier tier) {
         return switch (tier) {
-            case X4 -> MMCR.id("block/overlay_parallel_controller_normal");
-            case X16 -> MMCR.id("block/overlay_parallel_controller_reinforced");
-            case X64 -> MMCR.id("block/overlay_parallel_controller_super");
-            case X256 -> MMCR.id("block/overlay_parallel_controller_elite");
-            case X512, MAX -> MMCR.id("block/overlay_parallel_controller_ultimate");
+            case NORMAL -> MMCR.id("block/overlay_parallel_controller_normal");
+            case PLUS -> MMCR.id("block/overlay_parallel_controller_plus");
+            case REINFORCED -> MMCR.id("block/overlay_parallel_controller_reinforced");
+            case PRO -> MMCR.id("block/overlay_parallel_controller_pro");
+            case ELITE -> MMCR.id("block/overlay_parallel_controller_elite");
+            case FANTASY -> MMCR.id("block/overlay_parallel_controller_fantasy");
+            case MAX -> MMCR.id("block/overlay_parallel_controller_max");
+            case ULTIMATE -> MMCR.id("block/overlay_parallel_controller_ultimate");
         };
     }
 

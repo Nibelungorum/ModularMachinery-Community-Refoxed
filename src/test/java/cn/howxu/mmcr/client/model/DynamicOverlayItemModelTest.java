@@ -98,14 +98,14 @@ class DynamicOverlayItemModelTest {
 
     @Test
     void parallel_controller_item_uses_port_style_dynamic_overlay() {
-        var block = cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get();
+        var block = cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get(ParallelTier.PLUS.idSuffix()).get();
 
         var description = DynamicOverlayItemModel.describeItem(block.asItem());
 
         assertThat(description.kind()).isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
         assertThat(description.baseModel()).isEqualTo(MMCR.id("block/dynamic_io_port"));
         assertThat(description.baseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
-        assertThat(description.overlayTexture()).isEqualTo(MMCR.id("block/overlay_parallel_controller_reinforced"));
+        assertThat(description.overlayTexture()).isEqualTo(MMCR.id("block/overlay_parallel_controller_plus"));
         assertThat(description.overlayFaces()).containsExactlyInAnyOrder(Direction.values());
     }
 

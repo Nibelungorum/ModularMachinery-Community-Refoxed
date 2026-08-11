@@ -50,10 +50,10 @@ class RuntimeMachineModelRegistryTest {
                 .isEqualTo(DynamicOverlayBakedModel.Kind.CONTROLLER);
         assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.BLOCKS.get("item_input_bus").get()).modelKind())
                 .isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
-        assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get()).modelKind())
+        assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.BLOCKS.get(ParallelTier.PLUS.idSuffix()).get()).modelKind())
                 .isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
-        assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get()).itemDescription().overlayTexture())
-                .isEqualTo(MMCR.id("block/overlay_parallel_controller_reinforced"));
+        assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.BLOCKS.get(ParallelTier.PLUS.idSuffix()).get()).itemDescription().overlayTexture())
+                .isEqualTo(MMCR.id("block/overlay_parallel_controller_plus"));
         assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.BLOCKS.get("factory_controller").get()).blockName())
                 .isEqualTo("factory_controller");
         assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.BLOCKS.get("factory_controller").get()).itemDescription().overlayTexture())
@@ -124,7 +124,7 @@ class RuntimeMachineModelRegistryTest {
 
     @Test
     void parallel_and_factory_controllers_use_dynamic_port_loader() {
-        var parallel = ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get();
+        var parallel = ModBlocks.BLOCKS.get(ParallelTier.PLUS.idSuffix()).get();
         var factory = ModBlocks.BLOCKS.get("factory_controller").get();
 
         assertThat(RuntimeMachineModelRegistry.dynamicBlockState(parallel).variants()).singleElement()
