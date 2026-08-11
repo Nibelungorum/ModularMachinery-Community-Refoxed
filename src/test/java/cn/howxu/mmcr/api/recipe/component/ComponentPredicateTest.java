@@ -133,6 +133,27 @@ class ComponentPredicateTest {
     }
 
     @Test
+    void matchesArrayEncodedEnchantmentComponentsAgainstRuntimeStackValues() {
+        var lookup = VanillaRegistries.createLookup();
+        var sharpness = lookup.lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(ResourceKey.create(
+                Registries.ENCHANTMENT, Identifier.parse("minecraft:sharpness")));
+        ItemStack sword = new ItemStack(Items.DIAMOND_SWORD);
+        var enchantments = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
+        enchantments.set(sharpness, 2);
+        sword.set(DataComponents.ENCHANTMENTS, enchantments.toImmutable());
+
+        var expectedEnchantments = new JsonArray();
+        var expectedEntry = new JsonObject();
+        expectedEntry.addProperty("minecraft:sharpness", 2);
+        expectedEnchantments.add(expectedEntry);
+        var predicates = new DataComponentPredicateSet(Map.of(
+                DataComponents.ENCHANTMENTS,
+                ComponentPredicate.exact(new Dynamic<>(RegistryOps.create(JsonOps.INSTANCE, lookup), expectedEnchantments))));
+
+        assertThat(predicates.matches(sword)).isTrue();
+    }
+
+    @Test
     void matchesRejectsWrongRuntimeComponentValues() {
         var lookup = VanillaRegistries.createLookup();
         var sharpness = lookup.lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(ResourceKey.create(

@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.recipe.component;
 
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.DynamicOps;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponentPatch;
@@ -55,6 +56,11 @@ public final class ComponentPredicates {
 
     private static boolean matchesStandardEnchantments(ItemEnchantments enchantments, ComponentPredicate.Exact exact) {
         var expected = exact.value().convert(JsonOps.INSTANCE).getValue();
+        if (expected.isJsonArray()) {
+            JsonArray entries = expected.getAsJsonArray();
+            if (entries.size() != 1 || !entries.get(0).isJsonObject()) return false;
+            expected = entries.get(0);
+        }
         if (!expected.isJsonObject()) return false;
         JsonObject actual = new JsonObject();
         for (var enchantment : enchantments.keySet()) {

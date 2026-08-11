@@ -38,6 +38,7 @@ import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.JsonOps;
@@ -178,6 +179,17 @@ class MachineControllerBlockEntityRecipeDelayTest {
     }
 
     @Test
+    void enchantedInputRecipeStartsWithArrayEncodedEnchantments() throws Exception {
+        Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
+        ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
+        bus.getItemStackHandler(null).setStackInSlot(0, enchantedSword("minecraft:sharpness", 2));
+        MachineControllerBlockEntity controller = formedController(machineId, bus);
+        MachineRecipe recipe = inputRecipe("sharpness_two_array", machineId, List.of(arrayEncodedEnchantedInput(2)));
+
+        assertThat(new ActiveMachineRecipe(recipe).canStartCrafting(new RecipeCraftingContext(controller))).isTrue();
+    }
+
+    @Test
     void sharedDelayHelperDelaysOnlyConflictProneRecipeWithinWindow() {
         RecipeStartDelay delay = new RecipeStartDelay();
         Identifier recipe = Identifier.fromNamespaceAndPath("mmcr", "single_gold");
@@ -260,6 +272,20 @@ class MachineControllerBlockEntityRecipeDelayTest {
     private static ItemRequirement enchantedInput(int sharpnessLevel) {
         var enchantments = new JsonObject();
         enchantments.addProperty("minecraft:sharpness", sharpnessLevel);
+        var predicates = new DataComponentPredicateSet(Map.of(
+                DataComponents.ENCHANTMENTS,
+                ComponentPredicate.exact(new Dynamic<>(RegistryOps.create(JsonOps.INSTANCE, VanillaRegistries.createLookup()), enchantments)),
+                DataComponents.REPAIR_COST,
+                ComponentPredicate.exact(new Dynamic<>(JsonOps.INSTANCE, new com.google.gson.JsonPrimitive(1)))));
+        return new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.DIAMOND_SWORD), 1,
+                ItemStack.EMPTY, 1F, List.of(), predicates, 0F);
+    }
+
+    private static ItemRequirement arrayEncodedEnchantedInput(int sharpnessLevel) {
+        var enchantments = new JsonArray();
+        var entry = new JsonObject();
+        entry.addProperty("minecraft:sharpness", sharpnessLevel);
+        enchantments.add(entry);
         var predicates = new DataComponentPredicateSet(Map.of(
                 DataComponents.ENCHANTMENTS,
                 ComponentPredicate.exact(new Dynamic<>(RegistryOps.create(JsonOps.INSTANCE, VanillaRegistries.createLookup()), enchantments)),
