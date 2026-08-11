@@ -21,6 +21,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -362,15 +363,16 @@ class DefaultRecipesTest {
         assertThat(enchantments.get("minecraft:sharpness").getAsInt()).isEqualTo(2);
         assertThat(enchantments.has("levels")).isFalse();
         assertThat(enchantments.has("show_in_tooltip")).isFalse();
-        assertThat(enchantedInput.components().values()).containsOnlyKeys(DataComponents.ENCHANTMENTS, DataComponents.REPAIR_COST);
-        JsonObject repairCost = DataComponentPredicateSet.CODEC.encodeStart(JsonOps.INSTANCE, enchantedInput.components())
-                .getOrThrow()
-                .getAsJsonObject()
-                .getAsJsonObject("minecraft:repair_cost");
-        assertThat(repairCost.get("value").getAsInt()).isEqualTo(1);
-        assertThat(enchantedInput.components().matches(enchantedSword("minecraft:sharpness", 2))).isTrue();
-        assertThat(enchantedInput.components().matches(enchantedSword("minecraft:sharpness", 1))).isFalse();
-        assertThat(enchantedInput.components().matches(enchantedSword("minecraft:unbreaking", 3))).isFalse();
+        assertThat(enchantedInput.components().values())
+                .containsKey(DataComponents.ENCHANTMENTS)
+                .doesNotContainKey(DataComponents.REPAIR_COST);
+        var registryOps = RegistryOps.create(JsonOps.INSTANCE, net.minecraft.data.registries.VanillaRegistries.createLookup());
+        assertThat(enchantedInput.components().matches(enchantedSword("minecraft:sharpness", 2), registryOps)).isTrue();
+        ItemStack withoutRepairCost = enchantedSword("minecraft:sharpness", 2);
+        withoutRepairCost.remove(DataComponents.REPAIR_COST);
+        assertThat(enchantedInput.components().matches(withoutRepairCost, registryOps)).isTrue();
+        assertThat(enchantedInput.components().matches(enchantedSword("minecraft:sharpness", 1), registryOps)).isFalse();
+        assertThat(enchantedInput.components().matches(enchantedSword("minecraft:unbreaking", 3), registryOps)).isFalse();
     }
 
     @Test

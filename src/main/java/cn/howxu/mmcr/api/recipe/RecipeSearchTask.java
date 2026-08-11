@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -121,7 +122,8 @@ public final class RecipeSearchTask {
         }
 
         if ((bestFailureUnloc != null || bestFailure != null) && bestFailureRecipe != null) {
-            LOG.warn(failureLogMessage(machineId, structureVersion, bestFailureRecipe, bestFailureUnloc, bestFailure, bestValidity));
+            LOG.warn(failureLogMessage(machineId, structureVersion, bestFailureRecipe, bestFailureUnloc, bestFailure, bestValidity,
+                    describeInputStacks()));
         }
         return RecipeSearchResult.failure(machineId, structureVersion, bestFailureUnloc, bestFailure, bestValidity);
     }
@@ -132,6 +134,16 @@ public final class RecipeSearchTask {
                                     @Nullable String failureUnloc,
                                     @Nullable RequirementFailure failure,
                                     float validity) {
+        return failureLogMessage(machineId, structureVersion, recipe, failureUnloc, failure, validity, List.of());
+    }
+
+    static String failureLogMessage(Identifier machineId,
+                                            long structureVersion,
+                                            MachineRecipe recipe,
+                                            @Nullable String failureUnloc,
+                                            @Nullable RequirementFailure failure,
+                                            float validity,
+                                            List<String> inputStacks) {
         return "Recipe search failed: machine=" + machineId
                 + " structureVersion=" + structureVersion
                 + " recipe=" + recipe.id()
@@ -143,8 +155,22 @@ public final class RecipeSearchTask {
                 + " short=" + (failure == null ? "unknown" : failure.shortAmount())
                 + " validity=" + validity
                 + " expectedInputs=" + describeInputs(recipe)
+                + " inputStacks=" + inputStacks
                 + " searchedComponents=" + (failure == null ? List.of() : failure.searchedComponents())
                 + " matchedComponents=" + (failure == null ? List.of() : failure.matchedComponents());
+    }
+
+    private List<String> describeInputStacks() {
+        List<String> stacks = new ArrayList<>();
+        for (ProcessingComponent component : controller.getComponents()) {
+            if (!(component.getContainer() instanceof ItemInputBusBlockEntity bus)) continue;
+            IItemHandler handler = bus.getItemHandler(null);
+            for (int slot = 0; slot < handler.getSlots(); slot++) {
+                ItemStack stack = handler.getStackInSlot(slot);
+                if (!stack.isEmpty()) stacks.add(bus.getBlockPos() + "#" + slot + "=" + stack.getComponentsPatch());
+            }
+        }
+        return stacks;
     }
 
     private static List<String> describeInputs(MachineRecipe recipe) {

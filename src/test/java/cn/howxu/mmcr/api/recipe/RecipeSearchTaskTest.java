@@ -204,7 +204,8 @@ class RecipeSearchTaskTest {
         RequirementFailure failure = new RequirementFailure(0, RequirementFailure.Kind.MISSING_INPUT, 1, 0);
 
         String message = RecipeSearchTask.failureLogMessage(machineId, 19, recipe,
-                RecipeCraftingContext.FAILURE_MISSING_INPUT, failure, 0.3F);
+                RecipeCraftingContext.FAILURE_MISSING_INPUT, failure, 0.3F,
+                List.of("(1,2,3)#0={minecraft:custom_name:{\"text\":\"Probe\"}}"));
 
         assertThat(message).contains("machine=mmcr:machine");
         assertThat(message).contains("recipe=mmcr:expected_diamond_sword");
@@ -213,6 +214,7 @@ class RecipeSearchTaskTest {
         assertThat(message).contains("required=1");
         assertThat(message).contains("available=0");
         assertThat(message).contains("expectedInputs=[item[count=1, ingredient=minecraft:diamond_sword");
+        assertThat(message).contains("inputStacks=[(1,2,3)#0={minecraft:custom_name:{\"text\":\"Probe\"}}]");
     }
 
     private static MachineRecipe inputRecipe(String path, Identifier machineId, Item item, int count) {

@@ -169,7 +169,7 @@ public final class DefaultRecipes {
     private static MachineRecipe enchantedNonConsumableRecipe(Identifier machineId, String path) {
         return new MachineRecipe(MMCR.id(path), machineId, 100,
                 List.of(itemInputFromData("""
-                        {components: {"minecraft:enchantments": {"minecraft:sharpness": 2}, "minecraft:repair_cost": 1}, count: 1, id: "minecraft:diamond_sword"}
+                        {components: {"minecraft:enchantments": {"minecraft:sharpness": 2}}, count: 1, id: "minecraft:diamond_sword"}
                         """, 0F)),
                 List.of(), List.of(), 0, 1, true, List.of(), List.of(), true, List.of());
     }
