@@ -404,6 +404,68 @@ class FactoryRecipeSchedulerTest {
     }
 
     @Test
+    void rejectedSharedStartsExposeMissingInputOnEveryThread() throws Exception {
+        Items.IRON_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 64).build());
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
+        BlockPos controllerPos = new BlockPos(0, 64, 0);
+        MachineControllerBlockEntity controller = controllerWithInput(MMCR.id("factory_shared_failure"), controllerPos, input);
+        ServerLevel level = serverLevel(List.of(controller, input));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, input, "level", level);
+        StructureClaimRegistry registry = StructureClaimRegistry.get(level);
+        registry.claim(controllerPos, List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
+                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)));
+        StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_shared_failure_recipe"), MMCR.id("factory_shared_failure"),
+                20, List.of(), List.of(), List.of(), 0, 0, false, List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)), true);
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2, new RecipeCraftingContextPool());
+
+        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 1, new RecipeCraftingContextPool());
+        SharedIoCoordinator.get(level).resolve(domain);
+
+        assertThat(scheduler.threadSnapshots()).allSatisfy(snapshot -> {
+            assertThat(snapshot.active()).isFalse();
+            assertThat(snapshot.lastFailureUnloc()).isEqualTo(RecipeCraftingContext.FAILURE_MISSING_INPUT);
+        });
+        SharedIoCoordinator.discard(level);
+        StructureClaimRegistry.discard(level);
+    }
+
+    @Test
+    void removingNonConsumableInputCancelsEveryActiveThread() throws Exception {
+        Items.IRON_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 64).build());
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 4));
+        MachineControllerBlockEntity controller = controllerWithInput(MMCR.id("factory_non_consumable"),
+                new BlockPos(0, 64, 0), input);
+        ServerLevel level = serverLevel(List.of(controller, input));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, input, "level", level);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_non_consumable_recipe"), MMCR.id("factory_non_consumable"),
+                20, List.of(), List.of(), List.of(), 0, 0, false, List.of(), List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
+                        ItemStack.EMPTY, 1F, List.of(), cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet.EMPTY, 0F)
+        ), true);
+        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2, pool);
+
+        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 1, pool);
+        assertThat(scheduler.threadSnapshots()).allSatisfy(snapshot -> assertThat(snapshot.active()).isTrue());
+
+        input.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
+        scheduler.tickThreads(controller, List.of(), controller.getStructureVersion(), 1, pool);
+
+        assertThat(scheduler.allThreads()).allSatisfy(thread -> {
+            assertThat(thread.isIdle()).isTrue();
+            assertThat(thread.getStatus()).isEqualTo(RecipeThread.Status.FAILED);
+            assertThat(thread.getLastFailureUnloc()).isEqualTo(RecipeCraftingContext.FAILURE_MISSING_INPUT);
+        });
+    }
+
+    @Test
     void invalidatedSharedStartCannotCommitOrReplaceANewerPendingStart() throws Exception {
         Items.IRON_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
                 .set(DataComponents.MAX_STACK_SIZE, 64).build());

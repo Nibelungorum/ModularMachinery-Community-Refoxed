@@ -6,6 +6,8 @@ import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import net.minecraft.resources.Identifier;
@@ -251,10 +253,26 @@ public abstract class RecipeThread {
             status = Status.FAILED;
         } else if (tickStatus == ActiveMachineRecipe.TickStatus.WAITING) {
             lastFailureUnloc = recipeContext.getLastFailureUnloc();
-            status = Status.WAITING;
+            if (missingRetainedInput(recipe, recipeContext)) {
+                contextPool.returnContext(recipeContext);
+                activeRecipe = null;
+                context = null;
+                status = Status.FAILED;
+            } else {
+                status = Status.WAITING;
+            }
         } else {
             status = Status.WORKING;
         }
+    }
+
+    private static boolean missingRetainedInput(ActiveMachineRecipe recipe, RecipeCraftingContext context) {
+        var failure = context.getLastRequirementFailure();
+        if (failure == null || failure.requirementIndex() < 0) return false;
+        List<cn.howxu.mmcr.api.recipe.requirement.MachineRequirement> requirements = recipe.getRecipe().runtimeRequirements();
+        if (failure.requirementIndex() >= requirements.size()) return false;
+        return requirements.get(failure.requirementIndex()) instanceof ItemRequirement item
+                && item.io() == RecipeModifier.IOType.INPUT && item.consumeChance() == 0F;
     }
 
     public void invalidate() {
