@@ -207,7 +207,9 @@ public final class DefaultRecipes {
         JsonObject root = JsonParser.parseString(itemData).getAsJsonObject();
         Identifier id = Identifier.parse(root.get("id").getAsString());
         int count = root.has("count") ? root.get("count").getAsInt() : 1;
-        ItemStack stack = new ItemStack(Holder.direct(BuiltInRegistries.ITEM.getValue(id), DataComponentMap.EMPTY), count);
+        Item item = BuiltInRegistries.ITEM.getValue(id);
+        item.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+        ItemStack stack = new ItemStack(item, count);
         return new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, stack, 1F, List.of(), componentsFromData(root), 1F);
     }
 
@@ -310,7 +312,8 @@ public final class DefaultRecipes {
     }
 
     private static ItemStack item(net.minecraft.world.item.Item item, int count) {
-        return new ItemStack(Holder.direct(item, DataComponentMap.EMPTY), count);
+        item.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+        return new ItemStack(item, count);
     }
 
     private static ItemStack namedItem(Item item, int count, String name) {

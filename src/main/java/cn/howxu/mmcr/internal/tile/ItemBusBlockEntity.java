@@ -4,6 +4,7 @@ import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -49,7 +50,19 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
+        normalizeItemHolders();
         handler.serialize(output.child("inventory"));
+    }
+
+    private void normalizeItemHolders() {
+        for (int slot = 0; slot < handler.getSlots(); slot++) {
+            ItemStack stack = handler.getStackInSlot(slot);
+            if (stack.isEmpty() || stack.typeHolder().unwrapKey().isPresent()) continue;
+
+            ItemStack normalized = new ItemStack(stack.getItem(), stack.getCount());
+            normalized.applyComponents(stack.getComponentsPatch());
+            handler.setStackInSlot(slot, normalized);
+        }
     }
 
     @Override

@@ -381,6 +381,16 @@ class DefaultRecipesTest {
     }
 
     @Test
+    void data_defined_item_output_uses_registered_holder() {
+        var recipe = DefaultRecipes.recipes().get(MMCR.id("blast_furnace_component_enchanted_output"));
+        var output = recipe.outputs().getFirst();
+
+        assertThat(output.typeHolder().unwrapKey()).isPresent();
+        assertThat(output.typeHolder().unwrapKey().orElseThrow().identifier())
+                .isEqualTo(Identifier.parse("minecraft:iron_sword"));
+    }
+
+    @Test
     void complex_recipe_registers_three_inputs_and_three_outputs_with_correct_chances() {
         installDefaultRuntimeContent();
         DefaultRecipes.ensureRegistered();
