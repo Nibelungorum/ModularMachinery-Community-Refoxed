@@ -67,10 +67,6 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
         return new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, stack, chance, List.of(), DataComponentPredicateSet.EMPTY, 1F);
     }
 
-    static MachineRequirement itemOutput(ItemStack stack, float chance) {
-        return new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, stack.copy(), chance, List.of());
-    }
-
     static MachineRequirement fluidOutput(FluidStack stack) {
         return new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, stack.copy());
     }
@@ -197,7 +193,6 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
                 .orElseGet(() -> DataResult.success(DataComponentPredicateSet.EMPTY));
     }
 
-<<<<<<< HEAD
     private static <T> DataResult<MachineRequirement> decodeItemOutputStack(DynamicOps<T> ops, T stackInput,
             RecipeModifier.IOType io, float chance, List<String> tags) {
         Dynamic<T> stack = new Dynamic<>(ops, stackInput);
@@ -217,8 +212,6 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
         });
     }
 
-=======
->>>>>>> feat/shared-multiblock-io
     private static <T> float decodeConsumeChance(DynamicOps<T> ops, T input) {
         return ops.get(input, "consume_chance")
                 .flatMap(ops::getNumberValue)

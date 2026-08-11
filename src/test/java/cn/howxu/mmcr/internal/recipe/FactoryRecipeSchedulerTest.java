@@ -26,15 +26,12 @@ import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
-<<<<<<< HEAD
 import net.minecraft.core.HolderLookup;
-import net.minecraft.util.ProblemReporter;
-import net.minecraft.world.level.block.entity.BlockEntity;
-=======
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -44,15 +41,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
-import net.minecraft.core.HolderLookup;
-import net.minecraft.util.ProblemReporter;
 import net.neoforged.neoforge.items.ItemStackHandler;
-import net.minecraft.core.HolderLookup;
-import net.minecraft.util.ProblemReporter;
-import net.minecraft.world.level.block.entity.BlockEntity;
->>>>>>> feat/shared-multiblock-io
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -914,10 +903,6 @@ class FactoryRecipeSchedulerTest {
         return controller;
     }
 
-<<<<<<< HEAD
-    private static void setField(Class<?> declaringClass, Object target, String name, Object value) throws ReflectiveOperationException {
-        Field field = declaringClass.getDeclaredField(name);
-=======
     private static MachineControllerBlockEntity controllerWithInput(Identifier machineId, BlockPos pos,
                                                                       ItemInputBusBlockEntity input) throws Exception {
         return controllerWithComponents(machineId, pos, input);
@@ -1012,13 +997,10 @@ class FactoryRecipeSchedulerTest {
 
     private static void setField(Class<?> type, Object target, String name, Object value) throws ReflectiveOperationException {
         Field field = type.getDeclaredField(name);
->>>>>>> feat/shared-multiblock-io
         field.setAccessible(true);
         field.set(target, value);
     }
 
-<<<<<<< HEAD
-=======
     private static final class TestServerLevel extends ServerLevel {
         private Map<BlockPos, BlockState> blocks;
         private Map<BlockPos, BlockEntity> blockEntities;
@@ -1039,7 +1021,6 @@ class FactoryRecipeSchedulerTest {
 
     }
 
->>>>>>> feat/shared-multiblock-io
     private static Object fieldValue(Class<?> declaringClass, Object target, String name) throws ReflectiveOperationException {
         Field field = declaringClass.getDeclaredField(name);
         field.setAccessible(true);

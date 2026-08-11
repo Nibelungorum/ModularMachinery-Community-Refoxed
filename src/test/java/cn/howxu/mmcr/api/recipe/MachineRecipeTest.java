@@ -101,7 +101,6 @@ class MachineRecipeTest {
     }
 
     @Test
-<<<<<<< HEAD
     void enchanted_output_components_use_bound_enchantment_holders_for_tooltips() {
         bindItemComponents(Items.DIAMOND_SWORD);
         var root = new JsonObject();
@@ -179,49 +178,6 @@ class MachineRecipeTest {
 
         assertThat(actual.get(DataComponents.ENCHANTMENTS).getLevel(enchantment("minecraft:sharpness"))).isEqualTo(2);
         assertThat(actual.get(DataComponents.REPAIR_COST)).isEqualTo(1);
-    }
-
-    @Test
-=======
->>>>>>> feat/shared-multiblock-io
-    void recipe_codec_roundtrips_parallelized_and_equality_includes_flag() {
-        bindItemComponents(Items.IRON_BLOCK);
-        MachineRecipe serial = new MachineRecipe(
-                MMCR.id("parallel_test"),
-                MMCR.id("blast_furnace"),
-                20,
-                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
-                List.of(new ItemStack(Items.IRON_BLOCK)),
-                List.of(),
-                0,
-                3,
-                false,
-                List.of(),
-                List.of(),
-                true);
-        assertThat(serial.isParallelized()).isTrue();
-        assertThat(serial.maxThreads()).isEqualTo(3);
-
-        var encoded = MachineRecipe.CODEC.codec().encodeStart(jsonOps(), serial).getOrThrow();
-        var decoded = MachineRecipe.CODEC.codec().parse(jsonOps(), encoded).getOrThrow();
-        var nonParallel = new MachineRecipe(
-                MMCR.id("parallel_test"),
-                MMCR.id("blast_furnace"),
-                20,
-                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
-                List.of(new ItemStack(Items.IRON_BLOCK)),
-                List.of(),
-                0,
-                3,
-                false,
-                List.of(),
-                List.of(),
-                false);
-
-        assertThat(decoded.isParallelized()).isTrue();
-        assertThat(decoded.maxThreads()).isEqualTo(3);
-        assertThat(decoded).isNotEqualTo(nonParallel);
-        assertThat(decoded.hashCode()).isNotEqualTo(nonParallel.hashCode());
     }
 
     @Test

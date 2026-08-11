@@ -102,6 +102,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private boolean redstonePaused;
     private @Nullable ActiveMachineRecipe pausedActive;
     private @Nullable RecipeCraftingContext pausedContext;
+    private boolean restoredRecipeContext;
     private RecipeCraftingContextPool contextPool = RecipeCraftingContextPool.global();
     private Set<BlockPos> linkedPortPositions = new HashSet<>();
     private int recipeSearchRetryCounter;
@@ -426,9 +427,11 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         redstonePaused = false;
         FactorySchedulerBlockEntity factory = getFactoryController();
         if (factory != null) factory.resume();
+        if (shouldCheckStructure()) checkStructure();
         if (active == null && pausedActive != null && pausedContext != null) {
             active = pausedActive;
             context = pausedContext;
+            context.refreshController(this);
             pausedActive = null;
             pausedContext = null;
             structureDirty = true;
@@ -439,7 +442,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             pausedContext = null;
         }
 
-        if (shouldCheckStructure()) checkStructure();
         if (isFormed() && isStructureAreaLoaded()) {
             if (factory != null) {
                 tickFactoryRecipes(factory);
@@ -508,7 +510,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                     return;
                 }
                 collectFoundModifiers(replacements);
-                resumePausedRecipeAfterStructureCheck();
                 var failure = foundMachine.portRequirements().validate(countPorts(foundPattern, foundCompiledPattern, facing));
                 if (failure.isPresent()) {
                     recordFormationFailure(foundMachine, failure.get());
@@ -530,6 +531,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 if (!isFormed()) setFormed(true);
                 foundLevels = levels.foundLevels();
                 updateComponents();
+                resumePausedRecipeAfterStructureCheck();
                 return;
             }
             resetMachine();
@@ -641,8 +643,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             return false;
         }
 
-<<<<<<< HEAD
-=======
         if (level instanceof ServerLevel serverLevel) {
             StructureClaimRegistry.ClaimResult result = StructureClaimRegistry.get(serverLevel)
                     .claim(getBlockPos(), componentClaims(rotatedPattern, compiled, facing));
@@ -655,7 +655,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             }
         }
 
->>>>>>> feat/shared-multiblock-io
         lastFormationFailure = null;
         lastStructureMismatchDiagnostic = null;
         onStructureFormed(candidate, rotatedPattern, compiled, facing, replacements, levels.foundLevels());
@@ -749,28 +748,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         lastStructureMismatchDiagnostic = null;
     }
 
-    private StructureMatcher.LevelResolution resolveLevels(Machine candidate, Direction facing) {
-        MachineStructureDefinition definition = MachineStructureRegistry.dynamicSnapshot().get(candidate.registryName());
-        if (definition == null || definition.levelSlots().isEmpty()) {
-            return new StructureMatcher.LevelResolution(Map.of(), null);
-        }
-        Map<BlockPos, Identifier> slots = new LinkedHashMap<>();
-        Direction rollFacing = getBlockState().getValue(MachineControllerBlock.ROLL_FACING);
-        Direction normalizedRoll = facing.getAxis().isVertical() ? rollFacing : Direction.SOUTH;
-        for (var entry : definition.levelSlots().entrySet()) {
-            slots.put(BlockRotator.rotateSouthTo(entry.getKey(), facing, normalizedRoll), entry.getValue());
-        }
-        return StructureMatcher.resolveLevels(slots, level, getBlockPos());
-    }
-
-    private void recordLevelMismatch(LevelMismatch mismatch) {
-        lastStructureError = mismatch;
-        lastFormationFailure = null;
-        lastStructureMismatchDiagnostic = null;
-        LOG.info("[Ctrl#{}] formation rejected: level type={} expected={} actual={} worldPos={}",
-                instanceId, mismatch.typeId(), mismatch.expected().id(), mismatch.actual().id(), mismatch.worldPos());
-    }
-
     private void onStructureFormed(Machine matchedMachine, BlockArray rotatedPattern, CompiledMachinePattern compiledPattern,
                                    Direction facing, Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
                                    Map<Identifier, MachineLevel> levels) {
@@ -779,12 +756,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         foundCompiledPattern = compiledPattern;
         controllerFacing = facing;
         machine = matchedMachine;
-<<<<<<< HEAD
-=======
         if (level instanceof ServerLevel serverLevel) {
             resourceDomain = StructureClaimRegistry.get(serverLevel).domainFor(getBlockPos());
         }
->>>>>>> feat/shared-multiblock-io
         foundLevels = levels;
         collectFoundModifiers(replacements);
         FORMED_CONTROLLERS.add(this);
@@ -793,13 +767,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         structureCheckCounter = 0;
         if (!isFormed()) setFormed(true);
         updateComponents();
+        resumePausedRecipeAfterStructureCheck();
         clearCandidateCache();
         lastFormationFailure = null;
         lastStructureError = null;
         setChanged();
         syncLevelState();
-<<<<<<< HEAD
-=======
     }
 
     private List<StructureClaimRegistry.Claim> componentClaims(BlockArray pattern,
@@ -816,7 +789,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             }
         }
         return claims;
->>>>>>> feat/shared-multiblock-io
     }
 
     private void collectFoundModifiers(Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
@@ -1026,6 +998,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (active != null || pausedActive == null || pausedContext == null || redstonePaused) return;
         active = pausedActive;
         context = pausedContext;
+        context.refreshController(this);
         pausedActive = null;
         pausedContext = null;
         setActiveState(true);
@@ -1204,7 +1177,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         }
         active = next;
         context = nextContext;
-        int granted = nextContext.commitStart(next.getRecipe(), next.getMaxParallelism());
+        int granted = nextContext.commitStart(next, next.getMaxParallelism());
         if (granted <= 0) {
             active = null;
             context = null;
@@ -1214,7 +1187,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             lastFailureUnloc = nextContext.getLastFailureUnloc();
             return false;
         }
-        next.setParallelism(granted);
         next.refreshTotalTick(nextContext);
         setActiveState(true);
         rememberLastRecipe(next.getRecipe());
@@ -1269,14 +1241,13 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             }
             active = next;
             context = nextContext;
-            int granted = nextContext.commitStart(next.getRecipe(), next.getMaxParallelism());
+            int granted = nextContext.commitStart(next, next.getMaxParallelism());
             if (granted <= 0) {
                 active = null;
                 context = null;
                 recipeDirty = true;
                 return false;
             }
-            next.setParallelism(granted);
             next.refreshTotalTick(nextContext);
             setActiveState(true);
             recipeSearchRetryCounter = 0;
@@ -1306,7 +1277,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private void tickActiveRecipe() {
         if (active == null || context == null) return;
         if (!context.isStructureVersionCurrent()) {
-            if (context.isStructureVersionOnlyCurrent()) {
+            if (restoredRecipeContext) {
+                context.refreshStructureVersion();
+                restoredRecipeContext = false;
+            } else if (context.isStructureVersionOnlyCurrent()) {
                 context.refreshModifierSnapshot(foundModifierList());
                 active.refreshTotalTick(context);
             } else {
@@ -1342,7 +1316,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             setChanged();
             return;
         }
-        boolean resourcesGranted = context.commitSynchronousIoTick(active.getRecipe(), active.getParallelism());
+        boolean resourcesGranted = context.commitSynchronousIoTick(active.getRecipe(), active.getParallelism(), active.inputConsumptionPlan());
         boolean outputsCommitted = resourcesGranted && finalTick
                 && context.commitSynchronousOutputs(active.getRecipe(), active.getParallelism());
         ActiveMachineRecipe.TickStatus status = active.applyTickGrant(resourcesGranted, outputsCommitted, gameTime);
@@ -1392,7 +1366,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 next.getMaxParallelism(),
                 requested -> {
                     if (!isPendingSharedStart(next, nextContext, domain)) return 0;
-                    int granted = nextContext.commitStart(next.getRecipe(), requested);
+                    int granted = nextContext.commitStart(next, requested);
                     if (granted <= 0) {
                         clearPendingSharedStart();
                         returnContext(nextContext);
@@ -1404,7 +1378,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 granted -> {
                     if (!isPendingSharedStart(next, nextContext, domain)) return;
                     clearPendingSharedStart();
-                    next.setParallelism(granted);
                     next.refreshTotalTick(nextContext);
                     active = next;
                     context = nextContext;
@@ -1460,7 +1433,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                         applySharedTick(recipe, recipeContext, false, false, gameTime);
                         return false;
                     }
-                    if (!recipeContext.coordinatorIoTick(recipe.getRecipe(), recipe.getParallelism()).getAsBoolean()) {
+                    if (!recipeContext.coordinatorIoTick(recipe.getRecipe(), recipe.getParallelism(), recipe.inputConsumptionPlan()).getAsBoolean()) {
                         applySharedTick(recipe, recipeContext, false, false, gameTime);
                         return false;
                     }
@@ -1640,6 +1613,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         super.loadAdditional(input);
         pausedActive = null;
         pausedContext = null;
+        restoredRecipeContext = false;
         redstonePaused = false;
         active = null;
         context = null;
@@ -1672,11 +1646,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             LOG.warn("[Ctrl#{}] loadAdditional: stored recipe state {} is invalid; clearing slot", instanceId, recipeState);
             return;
         }
+        restored.refreshTotalTick(pausedContext == null ? context : pausedContext);
+        restoredRecipeContext = true;
         structureDirty = true;
-<<<<<<< HEAD
-=======
-        LOG.info("[Ctrl#{}] loadAdditional: pos={} restored {} recipe={} tick={}/{}", instanceId, getBlockPos(), recipeState, restored.getRecipe().id(), restored.getTick(), restored.getTotalTick());
->>>>>>> feat/shared-multiblock-io
         setChanged();
     }
 

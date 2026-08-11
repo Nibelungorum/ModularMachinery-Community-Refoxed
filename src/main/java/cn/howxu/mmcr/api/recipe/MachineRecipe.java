@@ -309,11 +309,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
             ItemStack stack = item.stack().copy();
             stack.setCount(levelOutputCount(stack.getCount(), outputMultiplier));
-<<<<<<< HEAD
             return new ItemRequirement(item.io(), item.item(), item.count(), stack, item.chance(), item.tags(), item.components(), item.consumeChance());
-=======
-            return new ItemRequirement(item.io(), item.item(), item.count(), stack, item.chance(), item.tags());
->>>>>>> feat/shared-multiblock-io
         }
         if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT) {
             FluidStack stack = fluid.stack().copy();

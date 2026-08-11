@@ -46,13 +46,12 @@ public final class FactoryRecipeLane implements FactoryRecipeScheduler.Lane {
     public void start() {
         if (started) return;
         started = true;
-        int granted = context.commitStart(recipe.getRecipe(), recipe.getMaxParallelism());
+        int granted = context.commitStart(recipe, recipe.getMaxParallelism());
         if (granted <= 0) {
             lastFailureUnloc = context.getLastFailureUnloc();
             close();
             return;
         }
-        recipe.setParallelism(granted);
         recipe.refreshTotalTick(context);
     }
 
@@ -64,11 +63,6 @@ public final class FactoryRecipeLane implements FactoryRecipeScheduler.Lane {
     @Override
     public boolean tick(long gameTime) {
         if (closed) return true;
-<<<<<<< HEAD
-        ActiveMachineRecipe.TickStatus status = recipe.tick(context, (int) Math.min(Integer.MAX_VALUE, Math.max(0L, gameTime)));
-        if (status == ActiveMachineRecipe.TickStatus.FINISHED || status == ActiveMachineRecipe.TickStatus.CANCELLED) {
-            lastFailureUnloc = context.getLastFailureUnloc();
-=======
         int tickTime = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, gameTime));
         if (recipe.isFinishPending()) {
             if (!recipe.shouldRetryFinish(tickTime)) return false;
@@ -87,12 +81,11 @@ public final class FactoryRecipeLane implements FactoryRecipeScheduler.Lane {
             lastFailureUnloc = context.getLastFailureUnloc();
             return false;
         }
-        boolean resourcesGranted = context.commitSynchronousIoTick(recipe.getRecipe(), recipe.getParallelism());
+        boolean resourcesGranted = context.commitSynchronousIoTick(recipe.getRecipe(), recipe.getParallelism(), recipe.inputConsumptionPlan());
         boolean outputsCommitted = resourcesGranted && finalTick
                 && context.commitSynchronousOutputs(recipe.getRecipe(), recipe.getParallelism());
         ActiveMachineRecipe.TickStatus status = recipe.applyTickGrant(resourcesGranted, outputsCommitted, tickTime);
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
->>>>>>> feat/shared-multiblock-io
             close();
             return true;
         }

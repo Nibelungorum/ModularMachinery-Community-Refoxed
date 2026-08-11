@@ -47,10 +47,7 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-<<<<<<< HEAD
-=======
 import java.util.TreeMap;
->>>>>>> feat/shared-multiblock-io
 import net.minecraft.core.HolderLookup;
 import net.minecraft.util.ProblemReporter;
 

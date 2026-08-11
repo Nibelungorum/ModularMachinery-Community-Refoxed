@@ -41,10 +41,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.Identifier;
-<<<<<<< HEAD
-=======
 import net.minecraft.server.level.ServerLevel;
->>>>>>> feat/shared-multiblock-io
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;

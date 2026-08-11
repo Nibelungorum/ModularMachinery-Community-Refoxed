@@ -113,12 +113,9 @@ public final class LevelStub {
             var level = (TestLevel) unsafe().allocateInstance(TestLevel.class);
             level.blocks = new HashMap<>(blocks);
             level.directSignals = new HashMap<>();
-<<<<<<< HEAD
             Field registryAccess = Level.class.getDeclaredField("registryAccess");
             registryAccess.setAccessible(true);
             registryAccess.set(level, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
-=======
->>>>>>> feat/shared-multiblock-io
             return level;
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Unable to create level stub", e);

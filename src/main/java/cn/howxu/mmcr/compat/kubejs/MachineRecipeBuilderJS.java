@@ -13,11 +13,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
 import dev.latvian.mods.kubejs.recipe.RecipesKubeEvent;
-<<<<<<< HEAD
-=======
-import net.minecraft.core.Holder;
-import net.minecraft.core.component.DataComponentMap;
->>>>>>> feat/shared-multiblock-io
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -94,21 +89,13 @@ public class MachineRecipeBuilderJS {
     }
 
     public MachineRecipeBuilderJS itemOutput(String itemId, int count) {
-<<<<<<< HEAD
         outputs.add(new ItemStack(item(itemId), count));
-=======
-        outputs.add(new ItemStack(Holder.direct(item(itemId), DataComponentMap.EMPTY), count));
->>>>>>> feat/shared-multiblock-io
         outputChances.add(1F);
         return this;
     }
 
     public MachineRecipeBuilderJS chancedItemOutput(String itemId, int count, float chance) {
-<<<<<<< HEAD
         outputs.add(new ItemStack(item(itemId), count));
-=======
-        outputs.add(new ItemStack(Holder.direct(item(itemId), DataComponentMap.EMPTY), count));
->>>>>>> feat/shared-multiblock-io
         outputChances.add(chance);
         return this;
     }

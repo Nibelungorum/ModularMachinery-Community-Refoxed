@@ -1,10 +1,14 @@
+实施计划已完成并保存至：
+docs/superpowers/plans/2026-08-11-smart-interface-implementation.md
+计划分为 7 个可独立验证和提交的任务：类型声明、方块实体持久化、结构绑定、配方需求、菜单与网络、KubeJS/JEI 集成、资源与端到端验证。
+
 - [ ] kubejs集成的测试
 
 - [] 共享多方块结构 和已经输入输出锁解决异步和线程问题
 
 .worktrees/shared-multiblock-io
 
-还来不及merge
+正在merge中
 
 - [X] 等级系统(实现线圈方块等级能力)
 
@@ -12,11 +16,11 @@
 
 这个确实已经搞完了
 
-- [ ] 配方输入带数据的物品 输出带数据的物品 DataCompoment处理(?)(今天就搞) 不消耗和概率消耗配方
+- [X] 配方输入带数据的物品 输出带数据的物品 DataCompoment处理(?)(今天就搞) 不消耗和概率消耗配方
 
 .worktrees/data-component-recipe-inputs
 
-基本功能应该没有问题
+基本功能应该没有问题X
 
 还有概率输出没做，我真服了
 
@@ -33,11 +37,20 @@
 
 - [ ] 自动输入自动输出功能(使用原版的控件，嗯对，参考MEK)
 
-- [ ] 重构其它地方
-
-- [ ] 接口集成(AE2 总成型接口[新UI?] MEK气体接口(涉及配方modify))
-
 - [ ] 声音事件
+
+我使用 writing-plans 完成了实施计划：
+docs/superpowers/plans/2026-08-11-machine-sound-implementation.md
+计划拆为 6 个可独立验收的任务：
+1. 机器声音声明、服务端 SoundEvent 注册与 Java API。
+2. KubeJS Startup Builder API。
+3. 普通机器及工厂 lane 的成功完成声。
+4. 活动状态同步边界与存档恢复语义。
+5. 客户端循环声音实例与生命周期管理。
+6. 单元测试、编译与手动集成验收。
+计划已自检覆盖同步、持久化、dedicated server 客户端隔离以及完成声触发边界。
+
+- [ ] 接口集成(AE2 总成型接口[新UI?] MEK气体接口(涉及配方modify) 输入输出总成)
 
 - [ ] 额外解锁槽(发电阵列，生物屠宰场类似)系统，这样UI又要改了，干吧跌。
 把这个单独扔到一个方块里面吧，嗯对
@@ -47,6 +60,8 @@
 - [ ] Modifer JEI集成(机器预览功能出了再搞)
 
 - [ ] 机器的render和相关api暴露(最后一个再做这个)
+
+- [ ] 重构其它地方
 
 - [X] 多线程 Stage 5已经实现了
 

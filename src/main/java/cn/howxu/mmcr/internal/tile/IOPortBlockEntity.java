@@ -136,7 +136,7 @@ public abstract class IOPortBlockEntity extends BlockEntity implements MachineCo
         super.saveAdditional(output);
         output.putString(APPEARANCE_BASE_TEXTURE_KEY, appearanceBaseTexture.toString());
         var controllers = output.childrenList(LINKED_CONTROLLERS_KEY);
-        for (var entry : linkedControllers.entrySet()) {
+        for (var entry : linkedControllers == null ? java.util.Map.<BlockPos, Identifier>of().entrySet() : linkedControllers.entrySet()) {
             var controller = entry.getKey();
             var controllerOutput = controllers.addChild();
             controllerOutput.putInt(LINKED_CONTROLLER_X_KEY, controller.getX());

@@ -69,33 +69,13 @@ public abstract class RecipeThread {
         if (controller != null && controller.getLevel() instanceof ServerLevel serverLevel && controller.resourceDomain() != null) {
             return requestStart(serverLevel, controller.resourceDomain(), next, nextContext, structureVersion);
         }
-        int searchedParallelism = next.getParallelism();
-        int granted = nextContext.commitStart(next.getRecipe(), next.getMaxParallelism());
+        int granted = nextContext.commitStart(next, next.getMaxParallelism());
         if (granted <= 0) {
             contextPool.returnContext(nextContext);
             lastFailureUnloc = nextContext.getLastFailureUnloc();
             status = Status.FAILED;
-<<<<<<< HEAD
             return false;
         }
-=======
-            LOG.info("[ParallelStart] machine={} recipe={} availableParallelism={} searchedParallelism={} startFailed failure={}",
-                    machineId,
-                    next.getRecipe() == null ? null : next.getRecipe().id(),
-                    next.getMaxParallelism(),
-                    searchedParallelism,
-                    lastFailureUnloc);
-            return false;
-        }
-        next.setParallelism(granted);
-        next.refreshTotalTick(nextContext);
-        LOG.info("[ParallelStart] machine={} recipe={} availableParallelism={} searchedParallelism={} startedParallelism={}",
-                machineId,
-                next.getRecipe().id(),
-                next.getMaxParallelism(),
-                searchedParallelism,
-                next.getParallelism());
->>>>>>> feat/shared-multiblock-io
         activeRecipe = next;
         context = nextContext;
         status = Status.WORKING;
@@ -119,7 +99,7 @@ public abstract class RecipeThread {
                 next.getMaxParallelism(),
                 requested -> {
                     if (!isPendingStart(startToken, nextContext)) return 0;
-                    int granted = nextContext.commitStart(next.getRecipe(), requested);
+                    int granted = nextContext.commitStart(next, requested);
                     if (granted <= 0) {
                         clearPendingStart(startToken, nextContext);
                         contextPool.returnContext(nextContext);
@@ -129,7 +109,6 @@ public abstract class RecipeThread {
                 granted -> {
                     if (!isPendingStart(startToken, nextContext)) return;
                     clearPendingStart(startToken, nextContext);
-                    next.setParallelism(granted);
                     next.refreshTotalTick(nextContext);
                     activeRecipe = next;
                     context = nextContext;
@@ -177,7 +156,7 @@ public abstract class RecipeThread {
             requestTick(level, controller.resourceDomain(), activeRecipe, context, controller.getStructureVersion());
             return;
         }
-        boolean resourcesGranted = context.commitSynchronousIoTick(activeRecipe.getRecipe(), activeRecipe.getParallelism());
+        boolean resourcesGranted = context.commitSynchronousIoTick(activeRecipe.getRecipe(), activeRecipe.getParallelism(), activeRecipe.inputConsumptionPlan());
         boolean outputsCommitted = resourcesGranted && activeRecipe.needsFinishCommit()
                 && context.commitSynchronousOutputs(activeRecipe.getRecipe(), activeRecipe.getParallelism());
         applyTick(activeRecipe, context, resourcesGranted, outputsCommitted, 0);
@@ -200,7 +179,7 @@ public abstract class RecipeThread {
                         tickPending = true;
                         return false;
                     }
-                    boolean granted = recipeContext.coordinatorIoTick(recipe.getRecipe(), recipe.getParallelism()).getAsBoolean();
+                    boolean granted = recipeContext.coordinatorIoTick(recipe.getRecipe(), recipe.getParallelism(), recipe.inputConsumptionPlan()).getAsBoolean();
                     if (!granted) {
                         applyTick(recipe, recipeContext, false, false, gameTime);
                         tickPending = true;
@@ -265,15 +244,6 @@ public abstract class RecipeThread {
             context = null;
             status = Status.IDLE;
         } else if (tickStatus == ActiveMachineRecipe.TickStatus.CANCELLED) {
-<<<<<<< HEAD
-            lastFailureUnloc = context.getLastFailureUnloc();
-            contextPool.returnContext(context);
-            activeRecipe = null;
-            context = null;
-            status = Status.FAILED;
-        } else if (tickStatus == ActiveMachineRecipe.TickStatus.WAITING) {
-=======
->>>>>>> feat/shared-multiblock-io
             lastFailureUnloc = context.getLastFailureUnloc();
             contextPool.returnContext(context);
             activeRecipe = null;

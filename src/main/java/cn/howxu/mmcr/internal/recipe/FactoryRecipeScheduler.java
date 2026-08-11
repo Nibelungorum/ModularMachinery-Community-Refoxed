@@ -268,10 +268,6 @@ public final class FactoryRecipeScheduler {
 
     public void load(ValueInput input, MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
         threads.clear();
-<<<<<<< HEAD
-=======
-        nextFactoryLaneId = 0;
->>>>>>> feat/shared-multiblock-io
         threadLimit = Math.max(1, input.getIntOr("thread_limit", threadLimit));
         paused = input.getBooleanOr("paused", false);
         int count = Math.max(0, input.getIntOr("thread_count", 0));
