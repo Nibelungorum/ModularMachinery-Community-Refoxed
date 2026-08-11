@@ -85,7 +85,7 @@ class ComponentPredicateTest {
                 DataComponents.ENCHANTMENTS,
                 ComponentPredicate.exact(new Dynamic<>(RegistryOps.create(JsonOps.INSTANCE, lookup), encoded))));
 
-        assertThat(predicates.matches(sword)).isTrue();
+        assertThat(predicates.matches(sword, RegistryOps.create(JsonOps.INSTANCE, lookup))).isTrue();
         DataComponentPatch patch = predicates.exactPatch().orElseThrow();
         assertThat(patch.getPatch(DataComponents.ENCHANTMENTS).orElseThrow().getLevel(sharpness)).isEqualTo(2);
     }
@@ -129,28 +129,33 @@ class ComponentPredicateTest {
                 DataComponents.REPAIR_COST,
                 ComponentPredicate.exact(new Dynamic<>(JsonOps.INSTANCE, new JsonPrimitive(1)))));
 
-        assertThat(predicates.matches(sword)).isTrue();
+        assertThat(predicates.matches(sword, RegistryOps.create(JsonOps.INSTANCE, lookup))).isTrue();
     }
 
     @Test
-    void matchesArrayEncodedEnchantmentComponentsAgainstRuntimeStackValues() {
+    void registryAwareMatchingDecodesPlainJsonEnchantmentPredicates() {
         var lookup = VanillaRegistries.createLookup();
-        var sharpness = lookup.lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(ResourceKey.create(
+        var enchantments = lookup.lookupOrThrow(Registries.ENCHANTMENT);
+        var sharpness = enchantments.getOrThrow(ResourceKey.create(
                 Registries.ENCHANTMENT, Identifier.parse("minecraft:sharpness")));
-        ItemStack sword = new ItemStack(Items.DIAMOND_SWORD);
-        var enchantments = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
-        enchantments.set(sharpness, 2);
-        sword.set(DataComponents.ENCHANTMENTS, enchantments.toImmutable());
-
-        var expectedEnchantments = new JsonArray();
-        var expectedEntry = new JsonObject();
-        expectedEntry.addProperty("minecraft:sharpness", 2);
-        expectedEnchantments.add(expectedEntry);
+        var unbreaking = enchantments.getOrThrow(ResourceKey.create(
+                Registries.ENCHANTMENT, Identifier.parse("minecraft:unbreaking")));
+        var expectedEnchantments = new JsonObject();
+        expectedEnchantments.addProperty("minecraft:sharpness", 2);
         var predicates = new DataComponentPredicateSet(Map.of(
                 DataComponents.ENCHANTMENTS,
-                ComponentPredicate.exact(new Dynamic<>(RegistryOps.create(JsonOps.INSTANCE, lookup), expectedEnchantments))));
+                ComponentPredicate.exact(new Dynamic<>(JsonOps.INSTANCE, expectedEnchantments))));
 
-        assertThat(predicates.matches(sword)).isTrue();
+        ItemStack sharpnessTwoSword = new ItemStack(Items.DIAMOND_SWORD);
+        sharpnessTwoSword.set(DataComponents.ENCHANTMENTS, enchantments(sharpness, 2));
+        ItemStack sharpnessOneSword = new ItemStack(Items.DIAMOND_SWORD);
+        sharpnessOneSword.set(DataComponents.ENCHANTMENTS, enchantments(sharpness, 1));
+        ItemStack unbreakingTwoSword = new ItemStack(Items.DIAMOND_SWORD);
+        unbreakingTwoSword.set(DataComponents.ENCHANTMENTS, enchantments(unbreaking, 2));
+
+        assertThat(predicates.matches(sharpnessTwoSword, RegistryOps.create(JsonOps.INSTANCE, lookup))).isTrue();
+        assertThat(predicates.matches(sharpnessOneSword, RegistryOps.create(JsonOps.INSTANCE, lookup))).isFalse();
+        assertThat(predicates.matches(unbreakingTwoSword, RegistryOps.create(JsonOps.INSTANCE, lookup))).isFalse();
     }
 
     @Test
@@ -173,6 +178,13 @@ class ComponentPredicateTest {
                 ComponentPredicate.exact(new Dynamic<>(JsonOps.INSTANCE, new JsonPrimitive(1)))));
 
         assertThat(predicates.matches(sword)).isFalse();
+    }
+
+    private static ItemEnchantments enchantments(net.minecraft.core.Holder<net.minecraft.world.item.enchantment.Enchantment> enchantment,
+            int level) {
+        var mutable = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
+        mutable.set(enchantment, level);
+        return mutable.toImmutable();
     }
 
 }

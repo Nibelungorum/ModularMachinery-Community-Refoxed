@@ -5,6 +5,7 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.DynamicOps;
+import com.mojang.serialization.JsonOps;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -30,11 +31,13 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
     }
 
     public boolean matches(ItemStack stack) {
+        return matches(stack, JsonOps.INSTANCE);
+    }
+
+    public boolean matches(ItemStack stack, DynamicOps<?> ops) {
         if (stack == null || stack.isEmpty()) return values.isEmpty();
-        ItemStack expected = new ItemStack(stack.getItem().builtInRegistryHolder(), Math.max(1, stack.getCount()));
-        applyTo(expected);
         for (var entry : values.entrySet()) {
-            if (!matches(stack, expected, entry.getKey(), entry.getValue())) return false;
+            if (!matches(stack, entry.getKey(), entry.getValue(), ops)) return false;
         }
         return true;
     }
@@ -125,14 +128,11 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
         });
     }
 
-    private static <T> boolean matches(ItemStack actual, ItemStack expected, DataComponentType<T> type, ComponentPredicate predicate) {
+    private static <T> boolean matches(ItemStack actual, DataComponentType<T> type, ComponentPredicate predicate,
+            DynamicOps<?> ops) {
         T actualValue = actual.get(type);
         if (actualValue == null) return false;
-        if (predicate instanceof ComponentPredicate.Exact) {
-            T expectedValue = expected.get(type);
-            return expectedValue != null ? expectedValue.equals(actualValue) : ComponentPredicates.matches(type, actualValue, predicate);
-        }
-        return ComponentPredicates.matches(type, actualValue, predicate);
+        return ComponentPredicates.matches(type, actualValue, predicate, ops);
     }
 
     private static <T> void applyExactValue(ItemStack stack, DataComponentType<T> type, ComponentPredicate predicate) {
