@@ -40,6 +40,7 @@ public record MachineRecipeDisplay(
 ) {
 
     public static MachineRecipeDisplay from(MachineRecipe recipe) {
+<<<<<<< HEAD
         return from(recipe, null);
     }
 
@@ -47,6 +48,8 @@ public record MachineRecipeDisplay(
         DynamicOps<com.google.gson.JsonElement> componentOps = registryAccess == null
                 ? com.mojang.serialization.JsonOps.INSTANCE
                 : RegistryOps.create(com.mojang.serialization.JsonOps.INSTANCE, registryAccess);
+=======
+>>>>>>> feat/shared-multiblock-io
         List<ItemInputDisplay> itemInputs = new ArrayList<>();
         List<FluidIngredient> fluidInputs = new ArrayList<>();
         List<Integer> fluidInputAmounts = new ArrayList<>();
@@ -62,11 +65,15 @@ public record MachineRecipeDisplay(
                 List<ItemStack> baseStacks = item.item().items()
                         .map(holder -> new ItemStack(holder.value(), item.count()))
                         .toList();
+<<<<<<< HEAD
                 itemInputs.add(new ItemInputDisplay(baseStacks, item.count(), item.consumeChance(), components, componentOps));
             } else if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
                 ItemStack stack = item.stack(componentOps);
                 itemOutputs.add(new ItemOutputDisplay(stack, item.chance()));
                 outputs.add(new MachineOutput.ItemOutput(stack, item.chance()));
+=======
+                itemInputs.add(new ItemInputDisplay(baseStacks, item.count(), item.consumeChance(), components));
+>>>>>>> feat/shared-multiblock-io
             } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.INPUT) {
                 fluidInputs.add(fluid.fluid());
                 fluidInputAmounts.add(fluid.amount());
@@ -81,6 +88,20 @@ public record MachineRecipeDisplay(
             }
         }
 
+<<<<<<< HEAD
+=======
+        List<MachineOutput> outputs = recipe.runtimeMachineOutputs();
+        List<ItemOutputDisplay> itemOutputs = new ArrayList<>();
+        List<FluidStack> fluidOutputs = new ArrayList<>();
+        for (MachineOutput output : outputs) {
+            if (output instanceof MachineOutput.ItemOutput item) {
+                itemOutputs.add(new ItemOutputDisplay(item.stack(), item.chance()));
+            } else if (output instanceof MachineOutput.FluidOutput fluid) {
+                fluidOutputs.add(fluid.stack().copy());
+            }
+        }
+
+>>>>>>> feat/shared-multiblock-io
         return new MachineRecipeDisplay(
                 recipe,
                 recipe.id(),
@@ -109,24 +130,39 @@ public record MachineRecipeDisplay(
             List<ItemStack> baseStacks,
             int count,
             float consumeChance,
+<<<<<<< HEAD
             DataComponentPredicateSet components,
             DynamicOps<?> componentOps
+=======
+            DataComponentPredicateSet components
+>>>>>>> feat/shared-multiblock-io
     ) {
         public ItemInputDisplay {
             baseStacks = baseStacks.stream().map(ItemStack::copy).toList();
             components = components == null ? DataComponentPredicateSet.EMPTY : components;
+<<<<<<< HEAD
             componentOps = componentOps == null ? com.mojang.serialization.JsonOps.INSTANCE : componentOps;
         }
 
         public ItemInputDisplay(List<ItemStack> baseStacks, int count, float consumeChance) {
             this(baseStacks, count, consumeChance, DataComponentPredicateSet.EMPTY, com.mojang.serialization.JsonOps.INSTANCE);
+=======
+        }
+
+        public ItemInputDisplay(List<ItemStack> baseStacks, int count, float consumeChance) {
+            this(baseStacks, count, consumeChance, DataComponentPredicateSet.EMPTY);
+>>>>>>> feat/shared-multiblock-io
         }
 
         public List<ItemStack> stacks() {
             return baseStacks.stream()
                     .map(stack -> {
                         ItemStack copy = stack.copy();
+<<<<<<< HEAD
                         components.applyTo(copy, componentOps);
+=======
+                        components.applyTo(copy);
+>>>>>>> feat/shared-multiblock-io
                         return copy;
                     })
                     .toList();

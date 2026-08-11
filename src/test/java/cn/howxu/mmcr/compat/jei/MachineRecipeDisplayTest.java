@@ -57,6 +57,7 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
+<<<<<<< HEAD
     void describesAddedJeiItemStackFromConcreteStackData() {
         ItemStack stack = new ItemStack(Items.DIAMOND_SWORD);
         stack.set(DataComponents.REPAIR_COST, 3);
@@ -69,6 +70,8 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
+=======
+>>>>>>> feat/shared-multiblock-io
     void itemOverlayUsesReducedScaleAtSlotTopLeft() {
         assertThat(MachineRecipeCategory.ITEM_OVERLAY_SCALE).isEqualTo(0.6F);
         assertThat(MachineRecipeCategory.ITEM_OVERLAY_X).isEqualTo(0);

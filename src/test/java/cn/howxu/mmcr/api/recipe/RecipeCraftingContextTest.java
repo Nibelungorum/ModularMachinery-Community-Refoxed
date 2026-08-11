@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
@@ -46,6 +47,10 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+<<<<<<< HEAD
+=======
+import java.util.TreeMap;
+>>>>>>> feat/shared-multiblock-io
 import net.minecraft.core.HolderLookup;
 import net.minecraft.util.ProblemReporter;
 
@@ -146,6 +151,26 @@ class RecipeCraftingContextTest {
     }
 
     @Test
+    void sharedInputStartsOnlyTheParallelismThatCanBeCommitted() {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(10));
+        MachineControllerBlockEntity first = controllerWithComponents(input);
+        MachineControllerBlockEntity second = controllerWithComponents(input);
+        MachineRecipe recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "shared_start"),
+                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                20, List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)), true);
+
+        int firstParallel = new RecipeCraftingContext(first).commitStart(recipe, 8);
+        int secondParallel = new RecipeCraftingContext(second).commitStart(recipe, 8);
+
+        assertThat(firstParallel + secondParallel).isEqualTo(10);
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+    }
+
+    @Test
     void mixedShapeItemInputRuntimeUsesExplicitRequirements() {
         bindItemComponents(Items.IRON_INGOT);
         ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 0, 0));
@@ -235,7 +260,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(15);
         assertThat(output.getItemStackHandler(null).getStackInSlot(1).isEmpty()).isTrue();
     }
@@ -261,7 +286,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getItem()).isEqualTo(Items.IRON_NUGGET);
         assertThat(output.getItemStackHandler(null).getStackInSlot(1).getItem()).isEqualTo(Items.GOLD_NUGGET);
         assertThat(output.getItemStackHandler(null).getStackInSlot(2).getItem()).isEqualTo(Items.COPPER_NUGGET);
@@ -285,7 +310,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
         assertThat(output.getItemStackHandler(null).getStackInSlot(1).isEmpty()).isTrue();
     }
@@ -302,7 +327,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
     }
 
@@ -318,7 +343,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
     }
 
@@ -338,7 +363,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getItem()).isEqualTo(Items.COBBLESTONE);
     }
 
@@ -354,7 +379,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(3);
     }
 
@@ -370,7 +395,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getFluidTank(null).getFluidAmount()).isZero();
     }
 
@@ -388,7 +413,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getFluidTank(null).getFluid().getFluid()).isEqualTo(Fluids.LAVA);
     }
 
@@ -404,7 +429,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getFluidTank(null).getFluid()).satisfies(stack -> {
             assertThat(stack.getFluid()).isEqualTo(Fluids.WATER);
             assertThat(stack.getAmount()).isEqualTo(1000);
@@ -475,7 +500,7 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
-        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(6);
         assertThat(recipe.outputs().getFirst().getCount()).isEqualTo(2);
     }
@@ -629,6 +654,97 @@ class RecipeCraftingContextTest {
 
         assertThat(context.ioTick(recipe)).isTrue();
         assertThat(hatch.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(60);
+    }
+
+    @Test
+    void commitIoTickConsumesEnergyOnlyAfterItsFullRequirementIsAvailable() {
+        EnergyInputHatchBlockEntity hatch = energyInputHatch(new BlockPos(1, 0, 0));
+        hatch.getMutableEnergyStorage(null).receiveEnergy(25, false);
+        MachineControllerBlockEntity controller = controllerWithComponents(hatch);
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "atomic_energy_tick",
+                List.of(new EnergyRequirement(40))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.commitSynchronousIoTick(recipe, 1)).isFalse();
+        assertThat(hatch.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(25);
+    }
+
+    @Test
+    void commitIoTickDoesNotPartiallyConsumeAcrossEnergyRequirements() {
+        EnergyInputHatchBlockEntity hatch = energyInputHatch(new BlockPos(1, 0, 0));
+        hatch.getMutableEnergyStorage(null).receiveEnergy(30, false);
+        MachineControllerBlockEntity controller = controllerWithComponents(hatch);
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "atomic_multiple_energy_tick",
+                List.of(new EnergyRequirement(20), new EnergyRequirement(20))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
+
+        assertThat(context.commitSynchronousIoTick(recipe, active.getParallelism())).isFalse();
+        assertThat(active.applyTickGrant(false, false, 0)).isEqualTo(ActiveMachineRecipe.TickStatus.WAITING);
+        assertThat(active.getTick()).isZero();
+        assertThat(hatch.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(30);
+    }
+
+    @Test
+    void commitIoTickDoesNotPartiallyProduceAcrossEnergyRequirements() throws Exception {
+        EnergyOutputHatchBlockEntity hatch = energyOutputHatch(new BlockPos(1, 0, 0));
+        setField(cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity.class, hatch, "storage",
+                new net.neoforged.neoforge.energy.EnergyStorage(30, 30, 30));
+        MachineControllerBlockEntity controller = controllerWithComponents(hatch);
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "atomic_multiple_energy_outputs",
+                List.of(
+                        new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 20),
+                        new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 20)
+                )
+        );
+
+        assertThat(new RecipeCraftingContext(controller).commitSynchronousIoTick(recipe, 1)).isFalse();
+        assertThat(hatch.getMutableEnergyStorage(null).getEnergyStored()).isZero();
+    }
+
+    @Test
+    void blockedOutputKeepsCompletedRecipeAtFinalTick() {
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "blocked_finish_tick",
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_INGOT.getDefaultInstance()))
+        );
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
+        active.setTick(active.getTotalTick() - 1);
+
+        assertThat(active.applyTickGrant(true, false, 0)).isEqualTo(ActiveMachineRecipe.TickStatus.WAITING);
+        assertThat(active.getTick()).isEqualTo(active.getTotalTick() - 1);
+    }
+
+    @Test
+    void blockedLiveOutputRetriesAndCommitsOnlyOnce() {
+        bindItemComponents(Items.IRON_NUGGET);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        for (int slot = 0; slot < output.getItemStackHandler(null).getSlots(); slot++) {
+            output.getItemStackHandler(null).setStackInSlot(slot, Items.COBBLESTONE.getDefaultInstance().copyWithCount(64));
+        }
+        MachineRecipe recipe = explicitRequirementRecipe(
+                "blocked_live_output_retry",
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_NUGGET.getDefaultInstance()))
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controllerWithComponents(output));
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
+        active.setTick(active.getTotalTick() - 1);
+
+        assertThat(context.commitSynchronousOutputs(recipe, active.getParallelism())).isFalse();
+        assertThat(active.applyTickGrant(true, false, 0)).isEqualTo(ActiveMachineRecipe.TickStatus.WAITING);
+        assertThat(active.getTick()).isEqualTo(active.getTotalTick() - 1);
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getItem()).isEqualTo(Items.COBBLESTONE);
+
+        output.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
+
+        assertThat(context.commitSynchronousOutputs(recipe, active.getParallelism())).isTrue();
+        assertThat(active.applyTickGrant(true, true, 10)).isEqualTo(ActiveMachineRecipe.TickStatus.FINISHED);
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
     }
 
     @Test
@@ -999,6 +1115,10 @@ class RecipeCraftingContextTest {
         return allocateBlockEntity(EnergyInputHatchBlockEntity.class, pos);
     }
 
+    private static EnergyOutputHatchBlockEntity energyOutputHatch(BlockPos pos) {
+        return allocateBlockEntity(EnergyOutputHatchBlockEntity.class, pos);
+    }
+
     private static void bindItemComponents(Item item) {
         item.builtInRegistryHolder().bindComponents(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
     }
@@ -1037,6 +1157,7 @@ class RecipeCraftingContextTest {
             setField(BlockEntity.class, bus, "type", null);
             setField(BlockEntity.class, bus, "worldPosition", pos);
             setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
+            setField(cn.howxu.mmcr.internal.tile.IOPortBlockEntity.class, bus, "linkedControllers", new TreeMap<>(BlockPos::compareTo));
             setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
             return bus;
         } catch (ReflectiveOperationException e) {
@@ -1114,6 +1235,7 @@ class RecipeCraftingContextTest {
         if (port instanceof FluidInputHatchBlockEntity) return new MachineComponent(PortKinds.FLUID_INPUT, cn.howxu.mmcr.util.IOType.INPUT);
         if (port instanceof FluidOutputHatchBlockEntity) return new MachineComponent(PortKinds.FLUID_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT);
         if (port instanceof EnergyInputHatchBlockEntity) return new MachineComponent(PortKinds.ENERGY_INPUT, cn.howxu.mmcr.util.IOType.INPUT);
+        if (port instanceof EnergyOutputHatchBlockEntity) return new MachineComponent(PortKinds.ENERGY_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT);
         throw new IllegalArgumentException("Unknown port: " + port.getClass().getSimpleName());
     }
 

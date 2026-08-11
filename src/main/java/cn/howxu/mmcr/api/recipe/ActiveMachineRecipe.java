@@ -9,6 +9,7 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -27,6 +28,10 @@ public final class ActiveMachineRecipe {
     private int maxParallelism;
     private int parallelism;
     private int nextFinishRetryTick;
+<<<<<<< HEAD
+=======
+    private boolean finishPending;
+>>>>>>> feat/shared-multiblock-io
     private @Nullable InputConsumptionPlan inputConsumptionPlan;
 
     public record InputConsumptionPlan(List<Integer> consumedInputBatches) {
@@ -81,6 +86,10 @@ public final class ActiveMachineRecipe {
         this.totalTick = serialized.getIntOr("totalTick", 0);
         this.data = serialized.contains("data") ? serialized.getCompoundOrEmpty("data") : new CompoundTag();
         this.nextFinishRetryTick = serialized.getIntOr("nextFinishRetryTick", 0);
+<<<<<<< HEAD
+=======
+        this.finishPending = serialized.getBooleanOr("finishPending", false);
+>>>>>>> feat/shared-multiblock-io
         if (serialized.contains("inputConsumptionPlan")) {
             this.inputConsumptionPlan = InputConsumptionPlan.deserialize(serialized.getCompoundOrEmpty("inputConsumptionPlan"));
         }
@@ -150,7 +159,14 @@ public final class ActiveMachineRecipe {
         this.parallelism = 1;
         this.maxParallelism = 1;
         this.data = new CompoundTag();
+<<<<<<< HEAD
         this.inputConsumptionPlan = null;
+=======
+        this.finishPending = false;
+        this.inputConsumptionPlan = null;
+        LOG.info("ActiveMachineRecipe#{} reset: tick {} → 0; parallelism and data cleared (recipe={})",
+                instanceId, before, recipe == null ? null : recipe.id());
+>>>>>>> feat/shared-multiblock-io
     }
 
     public boolean isCompleted() {
@@ -175,9 +191,17 @@ public final class ActiveMachineRecipe {
         tag.putInt("maxParallelism", this.maxParallelism);
         tag.putInt("parallelism", this.parallelism);
         tag.putInt("nextFinishRetryTick", this.nextFinishRetryTick);
+<<<<<<< HEAD
         if (inputConsumptionPlan != null) {
             tag.put("inputConsumptionPlan", inputConsumptionPlan.serialize());
         }
+=======
+        tag.putBoolean("finishPending", this.finishPending);
+        if (inputConsumptionPlan != null) {
+            tag.put("inputConsumptionPlan", inputConsumptionPlan.serialize());
+        }
+        tag.putBoolean("finishPending", this.finishPending);
+>>>>>>> feat/shared-multiblock-io
         if (!data.isEmpty()) {
             tag.put("data", data);
         }
@@ -191,9 +215,17 @@ public final class ActiveMachineRecipe {
         output.putInt("maxParallelism", this.maxParallelism);
         output.putInt("parallelism", this.parallelism);
         output.putInt("nextFinishRetryTick", this.nextFinishRetryTick);
+<<<<<<< HEAD
         if (inputConsumptionPlan != null) {
             output.store("inputConsumptionPlan", CompoundTag.CODEC, inputConsumptionPlan.serialize());
         }
+=======
+        output.putBoolean("finishPending", this.finishPending);
+        if (inputConsumptionPlan != null) {
+            output.store("inputConsumptionPlan", CompoundTag.CODEC, inputConsumptionPlan.serialize());
+        }
+        output.putBoolean("finishPending", this.finishPending);
+>>>>>>> feat/shared-multiblock-io
         if (!data.isEmpty()) {
             output.store("data", CompoundTag.CODEC, data);
         }
@@ -207,8 +239,15 @@ public final class ActiveMachineRecipe {
         result.tick = input.getIntOr("tick", 0);
         result.totalTick = input.getIntOr("totalTick", 0);
         result.nextFinishRetryTick = input.getIntOr("nextFinishRetryTick", 0);
+<<<<<<< HEAD
         result.inputConsumptionPlan = input.read("inputConsumptionPlan", CompoundTag.CODEC)
                 .map(InputConsumptionPlan::deserialize).orElse(null);
+=======
+        result.finishPending = input.getBooleanOr("finishPending", false);
+        result.inputConsumptionPlan = input.read("inputConsumptionPlan", CompoundTag.CODEC)
+                .map(InputConsumptionPlan::deserialize).orElse(null);
+        result.finishPending = input.getBooleanOr("finishPending", false);
+>>>>>>> feat/shared-multiblock-io
         result.setParallelism(input.getIntOr("parallelism", 1));
         result.data = input.read("data", CompoundTag.CODEC).orElseGet(CompoundTag::new);
         return result;
@@ -257,14 +296,23 @@ public final class ActiveMachineRecipe {
         return gameTime >= nextFinishRetryTick;
     }
 
+    public boolean isFinishPending() {
+        return finishPending;
+    }
+
+    public void beginFinishCommit() {
+        finishPending = true;
+    }
+
     public void markFinishBlocked(int gameTime) {
         nextFinishRetryTick = gameTime + 10;
     }
 
-    public TickStatus tick(RecipeCraftingContext context) {
-        return tick(context, 0);
+    public boolean needsFinishCommit() {
+        return tick + 1 >= totalTick;
     }
 
+<<<<<<< HEAD
     public TickStatus tick(RecipeCraftingContext context, int gameTime) {
         if (recipe == null) {
             return TickStatus.WAITING;
@@ -300,6 +348,26 @@ public final class ActiveMachineRecipe {
             return TickStatus.CANCELLED;
         }
 
+=======
+    public TickStatus applyTickGrant(boolean resourcesGranted, boolean outputsCommitted, int gameTime) {
+        if (!resourcesGranted) {
+            doFailureAction(RecipeFailureActions.STILL);
+            return TickStatus.WAITING;
+        }
+        int nextTick = Math.min(tick + 1, totalTick);
+        if (nextTick < totalTick) {
+            tick = nextTick;
+            return TickStatus.CONTINUE;
+        }
+        if (!outputsCommitted) {
+            tick = Math.max(0, totalTick - 1);
+            finishPending = true;
+            markFinishBlocked(gameTime);
+            return TickStatus.WAITING;
+        }
+        tick = nextTick;
+        finishPending = false;
+>>>>>>> feat/shared-multiblock-io
         return TickStatus.FINISHED;
     }
 

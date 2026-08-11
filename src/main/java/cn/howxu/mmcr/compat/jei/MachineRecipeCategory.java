@@ -2,7 +2,10 @@ package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+<<<<<<< HEAD
 import cn.howxu.mmcr.MMCR;
+=======
+>>>>>>> feat/shared-multiblock-io
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.LevelRequirement;
@@ -30,7 +33,10 @@ import org.jspecify.annotations.Nullable;
 import java.util.List;
 import java.util.Locale;
 import java.util.Comparator;
+<<<<<<< HEAD
 import java.util.stream.Collectors;
+=======
+>>>>>>> feat/shared-multiblock-io
 
 /**
  * JEI category for MMCR machine recipes.
@@ -239,8 +245,12 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                         ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
             }
             jeiSlot.addRichTooltipCallback((view, tooltip) -> appendOutputTooltip(tooltip, output));
+<<<<<<< HEAD
             ItemStack jeiStack = new ItemStack(stack.getItem().builtInRegistryHolder(), stack.getCount(), stack.getComponentsPatch());
             jeiSlot.add(jeiStack);
+=======
+            jeiSlot.add(new ItemStack(stack.getItem().builtInRegistryHolder(), stack.getCount(), stack.getComponentsPatch()));
+>>>>>>> feat/shared-multiblock-io
         }
     }
 

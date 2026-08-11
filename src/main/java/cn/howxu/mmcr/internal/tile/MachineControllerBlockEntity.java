@@ -28,6 +28,9 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
+import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.recipe.RecipeStartDelay;
@@ -113,6 +116,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private long lastRecipeStructureVersion = Long.MIN_VALUE;
     private long lastRecipeModifierSnapshotVersion = Long.MIN_VALUE;
     private boolean recipeDirty = true;
+    private @Nullable StructureClaimRegistry.ResourceDomain resourceDomain;
+    private boolean sharedStartPending;
+    private @Nullable RecipeCraftingContext pendingSharedStartContext;
+    private @Nullable StructureClaimRegistry.ResourceDomain pendingSharedStartDomain;
+    private boolean sharedTickPending;
+    private @Nullable StructureClaimRegistry.ResourceDomain pendingSharedTickDomain;
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
@@ -183,6 +192,13 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     public @Nullable LevelInsufficientFailure getRecipeFailure() { return recipeFailure; }
 
     public @Nullable PortRequirementSpec.Failure getLastFormationFailure() { return lastFormationFailure; }
+
+    public @Nullable StructureClaimRegistry.ResourceDomain resourceDomain() {
+        if (level instanceof ServerLevel serverLevel) {
+            return StructureClaimRegistry.get(serverLevel).domainFor(getBlockPos());
+        }
+        return resourceDomain;
+    }
 
     public void onStructureBlockChanged(BlockPos changedPos) {
         if (!isFormed() || foundCompiledPattern == null || controllerFacing == null) return;
@@ -263,7 +279,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     public void resetLinkedPortAppearances() {
-        resetLinkedPorts();
+        unlinkLinkedPorts();
     }
 
     public long totalStoredEnergy() {
@@ -436,7 +452,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     private void tickSingleActiveRecipe() {
         boolean startedThisTick = false;
-        if (active == null) {
+        if (sharedStartPending && !isCurrentSharedDomain(pendingSharedStartDomain)) {
+            RecipeCraftingContext pendingContext = pendingSharedStartContext;
+            clearPendingSharedStart();
+            returnContext(pendingContext);
+        }
+        if (active == null && !sharedStartPending) {
             startedThisTick = tryStartNewRecipe();
         }
         if (active != null && !startedThisTick) tickActiveRecipe();
@@ -620,6 +641,21 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             return false;
         }
 
+<<<<<<< HEAD
+=======
+        if (level instanceof ServerLevel serverLevel) {
+            StructureClaimRegistry.ClaimResult result = StructureClaimRegistry.get(serverLevel)
+                    .claim(getBlockPos(), componentClaims(rotatedPattern, compiled, facing));
+            if (!result.accepted()) {
+                StructureClaimRegistry.Conflict conflict = result.conflict();
+                lastFormationFailure = new PortRequirementSpec.Failure(
+                        "component_claim_conflict component=" + conflict.componentPos() + " owner=" + conflict.ownerPos(),
+                        0, 1, java.util.OptionalInt.empty(), PortRequirementSpec.FailureReason.MISSING);
+                return false;
+            }
+        }
+
+>>>>>>> feat/shared-multiblock-io
         lastFormationFailure = null;
         lastStructureMismatchDiagnostic = null;
         onStructureFormed(candidate, rotatedPattern, compiled, facing, replacements, levels.foundLevels());
@@ -713,6 +749,28 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         lastStructureMismatchDiagnostic = null;
     }
 
+    private StructureMatcher.LevelResolution resolveLevels(Machine candidate, Direction facing) {
+        MachineStructureDefinition definition = MachineStructureRegistry.dynamicSnapshot().get(candidate.registryName());
+        if (definition == null || definition.levelSlots().isEmpty()) {
+            return new StructureMatcher.LevelResolution(Map.of(), null);
+        }
+        Map<BlockPos, Identifier> slots = new LinkedHashMap<>();
+        Direction rollFacing = getBlockState().getValue(MachineControllerBlock.ROLL_FACING);
+        Direction normalizedRoll = facing.getAxis().isVertical() ? rollFacing : Direction.SOUTH;
+        for (var entry : definition.levelSlots().entrySet()) {
+            slots.put(BlockRotator.rotateSouthTo(entry.getKey(), facing, normalizedRoll), entry.getValue());
+        }
+        return StructureMatcher.resolveLevels(slots, level, getBlockPos());
+    }
+
+    private void recordLevelMismatch(LevelMismatch mismatch) {
+        lastStructureError = mismatch;
+        lastFormationFailure = null;
+        lastStructureMismatchDiagnostic = null;
+        LOG.info("[Ctrl#{}] formation rejected: level type={} expected={} actual={} worldPos={}",
+                instanceId, mismatch.typeId(), mismatch.expected().id(), mismatch.actual().id(), mismatch.worldPos());
+    }
+
     private void onStructureFormed(Machine matchedMachine, BlockArray rotatedPattern, CompiledMachinePattern compiledPattern,
                                    Direction facing, Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
                                    Map<Identifier, MachineLevel> levels) {
@@ -721,6 +779,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         foundCompiledPattern = compiledPattern;
         controllerFacing = facing;
         machine = matchedMachine;
+<<<<<<< HEAD
+=======
+        if (level instanceof ServerLevel serverLevel) {
+            resourceDomain = StructureClaimRegistry.get(serverLevel).domainFor(getBlockPos());
+        }
+>>>>>>> feat/shared-multiblock-io
         foundLevels = levels;
         collectFoundModifiers(replacements);
         FORMED_CONTROLLERS.add(this);
@@ -734,6 +798,25 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         lastStructureError = null;
         setChanged();
         syncLevelState();
+<<<<<<< HEAD
+=======
+    }
+
+    private List<StructureClaimRegistry.Claim> componentClaims(BlockArray pattern,
+                                                                 @Nullable CompiledMachinePattern compiled,
+                                                                 Direction facing) {
+        List<StructureClaimRegistry.Claim> claims = new ArrayList<>();
+        if (level == null) return claims;
+        for (BlockPos relativePos : componentPositions(pattern, compiled, facing)) {
+            BlockEntity entity = level.getBlockEntity(getBlockPos().offset(relativePos));
+            if (entity instanceof MachineComponentTile tile) {
+                claims.add(new StructureClaimRegistry.Claim(entity.getBlockPos(), tile.claimPolicy()));
+            } else if (entity instanceof ParallelControllerBlockEntity || entity instanceof FactorySchedulerBlockEntity) {
+                claims.add(new StructureClaimRegistry.Claim(entity.getBlockPos(), ComponentClaimPolicy.EXCLUSIVE));
+            }
+        }
+        return claims;
+>>>>>>> feat/shared-multiblock-io
     }
 
     private void collectFoundModifiers(Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
@@ -766,7 +849,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         components.clear();
         if (level == null || foundMachine == null || foundPattern == null) return;
 
-        resetLinkedPorts();
+        unlinkLinkedPorts();
 
         for (BlockPos relativePos : componentPositions()) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
@@ -782,7 +865,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
             if (tile instanceof IOPortBlockEntity port) {
                 Identifier formedTexture = foundMachine.appearance().formedPortBaseTexture();
-                port.bindControllerAppearance(getBlockPos(), formedTexture);
+                port.linkControllerAppearance(getBlockPos(), formedTexture);
                 linkedPortPositions().add(worldPos.immutable());
             }
             var component = tile.provideComponent();
@@ -791,29 +874,26 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         }
     }
 
-    private void resetLinkedPorts() {
+    private void unlinkLinkedPorts() {
         Set<BlockPos> linkedPortPositions = linkedPortPositions();
         if (level == null) {
             linkedPortPositions.clear();
             return;
         }
-        resetPortsAtCurrentStructurePositions();
+        if (foundPattern != null) {
+            for (BlockPos relativePos : componentPositions()) {
+                BlockEntity entity = level.getBlockEntity(getBlockPos().offset(relativePos));
+                if (entity instanceof IOPortBlockEntity port) {
+                    port.unlinkControllerAppearance(getBlockPos());
+                }
+            }
+        }
         for (BlockPos portPos : linkedPortPositions) {
             if (level.getBlockEntity(portPos) instanceof IOPortBlockEntity port) {
-                port.resetAppearanceBaseTexture();
+                port.unlinkControllerAppearance(getBlockPos());
             }
         }
         linkedPortPositions.clear();
-    }
-
-    private void resetPortsAtCurrentStructurePositions() {
-        if (level == null || foundPattern == null) return;
-        for (BlockPos relativePos : componentPositions()) {
-            BlockPos worldPos = getBlockPos().offset(relativePos);
-            if (level.getBlockEntity(worldPos) instanceof IOPortBlockEntity port) {
-                port.resetAppearanceBaseTexture();
-            }
-        }
     }
 
     private Set<BlockPos> linkedPortPositions() {
@@ -826,6 +906,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             return foundCompiledPattern.componentPositions(controllerFacing);
         }
         return new ArrayList<>(foundPattern.pattern().keySet());
+    }
+
+    private static List<BlockPos> componentPositions(BlockArray pattern, @Nullable CompiledMachinePattern compiled, Direction facing) {
+        return compiled == null ? new ArrayList<>(pattern.pattern().keySet()) : compiled.componentPositions(facing);
     }
 
     private PortRequirementSpec.PortCounts countPorts(BlockArray rotatedPattern, @Nullable CompiledMachinePattern compiledPattern, Direction facing) {
@@ -981,7 +1065,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         Identifier dropped = foundMachine == null ? null : foundMachine.registryName();
         boolean hadActive = active != null;
         Identifier activeRecipe = hadActive ? active.getRecipe().id() : null;
-        resetLinkedPorts();
+        releaseStructureClaims();
+        unlinkLinkedPorts();
         stopFactoryController();
         foundMachine = null;
         foundPattern = null;
@@ -999,6 +1084,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             context = null;
             setActiveState(false);
         }
+        returnContext(pendingSharedStartContext);
+        clearPendingSharedStart();
+        sharedTickPending = false;
+        pendingSharedTickDomain = null;
         clearPendingConflictStart();
         pausedActive = null;
         returnContext(pausedContext);
@@ -1013,6 +1102,13 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         clearCandidateCache();
         if (wasFormed) setFormed(false);
         setChanged();
+    }
+
+    public void releaseStructureClaims() {
+        if (level instanceof ServerLevel serverLevel) {
+            StructureClaimRegistry.get(serverLevel).release(getBlockPos());
+        }
+        resourceDomain = null;
     }
 
     private void stopFactoryController() {
@@ -1102,9 +1198,14 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             returnContext(nextContext);
             return false;
         }
+        if (usesSharedIoCoordinator()) {
+            requestSharedStart(next, nextContext);
+            return true;
+        }
         active = next;
         context = nextContext;
-        if (!next.start(nextContext)) {
+        int granted = nextContext.commitStart(next.getRecipe(), next.getMaxParallelism());
+        if (granted <= 0) {
             active = null;
             context = null;
             returnContext(nextContext);
@@ -1113,6 +1214,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             lastFailureUnloc = nextContext.getLastFailureUnloc();
             return false;
         }
+        next.setParallelism(granted);
+        next.refreshTotalTick(nextContext);
         setActiveState(true);
         rememberLastRecipe(next.getRecipe());
         recipeSearchRetryCounter = 0;
@@ -1160,14 +1263,21 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         RecipeCraftingContext nextContext = contextPool().borrow(next, this);
         try {
             if (!next.canStartCrafting(nextContext)) return false;
+            if (usesSharedIoCoordinator()) {
+                requestSharedStart(next, nextContext);
+                return true;
+            }
             active = next;
             context = nextContext;
-            if (!next.start(nextContext)) {
+            int granted = nextContext.commitStart(next.getRecipe(), next.getMaxParallelism());
+            if (granted <= 0) {
                 active = null;
                 context = null;
                 recipeDirty = true;
                 return false;
             }
+            next.setParallelism(granted);
+            next.refreshTotalTick(nextContext);
             setActiveState(true);
             recipeSearchRetryCounter = 0;
             lastFailureUnloc = null;
@@ -1175,7 +1285,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             setChanged();
             return true;
         } finally {
-            if (active != next) returnContext(nextContext);
+            if (active != next && pendingSharedStartContext != nextContext) returnContext(nextContext);
         }
     }
 
@@ -1204,7 +1314,38 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 context.setStructureModifiers(foundModifierList());
             }
         }
-        ActiveMachineRecipe.TickStatus status = active.tick(context, (int) Math.min(Integer.MAX_VALUE, Math.max(0L, currentGameTime())));
+        if (usesSharedIoCoordinator()) {
+            tickSharedRecipe();
+            return;
+        }
+        int gameTime = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, currentGameTime()));
+        if (active.isFinishPending()) {
+            if (!active.shouldRetryFinish(gameTime)) return;
+            ActiveMachineRecipe.TickStatus status = active.applyTickGrant(true,
+                    context.commitSynchronousOutputs(active.getRecipe(), active.getParallelism()), gameTime);
+            if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
+                lastFailureUnloc = null;
+                returnContext(context);
+                active = null;
+                context = null;
+                setActiveState(false);
+            } else {
+                lastFailureUnloc = context.getLastFailureUnloc();
+            }
+            setChanged();
+            return;
+        }
+        boolean finalTick = active.needsFinishCommit();
+        if (finalTick && !context.simulateOutputs(active.getRecipe(), active.getParallelism())) {
+            active.applyTickGrant(true, false, gameTime);
+            lastFailureUnloc = context.getLastFailureUnloc();
+            setChanged();
+            return;
+        }
+        boolean resourcesGranted = context.commitSynchronousIoTick(active.getRecipe(), active.getParallelism());
+        boolean outputsCommitted = resourcesGranted && finalTick
+                && context.commitSynchronousOutputs(active.getRecipe(), active.getParallelism());
+        ActiveMachineRecipe.TickStatus status = active.applyTickGrant(resourcesGranted, outputsCommitted, gameTime);
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
             lastFailureUnloc = null;
             recipeFailure = null;
@@ -1233,6 +1374,156 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         setChanged();
     }
 
+    private boolean usesSharedIoCoordinator() {
+        StructureClaimRegistry.ResourceDomain domain = resourceDomain();
+        return level instanceof ServerLevel && domain != null && domain.controllers().size() > 1;
+    }
+
+    private void requestSharedStart(ActiveMachineRecipe next, RecipeCraftingContext nextContext) {
+        if (!(level instanceof ServerLevel serverLevel)) return;
+        StructureClaimRegistry.ResourceDomain domain = resourceDomain();
+        if (domain == null) return;
+        sharedStartPending = true;
+        pendingSharedStartContext = nextContext;
+        pendingSharedStartDomain = domain;
+        SharedIoCoordinator.get(serverLevel).enqueue(new SharedIoCoordinator.StartRequest(
+                domain,
+                new SharedIoCoordinator.LaneKey(getBlockPos(), "base"), structureVersion,
+                next.getMaxParallelism(),
+                requested -> {
+                    if (!isPendingSharedStart(next, nextContext, domain)) return 0;
+                    int granted = nextContext.commitStart(next.getRecipe(), requested);
+                    if (granted <= 0) {
+                        clearPendingSharedStart();
+                        returnContext(nextContext);
+                        recipeSearchRetryCounter++;
+                        lastFailureUnloc = nextContext.getLastFailureUnloc();
+                    }
+                    return granted;
+                },
+                granted -> {
+                    if (!isPendingSharedStart(next, nextContext, domain)) return;
+                    clearPendingSharedStart();
+                    next.setParallelism(granted);
+                    next.refreshTotalTick(nextContext);
+                    active = next;
+                    context = nextContext;
+                    setActiveState(true);
+                    rememberLastRecipe(next.getRecipe());
+                    recipeSearchRetryCounter = 0;
+                    lastFailureUnloc = null;
+                    setChanged();
+                },
+                () -> isPendingSharedStart(next, nextContext, domain), this::getStructureVersion
+        ));
+    }
+
+    private boolean isPendingSharedStart(ActiveMachineRecipe next, RecipeCraftingContext nextContext,
+                                         StructureClaimRegistry.ResourceDomain domain) {
+        return sharedStartPending && pendingSharedStartContext == nextContext
+                && pendingSharedStartDomain != null && pendingSharedStartDomain.equals(domain)
+                && active == null && isCurrentSharedDomain(domain);
+    }
+
+    private void clearPendingSharedStart() {
+        sharedStartPending = false;
+        pendingSharedStartContext = null;
+        pendingSharedStartDomain = null;
+    }
+
+    private void tickSharedRecipe() {
+        if (!(level instanceof ServerLevel serverLevel) || active == null || context == null) return;
+        StructureClaimRegistry.ResourceDomain domain = resourceDomain();
+        if (domain == null) return;
+        if (sharedTickPending && !isCurrentSharedDomain(pendingSharedTickDomain)) {
+            sharedTickPending = false;
+            pendingSharedTickDomain = null;
+        }
+        if (sharedTickPending) return;
+        int gameTime = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, currentGameTime()));
+        ActiveMachineRecipe recipe = active;
+        RecipeCraftingContext recipeContext = context;
+        if (recipe.isFinishPending()) {
+            if (!recipe.shouldRetryFinish(gameTime)) return;
+            sharedTickPending = true;
+            pendingSharedTickDomain = domain;
+            requestSharedFinish(serverLevel, domain, recipe, recipeContext, gameTime);
+            return;
+        }
+        sharedTickPending = true;
+        pendingSharedTickDomain = domain;
+        SharedIoCoordinator.get(serverLevel).enqueue(new SharedIoCoordinator.TickRequest(
+                domain, new SharedIoCoordinator.LaneKey(getBlockPos(), "base"), structureVersion,
+                () -> {
+                    if (!isActiveSharedRecipe(recipe, recipeContext, domain)) return false;
+                    if (recipe.needsFinishCommit() && !recipeContext.simulateOutputs(recipe.getRecipe(), recipe.getParallelism())) {
+                        applySharedTick(recipe, recipeContext, false, false, gameTime);
+                        return false;
+                    }
+                    if (!recipeContext.coordinatorIoTick(recipe.getRecipe(), recipe.getParallelism()).getAsBoolean()) {
+                        applySharedTick(recipe, recipeContext, false, false, gameTime);
+                        return false;
+                    }
+                    if (recipe.needsFinishCommit()) {
+                        recipe.beginFinishCommit();
+                        requestSharedFinish(serverLevel, domain, recipe, recipeContext, gameTime);
+                    } else {
+                        applySharedTick(recipe, recipeContext, true, false, gameTime);
+                    }
+                    return true;
+                },
+                () -> isActiveSharedRecipe(recipe, recipeContext, domain), this::getStructureVersion
+        ));
+    }
+
+    private void requestSharedFinish(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
+                                     ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext, int gameTime) {
+        SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.FinishRequest(
+                domain, new SharedIoCoordinator.LaneKey(getBlockPos(), "base"), structureVersion,
+                () -> {
+                    if (!isActiveSharedRecipe(recipe, recipeContext, domain)) return false;
+                    applySharedTick(recipe, recipeContext, true,
+                            recipeContext.coordinatorOutputs(recipe.getRecipe(), recipe.getParallelism()).getAsBoolean(), gameTime);
+                    return true;
+                },
+                () -> isActiveSharedRecipe(recipe, recipeContext, domain), this::getStructureVersion
+        ));
+    }
+
+    private boolean isActiveSharedRecipe(ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext,
+                                         StructureClaimRegistry.ResourceDomain domain) {
+        return active == recipe && context == recipeContext && isCurrentSharedDomain(domain);
+    }
+
+    private void applySharedTick(ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext,
+                                 boolean resourcesGranted, boolean outputsCommitted, int gameTime) {
+        sharedTickPending = false;
+        pendingSharedTickDomain = null;
+        ActiveMachineRecipe.TickStatus status = recipe.applyTickGrant(resourcesGranted, outputsCommitted, gameTime);
+        if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
+            lastFailureUnloc = null;
+            returnContext(recipeContext);
+            active = null;
+            context = null;
+            setActiveState(false);
+        } else if (status == ActiveMachineRecipe.TickStatus.WAITING) {
+            lastFailureUnloc = recipeContext.getLastFailureUnloc();
+            if (recipe.getRecipe().doesCancelRecipeOnPerTickFailure()) {
+                returnContext(recipeContext);
+                active = null;
+                context = null;
+                setActiveState(false);
+            }
+        } else {
+            lastFailureUnloc = null;
+        }
+        setChanged();
+    }
+
+    private boolean isCurrentSharedDomain(@Nullable StructureClaimRegistry.ResourceDomain domain) {
+        return domain != null && domain.equals(resourceDomain());
+    }
+
     private void setActiveState(boolean activeState) {
         if (level == null || level.isClientSide()) return;
         if (getBlockState().getValue(MachineControllerBlock.ACTIVE) != activeState) {
@@ -1242,7 +1533,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     @Override
     public void setRemoved() {
-        stopFactoryController();
+        if (level != null && !level.isClientSide()) resetMachine();
         super.setRemoved();
     }
 
@@ -1382,6 +1673,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             return;
         }
         structureDirty = true;
+<<<<<<< HEAD
+=======
+        LOG.info("[Ctrl#{}] loadAdditional: pos={} restored {} recipe={} tick={}/{}", instanceId, getBlockPos(), recipeState, restored.getRecipe().id(), restored.getTick(), restored.getTotalTick());
+>>>>>>> feat/shared-multiblock-io
         setChanged();
     }
 

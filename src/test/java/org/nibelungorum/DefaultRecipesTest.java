@@ -16,6 +16,7 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
+<<<<<<< HEAD
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
@@ -23,6 +24,10 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceKey;
+=======
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
+>>>>>>> feat/shared-multiblock-io
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
@@ -363,6 +368,7 @@ class DefaultRecipesTest {
         assertThat(enchantments.get("minecraft:sharpness").getAsInt()).isEqualTo(2);
         assertThat(enchantments.has("levels")).isFalse();
         assertThat(enchantments.has("show_in_tooltip")).isFalse();
+<<<<<<< HEAD
         assertThat(enchantedInput.components().values())
                 .containsKey(DataComponents.ENCHANTMENTS)
                 .doesNotContainKey(DataComponents.REPAIR_COST);
@@ -373,6 +379,14 @@ class DefaultRecipesTest {
         assertThat(enchantedInput.components().matches(withoutRepairCost, registryOps)).isTrue();
         assertThat(enchantedInput.components().matches(enchantedSword("minecraft:sharpness", 1), registryOps)).isFalse();
         assertThat(enchantedInput.components().matches(enchantedSword("minecraft:unbreaking", 3), registryOps)).isFalse();
+=======
+        assertThat(enchantedInput.components().values()).containsOnlyKeys(DataComponents.ENCHANTMENTS, DataComponents.REPAIR_COST);
+        JsonObject repairCost = DataComponentPredicateSet.CODEC.encodeStart(JsonOps.INSTANCE, enchantedInput.components())
+                .getOrThrow()
+                .getAsJsonObject()
+                .getAsJsonObject("minecraft:repair_cost");
+        assertThat(repairCost.get("value").getAsInt()).isEqualTo(1);
+>>>>>>> feat/shared-multiblock-io
     }
 
     @Test
@@ -381,6 +395,7 @@ class DefaultRecipesTest {
     }
 
     @Test
+<<<<<<< HEAD
     void data_defined_item_output_uses_registered_holder() {
         var recipe = DefaultRecipes.recipes().get(MMCR.id("blast_furnace_component_enchanted_output"));
         var output = recipe.outputs().getFirst();
@@ -391,6 +406,8 @@ class DefaultRecipesTest {
     }
 
     @Test
+=======
+>>>>>>> feat/shared-multiblock-io
     void complex_recipe_registers_three_inputs_and_three_outputs_with_correct_chances() {
         installDefaultRuntimeContent();
         DefaultRecipes.ensureRegistered();
@@ -426,6 +443,7 @@ class DefaultRecipesTest {
         return stack;
     }
 
+<<<<<<< HEAD
     private static ItemStack enchantedSword(String enchantmentId, int level) {
         Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
                 .set(DataComponents.MAX_STACK_SIZE, 1)
@@ -441,4 +459,6 @@ class DefaultRecipesTest {
         return stack;
     }
 
+=======
+>>>>>>> feat/shared-multiblock-io
 }

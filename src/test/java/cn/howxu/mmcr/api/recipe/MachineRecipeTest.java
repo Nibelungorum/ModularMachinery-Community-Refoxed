@@ -101,6 +101,7 @@ class MachineRecipeTest {
     }
 
     @Test
+<<<<<<< HEAD
     void enchanted_output_components_use_bound_enchantment_holders_for_tooltips() {
         bindItemComponents(Items.DIAMOND_SWORD);
         var root = new JsonObject();
@@ -181,6 +182,8 @@ class MachineRecipeTest {
     }
 
     @Test
+=======
+>>>>>>> feat/shared-multiblock-io
     void recipe_codec_roundtrips_parallelized_and_equality_includes_flag() {
         bindItemComponents(Items.IRON_BLOCK);
         MachineRecipe serial = new MachineRecipe(

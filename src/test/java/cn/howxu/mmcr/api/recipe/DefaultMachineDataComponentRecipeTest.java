@@ -77,7 +77,12 @@ class DefaultMachineDataComponentRecipeTest {
 
         assertThat(active.start(context)).isTrue();
         scenario.assertInputsAfterStart(input.getItemStackHandler(null), active.inputConsumptionPlan());
+<<<<<<< HEAD
         assertThat(active.tick(context)).isEqualTo(ActiveMachineRecipe.TickStatus.FINISHED);
+=======
+        assertThat(context.commitSynchronousOutputs(active.getRecipe(), active.getParallelism())).isTrue();
+        assertThat(active.applyTickGrant(true, true, 100)).isEqualTo(ActiveMachineRecipe.TickStatus.FINISHED);
+>>>>>>> feat/shared-multiblock-io
         scenario.assertOutputs(output.getItemStackHandler(null));
     }
 

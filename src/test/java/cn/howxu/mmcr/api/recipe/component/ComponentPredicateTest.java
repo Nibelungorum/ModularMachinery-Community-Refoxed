@@ -85,11 +85,16 @@ class ComponentPredicateTest {
                 DataComponents.ENCHANTMENTS,
                 ComponentPredicate.exact(new Dynamic<>(RegistryOps.create(JsonOps.INSTANCE, lookup), encoded))));
 
+<<<<<<< HEAD
         assertThat(predicates.matches(sword, RegistryOps.create(JsonOps.INSTANCE, lookup))).isTrue();
+=======
+        assertThat(predicates.matches(sword)).isTrue();
+>>>>>>> feat/shared-multiblock-io
         DataComponentPatch patch = predicates.exactPatch().orElseThrow();
         assertThat(patch.getPatch(DataComponents.ENCHANTMENTS).orElseThrow().getLevel(sharpness)).isEqualTo(2);
     }
 
+<<<<<<< HEAD
     @Test
     void applyToMaterializesStandardJsonComponentsOnTargetStack() {
         var lookup = VanillaRegistries.createLookup();
@@ -187,4 +192,6 @@ class ComponentPredicateTest {
         return mutable.toImmutable();
     }
 
+=======
+>>>>>>> feat/shared-multiblock-io
 }

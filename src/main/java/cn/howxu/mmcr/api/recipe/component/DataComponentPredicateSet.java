@@ -5,7 +5,10 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.DynamicOps;
+<<<<<<< HEAD
 import com.mojang.serialization.JsonOps;
+=======
+>>>>>>> feat/shared-multiblock-io
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -31,6 +34,7 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
     }
 
     public boolean matches(ItemStack stack) {
+<<<<<<< HEAD
         return matches(stack, JsonOps.INSTANCE);
     }
 
@@ -38,6 +42,10 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
         if (stack == null || stack.isEmpty()) return values.isEmpty();
         for (var entry : values.entrySet()) {
             if (!matches(stack, entry.getKey(), entry.getValue(), ops)) return false;
+=======
+        for (var entry : values.entrySet()) {
+            if (!matches(stack, entry.getKey(), entry.getValue())) return false;
+>>>>>>> feat/shared-multiblock-io
         }
         return true;
     }
@@ -48,12 +56,15 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
         return stack;
     }
 
+<<<<<<< HEAD
     public ItemStack displayStack(Item item, int count, DynamicOps<?> ops) {
         ItemStack stack = new ItemStack(item, count);
         applyTo(stack, ops);
         return stack;
     }
 
+=======
+>>>>>>> feat/shared-multiblock-io
     /**
      * Write every exact-valued component onto {@code stack} via {@link ItemStack#set}.
      * Mirrors the vanilla anvil approach where JEI slots are built by mutating a real
@@ -69,12 +80,15 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
         }
     }
 
+<<<<<<< HEAD
     public void applyTo(ItemStack stack, DynamicOps<?> ops) {
         for (var entry : values.entrySet()) {
             applyExactValue(stack, entry.getKey(), entry.getValue(), ops);
         }
     }
 
+=======
+>>>>>>> feat/shared-multiblock-io
     public boolean isEmpty() {
         return values.isEmpty();
     }
@@ -83,7 +97,11 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
         DataComponentPatch.Builder patch = DataComponentPatch.builder();
         for (var entry : values.entrySet()) {
             if (!(entry.getValue() instanceof ComponentPredicate.Exact exact)) return Optional.empty();
+<<<<<<< HEAD
             Object value = ComponentPredicates.exactValue(entry.getKey(), exact, ItemStack.EMPTY);
+=======
+            Object value = ComponentPredicates.exactValue(entry.getKey(), exact);
+>>>>>>> feat/shared-multiblock-io
             if (value == null) return Optional.empty();
             setPatchValue(patch, entry.getKey(), value);
         }
@@ -111,8 +129,12 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
             Map<DataComponentType<?>, ComponentPredicate> decoded = new LinkedHashMap<>();
             for (var entry : values.toList()) {
                 var key = entry.getFirst().asString().result();
+<<<<<<< HEAD
                 var predicate = ComponentPredicate.CODEC.parse(entry.getSecond()).result()
                         .or(() -> Optional.of(ComponentPredicate.exact(entry.getSecond())));
+=======
+                var predicate = ComponentPredicate.CODEC.parse(entry.getSecond()).result();
+>>>>>>> feat/shared-multiblock-io
                 if (key.isEmpty() || predicate.isEmpty()) return DataResult.error(() -> "Invalid data component predicate");
                 Identifier id;
                 try {
@@ -128,6 +150,7 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
         });
     }
 
+<<<<<<< HEAD
     private static <T> boolean matches(ItemStack actual, DataComponentType<T> type, ComponentPredicate predicate,
             DynamicOps<?> ops) {
         T actualValue = actual.get(type);
@@ -142,6 +165,15 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
     private static <T> void applyExactValue(ItemStack stack, DataComponentType<T> type, ComponentPredicate predicate,
             DynamicOps<?> ops) {
         T value = ComponentPredicates.exactValue(type, predicate, stack, ops);
+=======
+    private static <T> boolean matches(ItemStack stack, DataComponentType<T> type, ComponentPredicate predicate) {
+        T value = stack.get(type);
+        return value != null && ComponentPredicates.matches(type, value, predicate);
+    }
+
+    private static <T> void applyExactValue(ItemStack stack, DataComponentType<T> type, ComponentPredicate predicate) {
+        T value = ComponentPredicates.exactValue(type, predicate);
+>>>>>>> feat/shared-multiblock-io
         if (value == null && type == DataComponents.CUSTOM_NAME && predicate instanceof ComponentPredicate.TextValue text) {
             value = (T) text.value();
         }

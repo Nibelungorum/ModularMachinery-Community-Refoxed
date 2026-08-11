@@ -1,17 +1,33 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.api.recipe.MachineComponent;
+import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.client.model.MachineModelDataKeys;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
 import net.neoforged.neoforge.model.data.ModelData;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+
+import java.lang.reflect.Field;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -48,24 +64,93 @@ class MachinePortAppearanceTest {
 
         var tag = port.getUpdateTag(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
         assertThat(tag.getString("AppearanceBaseTexture")).contains(texture.toString());
-        assertThat(tag.getBooleanOr("HasLinkedController", false)).isTrue();
-        assertThat(tag.getIntOr("LinkedControllerX", 0)).isEqualTo(12);
-        assertThat(tag.getIntOr("LinkedControllerY", 0)).isEqualTo(4);
-        assertThat(tag.getIntOr("LinkedControllerZ", 0)).isEqualTo(12);
+        var linkedControllers = tag.getListOrEmpty("LinkedControllers");
+        assertThat(linkedControllers).hasSize(1);
+        var linkedController = linkedControllers.getCompound(0).orElseThrow();
+        assertThat(linkedController.getIntOr("X", 0)).isEqualTo(12);
+        assertThat(linkedController.getIntOr("Y", 0)).isEqualTo(4);
+        assertThat(linkedController.getIntOr("Z", 0)).isEqualTo(12);
+        assertThat(linkedController.getStringOr("Texture", "")).isEqualTo(texture.toString());
     }
 
     @Test
-    void io_port_restores_linked_controller_from_update_tag() throws Exception {
+    void io_port_restores_every_linked_controller_from_nbt_with_deterministic_first_owner_appearance() {
         IOPortBlockEntity source = itemInputBus();
-        Identifier texture = Identifier.parse("kubejs:block/steel_casing");
-        BlockPos controllerPos = new BlockPos(12, 4, 12);
-        source.bindControllerAppearance(controllerPos, texture);
+        BlockPos first = new BlockPos(0, 64, 0);
+        BlockPos second = new BlockPos(4, 64, 0);
+        Identifier firstTexture = Identifier.parse("kubejs:block/first_casing");
+        Identifier secondTexture = Identifier.parse("kubejs:block/second_casing");
+        source.linkControllerAppearance(second, secondTexture);
+        source.linkControllerAppearance(first, firstTexture);
+
+        TagValueOutput output = TagValueOutput.createWithContext(
+                ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        source.saveAdditional(output);
         IOPortBlockEntity restored = itemInputBus();
 
-        invokeHandleUpdateTag(restored, source.getUpdateTag(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)));
+        restored.loadAdditional(TagValueInput.create(
+                ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()),
+                output.buildResult()));
 
-        assertThat(restored.appearanceBaseTexture()).isEqualTo(texture);
-        assertThat(restored.linkedControllerPos()).isEqualTo(controllerPos);
+        assertThat(restored.linkedControllerPositions()).containsExactlyInAnyOrder(first, second);
+        assertThat(restored.linkedControllerPos()).isEqualTo(first);
+        assertThat(restored.appearanceBaseTexture()).isEqualTo(firstTexture);
+    }
+
+    @Test
+    void removingOneSharedOwnerKeepsTheOtherOwnersAppearance() {
+        IOPortBlockEntity port = itemInputBus();
+        BlockPos first = new BlockPos(0, 64, 0);
+        BlockPos second = new BlockPos(4, 64, 0);
+        Identifier firstTexture = MMCR.id("block/first");
+        Identifier secondTexture = MMCR.id("block/second");
+
+        port.linkControllerAppearance(first, firstTexture);
+        port.linkControllerAppearance(second, secondTexture);
+        port.unlinkControllerAppearance(first);
+
+        assertThat(port.linkedControllerPositions()).containsExactly(second);
+        assertThat(port.linkedControllerPos()).isEqualTo(second);
+        assertThat(port.appearanceBaseTexture()).isEqualTo(secondTexture);
+    }
+
+    @Test
+    void ioPortsAreSharedSerializedButSchedulersAreExclusiveByDefault() {
+        assertThat(itemInputBus().claimPolicy()).isEqualTo(ComponentClaimPolicy.SHARED_SERIALIZED);
+        assertThat(new MachineComponentTile() {
+            @Override
+            public MachineComponent provideComponent() {
+                return null;
+            }
+        }.claimPolicy()).isEqualTo(ComponentClaimPolicy.EXCLUSIVE);
+    }
+
+    @Test
+    void controller_link_maintenance_removes_only_invalid_owner_and_keeps_valid_owner_appearance() throws Exception {
+        IOPortBlockEntity port = itemInputBus();
+        BlockPos invalid = new BlockPos(0, 64, 0);
+        BlockPos valid = new BlockPos(4, 64, 0);
+        Identifier invalidTexture = MMCR.id("block/invalid");
+        Identifier validTexture = MMCR.id("block/valid");
+        MachineControllerBlockEntity invalidController = controller(invalid, false, Set.of(port.getBlockPos()));
+        MachineControllerBlockEntity validController = controller(valid, true, Set.of(port.getBlockPos()));
+        Level level = LevelStub.create(Map.of(
+                invalid, invalidController.getBlockState().getBlock(),
+                valid, validController.getBlockState().getBlock()),
+                List.of(port, invalidController, validController));
+        port.setLevel(level);
+        invalidController.setLevel(level);
+        validController.setLevel(level);
+        port.linkControllerAppearance(invalid, invalidTexture);
+        port.linkControllerAppearance(valid, validTexture);
+
+        port.serverTick();
+
+        assertThat(port.linkedControllerPositions()).containsExactly(valid);
+        assertThat(port.linkedControllerPos()).isEqualTo(valid);
+        assertThat(port.appearanceBaseTexture()).isEqualTo(validTexture);
     }
 
     @Test
@@ -85,9 +170,22 @@ class MachinePortAppearanceTest {
                 ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
     }
 
-    private static void invokeHandleUpdateTag(IOPortBlockEntity port, net.minecraft.nbt.CompoundTag tag) throws Exception {
-        port.handleUpdateTag(net.minecraft.world.level.storage.TagValueInput.create(
-                net.minecraft.util.ProblemReporter.DISCARDING,
-                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), tag));
+    private static MachineControllerBlockEntity controller(BlockPos pos, boolean formed, Set<BlockPos> linkedPorts) throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        MachineControllerBlockEntity controller = (MachineControllerBlockEntity) ((sun.misc.Unsafe) unsafeField.get(null))
+                .allocateInstance(MachineControllerBlockEntity.class);
+        setField(BlockEntity.class, controller, "worldPosition", pos);
+        setField(BlockEntity.class, controller, "blockState", ModBlocks.controllerFor(MMCR.id("blast_furnace")).get().defaultBlockState()
+                .setValue(MachineControllerBlock.FORMED, formed));
+        setField(MachineControllerBlockEntity.class, controller, "linkedPortPositions", linkedPorts);
+        return controller;
     }
+
+    private static void setField(Class<?> type, Object target, String name, Object value) throws ReflectiveOperationException {
+        Field field = type.getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+
 }

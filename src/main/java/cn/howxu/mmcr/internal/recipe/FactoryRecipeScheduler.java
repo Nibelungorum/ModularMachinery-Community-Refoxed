@@ -32,6 +32,7 @@ public final class FactoryRecipeScheduler {
     private final List<Lane> lanes = new ArrayList<>();
     private final List<FactoryRecipeThread> threads = new ArrayList<>();
     private final RecipeCraftingContextPool contextPool;
+    private long nextFactoryLaneId;
 
     public FactoryRecipeScheduler(int threadLimit) {
         this(threadLimit, RecipeCraftingContextPool.global());
@@ -246,7 +247,8 @@ public final class FactoryRecipeScheduler {
         while (threads.size() < threadLimit && availableParallelism() > 0) {
             List<MachineRecipe> availableCandidates = availableCandidates(candidates);
             if (availableCandidates.isEmpty()) break;
-            FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, contextPool == null ? this.contextPool : contextPool);
+            FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, contextPool == null ? this.contextPool : contextPool,
+                    "factory-" + nextFactoryLaneId++);
             threads.add(thread);
             if (!thread.searchAndStartRecipe(availableCandidates, availableParallelism(), structureVersion)) break;
         }
@@ -266,12 +268,24 @@ public final class FactoryRecipeScheduler {
 
     public void load(ValueInput input, MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
         threads.clear();
+<<<<<<< HEAD
+=======
+        nextFactoryLaneId = 0;
+>>>>>>> feat/shared-multiblock-io
         threadLimit = Math.max(1, input.getIntOr("thread_limit", threadLimit));
         paused = input.getBooleanOr("paused", false);
         int count = Math.max(0, input.getIntOr("thread_count", 0));
         for (int i = 0; i < count; i++) {
             threads.add(FactoryRecipeThread.load(input.childOrEmpty("thread_" + i), controller,
                     contextPool == null ? this.contextPool : contextPool));
+        }
+        for (FactoryRecipeThread thread : threads) {
+            String laneId = thread.laneId();
+            if (!laneId.startsWith("factory-")) continue;
+            try {
+                nextFactoryLaneId = Math.max(nextFactoryLaneId, Long.parseLong(laneId.substring("factory-".length())) + 1);
+            } catch (NumberFormatException ignored) {
+            }
         }
         ensureBaseThread(controller, contextPool);
     }

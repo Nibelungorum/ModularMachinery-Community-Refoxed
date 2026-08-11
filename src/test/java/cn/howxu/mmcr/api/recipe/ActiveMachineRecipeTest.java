@@ -133,6 +133,28 @@ class ActiveMachineRecipeTest {
     }
 
     @Test
+<<<<<<< HEAD
+=======
+    void coordinatorStartCommitConsumesPromotedInputs() throws Exception {
+        ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
+        bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(8));
+        MachineControllerBlockEntity controller = controllerWithComponents(bus);
+        MachineRecipe recipe = inputRecipe("active_parallel_start", MMCR.id("blast_furnace"), Items.IRON_INGOT, 2);
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, 16);
+
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+        boolean canStart = active.canStartCrafting(context);
+        int granted = context.commitStart(recipe, active.getMaxParallelism());
+        active.setParallelism(granted);
+
+        assertThat(canStart).isTrue();
+        assertThat(granted).isEqualTo(4);
+        assertThat(active.getParallelism()).isEqualTo(4);
+        assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isZero();
+    }
+
+    @Test
+>>>>>>> feat/shared-multiblock-io
     void inputConsumptionPlanPersistsConsumedBatchCounts() {
         MachineRecipe recipe = new MachineRecipe(
                 MMCR.id("active_consumption_plan"),
@@ -195,7 +217,11 @@ class ActiveMachineRecipeTest {
     }
 
     @Test
+<<<<<<< HEAD
     void completionWithBlockedOutputCancelsTheActiveRecipe() throws Exception {
+=======
+    void completionWithBlockedOutputMarksRecipeForRetry() throws Exception {
+>>>>>>> feat/shared-multiblock-io
         bindItemComponents(Items.COBBLESTONE);
         ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = controllerWithComponents(output);
@@ -210,8 +236,15 @@ class ActiveMachineRecipeTest {
             output.getItemStackHandler(null).setStackInSlot(slot, Items.COBBLESTONE.getDefaultInstance().copyWithCount(64));
         }
 
+<<<<<<< HEAD
         assertThat(active.tick(context)).isEqualTo(ActiveMachineRecipe.TickStatus.CANCELLED);
         assertThat(active.getTick()).isZero();
+=======
+        assertThat(context.simulateOutputs(active.getRecipe(), active.getParallelism())).isFalse();
+        assertThat(active.applyTickGrant(true, false, 100)).isEqualTo(ActiveMachineRecipe.TickStatus.WAITING);
+        assertThat(active.getTick()).isZero();
+        assertThat(active.isFinishPending()).isTrue();
+>>>>>>> feat/shared-multiblock-io
         assertThat(context.getLastFailureUnloc()).isEqualTo(RecipeCraftingContext.FAILURE_MISSING_OUTPUT);
     }
 

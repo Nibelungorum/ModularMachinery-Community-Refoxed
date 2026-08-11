@@ -46,10 +46,14 @@ public final class FactoryRecipeLane implements FactoryRecipeScheduler.Lane {
     public void start() {
         if (started) return;
         started = true;
-        if (!recipe.start(context)) {
+        int granted = context.commitStart(recipe.getRecipe(), recipe.getMaxParallelism());
+        if (granted <= 0) {
             lastFailureUnloc = context.getLastFailureUnloc();
             close();
+            return;
         }
+        recipe.setParallelism(granted);
+        recipe.refreshTotalTick(context);
     }
 
     @Override
@@ -60,8 +64,39 @@ public final class FactoryRecipeLane implements FactoryRecipeScheduler.Lane {
     @Override
     public boolean tick(long gameTime) {
         if (closed) return true;
+<<<<<<< HEAD
         ActiveMachineRecipe.TickStatus status = recipe.tick(context, (int) Math.min(Integer.MAX_VALUE, Math.max(0L, gameTime)));
         if (status == ActiveMachineRecipe.TickStatus.FINISHED || status == ActiveMachineRecipe.TickStatus.CANCELLED) {
+            lastFailureUnloc = context.getLastFailureUnloc();
+=======
+        int tickTime = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, gameTime));
+        if (recipe.isFinishPending()) {
+            if (!recipe.shouldRetryFinish(tickTime)) return false;
+            ActiveMachineRecipe.TickStatus status = recipe.applyTickGrant(true,
+                    context.commitSynchronousOutputs(recipe.getRecipe(), recipe.getParallelism()), tickTime);
+            if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
+                close();
+                return true;
+            }
+            lastFailureUnloc = context.getLastFailureUnloc();
+            return false;
+        }
+        boolean finalTick = recipe.needsFinishCommit();
+        if (finalTick && !context.simulateOutputs(recipe.getRecipe(), recipe.getParallelism())) {
+            recipe.applyTickGrant(true, false, tickTime);
+            lastFailureUnloc = context.getLastFailureUnloc();
+            return false;
+        }
+        boolean resourcesGranted = context.commitSynchronousIoTick(recipe.getRecipe(), recipe.getParallelism());
+        boolean outputsCommitted = resourcesGranted && finalTick
+                && context.commitSynchronousOutputs(recipe.getRecipe(), recipe.getParallelism());
+        ActiveMachineRecipe.TickStatus status = recipe.applyTickGrant(resourcesGranted, outputsCommitted, tickTime);
+        if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
+>>>>>>> feat/shared-multiblock-io
+            close();
+            return true;
+        }
+        if (status == ActiveMachineRecipe.TickStatus.CANCELLED) {
             lastFailureUnloc = context.getLastFailureUnloc();
             close();
             return true;

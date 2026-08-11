@@ -29,7 +29,9 @@ import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
+import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
@@ -39,6 +41,10 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.Identifier;
+<<<<<<< HEAD
+=======
+import net.minecraft.server.level.ServerLevel;
+>>>>>>> feat/shared-multiblock-io
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -749,6 +755,72 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void exclusive_component_claim_prevents_second_controller_from_forming() throws Exception {
+        BlockPos firstControllerPos = new BlockPos(0, 64, 0);
+        BlockPos secondControllerPos = new BlockPos(2, 64, 0);
+        BlockPos componentPos = new BlockPos(1, 64, 0);
+        ParallelControllerBlockEntity component = parallelController(ParallelTier.X16, componentPos);
+        DynamicMachine firstMachine = new DynamicMachine(
+                MMCR.id("exclusive_first_machine"), "Exclusive First",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get()));
+        DynamicMachine secondMachine = new DynamicMachine(
+                MMCR.id("exclusive_second_machine"), "Exclusive Second",
+                new BlockArray(Map.of(new BlockPos(-1, 0, 0), new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get()))));
+        ControllerPairFixture fixture = controllerPair(firstMachine, firstControllerPos, secondMachine, secondControllerPos, component);
+
+        assertThat(invokeTryFormMachine(fixture.first(), firstMachine, Direction.SOUTH)).isTrue();
+        assertThat(invokeTryFormMachine(fixture.second(), secondMachine, Direction.SOUTH)).isFalse();
+
+        assertThat(fixture.second().getLastFormationFailure().portId()).contains("component_claim_conflict");
+        assertThat(fixture.second().isFormed()).isFalse();
+        assertThat(fixture.second().getComponents()).isEmpty();
+        assertThat(StructureClaimRegistry.get(fixture.level()).ownersOf(componentPos)).containsExactly(firstControllerPos);
+    }
+
+    @Test
+    void shared_port_remains_linked_when_one_of_its_controllers_resets() throws Exception {
+        BlockPos sharedPortPos = new BlockPos(1, 64, 0);
+        ItemInputBusBlockEntity shared = itemInputBus(sharedPortPos);
+        DynamicMachine firstMachine = portAppearanceMachine(
+                "first_shared_port_machine",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()),
+                Identifier.parse("kubejs:block/first_formed_casing"));
+        BlockPos firstControllerPos = new BlockPos(0, 64, 0);
+        BlockPos secondControllerPos = new BlockPos(4, 64, 0);
+        DynamicMachine secondMachine = portAppearanceMachine(
+                "second_shared_port_machine",
+                new BlockArray(Map.of(new BlockPos(-3, 0, 0), new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()))),
+                Identifier.parse("kubejs:block/second_formed_casing"));
+        ControllerPairFixture fixture = controllerPair(firstMachine, firstControllerPos, secondMachine, secondControllerPos, shared);
+
+        assertThat(invokeTryFormMachine(fixture.first(), firstMachine, Direction.SOUTH)).isTrue();
+        assertThat(invokeTryFormMachine(fixture.second(), secondMachine, Direction.SOUTH)).isTrue();
+        assertThat(fixture.first().resourceDomain().controllers())
+                .containsExactlyInAnyOrder(firstControllerPos, secondControllerPos);
+        assertThat(fixture.second().resourceDomain().controllers())
+                .containsExactlyInAnyOrder(firstControllerPos, secondControllerPos);
+        assertThat(StructureClaimRegistry.get(fixture.level()).domainFor(firstControllerPos))
+                .isEqualTo(StructureClaimRegistry.get(fixture.level()).domainFor(secondControllerPos));
+        assertThat(StructureClaimRegistry.get(fixture.level()).ownersOf(sharedPortPos))
+                .containsExactlyInAnyOrder(firstControllerPos, secondControllerPos);
+
+        invokeResetMachine(fixture.first());
+
+        assertThat(shared.linkedControllerPositions()).containsExactly(secondControllerPos);
+        assertThat(fixture.second().isFormed()).isTrue();
+        assertThat(fixture.second().getComponents()).extracting(ProcessingComponent::getContainer).containsExactly(shared);
+        assertThat(fixture.second().hasLinkedPort(shared.getBlockPos())).isTrue();
+        assertThat(StructureClaimRegistry.get(fixture.level()).ownersOf(sharedPortPos)).containsExactly(secondControllerPos);
+        assertThat(fixture.second().resourceDomain().controllers()).containsExactly(secondControllerPos);
+        assertThat(StructureClaimRegistry.get(fixture.level()).domainFor(secondControllerPos).controllers()).containsExactly(secondControllerPos);
+
+        fixture.second().setRemoved();
+
+        assertThat(StructureClaimRegistry.get(fixture.level()).ownersOf(sharedPortPos)).isEmpty();
+        assertThat(fixture.second().resourceDomain()).isNull();
+    }
+
+    @Test
     void invalidating_structure_resets_linked_port_appearance_base_texture() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         ItemInputBusBlockEntity port = itemInputBus(controllerPos.offset(1, 0, 0));
@@ -1311,6 +1383,74 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void privateControllerFinalOutputRetryDoesNotRepeatItsLastTickIo() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.COBBLESTONE);
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 0, 0));
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(2, 0, 0));
+        setField(ItemBusBlockEntity.class, output, "handler", new ItemStackHandler(6));
+        setField(ItemBusBlockEntity.class, input, "handler", new ItemStackHandler(6) {
+            @Override
+            public ItemStack extractItem(int slot, int amount, boolean simulate) {
+                ItemStack extracted = super.extractItem(slot, amount, simulate);
+                if (!simulate && !extracted.isEmpty()) {
+                    for (int outputSlot = 0; outputSlot < output.getItemStackHandler(null).getSlots(); outputSlot++) {
+                        output.getItemStackHandler(null).setStackInSlot(outputSlot, new ItemStack(Items.COBBLESTONE, 64));
+                    }
+                }
+                return extracted;
+            }
+
+            @Override protected void onContentsChanged(int slot) { }
+        });
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 1));
+        EnergyInputHatchBlockEntity energy = energyHatch(new BlockPos(3, 0, 0));
+        energy.getMutableEnergyStorage(null).receiveEnergy(20, false);
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
+        DynamicMachine stateMachine = new DynamicMachine(MMCR.id("private_controller_state"), "Private Controller State", new BlockArray(Map.of()));
+        setField(BlockEntity.class, controller, "blockState", testControllerBlock(stateMachine).defaultBlockState());
+        Level level = LevelStub.createWithBlockEntities(List.of(input, output, energy));
+        setField(Level.class, level, "isClientSide", true);
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, input, "level", level);
+        setField(BlockEntity.class, output, "level", level);
+        setField(BlockEntity.class, energy, "level", level);
+        addItemInputComponent(controller, input);
+        addItemOutputComponent(controller, output);
+        addComponent(controller, new MachineComponent(PortKinds.ENERGY_INPUT, IOType.INPUT), energy);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("private_controller_finish_retry"), MMCR.id("private_controller"),
+                1, List.of(), List.of(), List.of(), 0, 0, false, List.of(), List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
+                new EnergyRequirement(10),
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.IRON_INGOT))
+        ));
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
+        setField(MachineControllerBlockEntity.class, controller, "active", active);
+        setField(MachineControllerBlockEntity.class, controller, "context", new RecipeCraftingContext(controller));
+
+        invokeTickActiveRecipe(controller);
+
+        assertThat(active.isFinishPending()).isTrue();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+
+        invokeTickActiveRecipe(controller);
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+
+        output.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
+        setField(ActiveMachineRecipe.class, active, "nextFinishRetryTick", 0);
+        invokeTickActiveRecipe(controller);
+
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "active")).isNull();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getItem()).isEqualTo(Items.IRON_INGOT);
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+    }
+
+    @Test
     void set_machine_clears_matched_modifier_snapshot() throws Exception {
         var replacement = replacementAt(new BlockPos(1, 0, 0), Blocks.GOLD_BLOCK, "speed", 2F);
         var machine = machineWithReplacements(replacement);
@@ -1769,6 +1909,7 @@ class MachineControllerBlockEntityTest {
                     .findFirst()
                     .orElseThrow());
             setField(EnergyHatchBlockEntity.class, hatch, "storage", new EnergyStorage(1000, 1000, 1000));
+            initializePortAppearance(hatch);
             return hatch;
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate energy hatch", e);
@@ -1786,6 +1927,7 @@ class MachineControllerBlockEntityTest {
             setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
             setField(ItemInputBusBlockEntity.class, bus, "kind", PortKinds.ITEM_INPUT);
             setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
+            initializePortAppearance(bus);
             return bus;
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate item input bus", e);
@@ -1802,6 +1944,7 @@ class MachineControllerBlockEntityTest {
             setField(BlockEntity.class, bus, "worldPosition", pos);
             setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
             setField(ItemOutputBusBlockEntity.class, bus, "kind", PortKinds.ITEM_OUTPUT);
+            initializePortAppearance(bus);
             return bus;
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate item output bus", e);
@@ -1821,6 +1964,7 @@ class MachineControllerBlockEntityTest {
             setField(FluidHatchBlockEntity.class, hatch, "tank", new FluidTank(8000) {
                 @Override protected void onContentsChanged() { }
             });
+            initializePortAppearance(hatch);
             return hatch;
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate fluid input hatch", e);
@@ -1840,6 +1984,7 @@ class MachineControllerBlockEntityTest {
             setField(FluidHatchBlockEntity.class, hatch, "tank", new FluidTank(8000) {
                 @Override protected void onContentsChanged() { }
             });
+            initializePortAppearance(hatch);
             return hatch;
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate fluid output hatch", e);
@@ -1852,6 +1997,10 @@ class MachineControllerBlockEntityTest {
         componentsField.setAccessible(true);
         List<ProcessingComponent> list = (List<ProcessingComponent>) componentsField.get(controller);
         list.add(new ProcessingComponent(null, parallel, parallel.getBlockPos(), BlockPos.ZERO, List.of(), null));
+    }
+
+    private static void initializePortAppearance(IOPortBlockEntity port) throws ReflectiveOperationException {
+        setField(IOPortBlockEntity.class, port, "linkedControllers", new java.util.TreeMap<>(BlockPos::compareTo));
     }
 
     private static ParallelControllerBlockEntity parallelController(ParallelTier tier, BlockPos pos) {
@@ -2255,6 +2404,54 @@ class MachineControllerBlockEntityTest {
         return controller;
     }
 
+    private static ControllerPairFixture controllerPair(
+            DynamicMachine firstMachine,
+            BlockPos firstControllerPos,
+            DynamicMachine secondMachine,
+            BlockPos secondControllerPos,
+            BlockEntity component) throws Exception {
+        MachineControllerBlockEntity first = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        MachineControllerBlockEntity second = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        var firstBlock = testControllerBlock(firstMachine);
+        var secondBlock = testControllerBlock(secondMachine);
+        BlockState firstState = testControllerState(firstBlock);
+        BlockState secondState = testControllerState(secondBlock);
+        setField(BlockEntity.class, first, "worldPosition", firstControllerPos);
+        setField(BlockEntity.class, first, "blockState", firstState);
+        setField(BlockEntity.class, second, "worldPosition", secondControllerPos);
+        setField(BlockEntity.class, second, "blockState", secondState);
+        Map<BlockPos, Block> blocks = new HashMap<>();
+        blocks.put(firstControllerPos, firstBlock);
+        blocks.put(secondControllerPos, secondBlock);
+        blocks.put(component.getBlockPos(), component instanceof IOPortBlockEntity port
+                ? blockForPort(port)
+                : cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get(ParallelTier.X16.idSuffix()).get());
+        ServerLevel level = serverLevel(blocks, List.of(first, second, component));
+        setField(BlockEntity.class, first, "level", level);
+        setField(BlockEntity.class, second, "level", level);
+        setField(BlockEntity.class, component, "level", level);
+        return new ControllerPairFixture(first, second, level);
+    }
+
+    private static BlockState testControllerState(cn.howxu.mmcr.internal.block.MachineControllerBlock block) {
+        return block.defaultBlockState()
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FORMED, false)
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FACING, Direction.SOUTH)
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ROLL_FACING, Direction.NORTH);
+    }
+
+    private static ServerLevel serverLevel(Map<BlockPos, Block> blocks, List<BlockEntity> blockEntities) throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+        TestServerLevel level = (TestServerLevel) unsafe.allocateInstance(TestServerLevel.class);
+        setField(TestServerLevel.class, level, "blocks", new HashMap<>(blocks.entrySet().stream()
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().defaultBlockState()))));
+        setField(TestServerLevel.class, level, "blockEntities", blockEntities.stream()
+                .collect(java.util.stream.Collectors.toMap(BlockEntity::getBlockPos, entity -> entity)));
+        return level;
+    }
+
     private static MachineControllerBlockEntity controllerForParallelFormation(
             DynamicMachine machine,
             BlockPos controllerPos,
@@ -2554,5 +2751,47 @@ class MachineControllerBlockEntityTest {
                                          FactorySchedulerBlockEntity factory,
                                          ItemInputBusBlockEntity inputBus,
                                          ItemOutputBusBlockEntity outputBus,
-                                         DynamicMachine machine) { }
+                                          DynamicMachine machine) { }
+
+    private record ControllerPairFixture(MachineControllerBlockEntity first,
+                                         MachineControllerBlockEntity second,
+                                         ServerLevel level) { }
+
+    private static final class TestServerLevel extends ServerLevel {
+        private Map<BlockPos, BlockState> blocks;
+        private Map<BlockPos, BlockEntity> blockEntities;
+
+        private TestServerLevel() {
+            super(null, null, null, null, null, null, false, 0L, List.of(), false);
+        }
+
+        @Override public BlockState getBlockState(BlockPos pos) {
+            return blocks.getOrDefault(pos, Blocks.AIR.defaultBlockState());
+        }
+
+        @Override public BlockEntity getBlockEntity(BlockPos pos) {
+            return blockEntities.get(pos);
+        }
+
+        @Override public void blockEntityChanged(BlockPos pos) { }
+
+        @Override public boolean setBlock(BlockPos pos, BlockState state, int flags) {
+            blocks.put(pos, state);
+            BlockEntity blockEntity = blockEntities.get(pos);
+            if (blockEntity != null) {
+                try {
+                    setField(BlockEntity.class, blockEntity, "blockState", state);
+                } catch (ReflectiveOperationException e) {
+                    throw new AssertionError("Unable to update block entity state", e);
+                }
+            }
+            return true;
+        }
+
+        @Override public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) { }
+
+        @Override public boolean hasChunk(int chunkX, int chunkZ) { return true; }
+
+        @Override public void invalidateCapabilities(BlockPos pos) { }
+    }
 }

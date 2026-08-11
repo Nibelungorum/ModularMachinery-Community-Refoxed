@@ -31,9 +31,16 @@ import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.IdentityHashMap;
 import java.util.List;
+<<<<<<< HEAD
 import java.util.Comparator;
 import java.util.Map;
+=======
+import java.util.Map;
+import java.util.function.BooleanSupplier;
+>>>>>>> feat/shared-multiblock-io
 
 public final class RecipeCraftingContext {
 
@@ -415,6 +422,117 @@ public final class RecipeCraftingContext {
         return ioTick(scaledRequirements(recipe, parallelism));
     }
 
+    /**
+     * Revalidates every requirement before allowing any per-tick live IO mutation.
+     */
+    private boolean commitIoTick(MachineRecipe recipe, int parallelism) {
+        return commitAtomicIoTick(recipe, parallelism);
+    }
+
+    /** Supplies the coordinator-only per-tick commit callback. */
+    public BooleanSupplier coordinatorIoTick(MachineRecipe recipe, int parallelism) {
+        return () -> commitIoTick(recipe, parallelism);
+    }
+
+    /**
+     * Commits per-tick IO for a controller without a shared resource domain.
+     */
+    public boolean commitSynchronousIoTick(MachineRecipe recipe, int parallelism) {
+        return commitAtomicIoTick(recipe, parallelism);
+    }
+
+    private boolean commitAtomicIoTick(MachineRecipe recipe, int parallelism) {
+        List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism);
+        lastFailureUnloc = null;
+        lastRequirementFailure = null;
+        if (!simulateInputs(requirements)) return false;
+        RequirementFailure itemFailure = firstItemInputFailure(requirements);
+        if (itemFailure != null) {
+            setFailure(FAILURE_MISSING_INPUT, itemFailure);
+            return false;
+        }
+        RequirementFailure fluidFailure = firstFluidInputFailure(requirements);
+        if (fluidFailure != null) {
+            setFailure(FAILURE_MISSING_INPUT, fluidFailure);
+            return false;
+        }
+        Map<IEnergyStorage, Integer> reservedEnergyInputs = new IdentityHashMap<>();
+        Map<IEnergyStorage, Integer> reservedEnergyOutputs = new IdentityHashMap<>();
+        for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
+            MachineRequirement requirement = requirements.get(requirementIndex);
+            if (!(requirement instanceof EnergyRequirement energy)) continue;
+            if (energy.io() == RecipeModifier.IOType.INPUT
+                    && !reserveEnergyInput(requirementIndex, energy, reservedEnergyInputs)) return false;
+            if (energy.io() == RecipeModifier.IOType.OUTPUT
+                    && !reserveEnergyOutput(requirementIndex, energy, reservedEnergyOutputs)) return false;
+        }
+        if (!commitInputs(requirements)) return false;
+        commitEnergyInputs(reservedEnergyInputs);
+        commitEnergyOutputs(reservedEnergyOutputs);
+        return true;
+    }
+
+    private boolean reserveEnergyInput(int requirementIndex, EnergyRequirement energy, Map<IEnergyStorage, Integer> reservedEnergy) {
+        int remaining = energy.fePerTick();
+        for (IEnergyStorage storage : taggedEnergyStorages(energy.tags())) {
+            int reserved = reservedEnergy.getOrDefault(storage, 0);
+            int available = Math.max(0, storage.getEnergyStored() - reserved);
+            int requested = Math.min(remaining, available);
+            if (requested <= 0 || storage.extractEnergy(requested, true) < requested) continue;
+            reservedEnergy.put(storage, reserved + requested);
+            remaining -= requested;
+            if (remaining == 0) return true;
+        }
+        long available = energy.fePerTick() - remaining;
+        setRequirementFailure(FAILURE_MISSING_ENERGY, new RequirementFailure(
+                requirementIndex,
+                RequirementFailure.Kind.MISSING_ENERGY,
+                energy.fePerTick(),
+                available,
+                remaining,
+                energyComponentTraces(energy.tags()),
+                List.of()
+        ));
+        return false;
+    }
+
+    private boolean reserveEnergyOutput(int requirementIndex, EnergyRequirement energy, Map<IEnergyStorage, Integer> reservedEnergy) {
+        int remaining = energy.fePerTick();
+        for (IEnergyStorage storage : taggedEnergyOutputs(energy.tags())) {
+            int reserved = reservedEnergy.getOrDefault(storage, 0);
+            int accepted = storage.receiveEnergy(Integer.MAX_VALUE, true);
+            int available = Math.max(0, accepted - reserved);
+            int requested = Math.min(remaining, available);
+            if (requested <= 0) continue;
+            reservedEnergy.put(storage, reserved + requested);
+            remaining -= requested;
+            if (remaining == 0) return true;
+        }
+        long available = energy.fePerTick() - remaining;
+        setRequirementFailure(FAILURE_MISSING_OUTPUT, new RequirementFailure(
+                requirementIndex,
+                RequirementFailure.Kind.MISSING_OUTPUT,
+                energy.fePerTick(),
+                available,
+                remaining,
+                energyOutputComponentTraces(energy.tags()),
+                List.of()
+        ));
+        return false;
+    }
+
+    private static void commitEnergyInputs(Map<IEnergyStorage, Integer> reservedEnergy) {
+        for (Map.Entry<IEnergyStorage, Integer> entry : reservedEnergy.entrySet()) {
+            entry.getKey().extractEnergy(entry.getValue(), false);
+        }
+    }
+
+    private static void commitEnergyOutputs(Map<IEnergyStorage, Integer> reservedEnergy) {
+        for (Map.Entry<IEnergyStorage, Integer> entry : reservedEnergy.entrySet()) {
+            entry.getKey().receiveEnergy(entry.getValue(), false);
+        }
+    }
+
     private boolean ioTick(List<MachineRequirement> requirements) {
         lastFailureUnloc = null;
         lastRequirementFailure = null;
@@ -722,8 +840,34 @@ public final class RecipeCraftingContext {
         return commitInputs(requirements);
     }
 
+<<<<<<< HEAD
     public ActiveMachineRecipe.InputConsumptionPlan createInputConsumptionPlan(MachineRecipe recipe, int parallelism) {
         List<MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
+=======
+    /**
+     * Rebuilds routes from live handlers and commits the largest viable start.
+     */
+    public int commitStart(MachineRecipe recipe, int requestedParallelism) {
+        if (recipe == null || requestedParallelism <= 0) return 0;
+        int parallelism = Math.max(0, Math.min(requestedParallelism, maxInputParallelism(recipe, requestedParallelism)));
+        while (parallelism > 0) {
+            ActiveMachineRecipe activeRecipe = new ActiveMachineRecipe(recipe, parallelism);
+            if (canStartCrafting(activeRecipe)) {
+                int granted = activeRecipe.getParallelism();
+                if (simulateInputs(recipe, granted)
+                        && simulateOutputs(recipe, granted)
+                        && startCrafting(recipe, granted)) {
+                    return granted;
+                }
+            }
+            parallelism--;
+        }
+        return 0;
+    }
+
+    public ActiveMachineRecipe.InputConsumptionPlan createInputConsumptionPlan(MachineRecipe recipe, int parallelism) {
+        List<MachineRequirement> requirements = runtimeRequirements(recipe);
+>>>>>>> feat/shared-multiblock-io
         List<Integer> consumed = new ArrayList<>(requirements.size());
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
@@ -767,7 +911,7 @@ public final class RecipeCraftingContext {
     }
 
     public boolean finishCrafting(MachineRecipe recipe, int parallelism) {
-        return commitOutputs(scaledRequirements(recipe, parallelism));
+        return commitSynchronousOutputs(recipe, parallelism);
     }
 
     public boolean commitInputs(MachineRecipe recipe) {
@@ -804,6 +948,27 @@ public final class RecipeCraftingContext {
         extract(itemTransfers);
         drain(fluidTransfers);
         return true;
+    }
+
+    private boolean commitOutputs(MachineRecipe recipe, int parallelism) {
+        return commitAtomicOutputs(recipe, parallelism);
+    }
+
+    /** Supplies the coordinator-only final-output commit callback. */
+    public BooleanSupplier coordinatorOutputs(MachineRecipe recipe, int parallelism) {
+        return () -> commitOutputs(recipe, parallelism);
+    }
+
+    /**
+     * Commits final outputs for a controller without a shared resource domain.
+     */
+    public boolean commitSynchronousOutputs(MachineRecipe recipe, int parallelism) {
+        return commitAtomicOutputs(recipe, parallelism);
+    }
+
+    private boolean commitAtomicOutputs(MachineRecipe recipe, int parallelism) {
+        List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism);
+        return simulateOutputs(requirements) && commitOutputs(requirements);
     }
 
     public boolean commitOutputs(MachineRecipe recipe) {
@@ -1432,10 +1597,17 @@ public final class RecipeCraftingContext {
         private boolean matches(MachineIngredient.ItemIngredient ingredient) {
             if (!ingredient.item().test(stack)) return false;
             if (itemMatchCache == null || ingredient.components().isEmpty()) {
+<<<<<<< HEAD
                 return ingredient.components().matches(stack, componentOps());
             }
             ItemMatchKey key = new ItemMatchKey(ingredient, stack.copyWithCount(1));
             return itemMatchCache.computeIfAbsent(key, ignored -> ingredient.components().matches(stack, componentOps()));
+=======
+                return ingredient.components().matches(stack);
+            }
+            ItemMatchKey key = new ItemMatchKey(ingredient, stack.copyWithCount(1));
+            return itemMatchCache.computeIfAbsent(key, ignored -> ingredient.components().matches(stack));
+>>>>>>> feat/shared-multiblock-io
         }
 
         private ItemBusBlockEntity bus() {

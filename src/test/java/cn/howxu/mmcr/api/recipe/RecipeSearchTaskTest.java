@@ -197,6 +197,27 @@ class RecipeSearchTaskTest {
         assertThat(result.activeRecipe().getRecipe()).isEqualTo(iron);
     }
 
+<<<<<<< HEAD
+=======
+    @Test
+    void failureLogMessageIncludesReasonAndExpectedInputs() {
+        Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
+        MachineRecipe recipe = inputRecipe("expected_diamond_sword", machineId, Items.DIAMOND_SWORD, 1);
+        RequirementFailure failure = new RequirementFailure(0, RequirementFailure.Kind.MISSING_INPUT, 1, 0);
+
+        String message = RecipeSearchTask.failureLogMessage(machineId, 19, recipe,
+                RecipeCraftingContext.FAILURE_MISSING_INPUT, failure, 0.3F);
+
+        assertThat(message).contains("machine=mmcr:machine");
+        assertThat(message).contains("recipe=mmcr:expected_diamond_sword");
+        assertThat(message).contains("reason=" + RecipeCraftingContext.FAILURE_MISSING_INPUT);
+        assertThat(message).contains("kind=MISSING_INPUT");
+        assertThat(message).contains("required=1");
+        assertThat(message).contains("available=0");
+        assertThat(message).contains("expectedInputs=[item[count=1, ingredient=minecraft:diamond_sword");
+    }
+
+>>>>>>> feat/shared-multiblock-io
     private static MachineRecipe inputRecipe(String path, Identifier machineId, Item item, int count) {
         return inputRecipe(path, machineId, List.of(itemInput(item, count)));
     }

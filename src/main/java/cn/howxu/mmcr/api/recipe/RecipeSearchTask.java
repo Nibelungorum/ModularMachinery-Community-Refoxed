@@ -5,9 +5,23 @@ import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+<<<<<<< HEAD
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+=======
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
+>>>>>>> feat/shared-multiblock-io
 import net.neoforged.neoforge.items.IItemHandler;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -18,6 +32,10 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
+<<<<<<< HEAD
+=======
+import java.util.stream.Collectors;
+>>>>>>> feat/shared-multiblock-io
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -88,11 +106,20 @@ public final class RecipeSearchTask {
                 }
             }
             if (activeRecipe.canStartCrafting(context)) {
+<<<<<<< HEAD
+=======
+                LOG.info("[ParallelSearch] machine={} recipe={} recipeParallelized={} searchMaxParallelism={} selectedParallelism={} structureVersion={}",
+                        machineId,
+                        recipe.id(),
+                        recipe.isParallelized(),
+                        maxParallelism,
+                        activeRecipe.getParallelism(),
+                        structureVersion);
+>>>>>>> feat/shared-multiblock-io
                 boolean conflictProne = hasMoreSpecificPendingInputCandidate(recipe, recipeIndex, ordered, itemMatchCache);
                 context.clearItemMatchCache();
                 return RecipeSearchResult.success(activeRecipe, context, machineId, structureVersion, conflictProne);
             }
-
             float validity = validity(context.getLastFailureUnloc(), context.getLastRequirementFailure());
             if (validity > bestValidity) {
                 bestValidity = validity;
@@ -104,9 +131,84 @@ public final class RecipeSearchTask {
             contextPool.returnContext(context);
         }
 
+        if ((bestFailureUnloc != null || bestFailure != null) && bestFailureRecipe != null) {
+            LOG.warn(failureLogMessage(machineId, structureVersion, bestFailureRecipe, bestFailureUnloc, bestFailure, bestValidity));
+        }
         return RecipeSearchResult.failure(machineId, structureVersion, bestFailureUnloc, bestFailure, bestValidity);
     }
 
+<<<<<<< HEAD
+=======
+    static String failureLogMessage(Identifier machineId,
+                                    long structureVersion,
+                                    MachineRecipe recipe,
+                                    @Nullable String failureUnloc,
+                                    @Nullable RequirementFailure failure,
+                                    float validity) {
+        return "Recipe search failed: machine=" + machineId
+                + " structureVersion=" + structureVersion
+                + " recipe=" + recipe.id()
+                + " reason=" + failureUnloc
+                + " kind=" + (failure == null ? "unknown" : failure.kind())
+                + " requirementIndex=" + (failure == null ? "unknown" : failure.requirementIndex())
+                + " required=" + (failure == null ? "unknown" : failure.required())
+                + " available=" + (failure == null ? "unknown" : failure.available())
+                + " short=" + (failure == null ? "unknown" : failure.shortAmount())
+                + " validity=" + validity
+                + " expectedInputs=" + describeInputs(recipe)
+                + " searchedComponents=" + (failure == null ? List.of() : failure.searchedComponents())
+                + " matchedComponents=" + (failure == null ? List.of() : failure.matchedComponents());
+    }
+
+    private static List<String> describeInputs(MachineRecipe recipe) {
+        return recipe.requirements().stream()
+                .filter(requirement -> requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT
+                        || requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.INPUT
+                        || requirement instanceof EnergyRequirement energy && energy.io() == RecipeModifier.IOType.INPUT)
+                .map(RecipeSearchTask::describeInput)
+                .toList();
+    }
+
+    private static String describeInput(MachineRequirement requirement) {
+        if (requirement instanceof ItemRequirement item) {
+            return "item[count=" + item.count()
+                    + ", ingredient=" + describeIngredient(item.item())
+                    + ", components=" + item.components().values()
+                    + ", consumeChance=" + item.consumeChance()
+                    + "]";
+        }
+        if (requirement instanceof FluidRequirement fluid) {
+            return "fluid[amount=" + fluid.amount()
+                    + ", ingredient=" + describeFluidIngredient(fluid.fluid())
+                    + "]";
+        }
+        if (requirement instanceof EnergyRequirement energy) {
+            return "energy[fePerTick=" + energy.fePerTick() + "]";
+        }
+        return requirement.toString();
+    }
+
+    private static String describeIngredient(@Nullable Ingredient ingredient) {
+        if (ingredient == null) return "<any>";
+        try {
+            return ingredient.items()
+                    .map(holder -> BuiltInRegistries.ITEM.getKey(holder.value()))
+                    .map(String::valueOf)
+                    .collect(Collectors.joining("|"));
+        } catch (NullPointerException e) {
+            return ingredient.toString();
+        }
+    }
+
+    private static String describeFluidIngredient(@Nullable FluidIngredient ingredient) {
+        if (ingredient == null) return "<any>";
+        return ingredient.fluids().stream()
+                .map(holder -> BuiltInRegistries.FLUID.getKey(holder.value()))
+                .map(String::valueOf)
+                .collect(Collectors.joining("|"));
+    }
+
+>>>>>>> feat/shared-multiblock-io
     private @Nullable LevelInsufficientFailure levelFailure(MachineRecipe recipe) {
         for (LevelRequirement requirement : recipe.levelRequirements()) {
             MachineLevel required = MachineLevelRegistry.getLevel(requirement.levelId());
@@ -143,14 +245,20 @@ public final class RecipeSearchTask {
     }
 
     private boolean hasMoreSpecificPendingInputCandidate(MachineRecipe selectedRecipe,
+<<<<<<< HEAD
                                                          int selectedRecipeIndex,
                                                          List<MachineRecipe> ordered,
                                                          Map<RecipeCraftingContext.ItemMatchKey, Boolean> itemMatchCache) {
+=======
+                                                          int selectedRecipeIndex,
+                                                          List<MachineRecipe> ordered,
+                                                          Map<RecipeCraftingContext.ItemMatchKey, Boolean> itemMatchCache) {
+>>>>>>> feat/shared-multiblock-io
         for (int i = 0; i < selectedRecipeIndex; i++) {
             MachineRecipe earlier = ordered.get(i);
-            if (earlier.priority() != selectedRecipe.priority()) continue;
-            if (earlier.inputRequirementCount() <= selectedRecipe.inputRequirementCount()) continue;
-            if (!earlier.hasOverlappingInputs(selectedRecipe)) continue;
+            if (earlier.priority() != selectedRecipe.priority()
+                    || earlier.inputRequirementCount() <= selectedRecipe.inputRequirementCount()
+                    || !earlier.hasOverlappingInputs(selectedRecipe)) continue;
             ActiveMachineRecipe activeRecipe = new ActiveMachineRecipe(earlier, maxParallelism);
             RecipeCraftingContext context = contextPool.borrow(activeRecipe, controller);
             context.setItemMatchCache(itemMatchCache);
@@ -159,9 +267,7 @@ public final class RecipeSearchTask {
             boolean outputAvailable = context.simulateOutputs(earlier);
             context.clearItemMatchCache();
             contextPool.returnContext(context);
-            if (missingInputs && outputAvailable && RecipeCraftingContext.FAILURE_MISSING_INPUT.equals(failureUnloc)) {
-                return true;
-            }
+            if (missingInputs && outputAvailable && RecipeCraftingContext.FAILURE_MISSING_INPUT.equals(failureUnloc)) return true;
         }
         return false;
     }

@@ -166,12 +166,17 @@ public final class DefaultRecipes {
     private static MachineRecipe enchantedNonConsumableRecipe(Identifier machineId, String path) {
         return new MachineRecipe(MMCR.id(path), machineId, 100,
                 List.of(itemInputFromData("""
+<<<<<<< HEAD
                         {components: {"minecraft:enchantments": {"minecraft:sharpness": 2}}, count: 1, id: "minecraft:diamond_sword"}
+=======
+                        {components: {"minecraft:enchantments": {"minecraft:sharpness": 2}, "minecraft:repair_cost": 1}, count: 1, id: "minecraft:diamond_sword"}
+>>>>>>> feat/shared-multiblock-io
                         """, 0F)),
                 List.of(), List.of(), 0, 1, true, List.of(), List.of(), true, List.of());
     }
 
     private static MachineRecipe enchantedOutputRecipe(Identifier machineId, String path) {
+<<<<<<< HEAD
         var input = itemInput(Items.IRON_SWORD, 1);
         return new MachineRecipe(MMCR.id(path), machineId, 100,
                 List.of(input),
@@ -181,6 +186,14 @@ public final class DefaultRecipes {
                         itemOutputRequirementFromData("""
                                 {components: {"minecraft:enchantments": {"minecraft:sharpness": 2}, "minecraft:repair_cost": 1}, count: 1, id: "minecraft:iron_sword"}
                                 """)), true, List.of());
+=======
+        return new MachineRecipe(MMCR.id(path), machineId, 100,
+                List.of(itemInput(Items.IRON_SWORD, 1)),
+                List.of(itemOutputFromData("""
+                        {components: {"minecraft:enchantments": {"minecraft:sharpness": 2}, "minecraft:repair_cost": 1}, count: 1, id: "minecraft:iron_sword"}
+                        """)),
+                List.of(), 0, 1, true, List.of(), List.of(), true, List.of());
+>>>>>>> feat/shared-multiblock-io
     }
 
     private static MachineRecipe chancedOutputRecipe(Identifier machineId, String path) {
@@ -200,6 +213,7 @@ public final class DefaultRecipes {
                 componentsFromData(root), consumeChance);
     }
 
+<<<<<<< HEAD
     private static MachineRequirement itemOutputRequirementFromData(String itemData) {
         JsonObject root = JsonParser.parseString(itemData).getAsJsonObject();
         Identifier id = Identifier.parse(root.get("id").getAsString());
@@ -211,12 +225,29 @@ public final class DefaultRecipes {
     }
 
     private static DataComponentPredicateSet componentsFromData(JsonObject root) {
+=======
+    private static ItemStack itemOutputFromData(String itemData) {
+        JsonObject root = JsonParser.parseString(itemData).getAsJsonObject();
+        Identifier id = Identifier.parse(root.get("id").getAsString());
+        int count = root.has("count") ? root.get("count").getAsInt() : 1;
+        ItemStack stack = new ItemStack(Holder.direct(BuiltInRegistries.ITEM.getValue(id), DataComponentMap.EMPTY), count);
+        componentsFromData(root).applyTo(stack);
+        return stack;
+    }
+
+    private static DataComponentPredicateSet componentsFromData(JsonObject root) {
+        var ops = JsonOps.INSTANCE;
+>>>>>>> feat/shared-multiblock-io
         JsonObject components = root.getAsJsonObject("components");
         Map<DataComponentType<?>, ComponentPredicate> predicates = new java.util.LinkedHashMap<>();
         for (var entry : components.entrySet()) {
             DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(Identifier.parse(entry.getKey()));
             if (type == null) throw new IllegalArgumentException("Unknown data component type " + entry.getKey());
+<<<<<<< HEAD
             predicates.put(type, ComponentPredicate.exact(new Dynamic<>(JsonOps.INSTANCE, entry.getValue())));
+=======
+            predicates.put(type, ComponentPredicate.exact(new Dynamic<>(ops, entry.getValue())));
+>>>>>>> feat/shared-multiblock-io
         }
         return new DataComponentPredicateSet(predicates);
     }
@@ -311,6 +342,13 @@ public final class DefaultRecipes {
     private static ItemStack item(net.minecraft.world.item.Item item, int count) {
         item.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         return new ItemStack(item, count);
+    }
+
+    private static ItemStack namedItem(Item item, int count, String name) {
+        bindItem(item);
+        ItemStack stack = new ItemStack(item, count);
+        stack.set(DataComponents.CUSTOM_NAME, Component.literal(name));
+        return stack;
     }
 
     private static ItemStack namedItem(Item item, int count, String name) {
