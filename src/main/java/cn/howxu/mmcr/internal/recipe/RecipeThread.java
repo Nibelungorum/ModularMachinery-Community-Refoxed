@@ -56,20 +56,8 @@ public abstract class RecipeThread {
             contextPool.returnContext(nextContext);
             lastFailureUnloc = nextContext.getLastFailureUnloc();
             status = Status.FAILED;
-            LOG.info("[ParallelStart] machine={} recipe={} availableParallelism={} searchedParallelism={} startFailed failure={}",
-                    machineId,
-                    next.getRecipe() == null ? null : next.getRecipe().id(),
-                    availableParallelism,
-                    searchedParallelism,
-                    lastFailureUnloc);
             return false;
         }
-        LOG.info("[ParallelStart] machine={} recipe={} availableParallelism={} searchedParallelism={} startedParallelism={}",
-                machineId,
-                next.getRecipe().id(),
-                availableParallelism,
-                searchedParallelism,
-                next.getParallelism());
         activeRecipe = next;
         context = nextContext;
         status = Status.WORKING;

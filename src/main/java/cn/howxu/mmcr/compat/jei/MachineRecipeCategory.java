@@ -30,8 +30,6 @@ import org.jspecify.annotations.Nullable;
 import java.util.List;
 import java.util.Locale;
 import java.util.Comparator;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -48,7 +46,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     static final int ITEM_OVERLAY_X = 0;
     static final int ITEM_OVERLAY_Y = 0;
     static final float ITEM_OVERLAY_SCALE = 0.6F;
-    private static final Set<String> LOGGED_ITEM_STACKS = ConcurrentHashMap.newKeySet();
 
     private final Machine machine;
     private final IRecipeType<MachineRecipeDisplay> recipeType;
@@ -232,9 +229,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                         ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
             }
             jeiSlot.addRichTooltipCallback((view, tooltip) -> appendInputTooltip(tooltip, item));
-            for (int i = 0; i < stacks.size(); i++) {
-                logAddedItemStack(recipe, true, entry.index(), i, stacks.get(i));
-            }
             jeiSlot.addItemStacks(stacks);
         } else {
             MachineRecipeDisplay.ItemOutputDisplay output = recipe.itemOutputs().get(entry.index());
@@ -246,16 +240,8 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             }
             jeiSlot.addRichTooltipCallback((view, tooltip) -> appendOutputTooltip(tooltip, output));
             ItemStack jeiStack = new ItemStack(stack.getItem().builtInRegistryHolder(), stack.getCount(), stack.getComponentsPatch());
-            logAddedItemStack(recipe, false, entry.index(), 0, jeiStack);
             jeiSlot.add(jeiStack);
         }
-    }
-
-    private static void logAddedItemStack(MachineRecipeDisplay recipe, boolean input, int entryIndex, int stackIndex, ItemStack stack) {
-        String key = recipe.recipeId() + ":" + (input ? "input" : "output") + ":" + entryIndex + ":" + stackIndex;
-        if (!LOGGED_ITEM_STACKS.add(key)) return;
-        MMCR.LOG.info("JEI recipe {} {}[{}:{}] added ItemStack {}",
-                recipe.recipeId(), input ? "input" : "output", entryIndex, stackIndex, describeAddedItemStack(stack));
     }
 
     static String describeAddedItemStack(ItemStack stack) {

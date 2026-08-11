@@ -116,7 +116,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
-        LOG.info("Controller BE spawned: instance=#{} pos={} blockStateMachineId={}", instanceId, pos, machineIdFromState(state));
     }
 
     private static Identifier machineIdFromState(BlockState state) {
@@ -134,7 +133,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         foundLevels = Map.of();
         this.machine = m;
         markRecipeDirty();
-        LOG.info("[Ctrl#{}] setMachine: {} → {} at pos={}", instanceId, before, m == null ? null : m.registryName(), getBlockPos());
         setChanged();
     }
 
@@ -168,7 +166,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         boolean before = isFormed();
         if (before == f) return;
         level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.FORMED, f), 3);
-        LOG.info("[Ctrl#{}] setFormed: {} → {} at pos={}", instanceId, before, f, getBlockPos());
     }
 
     public MachineRecipe getActiveRecipe() { return active == null ? null : active.getRecipe(); }
@@ -514,8 +511,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 updateComponents();
                 return;
             }
-            LOG.info("[Ctrl#{}] checkStructure: cached pattern no longer matches → reset; {}",
-                    instanceId, structureMismatchDiagnostic(foundMachine, facing, foundPattern, level, getBlockPos(), replacements));
             resetMachine();
             return;
         }
@@ -648,7 +643,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         String diagnostic = structureMismatchDiagnostic(candidate, facing, rotatedPattern, level, getBlockPos(), replacements);
         if (diagnostic.equals(lastStructureMismatchDiagnostic)) return;
         lastStructureMismatchDiagnostic = diagnostic;
-        LOG.info("[Ctrl#{}] formation rejected: {}", instanceId, diagnostic);
     }
 
     private @Nullable CompiledMachinePattern compiledFor(Machine candidate, BlockArray rotatedPattern, Direction facing) {
@@ -697,8 +691,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         lastFormationFailure = failure;
         lastStructureMismatchDiagnostic = null;
         String max = failure.requiredMax().isPresent() ? Integer.toString(failure.requiredMax().getAsInt()) : "unbounded";
-        LOG.info("[Ctrl#{}] formation rejected: pos={} machine={} port={} actual={} requiredMin={} requiredMax={} reason={}",
-                instanceId, getBlockPos(), candidate.registryName(), failure.portId(), failure.actual(), failure.requiredMin(), max, failure.reason());
     }
 
     private StructureMatcher.LevelResolution resolveLevels(Machine candidate, Direction facing) {
@@ -719,8 +711,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         lastStructureError = mismatch;
         lastFormationFailure = null;
         lastStructureMismatchDiagnostic = null;
-        LOG.info("[Ctrl#{}] formation rejected: level type={} expected={} actual={} worldPos={}",
-                instanceId, mismatch.typeId(), mismatch.expected().id(), mismatch.actual().id(), mismatch.worldPos());
     }
 
     private void onStructureFormed(Machine matchedMachine, BlockArray rotatedPattern, CompiledMachinePattern compiledPattern,
@@ -740,10 +730,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (!isFormed()) setFormed(true);
         updateComponents();
         clearCandidateCache();
-        ComponentCounts counts = componentCounts();
-        LOG.info("[Ctrl#{}] onStructureFormed: pos={} machine={} facing={} components=itemIn:{} itemOut:{} fluidIn:{} fluidOut:{} energyIn:{} energyOut:{}",
-                instanceId, getBlockPos(), matchedMachine.registryName(), facing,
-                counts.itemInputs(), counts.itemOutputs(), counts.fluidInputs(), counts.fluidOutputs(), counts.energyInputs(), counts.energyOutputs());
         lastFormationFailure = null;
         lastStructureError = null;
         setChanged();
@@ -1026,9 +1012,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         markRecipeDirty();
         clearCandidateCache();
         if (wasFormed) setFormed(false);
-        if (dropped != null || hadActive) {
-            LOG.info("[Ctrl#{}] resetMachine: pos={} dropped={} clearedActiveRecipe={} wasFormed={}", instanceId, getBlockPos(), dropped, activeRecipe, wasFormed);
-        }
         setChanged();
     }
 
@@ -1277,7 +1260,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 }
             }
         }
-        LOG.info("[Ctrl#{}] bindDefaultMachine: resolving state-bound machineId={} → resolved={}", instanceId, machineId, resolved == null ? null : resolved.registryName());
         setMachine(resolved);
     }
 
@@ -1400,7 +1382,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             return;
         }
         structureDirty = true;
-        LOG.info("[Ctrl#{}] loadAdditional: pos={} restored {} recipe={} tick={}/{}", instanceId, getBlockPos(), recipeState, restored.getRecipe().id(), restored.getTick(), restored.getTotalTick());
         setChanged();
     }
 

@@ -118,7 +118,6 @@ public class MMCR {
                 .displayItems((params, output) ->
                         ModItems.ITEMS.values().forEach(h -> output.accept(h.get())))
                 .build());
-        LOG.info("MMCR {} loaded", modContainer.getModInfo().getVersion());
     }
 
     public static Identifier id(String path) {

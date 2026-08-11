@@ -34,7 +34,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Built-in actual recipe content. Machine startup registration creates the recipe
@@ -74,8 +73,6 @@ public final class DefaultRecipes {
         for (MachineRecipe recipe : recipes) {
             if (RecipeRegistry.getRecipe(recipe.id()) == null) {
                 register(recipe);
-            } else {
-                LOG.info("ensureRegistered: built-in recipe {} already registered; skipping", recipe.id());
             }
         }
     }
@@ -371,55 +368,5 @@ public final class DefaultRecipes {
 
     private static void register(MachineRecipe recipe) {
         RecipeRegistry.register(recipe);
-        long totalEnergyIn = recipe.inputs().stream()
-                .filter(i -> i instanceof MachineIngredient.EnergyIngredient)
-                .mapToLong(i -> (long) ((MachineIngredient.EnergyIngredient) i).fePerTick() * recipe.tickTime())
-                .sum();
-        long totalEnergyOut = recipe.energyOutputs().stream()
-                .mapToLong(fe -> (long) fe * recipe.tickTime())
-                .sum();
-        LOG.info("ensureRegistered: registered built-in recipe id={} machine={} tickTime={}t ({}s) priority={} maxThreads={} modifiers={} energyIn={}FE energyOut={}FE",
-                recipe.id(), recipe.machineId(), recipe.tickTime(), String.format("%.2f", recipe.tickTime() / 20.0),
-                recipe.priority(), recipe.maxThreads(), recipe.modifiers().size(), totalEnergyIn, totalEnergyOut);
-        LOG.info("  inputs  = [{}]", describeInputs(recipe));
-        LOG.info("  outputs = [{}]", describeOutputs(recipe));
-        LOG.info("  entry points = RecipeRegistry.byMachine({}) and /mmcr reload", recipe.machineId());
-    }
-
-    private static String describeInputs(MachineRecipe recipe) {
-        return recipe.inputs().stream().map(DefaultRecipes::describeIngredient).collect(Collectors.joining(", "));
-    }
-
-    private static String describeOutputs(MachineRecipe recipe) {
-        return recipe.outputs().stream()
-                .map(s -> s.getCount() + "x " + s.getItem().builtInRegistryHolder().getRegisteredName())
-                .collect(Collectors.joining(", "));
-    }
-
-    private static String describeIngredient(MachineIngredient ingredient) {
-        if (ingredient instanceof MachineIngredient.ItemIngredient item) {
-            return "item " + item.count() + "x " + firstStackName(item.item());
-        }
-        if (ingredient instanceof MachineIngredient.FluidIngredient fluid) {
-            return "fluid " + fluid.amount() + "mb " + firstFluidName(fluid.fluid());
-        }
-        if (ingredient instanceof MachineIngredient.EnergyIngredient energy) {
-            return "energy " + energy.fePerTick() + "FE/t";
-        }
-        return ingredient.getClass().getSimpleName();
-    }
-
-    private static String firstStackName(Ingredient ingredient) {
-        return ingredient.items()
-                .findFirst()
-                .map(h -> h.value().builtInRegistryHolder().getRegisteredName())
-                .orElseGet(ingredient::toString);
-    }
-
-    private static String firstFluidName(FluidIngredient fluid) {
-        return fluid.fluids().stream()
-                .findFirst()
-                .map(h -> h.value().builtInRegistryHolder().getRegisteredName())
-                .orElseGet(fluid::toString);
     }
 }
