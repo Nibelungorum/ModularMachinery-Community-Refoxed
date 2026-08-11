@@ -63,16 +63,18 @@ public class SharedMultiblockIoGameTest {
         BlockPos sharedInput = new BlockPos(2, 2, 2);
         MachineControllerBlockEntity first = placeController(helper, new BlockPos(0, 2, 2), sharedInput, "shared_input_first");
         MachineControllerBlockEntity second = placeController(helper, new BlockPos(4, 2, 2), sharedInput, "shared_input_second");
-        helper.setBlock(sharedInput, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+        helper.setBlock(sharedInput, ModBlocks.BLOCKS.get("item_input_bus_huge").get().defaultBlockState());
 
         helper.runAtTickTime(4, () -> {
             first.serverTick();
             second.serverTick();
             ItemInputBusBlockEntity input = helper.getBlockEntity(sharedInput, ItemInputBusBlockEntity.class);
-            input.getItemHandler(null).insertItem(0, new ItemStack(Items.IRON_INGOT, 10), false);
+            for (int slot = 0; slot < 10; slot++) {
+                input.getItemHandler(null).insertItem(slot, new ItemStack(Items.IRON_INGOT), false);
+            }
             MachineRecipe recipe = itemRecipe("shared_input_start");
             StructureClaimRegistry.ResourceDomain domain = first.resourceDomain();
-            SharedIoCoordinator coordinator = new SharedIoCoordinator();
+            SharedIoCoordinator coordinator = SharedIoCoordinator.get(helper.getLevel());
             AtomicInteger totalParallelism = new AtomicInteger();
 
             enqueueStart(coordinator, domain, first, recipe, totalParallelism);
@@ -130,6 +132,7 @@ public class SharedMultiblockIoGameTest {
         DynamicMachine machine = new DynamicMachine(MMCR.id(path), path,
                 new BlockArray(Map.of(sharedPort.subtract(controllerPos), new BlockPredicate.AnyOf(List.of(
                         new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()),
+                        new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus_huge").get()),
                         new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("energy_input_hatch").get()))))),
                 MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none());
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);

@@ -42,19 +42,27 @@ public class ItemBusCapabilityGameTest {
         helper.assertTrue(output != null, "Output item capability is present");
 
         try (Transaction tx = Transaction.openRoot()) {
-            int inserted = input.insert(0, ItemResource.of(Items.IRON_INGOT), 4, tx);
+            int inserted = 0;
+            for (int slot = 0; slot < 4; slot++) {
+                inserted += input.insert(slot, ItemResource.of(Items.IRON_INGOT), 1, tx);
+            }
             int extracted = input.extract(0, ItemResource.of(Items.IRON_INGOT), 1, tx);
             helper.assertTrue(inserted == 4, "Input capability inserts");
             helper.assertTrue(extracted == 1, "Input capability extracts");
             tx.commit();
         }
 
-        outputBus.getItemStackHandler(null).insertItem(0, new ItemStack(Items.IRON_INGOT, 8), false);
+        for (int slot = 0; slot < 4; slot++) {
+            outputBus.getItemStackHandler(null).insertItem(slot, new ItemStack(Items.IRON_INGOT), false);
+        }
 
         try (Transaction tx = Transaction.openRoot()) {
             int inserted = output.insert(0, ItemResource.of(Items.IRON_INGOT), 1, tx);
-            int extracted = output.extract(0, ItemResource.of(Items.IRON_INGOT), 4, tx);
-            helper.assertTrue(inserted == 1, "Output capability inserts");
+            int extracted = 0;
+            for (int slot = 0; slot < 4; slot++) {
+                extracted += output.extract(slot, ItemResource.of(Items.IRON_INGOT), 1, tx);
+            }
+            helper.assertTrue(inserted == 0, "Output capability rejects inserts");
             helper.assertTrue(extracted == 4, "Output capability extracts");
             tx.commit();
         }

@@ -36,7 +36,9 @@ public class E2ERecipeRunGameTest {
         BlockPos inputPos = new BlockPos(1, 2, 0);
         helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
         helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null)
-                .insertItem(0, new ItemStack(Items.IRON_INGOT, 2), false);
+                .insertItem(0, new ItemStack(Items.IRON_INGOT), false);
+        helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null)
+                .insertItem(1, new ItemStack(Items.IRON_INGOT), false);
         BlockPos outputPos = new BlockPos(1, 2, 2);
         helper.setBlock(outputPos, ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState());
         BlockPos energyPos = new BlockPos(2, 2, 1);
@@ -50,20 +52,24 @@ public class E2ERecipeRunGameTest {
                 machineId, 40,
                 List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2),
                         new MachineIngredient.EnergyIngredient(80)),
-                List.of(new ItemStack(Items.IRON_NUGGET))));
+                List.of(new ItemStack(Items.IRON_NUGGET)), List.of(), -100, 1));
 
         var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(machine);
-        controller.serverTick();
-        helper.assertTrue(controller.isFormed(), "Structure formed");
-        for (int tick = 0; tick < 40; tick++) controller.serverTick();
-        ItemStack input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
-        ItemStack output = helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
-        int energy = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).getEnergyStorage(null).getEnergyStored();
-        helper.assertTrue(input.isEmpty(), "Input ingots consumed");
-        helper.assertTrue(output.is(Items.IRON_NUGGET), "Output is iron nugget");
-        helper.assertTrue(energy == 4992, "Energy consumed per tick");
-        helper.succeed();
+        for (int tick = 1; tick <= 80; tick++) {
+            helper.runAtTickTime(tick, controller::serverTick);
+        }
+        helper.runAtTickTime(80, () -> {
+            helper.assertTrue(controller.isFormed(), "Structure formed");
+            ItemStack input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
+            ItemStack input1 = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null).getStackInSlot(1);
+            ItemStack output = helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
+            int energy = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).getEnergyStorage(null).getEnergyStored();
+            helper.assertTrue(input.isEmpty() && input1.isEmpty(), "Input ingots consumed");
+            helper.assertTrue(output.is(Items.IRON_NUGGET), "Output is iron nugget");
+            helper.assertTrue(energy == 4992, "Energy consumed per tick");
+            helper.succeed();
+        });
     }
 
     public void recipeUsesPortsFromMatchedPatternOutsideLegacyScan(GameTestHelper helper) {

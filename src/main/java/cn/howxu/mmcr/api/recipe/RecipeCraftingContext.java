@@ -974,7 +974,8 @@ public final class RecipeCraftingContext {
      */
     public int commitStart(MachineRecipe recipe, int requestedParallelism) {
         if (recipe == null || requestedParallelism <= 0) return 0;
-        int parallelism = Math.max(0, Math.min(requestedParallelism, maxInputParallelism(recipe, requestedParallelism)));
+        int inputLimit = maxInputParallelism(recipe, requestedParallelism);
+        int parallelism = inputLimit < 0 ? requestedParallelism : Math.min(requestedParallelism, inputLimit);
         while (parallelism > 0) {
             ActiveMachineRecipe activeRecipe = new ActiveMachineRecipe(recipe, parallelism);
             if (canStartCrafting(activeRecipe)) {
@@ -993,7 +994,8 @@ public final class RecipeCraftingContext {
     public int commitStart(ActiveMachineRecipe activeRecipe, int requestedParallelism) {
         if (activeRecipe == null || activeRecipe.getRecipe() == null || requestedParallelism <= 0) return 0;
         MachineRecipe recipe = activeRecipe.getRecipe();
-        int parallelism = Math.max(0, Math.min(requestedParallelism, maxInputParallelism(recipe, requestedParallelism)));
+        int inputLimit = maxInputParallelism(recipe, requestedParallelism);
+        int parallelism = inputLimit < 0 ? requestedParallelism : Math.min(requestedParallelism, inputLimit);
         while (parallelism > 0) {
             activeRecipe.setParallelism(parallelism);
             if (canStartCrafting(activeRecipe) && activeRecipe.start(this, activeRecipe.getParallelism())) {

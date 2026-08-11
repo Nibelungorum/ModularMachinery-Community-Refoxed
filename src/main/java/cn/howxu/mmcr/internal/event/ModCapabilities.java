@@ -93,10 +93,11 @@ public final class ModCapabilities {
 
     private static void registerNativePort(RegisterCapabilitiesEvent event, IOPortKind kind) {
         if (kind.itemBusSize().isPresent()) {
+            boolean canInsert = kind.ioType() == IOType.INPUT;
             event.registerBlockEntity(
                     ITEM_BLOCK,
                     ModBlockEntities.BES.get(kind.id()).get(),
-                    (be, side) -> be instanceof ItemBusBlockEntity ib ? new LegacyItemHandlerAdapter(ib.getItemStackHandler(side), true, true) : null);
+                    (be, side) -> be instanceof ItemBusBlockEntity ib ? new LegacyItemHandlerAdapter(ib.getItemStackHandler(side), canInsert, true) : null);
         } else if (kind.fluidHatchSize().isPresent()) {
             boolean canInsert = kind.ioType() == IOType.INPUT;
             event.registerBlockEntity(
@@ -281,7 +282,9 @@ public final class ModCapabilities {
 
         @Override
         public long getCapacityAsLong(int slot, ItemResource resource) {
-            return Math.min(handler.getSlotLimit(slot), resource.getMaxStackSize());
+            return resource.isEmpty()
+                    ? handler.getSlotLimit(slot)
+                    : Math.min(handler.getSlotLimit(slot), resource.getMaxStackSize());
         }
 
         @Override
