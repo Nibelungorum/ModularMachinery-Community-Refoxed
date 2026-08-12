@@ -11,11 +11,22 @@ public interface SmartInterfaceEvents {
     String UPDATED_ID = "mmcr.smart_interface.updated";
 
     static EventGroup group() {
-        return Holder.GROUP;
+        EventGroup group = Holder.GROUP;
+        Registration.COMPLETE = true;
+        return group;
     }
 
     static void post(SmartInterfaceUpdateEventJS event) {
-        Holder.UPDATED.post(event);
+        if (Registration.COMPLETE && Holder.UPDATED.hasListeners()) {
+            Holder.UPDATED.post(event);
+        }
+    }
+
+    final class Registration {
+        private static boolean COMPLETE;
+
+        private Registration() {
+        }
     }
 
     final class Holder {
