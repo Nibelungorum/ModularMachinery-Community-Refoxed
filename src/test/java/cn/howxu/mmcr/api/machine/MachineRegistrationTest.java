@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.MMCR;
+import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -64,5 +65,16 @@ class MachineRegistrationTest {
 
         assertThat(zero.maxParallelAmount()).isEqualTo(1);
         assertThat(negative.maxParallelAmount()).isEqualTo(1);
+    }
+
+    @Test
+    void builderPreservesExistingRunningAndFinishSoundIds() {
+        MachineRegistration registration = MachineRegistration.builder(MMCR.id("sound_machine"))
+                .runningSound(Identifier.parse("minecraft:block.furnace.fire_crackle"))
+                .finishSound(Identifier.parse("minecraft:block.anvil.land"))
+                .build();
+
+        assertThat(registration.runningSoundId()).isEqualTo(Identifier.parse("minecraft:block.furnace.fire_crackle"));
+        assertThat(registration.finishSoundId()).isEqualTo(Identifier.parse("minecraft:block.anvil.land"));
     }
 }
