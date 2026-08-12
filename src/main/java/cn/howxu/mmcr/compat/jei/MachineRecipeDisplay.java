@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.jei;
 
+import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
@@ -42,7 +43,8 @@ public record MachineRecipeDisplay(
         List<EnergyIngredient> energyOutputs,
         List<MachineOutput> outputs,
         List<SmartInterfaceDisplay> smartInterfaceInputs,
-        List<SmartInterfaceDisplay> smartInterfaceOutputs
+        List<SmartInterfaceDisplay> smartInterfaceOutputs,
+        List<SmartInterfaceModifierDisplay> smartInterfaceModifiers
 ) {
 
     public static MachineRecipeDisplay from(MachineRecipe recipe) {
@@ -61,6 +63,8 @@ public record MachineRecipeDisplay(
         List<SmartInterfaceDisplay> smartInterfaceInputs = new ArrayList<>();
         List<SmartInterfaceDisplay> smartInterfaceOutputs = new ArrayList<>();
         var registration = MachineDefinitions.getRegistration(recipe.machineId());
+        List<SmartInterfaceModifierDisplay> smartInterfaceModifiers = registration == null ? List.of()
+                : registration.smartInterfaceModifiers().stream().map(SmartInterfaceModifierDisplay::from).toList();
         List<MachineRequirement> requirements = recipe.runtimeRequirements();
         for (var requirement : requirements) {
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT) {
@@ -115,13 +119,17 @@ public record MachineRecipeDisplay(
                 List.copyOf(energyOutputs),
                 List.copyOf(outputs),
                 List.copyOf(smartInterfaceInputs),
-                List.copyOf(smartInterfaceOutputs)
+                List.copyOf(smartInterfaceOutputs),
+                List.copyOf(smartInterfaceModifiers)
         );
     }
 
     public List<String> tooltips() {
-        return java.util.stream.Stream.concat(smartInterfaceInputs.stream(), smartInterfaceOutputs.stream())
-                .map(SmartInterfaceDisplay::tooltip).toList();
+        return java.util.stream.Stream.concat(
+                        java.util.stream.Stream.concat(smartInterfaceInputs.stream(), smartInterfaceOutputs.stream())
+                                .map(SmartInterfaceDisplay::tooltip),
+                        smartInterfaceModifiers.stream().map(SmartInterfaceModifierDisplay::tooltip))
+                .toList();
     }
 
     private static java.util.Optional<SmartInterfaceDisplay> smartInterfaceDisplay(SmartInterfaceType type,
@@ -152,6 +160,25 @@ public record MachineRecipeDisplay(
     public record SmartInterfaceDisplay(String type, float minValue, float maxValue, boolean input, String tooltip) {
         public String label() {
             return input ? type + ": [" + minValue + ", " + maxValue + "]" : type + ": " + minValue;
+        }
+    }
+
+    public record SmartInterfaceModifierDisplay(String type, String target, RecipeModifier.IOType io, boolean chance,
+            float minValue, float maxValue, float atMin, float atMax, RecipeModifier.Operation operation) {
+        static SmartInterfaceModifierDisplay from(SmartInterfaceModifier modifier) {
+            return new SmartInterfaceModifierDisplay(modifier.interfaceType(), modifier.target(), modifier.io(),
+                    modifier.affectsChance(), modifier.minValue(), modifier.maxValue(), modifier.atMin(),
+                    modifier.atMax(), modifier.operation());
+        }
+
+        public String label() {
+            return type + " -> " + target;
+        }
+
+        public String tooltip() {
+            return "Smart interface " + type + " modifies " + target + " " + io.getKey()
+                    + (chance ? " chance" : "") + ": [" + minValue + ", " + maxValue + "] -> ["
+                    + atMin + ", " + atMax + "] " + operation;
         }
     }
 

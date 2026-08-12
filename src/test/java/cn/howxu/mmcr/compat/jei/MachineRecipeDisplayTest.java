@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
@@ -19,6 +20,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
 import cn.howxu.mmcr.datagen.Translations;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.Holder;
@@ -36,6 +38,7 @@ import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -86,6 +89,27 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
+    void display_includes_smart_interface_modifiers_from_machine_registration() {
+        MachineDefinitions.clearForTesting();
+        MachineDefinitions.beginRegistryPhase();
+        MachineDefinitions.register(MachineRegistration.builder(MMCR.id("jei_interface_modifier"))
+                .smartInterfaceType(new SmartInterfaceType("temperature", 20F, 0, "", "", "", "", "", 0))
+                .smartInterfaceModifier(SmartInterfaceModifier.energy("temperature", 0F, 100F, 1F, 2F,
+                        RecipeModifier.Operation.MULTIPLY))
+                .build());
+        MachineDefinitions.freezeRegistryPhase();
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("jei_smart_modifier_recipe"),
+                MMCR.id("jei_interface_modifier"), 40, List.of(), List.of());
+
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+
+        assertThat(display.smartInterfaceModifiers()).containsExactly(new MachineRecipeDisplay.SmartInterfaceModifierDisplay(
+                "temperature", IntegrationTypeHelper.TARGET_ENERGY, RecipeModifier.IOType.INPUT, false,
+                0F, 100F, 1F, 2F, RecipeModifier.Operation.MULTIPLY));
+        assertThat(display.tooltips()).anyMatch(text -> text.contains("temperature") && text.contains("energy"));
+    }
+
+    @Test
     void describesAddedJeiItemStackFromConcreteStackData() {
         ItemStack stack = new ItemStack(Items.DIAMOND_SWORD);
         stack.set(DataComponents.REPAIR_COST, 3);
@@ -111,6 +135,11 @@ class MachineRecipeDisplayTest {
                 Items.COAL, Items.IRON_INGOT, Items.GOLD_INGOT, Items.IRON_NUGGET, Items.GOLD_NUGGET,
                 Items.DIAMOND_SWORD
         );
+    }
+
+    @BeforeEach
+    void resetMachineDefinitions() {
+        MachineDefinitions.clearForTesting();
     }
 
     @Test

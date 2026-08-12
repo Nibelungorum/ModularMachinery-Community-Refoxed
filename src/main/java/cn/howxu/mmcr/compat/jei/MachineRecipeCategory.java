@@ -135,6 +135,11 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                     layout.durationTextX(), y, 0xFF404040, false);
             y += 10;
         }
+        for (MachineRecipeDisplay.SmartInterfaceModifierDisplay modifier : recipe.smartInterfaceModifiers()) {
+            guiGraphics.text(Minecraft.getInstance().font, Component.literal(modifier.label()),
+                    layout.durationTextX(), y, 0xFF404040, false);
+            y += 10;
+        }
         drawOverflowSlot(layout.inputs().overflowSlot(), guiGraphics, slotBackground);
         drawOverflowSlot(layout.outputs().overflowSlot(), guiGraphics, slotBackground);
     }
@@ -361,6 +366,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
         for (MachineRecipeDisplay.SmartInterfaceDisplay smartInterface : recipe.smartInterfaceOutputs()) {
             if (mouseY >= y && mouseY < y + 10) return java.util.Optional.of(smartInterface.tooltip());
+            y += 10;
+        }
+        for (MachineRecipeDisplay.SmartInterfaceModifierDisplay modifier : recipe.smartInterfaceModifiers()) {
+            if (mouseY >= y && mouseY < y + 10) return java.util.Optional.of(modifier.tooltip());
             y += 10;
         }
         return java.util.Optional.empty();
