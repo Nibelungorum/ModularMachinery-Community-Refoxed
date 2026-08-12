@@ -1,0 +1,33 @@
+repositories {
+    mavenCentral()
+
+    // ModMaven
+    maven { url 'https://modmaven.dev/' }
+
+    // BlameJared
+    exclusiveContent {
+        forRepository { maven { url = "https://maven.blamejared.com/" } }
+        filter { includeGroup("mezz.jei") }
+    }
+
+    // KubeJS / Rhino
+    maven {
+        name = "Latvian Maven"
+        url = "https://maven.latvian.dev/releases"
+    }
+
+    // CurseForge
+    exclusiveContent {
+        forRepository { maven { url = "https://cursemaven.com/" } }
+        filter { includeGroup("curse.maven") }
+    }
+
+    // JitPack
+    maven { url = 'https://www.jitpack.io' }
+
+    //
+    maven {
+        name = "HowXu.public"
+        url = uri("https://maven.howxu.cn/")
+    }
+}

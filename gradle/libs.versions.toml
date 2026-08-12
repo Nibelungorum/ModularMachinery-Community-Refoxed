@@ -1,0 +1,14 @@
+[versions]
+minecraft = "26.1.2"
+neoForge = "26.1.2.84"
+modDevGradle = "2.0.141"
+jetbrains-annotations = "26.0.1"
+
+[libraries]
+minecraft = { module = "com.mojang:minecraft", version.ref = "minecraft" }
+neoForge = { module = "net.neoforged:neoforge", version.ref = "neoForge" }
+testframework = { module = "net.neoforged:testframework", version.ref = "neoForge" }
+jetbrains-annotations = { module = "org.jetbrains:annotations", version.ref = "jetbrains-annotations" }
+
+[plugins]
+modDevGradle = { id = "net.neoforged.moddev", version.ref = "modDevGradle" }
