@@ -63,22 +63,21 @@ class ModelGenTest {
     }
 
     @Test
-    void smart_interface_uses_generated_number_overlay_resources() throws Exception {
+    void smart_interface_uses_dynamic_resources_and_number_overlay_texture() throws Exception {
         Path root = Path.of("src/main/resources/assets/mmcr");
         Path generatedRoot = Path.of("src/generated/resources/assets/mmcr");
 
-        assertThat(ModelGen.collectKnownBlockNames()).contains("smart_interface");
-        assertThat(ModelGen.collectKnownItemNames()).contains("smart_interface");
+        assertThat(ModelGen.collectKnownBlockNames()).doesNotContain("smart_interface");
+        assertThat(ModelGen.collectKnownItemNames()).doesNotContain("smart_interface");
+        assertThat(Files.exists(root.resolve("blockstates/smart_interface.json"))).isFalse();
         assertThat(Files.exists(root.resolve("models/block/smart_interface.json"))).isFalse();
-        assertThat(Files.exists(root.resolve("models/item/smart_interface.json"))).isTrue();
-        assertThat(Files.exists(generatedRoot.resolve("blockstates/smart_interface.json"))).isTrue();
-        assertThat(Files.exists(generatedRoot.resolve("models/block/smart_interface.json"))).isTrue();
-        assertThat(Files.exists(generatedRoot.resolve("items/smart_interface.json"))).isTrue();
+        assertThat(Files.exists(root.resolve("models/item/smart_interface.json"))).isFalse();
+        assertThat(Files.exists(generatedRoot.resolve("blockstates/smart_interface.json"))).isFalse();
+        assertThat(Files.exists(generatedRoot.resolve("models/block/smart_interface.json"))).isFalse();
+        assertThat(Files.exists(generatedRoot.resolve("items/smart_interface.json"))).isFalse();
         assertThat(Files.exists(root.resolve("textures/block/overlay_smartinterface_number.png"))).isTrue();
         assertThat(Files.exists(root.resolve("textures/block/overlay_smartinterface_number.png.mcmeta"))).isTrue();
         assertThat(Files.exists(root.resolve("textures/gui/guismartinterface.png"))).isTrue();
-        assertThat(Files.readString(generatedRoot.resolve("models/block/smart_interface.json")))
-                .contains("mmcr:block/overlay_smartinterface_number");
         assertThat(Files.readString(root.resolve("textures/block/overlay_smartinterface_number.png.mcmeta")))
                 .contains("\"frametime\": 2");
     }
