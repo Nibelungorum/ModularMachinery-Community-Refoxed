@@ -397,6 +397,133 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void runtime_activity_switches_only_on_ordinary_start_and_finish() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.IRON_NUGGET);
+        RuntimeSyncFixture fixture = serverRuntimeFixture(MMCR.id("runtime_sync_single_machine"), 2, 1);
+        registerItemRecipe("runtime_sync_single", fixture.machine().registryName(), 2);
+
+        fixture.controller().serverTick();
+        fixture.controller().serverTick();
+
+        assertThat(fixture.controller().isRuntimeActive()).isTrue();
+        assertThat(fixture.controller().getBlockState().getValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ACTIVE)).isTrue();
+
+        fixture.controller().serverTick();
+
+        assertThat(fixture.controller().isRuntimeActive()).isFalse();
+        assertThat(fixture.controller().getBlockState().getValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ACTIVE)).isFalse();
+    }
+
+    @Test
+    void runtime_activity_stays_true_while_active_recipe_waits_for_outputs() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.IRON_NUGGET);
+        RuntimeSyncFixture fixture = serverRuntimeFixture(MMCR.id("runtime_waiting_output_machine"), 1, 1);
+        registerItemRecipe("runtime_waiting_output", fixture.machine().registryName(), 1);
+
+        fixture.controller().serverTick();
+        fillOutputBus(fixture.outputBus(), Items.COBBLESTONE);
+        fixture.controller().serverTick();
+
+        assertThat(fixture.controller().isRuntimeActive()).isTrue();
+        assertThat(fixture.controller().getBlockState().getValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ACTIVE)).isTrue();
+    }
+
+    @Test
+    void runtime_activity_pauses_for_redstone_and_resumes_from_cached_recipe() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.IRON_NUGGET);
+        RuntimeSyncFixture fixture = serverRuntimeFixture(MMCR.id("runtime_redstone_machine"), 20, 1);
+        registerItemRecipe("runtime_redstone", fixture.machine().registryName(), 20);
+        fixture.controller().serverTick();
+        assertThat(fixture.controller().isRuntimeActive()).isTrue();
+
+        LevelStub.setDirectSignal(fixture.level(), fixture.controller().getBlockPos(), 15);
+        fixture.controller().serverTick();
+
+        assertThat(fixture.controller().isRuntimeActive()).isFalse();
+        assertThat(fixture.controller().getBlockState().getValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ACTIVE)).isFalse();
+
+        LevelStub.setDirectSignal(fixture.level(), fixture.controller().getBlockPos(), 0);
+        fixture.controller().serverTick();
+
+        assertThat(fixture.controller().isRuntimeActive()).isTrue();
+        assertThat(fixture.controller().getBlockState().getValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ACTIVE)).isTrue();
+    }
+
+    @Test
+    void runtime_activity_is_false_after_structure_chunk_unload_pauses_recipe() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        DynamicMachine machine = new DynamicMachine(MMCR.id("runtime_chunk_pause_machine"), "Runtime Chunk Pause",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()));
+        MachineRegistry.register(machine);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_chunk_pause_recipe"), machine.registryName(), 100, List.of(), List.of());
+        MachineControllerBlockEntity controller = controllerForServerFormation(machine, controllerPos, itemInputBus(controllerPos.offset(1, 0, 0)));
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        setField(MachineControllerBlockEntity.class, controller, "active", new ActiveMachineRecipe(recipe, 1));
+        setField(MachineControllerBlockEntity.class, controller, "context", new RecipeCraftingContext(controller));
+        invokeSyncRuntimeStateIfChanged(controller);
+        assertThat(controller.isRuntimeActive()).isTrue();
+
+        MachineControllerBlockEntity.markStructureChunkDirty(levelOf(controller),
+                new net.minecraft.world.level.ChunkPos(controllerPos.getX() >> 4, controllerPos.getZ() >> 4));
+
+        assertThat(controller.isRuntimeActive()).isFalse();
+    }
+
+    @Test
+    void runtime_activity_switches_false_when_last_factory_lane_finishes() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        DynamicMachine machine = factoryOnlyMachine(MMCR.id("runtime_factory_finish_machine"), 1);
+        FactorySchedulerBlockEntity factory = factoryController(controllerPos.offset(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerForServerFactoryFormation(machine, controllerPos, factory);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        startFiniteFactoryLane(factory, 1);
+        invokeSyncRuntimeStateIfChanged(controller);
+        assertThat(controller.isRuntimeActive()).isTrue();
+        assertThat(blockUpdateCount(levelOf(controller))).isEqualTo(2);
+
+        factory.tickScheduler(controller);
+
+        assertThat(controller.isRuntimeActive()).isFalse();
+        assertThat(blockUpdateCount(levelOf(controller))).isEqualTo(3);
+    }
+
+    @Test
+    void factory_lane_progress_does_not_repeat_runtime_block_updates() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        DynamicMachine machine = factoryOnlyMachine(MMCR.id("runtime_factory_progress_machine"), 1);
+        FactorySchedulerBlockEntity factory = factoryController(controllerPos.offset(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerForServerFactoryFormation(machine, controllerPos, factory);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        startFiniteFactoryLane(factory, 3);
+        invokeSyncRuntimeStateIfChanged(controller);
+        int afterStart = blockUpdateCount(levelOf(controller));
+
+        factory.tickScheduler(controller);
+        factory.tickScheduler(controller);
+
+        assertThat(controller.isRuntimeActive()).isTrue();
+        assertThat(blockUpdateCount(levelOf(controller))).isEqualTo(afterStart);
+    }
+
+    @Test
+    void synced_runtime_activity_is_not_saved() throws Exception {
+        RuntimeSyncFixture fixture = serverRuntimeFixture(MMCR.id("runtime_not_saved_machine"), 20, 1);
+        setField(MachineControllerBlockEntity.class, fixture.controller(), "active",
+                new ActiveMachineRecipe(new MachineRecipe(MMCR.id("runtime_not_saved_recipe"), fixture.machine().registryName(), 20, List.of(), List.of())));
+        setField(MachineControllerBlockEntity.class, fixture.controller(), "context", new RecipeCraftingContext(fixture.controller()));
+        invokeSyncRuntimeStateIfChanged(fixture.controller());
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        invokeSaveAdditional(fixture.controller(), output);
+
+        assertThat(output.buildResult().toString()).doesNotContain("syncedRuntimeActive");
+    }
+
+    @Test
     void factory_lanes_do_not_overconsume_shared_inputs() throws Exception {
         bindItemComponents(Items.IRON_INGOT);
         bindItemComponents(Items.IRON_NUGGET);
@@ -2404,6 +2531,98 @@ class MachineControllerBlockEntityTest {
         return controllerForFormation(machine, controllerPos, Direction.SOUTH, Direction.NORTH, port);
     }
 
+    private static RuntimeSyncFixture serverRuntimeFixture(Identifier machineId, int ticks, int inputCount) throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        ItemInputBusBlockEntity input = itemInputBus(controllerPos.offset(1, 0, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, inputCount));
+        ItemOutputBusBlockEntity output = itemOutputBus(controllerPos.offset(2, 0, 0));
+        setField(ItemBusBlockEntity.class, output, "handler", new ItemStackHandler(6));
+        DynamicMachine machine = new DynamicMachine(machineId, "Runtime Sync", itemInputOutputPattern());
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForItemRuntimeFormation(machine, controllerPos, input, output);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        addItemInputComponent(controller, input);
+        addItemOutputComponent(controller, output);
+        return new RuntimeSyncFixture(controller, levelOf(controller), input, output, machine, ticks);
+    }
+
+    private static MachineControllerBlockEntity controllerForServerFormation(
+            DynamicMachine machine,
+            BlockPos controllerPos,
+            IOPortBlockEntity port) throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        var controllerBlock = testControllerBlock(machine);
+        var controllerState = testControllerState(controllerBlock);
+        setField(BlockEntity.class, controller, "worldPosition", controllerPos);
+        setField(BlockEntity.class, controller, "blockState", controllerState);
+        Map<BlockPos, Block> blocks = new HashMap<>();
+        blocks.put(controllerPos, controllerBlock);
+        blocks.put(port.getBlockPos(), blockForPort(port));
+        CountingServerLevel level = countingServerLevel(blocks, List.of(controller, port));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, port, "level", level);
+        return controller;
+    }
+
+    private static MachineControllerBlockEntity controllerForServerItemRuntimeFormation(
+            DynamicMachine machine,
+            BlockPos controllerPos,
+            ItemInputBusBlockEntity input,
+            ItemOutputBusBlockEntity output) throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        var controllerBlock = testControllerBlock(machine);
+        var controllerState = testControllerState(controllerBlock);
+        setField(BlockEntity.class, controller, "worldPosition", controllerPos);
+        setField(BlockEntity.class, controller, "blockState", controllerState);
+        Map<BlockPos, Block> blocks = new HashMap<>();
+        blocks.put(controllerPos, controllerBlock);
+        blocks.put(input.getBlockPos(), cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
+        blocks.put(output.getBlockPos(), cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_output_bus").get());
+        CountingServerLevel level = countingServerLevel(blocks, List.of(controller, input, output));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, input, "level", level);
+        setField(BlockEntity.class, output, "level", level);
+        return controller;
+    }
+
+    private static MachineControllerBlockEntity controllerForServerFactoryFormation(
+            DynamicMachine machine,
+            BlockPos controllerPos,
+            FactorySchedulerBlockEntity factory) throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        var controllerBlock = testControllerBlock(machine);
+        var controllerState = testControllerState(controllerBlock);
+        setField(BlockEntity.class, controller, "worldPosition", controllerPos);
+        setField(BlockEntity.class, controller, "blockState", controllerState);
+        Map<BlockPos, Block> blocks = new HashMap<>();
+        blocks.put(controllerPos, controllerBlock);
+        blocks.put(factory.getBlockPos(), cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("factory_controller").get());
+        CountingServerLevel level = countingServerLevel(blocks, List.of(controller, factory));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, factory, "level", level);
+        return controller;
+    }
+
+    private static DynamicMachine factoryOnlyMachine(Identifier machineId, int threadLimit) {
+        DynamicMachine machine = new DynamicMachine(
+                machineId,
+                "Factory Runtime Sync",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("factory_controller").get()),
+                MachineControllerSpec.defaultsFor(machineId),
+                PortRequirementSpec.none(),
+                List.of(),
+                Map.of(),
+                1,
+                false,
+                true,
+                threadLimit);
+        MachineRegistry.register(machine);
+        return machine;
+    }
+
     private static MachineControllerBlockEntity controllerForFormation(
             DynamicMachine machine,
             BlockPos controllerPos,
@@ -2474,6 +2693,57 @@ class MachineControllerBlockEntityTest {
         setField(TestServerLevel.class, level, "blockEntities", blockEntities.stream()
                 .collect(java.util.stream.Collectors.toMap(BlockEntity::getBlockPos, entity -> entity)));
         return level;
+    }
+
+    private static CountingServerLevel countingServerLevel(Map<BlockPos, Block> blocks, List<BlockEntity> blockEntities) throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        CountingServerLevel level = (CountingServerLevel) ((sun.misc.Unsafe) unsafeField.get(null))
+                .allocateInstance(CountingServerLevel.class);
+        setField(TestServerLevel.class, level, "blocks", new HashMap<>(blocks.entrySet().stream()
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().defaultBlockState()))));
+        setField(TestServerLevel.class, level, "blockEntities", blockEntities.stream()
+                .collect(java.util.stream.Collectors.toMap(BlockEntity::getBlockPos, entity -> entity)));
+        setField(CountingServerLevel.class, level, "directSignals", new HashMap<>());
+        return level;
+    }
+
+    private static void setDirectSignal(ServerLevel level, BlockPos pos, int signal) throws Exception {
+        Map<BlockPos, Integer> directSignals = (Map<BlockPos, Integer>) fieldValue(CountingServerLevel.class, level, "directSignals");
+        directSignals.put(pos, signal);
+    }
+
+    private static int blockUpdateCount(Level level) {
+        return ((CountingServerLevel) level).blockUpdates;
+    }
+
+    private static void fillOutputBus(ItemOutputBusBlockEntity outputBus, Item item) {
+        for (int slot = 0; slot < outputBus.getItemStackHandler(null).getSlots(); slot++) {
+            outputBus.getItemStackHandler(null).setStackInSlot(slot, new ItemStack(item, 64));
+        }
+    }
+
+    private static void startFiniteFactoryLane(FactorySchedulerBlockEntity factory, int ticks) throws Exception {
+        Field schedulerField = FactorySchedulerBlockEntity.class.getDeclaredField("scheduler");
+        schedulerField.setAccessible(true);
+        cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler scheduler =
+                (cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler) schedulerField.get(factory);
+        assertThat(scheduler.startLane(new cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler.Lane() {
+            private int remaining = ticks;
+
+            @Override
+            public boolean tick() {
+                return --remaining <= 0;
+            }
+
+            @Override
+            public boolean tick(long gameTime) {
+                return tick();
+            }
+
+            @Override
+            public void stop() { }
+        })).isTrue();
     }
 
     private static MachineControllerBlockEntity controllerForParallelFormation(
@@ -2721,6 +2991,12 @@ class MachineControllerBlockEntityTest {
         method.invoke(controller, factory);
     }
 
+    private static void invokeSyncRuntimeStateIfChanged(MachineControllerBlockEntity controller) throws Exception {
+        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("syncRuntimeStateIfChanged");
+        method.setAccessible(true);
+        method.invoke(controller);
+    }
+
     private static void invokeCollectFoundModifiers(
             MachineControllerBlockEntity controller,
             Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) throws Exception {
@@ -2775,13 +3051,20 @@ class MachineControllerBlockEntityTest {
                                          FactorySchedulerBlockEntity factory,
                                          ItemInputBusBlockEntity inputBus,
                                          ItemOutputBusBlockEntity outputBus,
-                                          DynamicMachine machine) { }
+                                           DynamicMachine machine) { }
+
+    private record RuntimeSyncFixture(MachineControllerBlockEntity controller,
+                                      Level level,
+                                      ItemInputBusBlockEntity inputBus,
+                                      ItemOutputBusBlockEntity outputBus,
+                                      DynamicMachine machine,
+                                      int ticks) { }
 
     private record ControllerPairFixture(MachineControllerBlockEntity first,
                                          MachineControllerBlockEntity second,
                                          ServerLevel level) { }
 
-    private static final class TestServerLevel extends ServerLevel {
+    private static class TestServerLevel extends ServerLevel {
         private Map<BlockPos, BlockState> blocks;
         private Map<BlockPos, BlockEntity> blockEntities;
 
@@ -2817,6 +3100,21 @@ class MachineControllerBlockEntityTest {
         @Override public boolean hasChunk(int chunkX, int chunkZ) { return true; }
 
         @Override public void invalidateCapabilities(BlockPos pos) { }
+    }
+
+    private static final class CountingServerLevel extends TestServerLevel {
+        private Map<BlockPos, Integer> directSignals;
+        private int blockUpdates;
+
+        private CountingServerLevel() { }
+
+        @Override public int getDirectSignalTo(BlockPos pos) {
+            return directSignals.getOrDefault(pos, 0);
+        }
+
+        @Override public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) {
+            blockUpdates++;
+        }
     }
 
     private static TestSoundController controllerWithFinalTickResult(ActiveMachineRecipe.TickStatus status) throws Exception {
