@@ -12,6 +12,8 @@ import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
@@ -239,6 +241,30 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.getComponents()).hasSize(1);
         assertThat(controller.getComponents().getFirst().getContainer()).isInstanceOf(ParallelControllerBlockEntity.class);
         assertThat(controller.getMaxParallelism()).isEqualTo(16);
+    }
+
+    @Test
+    void formed_structure_binds_smart_interfaces_before_rebuilding_components_and_unbinds_when_invalid() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        Identifier machineId = MMCR.id("smart_interface_binding_machine");
+        MachineDefinitions.register(MachineRegistration.builder(machineId)
+                .localizedName("Smart Interface Binding")
+                .smartInterfaceType(new SmartInterfaceType("mode", 3F, 1, "", "", "", "", "", 0))
+                .build());
+        var machine = new DynamicMachine(machineId, "Smart Interface Binding",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.SMART_INTERFACE.get()));
+        var smartInterface = (SmartInterfaceBlockEntity) cn.howxu.mmcr.registry.ModBlockEntities.SMART_INTERFACE.get().create(
+                controllerPos.offset(1, 0, 0), cn.howxu.mmcr.registry.ModBlocks.SMART_INTERFACE.get().defaultBlockState());
+        MachineControllerBlockEntity controller = controllerForSmartInterfaceFormation(machine, controllerPos, smartInterface);
+
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        assertThat(smartInterface.bindingFor(controllerPos)).contains(new SmartInterfaceBlockEntity.Binding(
+                controllerPos, machineId, "mode", 3F));
+        assertThat(controller.getComponents()).extracting(ProcessingComponent::getContainer).contains(smartInterface);
+
+        invokeResetMachine(controller);
+
+        assertThat(smartInterface.bindingFor(controllerPos)).isEmpty();
     }
 
     @Test
@@ -2468,6 +2494,21 @@ class MachineControllerBlockEntityTest {
         Level level = LevelStub.create(blocks, List.of(controller, parallel));
         setField(BlockEntity.class, controller, "level", level);
         setField(BlockEntity.class, parallel, "level", level);
+        return controller;
+    }
+
+    private static MachineControllerBlockEntity controllerForSmartInterfaceFormation(
+            DynamicMachine machine, BlockPos controllerPos, SmartInterfaceBlockEntity smartInterface) throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        var controllerBlock = testControllerBlock(machine);
+        setField(BlockEntity.class, controller, "worldPosition", controllerPos);
+        setField(BlockEntity.class, controller, "blockState", testControllerState(controllerBlock));
+        Level level = LevelStub.create(Map.of(
+                controllerPos, controllerBlock,
+                smartInterface.getBlockPos(), cn.howxu.mmcr.registry.ModBlocks.SMART_INTERFACE.get()), List.of(controller, smartInterface));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, smartInterface, "level", level);
         return controller;
     }
 

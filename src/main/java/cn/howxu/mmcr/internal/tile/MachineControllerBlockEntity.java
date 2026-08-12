@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.BlockArrayCache;
 import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
@@ -30,6 +31,7 @@ import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
+import cn.howxu.mmcr.internal.multiblock.SmartInterfaceBindingCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -818,13 +820,36 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private void updateComponents() {
+        List<SmartInterfaceBlockEntity> previousSmartInterfaces = components.stream()
+                .map(ProcessingComponent::getContainer)
+                .filter(SmartInterfaceBlockEntity.class::isInstance)
+                .map(SmartInterfaceBlockEntity.class::cast)
+                .toList();
         components.clear();
         if (level == null || foundMachine == null || foundPattern == null) return;
 
         unlinkLinkedPorts();
 
+        List<SmartInterfaceBlockEntity> smartInterfaces = new ArrayList<>();
+        for (BlockPos relativePos : componentPositions()) {
+            if (level.getBlockEntity(getBlockPos().offset(relativePos)) instanceof SmartInterfaceBlockEntity smartInterface) {
+                smartInterfaces.add(smartInterface);
+            }
+        }
+        var registration = MachineDefinitions.getRegistration(foundMachine.registryName());
+        if (registration != null) {
+            new SmartInterfaceBindingCoordinator(Map.of()).unbindAll(this, previousSmartInterfaces.stream()
+                    .filter(smartInterface -> !smartInterfaces.contains(smartInterface))
+                    .toList());
+            new SmartInterfaceBindingCoordinator(registration.smartInterfaceTypes()).reconcile(this, smartInterfaces);
+        }
+
         for (BlockPos relativePos : componentPositions()) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
+            if (level.getBlockEntity(worldPos) instanceof SmartInterfaceBlockEntity smartInterface) {
+                components.add(new ProcessingComponent(null, smartInterface, worldPos, relativePos, foundPattern.tagsAt(relativePos), null));
+                continue;
+            }
             if (level.getBlockEntity(worldPos) instanceof ParallelControllerBlockEntity parallel) {
                 components.add(new ProcessingComponent(null, parallel, worldPos, relativePos, foundPattern.tagsAt(relativePos), null));
                 continue;
@@ -1039,6 +1064,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         boolean hadActive = active != null;
         Identifier activeRecipe = hadActive ? active.getRecipe().id() : null;
         releaseStructureClaims();
+        unbindSmartInterfaces();
         unlinkLinkedPorts();
         stopFactoryController();
         foundMachine = null;
@@ -1075,6 +1101,17 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         clearCandidateCache();
         if (wasFormed) setFormed(false);
         setChanged();
+    }
+
+    private void unbindSmartInterfaces() {
+        if (level == null || foundPattern == null) return;
+        List<SmartInterfaceBlockEntity> smartInterfaces = new ArrayList<>();
+        for (BlockPos relativePos : componentPositions()) {
+            if (level.getBlockEntity(getBlockPos().offset(relativePos)) instanceof SmartInterfaceBlockEntity smartInterface) {
+                smartInterfaces.add(smartInterface);
+            }
+        }
+        new SmartInterfaceBindingCoordinator(Map.of()).unbindAll(this, smartInterfaces);
     }
 
     public void releaseStructureClaims() {
