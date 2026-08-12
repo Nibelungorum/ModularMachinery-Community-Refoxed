@@ -4,7 +4,9 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
 import net.minecraft.resources.Identifier;
 
@@ -28,6 +30,8 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient Identifier controllerBaseTexture;
     public transient Identifier formedPortBaseTexture;
     private final List<SmartInterfaceType> smartInterfaceTypes = new ArrayList<>();
+    private boolean shareSmartInterfaces;
+    private final List<SmartInterfaceModifier> smartInterfaceModifiers = new ArrayList<>();
 
     public MachineBuilderJS(Identifier id) {
         super(id);
@@ -52,8 +56,10 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .allowModifiers(allowModifiers)
                 .allowMultithreading(allowMultithreading)
                 .allowParallelism(allowParallelism)
-                .maxParallelAmount(maxParallelAmount);
+                .maxParallelAmount(maxParallelAmount)
+                .shareSmartInterfaces(shareSmartInterfaces);
         smartInterfaceTypes.forEach(registration::smartInterfaceType);
+        smartInterfaceModifiers.forEach(registration::smartInterfaceModifier);
         return registration.build();
     }
 
@@ -208,6 +214,103 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return new SmartInterfaceTypeBuilderJS(this, type, defaultValue);
     }
 
+    public MachineBuilderJS shareSmartInterface() {
+        return shareSmartInterface(true);
+    }
+
+    public MachineBuilderJS shareSmartInterface(boolean share) {
+        this.shareSmartInterfaces = share;
+        return this;
+    }
+
+    public MachineBuilderJS durationByInterface(String type, float min, float max, float atMin, float atMax) {
+        return durationByInterface(type, min, max, atMin, atMax, RecipeModifier.Operation.MULTIPLY);
+    }
+
+    public MachineBuilderJS durationByInterface(String type, float min, float max, float atMin, float atMax,
+            RecipeModifier.Operation operation) {
+        smartInterfaceModifiers.add(SmartInterfaceModifier.duration(type, min, max, atMin, atMax, operation));
+        return this;
+    }
+
+    public MachineBuilderJS energyByInterface(String type, float min, float max, float atMin, float atMax) {
+        return energyByInterface(type, min, max, atMin, atMax, RecipeModifier.Operation.MULTIPLY);
+    }
+
+    public MachineBuilderJS energyByInterface(String type, float min, float max, float atMin, float atMax,
+            RecipeModifier.Operation operation) {
+        smartInterfaceModifiers.add(SmartInterfaceModifier.energy(type, min, max, atMin, atMax, operation));
+        return this;
+    }
+
+    public MachineBuilderJS itemInputByInterface(String type, float min, float max, float atMin, float atMax) {
+        return itemByInterface(type, RecipeModifier.IOType.INPUT, false, min, max, atMin, atMax,
+                RecipeModifier.Operation.MULTIPLY);
+    }
+
+    public MachineBuilderJS itemOutputByInterface(String type, float min, float max, float atMin, float atMax) {
+        return itemByInterface(type, RecipeModifier.IOType.OUTPUT, false, min, max, atMin, atMax,
+                RecipeModifier.Operation.MULTIPLY);
+    }
+
+    public MachineBuilderJS itemInputChanceByInterface(String type, float min, float max, float atMin, float atMax) {
+        return itemInputChanceByInterface(type, min, max, atMin, atMax, RecipeModifier.Operation.MULTIPLY);
+    }
+
+    public MachineBuilderJS itemInputChanceByInterface(String type, float min, float max, float atMin, float atMax,
+            RecipeModifier.Operation operation) {
+        return itemByInterface(type, RecipeModifier.IOType.INPUT, true, min, max, atMin, atMax, operation);
+    }
+
+    public MachineBuilderJS itemOutputChanceByInterface(String type, float min, float max, float atMin, float atMax) {
+        return itemOutputChanceByInterface(type, min, max, atMin, atMax, RecipeModifier.Operation.MULTIPLY);
+    }
+
+    public MachineBuilderJS itemOutputChanceByInterface(String type, float min, float max, float atMin, float atMax,
+            RecipeModifier.Operation operation) {
+        return itemByInterface(type, RecipeModifier.IOType.OUTPUT, true, min, max, atMin, atMax, operation);
+    }
+
+    public MachineBuilderJS fluidInputByInterface(String type, float min, float max, float atMin, float atMax) {
+        return fluidByInterface(type, RecipeModifier.IOType.INPUT, false, min, max, atMin, atMax,
+                RecipeModifier.Operation.MULTIPLY);
+    }
+
+    public MachineBuilderJS fluidOutputByInterface(String type, float min, float max, float atMin, float atMax) {
+        return fluidByInterface(type, RecipeModifier.IOType.OUTPUT, false, min, max, atMin, atMax,
+                RecipeModifier.Operation.MULTIPLY);
+    }
+
+    public MachineBuilderJS fluidInputChanceByInterface(String type, float min, float max, float atMin, float atMax) {
+        return fluidInputChanceByInterface(type, min, max, atMin, atMax, RecipeModifier.Operation.MULTIPLY);
+    }
+
+    public MachineBuilderJS fluidInputChanceByInterface(String type, float min, float max, float atMin, float atMax,
+            RecipeModifier.Operation operation) {
+        return fluidByInterface(type, RecipeModifier.IOType.INPUT, true, min, max, atMin, atMax, operation);
+    }
+
+    public MachineBuilderJS fluidOutputChanceByInterface(String type, float min, float max, float atMin, float atMax) {
+        return fluidOutputChanceByInterface(type, min, max, atMin, atMax, RecipeModifier.Operation.MULTIPLY);
+    }
+
+    public MachineBuilderJS fluidOutputChanceByInterface(String type, float min, float max, float atMin, float atMax,
+            RecipeModifier.Operation operation) {
+        return fluidByInterface(type, RecipeModifier.IOType.OUTPUT, true, min, max, atMin, atMax, operation);
+    }
+
+    private MachineBuilderJS itemByInterface(String type, RecipeModifier.IOType io, boolean chance, float min, float max,
+            float atMin, float atMax, RecipeModifier.Operation operation) {
+        smartInterfaceModifiers.add(SmartInterfaceModifier.item(type, io, chance, min, max, atMin, atMax, operation));
+        return this;
+    }
+
+    private MachineBuilderJS fluidByInterface(String type, RecipeModifier.IOType io, boolean chance, float min,
+            float max, float atMin, float atMax, RecipeModifier.Operation operation) {
+        smartInterfaceModifiers.add(SmartInterfaceModifier.fluid(type, io, chance, min, max, atMin, atMax, operation));
+        return this;
+    }
+
     public void registerObject() {
         MachineDefinitions.register(createObject());
     }
@@ -251,6 +354,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         private String notEqualMessage = "";
         private String jeiTooltip = "";
         private int jeiTooltipArgsCount;
+        private SmartInterfaceType.ValueType valueType = SmartInterfaceType.ValueType.FLOAT;
 
         private SmartInterfaceTypeBuilderJS(MachineBuilderJS parent, String type, float defaultValue) {
             this.parent = parent;
@@ -293,9 +397,14 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
             return this;
         }
 
+        public SmartInterfaceTypeBuilderJS valueType(String valueType) {
+            this.valueType = SmartInterfaceType.ValueType.byName(valueType);
+            return this;
+        }
+
         public MachineBuilderJS end() {
             parent.smartInterfaceTypes.add(new SmartInterfaceType(type, defaultValue, priority, headerInfo, valueInfo,
-                    footerInfo, notEqualMessage, jeiTooltip, jeiTooltipArgsCount));
+                    footerInfo, notEqualMessage, jeiTooltip, jeiTooltipArgsCount, valueType));
             return parent;
         }
     }

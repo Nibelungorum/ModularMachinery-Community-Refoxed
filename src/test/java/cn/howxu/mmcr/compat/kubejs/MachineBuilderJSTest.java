@@ -4,6 +4,9 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.SmartInterfaceType;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.BeforeAll;
@@ -139,6 +142,33 @@ class MachineBuilderJSTest {
                 .createObject();
 
         assertThat(registration.smartInterfaceTypes().get("speed").priority()).isEqualTo(10);
+    }
+
+    @Test
+    void builder_declares_shared_integer_smart_interface() {
+        var registration = new MachineBuilderJS("mmcr:shared_interface_builder")
+                .shareSmartInterface()
+                .smartInterface("batch", 2F).valueType("integer").end()
+                .createObject();
+
+        assertThat(registration.shareSmartInterfaces()).isTrue();
+        assertThat(registration.smartInterfaceTypes().get("batch").valueType())
+                .isEqualTo(SmartInterfaceType.ValueType.INTEGER);
+    }
+
+    @Test
+    void builder_declares_interface_driven_modifiers() {
+        var registration = new MachineBuilderJS("mmcr:interface_modifier_builder")
+                .durationByInterface("temperature", 0F, 100F, 2F, 0.5F)
+                .itemOutputChanceByInterface("temperature", 0F, 100F, 0.25F, 1F, RecipeModifier.Operation.ADD)
+                .createObject();
+
+        assertThat(registration.smartInterfaceModifiers()).hasSize(2);
+        assertThat(registration.smartInterfaceModifiers().get(0).toRecipeModifier(100F).getTarget())
+                .isEqualTo(IntegrationTypeHelper.TARGET_DURATION);
+        assertThat(registration.smartInterfaceModifiers().get(1).toRecipeModifier(100F)).isEqualTo(new RecipeModifier(
+                IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.OUTPUT, 1F,
+                RecipeModifier.Operation.ADD, true));
     }
 
     @Test
