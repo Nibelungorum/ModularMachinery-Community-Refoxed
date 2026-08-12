@@ -4,12 +4,17 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+
+import java.lang.reflect.Method;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -132,6 +137,18 @@ class MachineBuilderJSTest {
     }
 
     @Test
+    void startup_builder_preserves_existing_and_registered_sound_ids() throws Exception {
+        MachineRegistration registration = new MachineBuilderJS(MMCR.id("sound_press"))
+                .registerRunningSound("mmcr:machine.press.loop")
+                .finishSound(Identifier.parse("minecraft:block.anvil.land"))
+                .createObject();
+
+        assertThat(registration.runningSoundId()).isEqualTo(MMCR.id("machine.press.loop"));
+        assertThat(registration.finishSoundId()).isEqualTo(Identifier.parse("minecraft:block.anvil.land"));
+        assertThat(requestedMachineSoundIds()).contains(MMCR.id("machine.press.loop"));
+    }
+
+    @Test
     void builder_sets_machine_basic_block_for_all_base_textures() {
         var registration = new MachineBuilderJS("mmcr:electric_press")
                 .localizedName("Electric Press")
@@ -168,5 +185,12 @@ class MachineBuilderJSTest {
         assertThatThrownBy(builder::registerObject)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("registry phase");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Set<Identifier> requestedMachineSoundIds() throws Exception {
+        Method method = MachineSoundRegistry.class.getDeclaredMethod("requestedIds");
+        method.setAccessible(true);
+        return (Set<Identifier>) method.invoke(null);
     }
 }

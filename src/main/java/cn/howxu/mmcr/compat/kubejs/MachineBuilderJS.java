@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
 import net.minecraft.resources.Identifier;
 
@@ -23,6 +24,8 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient Identifier machineBasicBlock;
     public transient Identifier controllerBaseTexture;
     public transient Identifier formedPortBaseTexture;
+    public transient Identifier runningSoundId;
+    public transient Identifier finishSoundId;
 
     public MachineBuilderJS(Identifier id) {
         super(id);
@@ -48,7 +51,47 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .allowMultithreading(allowMultithreading)
                 .allowParallelism(allowParallelism)
                 .maxParallelAmount(maxParallelAmount)
+                .runningSound(runningSoundId)
+                .finishSound(finishSoundId)
                 .build();
+    }
+
+    public MachineBuilderJS runningSound(String soundId) {
+        return runningSound(Identifier.parse(soundId));
+    }
+
+    public MachineBuilderJS runningSound(Identifier soundId) {
+        this.runningSoundId = soundId;
+        return this;
+    }
+
+    public MachineBuilderJS finishSound(String soundId) {
+        return finishSound(Identifier.parse(soundId));
+    }
+
+    public MachineBuilderJS finishSound(Identifier soundId) {
+        this.finishSoundId = soundId;
+        return this;
+    }
+
+    public MachineBuilderJS registerRunningSound(String soundId) {
+        return registerRunningSound(Identifier.parse(soundId));
+    }
+
+    public MachineBuilderJS registerRunningSound(Identifier soundId) {
+        this.runningSoundId = soundId;
+        MachineSoundRegistry.requestRegistration(soundId);
+        return this;
+    }
+
+    public MachineBuilderJS registerFinishSound(String soundId) {
+        return registerFinishSound(Identifier.parse(soundId));
+    }
+
+    public MachineBuilderJS registerFinishSound(Identifier soundId) {
+        this.finishSoundId = soundId;
+        MachineSoundRegistry.requestRegistration(soundId);
+        return this;
     }
 
     public MachineBuilderJS controllerTextures(String front, String otherFive) {
