@@ -1,3 +1,9 @@
+智能接口的UI 上一个和下一个
+
+KubeJS tag+data组合拳 以及游戏内注册测试tag和tag带data (估计又是一天时间过去了)
+
+test和gametest没跑完
+
 实施计划已完成并保存至：
 docs/superpowers/plans/2026-08-11-smart-interface-implementation.md
 计划分为 7 个可独立验证和提交的任务：类型声明、方块实体持久化、结构绑定、配方需求、菜单与网络、KubeJS/JEI 集成、资源与端到端验证。

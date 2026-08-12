@@ -42,6 +42,15 @@ class RecipeRegistryTest {
         assertThat(RecipeRegistry.reloadVersion()).isGreaterThan(version);
     }
 
+    @Test
+    void registeringStaticRecipeAdvancesReloadVersion() {
+        long version = RecipeRegistry.reloadVersion();
+
+        RecipeRegistry.register(recipe("mmcr:static_reload_recipe", "mmcr:static_reload_machine"));
+
+        assertThat(RecipeRegistry.reloadVersion()).isGreaterThan(version);
+    }
+
     private static MachineRecipe recipe(String id, String machineId) {
         return new MachineRecipe(Identifier.parse(id), Identifier.parse(machineId), 1, List.of(), List.of());
     }

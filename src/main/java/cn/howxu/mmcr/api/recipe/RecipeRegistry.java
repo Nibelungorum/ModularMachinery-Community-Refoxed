@@ -33,6 +33,7 @@ public final class RecipeRegistry {
         }
         STATIC_RECIPES.put(recipe.id(), recipe);
         rebuildIndex();
+        reloadVersion++;
     }
 
     public static MachineRecipe getRecipe(Identifier id) {
