@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.block;
 
 import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
+import cn.howxu.mmcr.internal.menu.SmartInterfaceMenu;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
@@ -39,7 +40,8 @@ public class SmartInterfaceBlock extends Block implements EntityBlock {
 
     @Override
     public MenuProvider getMenuProvider(BlockState state, Level level, BlockPos pos) {
-        return new SimpleMenuProvider((containerId, playerInv, player) -> null,
+        return new SimpleMenuProvider((containerId, playerInv, player) -> new SmartInterfaceMenu(containerId, playerInv,
+                level.getBlockEntity(pos) instanceof SmartInterfaceBlockEntity smartInterface ? smartInterface : null),
                 Component.translatable("container.mmcr.smart_interface"));
     }
 

@@ -18,6 +18,7 @@ import cn.howxu.mmcr.internal.network.PktMachineAppearancePayload;
 import cn.howxu.mmcr.internal.network.PktControllerSpecsPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockDetectorPickPayload;
 import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
+import cn.howxu.mmcr.internal.network.PktSmartInterfaceUpdatePayload;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModDataComponents;
@@ -109,10 +110,14 @@ public class MMCR {
                             PktMachineAppearancePayload.TYPE,
                             PktMachineAppearancePayload.STREAM_CODEC,
                             PktMachineAppearancePayload::handle)
-                    .playToServer(
-                            PktMultiblockDetectorPickPayload.TYPE,
-                            PktMultiblockDetectorPickPayload.STREAM_CODEC,
-                            PktMultiblockDetectorPickPayload::handle);
+                     .playToServer(
+                             PktMultiblockDetectorPickPayload.TYPE,
+                             PktMultiblockDetectorPickPayload.STREAM_CODEC,
+                             PktMultiblockDetectorPickPayload::handle)
+                     .playToServer(
+                             PktSmartInterfaceUpdatePayload.TYPE,
+                             PktSmartInterfaceUpdatePayload.STREAM_CODEC,
+                             PktSmartInterfaceUpdatePayload::handle);
         });
         modBus.addListener((RegisterGameTestsEvent ev) -> registerGameTests(ev));
         CREATIVE_TABS.register(MODID, () -> CreativeModeTab.builder()
