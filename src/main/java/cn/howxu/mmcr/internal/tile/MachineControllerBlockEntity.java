@@ -120,6 +120,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private long lastRecipeModifierSnapshotVersion = Long.MIN_VALUE;
     private boolean recipeDirty = true;
     private @Nullable StructureClaimRegistry.ResourceDomain resourceDomain;
+    private Set<BlockPos> linkedAppearancePositions = new HashSet<>();
     private boolean sharedStartPending;
     private @Nullable RecipeCraftingContext pendingSharedStartContext;
     private @Nullable StructureClaimRegistry.ResourceDomain pendingSharedStartDomain;
@@ -278,11 +279,11 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     public boolean hasLinkedPort(BlockPos portPos) {
-        return linkedPortPositions != null && linkedPortPositions.contains(portPos);
+        return linkedAppearancePositions().contains(portPos);
     }
 
     public void resetLinkedPortAppearances() {
-        unlinkLinkedPorts();
+        unlinkLinkedAppearances();
     }
 
     public long totalStoredEnergy() {
@@ -844,13 +845,18 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             new SmartInterfaceBindingCoordinator(registration.smartInterfaceTypes()).reconcile(this, smartInterfaces);
         }
 
+        Identifier formedTexture = foundMachine.appearance().formedPortBaseTexture();
         for (BlockPos relativePos : componentPositions()) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
             if (level.getBlockEntity(worldPos) instanceof SmartInterfaceBlockEntity smartInterface) {
+                smartInterface.linkControllerAppearance(getBlockPos(), formedTexture);
+                linkedAppearancePositions().add(worldPos.immutable());
                 components.add(new ProcessingComponent(null, smartInterface, worldPos, relativePos, foundPattern.tagsAt(relativePos), null));
                 continue;
             }
             if (level.getBlockEntity(worldPos) instanceof ParallelControllerBlockEntity parallel) {
+                parallel.linkControllerAppearance(getBlockPos(), formedTexture);
+                linkedAppearancePositions().add(worldPos.immutable());
                 components.add(new ProcessingComponent(null, parallel, worldPos, relativePos, foundPattern.tagsAt(relativePos), null));
                 continue;
             }
@@ -861,9 +867,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             if (!(level.getBlockEntity(worldPos) instanceof MachineComponentTile tile)) continue;
 
             if (tile instanceof IOPortBlockEntity port) {
-                Identifier formedTexture = foundMachine.appearance().formedPortBaseTexture();
                 port.linkControllerAppearance(getBlockPos(), formedTexture);
-                linkedPortPositions().add(worldPos.immutable());
+                linkedAppearancePositions().add(worldPos.immutable());
             }
             var component = tile.provideComponent();
             if (!(tile instanceof BlockEntity container)) continue;
@@ -872,30 +877,44 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private void unlinkLinkedPorts() {
-        Set<BlockPos> linkedPortPositions = linkedPortPositions();
+        unlinkLinkedAppearances();
+    }
+
+    private void unlinkLinkedAppearances() {
+        Set<BlockPos> linkedAppearancePositions = linkedAppearancePositions();
         if (level == null) {
-            linkedPortPositions.clear();
+            linkedAppearancePositions.clear();
             return;
         }
         if (foundPattern != null) {
             for (BlockPos relativePos : componentPositions()) {
                 BlockEntity entity = level.getBlockEntity(getBlockPos().offset(relativePos));
-                if (entity instanceof IOPortBlockEntity port) {
-                    port.unlinkControllerAppearance(getBlockPos());
+                if (entity instanceof LinkedAppearanceBlockEntity linkedAppearance) {
+                    linkedAppearance.unlinkControllerAppearance(getBlockPos());
                 }
             }
         }
-        for (BlockPos portPos : linkedPortPositions) {
-            if (level.getBlockEntity(portPos) instanceof IOPortBlockEntity port) {
-                port.unlinkControllerAppearance(getBlockPos());
+        for (BlockPos linkedPos : linkedAppearancePositions) {
+            if (level.getBlockEntity(linkedPos) instanceof LinkedAppearanceBlockEntity linkedAppearance) {
+                linkedAppearance.unlinkControllerAppearance(getBlockPos());
             }
         }
-        linkedPortPositions.clear();
+        linkedAppearancePositions.clear();
     }
 
     private Set<BlockPos> linkedPortPositions() {
-        if (linkedPortPositions == null) linkedPortPositions = new HashSet<>();
-        return linkedPortPositions;
+        return linkedAppearancePositions();
+    }
+
+    private Set<BlockPos> linkedAppearancePositions() {
+        if (linkedAppearancePositions == null) {
+            if (linkedPortPositions == null) {
+                linkedAppearancePositions = new HashSet<>();
+            } else {
+                linkedAppearancePositions = new HashSet<>(linkedPortPositions);
+            }
+        }
+        return linkedAppearancePositions;
     }
 
     private List<BlockPos> componentPositions() {

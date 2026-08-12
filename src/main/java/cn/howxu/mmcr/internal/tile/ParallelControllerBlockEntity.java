@@ -3,7 +3,6 @@ package cn.howxu.mmcr.internal.tile;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
@@ -11,7 +10,7 @@ import net.minecraft.world.level.storage.ValueOutput;
 /**
  * @author howxu <dev@howxu.cn>
  */
-public class ParallelControllerBlockEntity extends BlockEntity {
+public class ParallelControllerBlockEntity extends LinkedAppearanceBlockEntity {
 
     private final ParallelTier tier;
     private int currentParallelism;
