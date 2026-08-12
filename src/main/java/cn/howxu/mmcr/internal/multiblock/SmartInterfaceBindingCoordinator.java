@@ -9,9 +9,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Reconciles smart-interface bindings against one formed controller structure.
@@ -20,48 +18,35 @@ import java.util.Set;
  */
 public final class SmartInterfaceBindingCoordinator {
     private final Map<String, SmartInterfaceType> types;
+    private final boolean shared;
 
     public SmartInterfaceBindingCoordinator(Map<String, SmartInterfaceType> types) {
+        this(types, false);
+    }
+
+    public SmartInterfaceBindingCoordinator(Map<String, SmartInterfaceType> types, boolean shared) {
         this.types = Collections.unmodifiableMap(new LinkedHashMap<>(types));
+        this.shared = shared;
     }
 
     public void reconcile(MachineControllerBlockEntity controller, Collection<SmartInterfaceBlockEntity> interfaces) {
         BlockPos controllerPos = controller.getBlockPos();
         var controllerAppearance = controller.getFoundMachine().appearance().formedPortBaseTexture();
         var ordered = interfaces.stream().sorted(Comparator.comparing(SmartInterfaceBlockEntity::getBlockPos)).toList();
-        Set<String> usedTypes = new LinkedHashSet<>();
         for (SmartInterfaceBlockEntity smartInterface : ordered) {
-            var binding = smartInterface.bindingFor(controllerPos);
-            if (binding.isPresent() && (!binding.get().machineId().equals(controller.getFoundMachine().registryName())
-                    || !types.containsKey(binding.get().type()))) {
-                smartInterface.unbind(controllerPos);
-                smartInterface.unlinkControllerAppearance(controllerPos);
-            } else {
-                binding.ifPresent(value -> {
-                    usedTypes.add(value.type());
-                    smartInterface.linkControllerAppearance(controllerPos, controllerAppearance);
-                });
+            if (smartInterface.machineId().isPresent() && !smartInterface.machineId().orElseThrow().equals(controller.getFoundMachine().registryName())) {
+                continue;
             }
-        }
-
-        SmartInterfaceType fallback = types.values().stream()
-                .max(Comparator.comparingInt(SmartInterfaceType::priority).thenComparing(SmartInterfaceType::type))
-                .orElse(null);
-        for (SmartInterfaceBlockEntity smartInterface : ordered) {
-            if (smartInterface.bindingFor(controllerPos).isPresent()) continue;
-            SmartInterfaceType type = types.values().stream().filter(candidate -> !usedTypes.contains(candidate.type()))
-                    .findFirst().orElse(fallback);
-            if (type != null && smartInterface.bind(controllerPos, controller.getFoundMachine().registryName(), type.type(), type.defaultValue())) {
-                usedTypes.add(type.type());
+            if (smartInterface.claimController(controllerPos, controller.getFoundMachine().registryName(), types, shared)) {
                 smartInterface.linkControllerAppearance(controllerPos, controllerAppearance);
+                return;
             }
         }
     }
 
     public void unbindAll(MachineControllerBlockEntity controller, Collection<SmartInterfaceBlockEntity> interfaces) {
         for (SmartInterfaceBlockEntity smartInterface : interfaces) {
-            smartInterface.unbind(controller.getBlockPos());
-            smartInterface.unlinkControllerAppearance(controller.getBlockPos());
+            smartInterface.releaseController(controller.getBlockPos());
         }
     }
 }

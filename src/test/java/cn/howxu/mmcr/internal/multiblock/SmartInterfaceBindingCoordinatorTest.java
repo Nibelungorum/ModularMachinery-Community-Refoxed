@@ -31,38 +31,42 @@ class SmartInterfaceBindingCoordinatorTest {
     }
 
     @Test
-    void reconcile_uses_unused_types_before_the_highest_priority_fallback() throws Exception {
-        var types = types(
-                type("low", 1F, 1),
-                type("high", 2F, 10));
-        var first = smartInterface(new BlockPos(3, 0, 0));
-        var second = smartInterface(new BlockPos(1, 0, 0));
-        var third = smartInterface(new BlockPos(2, 0, 0));
+    void reconcile_claims_all_machine_parameters_on_one_interface() throws Exception {
+        var smartInterface = smartInterface(new BlockPos(1, 0, 0));
 
-        new SmartInterfaceBindingCoordinator(types).reconcile(controller(), List.of(first, second, third));
+        coordinator(false, type("low", 1F, 1), type("high", 2F, 10))
+                .reconcile(controller(), List.of(smartInterface));
 
-        assertThat(List.of(first.binding(0).orElseThrow().type(), second.binding(0).orElseThrow().type(), third.binding(0).orElseThrow().type()))
-                .containsExactlyInAnyOrder("low", "high", "high");
+        assertThat(smartInterface.parameterTypes()).containsExactly("low", "high");
+        assertThat(smartInterface.value("low")).contains(1F);
+        assertThat(smartInterface.value("high")).contains(2F);
+        assertThat(smartInterface.hasController(BlockPos.ZERO)).isTrue();
     }
 
     @Test
-    void reconcile_retains_valid_bindings_and_replaces_invalid_bindings() throws Exception {
-        var controller = controller();
-        var retained = smartInterface(new BlockPos(1, 0, 0));
-        assertThat(retained.bind(BlockPos.ZERO, MMCR.id("binding_test"), "low", 7F)).isTrue();
+    void default_exclusive_interfaces_reject_second_controller() throws Exception {
+        var smartInterface = smartInterface(new BlockPos(1, 0, 0));
+        var first = controller(BlockPos.ZERO, MMCR.id("binding_test"), MMCR.id("block/basic_casing"));
+        var second = controller(new BlockPos(9, 0, 0), MMCR.id("binding_test"), MMCR.id("block/basic_casing"));
 
-        new SmartInterfaceBindingCoordinator(types(type("low", 1F, 1), type("high", 2F, 10)))
-                .reconcile(controller, List.of(retained));
+        coordinator(false, type("mode", 1F, 0)).reconcile(first, List.of(smartInterface));
+        coordinator(false, type("mode", 1F, 0)).reconcile(second, List.of(smartInterface));
 
-        assertThat(retained.bindingFor(BlockPos.ZERO)).contains(new SmartInterfaceBlockEntity.Binding(
-                BlockPos.ZERO, MMCR.id("binding_test"), "low", 7F));
+        assertThat(smartInterface.controllerPositions()).containsExactly(BlockPos.ZERO);
+    }
 
-        assertThat(retained.unbind(BlockPos.ZERO)).isTrue();
-        assertThat(retained.bind(BlockPos.ZERO, MMCR.id("other"), "missing", 2F)).isTrue();
-        new SmartInterfaceBindingCoordinator(types(type("low", 1F, 1), type("high", 2F, 10)))
-                .reconcile(controller, List.of(retained));
-        assertThat(retained.bindingFor(BlockPos.ZERO)).contains(new SmartInterfaceBlockEntity.Binding(
-                BlockPos.ZERO, MMCR.id("binding_test"), "low", 1F));
+    @Test
+    void shared_interfaces_allow_multiple_controllers_and_one_value_set() throws Exception {
+        var smartInterface = smartInterface(new BlockPos(1, 0, 0));
+        var first = controller(BlockPos.ZERO, MMCR.id("binding_test"), MMCR.id("block/basic_casing"));
+        var second = controller(new BlockPos(9, 0, 0), MMCR.id("binding_test"), MMCR.id("block/basic_casing"));
+
+        coordinator(true, type("mode", 1F, 0)).reconcile(first, List.of(smartInterface));
+        assertThat(smartInterface.setValue("mode", 3F)).isTrue();
+        coordinator(true, type("mode", 1F, 0)).reconcile(second, List.of(smartInterface));
+
+        assertThat(smartInterface.controllerPositions()).containsExactly(BlockPos.ZERO, new BlockPos(9, 0, 0));
+        assertThat(smartInterface.value("mode")).contains(3F);
     }
 
     @Test
@@ -70,12 +74,12 @@ class SmartInterfaceBindingCoordinatorTest {
         var controller = controller();
         var smartInterface = smartInterface(new BlockPos(1, 0, 0));
         assertThat(smartInterface.bind(BlockPos.ZERO, MMCR.id("binding_test"), "low", 1F)).isTrue();
-        assertThat(smartInterface.bind(new BlockPos(9, 0, 0), MMCR.id("other"), "high", 2F)).isTrue();
+        assertThat(smartInterface.bind(new BlockPos(9, 0, 0), MMCR.id("binding_test"), "high", 2F)).isTrue();
 
         new SmartInterfaceBindingCoordinator(Map.of()).unbindAll(controller, List.of(smartInterface));
 
-        assertThat(smartInterface.bindingFor(BlockPos.ZERO)).isEmpty();
-        assertThat(smartInterface.bindingFor(new BlockPos(9, 0, 0))).isPresent();
+        assertThat(smartInterface.hasController(BlockPos.ZERO)).isFalse();
+        assertThat(smartInterface.hasController(new BlockPos(9, 0, 0))).isTrue();
     }
 
     @Test
@@ -106,11 +110,11 @@ class SmartInterfaceBindingCoordinatorTest {
         var secondTexture = MMCR.id("block/other_smart_interface_casing");
         var smartInterface = smartInterface(new BlockPos(1, 0, 0));
         var firstController = controller(BlockPos.ZERO, MMCR.id("binding_test"), firstTexture);
-        var secondController = controller(new BlockPos(9, 0, 0), MMCR.id("other"), secondTexture);
+        var secondController = controller(new BlockPos(9, 0, 0), MMCR.id("binding_test"), secondTexture);
 
         new SmartInterfaceBindingCoordinator(types(type("low", 1F, 1)))
                 .reconcile(firstController, List.of(smartInterface));
-        new SmartInterfaceBindingCoordinator(types(type("high", 2F, 1)))
+        new SmartInterfaceBindingCoordinator(types(type("high", 2F, 1)), true)
                 .reconcile(secondController, List.of(smartInterface));
 
         assertThat(smartInterface.appearanceBaseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
@@ -120,6 +124,10 @@ class SmartInterfaceBindingCoordinatorTest {
         Map<String, SmartInterfaceType> result = new LinkedHashMap<>();
         for (SmartInterfaceType type : types) result.put(type.type(), type);
         return result;
+    }
+
+    private static SmartInterfaceBindingCoordinator coordinator(boolean shared, SmartInterfaceType... types) {
+        return new SmartInterfaceBindingCoordinator(types(types), shared);
     }
 
     private static SmartInterfaceType type(String type, float defaultValue, int priority) {

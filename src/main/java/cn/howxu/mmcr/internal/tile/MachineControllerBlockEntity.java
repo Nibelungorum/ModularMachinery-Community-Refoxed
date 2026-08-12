@@ -899,13 +899,14 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             new SmartInterfaceBindingCoordinator(Map.of()).unbindAll(this, previousSmartInterfaces.stream()
                     .filter(smartInterface -> !smartInterfaces.contains(smartInterface))
                     .toList());
-            new SmartInterfaceBindingCoordinator(registration.smartInterfaceTypes()).reconcile(this, smartInterfaces);
+            new SmartInterfaceBindingCoordinator(registration.smartInterfaceTypes(), registration.shareSmartInterfaces())
+                    .reconcile(this, smartInterfaces);
         }
 
         for (BlockPos relativePos : componentPositions()) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
             if (level.getBlockEntity(worldPos) instanceof SmartInterfaceBlockEntity smartInterface) {
-                if (smartInterface.bindingFor(getBlockPos()).isPresent()) {
+                if (smartInterface.hasController(getBlockPos())) {
                     linkedPortPositions().add(worldPos.immutable());
                 }
                 components.add(new ProcessingComponent(null, smartInterface, worldPos, relativePos, foundPattern.tagsAt(relativePos), null));
