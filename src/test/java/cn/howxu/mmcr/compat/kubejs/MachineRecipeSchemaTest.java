@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
@@ -118,6 +119,7 @@ class MachineRecipeSchemaTest {
 
     @Test
     void builder_keeps_plain_item_outputs_immediate() {
+        Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         MachineRecipeBuilderJS builder = new MachineRecipeBuilderJS(MMCR.id("plain_output"));
 
         builder.itemOutput("minecraft:diamond_sword", 2);
@@ -126,6 +128,19 @@ class MachineRecipeSchemaTest {
             assertThat(output.getItem()).isSameAs(Items.DIAMOND_SWORD);
             assertThat(output.getCount()).isEqualTo(2);
         });
+    }
+
+    @Test
+    void builder_exposes_smart_interface_input_and_output_functions() {
+        var builder = new MachineRecipeBuilderJS(MMCR.id("smart_interface"));
+
+        assertThat(builder.smartInterfaceInput("mode", 1F)).isSameAs(builder);
+        assertThat(builder.smartInterfaceInput("mode", 1F, 2F)).isSameAs(builder);
+        assertThat(builder.smartInterfaceOutput("mode", 9F)).isSameAs(builder);
+        assertThat(builder.requirements).containsExactly(
+                SmartInterfaceRequirement.input("mode", 1F),
+                SmartInterfaceRequirement.input("mode", 1F, 2F),
+                SmartInterfaceRequirement.output("mode", 9F));
     }
 
     private static JsonElement json(String value) {

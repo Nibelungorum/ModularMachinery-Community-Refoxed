@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidInputHatchBlockEntity;
@@ -16,6 +17,9 @@ import cn.howxu.mmcr.internal.tile.FluidOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
+import cn.howxu.mmcr.registry.ModBlockEntities;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonElement;
@@ -839,6 +843,29 @@ class RecipeCraftingContextTest {
         assertThat(context.simulateOutputs(recipe, 4)).isFalse();
         assertThat(context.startCrafting(recipe, 4)).isFalse();
         assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(8);
+    }
+
+    @Test
+    void missingSmartInterfaceOutputDoesNotConsumeInputsAtRecipeStart() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 0, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance());
+        MachineControllerBlockEntity controller = controllerWithComponents(input);
+        SmartInterfaceBlockEntity smartInterface = (SmartInterfaceBlockEntity) ModBlockEntities.SMART_INTERFACE.get().create(
+                new BlockPos(2, 0, 0), ModBlocks.SMART_INTERFACE.get().defaultBlockState());
+        setBlockEntityLevel(smartInterface, controller.getLevel());
+        replaceComponents(controller, List.of(
+                new ProcessingComponent(new MachineComponent(PortKinds.ITEM_INPUT, cn.howxu.mmcr.util.IOType.INPUT), input,
+                        input.getBlockPos(), BlockPos.ZERO, (String) null),
+                new ProcessingComponent((MachineComponent) null, smartInterface, smartInterface.getBlockPos(), BlockPos.ZERO, (String) null)
+        ));
+        MachineRecipe recipe = explicitRequirementRecipe("missing_smart_output", List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
+                SmartInterfaceRequirement.output("mode", 9F)
+        ));
+
+        assertThat(new RecipeCraftingContext(controller).startCrafting(recipe)).isFalse();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
     }
 
     @Test

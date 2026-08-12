@@ -20,7 +20,7 @@ import java.util.List;
 /**
  * @author howxu <dev@howxu.cn>
  */
-public sealed interface MachineRequirement permits ItemRequirement, FluidRequirement, EnergyRequirement {
+public sealed interface MachineRequirement permits ItemRequirement, FluidRequirement, EnergyRequirement, SmartInterfaceRequirement {
 
     Codec<List<String>> TAGS_CODEC = Codec.STRING.listOf();
     Codec<MachineRequirement> CODEC = Codec.of(MachineRequirement::encode, MachineRequirement::decode);
@@ -110,6 +110,13 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
         if (requirement instanceof EnergyRequirement energy) {
             return builder.add("fe_per_tick", ops.createInt(energy.fePerTick())).build(prefix);
         }
+        if (requirement instanceof SmartInterfaceRequirement smartInterface) {
+            return builder
+                    .add("interface_type", ops.createString(smartInterface.interfaceType()))
+                    .add("min_value", ops.createFloat(smartInterface.minValue()))
+                    .add("max_value", ops.createFloat(smartInterface.maxValue()))
+                    .build(prefix);
+        }
         return DataResult.error(() -> "Unknown machine requirement: " + requirement);
     }
 
@@ -136,6 +143,14 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
                         .flatMap(ops::getNumberValue)
                         .<MachineRequirement>map(fePerTick -> new EnergyRequirement(io, fePerTick.intValue(), tags));
             }
+            case "smart_interface" -> decodeIo(ops, input).flatMap(io -> ops.get(input, "interface_type")
+                    .flatMap(ops::getStringValue)
+                    .flatMap(interfaceType -> ops.get(input, "min_value")
+                            .flatMap(ops::getNumberValue)
+                            .flatMap(minValue -> ops.get(input, "max_value")
+                                    .flatMap(ops::getNumberValue)
+                                    .<MachineRequirement>map(maxValue -> new SmartInterfaceRequirement(io, interfaceType,
+                                            minValue.floatValue(), maxValue.floatValue())))));
             default -> DataResult.error(() -> "Unknown requirement type: " + type);
         };
     }

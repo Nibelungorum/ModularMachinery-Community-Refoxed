@@ -10,10 +10,12 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -36,6 +38,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Comparator;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.BooleanSupplier;
 
 public final class RecipeCraftingContext {
@@ -464,6 +467,34 @@ public final class RecipeCraftingContext {
 
     public @Nullable RequirementFailure getLastRequirementFailure() {
         return lastRequirementFailure;
+    }
+
+    public Optional<Float> smartInterfaceValue(String type) {
+        return smartInterface(type).map(binding -> binding.interfaceEntity().binding(binding.index()).orElseThrow().value());
+    }
+
+    public boolean hasSmartInterface(String type) {
+        return smartInterface(type).isPresent();
+    }
+
+    public boolean setSmartInterfaceValue(String type, float value) {
+        return smartInterface(type).map(binding -> binding.interfaceEntity().setValue(binding.index(), value)).orElse(false);
+    }
+
+    private Optional<SmartInterfaceBinding> smartInterface(String type) {
+        for (ProcessingComponent component : controller.getComponents()) {
+            if (!(component.getContainer() instanceof SmartInterfaceBlockEntity smartInterface)) continue;
+            for (int index = 0; smartInterface.binding(index).isPresent(); index++) {
+                var binding = smartInterface.binding(index).orElseThrow();
+                if (binding.controllerPos().equals(controller.getBlockPos()) && binding.type().equals(type)) {
+                    return Optional.of(new SmartInterfaceBinding(smartInterface, index));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private record SmartInterfaceBinding(SmartInterfaceBlockEntity interfaceEntity, int index) {
     }
 
     private void setFailure(String key) {
@@ -948,9 +979,28 @@ public final class RecipeCraftingContext {
 
     public boolean startCrafting(MachineRecipe recipe, int parallelism, ActiveMachineRecipe.InputConsumptionPlan plan) {
         List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism, plan);
+        if (!simulateStartRequirements(requirements, plan)) return false;
+        if (!commitInputs(requirements)) return false;
+        for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
+            MachineRequirement requirement = requirements.get(requirementIndex);
+            if (requirement instanceof SmartInterfaceRequirement smartInterface
+                    && smartInterface.io() == RecipeModifier.IOType.OUTPUT
+                    && !smartInterface.commit(this, requirementIndex)) return false;
+        }
+        return true;
+    }
+
+    private boolean simulateStartRequirements(List<MachineRequirement> requirements,
+                                              @Nullable ActiveMachineRecipe.InputConsumptionPlan plan) {
         if (!simulateInputs(requirements, plan)) return false;
         if (!simulateOutputs(requirements)) return false;
-        return commitInputs(requirements);
+        for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
+            MachineRequirement requirement = requirements.get(requirementIndex);
+            if (requirement instanceof SmartInterfaceRequirement smartInterface
+                    && smartInterface.io() == RecipeModifier.IOType.OUTPUT
+                    && !smartInterface.simulate(this, requirementIndex)) return false;
+        }
+        return true;
     }
 
     public ActiveMachineRecipe.InputConsumptionPlan createInputConsumptionPlan(MachineRecipe recipe, int parallelism) {

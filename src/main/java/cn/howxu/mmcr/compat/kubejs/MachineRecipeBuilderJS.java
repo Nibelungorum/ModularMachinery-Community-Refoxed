@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
@@ -32,6 +33,7 @@ public class MachineRecipeBuilderJS {
     public int energyPerTick = 0;
     public boolean cancelIfPerTickFails = false;
     public final List<LevelRequirement> levelRequirements = new ArrayList<>();
+    final List<MachineRequirement> requirements = new ArrayList<>();
 
     private Identifier id;
     private final List<ComponentOutput> componentOutputs = new ArrayList<>();
@@ -119,6 +121,21 @@ public class MachineRecipeBuilderJS {
         return this;
     }
 
+    public MachineRecipeBuilderJS smartInterfaceInput(String type, float value) {
+        requirements.add(SmartInterfaceRequirement.input(type, value));
+        return this;
+    }
+
+    public MachineRecipeBuilderJS smartInterfaceInput(String type, float minValue, float maxValue) {
+        requirements.add(SmartInterfaceRequirement.input(type, minValue, maxValue));
+        return this;
+    }
+
+    public MachineRecipeBuilderJS smartInterfaceOutput(String type, float value) {
+        requirements.add(SmartInterfaceRequirement.output(type, value));
+        return this;
+    }
+
     public MachineRecipeBuilderJS requiresLevel(String typeId, String levelId) {
         var type = Identifier.parse(typeId);
         var level = MachineLevelRegistry.getLevel(Identifier.parse(levelId));
@@ -173,6 +190,7 @@ public class MachineRecipeBuilderJS {
         for (int index = 0; index < recipeOutputs.size(); index++) {
             requirements.add(MachineRequirement.itemOutput(recipeOutputs.get(index), recipeOutputChances.get(index)));
         }
+        requirements.addAll(this.requirements);
 
         RecipeRegistry.register(new MachineRecipe(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(recipeOutputs), List.of(), 0, 1,
                 cancelIfPerTickFails, List.of(), List.copyOf(requirements), false, List.copyOf(levelRequirements)));
