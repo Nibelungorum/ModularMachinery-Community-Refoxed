@@ -1448,6 +1448,33 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void private_controller_finish_invokes_sound_dispatch_once() throws Exception {
+        TestSoundController controller = controllerWithFinalTickResult(ActiveMachineRecipe.TickStatus.FINISHED);
+
+        invokeTickActiveRecipe(controller);
+
+        assertThat(controller.finishSounds).isEqualTo(1);
+    }
+
+    @Test
+    void private_controller_cancelled_finish_does_not_invoke_sound_dispatch() throws Exception {
+        TestSoundController controller = controllerWithFinalTickResult(ActiveMachineRecipe.TickStatus.CANCELLED);
+
+        invokeTickActiveRecipe(controller);
+
+        assertThat(controller.finishSounds).isZero();
+    }
+
+    @Test
+    void private_controller_waiting_finish_does_not_invoke_sound_dispatch() throws Exception {
+        TestSoundController controller = controllerWithFinalTickResult(ActiveMachineRecipe.TickStatus.WAITING);
+
+        invokeTickActiveRecipe(controller);
+
+        assertThat(controller.finishSounds).isZero();
+    }
+
+    @Test
     void set_machine_clears_matched_modifier_snapshot() throws Exception {
         var replacement = replacementAt(new BlockPos(1, 0, 0), Blocks.GOLD_BLOCK, "speed", 2F);
         var machine = machineWithReplacements(replacement);
@@ -2790,5 +2817,53 @@ class MachineControllerBlockEntityTest {
         @Override public boolean hasChunk(int chunkX, int chunkZ) { return true; }
 
         @Override public void invalidateCapabilities(BlockPos pos) { }
+    }
+
+    private static TestSoundController controllerWithFinalTickResult(ActiveMachineRecipe.TickStatus status) throws Exception {
+        TestSoundController controller = testSoundControllerWithoutRunningMinecraftConstructor();
+        setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
+        DynamicMachine machine = new DynamicMachine(MMCR.id("finish_sound_" + status.name().toLowerCase()),
+                "Finish Sound", new BlockArray(Map.of()));
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("finish_sound_recipe_" + status.name().toLowerCase()),
+                machine.registryName(), 1, List.of(), List.of(), List.of(), 0, 0,
+                status == ActiveMachineRecipe.TickStatus.CANCELLED, List.of(), finishSoundRequirements(status));
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+        setField(MachineControllerBlockEntity.class, controller, "foundMachine", machine);
+        setField(MachineControllerBlockEntity.class, controller, "active", active);
+        setField(MachineControllerBlockEntity.class, controller, "context", context);
+        return controller;
+    }
+
+    private static List<cn.howxu.mmcr.api.recipe.requirement.MachineRequirement> finishSoundRequirements(
+            ActiveMachineRecipe.TickStatus status) {
+        if (status == ActiveMachineRecipe.TickStatus.CANCELLED) {
+            return List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY));
+        }
+        if (status == ActiveMachineRecipe.TickStatus.WAITING) {
+            return List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.IRON_INGOT)));
+        }
+        return List.of();
+    }
+
+    private static TestSoundController testSoundControllerWithoutRunningMinecraftConstructor() throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        return (TestSoundController) ((sun.misc.Unsafe) unsafeField.get(null))
+                .allocateInstance(TestSoundController.class);
+    }
+
+    /** Test seam for counting finish sound dispatches. */
+    private static final class TestSoundController extends MachineControllerBlockEntity {
+        private int finishSounds;
+
+        private TestSoundController() {
+            super(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
+        }
+
+        @Override
+        void playFinishSound() {
+            finishSounds++;
+        }
     }
 }

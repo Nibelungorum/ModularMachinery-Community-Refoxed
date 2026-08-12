@@ -62,6 +62,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -351,6 +352,22 @@ class FactoryRecipeSchedulerTest {
                     assertThat(snapshot.active()).isTrue();
                     assertThat(snapshot.recipeId()).isEqualTo(recipe.id().toString());
                 });
+    }
+
+    @Test
+    void factory_threads_notify_once_when_recipe_finishes() throws Exception {
+        MachineControllerBlockEntity controller = controller(MMCR.id("factory_thread_finish_machine"));
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_thread_finish_recipe"),
+                MMCR.id("factory_thread_finish_machine"), 1, List.of(), List.of());
+        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1, pool);
+        AtomicInteger finished = new AtomicInteger();
+
+        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 1, pool, finished::incrementAndGet);
+        scheduler.tickThreads(controller, List.of(), controller.getStructureVersion(), 1, pool, finished::incrementAndGet);
+        scheduler.tickThreads(controller, List.of(), controller.getStructureVersion(), 1, pool, finished::incrementAndGet);
+
+        assertThat(finished).hasValue(1);
     }
 
     @Test

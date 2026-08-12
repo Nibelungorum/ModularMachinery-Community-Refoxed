@@ -5,6 +5,8 @@ import cn.howxu.mmcr.api.machine.BlockArrayCache;
 import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
@@ -26,6 +28,7 @@ import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
+import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
@@ -47,6 +50,8 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
@@ -1299,6 +1304,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                     context.commitSynchronousOutputs(active.getRecipe(), active.getParallelism()), gameTime);
             if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
                 lastFailureUnloc = null;
+                playFinishSound();
                 returnContext(context);
                 active = null;
                 context = null;
@@ -1323,6 +1329,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
             lastFailureUnloc = null;
             recipeFailure = null;
+            playFinishSound();
             returnContext(context);
             active = null;
             context = null;
@@ -1475,6 +1482,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         ActiveMachineRecipe.TickStatus status = recipe.applyTickGrant(resourcesGranted, outputsCommitted, gameTime);
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
             lastFailureUnloc = null;
+            playFinishSound();
             returnContext(recipeContext);
             active = null;
             context = null;
@@ -1491,6 +1499,15 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             lastFailureUnloc = null;
         }
         setChanged();
+    }
+
+    void playFinishSound() {
+        if (!(level instanceof ServerLevel serverLevel) || foundMachine == null) return;
+        MachineRegistration registration = MachineDefinitions.getRegistration(foundMachine.registryName());
+        SoundEvent sound = registration == null ? null : MachineSoundRegistry.get(registration.finishSoundId());
+        if (sound != null) {
+            serverLevel.playSound(null, worldPosition, sound, SoundSource.BLOCKS, 1.0F, 1.0F);
+        }
     }
 
     private boolean isCurrentSharedDomain(@Nullable StructureClaimRegistry.ResourceDomain domain) {

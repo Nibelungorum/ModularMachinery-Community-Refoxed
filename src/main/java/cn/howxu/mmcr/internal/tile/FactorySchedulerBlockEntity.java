@@ -103,7 +103,8 @@ public class FactorySchedulerBlockEntity extends BlockEntity {
                               long structureVersion, int parallelLimit, RecipeCraftingContextPool contextPool) {
         tickThreadLimitSync(controller);
         int before = scheduler.activeThreadCount();
-        scheduler.tickThreads(controller, candidates, structureVersion, parallelLimit, contextPool);
+        scheduler.tickThreads(controller, candidates, structureVersion, parallelLimit, contextPool,
+                controller == null ? () -> { } : controller::playFinishSound);
         if (scheduler.activeThreadCount() != before) setChanged();
         if (controller != null) syncOpenControllerMenus(controller);
     }
