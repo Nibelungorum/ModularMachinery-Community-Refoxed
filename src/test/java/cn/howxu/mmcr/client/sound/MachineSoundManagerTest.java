@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.client.sound;
 
+import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
@@ -9,12 +11,15 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
+import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -69,6 +74,58 @@ class MachineSoundManagerTest {
         assertThat(MachineSoundManager.machineIdFromState(controllerBlock.defaultBlockState())).isEqualTo(machineId);
     }
 
+    @Test
+    void descriptor_uses_controller_block_machine_id_when_found_machine_is_not_synced() throws Exception {
+        Identifier machineId = Identifier.fromNamespaceAndPath("test", "client_synced_descriptor_machine");
+        cn.howxu.mmcr.api.machine.MachineDefinitions.clearForTesting();
+        cn.howxu.mmcr.api.machine.MachineDefinitions.register(
+                cn.howxu.mmcr.api.machine.MachineRegistration.builder(machineId).runningSound(LOOP_SOUND).build());
+        cn.howxu.mmcr.api.machine.MachineDefinitions.freezeRegistryPhase();
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        setField(BlockEntity.class, controller, "worldPosition", new BlockPos(4, 5, 6));
+        MachineControllerBlock controllerBlock = testControllerBlock(machineId);
+        setField(BlockEntity.class, controller, "blockState", controllerBlock.defaultBlockState());
+        Level level = LevelStub.create(Map.of(new BlockPos(4, 5, 6), controllerBlock), List.of(controller));
+        setField(Level.class, level, "isClientSide", true);
+        setField(BlockEntity.class, controller, "level", level);
+        setField(MachineControllerBlockEntity.class, controller, "clientActive", true);
+
+        MachineSoundManager.ControllerDescriptor descriptor = MachineSoundManager.descriptorForTest(OVERWORLD, controller);
+
+        assertThat(controller.getFoundMachine()).isNull();
+        assertThat(descriptor.active()).isTrue();
+        assertThat(descriptor.soundId()).isEqualTo(LOOP_SOUND);
+    }
+
+    @Test
+    void manager_removes_loop_when_sound_factory_cannot_resolve_new_sound() {
+        MachineSoundManager manager = new MachineSoundManager();
+        MachineSoundManager.ControllerKey key = new MachineSoundManager.ControllerKey(OVERWORLD, new BlockPos(1, 2, 3));
+        AtomicInteger stopped = new AtomicInteger();
+        manager.reconcile(List.of(activeController(key, LOOP_SOUND)), (trackedKey, soundId) -> stopped::incrementAndGet);
+
+        manager.reconcile(List.of(activeController(key, Identifier.fromNamespaceAndPath("test", "missing.loop"))),
+                (trackedKey, soundId) -> null);
+
+        assertThat(manager.trackedCount()).isZero();
+        assertThat(stopped).hasValue(1);
+    }
+
+    @Test
+    void clear_stops_all_tracked_loops() {
+        MachineSoundManager manager = new MachineSoundManager();
+        AtomicInteger stopped = new AtomicInteger();
+        manager.reconcile(List.of(
+                activeController(new MachineSoundManager.ControllerKey(OVERWORLD, new BlockPos(1, 2, 3)), LOOP_SOUND),
+                activeController(new MachineSoundManager.ControllerKey(OVERWORLD, new BlockPos(4, 5, 6)), LOOP_SOUND)),
+                (trackedKey, soundId) -> stopped::incrementAndGet);
+
+        manager.clear();
+
+        assertThat(manager.trackedCount()).isZero();
+        assertThat(stopped).hasValue(2);
+    }
+
     private static MachineSoundManager managerWithTrackedActiveController() {
         MachineSoundManager manager = new MachineSoundManager();
         MachineSoundManager.ControllerKey key = new MachineSoundManager.ControllerKey(OVERWORLD, new BlockPos(1, 2, 3));
@@ -91,10 +148,26 @@ class MachineSoundManagerTest {
         registry.unfreeze(true);
         try {
             MachineControllerBlock block = new MachineControllerBlock(machineId, net.minecraft.world.level.block.Blocks.IRON_BLOCK.properties());
-            Registry.register(BuiltInRegistries.BLOCK, Identifier.fromNamespaceAndPath("test", "client_synced_controller"), block);
+            Registry.register(BuiltInRegistries.BLOCK, Identifier.fromNamespaceAndPath("test", machineId.getPath() + "_controller"), block);
             return block;
         } finally {
             registry.freeze();
         }
+    }
+
+    private static MachineControllerBlockEntity controllerBlockEntityWithoutRunningMinecraftConstructor() throws Exception {
+        return (MachineControllerBlockEntity) unsafe().allocateInstance(MachineControllerBlockEntity.class);
+    }
+
+    private static void setField(Class<?> owner, Object target, String name, Object value) throws Exception {
+        Field field = owner.getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+
+    private static sun.misc.Unsafe unsafe() throws Exception {
+        Field field = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        field.setAccessible(true);
+        return (sun.misc.Unsafe) field.get(null);
     }
 }
