@@ -20,3 +20,7 @@
 	path = reference/neoforge
 	url = https://github.com/neoforged/NeoForge
 	branch = 26.1.x
+[submodule "reference/gtceu"]
+	path = reference/gtceu
+	url = https://github.com/GregTechCEu/GregTech
+	branch = master
