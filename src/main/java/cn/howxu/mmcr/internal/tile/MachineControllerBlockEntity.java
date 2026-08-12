@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockArrayCache;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
@@ -34,6 +35,7 @@ import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.SmartInterfaceBindingCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
+import cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.recipe.RecipeStartDelay;
 import cn.howxu.mmcr.registry.ModBlockEntities;
@@ -41,6 +43,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.network.Connection;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
@@ -59,6 +62,7 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -591,6 +595,60 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             if (tryFormMachine(candidate, facing, rotatedPattern)) return true;
         }
         return false;
+    }
+
+    public boolean diagnoseFirstStructureMismatch(ServerPlayer player) {
+        if (level == null || level.isClientSide() || isFormed()) return false;
+        if (machine == null) bindDefaultMachine();
+        if (machine == null) return false;
+
+        Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
+        for (BlockArray rotatedPattern : candidatePatterns(machine, facing)) {
+            CompiledMachinePattern compiled = compiledFor(machine, rotatedPattern, facing);
+            Map<BlockPos, List<SingleBlockModifierReplacement>> replacements = replacementsFor(machine, compiled, facing, rotatedPattern);
+            var mismatch = StructureMatcher.firstMismatch(rotatedPattern, level, getBlockPos(), replacements);
+            if (mismatch.isPresent()) {
+                sendStructureMismatchDiagnostic(player, mismatch.get());
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void sendStructureMismatchDiagnostic(ServerPlayer player, StructureMatcher.Mismatch mismatch) {
+        BlockPos pos = mismatch.worldPos();
+        player.sendSystemMessage(Component.translatable(
+                "message.mmcr.multiblock_mismatch",
+                pos.getX() + ", " + pos.getY() + ", " + pos.getZ(),
+                describeExpected(mismatch.expected()),
+                mismatch.actualState().getBlock().getName()));
+        PacketDistributor.sendToPlayer(player, new PktMultiblockMismatchHighlightPayload(level.dimension(), pos));
+    }
+
+    private static Component describeExpected(BlockPredicate expected) {
+        return switch (expected) {
+            case BlockPredicate.OfBlock ofBlock -> ofBlock.block().getName();
+            case BlockPredicate.OfBlockState ofState -> ofState.state().getBlock().getName();
+            case BlockPredicate.OfTag ofTag -> Component.literal("#" + ofTag.tag().location());
+            case BlockPredicate.AnyOf anyOf -> Component.literal(anyOf.children().stream()
+                    .map(MachineControllerBlockEntity::expectedText)
+                    .distinct()
+                    .limit(4)
+                    .collect(java.util.stream.Collectors.joining(" / ")));
+            case BlockPredicate.Air ignored -> Component.translatable("block.minecraft.air");
+            case BlockPredicate.Any ignored -> Component.literal("any block");
+        };
+    }
+
+    private static String expectedText(BlockPredicate expected) {
+        return switch (expected) {
+            case BlockPredicate.OfBlock ofBlock -> ofBlock.block().getName().getString();
+            case BlockPredicate.OfBlockState ofState -> ofState.state().getBlock().getName().getString();
+            case BlockPredicate.OfTag ofTag -> "#" + ofTag.tag().location();
+            case BlockPredicate.Air ignored -> Component.translatable("block.minecraft.air").getString();
+            case BlockPredicate.Any ignored -> "any block";
+            case BlockPredicate.AnyOf ignored -> expected.toString();
+        };
     }
 
     private List<BlockArray> candidatePatterns(Machine candidate, Direction facing) {

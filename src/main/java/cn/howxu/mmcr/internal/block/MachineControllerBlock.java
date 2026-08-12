@@ -151,6 +151,17 @@ public class MachineControllerBlock extends Block implements EntityBlock {
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
                                                 Player player, BlockHitResult hit) {
+        if (!level.isClientSide()
+                && player.isShiftKeyDown()
+                && player.getMainHandItem().isEmpty()
+                && player.getOffhandItem().isEmpty()
+                && level.getBlockEntity(pos) instanceof MachineControllerBlockEntity controller
+                && !controller.isFormed()
+                && player instanceof ServerPlayer serverPlayer
+                && controller.diagnoseFirstStructureMismatch(serverPlayer)) {
+            return InteractionResult.SUCCESS;
+        }
+
         if (!level.isClientSide()) {
             MenuProvider provider = state.getMenuProvider(level, pos);
             if (provider != null) player.openMenu(provider, pos);

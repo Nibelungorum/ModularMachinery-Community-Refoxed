@@ -7,6 +7,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -53,6 +55,25 @@ class StructureMatcherTest {
         assertThat(mismatch.get().worldPos()).isEqualTo(new BlockPos(1, 0, 0));
         assertThat(mismatch.get().expected()).isEqualTo(new BlockPredicate.OfBlock(Blocks.FURNACE));
         assertThat(mismatch.get().actualState().getBlock()).isEqualTo(Blocks.DIRT);
+    }
+
+    @Test
+    void firstMismatchReportsWorldPositionExpectedPredicateAndActualState() {
+        BlockPos controller = new BlockPos(10, 64, -3);
+        Block expectedBlock = Blocks.IRON_BLOCK;
+        BlockState actualState = Blocks.COPPER_BLOCK.defaultBlockState();
+        BlockArray pattern = new BlockArray(Map.of(
+                new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(expectedBlock)));
+
+        Level level = LevelStub.create(Map.of(controller.offset(1, 0, 0), Blocks.COPPER_BLOCK));
+
+        Optional<StructureMatcher.Mismatch> mismatch = StructureMatcher.firstMismatch(pattern, level, controller);
+
+        assertThat(mismatch).isPresent();
+        assertThat(mismatch.get().relativePos()).isEqualTo(new BlockPos(1, 0, 0));
+        assertThat(mismatch.get().worldPos()).isEqualTo(controller.offset(1, 0, 0));
+        assertThat(mismatch.get().expected()).isEqualTo(new BlockPredicate.OfBlock(expectedBlock));
+        assertThat(mismatch.get().actualState()).isEqualTo(actualState);
     }
 
     @Test
