@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 class TranslationsTest {
 
     @Test
@@ -94,5 +96,31 @@ class TranslationsTest {
         assertEquals("机器配方", Translations.ALL.get("zh_cn").get("jei.mmcr.machine_recipe"));
         assertEquals("耗时：%s tick %s 秒", Translations.ALL.get("zh_cn").get("jei.mmcr.machine_recipe.duration"));
         assertEquals("仅支持转移物品输入；流体和能量需要通过对应端口供应。", Translations.ALL.get("zh_cn").get("jei.mmcr.transfer.fluid_energy_not_supported"));
+    }
+
+    @Test
+    void translations_include_smart_interface_messages() {
+        assertThat(Translations.ALL.get("en_us")).containsKeys(
+                "block.mmcr.smart_interface",
+                "container.mmcr.smart_interface",
+                "mmcr.smart_interface.value",
+                "mmcr.recipe.smart_interface_mismatch",
+                "mmcr.smart_interface.empty_binding",
+                "mmcr.smart_interface.previous",
+                "mmcr.smart_interface.next",
+                "mmcr.smart_interface.invalid_number",
+                "jei.mmcr.smart_interface.input",
+                "jei.mmcr.smart_interface.output");
+        assertThat(Translations.ALL.get("zh_cn")).containsKeys(
+                "block.mmcr.smart_interface",
+                "container.mmcr.smart_interface",
+                "mmcr.smart_interface.value",
+                "mmcr.recipe.smart_interface_mismatch",
+                "mmcr.smart_interface.empty_binding",
+                "mmcr.smart_interface.previous",
+                "mmcr.smart_interface.next",
+                "mmcr.smart_interface.invalid_number",
+                "jei.mmcr.smart_interface.input",
+                "jei.mmcr.smart_interface.output");
     }
 }

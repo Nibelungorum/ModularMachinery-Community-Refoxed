@@ -80,7 +80,7 @@ public final class ModelGen extends ModelProvider {
     }
 
     private static boolean shouldGenerateBlockModels(String name) {
-        return !isIoPort(name) && !isParallelController(name) && !"factory_controller".equals(name)
+        return !isIoPort(name) && !isParallelController(name) && !"factory_controller".equals(name) && !"smart_interface".equals(name)
                 && MachineDefinitions.allRegistrations().stream()
                 .map(registration -> MachineControllerSpec.defaultsFor(registration.id()).id().getPath())
                 .noneMatch(name::equals);

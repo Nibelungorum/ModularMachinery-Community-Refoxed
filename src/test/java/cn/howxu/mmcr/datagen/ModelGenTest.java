@@ -61,4 +61,15 @@ class ModelGenTest {
         assertThat(Files.exists(root.resolve("textures/item/thread_disperser.png"))).isTrue();
         assertThat(Files.exists(root.resolve("textures/gui/inventory_tiny.png"))).isTrue();
     }
+
+    @Test
+    void smart_interface_uses_static_cube_resources() {
+        Path root = Path.of("src/main/resources/assets/mmcr");
+
+        assertThat(ModelGen.collectKnownBlockNames()).doesNotContain("smart_interface");
+        assertThat(ModelGen.collectKnownItemNames()).doesNotContain("smart_interface");
+        assertThat(Files.exists(root.resolve("models/block/smart_interface.json"))).isTrue();
+        assertThat(Files.exists(root.resolve("models/item/smart_interface.json"))).isTrue();
+        assertThat(Files.exists(root.resolve("textures/block/smart_interface.png"))).isTrue();
+    }
 }
