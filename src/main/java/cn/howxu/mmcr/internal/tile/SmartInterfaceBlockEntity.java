@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
+import cn.howxu.mmcr.compat.kubejs.SmartInterfaceEvents;
+import cn.howxu.mmcr.compat.kubejs.SmartInterfaceUpdateEventJS;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -35,8 +37,10 @@ public class SmartInterfaceBlockEntity extends BlockEntity {
                 || bindingFor(controllerPos).isPresent()) {
             return false;
         }
-        bindings.add(new Binding(controllerPos.immutable(), machineId, type, value));
+        Binding binding = new Binding(controllerPos.immutable(), machineId, type, value);
+        bindings.add(binding);
         changed();
+        postUpdate(binding, null, value);
         return true;
     }
 
@@ -45,6 +49,7 @@ public class SmartInterfaceBlockEntity extends BlockEntity {
         if (binding.isEmpty()) return false;
         bindings.remove(binding.get());
         changed();
+        postUpdate(binding.get(), binding.get().value(), null);
         return true;
     }
 
@@ -64,6 +69,7 @@ public class SmartInterfaceBlockEntity extends BlockEntity {
         if (Float.compare(current.value(), value) == 0) return true;
         bindings.set(index, new Binding(current.controllerPos(), current.machineId(), current.type(), value));
         changed();
+        postUpdate(current, current.value(), value);
         return true;
     }
 
@@ -98,6 +104,12 @@ public class SmartInterfaceBlockEntity extends BlockEntity {
         if (level != null) {
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
         }
+    }
+
+    private void postUpdate(Binding binding, Float oldValue, Float newValue) {
+        if (level == null || level.isClientSide()) return;
+        SmartInterfaceEvents.post(new SmartInterfaceUpdateEventJS(worldPosition, binding.controllerPos(),
+                binding.machineId(), binding.type(), oldValue, newValue));
     }
 
     public record Binding(BlockPos controllerPos, Identifier machineId, String type, float value) {

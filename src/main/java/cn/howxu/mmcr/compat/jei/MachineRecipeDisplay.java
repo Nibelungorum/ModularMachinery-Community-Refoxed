@@ -8,6 +8,9 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import net.minecraft.resources.Identifier;
 import com.mojang.serialization.DynamicOps;
 import net.minecraft.core.RegistryAccess;
@@ -37,7 +40,9 @@ public record MachineRecipeDisplay(
         List<FluidStack> fluidOutputs,
         List<EnergyIngredient> energyInputs,
         List<EnergyIngredient> energyOutputs,
-        List<MachineOutput> outputs
+        List<MachineOutput> outputs,
+        List<SmartInterfaceDisplay> smartInterfaceInputs,
+        List<SmartInterfaceDisplay> smartInterfaceOutputs
 ) {
 
     public static MachineRecipeDisplay from(MachineRecipe recipe) {
@@ -53,6 +58,9 @@ public record MachineRecipeDisplay(
         List<Integer> fluidInputAmounts = new ArrayList<>();
         List<EnergyIngredient> energyInputs = new ArrayList<>();
         List<EnergyIngredient> energyOutputs = new ArrayList<>();
+        List<SmartInterfaceDisplay> smartInterfaceInputs = new ArrayList<>();
+        List<SmartInterfaceDisplay> smartInterfaceOutputs = new ArrayList<>();
+        var registration = MachineDefinitions.getRegistration(recipe.machineId());
         List<MachineRequirement> requirements = recipe.runtimeRequirements();
         for (var requirement : requirements) {
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT) {
@@ -68,6 +76,10 @@ public record MachineRecipeDisplay(
                 EnergyIngredient ingredient = new EnergyIngredient(energy.fePerTick(), energy.io() == RecipeModifier.IOType.INPUT);
                 if (ingredient.input()) energyInputs.add(ingredient);
                 else energyOutputs.add(ingredient);
+            } else if (requirement instanceof SmartInterfaceRequirement smartInterface
+                    && smartInterface.io() == RecipeModifier.IOType.INPUT) {
+                smartInterfaceDisplay(registration == null ? null : registration.smartInterfaceTypes().get(smartInterface.interfaceType()),
+                        smartInterface).ifPresent(smartInterfaceInputs::add);
             }
         }
 
@@ -83,6 +95,10 @@ public record MachineRecipeDisplay(
                 FluidStack stack = fluid.stack().copy();
                 fluidOutputs.add(stack);
                 outputs.add(new MachineOutput.FluidOutput(stack, fluid.chance()));
+            } else if (requirement instanceof SmartInterfaceRequirement smartInterface
+                    && smartInterface.io() == RecipeModifier.IOType.OUTPUT) {
+                smartInterfaceDisplay(registration == null ? null : registration.smartInterfaceTypes().get(smartInterface.interfaceType()),
+                        smartInterface).ifPresent(smartInterfaceOutputs::add);
             }
         }
         return new MachineRecipeDisplay(
@@ -97,8 +113,46 @@ public record MachineRecipeDisplay(
                 List.copyOf(fluidOutputs),
                 List.copyOf(energyInputs),
                 List.copyOf(energyOutputs),
-                List.copyOf(outputs)
+                List.copyOf(outputs),
+                List.copyOf(smartInterfaceInputs),
+                List.copyOf(smartInterfaceOutputs)
         );
+    }
+
+    public List<String> tooltips() {
+        return java.util.stream.Stream.concat(smartInterfaceInputs.stream(), smartInterfaceOutputs.stream())
+                .map(SmartInterfaceDisplay::tooltip).toList();
+    }
+
+    private static java.util.Optional<SmartInterfaceDisplay> smartInterfaceDisplay(SmartInterfaceType type,
+            SmartInterfaceRequirement requirement) {
+        if (type == null) return java.util.Optional.empty();
+        String tooltip = standardSmartInterfaceText(requirement);
+        if (!type.jeiTooltip().isBlank()) {
+            Object[] arguments = requirement.minValue() == requirement.maxValue()
+                    ? new Object[]{requirement.minValue()} : new Object[]{requirement.minValue(), requirement.maxValue()};
+            if (arguments.length == type.jeiTooltipArgsCount()) {
+                try {
+                    tooltip = String.format(java.util.Locale.ROOT, type.jeiTooltip(), arguments);
+                } catch (java.util.IllegalFormatException ignored) {
+                    // Keep the standard localized fallback.
+                }
+            }
+        }
+        return java.util.Optional.of(new SmartInterfaceDisplay(requirement.interfaceType(), requirement.minValue(),
+                requirement.maxValue(), requirement.io() == RecipeModifier.IOType.INPUT, tooltip));
+    }
+
+    private static String standardSmartInterfaceText(SmartInterfaceRequirement requirement) {
+        return requirement.io() == RecipeModifier.IOType.INPUT
+                ? "Smart interface " + requirement.interfaceType() + ": [" + requirement.minValue() + ", " + requirement.maxValue() + "]"
+                : "Smart interface " + requirement.interfaceType() + ": " + requirement.minValue();
+    }
+
+    public record SmartInterfaceDisplay(String type, float minValue, float maxValue, boolean input, String tooltip) {
+        public String label() {
+            return input ? type + ": [" + minValue + ", " + maxValue + "]" : type + ": " + minValue;
+        }
     }
 
     /**

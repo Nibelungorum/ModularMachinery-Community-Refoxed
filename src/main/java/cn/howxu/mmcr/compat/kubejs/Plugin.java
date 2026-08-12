@@ -8,9 +8,12 @@ import org.nibelungorum.DefaultMachineLevels;
 import dev.latvian.mods.kubejs.recipe.component.RecipeComponentTypeRegistry;
 import dev.latvian.mods.kubejs.recipe.schema.RecipeFactoryRegistry;
 import dev.latvian.mods.kubejs.recipe.schema.RecipeSchemaRegistry;
+import dev.latvian.mods.kubejs.event.EventGroupRegistry;
 import dev.latvian.mods.kubejs.script.BindingRegistry;
 import dev.latvian.mods.kubejs.script.ScriptManager;
 import dev.latvian.mods.kubejs.script.ScriptType;
+
+import java.util.Map;
 
 public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     static final String RECIPE_BUILDER_BINDING = "MMCR_RECIPE_BUILDER";
@@ -41,6 +44,15 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
         bindings.add("MMCR_MACHINE_LEVEL_BUILDER", MachineLevelBuilderJS.class);
         bindings.add("MMCR", new Bindings());
         bindings.add(RECIPE_BUILDER_BINDING, RECIPE_BUILDER_CLASS);
+    }
+
+    @Override
+    public void registerEvents(EventGroupRegistry registry) {
+        registry.register(SmartInterfaceEvents.group());
+    }
+
+    static Map<String, String> events() {
+        return Map.of(SmartInterfaceEvents.UPDATED_ID, SmartInterfaceEvents.UPDATED_ID);
     }
 
     @Override

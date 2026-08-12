@@ -125,6 +125,16 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                     layout.durationTextX(), y, 0xFF404040, false);
             y += 10;
         }
+        for (MachineRecipeDisplay.SmartInterfaceDisplay smartInterface : recipe.smartInterfaceInputs()) {
+            guiGraphics.text(Minecraft.getInstance().font, Component.literal(smartInterface.label()),
+                    layout.durationTextX(), y, 0xFF404040, false);
+            y += 10;
+        }
+        for (MachineRecipeDisplay.SmartInterfaceDisplay smartInterface : recipe.smartInterfaceOutputs()) {
+            guiGraphics.text(Minecraft.getInstance().font, Component.literal(smartInterface.label()),
+                    layout.durationTextX(), y, 0xFF404040, false);
+            y += 10;
+        }
         drawOverflowSlot(layout.inputs().overflowSlot(), guiGraphics, slotBackground);
         drawOverflowSlot(layout.outputs().overflowSlot(), guiGraphics, slotBackground);
     }
@@ -136,6 +146,8 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             appendOverflowTooltip(tooltip, recipe, layout.inputs().hiddenEntries(), true);
         } else if (isMouseOver(layout.outputs().overflowSlot(), mouseX, mouseY)) {
             appendOverflowTooltip(tooltip, recipe, layout.outputs().hiddenEntries(), false);
+        } else {
+            smartInterfaceTooltip(recipe, layout, mouseX, mouseY).ifPresent(value -> tooltip.add(Component.literal(value)));
         }
     }
 
@@ -336,6 +348,22 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     private static boolean isMouseOver(@Nullable OverflowSlotPlan slot, double mouseX, double mouseY) {
         return slot != null && mouseX >= slot.x() && mouseX < slot.x() + 16 && mouseY >= slot.y() && mouseY < slot.y() + 16;
+    }
+
+    private static java.util.Optional<String> smartInterfaceTooltip(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
+            double mouseX, double mouseY) {
+        if (mouseX < layout.durationTextX()) return java.util.Optional.empty();
+        int y = layout.durationTextY() + 10 * (1 + recipe.energyInputs().size() + recipe.energyOutputs().size()
+                + sortedLevelRequirements(recipe.recipe()).size());
+        for (MachineRecipeDisplay.SmartInterfaceDisplay smartInterface : recipe.smartInterfaceInputs()) {
+            if (mouseY >= y && mouseY < y + 10) return java.util.Optional.of(smartInterface.tooltip());
+            y += 10;
+        }
+        for (MachineRecipeDisplay.SmartInterfaceDisplay smartInterface : recipe.smartInterfaceOutputs()) {
+            if (mouseY >= y && mouseY < y + 10) return java.util.Optional.of(smartInterface.tooltip());
+            y += 10;
+        }
+        return java.util.Optional.empty();
     }
 
     private record TextOverlayDrawable(String text, int color, float scale) implements IDrawable {

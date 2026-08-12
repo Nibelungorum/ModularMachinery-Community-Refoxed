@@ -43,6 +43,11 @@ class PluginBindingTest {
     }
 
     @Test
+    void plugin_exposes_smart_interface_update_event() {
+        assertThat(Plugin.events()).containsKey("mmcr.smart_interface.updated");
+    }
+
+    @Test
     void public_recipe_builder_creates_a_component_output_in_recipe_event_context() {
         Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         var builder = new MachineRecipeBuilderJS("mmcr:sharp_sword")

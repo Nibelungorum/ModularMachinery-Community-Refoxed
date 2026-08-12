@@ -2,6 +2,9 @@ package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
@@ -15,6 +18,7 @@ import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.datagen.Translations;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.Holder;
@@ -54,6 +58,31 @@ class MachineRecipeDisplayTest {
         assertThat(MachineRecipeCategory.outputOverlayText(1F)).isEmpty();
         assertThat(MachineRecipeCategory.outputOverlayText(0.5F)).isEqualTo("50%");
         assertThat(MachineRecipeCategory.outputOverlayText(0.25F)).isEqualTo("25%");
+    }
+
+    @Test
+    void display_uses_custom_tooltip_for_interface_input() {
+        var machineId = MMCR.id("interface_jei_machine");
+        MachineDefinitions.register(MachineRegistration.builder(machineId).localizedName("Interface JEI")
+                .smartInterfaceType(new SmartInterfaceType("mode", 0F, 0, "", "", "", "",
+                        "Mode: %.1f..%.1f", 2)).build());
+        MachineRecipeDisplay display = displayFor(SmartInterfaceRequirement.input("mode", 1F, 2F), machineId);
+
+        assertThat(display.tooltips()).contains("Mode: 1.0..2.0");
+    }
+
+    @Test
+    void display_falls_back_when_interface_tooltip_argument_count_does_not_match() {
+        var machineId = MMCR.id("interface_jei_fallback");
+        MachineDefinitions.register(MachineRegistration.builder(machineId).localizedName("Interface JEI Fallback")
+                .smartInterfaceType(new SmartInterfaceType("mode", 0F, 0, "", "", "", "",
+                        "Mode: %.1f", 2)).build());
+        MachineRecipeDisplay display = displayFor(SmartInterfaceRequirement.output("mode", 4F), machineId);
+
+        assertThat(display.smartInterfaceOutputs()).singleElement().satisfies(output -> {
+            assertThat(output.label()).isEqualTo("mode: 4.0");
+            assertThat(output.tooltip()).isEqualTo("Smart interface mode: 4.0");
+        });
     }
 
     @Test
@@ -368,6 +397,11 @@ class MachineRecipeDisplayTest {
                 priority,
                 1
         );
+    }
+
+    private static MachineRecipeDisplay displayFor(SmartInterfaceRequirement requirement, Identifier machineId) {
+        return MachineRecipeDisplay.from(new MachineRecipe(MMCR.id("interface_jei_recipe"), machineId, 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(requirement)));
     }
 
     private static void registerLevel(net.minecraft.resources.Identifier id, net.minecraft.resources.Identifier typeId,
