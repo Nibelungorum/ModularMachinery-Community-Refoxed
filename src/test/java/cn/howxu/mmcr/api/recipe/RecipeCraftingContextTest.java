@@ -1,9 +1,14 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
+import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
@@ -1119,6 +1124,62 @@ class RecipeCraftingContextTest {
         });
     }
 
+    @Test
+    void smart_interface_values_are_resolved_from_interface_owned_parameters() throws Exception {
+        SmartInterfaceBlockEntity smart = smartInterface(new BlockPos(1, 0, 0));
+        assertThat(smart.claimController(BlockPos.ZERO, MMCR.id("test_machine"), java.util.Map.of(
+                "temperature", new SmartInterfaceType("temperature", 50F, 0, "", "", "", "", "", 0)
+        ), true)).isTrue();
+        MachineControllerBlockEntity controller = controllerWithMachineAndComponents(MMCR.id("test_machine"), smart);
+
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.smartInterfaceValue("temperature")).contains(50F);
+        assertThat(context.setSmartInterfaceValue("temperature", 75F)).isTrue();
+        assertThat(smart.value("temperature")).contains(75F);
+    }
+
+    @Test
+    void smart_interface_modifier_changes_runtime_item_output_and_chance() throws Exception {
+        registerMachineWithSmartModifier(MMCR.id("test_machine"), List.of(
+                SmartInterfaceModifier.item("temperature", RecipeModifier.IOType.OUTPUT, false, 0F, 100F, 1F, 3F,
+                        RecipeModifier.Operation.MULTIPLY),
+                SmartInterfaceModifier.item("temperature", RecipeModifier.IOType.OUTPUT, true, 0F, 100F, 0.25F, 2F,
+                        RecipeModifier.Operation.MULTIPLY)
+        ));
+        SmartInterfaceBlockEntity smart = smartInterface(new BlockPos(1, 0, 0));
+        assertThat(smart.claimController(BlockPos.ZERO, MMCR.id("test_machine"), java.util.Map.of(
+                "temperature", new SmartInterfaceType("temperature", 100F, 0, "", "", "", "", "", 0)
+        ), true)).isTrue();
+        MachineRecipe recipe = explicitRequirementRecipe("smart_modifier_item_output", List.of(
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                        Items.IRON_NUGGET.getDefaultInstance().copyWithCount(2), 0.75F, List.of())
+        ));
+
+        List<cn.howxu.mmcr.api.recipe.requirement.MachineRequirement> runtime = new RecipeCraftingContext(
+                controllerWithMachineAndComponents(MMCR.id("test_machine"), smart)).runtimeRequirements(recipe);
+
+        ItemRequirement item = (ItemRequirement) runtime.getFirst();
+        assertThat(item.stack().getCount()).isEqualTo(6);
+        assertThat(item.chance()).isEqualTo(1F);
+    }
+
+    @Test
+    void smart_interface_duration_modifier_changes_level_modified_duration() throws Exception {
+        registerMachineWithSmartModifier(MMCR.id("test_machine"), List.of(
+                SmartInterfaceModifier.duration("temperature", 0F, 100F, 2F, 0.5F, RecipeModifier.Operation.MULTIPLY)
+        ));
+        SmartInterfaceBlockEntity smart = smartInterface(new BlockPos(1, 0, 0));
+        assertThat(smart.claimController(BlockPos.ZERO, MMCR.id("test_machine"), java.util.Map.of(
+                "temperature", new SmartInterfaceType("temperature", 100F, 0, "", "", "", "", "", 0)
+        ), true)).isTrue();
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("smart_duration"), MMCR.id("test_machine"), 40,
+                List.of(), List.of());
+
+        assertThat(new RecipeCraftingContext(controllerWithMachineAndComponents(MMCR.id("test_machine"), smart))
+                .levelModifiedDuration(recipe)).isEqualTo(20);
+    }
+
     private static ItemInputBusBlockEntity itemInputBus(BlockPos pos) {
         return allocateItemBus(ItemInputBusBlockEntity.class, pos);
     }
@@ -1149,6 +1210,19 @@ class RecipeCraftingContextTest {
 
     private static void bindFluidComponents(net.minecraft.world.level.material.Fluid fluid) {
         fluid.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+    }
+
+    private static SmartInterfaceBlockEntity smartInterface(BlockPos pos) {
+        return (SmartInterfaceBlockEntity) ModBlockEntities.SMART_INTERFACE.get().create(
+                pos, ModBlocks.SMART_INTERFACE.get().defaultBlockState());
+    }
+
+    private static void registerMachineWithSmartModifier(Identifier machineId, List<SmartInterfaceModifier> modifiers) {
+        MachineDefinitions.clearForTesting();
+        MachineRegistration.Builder builder = MachineRegistration.builder(machineId).localizedName("Test Machine");
+        modifiers.forEach(builder::smartInterfaceModifier);
+        MachineDefinitions.register(builder.build());
+        MachineDefinitions.freezeRegistryPhase();
     }
 
     private static MachineRecipe explicitItemRecipe(String path, List<cn.howxu.mmcr.api.recipe.requirement.MachineRequirement> requirements) {
@@ -1234,6 +1308,7 @@ class RecipeCraftingContextTest {
             sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
             MachineControllerBlockEntity controller = (MachineControllerBlockEntity) unsafe.allocateInstance(MachineControllerBlockEntity.class);
             var level = LevelStub.createWithBlockEntities(List.of(ports));
+            setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
             setBlockEntityLevel(controller, level);
             for (net.minecraft.world.level.block.entity.BlockEntity port : ports) {
                 setBlockEntityLevel(port, level);
@@ -1254,6 +1329,14 @@ class RecipeCraftingContextTest {
         }
     }
 
+    private static MachineControllerBlockEntity controllerWithMachineAndComponents(Identifier machineId,
+            net.minecraft.world.level.block.entity.BlockEntity... ports) throws ReflectiveOperationException {
+        MachineControllerBlockEntity controller = controllerWithComponents(ports);
+        setField(MachineControllerBlockEntity.class, controller, "foundMachine",
+                new DynamicMachine(machineId, "Test Machine", new BlockArray(java.util.Map.of())));
+        return controller;
+    }
+
     private static void replaceComponents(MachineControllerBlockEntity controller, List<ProcessingComponent> replacements) throws Exception {
         Field components = MachineControllerBlockEntity.class.getDeclaredField("components");
         components.setAccessible(true);
@@ -1270,6 +1353,7 @@ class RecipeCraftingContextTest {
         if (port instanceof FluidOutputHatchBlockEntity) return new MachineComponent(PortKinds.FLUID_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT);
         if (port instanceof EnergyInputHatchBlockEntity) return new MachineComponent(PortKinds.ENERGY_INPUT, cn.howxu.mmcr.util.IOType.INPUT);
         if (port instanceof EnergyOutputHatchBlockEntity) return new MachineComponent(PortKinds.ENERGY_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT);
+        if (port instanceof SmartInterfaceBlockEntity) return null;
         throw new IllegalArgumentException("Unknown port: " + port.getClass().getSimpleName());
     }
 

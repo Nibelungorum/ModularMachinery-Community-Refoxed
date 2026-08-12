@@ -2,7 +2,12 @@ package cn.howxu.mmcr.api.recipe.requirement;
 
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -19,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -56,6 +62,27 @@ class SmartInterfaceRequirementTest {
     }
 
     @Test
+    void input_failure_uses_machine_not_equal_message() throws Exception {
+        MachineDefinitions.clearForTesting();
+        MachineDefinitions.register(MachineRegistration.builder(MMCR.id("test_machine"))
+                .smartInterfaceType(new SmartInterfaceType("temperature", 20F, 0, "", "", "",
+                        "mmcr.failure.temperature", "", 0))
+                .build());
+        MachineDefinitions.freezeRegistryPhase();
+        SmartInterfaceBlockEntity smart = smartInterface(new BlockPos(1, 0, 0));
+        assertThat(smart.claimController(BlockPos.ZERO, MMCR.id("test_machine"), Map.of(
+                "temperature", new SmartInterfaceType("temperature", 20F, 0, "", "", "",
+                        "mmcr.failure.temperature", "", 0)
+        ), false)).isTrue();
+        RecipeCraftingContext context = new RecipeCraftingContext(controllerWith(smart));
+
+        boolean result = SmartInterfaceRequirement.input("temperature", 30F).simulate(context, 0);
+
+        assertThat(result).isFalse();
+        assertThat(context.getLastFailureUnloc()).isEqualTo("mmcr.failure.temperature");
+    }
+
+    @Test
     void codec_round_trips_input_range_and_output_value() {
         var input = SmartInterfaceRequirement.input("mode", 1F, 2F);
         var output = SmartInterfaceRequirement.output("mode", 9F);
@@ -84,6 +111,8 @@ class SmartInterfaceRequirementTest {
         setField(BlockEntity.class, controller, "level", level);
         for (SmartInterfaceBlockEntity smartInterface : smartInterfaces) setField(BlockEntity.class, smartInterface, "level", level);
         setField(MachineControllerBlockEntity.class, controller, "components", new ArrayList<ProcessingComponent>());
+        setField(MachineControllerBlockEntity.class, controller, "foundMachine",
+                new DynamicMachine(MMCR.id("test_machine"), "Test Machine", new BlockArray(java.util.Map.of())));
         Field componentsField = MachineControllerBlockEntity.class.getDeclaredField("components");
         componentsField.setAccessible(true);
         @SuppressWarnings("unchecked")

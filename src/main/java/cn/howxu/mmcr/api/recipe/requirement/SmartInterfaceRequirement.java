@@ -36,9 +36,14 @@ public record SmartInterfaceRequirement(RecipeModifier.IOType io, String interfa
 
     @Override
     public boolean simulate(RecipeCraftingContext context, int requirementIndex) {
-        return io == RecipeModifier.IOType.INPUT
-                ? context.smartInterfaceValue(interfaceType).filter(value -> value >= minValue && value <= maxValue).isPresent()
-                : context.hasSmartInterface(interfaceType);
+        if (io == RecipeModifier.IOType.INPUT) {
+            boolean matches = context.smartInterfaceValue(interfaceType)
+                    .filter(value -> value >= minValue && value <= maxValue)
+                    .isPresent();
+            if (!matches) context.setRequirementFailure(context.smartInterfaceFailureMessage(interfaceType), null);
+            return matches;
+        }
+        return context.hasSmartInterface(interfaceType);
     }
 
     @Override

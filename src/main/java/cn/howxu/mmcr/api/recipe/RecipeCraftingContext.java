@@ -1,7 +1,9 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
+import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.helper.EnergyRecipeIo;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
@@ -33,8 +35,8 @@ import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Comparator;
 import java.util.Map;
@@ -396,21 +398,33 @@ public final class RecipeCraftingContext {
     }
 
     public List<RecipeModifier> effectiveModifiers(MachineRecipe recipe) {
-        ArrayList<RecipeModifier> result = new ArrayList<>(recipe.modifiers().size() + structureModifiers.size());
+        List<RecipeModifier> smartModifiers = smartInterfaceModifiers();
+        ArrayList<RecipeModifier> result = new ArrayList<>(recipe.modifiers().size() + structureModifiers.size() + smartModifiers.size());
         result.addAll(recipe.modifiers());
         result.addAll(structureModifiers);
+        result.addAll(smartModifiers);
         return List.copyOf(result);
     }
 
     public List<MachineRequirement> runtimeRequirements(MachineRecipe recipe) {
         double energyMultiplier = levelMultiplier(MachineLevel::modifier, LevelValue.ENERGY);
         double outputMultiplier = levelMultiplier(MachineLevel::modifier, LevelValue.OUTPUT);
-        return recipe.runtimeRequirements(structureModifiers, energyMultiplier, outputMultiplier);
+        return recipe.runtimeRequirements(runtimeExtraModifiers(), energyMultiplier, outputMultiplier);
+    }
+
+    private List<RecipeModifier> runtimeExtraModifiers() {
+        List<RecipeModifier> smartModifiers = smartInterfaceModifiers();
+        if (structureModifiers.isEmpty()) return smartModifiers;
+        if (smartModifiers.isEmpty()) return structureModifiers;
+        ArrayList<RecipeModifier> result = new ArrayList<>(structureModifiers.size() + smartModifiers.size());
+        result.addAll(structureModifiers);
+        result.addAll(smartModifiers);
+        return List.copyOf(result);
     }
 
     public int levelModifiedDuration(MachineRecipe recipe) {
         double duration = recipe.getRecipeTotalTickTime() * levelMultiplier(MachineLevel::modifier, LevelValue.DURATION);
-        return IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyDuration(effectiveModifiers(recipe), floorNonNegative(duration)));
+        return Math.max(1, IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyDuration(effectiveModifiers(recipe), (int) Math.round(duration))));
     }
 
     public int levelModifiedParallelism(int base, int maximum) {
@@ -470,7 +484,7 @@ public final class RecipeCraftingContext {
     }
 
     public Optional<Float> smartInterfaceValue(String type) {
-        return smartInterface(type).map(binding -> binding.interfaceEntity().binding(binding.index()).orElseThrow().value());
+        return smartInterface(type).flatMap(binding -> binding.interfaceEntity().value(type));
     }
 
     public boolean hasSmartInterface(String type) {
@@ -478,23 +492,55 @@ public final class RecipeCraftingContext {
     }
 
     public boolean setSmartInterfaceValue(String type, float value) {
-        return smartInterface(type).map(binding -> binding.interfaceEntity().setValue(binding.index(), value)).orElse(false);
+        return smartInterface(type).map(binding -> binding.interfaceEntity().setValue(type, value)).orElse(false);
+    }
+
+    public Map<String, Float> smartInterfaceValues() {
+        Map<String, Float> result = new LinkedHashMap<>();
+        for (ProcessingComponent component : controller.getComponents()) {
+            if (!(component.getContainer() instanceof SmartInterfaceBlockEntity smartInterface)) continue;
+            if (!smartInterface.hasController(controller.getBlockPos())) continue;
+            for (String type : smartInterface.parameterTypes()) {
+                smartInterface.value(type).ifPresent(value -> result.putIfAbsent(type, value));
+            }
+        }
+        return Map.copyOf(result);
+    }
+
+    public String smartInterfaceFailureMessage(String type) {
+        var machine = controller.getFoundMachine();
+        var registration = machine == null ? null : MachineDefinitions.getRegistration(machine.registryName());
+        if (registration == null) return FAILURE_MISSING_INPUT;
+        var smartInterfaceType = registration.smartInterfaceTypes().get(type);
+        if (smartInterfaceType == null || smartInterfaceType.notEqualMessage().isBlank()) return FAILURE_MISSING_INPUT;
+        return smartInterfaceType.notEqualMessage();
     }
 
     private Optional<SmartInterfaceBinding> smartInterface(String type) {
         for (ProcessingComponent component : controller.getComponents()) {
             if (!(component.getContainer() instanceof SmartInterfaceBlockEntity smartInterface)) continue;
-            for (int index = 0; smartInterface.binding(index).isPresent(); index++) {
-                var binding = smartInterface.binding(index).orElseThrow();
-                if (binding.controllerPos().equals(controller.getBlockPos()) && binding.type().equals(type)) {
-                    return Optional.of(new SmartInterfaceBinding(smartInterface, index));
-                }
+            if (smartInterface.hasController(controller.getBlockPos()) && smartInterface.value(type).isPresent()) {
+                return Optional.of(new SmartInterfaceBinding(smartInterface));
             }
         }
         return Optional.empty();
     }
 
-    private record SmartInterfaceBinding(SmartInterfaceBlockEntity interfaceEntity, int index) {
+    private List<RecipeModifier> smartInterfaceModifiers() {
+        var machine = controller.getFoundMachine();
+        var registration = machine == null ? null : MachineDefinitions.getRegistration(machine.registryName());
+        if (registration == null || registration.smartInterfaceModifiers().isEmpty()) return List.of();
+        Map<String, Float> values = smartInterfaceValues();
+        if (values.isEmpty()) return List.of();
+        ArrayList<RecipeModifier> modifiers = new ArrayList<>();
+        for (SmartInterfaceModifier modifier : registration.smartInterfaceModifiers()) {
+            Float value = values.get(modifier.interfaceType());
+            if (value != null) modifiers.add(modifier.toRecipeModifier(value));
+        }
+        return List.copyOf(modifiers);
+    }
+
+    private record SmartInterfaceBinding(SmartInterfaceBlockEntity interfaceEntity) {
     }
 
     private void setFailure(String key) {
