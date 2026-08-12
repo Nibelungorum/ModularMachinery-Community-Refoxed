@@ -449,6 +449,24 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void client_runtime_activity_recovers_from_synced_active_block_state() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        DynamicMachine machine = factoryOnlyMachine(MMCR.id("client_runtime_block_state_machine"), 1);
+        setField(MachineControllerBlockEntity.class, controller, "machine", machine);
+        setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
+        setField(BlockEntity.class, controller, "blockState", testControllerState(testControllerBlock(machine))
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FORMED, true)
+                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ACTIVE, true));
+        Level level = LevelStub.create(Map.of(BlockPos.ZERO, testControllerBlock(machine)), List.of(controller));
+        setField(Level.class, level, "isClientSide", true);
+        setField(BlockEntity.class, controller, "level", level);
+
+        assertThat(controller.hasClientActiveRecipe()).isFalse();
+        assertThat(controller.isRuntimeActive()).isTrue();
+    }
+
+    @Test
     void runtime_activity_pauses_for_redstone_and_resumes_from_cached_recipe() throws Exception {
         bindItemComponents(Items.IRON_INGOT);
         bindItemComponents(Items.IRON_NUGGET);
