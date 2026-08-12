@@ -8,13 +8,14 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -22,7 +23,7 @@ import java.util.Optional;
  *
  * @author howxu <dev@howxu.cn>
  */
-public class SmartInterfaceBlockEntity extends BlockEntity {
+public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
     private static final String BINDINGS_KEY = "bindings";
     private static final int BINDING_CHECK_INTERVAL_TICKS = 20;
 
@@ -79,6 +80,7 @@ public class SmartInterfaceBlockEntity extends BlockEntity {
                 && !(level.getBlockEntity(binding.controllerPos()) instanceof MachineControllerBlockEntity))) {
             changed();
         }
+        refreshLinkedAppearance();
     }
 
     @Override
@@ -97,9 +99,25 @@ public class SmartInterfaceBlockEntity extends BlockEntity {
                 bindings.add(binding);
             }
         });
+        refreshLinkedAppearance();
+    }
+
+    public void refreshLinkedAppearance() {
+        Map<BlockPos, Identifier> appearances = new LinkedHashMap<>();
+        if (level != null && !level.isClientSide()) {
+            for (Binding binding : bindings) {
+                if (level.getBlockEntity(binding.controllerPos()) instanceof MachineControllerBlockEntity controller
+                        && controller.isFormed()
+                        && controller.getFoundMachine() != null) {
+                    appearances.put(binding.controllerPos(), controller.getFoundMachine().appearance().formedPortBaseTexture());
+                }
+            }
+        }
+        replaceControllerAppearances(appearances);
     }
 
     private void changed() {
+        refreshLinkedAppearance();
         setChanged();
         if (level != null) {
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);

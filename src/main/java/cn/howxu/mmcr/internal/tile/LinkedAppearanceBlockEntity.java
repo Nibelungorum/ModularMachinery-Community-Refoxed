@@ -63,17 +63,32 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
     public final void linkControllerAppearance(BlockPos controllerPos, Identifier texture) {
         if (controllerPos == null) return;
         linkedControllers.put(controllerPos.immutable(), texture == null ? DEFAULT_APPEARANCE_BASE_TEXTURE : texture);
-        refreshLinkedAppearance();
+        refreshAppearanceBaseTexture();
     }
 
     public final void unlinkControllerAppearance(BlockPos controllerPos) {
         if (controllerPos == null || linkedControllers.remove(controllerPos) == null) return;
-        refreshLinkedAppearance();
+        refreshAppearanceBaseTexture();
     }
 
     public final void resetAppearanceBaseTexture() {
         linkedControllers.clear();
-        refreshLinkedAppearance();
+        refreshAppearanceBaseTexture();
+    }
+
+    public final void replaceControllerAppearances(Map<BlockPos, Identifier> appearances) {
+        TreeMap<BlockPos, Identifier> resolved = new TreeMap<>(BlockPos::compareTo);
+        if (appearances != null) {
+            appearances.forEach((controllerPos, texture) -> {
+                if (controllerPos != null) {
+                    resolved.put(controllerPos.immutable(), texture == null ? DEFAULT_APPEARANCE_BASE_TEXTURE : texture);
+                }
+            });
+        }
+        if (linkedControllers.equals(resolved)) return;
+        linkedControllers.clear();
+        linkedControllers.putAll(resolved);
+        refreshAppearanceBaseTexture();
     }
 
     public final void setAppearanceBaseTexture(Identifier texture) {
@@ -95,7 +110,7 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
                 : DEFAULT_APPEARANCE_BASE_TEXTURE;
     }
 
-    protected final void refreshLinkedAppearance() {
+    protected final void refreshAppearanceBaseTexture() {
         setAppearanceBaseTexture(appearanceTexture());
         setChanged();
     }
@@ -127,7 +142,7 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
             String texture = controllerInput.getStringOr(LINKED_CONTROLLER_TEXTURE_KEY, DEFAULT_APPEARANCE_BASE_TEXTURE.toString());
             linkedControllers.put(controllerPos, texture.isBlank() ? DEFAULT_APPEARANCE_BASE_TEXTURE : Identifier.parse(texture));
         }
-        refreshLinkedAppearance();
+        refreshAppearanceBaseTexture();
     }
 
     @Override
