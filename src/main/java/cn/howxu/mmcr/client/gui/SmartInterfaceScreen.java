@@ -10,6 +10,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
@@ -25,9 +26,11 @@ import java.util.IllegalFormatException;
  * @author howxu <dev@howxu.cn>
  */
 public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInterfaceMenu> {
-    private static final Identifier TEXTURE = MMCR.id("textures/gui/inventory_normal.png");
+    private static final Identifier TEXTURE = MMCR.id("textures/gui/guismartinterface.png");
     private int showing;
     private EditBox valueInput;
+    private Button previous;
+    private Button next;
 
     public SmartInterfaceScreen(SmartInterfaceMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, 176, 166);
@@ -37,12 +40,13 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
     @Override
     protected void init() {
         super.init();
-        valueInput = addRenderableWidget(new EditBox(font, leftPos + 53, topPos + 74, 70, 18, Component.empty()));
+        valueInput = addRenderableWidget(new EditBox(font, leftPos + 98, topPos + 35, 70, 10, Component.empty()));
         valueInput.setMaxLength(16);
-        addRenderableWidget(Button.builder(Component.literal("<"), button -> select(showing - 1))
-                .bounds(leftPos + 20, topPos + 105, 40, 20).build());
-        addRenderableWidget(Button.builder(Component.literal(">"), button -> select(showing + 1))
-                .bounds(leftPos + 116, topPos + 105, 40, 20).build());
+        previous = addRenderableWidget(Button.builder(Component.translatable("mmcr.smart_interface.previous"), button -> select(showing - 1))
+                .bounds(leftPos + 7, topPos + 58, 40, 20).build());
+        next = addRenderableWidget(Button.builder(Component.translatable("mmcr.smart_interface.next"), button -> select(showing + 1))
+                .bounds(leftPos + 129, topPos + 58, 40, 20).build());
+        updateWidgets();
     }
 
     @Override
@@ -55,19 +59,30 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
     }
 
     @Override
+    public boolean charTyped(CharacterEvent event) {
+        return acceptsInputCharacter(event.codepoint()) && super.charTyped(event);
+    }
+
+    @Override
+    protected void containerTick() {
+        super.containerTick();
+        updateWidgets();
+    }
+
+    @Override
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         SmartInterfaceBlockEntity.Binding binding = binding();
         if (binding == null) {
-            graphics.text(font, Component.literal("No smart interface binding"), 8, 10, 0x404040, false);
+            graphics.text(font, Component.translatable("mmcr.smart_interface.empty_binding"), 7, 16, 0xFFFFFF, true);
             return;
         }
         SmartInterfaceType type = type(binding);
-        graphics.text(font, Component.literal("Binding " + (showing + 1)), 8, 8, 0x404040, false);
-        graphics.text(font, Component.literal(binding.controllerPos().toShortString()), 8, 24, 0x404040, false);
+        graphics.text(font, Component.translatable("mmcr.smart_interface.title", showing + 1, bindingCount()), 4, 4, 0xFFFFFF, true);
+        graphics.text(font, Component.literal(binding.controllerPos().toShortString()), 7, 16, 0xFFFFFF, true);
         if (type == null) return;
-        graphics.text(font, Component.translatable(type.headerInfo()), 8, 40, 0x404040, false);
-        graphics.text(font, Component.literal(valueInfo(type.valueInfo(), binding.value())), 8, 56, 0x404040, false);
-        graphics.text(font, Component.translatable(type.footerInfo()), 8, 96, 0x404040, false);
+        graphics.text(font, Component.translatable(type.headerInfo()), 7, 26, 0xFFFFFF, true);
+        graphics.text(font, Component.literal(valueInfo(type.valueInfo(), binding.value())), 7, 36, 0xFFFFFF, true);
+        graphics.text(font, Component.translatable(type.footerInfo()), 7, 46, 0xFFFFFF, true);
     }
 
     @Override
@@ -94,10 +109,17 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
         }
     }
 
+    static boolean acceptsInputCharacter(int codepoint) {
+        return Character.isDigit(codepoint) || codepoint == '.' || codepoint == 'E';
+    }
+
+    static int clampPage(int page, int bindingCount) {
+        return bindingCount <= 0 ? 0 : Math.clamp(page, 0, bindingCount - 1);
+    }
+
     private void select(int index) {
-        SmartInterfaceBlockEntity smartInterface = smartInterface();
-        if (smartInterface == null || smartInterface.binding(index).isEmpty()) return;
-        showing = index;
+        showing = clampPage(index, bindingCount());
+        updateWidgets();
     }
 
     private void sendValue() {
@@ -110,6 +132,27 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
     private SmartInterfaceBlockEntity.Binding binding() {
         SmartInterfaceBlockEntity smartInterface = smartInterface();
         return smartInterface == null ? null : smartInterface.binding(showing).orElse(null);
+    }
+
+    private int bindingCount() {
+        SmartInterfaceBlockEntity smartInterface = smartInterface();
+        if (smartInterface == null) return 0;
+        int count = 0;
+        while (smartInterface.binding(count).isPresent()) count++;
+        return count;
+    }
+
+    private void updateWidgets() {
+        if (valueInput == null) return;
+        int count = bindingCount();
+        showing = clampPage(showing, count);
+        boolean bound = count > 0;
+        valueInput.visible = bound;
+        valueInput.active = bound;
+        previous.visible = bound;
+        previous.active = showing > 0;
+        next.visible = bound;
+        next.active = showing + 1 < count;
     }
 
     private SmartInterfaceBlockEntity smartInterface() {

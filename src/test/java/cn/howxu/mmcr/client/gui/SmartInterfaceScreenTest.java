@@ -16,4 +16,21 @@ class SmartInterfaceScreenTest {
         assertThat(SmartInterfaceScreen.parseFiniteValue("NaN")).isNull();
         assertThat(SmartInterfaceScreen.parseFiniteValue("invalid")).isNull();
     }
+
+    @Test
+    void input_accepts_only_the_mmce_numeric_characters() {
+        assertThat(SmartInterfaceScreen.acceptsInputCharacter('8')).isTrue();
+        assertThat(SmartInterfaceScreen.acceptsInputCharacter('.')).isTrue();
+        assertThat(SmartInterfaceScreen.acceptsInputCharacter('E')).isTrue();
+        assertThat(SmartInterfaceScreen.acceptsInputCharacter('-')).isFalse();
+        assertThat(SmartInterfaceScreen.acceptsInputCharacter('e')).isFalse();
+    }
+
+    @Test
+    void selected_page_is_clamped_to_available_bindings() {
+        assertThat(SmartInterfaceScreen.clampPage(-1, 3)).isZero();
+        assertThat(SmartInterfaceScreen.clampPage(1, 3)).isEqualTo(1);
+        assertThat(SmartInterfaceScreen.clampPage(3, 3)).isEqualTo(2);
+        assertThat(SmartInterfaceScreen.clampPage(0, 0)).isZero();
+    }
 }

@@ -76,11 +76,12 @@ public final class ModelGen extends ModelProvider {
 
     /** 用 block 注册名生成纹理 Material:modid:block/<name>。每个 block 自带独立贴图。 */
     private static Material textureFor(String blockName) {
-        return new Material(MMCR.id("block/" + blockName));
+        String textureName = "smart_interface".equals(blockName) ? "overlay_smartinterface_number" : blockName;
+        return new Material(MMCR.id("block/" + textureName));
     }
 
     private static boolean shouldGenerateBlockModels(String name) {
-        return !isIoPort(name) && !isParallelController(name) && !"factory_controller".equals(name) && !"smart_interface".equals(name)
+        return !isIoPort(name) && !isParallelController(name) && !"factory_controller".equals(name)
                 && MachineDefinitions.allRegistrations().stream()
                 .map(registration -> MachineControllerSpec.defaultsFor(registration.id()).id().getPath())
                 .noneMatch(name::equals);
