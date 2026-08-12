@@ -11,9 +11,11 @@ import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
+import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModItems;
@@ -89,6 +91,7 @@ public final class TestBootstrap {
         bindPortBlocks();
         for (ParallelTier tier : ParallelTier.values()) bindParallelController(tier);
         bindFactoryController();
+        bindSmartInterface();
         bind(ModBlocks.BLOCKS.get("debug_infinite_energy_source"), Blocks.STONE);
         bind(ModBlocks.BLOCKS.get("debug_infinite_water_source"), Blocks.STONE);
         bind(ModBlocks.BLOCKS.get("debug_infinite_lava_source"), Blocks.STONE);
@@ -220,6 +223,26 @@ public final class TestBootstrap {
         Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id("factory_controller"), beType);
         blockEntities.freeze();
         return beType;
+    }
+
+    private static void bindSmartInterface() throws Exception {
+        MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
+        MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
+        blocks.unfreeze(true);
+        blockEntities.unfreeze(true);
+        SmartInterfaceBlock block = new SmartInterfaceBlock(
+                () -> ModBlockEntities.SMART_INTERFACE.get(), Blocks.IRON_BLOCK.properties());
+        Registry.register(BuiltInRegistries.BLOCK, MMCR.id("smart_interface"), block);
+        bind(ModBlocks.SMART_INTERFACE, block);
+        Item item = registerItem(ModItems.ITEMS.get("smart_interface"));
+        bind(ModItems.ITEMS.get("smart_interface"), item);
+        Item.BY_BLOCK.put(block, item);
+
+        BlockEntityType<?> blockEntityType = new BlockEntityType<>(SmartInterfaceBlockEntity::new, block);
+        Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id("smart_interface"), blockEntityType);
+        blockEntities.freeze();
+        blocks.freeze();
+        bind(ModBlockEntities.SMART_INTERFACE, blockEntityType);
     }
 
     private static void bind(Object deferredHolder, Object value) throws Exception {
