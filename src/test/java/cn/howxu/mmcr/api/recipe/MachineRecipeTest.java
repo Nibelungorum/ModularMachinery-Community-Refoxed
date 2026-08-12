@@ -496,6 +496,32 @@ class MachineRecipeTest {
         assertThat(((ItemRequirement) recipe.requirements().getFirst()).count()).isEqualTo(2);
     }
 
+    @Test
+    void runtime_requirements_apply_item_input_chance_modifiers() {
+        MachineRecipe recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "input_chance_modifier"),
+                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                20,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2,
+                        ItemStack.EMPTY, 1F, List.of(), cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet.EMPTY, 0.5F)),
+                false,
+                List.of());
+
+        List<RecipeModifier> effective = List.of(new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM,
+                RecipeModifier.IOType.INPUT, 0.5F, RecipeModifier.Operation.MULTIPLY, true));
+
+        assertThat(recipe.runtimeRequirements(effective).getFirst()).isInstanceOf(ItemRequirement.class);
+        assertThat(((ItemRequirement) recipe.runtimeRequirements(effective).getFirst()).consumeChance()).isEqualTo(0.25F);
+        assertThat(((ItemRequirement) recipe.requirements().getFirst()).consumeChance()).isEqualTo(0.5F);
+    }
+
     private static Holder<Fluid> bindFluidComponents(Fluid fluid) {
         var holder = fluid.builtInRegistryHolder();
         holder.bindComponents(DataComponentMap.EMPTY);

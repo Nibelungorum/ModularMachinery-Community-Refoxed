@@ -360,7 +360,8 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         if (requirement instanceof ItemRequirement item) {
             if (item.io() == RecipeModifier.IOType.INPUT) {
                 int count = IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyItemInput(effectiveModifiers, item.count()));
-                return new ItemRequirement(item.io(), item.item(), count, item.stack(), item.chance(), item.tags(), item.components(), item.consumeChance());
+                float consumeChance = IntegrationTypeHelper.applyItemInputChance(effectiveModifiers, item.consumeChance());
+                return new ItemRequirement(item.io(), item.item(), count, item.stack(), item.chance(), item.tags(), item.components(), consumeChance);
             }
             ItemStack stack = item.stack().copy();
             stack.setCount(IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyItemOutput(effectiveModifiers, stack.getCount())));
@@ -370,7 +371,8 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         if (requirement instanceof FluidRequirement fluid) {
             if (fluid.io() == RecipeModifier.IOType.INPUT) {
                 int amount = IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyFluidInput(effectiveModifiers, fluid.amount()));
-                return new FluidRequirement(fluid.io(), fluid.fluid(), amount, fluid.stack(), fluid.chance(), fluid.tags());
+                float chance = IntegrationTypeHelper.applyFluidInputChance(effectiveModifiers, fluid.chance());
+                return new FluidRequirement(fluid.io(), fluid.fluid(), amount, fluid.stack(), chance, fluid.tags());
             }
             FluidStack stack = fluid.stack().copy();
             stack.setAmount(IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyFluidOutput(effectiveModifiers, stack.getAmount())));
