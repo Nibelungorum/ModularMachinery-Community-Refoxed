@@ -113,6 +113,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private Set<BlockPos> linkedPortPositions = new HashSet<>();
     private int recipeSearchRetryCounter;
     private long recipeSearchAttemptCounter;
+    private long lastRecipeSearchRegistryVersion = Long.MIN_VALUE;
     private long cachedCandidatesReloadVersion = Long.MIN_VALUE;
     private int cachedDatapackRecipeCount = -1;
     private @Nullable Identifier cachedCandidatesMachineId;
@@ -1240,6 +1241,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private boolean shouldSearchRecipe() {
+        long registryVersion = RecipeRegistry.registryVersion();
+        if (lastRecipeSearchRegistryVersion != registryVersion) {
+            lastRecipeSearchRegistryVersion = registryVersion;
+            recipeSearchRetryCounter = 0;
+            return true;
+        }
         if (recipeSearchRetryCounter <= 0) return true;
         long ticks = recipeSearchAttemptCounter;
         if (level != null) {
@@ -1632,9 +1639,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         Identifier machineId = machine == null ? null : machine.registryName();
         if (machineId == null) return List.of();
         int datapackCount = datapackRecipeCount();
-        long reloadVersion = RecipeRegistry.reloadVersion();
+        long registryVersion = RecipeRegistry.registryVersion();
         if (machineId.equals(cachedCandidatesMachineId)
-                && cachedCandidatesReloadVersion == reloadVersion
+                && cachedCandidatesReloadVersion == registryVersion
                 && cachedDatapackRecipeCount == datapackCount) {
             return cachedCandidates;
         }
@@ -1651,7 +1658,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             }
         }
         cachedCandidatesMachineId = machineId;
-        cachedCandidatesReloadVersion = reloadVersion;
+        cachedCandidatesReloadVersion = registryVersion;
         cachedDatapackRecipeCount = datapackCount;
         cachedCandidates = List.copyOf(recipes.values());
         cachedCandidateIndex = RecipeCandidateIndex.build(cachedCandidates);

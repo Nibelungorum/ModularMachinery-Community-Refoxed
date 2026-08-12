@@ -17,6 +17,7 @@ public final class RecipeRegistry {
     private static volatile Map<Identifier, MachineRecipe> DYNAMIC_RECIPES = Map.of();
     private static volatile Map<Identifier, TreeMap<Integer, TreeSet<MachineRecipe>>> BY_MACHINE = Map.of();
     private static long reloadVersion;
+    private static long registryVersion;
 
     private RecipeRegistry() {
     }
@@ -33,7 +34,7 @@ public final class RecipeRegistry {
         }
         STATIC_RECIPES.put(recipe.id(), recipe);
         rebuildIndex();
-        reloadVersion++;
+        registryVersion++;
     }
 
     public static MachineRecipe getRecipe(Identifier id) {
@@ -66,6 +67,10 @@ public final class RecipeRegistry {
         return reloadVersion;
     }
 
+    public static long registryVersion() {
+        return registryVersion;
+    }
+
     public static boolean containsStatic(Identifier id) {
         return STATIC_RECIPES.containsKey(id);
     }
@@ -81,6 +86,7 @@ public final class RecipeRegistry {
         DYNAMIC_RECIPES = Map.copyOf(replacement);
         rebuildIndex();
         reloadVersion++;
+        registryVersion++;
     }
 
     public static Map<Identifier, MachineRecipe> dynamicSnapshot() {
@@ -109,6 +115,7 @@ public final class RecipeRegistry {
         DYNAMIC_RECIPES = Map.of();
         BY_MACHINE = Map.of();
         reloadVersion++;
+        registryVersion++;
     }
 
     public static void clearForTesting() {
