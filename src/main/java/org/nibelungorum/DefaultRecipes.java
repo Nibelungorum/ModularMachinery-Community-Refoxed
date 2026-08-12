@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.Dynamic;
@@ -49,6 +50,7 @@ public final class DefaultRecipes {
     private static final Identifier CRACKER_ID = MMCR.id("cracker");
     private static final Identifier REACTOR_ID = MMCR.id("reactor");
     private static final Identifier THERMAL_SMELTING_FURNACE_ID = MMCR.id("thermal_smelting_furnace");
+    private static final Identifier PURPUR_FURNACE_ID = MMCR.id("purpur_furnace");
 
     private DefaultRecipes() {
     }
@@ -64,6 +66,9 @@ public final class DefaultRecipes {
             recipes.put(recipe.id(), recipe);
         }
         for (MachineRecipe recipe : componentExampleRecipes()) {
+            recipes.put(recipe.id(), recipe);
+        }
+        for (MachineRecipe recipe : purpurFurnaceRecipes()) {
             recipes.put(recipe.id(), recipe);
         }
         return Map.copyOf(recipes);
@@ -234,6 +239,23 @@ public final class DefaultRecipes {
                 thermalSmeltingDefinition("iron", DefaultMachineLevels.IRON_COIL, 160, Items.IRON_INGOT, Items.GOLD_INGOT, 800),
                 thermalSmeltingDefinition("gold", DefaultMachineLevels.GOLD_COIL, 200, Items.GOLD_INGOT, Items.DIAMOND, 1_200),
                 thermalSmeltingDefinition("diamond", DefaultMachineLevels.DIAMOND_COIL, 240, Items.DIAMOND, Items.NETHERITE_INGOT, 2_000));
+    }
+
+    private static List<MachineRecipe> purpurFurnaceRecipes() {
+        return List.of(
+                purpurFurnaceRecipe("mode_1", 1F, Items.DIAMOND, 2),
+                purpurFurnaceRecipe("mode_2", 2F, Items.GOLD_INGOT, 4),
+                purpurFurnaceRecipe("mode_3", 3F, Items.IRON_INGOT, 8));
+    }
+
+    private static MachineRecipe purpurFurnaceRecipe(String mode, float value, Item output, int count) {
+        var coal = itemInput(Items.COAL, 1);
+        var energy = energyInput(5);
+        var result = item(output, count);
+        return new MachineRecipe(MMCR.id("purpur_furnace_" + mode), PURPUR_FURNACE_ID, 200,
+                List.of(coal, energy), List.of(result), List.of(), 0, 1, true, List.of(),
+                List.of(MachineRequirement.fromInput(coal), MachineRequirement.fromInput(energy),
+                        MachineRequirement.itemOutput(result), SmartInterfaceRequirement.input("Mode", value)), true, List.of());
     }
 
     private static Definition thermalSmeltingDefinition(String level, Identifier levelId, int ticks,

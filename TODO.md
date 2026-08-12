@@ -39,21 +39,28 @@ docs/superpowers/plans/2026-08-11-smart-interface-implementation.md
 
 - [ ] 声音事件
 
-我使用 writing-plans 完成了实施计划：
-docs/superpowers/plans/2026-08-11-machine-sound-implementation.md
-计划拆为 6 个可独立验收的任务：
-1. 机器声音声明、服务端 SoundEvent 注册与 Java API。
-2. KubeJS Startup Builder API。
-3. 普通机器及工厂 lane 的成功完成声。
-4. 活动状态同步边界与存档恢复语义。
-5. 客户端循环声音实例与生命周期管理。
-6. 单元测试、编译与手动集成验收。
-计划已自检覆盖同步、持久化、dedicated server 客户端隔离以及完成声触发边界。
+实现完成并已通过最终 review。
+- Worktree：.worktrees/machine-sounds
+- 分支：feat/machine-sounds
+- 基于：dev/neo/26.1.2
+- 提交范围：2be3758..fc88c5a，共 9 个实现/修复/测试提交
+- 验证：focused suite 最终 BUILD SUCCESSFUL in 8s；此前 compileJava 也已通过 BUILD SUCCESSFUL in 10s
+- Review：final whole-branch re-review 结论 Ready，无 Critical/Important findings
+- 遗留：未执行手动集成客户端验收，因为当前会话没有获批替代客户端启动流程，且项目禁止 ./gradlew runClient --no-daemon
+Implementation complete. What would you like to do?
+1. Merge back to dev/neo/26.1.2 locally
+2. Push and create a Pull Request
+3. Keep the branch as-is
+4. Discard this work
 
 - [ ] 接口集成(AE2 总成型接口[新UI?] MEK气体接口(涉及配方modify) 输入输出总成)
 
 - [ ] 额外解锁槽(发电阵列，生物屠宰场类似)系统，这样UI又要改了，干吧跌。
 把这个单独扔到一个方块里面吧，嗯对
+
+- [ ] 插件型机器 参考太空电梯
+
+- [ ] 可扩展型机器 参考蒸馏塔
 
 - [ ] 异步(这个可能要后面再说了)，大范围异步的线程内资源共享也是开销的一部分
 
@@ -62,6 +69,8 @@ docs/superpowers/plans/2026-08-11-machine-sound-implementation.md
 - [ ] 机器的render和相关api暴露(最后一个再做这个)
 
 - [ ] 重构其它地方
+
+
 
 - [X] 多线程 Stage 5已经实现了
 

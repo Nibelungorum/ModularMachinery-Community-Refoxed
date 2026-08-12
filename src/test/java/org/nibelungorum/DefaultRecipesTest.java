@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
@@ -193,6 +194,16 @@ class DefaultRecipesTest {
     }
 
     @Test
+    void purpur_furnace_recipes_use_mode_to_select_the_output() {
+        installDefaultRuntimeContent();
+        DefaultRecipes.ensureRegistered();
+
+        assertPurpurFurnaceRecipe("purpur_furnace_mode_1", 1F, Items.DIAMOND, 2);
+        assertPurpurFurnaceRecipe("purpur_furnace_mode_2", 2F, Items.GOLD_INGOT, 4);
+        assertPurpurFurnaceRecipe("purpur_furnace_mode_3", 3F, Items.IRON_INGOT, 8);
+    }
+
+    @Test
     void ensureRegistered_publishes_builtin_cracker_coal_lapis_recipe() {
         installDefaultRuntimeContent();
         DefaultRecipes.ensureRegistered();
@@ -272,7 +283,8 @@ class DefaultRecipesTest {
         assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker"))).hasSize(21);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("reactor"))).hasSize(21);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("thermal_smelting_furnace"))).hasSize(16);
-        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(102);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("purpur_furnace"))).hasSize(3);
+        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(105);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker")))
                 .anySatisfy(recipe -> assertThat(recipe.fluidOutputs()).isNotEmpty());
         assertThat(RecipeRegistry.recipes())
@@ -415,6 +427,21 @@ class DefaultRecipesTest {
         DefaultMachineLevels.register();
         MachineLevelRegistry.freezeRegistration();
         MachineStructureRegistry.replaceDynamic(DefaultMachines.structures());
+    }
+
+    private static void assertPurpurFurnaceRecipe(String id, float mode, net.minecraft.world.item.Item output, int count) {
+        var recipe = RecipeRegistry.getRecipe(MMCR.id(id));
+        assertThat(recipe.machineId()).isEqualTo(MMCR.id("purpur_furnace"));
+        assertThat(recipe.tickTime()).isEqualTo(200);
+        assertThat(recipe.inputs()).hasSize(2);
+        assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(0)).item().items().toList().getFirst().value()).isEqualTo(Items.COAL);
+        assertThat(((MachineIngredient.EnergyIngredient) recipe.inputs().get(1)).fePerTick()).isEqualTo(5);
+        assertThat(recipe.outputs()).singleElement().satisfies(stack -> {
+            assertThat(stack.getItem()).isEqualTo(output);
+            assertThat(stack.getCount()).isEqualTo(count);
+        });
+        assertThat(recipe.requirements()).filteredOn(SmartInterfaceRequirement.class::isInstance).singleElement()
+                .isEqualTo(SmartInterfaceRequirement.input("Mode", mode));
     }
 
     private static ItemStack namedStack(net.minecraft.world.item.Item item, String name) {

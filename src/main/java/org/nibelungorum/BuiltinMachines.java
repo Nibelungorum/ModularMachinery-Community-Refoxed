@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import net.minecraft.resources.Identifier;
 
 /**
@@ -18,6 +19,7 @@ public final class BuiltinMachines {
     private static final Identifier CRACKER_ID = MMCR.id("cracker");
     private static final Identifier REACTOR_ID = MMCR.id("reactor");
     private static final Identifier THERMAL_SMELTING_FURNACE_ID = MMCR.id("thermal_smelting_furnace");
+    private static final Identifier PURPUR_FURNACE_ID = MMCR.id("purpur_furnace");
 
     private BuiltinMachines() {
     }
@@ -115,5 +117,16 @@ public final class BuiltinMachines {
                     .maxParallelAmount(Integer.MAX_VALUE)
                     .build();
         });
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(PURPUR_FURNACE_ID)
+                .localizedName("紫珀炉")
+                .appearance(MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("end_stone_bricks")))
+                .recipeFamilyId(PURPUR_FURNACE_ID)
+                .allowModifiers(false)
+                .allowMultithreading(true)
+                .allowParallelism(true)
+                .maxParallelAmount(4)
+                .smartInterfaceType(new SmartInterfaceType("Mode", 1F, 0,
+                        "模式", "Mode: %.0f", "1: 钻石, 2: 金锭, 3: 铁锭", "模式不匹配", "模式: %.0f", 1))
+                .build());
     }
 }

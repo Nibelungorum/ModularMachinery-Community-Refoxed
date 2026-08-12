@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
@@ -160,6 +161,27 @@ class DefaultMachinesTest {
         assertThat(coilSlot.matches(net.minecraft.world.level.block.Blocks.GOLD_BLOCK.defaultBlockState())).isTrue();
         assertThat(coilSlot.matches(net.minecraft.world.level.block.Blocks.DIAMOND_BLOCK.defaultBlockState())).isTrue();
         assertThat(coilSlot.matches(net.minecraft.world.level.block.Blocks.EMERALD_BLOCK.defaultBlockState())).isFalse();
+    }
+
+    @Test
+    void structures_install_purpur_furnace_with_interfaces_parallelism_and_threads() {
+        installDefaultStructures();
+
+        var machine = MachineRegistry.getMachine(MMCR.id("purpur_furnace"));
+
+        assertThat(machine).isNotNull();
+        assertThat(machine.localizedName()).isEqualTo("紫珀炉");
+        assertThat(machine.parallelizable()).isTrue();
+        assertThat(machine.maxParallelism()).isEqualTo(4);
+        assertThat(machine.pattern().get(BlockPos.ZERO))
+                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine.registryName()).get()));
+        assertThat(machine.pattern().pattern().values())
+                .anySatisfy(predicate -> assertThat(predicate.matches(ModBlocks.SMART_INTERFACE.get().defaultBlockState())).isTrue());
+        var registration = MachineDefinitions.getRegistration(MMCR.id("purpur_furnace"));
+        assertThat(registration.allowMultithreading()).isTrue();
+        assertThat(registration.smartInterfaceTypes()).containsKey("Mode");
+        assertThat(registration.smartInterfaceTypes().get("Mode").defaultValue()).isEqualTo(1F);
+        assertThat(requirementIds(machine)).contains("energy_input_hatch>=tiny", "item_input_bus>=tiny", "item_output_bus>=tiny");
     }
 
     @Test

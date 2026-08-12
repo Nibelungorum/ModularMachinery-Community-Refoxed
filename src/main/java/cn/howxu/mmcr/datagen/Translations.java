@@ -355,6 +355,7 @@ Map.entry("zh_cn", Map.ofEntries(
                     Map.entry("item.mmcr.reactor_controller",        "反应堆控制器"),
                     Map.entry("item.mmcr.thermal_smelting_furnace_controller", "热能冶炼炉控制器"),
                     Map.entry("item.mmcr.basic_casing",             "基础机器外壳"),
+                    Map.entry("item.mmcr.smart_interface", "智能接口"),
                     itemEntry("item_input_bus",       "普通物品输入总线"),
                     itemEntry("item_input_bus_tiny",         "微型物品输入总线"),
                     itemEntry("item_input_bus_small",        "小型物品输入总线"),

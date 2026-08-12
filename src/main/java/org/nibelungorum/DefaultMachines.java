@@ -52,6 +52,7 @@ public final class DefaultMachines {
     private static final Identifier CRACKER_ID = MMCR.id("cracker");
     private static final Identifier REACTOR_ID = MMCR.id("reactor");
     private static final Identifier THERMAL_SMELTING_FURNACE_ID = MMCR.id("thermal_smelting_furnace");
+    private static final Identifier PURPUR_FURNACE_ID = MMCR.id("purpur_furnace");
 
     private DefaultMachines() {
     }
@@ -75,6 +76,7 @@ public final class DefaultMachines {
         structures.put(CRACKER_ID, structureOf(cracker(itemInput, itemOutput, fluidOutput, energyInput)));
         structures.put(REACTOR_ID, structureOf(reactor(itemInput, itemOutput, fluidInput, fluidOutput, energyOutput)));
         structures.put(THERMAL_SMELTING_FURNACE_ID, thermalSmeltingFurnaceStructure());
+        structures.put(PURPUR_FURNACE_ID, structureOf(purpurFurnace()));
         return Map.copyOf(structures);
     }
 
@@ -391,6 +393,48 @@ public final class DefaultMachines {
                 true,
                 4,
                 List.of());
+    }
+
+    private static Machine purpurFurnace() {
+        Block controller = ModBlocks.controllerFor(PURPUR_FURNACE_ID).get();
+        List<BlockPredicate> interfaceSlots = new ArrayList<>(List.of(
+                portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.ITEM),
+                portFamily(IOType.OUTPUT, PortTierRequirementSpec.PortCategory.ITEM),
+                portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.ENERGY),
+                new BlockPredicate.OfBlock(ModBlocks.SMART_INTERFACE.get())));
+        for (ParallelTier tier : ParallelTier.values()) {
+            interfaceSlots.add(new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get(tier.idSuffix()).get()));
+        }
+
+        BlockArray pattern = BlockArray.builder()
+                .pattern(" AAAAA ", "       ", "       ", "       ", "  GGG  ", "       ", "       ", "       ")
+                .pattern("AAXXXAA", "  BBB  ", "  EEE  ", "  FFF  ", " GBBBG ", " HHHHH ", "       ", "       ")
+                .pattern("AXXXXXA", " B   B ", " E   E ", " F   F ", "GB   BG", " HXXXH ", "  GBG  ", "   I   ")
+                .pattern("AXXXXXA", " B   B ", " E   E ", " F   F ", "GB   BG", " HX XH ", "  B B  ", "  I I  ")
+                .pattern("AXXXXXA", " B   B ", " E   E ", " F   F ", "GB   BG", " HXXXH ", "  GBG  ", "   I   ")
+                .pattern("AAXXXAA", "  BDB  ", "  EEE  ", "  FFF  ", " GBBBG ", " HHHHH ", "       ", "       ")
+                .pattern(" AAAAA ", "       ", "       ", "       ", "  GGG  ", "       ", "       ", "       ")
+                .set('X', new BlockPredicate.OfBlock(Blocks.END_STONE_BRICKS))
+                .set('A', new BlockPredicate.OfBlock(Blocks.END_STONE_BRICK_STAIRS))
+                .set('B', new BlockPredicate.AnyOf(interfaceSlots))
+                .set('D', new BlockPredicate.OfBlock(controller))
+                .set('E', new BlockPredicate.OfBlock(Blocks.PURPLE_TERRACOTTA))
+                .set('F', new BlockPredicate.OfBlock(Blocks.PURPUR_BLOCK))
+                .set('G', new BlockPredicate.OfBlock(Blocks.END_STONE_BRICK_SLAB))
+                .set('H', new BlockPredicate.OfBlock(Blocks.PURPUR_STAIRS))
+                .set('I', new BlockPredicate.OfBlock(Blocks.PURPUR_SLAB))
+                .controller('D')
+                .build();
+
+        return new DynamicMachine(PURPUR_FURNACE_ID, "紫珀炉", pattern,
+                MachineControllerSpec.defaultsFor(PURPUR_FURNACE_ID),
+                MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("end_stone_bricks")),
+                PortRequirementSpec.none(), PortTierRequirementSpec.builder()
+                        .anyItemInput()
+                        .anyItemOutput()
+                        .anyEnergyInput()
+                        .build(),
+                List.of(), Map.of(), 4, true, true, 1, List.of());
     }
 
     private static BlockPredicate portFamily(IOType ioType, PortTierRequirementSpec.PortCategory category) {
