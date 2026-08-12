@@ -110,13 +110,13 @@ class MachineBuilderJSTest {
     @Test
     void startup_builder_creates_machine_registration_without_structure() {
         var registration = new MachineBuilderJS(MMCR.id("arc_furnace"))
-                .localizedName("Arc Furnace")
+                .displayNameKey("machine.mmcr.arc_furnace")
                 .allowVerticalFacing()
                 .allowModifiers()
                 .createObject();
 
         assertThat(registration.id()).isEqualTo(MMCR.id("arc_furnace"));
-        assertThat(registration.localizedName()).isEqualTo("Arc Furnace");
+        assertThat(registration.displayNameKey()).isEqualTo("machine.mmcr.arc_furnace");
         assertThat(registration.controllerSpec().allowVerticalFacing()).isTrue();
         assertThat(registration.allowModifiers()).isTrue();
     }

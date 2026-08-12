@@ -14,7 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
-    public transient String localizedName = "Unknown Machine";
+    public transient String displayNameKey;
     public transient Identifier controllerFrontTexture;
     public transient Identifier controllerSideTexture;
     public transient Identifier controllerTopTexture;
@@ -41,15 +41,20 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         this(Identifier.parse(id));
     }
 
-    public MachineBuilderJS localizedName(String name) {
-        this.localizedName = name;
+    public MachineBuilderJS displayNameKey(String key) {
+        this.displayNameKey = key;
         return this;
+    }
+
+    @Deprecated(forRemoval = true)
+    public MachineBuilderJS localizedName(String name) {
+        return displayNameKey(name);
     }
 
     @Override
     public MachineRegistration createObject() {
         var registration = MachineRegistration.builder(id)
-                .localizedName(localizedName)
+                .displayNameKey(displayNameKey)
                 .controllerSpec(controllerSpec())
                 .appearance(appearanceSpec())
                 .recipeFamilyId(id)

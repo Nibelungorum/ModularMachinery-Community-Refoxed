@@ -41,7 +41,7 @@ public final class BuiltinMachines {
                     false,
                     false);
             return MachineRegistration.builder(BLAST_FURNACE_ID)
-                    .localizedName("高炉")
+                    .displayNameKey("machine.mmcr.blast_furnace")
                     .controllerSpec(controller)
                     .recipeFamilyId(BLAST_FURNACE_ID)
                     .allowModifiers(false)
@@ -62,7 +62,7 @@ public final class BuiltinMachines {
                     false,
                     false);
             return MachineRegistration.builder(ALLOY_FURNACE_ID)
-                    .localizedName("合金炉")
+                    .displayNameKey("machine.mmcr.alloy_furnace")
                     .controllerSpec(controller)
                     .appearance(MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("bricks")))
                     .recipeFamilyId(ALLOY_FURNACE_ID)
@@ -81,7 +81,7 @@ public final class BuiltinMachines {
                     true,
                     true);
             return MachineRegistration.builder(CRACKER_ID)
-                    .localizedName("裂化器")
+                    .displayNameKey("machine.mmcr.cracker")
                     .controllerSpec(controller)
                     .recipeFamilyId(CRACKER_ID)
                     .allowModifiers(false)
@@ -99,7 +99,7 @@ public final class BuiltinMachines {
                     false,
                     false);
             return MachineRegistration.builder(REACTOR_ID)
-                    .localizedName("反应堆")
+                    .displayNameKey("machine.mmcr.reactor")
                     .controllerSpec(controller)
                     .appearance(MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("blue_ice")))
                     .recipeFamilyId(REACTOR_ID)
@@ -108,7 +108,7 @@ public final class BuiltinMachines {
         });
         MachineDefinitions.addBuiltinSupplier(() -> {
             return MachineRegistration.builder(THERMAL_SMELTING_FURNACE_ID)
-                    .localizedName("热能冶炼炉")
+                    .displayNameKey("machine.mmcr.thermal_smelting_furnace")
                     .appearance(MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("smooth_basalt")))
                     .recipeFamilyId(THERMAL_SMELTING_FURNACE_ID)
                     .allowModifiers(false)
@@ -118,7 +118,7 @@ public final class BuiltinMachines {
                     .build();
         });
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(PURPUR_FURNACE_ID)
-                .localizedName("紫珀炉")
+                .displayNameKey("machine.mmcr.purpur_furnace")
                 .appearance(MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("end_stone_bricks")))
                 .recipeFamilyId(PURPUR_FURNACE_ID)
                 .allowModifiers(false)

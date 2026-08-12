@@ -40,8 +40,8 @@ public record PktMultiblockDetectorPickPayload(BlockPos pos, Direction face) imp
 
             var selection = MultiblockDetectorItem.selection(stack).withController(pos, face);
             stack.set(ModDataComponents.MULTIBLOCK_DETECTOR_SELECTION.get(), selection);
-            player.sendSystemMessage(Component.literal("[MMCR] Detector controller set to "
-                    + pos.toShortString() + " face " + face.getSerializedName()));
+            player.sendSystemMessage(Component.translatable("message.mmcr.multiblock_detector.controller_set",
+                    pos.toShortString(), face.getSerializedName()));
         });
     }
 

@@ -16,6 +16,18 @@ class MachineRegistrationTest {
         assertThat(registration.allowMultithreading()).isFalse();
         assertThat(registration.allowParallelism()).isFalse();
         assertThat(registration.maxParallelAmount()).isEqualTo(1);
+        assertThat(registration.displayNameKey()).isEqualTo("machine.mmcr.defaults_machine");
+        assertThat(registration.displayName().getString()).isEqualTo("machine.mmcr.defaults_machine");
+    }
+
+    @Test
+    void builderStoresExplicitDisplayNameKey() {
+        MachineRegistration registration = MachineRegistration.builder(MMCR.id("arc_furnace"))
+                .displayNameKey("machine.mmcr.arc_furnace")
+                .build();
+
+        assertThat(registration.displayNameKey()).isEqualTo("machine.mmcr.arc_furnace");
+        assertThat(registration.displayName().getString()).isEqualTo("machine.mmcr.arc_furnace");
     }
 
     @Test

@@ -41,7 +41,7 @@ public final class MachineStructureRegistry {
     public static Machine toRuntimeMachine(MachineRegistration registration, MachineStructureDefinition structure) {
         return new DynamicMachine(
                 registration.id(),
-                registration.localizedName(),
+                registration.displayNameKey(),
                 structure.pattern(),
                 registration.controllerSpec(),
                 registration.appearance(),

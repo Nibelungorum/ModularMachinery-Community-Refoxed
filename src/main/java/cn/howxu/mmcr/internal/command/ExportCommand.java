@@ -46,13 +46,13 @@ public final class ExportCommand {
 
         ItemStack detector = findSingleDetector(player);
         if (detector == null) {
-            ctx.getSource().sendFailure(Component.literal("MMCR: hold exactly one multiblock detector in main hand or off hand."));
+            ctx.getSource().sendFailure(Component.translatable("command.mmcr.export.require_detector"));
             return 0;
         }
 
         MultiblockDetectorSelection selection = MultiblockDetectorItem.selection(detector);
         if (!selection.isComplete()) {
-            ctx.getSource().sendFailure(Component.literal("MMCR: detector selection is incomplete. Pick controller, first point, and second point."));
+            ctx.getSource().sendFailure(Component.translatable("command.mmcr.export.incomplete_selection"));
             return 0;
         }
 
@@ -69,14 +69,13 @@ public final class ExportCommand {
                 Math.max(first.getZ(), second.getZ()));
 
         if (!contains(min, max, controller)) {
-            ctx.getSource().sendFailure(Component.literal("MMCR: selected region does not contain the controller."));
+            ctx.getSource().sendFailure(Component.translatable("command.mmcr.export.controller_outside"));
             return 0;
         }
 
         int volume = volume(min, max);
         if (volume > MAX_EXPORT_VOLUME) {
-            ctx.getSource().sendFailure(Component.literal("MMCR: selected region volume " + volume
-                    + " exceeds limit " + MAX_EXPORT_VOLUME + "."));
+            ctx.getSource().sendFailure(Component.translatable("command.mmcr.export.volume_exceeded", volume, MAX_EXPORT_VOLUME));
             return 0;
         }
 
@@ -84,17 +83,17 @@ public final class ExportCommand {
         var server = level.getServer();
         var gameDir = server.getServerDirectory();
         var face = selection.controllerFace();
-        ctx.getSource().sendSuccess(() -> Component.literal("MMCR: exporting " + volume + " blocks..."), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("command.mmcr.export.started", volume), false);
 
         MultiblockExportService.executor().submit(() -> {
             try {
                 var path = MultiblockExportService.writeExport(gameDir, LocalDateTime.now(), snapshot, face);
-                server.executeIfPossible(() -> player.sendSystemMessage(Component.literal(
-                        "[MMCR] Export written to " + gameDir.relativize(path))));
+                server.executeIfPossible(() -> player.sendSystemMessage(Component.translatable(
+                        "command.mmcr.export.written", gameDir.relativize(path).toString())));
             } catch (Exception e) {
                 MMCR.LOG.error("Failed to export multiblock detector selection", e);
-                server.executeIfPossible(() -> player.sendSystemMessage(Component.literal(
-                        "[MMCR] Export failed: " + e.getMessage())));
+                server.executeIfPossible(() -> player.sendSystemMessage(Component.translatable(
+                        "command.mmcr.export.failed", String.valueOf(e.getMessage()))));
             }
         });
         return 1;

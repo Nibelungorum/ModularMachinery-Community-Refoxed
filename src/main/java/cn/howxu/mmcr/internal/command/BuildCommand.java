@@ -58,9 +58,10 @@ public final class BuildCommand {
         ServerLevel level = player.level();
         MachineSelector.Result selection = MachineSelector.select(requested, MachineRegistry.getAll());
         if (selection.machine() == null) {
-            ctx.getSource().sendFailure(net.minecraft.network.chat.Component.literal(
-                    "MMCR: no machine" + (requested != null ? " '" + requested + "'" : "")
-                            + " registered. Use /mmcr reload or check KubeJS bindings."));
+            ctx.getSource().sendFailure(net.minecraft.network.chat.Component.translatable(
+                    "command.mmcr.build.no_machine",
+                    requested == null ? net.minecraft.network.chat.Component.empty()
+                            : net.minecraft.network.chat.Component.literal(requested.toString())));
             return 0;
         }
         Machine machine = selection.machine();
@@ -71,9 +72,10 @@ public final class BuildCommand {
         placeMachine(level, machine, controller, ctrlFacing);
         forceTickController(level, controller);
 
-        ctx.getSource().sendSuccess(() -> net.minecraft.network.chat.Component.literal(
-                "MMCR built '" + machine.registryName() + "' at " + controller.toShortString()
-                        + (selection.isFallback() ? " (default)" : "")),
+        ctx.getSource().sendSuccess(() -> net.minecraft.network.chat.Component.translatable(
+                "command.mmcr.build.success", machine.displayName(), controller.toShortString(),
+                selection.isFallback() ? net.minecraft.network.chat.Component.translatable("command.mmcr.build.default")
+                        : net.minecraft.network.chat.Component.empty()),
                 true);
         return 1;
     }

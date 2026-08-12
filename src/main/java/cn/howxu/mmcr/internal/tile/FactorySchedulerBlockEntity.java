@@ -165,7 +165,7 @@ public class FactorySchedulerBlockEntity extends BlockEntity {
         ensureBaseThreadFor(controller);
         return new FactoryControllerSnapshot(controller.getBlockPos(), controller.isFormed(), controller.isRedstonePaused(),
                 activeThreadCount(), threadLimit(), usedParallelism(), controller.getMaxParallelism(),
-                controller.getMachine() == null ? "" : controller.getMachine().localizedName(),
+                controller.getMachine() == null ? "" : controller.getMachine().displayNameKey(),
                 controller.parallelControllerCount(), controller.getLastFailureUnloc(), scheduler.threadSnapshots());
     }
 

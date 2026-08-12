@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.machine;
 
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
 import java.util.List;
@@ -7,7 +8,18 @@ import java.util.List;
 public interface Machine {
     Identifier registryName();
 
-    String localizedName();
+    default String displayNameKey() {
+        return MachineRegistration.defaultDisplayNameKey(registryName());
+    }
+
+    default Component displayName() {
+        return Component.translatable(displayNameKey());
+    }
+
+    @Deprecated(forRemoval = true)
+    default String localizedName() {
+        return displayNameKey();
+    }
 
     BlockArray pattern();
 

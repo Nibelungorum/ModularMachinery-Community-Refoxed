@@ -77,45 +77,37 @@ public final class WrenchDebugHandler {
         for (int i = 0; i < handler.getSlots(); i++) {
             ItemStack stack = handler.getStackInSlot(i);
             if (stack.isEmpty()) {
-                player.sendSystemMessage(Component.literal("  Slot " + i + ": (空)"));
+                player.sendSystemMessage(Component.translatable("debug.mmcr.wrench.item_slot.empty", i));
             } else {
                 total += stack.getCount();
                 occupied++;
-                player.sendSystemMessage(Component.literal("  Slot " + i + ": ")
-                        .append(stack.getHoverName())
-                        .append(Component.literal(" x" + stack.getCount() + "/" + stack.getMaxStackSize())));
+                player.sendSystemMessage(Component.translatable("debug.mmcr.wrench.item_slot.filled", i,
+                        stack.getHoverName(), stack.getCount(), stack.getMaxStackSize()));
             }
         }
-        player.sendSystemMessage(Component.literal(
-                "  共 " + total + " 个物品,占用 " + occupied + "/" + handler.getSlots() + " 槽"));
+        player.sendSystemMessage(Component.translatable("debug.mmcr.wrench.item_summary", total, occupied, handler.getSlots()));
     }
 
     private static void printFluidHatch(ServerPlayer player, BlockPos pos, FluidHatchBlockEntity hatch) {
         FluidTank tank = hatch.getFluidTank(null);
         player.sendSystemMessage(prefix(hatch, pos));
         if (tank.getFluid().isEmpty()) {
-            player.sendSystemMessage(Component.literal(
-                    "  流体: (空) 0 / " + tank.getCapacity() + " mB"));
+            player.sendSystemMessage(Component.translatable("debug.mmcr.wrench.fluid.empty", tank.getCapacity()));
         } else {
-            player.sendSystemMessage(Component.literal("  流体: ")
-                    .append(tank.getFluid().getHoverName())
-                    .append(Component.literal(
-                            " " + tank.getFluid().getAmount() + " / " + tank.getCapacity() + " mB")));
+            player.sendSystemMessage(Component.translatable("debug.mmcr.wrench.fluid.filled",
+                    tank.getFluid().getHoverName(), tank.getFluid().getAmount(), tank.getCapacity()));
         }
     }
 
     private static void printEnergyHatch(ServerPlayer player, BlockPos pos, EnergyHatchBlockEntity hatch) {
         EnergyStorage storage = hatch.getMutableEnergyStorage(null);
         player.sendSystemMessage(prefix(hatch, pos));
-        player.sendSystemMessage(Component.literal(
-                "  能量: " + storage.getEnergyStored() + " / " + storage.getMaxEnergyStored() + " FE"));
+        player.sendSystemMessage(Component.translatable("debug.mmcr.wrench.energy",
+                storage.getEnergyStored(), storage.getMaxEnergyStored()));
     }
 
     private static Component prefix(IOPortBlockEntity port, BlockPos pos) {
         Component name = Component.translatable("container.mmcr." + port.kind().id());
-        return Component.literal("[MMCR] ")
-                .append(name)
-                .append(Component.literal(
-                        " @ (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")"));
+        return Component.translatable("debug.mmcr.wrench.header", name, pos.getX(), pos.getY(), pos.getZ());
     }
 }

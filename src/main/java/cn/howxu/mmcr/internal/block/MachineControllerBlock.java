@@ -145,7 +145,7 @@ public class MachineControllerBlock extends Block implements EntityBlock {
         MachineRegistration registration = MachineDefinitions.getRegistration(machineId);
         return registration == null
                 ? Component.translatable("container.mmcr.machine_controller")
-                : Component.literal(registration.localizedName());
+                : registration.displayName();
     }
 
     @Override

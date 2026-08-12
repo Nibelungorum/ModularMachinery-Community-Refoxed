@@ -68,7 +68,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     @Override
     public Component getTitle() {
-        return Component.translatable(machine.localizedName());
+        return machine.displayName();
     }
 
     @Override

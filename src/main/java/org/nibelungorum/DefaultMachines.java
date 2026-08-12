@@ -167,7 +167,7 @@ public final class DefaultMachines {
                 .build();
         return new DynamicMachine(
                 BLAST_FURNACE_ID,
-                "高炉",
+                "machine.mmcr.blast_furnace",
                 pattern,
                 MachineControllerSpec.defaultsFor(BLAST_FURNACE_ID),
                 MachineAppearanceSpec.defaults(),
@@ -203,7 +203,7 @@ public final class DefaultMachines {
         PortTierRequirementSpec tierRequirements = PortTierRequirementSpec.none();
         return new DynamicMachine(
                 ALLOY_FURNACE_ID,
-                "合金炉",
+                "machine.mmcr.alloy_furnace",
                 pattern,
                 MachineControllerSpec.defaultsFor(ALLOY_FURNACE_ID),
                 MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("bricks")),
@@ -295,7 +295,7 @@ public final class DefaultMachines {
                 true,
                 true,
                 true);
-        return new DynamicMachine(CRACKER_ID, "裂化器", pattern, controllerSpec, portRequirements, tierRequirements, List.of(), Map.of());
+        return new DynamicMachine(CRACKER_ID, "machine.mmcr.cracker", pattern, controllerSpec, portRequirements, tierRequirements, List.of(), Map.of());
     }
 
     public static Machine reactor(Block itemInput, Block itemOutput, Block fluidInput, Block fluidOutput, Block energyOutput) {
@@ -337,7 +337,7 @@ public final class DefaultMachines {
         PortTierRequirementSpec tierRequirements = PortTierRequirementSpec.none();
         return new DynamicMachine(
                 REACTOR_ID,
-                "反应堆",
+                "machine.mmcr.reactor",
                 pattern,
                 MachineControllerSpec.defaultsFor(REACTOR_ID),
                 MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("blue_ice")),
@@ -376,7 +376,7 @@ public final class DefaultMachines {
 
         return new DynamicMachine(
                 THERMAL_SMELTING_FURNACE_ID,
-                "热能冶炼炉",
+                "machine.mmcr.thermal_smelting_furnace",
                 pattern,
                 MachineControllerSpec.defaultsFor(THERMAL_SMELTING_FURNACE_ID),
                 MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("smooth_basalt")),
@@ -428,7 +428,7 @@ public final class DefaultMachines {
                 .controller('D')
                 .build();
 
-        return new DynamicMachine(PURPUR_FURNACE_ID, "紫珀炉", pattern,
+        return new DynamicMachine(PURPUR_FURNACE_ID, "machine.mmcr.purpur_furnace", pattern,
                 MachineControllerSpec.defaultsFor(PURPUR_FURNACE_ID),
                 MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("end_stone_bricks")),
                 PortRequirementSpec.none(), PortTierRequirementSpec.builder()

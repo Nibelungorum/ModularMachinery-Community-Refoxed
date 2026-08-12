@@ -178,9 +178,9 @@ public class MMCR {
     }
 
     public static void registerGameTestMachineDefinitions() {
-        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("test_cube")).localizedName("Test").build());
-        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("controller_tick")).localizedName("Controller Tick").build());
-        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("iron_compressor")).localizedName("Iron Compressor").build());
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("test_cube")).displayNameKey("machine.mmcr.test_cube").build());
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("controller_tick")).displayNameKey("machine.mmcr.controller_tick").build());
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("iron_compressor")).displayNameKey("machine.mmcr.iron_compressor").build());
     }
 
     public static void registerGameTestMachineStructures(DynamicContentReloadService.Candidate candidate) {

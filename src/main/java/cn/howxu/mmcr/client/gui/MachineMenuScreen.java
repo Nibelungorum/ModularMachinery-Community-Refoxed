@@ -362,7 +362,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         }
 
         if (owner != null && owner.getMachine() != null) {
-            scaledY = renderScaledWrappedLine(g, Component.translatable("gui.mmcr.controller.machine", owner.getMachine().localizedName()),
+            scaledY = renderScaledWrappedLine(g, Component.translatable("gui.mmcr.controller.machine", owner.getMachine().displayName()),
                     scaledX, scaledY, scaledWidth, PROGRESS_STATUS_COLOR);
         }
 

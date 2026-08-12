@@ -51,7 +51,7 @@ class DefaultMachinesTest {
         assertThat(machine.parallelizable()).isTrue();
         assertThat(machine.maxParallelism()).isEqualTo(Integer.MAX_VALUE);
         assertThat(machine.hasFactory()).isTrue();
-        assertThat(machine.localizedName()).isEqualTo("高炉");
+        assertThat(machine.displayNameKey()).isEqualTo("machine.mmcr.blast_furnace");
         assertThat(machine.controller().id()).isEqualTo(MMCR.id("blast_furnace_controller"));
         assertThat(machine.portRequirements().isEmpty()).isTrue();
         assertThat(machine.pattern().pattern()).hasSize(26);
@@ -78,7 +78,7 @@ class DefaultMachinesTest {
         var machine = (cn.howxu.mmcr.api.machine.DynamicMachine) MachineRegistry.getMachine(MMCR.id("alloy_furnace"));
 
         assertThat(machine).isNotNull();
-        assertThat(machine.localizedName()).isEqualTo("合金炉");
+        assertThat(machine.displayNameKey()).isEqualTo("machine.mmcr.alloy_furnace");
         assertThat(machine.controller().id()).isEqualTo(MMCR.id("alloy_furnace_controller"));
         assertThat(machine.appearance().machineBasicBlock()).isEqualTo(net.minecraft.resources.Identifier.withDefaultNamespace("bricks"));
         assertThat(machine.appearance().controllerBaseTexture()).isEqualTo(net.minecraft.resources.Identifier.withDefaultNamespace("block/bricks"));
@@ -135,7 +135,7 @@ class DefaultMachinesTest {
         var machine = MachineRegistry.getMachine(MMCR.id("thermal_smelting_furnace"));
 
         assertThat(machine).isNotNull();
-        assertThat(machine.localizedName()).isEqualTo("热能冶炼炉");
+        assertThat(machine.displayNameKey()).isEqualTo("machine.mmcr.thermal_smelting_furnace");
         assertThat(machine.parallelizable()).isTrue();
         assertThat(machine.hasFactory()).isTrue();
         assertThat(machine.maxParallelism()).isEqualTo(Integer.MAX_VALUE);
@@ -170,7 +170,7 @@ class DefaultMachinesTest {
         var machine = MachineRegistry.getMachine(MMCR.id("purpur_furnace"));
 
         assertThat(machine).isNotNull();
-        assertThat(machine.localizedName()).isEqualTo("紫珀炉");
+        assertThat(machine.displayNameKey()).isEqualTo("machine.mmcr.purpur_furnace");
         assertThat(machine.parallelizable()).isTrue();
         assertThat(machine.maxParallelism()).isEqualTo(4);
         assertThat(machine.pattern().get(BlockPos.ZERO))
@@ -205,7 +205,7 @@ class DefaultMachinesTest {
         assertThat(machine.parallelizable()).isFalse();
         assertThat(machine.maxParallelism()).isEqualTo(1);
         assertThat(machine.hasFactory()).isFalse();
-        assertThat(machine.localizedName()).isEqualTo("裂化器");
+        assertThat(machine.displayNameKey()).isEqualTo("machine.mmcr.cracker");
         assertThat(machine.controller().id()).isEqualTo(MMCR.id("cracker_controller"));
         assertThat(machine.controller().allowVerticalFacing()).isTrue();
         assertThat(machine.portRequirements().isEmpty()).isTrue();
@@ -232,7 +232,7 @@ class DefaultMachinesTest {
         var machine = MachineRegistry.getMachine(MMCR.id("reactor"));
 
         assertThat(machine).isNotNull();
-        assertThat(machine.localizedName()).isEqualTo("反应堆");
+        assertThat(machine.displayNameKey()).isEqualTo("machine.mmcr.reactor");
         assertThat(machine.controller().id()).isEqualTo(MMCR.id("reactor_controller"));
         assertThat(machine.appearance().machineBasicBlock()).isEqualTo(net.minecraft.resources.Identifier.withDefaultNamespace("blue_ice"));
         assertThat(machine.appearance().controllerBaseTexture()).isEqualTo(net.minecraft.resources.Identifier.withDefaultNamespace("block/blue_ice"));

@@ -46,10 +46,10 @@ public class MultiblockDetectorItem extends Item {
             MultiblockDetectorSelection selection = selection(stack);
             if (player.isShiftKeyDown()) {
                 stack.set(ModDataComponents.MULTIBLOCK_DETECTOR_SELECTION.get(), selection.withSecond(pos));
-                player.sendSystemMessage(Component.literal("[MMCR] Detector second point set to " + pos.toShortString()));
+                player.sendSystemMessage(Component.translatable("message.mmcr.multiblock_detector.second_set", pos.toShortString()));
             } else {
                 stack.set(ModDataComponents.MULTIBLOCK_DETECTOR_SELECTION.get(), selection.withFirst(pos));
-                player.sendSystemMessage(Component.literal("[MMCR] Detector first point set to " + pos.toShortString()));
+                player.sendSystemMessage(Component.translatable("message.mmcr.multiblock_detector.first_set", pos.toShortString()));
             }
         }
         return InteractionResult.SUCCESS;
@@ -62,7 +62,7 @@ public class MultiblockDetectorItem extends Item {
         if (!level.isClientSide()) {
             ItemStack stack = player.getItemInHand(hand);
             stack.remove(ModDataComponents.MULTIBLOCK_DETECTOR_SELECTION.get());
-            player.sendSystemMessage(Component.literal("[MMCR] Detector selection cleared"));
+            player.sendSystemMessage(Component.translatable("message.mmcr.multiblock_detector.cleared"));
         }
         return InteractionResult.SUCCESS;
     }
@@ -79,8 +79,9 @@ public class MultiblockDetectorItem extends Item {
     private static Component selectionLine(Item.TooltipContext context, String key, BlockPos pos, Direction face) {
         Component value = pos == null
                 ? Component.translatable("tooltip.mmcr.multiblock_detector.not_set")
-                : Component.literal(blockName(context, pos).getString() + " @ " + pos.toShortString()
-                        + (face == null ? "" : " face " + face.getSerializedName()));
+                : Component.translatable("tooltip.mmcr.multiblock_detector.position", blockName(context, pos),
+                        pos.toShortString(), face == null ? Component.empty()
+                                : Component.translatable("tooltip.mmcr.multiblock_detector.face", face.getSerializedName()));
         return Component.translatable("tooltip.mmcr.multiblock_detector." + key, value)
                 .withStyle(pos == null ? ChatFormatting.DARK_GRAY : ChatFormatting.GRAY);
     }

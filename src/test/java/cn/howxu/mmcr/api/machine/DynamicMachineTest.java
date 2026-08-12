@@ -36,9 +36,11 @@ class DynamicMachineTest {
     void compatibilityConstructorsDefaultParallelAndFactoryCapabilities() {
         DynamicMachine machine = new DynamicMachine(
                 MMCR.id("parallel_defaults"),
-                "Parallel Defaults",
+                "machine.mmcr.parallel_defaults",
                 new BlockArray(Map.of()));
 
+        assertThat(machine.displayNameKey()).isEqualTo("machine.mmcr.parallel_defaults");
+        assertThat(machine.displayName().getString()).isEqualTo("machine.mmcr.parallel_defaults");
         assertThat(machine.maxParallelism()).isEqualTo(1);
         assertThat(machine.parallelizable()).isFalse();
         assertThat(machine.hasFactory()).isFalse();
