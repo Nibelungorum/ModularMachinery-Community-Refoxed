@@ -261,6 +261,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     public boolean hasClientActiveRecipe() { return clientActive; }
 
     public boolean isRuntimeActive() {
+        if (level != null && level.isClientSide()) return clientActive;
         if (!isFormed() || redstonePaused || !isStructureAreaLoaded()) return false;
         if (active != null) return true;
         FactorySchedulerBlockEntity factory = getFactoryController();

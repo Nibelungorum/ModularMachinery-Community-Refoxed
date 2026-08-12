@@ -128,7 +128,6 @@ public class FactorySchedulerBlockEntity extends BlockEntity {
         int current = threadCount();
         if (current == threadLimit) return;
         setThreadLimit(current);
-        if (syncListener != null) syncListener.syncFactoryScheduler();
     }
 
     private void tickThreadLimitSync(SyncListener syncListener) {

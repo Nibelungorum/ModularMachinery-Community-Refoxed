@@ -431,6 +431,24 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void client_runtime_activity_uses_synced_runtime_state() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        DynamicMachine machine = factoryOnlyMachine(MMCR.id("client_runtime_sync_machine"), 1);
+        setField(MachineControllerBlockEntity.class, controller, "machine", machine);
+        setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
+        setField(BlockEntity.class, controller, "blockState", testControllerState(testControllerBlock(machine)));
+        Level level = LevelStub.create(Map.of(BlockPos.ZERO, testControllerBlock(machine)), List.of(controller));
+        setField(Level.class, level, "isClientSide", true);
+        setField(BlockEntity.class, controller, "level", level);
+
+        controller.applyClientState("", true, true, List.of());
+
+        assertThat(controller.hasClientActiveRecipe()).isTrue();
+        assertThat(controller.isRuntimeActive()).isTrue();
+    }
+
+    @Test
     void runtime_activity_pauses_for_redstone_and_resumes_from_cached_recipe() throws Exception {
         bindItemComponents(Items.IRON_INGOT);
         bindItemComponents(Items.IRON_NUGGET);
@@ -506,6 +524,18 @@ class MachineControllerBlockEntityTest {
 
         assertThat(controller.isRuntimeActive()).isTrue();
         assertThat(blockUpdateCount(levelOf(controller))).isEqualTo(afterStart);
+    }
+
+    @Test
+    void factory_thread_limit_sync_does_not_notify_runtime_state_listener() throws Exception {
+        FactorySchedulerBlockEntity factory = factoryController(new BlockPos(1, 0, 0));
+        factory.getItemStackHandler(null).setStackInSlot(0, new ItemStack(cn.howxu.mmcr.registry.ModItems.THREAD_DISPERSER.get(), 1));
+        int[] runtimeSyncs = {0};
+
+        for (int i = 0; i < 40; i++) factory.tickScheduler(() -> runtimeSyncs[0]++);
+
+        assertThat(factory.threadLimit()).isEqualTo(2);
+        assertThat(runtimeSyncs[0]).isZero();
     }
 
     @Test
