@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.multiblock;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.Machine;
@@ -77,6 +78,44 @@ class SmartInterfaceBindingCoordinatorTest {
         assertThat(smartInterface.bindingFor(new BlockPos(9, 0, 0))).isPresent();
     }
 
+    @Test
+    void reconcile_links_unique_controller_appearance_to_smart_interface() throws Exception {
+        var texture = MMCR.id("block/smart_interface_casing");
+        var smartInterface = smartInterface(new BlockPos(1, 0, 0));
+
+        new SmartInterfaceBindingCoordinator(types(type("low", 1F, 1)))
+                .reconcile(controller(texture), List.of(smartInterface));
+
+        assertThat(smartInterface.appearanceBaseTexture()).isEqualTo(texture);
+    }
+
+    @Test
+    void unbindAll_unlinks_controller_appearance_from_smart_interface() throws Exception {
+        var controller = controller(MMCR.id("block/smart_interface_casing"));
+        var smartInterface = smartInterface(new BlockPos(1, 0, 0));
+        new SmartInterfaceBindingCoordinator(types(type("low", 1F, 1))).reconcile(controller, List.of(smartInterface));
+
+        new SmartInterfaceBindingCoordinator(Map.of()).unbindAll(controller, List.of(smartInterface));
+
+        assertThat(smartInterface.appearanceBaseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
+    }
+
+    @Test
+    void multiple_controller_bindings_fall_back_to_basic_casing_for_smart_interface() throws Exception {
+        var firstTexture = MMCR.id("block/smart_interface_casing");
+        var secondTexture = MMCR.id("block/other_smart_interface_casing");
+        var smartInterface = smartInterface(new BlockPos(1, 0, 0));
+        var firstController = controller(BlockPos.ZERO, MMCR.id("binding_test"), firstTexture);
+        var secondController = controller(new BlockPos(9, 0, 0), MMCR.id("other"), secondTexture);
+
+        new SmartInterfaceBindingCoordinator(types(type("low", 1F, 1)))
+                .reconcile(firstController, List.of(smartInterface));
+        new SmartInterfaceBindingCoordinator(types(type("high", 2F, 1)))
+                .reconcile(secondController, List.of(smartInterface));
+
+        assertThat(smartInterface.appearanceBaseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
+    }
+
     private static Map<String, SmartInterfaceType> types(SmartInterfaceType... types) {
         Map<String, SmartInterfaceType> result = new LinkedHashMap<>();
         for (SmartInterfaceType type : types) result.put(type.type(), type);
@@ -93,15 +132,24 @@ class SmartInterfaceBindingCoordinatorTest {
     }
 
     private static MachineControllerBlockEntity controller() throws Exception {
+        return controller(MMCR.id("block/basic_casing"));
+    }
+
+    private static MachineControllerBlockEntity controller(net.minecraft.resources.Identifier texture) throws Exception {
+        return controller(BlockPos.ZERO, MMCR.id("binding_test"), texture);
+    }
+
+    private static MachineControllerBlockEntity controller(BlockPos pos, net.minecraft.resources.Identifier machineId,
+                                                           net.minecraft.resources.Identifier texture) throws Exception {
         Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
         unsafeField.setAccessible(true);
         MachineControllerBlockEntity controller = (MachineControllerBlockEntity) ((sun.misc.Unsafe) unsafeField.get(null))
                 .allocateInstance(MachineControllerBlockEntity.class);
-        setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
+        setField(BlockEntity.class, controller, "worldPosition", pos);
         setField(MachineControllerBlockEntity.class, controller, "foundMachine", new Machine() {
             @Override
             public net.minecraft.resources.Identifier registryName() {
-                return MMCR.id("binding_test");
+                return machineId;
             }
 
             @Override
@@ -117,6 +165,11 @@ class SmartInterfaceBindingCoordinatorTest {
             @Override
             public MachineControllerSpec controller() {
                 return MachineControllerSpec.defaultsFor(registryName());
+            }
+
+            @Override
+            public MachineAppearanceSpec appearance() {
+                return new MachineAppearanceSpec(MMCR.id("block/basic_casing"), MMCR.id("block/basic_casing"), texture);
             }
         });
         return controller;

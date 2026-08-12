@@ -27,6 +27,7 @@ public final class SmartInterfaceBindingCoordinator {
 
     public void reconcile(MachineControllerBlockEntity controller, Collection<SmartInterfaceBlockEntity> interfaces) {
         BlockPos controllerPos = controller.getBlockPos();
+        var controllerAppearance = controller.getFoundMachine().appearance().formedPortBaseTexture();
         var ordered = interfaces.stream().sorted(Comparator.comparing(SmartInterfaceBlockEntity::getBlockPos)).toList();
         Set<String> usedTypes = new LinkedHashSet<>();
         for (SmartInterfaceBlockEntity smartInterface : ordered) {
@@ -34,8 +35,12 @@ public final class SmartInterfaceBindingCoordinator {
             if (binding.isPresent() && (!binding.get().machineId().equals(controller.getFoundMachine().registryName())
                     || !types.containsKey(binding.get().type()))) {
                 smartInterface.unbind(controllerPos);
+                smartInterface.unlinkControllerAppearance(controllerPos);
             } else {
-                binding.ifPresent(value -> usedTypes.add(value.type()));
+                binding.ifPresent(value -> {
+                    usedTypes.add(value.type());
+                    smartInterface.linkControllerAppearance(controllerPos, controllerAppearance);
+                });
             }
         }
 
@@ -48,11 +53,15 @@ public final class SmartInterfaceBindingCoordinator {
                     .findFirst().orElse(fallback);
             if (type != null && smartInterface.bind(controllerPos, controller.getFoundMachine().registryName(), type.type(), type.defaultValue())) {
                 usedTypes.add(type.type());
+                smartInterface.linkControllerAppearance(controllerPos, controllerAppearance);
             }
         }
     }
 
     public void unbindAll(MachineControllerBlockEntity controller, Collection<SmartInterfaceBlockEntity> interfaces) {
-        for (SmartInterfaceBlockEntity smartInterface : interfaces) smartInterface.unbind(controller.getBlockPos());
+        for (SmartInterfaceBlockEntity smartInterface : interfaces) {
+            smartInterface.unbind(controller.getBlockPos());
+            smartInterface.unlinkControllerAppearance(controller.getBlockPos());
+        }
     }
 }

@@ -120,7 +120,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private long lastRecipeModifierSnapshotVersion = Long.MIN_VALUE;
     private boolean recipeDirty = true;
     private @Nullable StructureClaimRegistry.ResourceDomain resourceDomain;
-    private Set<BlockPos> linkedAppearancePositions = new HashSet<>();
     private boolean sharedStartPending;
     private @Nullable RecipeCraftingContext pendingSharedStartContext;
     private @Nullable StructureClaimRegistry.ResourceDomain pendingSharedStartDomain;
@@ -279,11 +278,11 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     public boolean hasLinkedPort(BlockPos portPos) {
-        return linkedAppearancePositions().contains(portPos);
+        return linkedPortPositions != null && linkedPortPositions.contains(portPos);
     }
 
     public void resetLinkedPortAppearances() {
-        unlinkLinkedAppearances();
+        unlinkLinkedPorts();
     }
 
     public long totalStoredEnergy() {
@@ -845,18 +844,18 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             new SmartInterfaceBindingCoordinator(registration.smartInterfaceTypes()).reconcile(this, smartInterfaces);
         }
 
-        Identifier formedTexture = foundMachine.appearance().formedPortBaseTexture();
         for (BlockPos relativePos : componentPositions()) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
             if (level.getBlockEntity(worldPos) instanceof SmartInterfaceBlockEntity smartInterface) {
-                smartInterface.linkControllerAppearance(getBlockPos(), formedTexture);
-                linkedAppearancePositions().add(worldPos.immutable());
+                if (smartInterface.bindingFor(getBlockPos()).isPresent()) {
+                    linkedPortPositions().add(worldPos.immutable());
+                }
                 components.add(new ProcessingComponent(null, smartInterface, worldPos, relativePos, foundPattern.tagsAt(relativePos), null));
                 continue;
             }
             if (level.getBlockEntity(worldPos) instanceof ParallelControllerBlockEntity parallel) {
-                parallel.linkControllerAppearance(getBlockPos(), formedTexture);
-                linkedAppearancePositions().add(worldPos.immutable());
+                parallel.linkControllerAppearance(getBlockPos(), foundMachine.appearance().formedPortBaseTexture());
+                linkedPortPositions().add(worldPos.immutable());
                 components.add(new ProcessingComponent(null, parallel, worldPos, relativePos, foundPattern.tagsAt(relativePos), null));
                 continue;
             }
@@ -867,8 +866,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             if (!(level.getBlockEntity(worldPos) instanceof MachineComponentTile tile)) continue;
 
             if (tile instanceof IOPortBlockEntity port) {
+                Identifier formedTexture = foundMachine.appearance().formedPortBaseTexture();
                 port.linkControllerAppearance(getBlockPos(), formedTexture);
-                linkedAppearancePositions().add(worldPos.immutable());
+                linkedPortPositions().add(worldPos.immutable());
             }
             var component = tile.provideComponent();
             if (!(tile instanceof BlockEntity container)) continue;
@@ -877,13 +877,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private void unlinkLinkedPorts() {
-        unlinkLinkedAppearances();
-    }
-
-    private void unlinkLinkedAppearances() {
-        Set<BlockPos> linkedAppearancePositions = linkedAppearancePositions();
+        Set<BlockPos> linkedPortPositions = linkedPortPositions();
         if (level == null) {
-            linkedAppearancePositions.clear();
+            linkedPortPositions.clear();
             return;
         }
         if (foundPattern != null) {
@@ -894,27 +890,17 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 }
             }
         }
-        for (BlockPos linkedPos : linkedAppearancePositions) {
-            if (level.getBlockEntity(linkedPos) instanceof LinkedAppearanceBlockEntity linkedAppearance) {
+        for (BlockPos portPos : linkedPortPositions) {
+            if (level.getBlockEntity(portPos) instanceof LinkedAppearanceBlockEntity linkedAppearance) {
                 linkedAppearance.unlinkControllerAppearance(getBlockPos());
             }
         }
-        linkedAppearancePositions.clear();
+        linkedPortPositions.clear();
     }
 
     private Set<BlockPos> linkedPortPositions() {
-        return linkedAppearancePositions();
-    }
-
-    private Set<BlockPos> linkedAppearancePositions() {
-        if (linkedAppearancePositions == null) {
-            if (linkedPortPositions == null) {
-                linkedAppearancePositions = new HashSet<>();
-            } else {
-                linkedAppearancePositions = new HashSet<>(linkedPortPositions);
-            }
-        }
-        return linkedAppearancePositions;
+        if (linkedPortPositions == null) linkedPortPositions = new HashSet<>();
+        return linkedPortPositions;
     }
 
     private List<BlockPos> componentPositions() {

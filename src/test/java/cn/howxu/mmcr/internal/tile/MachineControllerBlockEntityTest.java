@@ -219,28 +219,35 @@ class MachineControllerBlockEntityTest {
     @Test
     void formed_parallel_controller_is_discovered_from_structure_snapshot() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
+        Identifier texture = MMCR.id("block/parallel_structure_casing");
         var machine = new DynamicMachine(
                 MMCR.id("formed_parallel_test_machine"),
                 "Formed Parallel Test",
                 onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get(ParallelTier.PLUS.idSuffix()).get()),
                 MachineControllerSpec.defaultsFor(MMCR.id("formed_parallel_test_machine")),
+                new MachineAppearanceSpec(MMCR.id("basic_casing"), MMCR.id("block/basic_casing"), texture),
                 PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(),
                 List.of(),
                 Map.of(),
                 64,
                 true,
                 false,
                 1);
-        MachineControllerBlockEntity controller = controllerForParallelFormation(
-                machine,
-                controllerPos,
-                parallelController(ParallelTier.PLUS, controllerPos.offset(1, 0, 0)));
+        ParallelControllerBlockEntity parallel = parallelController(ParallelTier.PLUS, controllerPos.offset(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerForParallelFormation(machine, controllerPos, parallel);
 
         assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
 
         assertThat(controller.getComponents()).hasSize(1);
         assertThat(controller.getComponents().getFirst().getContainer()).isInstanceOf(ParallelControllerBlockEntity.class);
         assertThat(controller.getMaxParallelism()).isEqualTo(16);
+        assertThat(((ParallelControllerBlockEntity) controller.getComponents().getFirst().getContainer()).appearanceBaseTexture())
+                .isEqualTo(texture);
+
+        invokeResetMachine(controller);
+
+        assertThat(parallel.appearanceBaseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
     }
 
     @Test
@@ -2023,7 +2030,13 @@ class MachineControllerBlockEntityTest {
     }
 
     private static void initializePortAppearance(IOPortBlockEntity port) throws ReflectiveOperationException {
-        setField(IOPortBlockEntity.class, port, "linkedControllers", new java.util.TreeMap<>(BlockPos::compareTo));
+        initializeLinkedAppearance(port);
+    }
+
+    private static void initializeLinkedAppearance(LinkedAppearanceBlockEntity component) throws ReflectiveOperationException {
+        setField(LinkedAppearanceBlockEntity.class, component, "appearanceBaseTexture", MMCR.id("block/basic_casing"));
+        setField(LinkedAppearanceBlockEntity.class, component, "linkedControllers", new java.util.TreeMap<>(BlockPos::compareTo));
+        setField(LinkedAppearanceBlockEntity.class, component, "controllerLinkCheckCounter", 0);
     }
 
     private static ParallelControllerBlockEntity parallelController(ParallelTier tier, BlockPos pos) {
@@ -2036,6 +2049,7 @@ class MachineControllerBlockEntityTest {
             setField(BlockEntity.class, entity, "worldPosition", pos);
             setField(BlockEntity.class, entity, "blockState", Blocks.IRON_BLOCK.defaultBlockState());
             setField(ParallelControllerBlockEntity.class, entity, "tier", tier);
+            initializeLinkedAppearance(entity);
             return entity;
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate parallel controller", e);

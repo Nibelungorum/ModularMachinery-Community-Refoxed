@@ -13,9 +13,7 @@ import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -80,7 +78,7 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
                 && !(level.getBlockEntity(binding.controllerPos()) instanceof MachineControllerBlockEntity))) {
             changed();
         }
-        refreshLinkedAppearance();
+        maintainControllerLink();
     }
 
     @Override
@@ -99,25 +97,9 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
                 bindings.add(binding);
             }
         });
-        refreshLinkedAppearance();
-    }
-
-    public void refreshLinkedAppearance() {
-        Map<BlockPos, Identifier> appearances = new LinkedHashMap<>();
-        if (level != null && !level.isClientSide()) {
-            for (Binding binding : bindings) {
-                if (level.getBlockEntity(binding.controllerPos()) instanceof MachineControllerBlockEntity controller
-                        && controller.isFormed()
-                        && controller.getFoundMachine() != null) {
-                    appearances.put(binding.controllerPos(), controller.getFoundMachine().appearance().formedPortBaseTexture());
-                }
-            }
-        }
-        replaceControllerAppearances(appearances);
     }
 
     private void changed() {
-        refreshLinkedAppearance();
         setChanged();
         if (level != null) {
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);

@@ -56,7 +56,9 @@ class ItemBusBlockEntityTest {
             setField(BlockEntity.class, bus, "blockState", Blocks.CHEST.defaultBlockState());
             setField(ItemInputBusBlockEntity.class, bus, "kind", PortKinds.ITEM_INPUT);
             setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(1));
-            setField(IOPortBlockEntity.class, bus, "appearanceBaseTexture", MMCR.id("block/basic_casing"));
+            setField(LinkedAppearanceBlockEntity.class, bus, "appearanceBaseTexture", MMCR.id("block/basic_casing"));
+            setField(LinkedAppearanceBlockEntity.class, bus, "linkedControllers", new java.util.TreeMap<>(BlockPos::compareTo));
+            setField(LinkedAppearanceBlockEntity.class, bus, "controllerLinkCheckCounter", 0);
             return bus;
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate item input bus", e);

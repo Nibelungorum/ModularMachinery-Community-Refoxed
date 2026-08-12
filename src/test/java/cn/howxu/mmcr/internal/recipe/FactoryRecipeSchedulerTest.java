@@ -1159,7 +1159,7 @@ class FactoryRecipeSchedulerTest {
         setField(BlockEntity.class, bus, "type", null);
         setField(BlockEntity.class, bus, "worldPosition", pos);
         setField(BlockEntity.class, bus, "blockState", Blocks.CHEST.defaultBlockState());
-        setField(cn.howxu.mmcr.internal.tile.IOPortBlockEntity.class, bus, "linkedControllers", new TreeMap<>(BlockPos::compareTo));
+        initializeLinkedAppearance(bus);
         setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6) {
             @Override protected void onContentsChanged(int slot) { }
         });
@@ -1174,7 +1174,7 @@ class FactoryRecipeSchedulerTest {
         setField(BlockEntity.class, bus, "type", null);
         setField(BlockEntity.class, bus, "worldPosition", pos);
         setField(BlockEntity.class, bus, "blockState", Blocks.CHEST.defaultBlockState());
-        setField(cn.howxu.mmcr.internal.tile.IOPortBlockEntity.class, bus, "linkedControllers", new TreeMap<>(BlockPos::compareTo));
+        initializeLinkedAppearance(bus);
         setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6) {
             @Override protected void onContentsChanged(int slot) { }
         });
@@ -1192,6 +1192,16 @@ class FactoryRecipeSchedulerTest {
         setField(cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity.class, hatch, "storage",
                 new net.neoforged.neoforge.energy.EnergyStorage(100, 100, 100));
         return hatch;
+    }
+
+    private static void initializeLinkedAppearance(cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity component)
+            throws ReflectiveOperationException {
+        setField(cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity.class, component,
+                "appearanceBaseTexture", cn.howxu.mmcr.MMCR.id("block/basic_casing"));
+        setField(cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity.class, component,
+                "linkedControllers", new TreeMap<>(BlockPos::compareTo));
+        setField(cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity.class, component,
+                "controllerLinkCheckCounter", 0);
     }
 
     private static int itemCount(ItemOutputBusBlockEntity output, net.minecraft.world.item.Item item) {

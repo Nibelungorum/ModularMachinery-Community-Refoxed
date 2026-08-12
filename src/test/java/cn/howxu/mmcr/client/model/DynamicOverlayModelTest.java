@@ -90,6 +90,28 @@ class DynamicOverlayModelTest {
     }
 
     @Test
+    void port_style_world_model_uses_explicit_linked_casing_with_smart_interface_overlay() {
+        Identifier linkedCasing = MMCR.id("block/steel_casing");
+        Identifier smartOverlay = MMCR.id("block/overlay_smartinterface_number");
+
+        DynamicOverlayBakedModel.TextureSet textures = DynamicOverlayBakedModel.portTextures(null, linkedCasing, smartOverlay);
+
+        assertThat(textures.base()).isEqualTo(linkedCasing);
+        assertThat(textures.overlay()).isEqualTo(smartOverlay);
+    }
+
+    @Test
+    void port_style_world_model_uses_explicit_linked_casing_with_parallel_controller_overlay() {
+        Identifier linkedCasing = MMCR.id("block/steel_casing");
+        Identifier parallelOverlay = MMCR.id("block/overlay_parallel_controller_normal");
+
+        DynamicOverlayBakedModel.TextureSet textures = DynamicOverlayBakedModel.portTextures(null, linkedCasing, parallelOverlay);
+
+        assertThat(textures.base()).isEqualTo(linkedCasing);
+        assertThat(textures.overlay()).isEqualTo(parallelOverlay);
+    }
+
+    @Test
     void cache_key_tracks_controller_and_appearance_revisions() {
         Identifier machineId = MMCR.id("press");
         MachineAppearanceCache.replaceSnapshot(Map.of(machineId, MachineAppearanceSpec.defaults()));

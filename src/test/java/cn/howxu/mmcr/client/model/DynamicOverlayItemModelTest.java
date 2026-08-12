@@ -103,6 +103,7 @@ class DynamicOverlayItemModelTest {
         var description = DynamicOverlayItemModel.describeItem(block.asItem());
 
         assertThat(description.kind()).isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
+        assertThat(description.machineId()).isNull();
         assertThat(description.baseModel()).isEqualTo(MMCR.id("block/dynamic_io_port"));
         assertThat(description.baseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
         assertThat(description.overlayTexture()).isEqualTo(MMCR.id("block/overlay_parallel_controller_plus"));
@@ -129,6 +130,7 @@ class DynamicOverlayItemModelTest {
         var description = DynamicOverlayItemModel.describeItem(block.asItem());
 
         assertThat(description.kind()).isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
+        assertThat(description.machineId()).isNull();
         assertThat(description.baseModel()).isEqualTo(MMCR.id("block/dynamic_io_port"));
         assertThat(description.baseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
         assertThat(description.overlayTexture()).isEqualTo(MMCR.id("block/overlay_smartinterface_number"));

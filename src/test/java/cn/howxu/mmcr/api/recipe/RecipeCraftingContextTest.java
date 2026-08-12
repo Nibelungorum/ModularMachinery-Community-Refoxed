@@ -1181,7 +1181,7 @@ class RecipeCraftingContextTest {
             setField(BlockEntity.class, bus, "type", null);
             setField(BlockEntity.class, bus, "worldPosition", pos);
             setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
-            setField(cn.howxu.mmcr.internal.tile.IOPortBlockEntity.class, bus, "linkedControllers", new TreeMap<>(BlockPos::compareTo));
+            initializeLinkedAppearance((cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity) bus);
             setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
             return bus;
         } catch (ReflectiveOperationException e) {
@@ -1215,6 +1215,16 @@ class RecipeCraftingContextTest {
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate block entity for crafting context test", e);
         }
+    }
+
+    private static void initializeLinkedAppearance(cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity component)
+            throws ReflectiveOperationException {
+        setField(cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity.class, component,
+                "appearanceBaseTexture", cn.howxu.mmcr.MMCR.id("block/basic_casing"));
+        setField(cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity.class, component,
+                "linkedControllers", new TreeMap<>(BlockPos::compareTo));
+        setField(cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity.class, component,
+                "controllerLinkCheckCounter", 0);
     }
 
     private static MachineControllerBlockEntity controllerWithComponents(net.minecraft.world.level.block.entity.BlockEntity... ports) {

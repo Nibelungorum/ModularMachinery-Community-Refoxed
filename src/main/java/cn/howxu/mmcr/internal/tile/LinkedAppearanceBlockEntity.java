@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.client.model.MachineModelDataKeys;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -19,12 +20,11 @@ import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.model.data.ModelData;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
 /**
- * Block entity base for components whose world model can borrow a formed machine casing.
+ * Shared dynamic casing appearance state for machine components linked to formed controllers.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -36,62 +36,46 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
     private static final String LINKED_CONTROLLER_Y_KEY = "Y";
     private static final String LINKED_CONTROLLER_Z_KEY = "Z";
     private static final String LINKED_CONTROLLER_TEXTURE_KEY = "Texture";
+    private static final int CONTROLLER_LINK_CHECK_INTERVAL_TICKS = 40;
 
     private Identifier appearanceBaseTexture = DEFAULT_APPEARANCE_BASE_TEXTURE;
     private final TreeMap<BlockPos, Identifier> linkedControllers = new TreeMap<>(BlockPos::compareTo);
+    private int controllerLinkCheckCounter;
 
     protected LinkedAppearanceBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
         super(type, pos, state);
     }
 
-    public final Identifier appearanceBaseTexture() {
+    public Identifier appearanceBaseTexture() {
         return appearanceBaseTexture;
     }
 
-    public final @Nullable BlockPos linkedControllerPos() {
+    public @Nullable BlockPos linkedControllerPos() {
         return linkedControllers.isEmpty() ? null : linkedControllers.firstKey();
     }
 
-    public final Set<BlockPos> linkedControllerPositions() {
+    public Set<BlockPos> linkedControllerPositions() {
         return Set.copyOf(linkedControllers.keySet());
     }
 
-    protected final Map<BlockPos, Identifier> linkedControllerAppearances() {
-        return Map.copyOf(linkedControllers);
-    }
-
-    public final void linkControllerAppearance(BlockPos controllerPos, Identifier texture) {
-        if (controllerPos == null) return;
+    public void linkControllerAppearance(BlockPos controllerPos, Identifier texture) {
         linkedControllers.put(controllerPos.immutable(), texture == null ? DEFAULT_APPEARANCE_BASE_TEXTURE : texture);
-        refreshAppearanceBaseTexture();
+        refreshLinkedAppearance();
     }
 
-    public final void unlinkControllerAppearance(BlockPos controllerPos) {
+    public void unlinkControllerAppearance(BlockPos controllerPos) {
         if (controllerPos == null || linkedControllers.remove(controllerPos) == null) return;
-        refreshAppearanceBaseTexture();
+        refreshLinkedAppearance();
     }
 
-    public final void resetAppearanceBaseTexture() {
-        linkedControllers.clear();
-        refreshAppearanceBaseTexture();
-    }
-
-    public final void replaceControllerAppearances(Map<BlockPos, Identifier> appearances) {
-        TreeMap<BlockPos, Identifier> resolved = new TreeMap<>(BlockPos::compareTo);
-        if (appearances != null) {
-            appearances.forEach((controllerPos, texture) -> {
-                if (controllerPos != null) {
-                    resolved.put(controllerPos.immutable(), texture == null ? DEFAULT_APPEARANCE_BASE_TEXTURE : texture);
-                }
-            });
+    @Deprecated
+    public void bindControllerAppearance(BlockPos controllerPos, Identifier texture) {
+        if (controllerPos != null) {
+            linkControllerAppearance(controllerPos, texture);
         }
-        if (linkedControllers.equals(resolved)) return;
-        linkedControllers.clear();
-        linkedControllers.putAll(resolved);
-        refreshAppearanceBaseTexture();
     }
 
-    public final void setAppearanceBaseTexture(Identifier texture) {
+    public void setAppearanceBaseTexture(Identifier texture) {
         Identifier resolvedTexture = texture == null ? DEFAULT_APPEARANCE_BASE_TEXTURE : texture;
         if (resolvedTexture.equals(appearanceBaseTexture)) {
             return;
@@ -104,15 +88,9 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
         }
     }
 
-    protected Identifier appearanceTexture() {
-        return linkedControllers.size() == 1
-                ? linkedControllers.firstEntry().getValue()
-                : DEFAULT_APPEARANCE_BASE_TEXTURE;
-    }
-
-    protected final void refreshAppearanceBaseTexture() {
-        setAppearanceBaseTexture(appearanceTexture());
-        setChanged();
+    public void resetAppearanceBaseTexture() {
+        linkedControllers.clear();
+        refreshLinkedAppearance();
     }
 
     @Override
@@ -142,18 +120,18 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
             String texture = controllerInput.getStringOr(LINKED_CONTROLLER_TEXTURE_KEY, DEFAULT_APPEARANCE_BASE_TEXTURE.toString());
             linkedControllers.put(controllerPos, texture.isBlank() ? DEFAULT_APPEARANCE_BASE_TEXTURE : Identifier.parse(texture));
         }
-        refreshAppearanceBaseTexture();
+        refreshLinkedAppearance();
     }
 
     @Override
-    public final ModelData getModelData() {
+    public ModelData getModelData() {
         return ModelData.builder()
                 .with(MachineModelDataKeys.PORT_BASE_TEXTURE, appearanceBaseTexture)
                 .build();
     }
 
     @Override
-    public final CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+    public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
         return saveCustomOnly(registries);
     }
 
@@ -173,7 +151,35 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
     }
 
     @Override
-    public final Packet<ClientGamePacketListener> getUpdatePacket() {
+    public Packet<ClientGamePacketListener> getUpdatePacket() {
         return ClientboundBlockEntityDataPacket.create(this);
+    }
+
+    protected void maintainControllerLink() {
+        if (level == null || level.isClientSide() || linkedControllers.isEmpty()) return;
+        if (Math.floorMod(controllerLinkCheckCounter++ + worldPosition.asLong(), CONTROLLER_LINK_CHECK_INTERVAL_TICKS) != 0) return;
+        boolean changed = linkedControllers.entrySet().removeIf(entry -> {
+            BlockPos controllerPos = entry.getKey();
+            return !(level.getBlockState(controllerPos).getBlock() instanceof MachineControllerBlock)
+                    || !(level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller)
+                    || !controller.isFormed()
+                    || !controller.hasLinkedPort(worldPosition);
+        });
+        if (changed) {
+            refreshLinkedAppearance();
+        }
+    }
+
+    protected Identifier resolveLinkedAppearance(TreeMap<BlockPos, Identifier> linkedControllers) {
+        return linkedControllers.size() == 1
+                ? linkedControllers.firstEntry().getValue()
+                : DEFAULT_APPEARANCE_BASE_TEXTURE;
+    }
+
+    private void refreshLinkedAppearance() {
+        setAppearanceBaseTexture(linkedControllers.isEmpty()
+                ? DEFAULT_APPEARANCE_BASE_TEXTURE
+                : resolveLinkedAppearance(linkedControllers));
+        setChanged();
     }
 }

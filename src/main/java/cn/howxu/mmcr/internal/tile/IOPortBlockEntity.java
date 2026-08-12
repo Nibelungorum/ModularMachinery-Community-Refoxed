@@ -4,7 +4,6 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
-import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.ModBlockEntities;
@@ -14,11 +13,9 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 
+import java.util.TreeMap;
+
 public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity implements MachineComponentTile {
-    private static final int CONTROLLER_LINK_CHECK_INTERVAL_TICKS = 40;
-
-    private int controllerLinkCheckCounter;
-
     protected IOPortBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
         super(type, pos, state);
     }
@@ -49,13 +46,6 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
     public abstract IOPortKind kind();
 
-    @Deprecated
-    public void bindControllerAppearance(BlockPos controllerPos, Identifier texture) {
-        if (controllerPos != null) {
-            linkControllerAppearance(controllerPos, texture);
-        }
-    }
-
     @Override
     public MachineComponent provideComponent() {
         return new MachineComponent(kind(), ioType());
@@ -75,25 +65,8 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         kind().tick(this);
     }
 
-    private void maintainControllerLink() {
-        if (level == null || level.isClientSide() || linkedControllerPositions().isEmpty()) return;
-        if (Math.floorMod(controllerLinkCheckCounter++ + worldPosition.asLong(), CONTROLLER_LINK_CHECK_INTERVAL_TICKS) != 0) return;
-        for (BlockPos controllerPos : linkedControllerPositions()) {
-            boolean invalid = !(level.getBlockState(controllerPos).getBlock() instanceof MachineControllerBlock)
-                    || !(level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller)
-                    || !controller.isFormed()
-                    || !controller.hasLinkedPort(worldPosition);
-            if (invalid) {
-                unlinkControllerAppearance(controllerPos);
-            }
-        }
-    }
-
     @Override
-    protected Identifier appearanceTexture() {
-        var appearances = linkedControllerAppearances();
-        return appearances.isEmpty()
-                ? DEFAULT_APPEARANCE_BASE_TEXTURE
-                : appearances.get(appearances.keySet().stream().min(BlockPos::compareTo).orElseThrow());
+    protected Identifier resolveLinkedAppearance(TreeMap<BlockPos, Identifier> linkedControllers) {
+        return linkedControllers.get(linkedControllers.firstKey());
     }
 }
