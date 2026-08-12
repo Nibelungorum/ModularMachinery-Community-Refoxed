@@ -46,6 +46,15 @@ class MachinePortAppearanceTest {
     }
 
     @Test
+    void multiple_linked_owners_fall_back_to_basic_casing_for_shared_appearance_components() {
+        LinkedAppearanceBlockEntity component = appearanceComponent();
+        component.linkControllerAppearance(new BlockPos(0, 64, 0), MMCR.id("block/first"));
+        component.linkControllerAppearance(new BlockPos(4, 64, 0), MMCR.id("block/second"));
+
+        assertThat(component.appearanceBaseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
+    }
+
+    @Test
     void reset_restores_basic_casing_base_texture() {
         IOPortBlockEntity port = itemInputBus();
         port.setAppearanceBaseTexture(Identifier.parse("kubejs:block/steel_casing"));
@@ -168,6 +177,14 @@ class MachinePortAppearanceTest {
         return (IOPortBlockEntity) ModBlockEntities.BES.get("item_input_bus").get().create(
                 BlockPos.ZERO,
                 ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+    }
+
+    private static LinkedAppearanceBlockEntity appearanceComponent() {
+        return new LinkedAppearanceBlockEntity(
+                ModBlockEntities.BES.get("item_input_bus").get(),
+                BlockPos.ZERO,
+                ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState()) {
+        };
     }
 
     private static MachineControllerBlockEntity controller(BlockPos pos, boolean formed, Set<BlockPos> linkedPorts) throws Exception {
