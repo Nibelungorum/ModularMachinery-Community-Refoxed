@@ -127,7 +127,7 @@ public final class BuiltinMachines {
                 .maxParallelAmount(4)
                 .smartInterfaceType(new SmartInterfaceType("Mode", 1F, 3F, 0, SmartInterfaceType.ValueType.INTEGER))
                 .smartInterfaceType(new SmartInterfaceType("Temperature", 400F, 6800F, 1, SmartInterfaceType.ValueType.INTEGER))
-                .smartInterfaceType(new SmartInterfaceType("ConversionRate", 0.0F, 1.0F, 2, SmartInterfaceType.ValueType.FLOAT))
+                .smartInterfaceType(new SmartInterfaceType("ConversionRate", 0.5F, 0.0F, 1.0F, 2, SmartInterfaceType.ValueType.FLOAT))
                 .build());
     }
 }

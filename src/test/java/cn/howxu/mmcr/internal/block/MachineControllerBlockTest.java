@@ -18,7 +18,8 @@ class MachineControllerBlockTest {
 
     @Test
     void menu_title_uses_machine_localized_name() {
-        assertThat(MachineControllerBlock.titleFor(MMCR.id("blast_furnace")).getString()).isEqualTo("高炉");
+        assertThat(((net.minecraft.network.chat.contents.TranslatableContents) MachineControllerBlock.titleFor(MMCR.id("blast_furnace")).getContents()).getKey())
+                .isEqualTo("machine.mmcr.blast_furnace");
     }
 
     @Test

@@ -112,8 +112,8 @@ class TranslationsTest {
                 "mmcr.smart_interface.save",
                 "mmcr.smart_interface.input",
                 "mmcr.smart_interface.invalid_number",
-                "jei.mmcr.smart_interface.input",
-                "jei.mmcr.smart_interface.output");
+                "jei.mmcr.smart_interface.requirement.input",
+                "jei.mmcr.smart_interface.requirement.output");
         assertThat(Translations.ALL.get("zh_cn")).containsKeys(
                 "block.mmcr.smart_interface",
                 "container.mmcr.smart_interface",
@@ -125,7 +125,7 @@ class TranslationsTest {
                 "mmcr.smart_interface.save",
                 "mmcr.smart_interface.input",
                 "mmcr.smart_interface.invalid_number",
-                "jei.mmcr.smart_interface.input",
-                "jei.mmcr.smart_interface.output");
+                "jei.mmcr.smart_interface.requirement.input",
+                "jei.mmcr.smart_interface.requirement.output");
     }
 }

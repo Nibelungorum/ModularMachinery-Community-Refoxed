@@ -39,7 +39,7 @@ public class SmartInterfaceGameTest {
         MachineDefinitions.clearForTesting();
         MachineDefinitions.register(MachineRegistration.builder(machineId)
                 .localizedName("Smart Interface Test")
-                .smartInterfaceType(new SmartInterfaceType(type, 12F, 0, "", "", "", "", "", 0))
+                .smartInterfaceType(new SmartInterfaceType(type, 12F, 0))
                 .build());
         DynamicMachine machine = new DynamicMachine(MMCR.id("smart_interface_test"), "Smart Interface Test",
                 new BlockArray(Map.of(interfacePos.subtract(controllerPos),

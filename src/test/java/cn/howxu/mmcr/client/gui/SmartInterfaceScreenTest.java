@@ -52,7 +52,7 @@ class SmartInterfaceScreenTest {
 
     @Test
     void control_layout_starts_below_info_line_height() {
-        SmartInterfaceScreen.ControlLayout layout = SmartInterfaceScreen.controlLayout(10);
+        SmartInterfaceScreen.ControlLayout layout = SmartInterfaceScreen.controlLayout();
 
         assertThat(layout.inputY()).isEqualTo(42);
         assertThat(layout.navigationY()).isEqualTo(68);

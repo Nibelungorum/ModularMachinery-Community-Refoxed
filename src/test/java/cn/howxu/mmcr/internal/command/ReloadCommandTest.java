@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ReloadCommandTest {
 
-    private final List<String> messages = new ArrayList<>();
+    private final List<Component> messageComponents = new ArrayList<>();
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -56,14 +56,18 @@ class ReloadCommandTest {
         int result = dispatcher.execute("mmcr reload", source());
 
         assertThat(result).isEqualTo(1);
-        assertThat(messages).anyMatch(message -> message.contains("MMCR reload: structures +0 ~0 -1"));
+        assertThat(messageComponents).anySatisfy(message -> {
+            var contents = (net.minecraft.network.chat.contents.TranslatableContents) message.getContents();
+            assertThat(contents.getKey()).isEqualTo("command.mmcr.reload.success");
+            assertThat(contents.getArgs()).containsExactly(0, 0, 1, 0, 0, 0);
+        });
     }
 
     private CommandSourceStack source() {
         CommandSource source = new CommandSource() {
             @Override
             public void sendSystemMessage(Component message) {
-                messages.add(message.getString());
+                messageComponents.add(message);
             }
 
             @Override
