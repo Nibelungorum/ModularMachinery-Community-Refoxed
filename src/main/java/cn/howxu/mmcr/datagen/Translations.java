@@ -146,6 +146,7 @@ public final class Translations {
                     Map.entry("item.mmcr.parallel_controller_max",        "Max Parallel Controller 16384x"),
                     Map.entry("item.mmcr.parallel_controller_ultimate",   "Ultimate Parallel Controller 2147483647x"),
                     Map.entry("item.mmcr.factory_controller", "Factory Controller"),
+                    Map.entry("item.mmcr.smart_interface", "Smart Interface"),
                     Map.entry("item.mmcr.debug_infinite_energy_source", "Debug Infinite Energy Source"),
                     Map.entry("item.mmcr.debug_infinite_water_source",  "Debug Infinite Water Source"),
                     Map.entry("item.mmcr.debug_infinite_lava_source",   "Debug Infinite Lava Source"),

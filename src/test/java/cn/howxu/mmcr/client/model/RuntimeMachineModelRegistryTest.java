@@ -58,6 +58,10 @@ class RuntimeMachineModelRegistryTest {
                 .isEqualTo("factory_controller");
         assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.BLOCKS.get("factory_controller").get()).itemDescription().overlayTexture())
                 .isEqualTo(MMCR.id("block/overlay_factory_controller"));
+        assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.SMART_INTERFACE.get()).modelKind())
+                .isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
+        assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.SMART_INTERFACE.get()).itemDescription().overlayTexture())
+                .isEqualTo(MMCR.id("block/overlay_smartinterface_number"));
     }
 
     @Test
@@ -126,10 +130,13 @@ class RuntimeMachineModelRegistryTest {
     void parallel_and_factory_controllers_use_dynamic_port_loader() {
         var parallel = ModBlocks.BLOCKS.get(ParallelTier.PLUS.idSuffix()).get();
         var factory = ModBlocks.BLOCKS.get("factory_controller").get();
+        var smartInterface = ModBlocks.SMART_INTERFACE.get();
 
         assertThat(RuntimeMachineModelRegistry.dynamicBlockState(parallel).variants()).singleElement()
                 .satisfies(variant -> assertThat(variant.modelId()).isEqualTo(DynamicOverlayModelLoader.PORT_ID));
         assertThat(RuntimeMachineModelRegistry.dynamicBlockState(factory).variants()).singleElement()
+                .satisfies(variant -> assertThat(variant.modelId()).isEqualTo(DynamicOverlayModelLoader.PORT_ID));
+        assertThat(RuntimeMachineModelRegistry.dynamicBlockState(smartInterface).variants()).singleElement()
                 .satisfies(variant -> assertThat(variant.modelId()).isEqualTo(DynamicOverlayModelLoader.PORT_ID));
     }
 

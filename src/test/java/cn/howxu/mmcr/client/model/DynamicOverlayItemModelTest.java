@@ -123,6 +123,19 @@ class DynamicOverlayItemModelTest {
     }
 
     @Test
+    void smart_interface_item_uses_port_style_dynamic_overlay() {
+        var block = cn.howxu.mmcr.registry.ModBlocks.SMART_INTERFACE.get();
+
+        var description = DynamicOverlayItemModel.describeItem(block.asItem());
+
+        assertThat(description.kind()).isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
+        assertThat(description.baseModel()).isEqualTo(MMCR.id("block/dynamic_io_port"));
+        assertThat(description.baseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
+        assertThat(description.overlayTexture()).isEqualTo(MMCR.id("block/overlay_smartinterface_number"));
+        assertThat(description.overlayFaces()).containsExactlyInAnyOrder(Direction.values());
+    }
+
+    @Test
     void ordinary_item_is_not_dynamic() {
         var description = DynamicOverlayItemModel.describeItem(Items.STICK);
 

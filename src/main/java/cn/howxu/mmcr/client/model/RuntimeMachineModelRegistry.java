@@ -6,6 +6,7 @@ import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
+import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -151,10 +152,12 @@ public final class RuntimeMachineModelRegistry {
                     portDefinition(port),
                     DynamicOverlayItemModel.Description.port(port.kind()));
         }
-        if (block instanceof ParallelControllerBlock || block instanceof FactorySchedulerBlock) {
+        if (block instanceof ParallelControllerBlock || block instanceof FactorySchedulerBlock || block instanceof SmartInterfaceBlock) {
             Identifier overlay = block instanceof ParallelControllerBlock parallel
                     ? parallelControllerOverlayTexture(parallel.tier())
-                    : MMCR.id("block/overlay_factory_controller");
+                    : block instanceof SmartInterfaceBlock
+                            ? MMCR.id("block/overlay_smartinterface_number")
+                            : MMCR.id("block/overlay_factory_controller");
             return new RuntimeBlockModelDefinition(
                     block,
                     blockName,

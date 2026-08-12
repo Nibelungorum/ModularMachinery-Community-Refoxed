@@ -102,6 +102,7 @@ class TranslationsTest {
     void translations_include_smart_interface_messages() {
         assertThat(Translations.ALL.get("en_us")).containsKeys(
                 "block.mmcr.smart_interface",
+                "item.mmcr.smart_interface",
                 "container.mmcr.smart_interface",
                 "mmcr.smart_interface.value",
                 "mmcr.recipe.smart_interface_mismatch",
