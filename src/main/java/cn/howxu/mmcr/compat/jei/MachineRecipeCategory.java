@@ -126,12 +126,12 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             y += 10;
         }
         for (MachineRecipeDisplay.SmartInterfaceDisplay smartInterface : recipe.smartInterfaceInputs()) {
-            guiGraphics.text(Minecraft.getInstance().font, Component.literal(smartInterface.label()),
+            guiGraphics.text(Minecraft.getInstance().font, smartInterface.label(),
                     layout.durationTextX(), y, 0xFF404040, false);
             y += 10;
         }
         for (MachineRecipeDisplay.SmartInterfaceDisplay smartInterface : recipe.smartInterfaceOutputs()) {
-            guiGraphics.text(Minecraft.getInstance().font, Component.literal(smartInterface.label()),
+            guiGraphics.text(Minecraft.getInstance().font, smartInterface.label(),
                     layout.durationTextX(), y, 0xFF404040, false);
             y += 10;
         }
@@ -152,7 +152,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         } else if (isMouseOver(layout.outputs().overflowSlot(), mouseX, mouseY)) {
             appendOverflowTooltip(tooltip, recipe, layout.outputs().hiddenEntries(), false);
         } else {
-            smartInterfaceTooltip(recipe, layout, mouseX, mouseY).ifPresent(value -> tooltip.add(Component.literal(value)));
+            smartInterfaceTooltip(recipe, layout, mouseX, mouseY).ifPresent(tooltip::add);
         }
     }
 
@@ -355,7 +355,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         return slot != null && mouseX >= slot.x() && mouseX < slot.x() + 16 && mouseY >= slot.y() && mouseY < slot.y() + 16;
     }
 
-    private static java.util.Optional<String> smartInterfaceTooltip(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
+    private static java.util.Optional<Component> smartInterfaceTooltip(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
             double mouseX, double mouseY) {
         if (mouseX < layout.durationTextX()) return java.util.Optional.empty();
         int y = layout.durationTextY() + 10 * (1 + recipe.energyInputs().size() + recipe.energyOutputs().size()

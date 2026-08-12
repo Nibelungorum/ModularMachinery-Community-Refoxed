@@ -109,6 +109,8 @@ class TranslationsTest {
                 "mmcr.smart_interface.empty_binding",
                 "mmcr.smart_interface.previous",
                 "mmcr.smart_interface.next",
+                "mmcr.smart_interface.save",
+                "mmcr.smart_interface.input",
                 "mmcr.smart_interface.invalid_number",
                 "jei.mmcr.smart_interface.input",
                 "jei.mmcr.smart_interface.output");
@@ -120,6 +122,8 @@ class TranslationsTest {
                 "mmcr.smart_interface.empty_binding",
                 "mmcr.smart_interface.previous",
                 "mmcr.smart_interface.next",
+                "mmcr.smart_interface.save",
+                "mmcr.smart_interface.input",
                 "mmcr.smart_interface.invalid_number",
                 "jei.mmcr.smart_interface.input",
                 "jei.mmcr.smart_interface.output");

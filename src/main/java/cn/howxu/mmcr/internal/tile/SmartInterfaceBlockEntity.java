@@ -102,8 +102,8 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
 
     public boolean bind(BlockPos controllerPos, Identifier machineId, String type, float value) {
         if (type == null || type.isBlank() || !Float.isFinite(value)) return false;
-        return claimController(controllerPos, machineId, Map.of(type, new SmartInterfaceType(type, value, 0,
-                "", "", "", "", "", 0)), true) && setValue(type, value);
+        return claimController(controllerPos, machineId, Map.of(type, new SmartInterfaceType(type, value, 0)), true)
+                && setValue(type, value);
     }
 
     public boolean unbind(BlockPos controllerPos) {

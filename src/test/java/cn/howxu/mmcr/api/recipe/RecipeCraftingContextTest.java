@@ -1128,7 +1128,7 @@ class RecipeCraftingContextTest {
     void smart_interface_values_are_resolved_from_interface_owned_parameters() throws Exception {
         SmartInterfaceBlockEntity smart = smartInterface(new BlockPos(1, 0, 0));
         assertThat(smart.claimController(BlockPos.ZERO, MMCR.id("test_machine"), java.util.Map.of(
-                "temperature", new SmartInterfaceType("temperature", 50F, 0, "", "", "", "", "", 0)
+                "temperature", new SmartInterfaceType("temperature", 50F, 0)
         ), true)).isTrue();
         MachineControllerBlockEntity controller = controllerWithMachineAndComponents(MMCR.id("test_machine"), smart);
 
@@ -1149,7 +1149,7 @@ class RecipeCraftingContextTest {
         ));
         SmartInterfaceBlockEntity smart = smartInterface(new BlockPos(1, 0, 0));
         assertThat(smart.claimController(BlockPos.ZERO, MMCR.id("test_machine"), java.util.Map.of(
-                "temperature", new SmartInterfaceType("temperature", 100F, 0, "", "", "", "", "", 0)
+                "temperature", new SmartInterfaceType("temperature", 100F, 0)
         ), true)).isTrue();
         MachineRecipe recipe = explicitRequirementRecipe("smart_modifier_item_output", List.of(
                 new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
@@ -1171,7 +1171,7 @@ class RecipeCraftingContextTest {
         ));
         SmartInterfaceBlockEntity smart = smartInterface(new BlockPos(1, 0, 0));
         assertThat(smart.claimController(BlockPos.ZERO, MMCR.id("test_machine"), java.util.Map.of(
-                "temperature", new SmartInterfaceType("temperature", 100F, 0, "", "", "", "", "", 0)
+                "temperature", new SmartInterfaceType("temperature", 100F, 0)
         ), true)).isTrue();
         MachineRecipe recipe = new MachineRecipe(MMCR.id("smart_duration"), MMCR.id("test_machine"), 40,
                 List.of(), List.of());

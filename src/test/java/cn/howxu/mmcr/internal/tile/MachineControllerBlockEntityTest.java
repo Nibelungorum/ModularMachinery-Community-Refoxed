@@ -256,7 +256,7 @@ class MachineControllerBlockEntityTest {
         Identifier machineId = MMCR.id("smart_interface_binding_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId)
                 .localizedName("Smart Interface Binding")
-                .smartInterfaceType(new SmartInterfaceType("mode", 3F, 1, "", "", "", "", "", 0))
+                .smartInterfaceType(new SmartInterfaceType("mode", 3F, 1))
                 .build());
         var machine = new DynamicMachine(machineId, "Smart Interface Binding",
                 onePortPattern(cn.howxu.mmcr.registry.ModBlocks.SMART_INTERFACE.get()));

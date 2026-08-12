@@ -31,8 +31,8 @@ class SmartInterfaceBlockEntityTest {
     void parameter_values_round_trip_and_reject_invalid_updates() {
         var owner = createSmartInterface();
         assertThat(owner.claimController(BlockPos.ZERO, MMCR.id("test"), Map.of(
-                "mode", new SmartInterfaceType("mode", 4F, 0, "", "", "", "", "", 0),
-                "temperature", new SmartInterfaceType("temperature", 20F, 1, "", "", "", "", "", 0)
+                "mode", new SmartInterfaceType("mode", 4F, 0),
+                "temperature", new SmartInterfaceType("temperature", 20F, 1)
         ), false)).isTrue();
         assertThat(owner.setValue("mode", 7F)).isTrue();
 
@@ -65,6 +65,18 @@ class SmartInterfaceBlockEntityTest {
         assertThat(restored.machineId()).contains(MMCR.id("test"));
         assertThat(restored.value("mode")).contains(4F);
         assertThat(restored.hasController(BlockPos.ZERO)).isTrue();
+    }
+
+    @Test
+    void sync_types_uses_registered_minimum_value() {
+        var owner = createSmartInterface();
+
+        assertThat(owner.claimController(BlockPos.ZERO, MMCR.id("test"), Map.of(
+                "temperature", new SmartInterfaceType("temperature", 400F, 6800F, 0,
+                        SmartInterfaceType.ValueType.INTEGER)
+        ), false)).isTrue();
+
+        assertThat(owner.value("temperature")).contains(400F);
     }
 
     @Test

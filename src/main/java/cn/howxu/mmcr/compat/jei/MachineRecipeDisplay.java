@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import com.mojang.serialization.DynamicOps;
 import net.minecraft.core.RegistryAccess;
@@ -124,7 +125,7 @@ public record MachineRecipeDisplay(
         );
     }
 
-    public List<String> tooltips() {
+    public List<Component> tooltips() {
         return java.util.stream.Stream.concat(
                         java.util.stream.Stream.concat(smartInterfaceInputs.stream(), smartInterfaceOutputs.stream())
                                 .map(SmartInterfaceDisplay::tooltip),
@@ -135,40 +136,19 @@ public record MachineRecipeDisplay(
     private static java.util.Optional<SmartInterfaceDisplay> smartInterfaceDisplay(SmartInterfaceType type,
             SmartInterfaceRequirement requirement) {
         if (type == null) return java.util.Optional.empty();
-        String displayType = type.headerInfo().isBlank() ? requirement.interfaceType() : type.headerInfo();
-        String tooltip = standardSmartInterfaceText(displayType, type.valueType(), requirement);
-        if (!type.jeiTooltip().isBlank()) {
-            Object[] arguments = tooltipArguments(type.valueType(), requirement);
-            if (arguments.length == type.jeiTooltipArgsCount()) {
-                try {
-                    tooltip = String.format(java.util.Locale.ROOT, type.jeiTooltip(), arguments);
-                } catch (java.util.IllegalFormatException ignored) {
-                    // Keep the standard localized fallback.
-                }
-            }
-        }
-        return java.util.Optional.of(new SmartInterfaceDisplay(displayType, requirement.minValue(), requirement.maxValue(),
-                requirement.io() == RecipeModifier.IOType.INPUT, tooltip, type.valueType()));
-    }
-
-    private static Object[] tooltipArguments(SmartInterfaceType.ValueType valueType, SmartInterfaceRequirement requirement) {
-        if (requirement.minValue() == requirement.maxValue()) return new Object[]{formatArgument(valueType, requirement.minValue())};
-        return new Object[]{formatArgument(valueType, requirement.minValue()), formatArgument(valueType, requirement.maxValue())};
-    }
-
-    private static Object formatArgument(SmartInterfaceType.ValueType valueType, float value) {
-        return valueType == SmartInterfaceType.ValueType.INTEGER && value == Math.rint(value) ? (int) value : value;
-    }
-
-    private static String standardSmartInterfaceText(String displayType, SmartInterfaceType.ValueType valueType,
-            SmartInterfaceRequirement requirement) {
-        return "Smart interface " + displayType + ": " + valueText(valueType, requirement.minValue(), requirement.maxValue());
+        Component displayType = Component.translatable(type.translationKey());
+        String value = valueText(type.valueType(), requirement.minValue(), requirement.maxValue());
+        boolean input = requirement.io() == RecipeModifier.IOType.INPUT;
+        Component tooltip = Component.translatable(input
+                ? "jei.mmcr.smart_interface.requirement.input"
+                : "jei.mmcr.smart_interface.requirement.output", displayType, value);
+        return java.util.Optional.of(new SmartInterfaceDisplay(displayType, value, input, tooltip));
     }
 
     private static String valueText(SmartInterfaceType.ValueType valueType, float minValue, float maxValue) {
         String min = formatValue(valueType, minValue);
-        if (minValue == maxValue) return min;
-        return "[" + min + ", " + formatValue(valueType, maxValue) + "]";
+        if (Float.compare(minValue, maxValue) == 0) return min;
+        return min + " - " + formatValue(valueType, maxValue);
     }
 
     private static String formatValue(SmartInterfaceType.ValueType valueType, float value) {
@@ -177,10 +157,9 @@ public record MachineRecipeDisplay(
                 : Float.toString(value);
     }
 
-    public record SmartInterfaceDisplay(String type, float minValue, float maxValue, boolean input, String tooltip,
-            SmartInterfaceType.ValueType valueType) {
-        public String label() {
-            return type + ": " + valueText(valueType, minValue, maxValue);
+    public record SmartInterfaceDisplay(Component type, String value, boolean input, Component tooltip) {
+        public Component label() {
+            return Component.translatable("mmcr.smart_interface.value", type, value);
         }
     }
 
@@ -196,10 +175,10 @@ public record MachineRecipeDisplay(
             return type + " -> " + target;
         }
 
-        public String tooltip() {
-            return "Smart interface " + type + " modifies " + target + " " + io.getKey()
+        public Component tooltip() {
+            return Component.literal("Smart interface " + type + " modifies " + target + " " + io.getKey()
                     + (chance ? " chance" : "") + ": [" + minValue + ", " + maxValue + "] -> ["
-                    + atMin + ", " + atMax + "] " + operation;
+                    + atMin + ", " + atMax + "] " + operation);
         }
     }
 

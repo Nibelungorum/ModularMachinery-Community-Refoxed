@@ -138,10 +138,14 @@ class MachineBuilderJSTest {
     void builder_declares_configured_smart_interface() {
         var registration = new MachineBuilderJS("mmcr:interface_builder_test")
                 .localizedName("Interface Builder Test")
-                .smartInterface("speed", 2F).priority(10).valueInfo("Speed: %.1f").end()
+                .smartInterface("speed", 1F, 4F).priority(10).end()
                 .createObject();
 
-        assertThat(registration.smartInterfaceTypes().get("speed").priority()).isEqualTo(10);
+        SmartInterfaceType speed = registration.smartInterfaceTypes().get("speed");
+        assertThat(speed.priority()).isEqualTo(10);
+        assertThat(speed.defaultValue()).isEqualTo(1F);
+        assertThat(speed.minValue()).isEqualTo(1F);
+        assertThat(speed.maxValue()).isEqualTo(4F);
     }
 
     @Test

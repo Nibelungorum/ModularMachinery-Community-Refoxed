@@ -63,24 +63,22 @@ class SmartInterfaceRequirementTest {
     }
 
     @Test
-    void input_failure_uses_machine_not_equal_message() throws Exception {
+    void input_failure_uses_standard_missing_input_message() throws Exception {
         MachineDefinitions.clearForTesting();
         MachineDefinitions.register(MachineRegistration.builder(MMCR.id("test_machine"))
-                .smartInterfaceType(new SmartInterfaceType("temperature", 20F, 0, "", "", "",
-                        "mmcr.failure.temperature", "", 0))
+                .smartInterfaceType(new SmartInterfaceType("temperature", 20F, 0))
                 .build());
         MachineDefinitions.freezeRegistryPhase();
         SmartInterfaceBlockEntity smart = smartInterface(new BlockPos(1, 0, 0));
         assertThat(smart.claimController(BlockPos.ZERO, MMCR.id("test_machine"), Map.of(
-                "temperature", new SmartInterfaceType("temperature", 20F, 0, "", "", "",
-                        "mmcr.failure.temperature", "", 0)
+                "temperature", new SmartInterfaceType("temperature", 20F, 0)
         ), false)).isTrue();
         RecipeCraftingContext context = new RecipeCraftingContext(controllerWith(smart));
 
         boolean result = SmartInterfaceRequirement.input("temperature", 30F).simulate(context, 0);
 
         assertThat(result).isFalse();
-        assertThat(context.getLastFailureUnloc()).isEqualTo("mmcr.failure.temperature");
+        assertThat(context.getLastFailureUnloc()).isEqualTo(RecipeCraftingContext.FAILURE_MISSING_INPUT);
     }
 
     @Test
@@ -126,12 +124,9 @@ class SmartInterfaceRequirementTest {
 
     private static Map<String, SmartInterfaceType> smartTypes() {
         return Map.of(
-                "Mode", new SmartInterfaceType("Mode", 1F, 0, "", "", "", "", "", 0,
-                        SmartInterfaceType.ValueType.INTEGER),
-                "Temperature", new SmartInterfaceType("Temperature", 400F, 1, "", "", "", "", "", 0,
-                        SmartInterfaceType.ValueType.INTEGER),
-                "ConversionRate", new SmartInterfaceType("ConversionRate", 0.5F, 2, "", "", "", "", "", 0,
-                        SmartInterfaceType.ValueType.FLOAT));
+                "Mode", new SmartInterfaceType("Mode", 1F, 0, SmartInterfaceType.ValueType.INTEGER),
+                "Temperature", new SmartInterfaceType("Temperature", 400F, 1, SmartInterfaceType.ValueType.INTEGER),
+                "ConversionRate", new SmartInterfaceType("ConversionRate", 0.5F, 2, SmartInterfaceType.ValueType.FLOAT));
     }
 
     private static SmartInterfaceBlockEntity smartInterface(BlockPos pos) {

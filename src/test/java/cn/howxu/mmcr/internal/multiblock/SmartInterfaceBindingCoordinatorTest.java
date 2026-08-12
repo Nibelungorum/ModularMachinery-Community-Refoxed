@@ -131,7 +131,7 @@ class SmartInterfaceBindingCoordinatorTest {
     }
 
     private static SmartInterfaceType type(String type, float defaultValue, int priority) {
-        return new SmartInterfaceType(type, defaultValue, priority, "", "", "", "", "", 0);
+        return new SmartInterfaceType(type, defaultValue, priority);
     }
 
     private static SmartInterfaceBlockEntity smartInterface(BlockPos pos) {

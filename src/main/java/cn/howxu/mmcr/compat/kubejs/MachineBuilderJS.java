@@ -211,7 +211,11 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     }
 
     public SmartInterfaceTypeBuilderJS smartInterface(String type, float defaultValue) {
-        return new SmartInterfaceTypeBuilderJS(this, type, defaultValue);
+        return smartInterface(type, defaultValue, Float.MAX_VALUE);
+    }
+
+    public SmartInterfaceTypeBuilderJS smartInterface(String type, float minValue, float maxValue) {
+        return new SmartInterfaceTypeBuilderJS(this, type, minValue, maxValue);
     }
 
     public MachineBuilderJS shareSmartInterface() {
@@ -346,54 +350,20 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public static final class SmartInterfaceTypeBuilderJS {
         private final MachineBuilderJS parent;
         private final String type;
-        private final float defaultValue;
+        private final float minValue;
+        private final float maxValue;
         private int priority;
-        private String headerInfo = "";
-        private String valueInfo = "";
-        private String footerInfo = "";
-        private String notEqualMessage = "";
-        private String jeiTooltip = "";
-        private int jeiTooltipArgsCount;
         private SmartInterfaceType.ValueType valueType = SmartInterfaceType.ValueType.FLOAT;
 
-        private SmartInterfaceTypeBuilderJS(MachineBuilderJS parent, String type, float defaultValue) {
+        private SmartInterfaceTypeBuilderJS(MachineBuilderJS parent, String type, float minValue, float maxValue) {
             this.parent = parent;
             this.type = type;
-            this.defaultValue = defaultValue;
+            this.minValue = minValue;
+            this.maxValue = maxValue;
         }
 
         public SmartInterfaceTypeBuilderJS priority(int priority) {
             this.priority = priority;
-            return this;
-        }
-
-        public SmartInterfaceTypeBuilderJS headerInfo(String headerInfo) {
-            this.headerInfo = headerInfo;
-            return this;
-        }
-
-        public SmartInterfaceTypeBuilderJS valueInfo(String valueInfo) {
-            this.valueInfo = valueInfo;
-            return this;
-        }
-
-        public SmartInterfaceTypeBuilderJS footerInfo(String footerInfo) {
-            this.footerInfo = footerInfo;
-            return this;
-        }
-
-        public SmartInterfaceTypeBuilderJS notEqualMessage(String notEqualMessage) {
-            this.notEqualMessage = notEqualMessage;
-            return this;
-        }
-
-        public SmartInterfaceTypeBuilderJS jeiTooltip(String jeiTooltip) {
-            this.jeiTooltip = jeiTooltip;
-            return this;
-        }
-
-        public SmartInterfaceTypeBuilderJS jeiTooltipArgsCount(int jeiTooltipArgsCount) {
-            this.jeiTooltipArgsCount = jeiTooltipArgsCount;
             return this;
         }
 
@@ -403,8 +373,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         }
 
         public MachineBuilderJS end() {
-            parent.smartInterfaceTypes.add(new SmartInterfaceType(type, defaultValue, priority, headerInfo, valueInfo,
-                    footerInfo, notEqualMessage, jeiTooltip, jeiTooltipArgsCount, valueType));
+            parent.smartInterfaceTypes.add(new SmartInterfaceType(type, minValue, maxValue, priority, valueType));
             return parent;
         }
     }

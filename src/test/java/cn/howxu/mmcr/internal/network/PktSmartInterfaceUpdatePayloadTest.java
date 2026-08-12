@@ -42,11 +42,22 @@ class PktSmartInterfaceUpdatePayloadTest {
 
     @Test
     void value_type_validation_rejects_fractional_integer_updates() {
-        SmartInterfaceType integer = new SmartInterfaceType("batch", 1F, 0, "", "", "", "", "", 0,
-                SmartInterfaceType.ValueType.INTEGER);
+        SmartInterfaceType integer = new SmartInterfaceType("batch", 1F, 0, SmartInterfaceType.ValueType.INTEGER);
 
         assertThat(PktSmartInterfaceUpdatePayload.typeAccepts(integer, 2F)).isTrue();
         assertThat(PktSmartInterfaceUpdatePayload.typeAccepts(integer, 2.5F)).isFalse();
+    }
+
+    @Test
+    void value_validation_returns_minimum_for_invalid_updates() {
+        SmartInterfaceType ranged = new SmartInterfaceType("temperature", 400F, 6800F, 0,
+                SmartInterfaceType.ValueType.INTEGER);
+
+        assertThat(PktSmartInterfaceUpdatePayload.validatedValue(ranged, 1200F)).contains(1200F);
+        assertThat(PktSmartInterfaceUpdatePayload.validatedValue(ranged, 399F)).contains(400F);
+        assertThat(PktSmartInterfaceUpdatePayload.validatedValue(ranged, 6801F)).contains(400F);
+        assertThat(PktSmartInterfaceUpdatePayload.validatedValue(ranged, 1200.5F)).contains(400F);
+        assertThat(PktSmartInterfaceUpdatePayload.validatedValue(null, 1200F)).isEmpty();
     }
 
     private static void bind(Object deferredHolder, MenuType<SmartInterfaceMenu> menuType) throws Exception {

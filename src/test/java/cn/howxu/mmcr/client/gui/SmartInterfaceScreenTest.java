@@ -7,10 +7,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class SmartInterfaceScreenTest {
     @Test
-    void malformed_value_info_falls_back_to_the_default_value_display() {
-        SmartInterfaceType type = new SmartInterfaceType("temperature", 8F, 0, "", "%q", "", "", "", 0);
+    void current_value_label_uses_translatable_type_name_and_raw_value() {
+        SmartInterfaceType type = new SmartInterfaceType("temperature", 8F, 0);
 
-        assertThat(SmartInterfaceScreen.valueInfo(type, 8F)).isEqualTo("Value: 8.0");
+        var contents = SmartInterfaceScreen.currentValueLabel(type, 8F).getContents();
+
+        assertThat(contents).isInstanceOf(net.minecraft.network.chat.contents.TranslatableContents.class);
+        var translatable = (net.minecraft.network.chat.contents.TranslatableContents) contents;
+        assertThat(translatable.getKey()).isEqualTo("mmcr.smart_interface.value");
+        assertThat(((net.minecraft.network.chat.contents.TranslatableContents)
+                ((net.minecraft.network.chat.Component) translatable.getArgs()[0]).getContents()).getKey())
+                .isEqualTo("mmcr.smart_interface.type.temperature");
+        assertThat(translatable.getArgs()[1]).isEqualTo("8.0");
     }
 
     @Test
@@ -23,20 +31,53 @@ class SmartInterfaceScreenTest {
     }
 
     @Test
-    void value_info_formats_integer_without_decimal() {
-        SmartInterfaceType integer = new SmartInterfaceType("batch", 2F, 0, "", "Batch: %d", "", "", "", 0,
-                SmartInterfaceType.ValueType.INTEGER);
+    void current_value_label_formats_integer_without_decimal() {
+        SmartInterfaceType integer = new SmartInterfaceType("batch", 2F, 0, SmartInterfaceType.ValueType.INTEGER);
 
-        assertThat(SmartInterfaceScreen.valueInfo(integer, 2F)).isEqualTo("Batch: 2");
+        var contents = (net.minecraft.network.chat.contents.TranslatableContents)
+                SmartInterfaceScreen.currentValueLabel(integer, 2F).getContents();
+
+        assertThat(contents.getArgs()[1]).isEqualTo("2");
     }
 
     @Test
-    void input_accepts_only_the_mmce_numeric_characters() {
-        assertThat(SmartInterfaceScreen.acceptsInputCharacter('8')).isTrue();
-        assertThat(SmartInterfaceScreen.acceptsInputCharacter('.')).isTrue();
-        assertThat(SmartInterfaceScreen.acceptsInputCharacter('E')).isTrue();
-        assertThat(SmartInterfaceScreen.acceptsInputCharacter('-')).isFalse();
-        assertThat(SmartInterfaceScreen.acceptsInputCharacter('e')).isFalse();
+    void description_label_uses_required_i18n_key() {
+        SmartInterfaceType type = new SmartInterfaceType("Mode", 1F, 0, SmartInterfaceType.ValueType.INTEGER);
+
+        var contents = (net.minecraft.network.chat.contents.TranslatableContents)
+                SmartInterfaceScreen.descriptionLabel(type).getContents();
+
+        assertThat(contents.getKey()).isEqualTo("mmcr.smart_interface.type.Mode.description");
+    }
+
+    @Test
+    void control_layout_starts_below_info_line_height() {
+        SmartInterfaceScreen.ControlLayout layout = SmartInterfaceScreen.controlLayout(10);
+
+        assertThat(layout.inputY()).isEqualTo(42);
+        assertThat(layout.navigationY()).isEqualTo(68);
+    }
+
+    @Test
+    void integer_input_accepts_only_whole_number_candidates() {
+        assertThat(SmartInterfaceScreen.acceptsInputCandidate("8", SmartInterfaceType.ValueType.INTEGER)).isTrue();
+        assertThat(SmartInterfaceScreen.acceptsInputCandidate("123", SmartInterfaceType.ValueType.INTEGER)).isTrue();
+        assertThat(SmartInterfaceScreen.acceptsInputCandidate("12.3", SmartInterfaceType.ValueType.INTEGER)).isFalse();
+        assertThat(SmartInterfaceScreen.acceptsInputCandidate("1E2", SmartInterfaceType.ValueType.INTEGER)).isFalse();
+        assertThat(SmartInterfaceScreen.acceptsInputCandidate("abc", SmartInterfaceType.ValueType.INTEGER)).isFalse();
+    }
+
+    @Test
+    void float_input_rejects_malformed_decimal_candidates() {
+        assertThat(SmartInterfaceScreen.acceptsInputCandidate("", SmartInterfaceType.ValueType.FLOAT)).isTrue();
+        assertThat(SmartInterfaceScreen.acceptsInputCandidate("1", SmartInterfaceType.ValueType.FLOAT)).isTrue();
+        assertThat(SmartInterfaceScreen.acceptsInputCandidate("1.", SmartInterfaceType.ValueType.FLOAT)).isTrue();
+        assertThat(SmartInterfaceScreen.acceptsInputCandidate("1.111", SmartInterfaceType.ValueType.FLOAT)).isTrue();
+        assertThat(SmartInterfaceScreen.acceptsInputCandidate("1.111.1", SmartInterfaceType.ValueType.FLOAT)).isFalse();
+        assertThat(SmartInterfaceScreen.acceptsInputCandidate("1E2", SmartInterfaceType.ValueType.FLOAT)).isTrue();
+        assertThat(SmartInterfaceScreen.acceptsInputCandidate("1E", SmartInterfaceType.ValueType.FLOAT)).isTrue();
+        assertThat(SmartInterfaceScreen.acceptsInputCandidate("1E2E3", SmartInterfaceType.ValueType.FLOAT)).isFalse();
+        assertThat(SmartInterfaceScreen.acceptsInputCandidate("abc", SmartInterfaceType.ValueType.FLOAT)).isFalse();
     }
 
     @Test

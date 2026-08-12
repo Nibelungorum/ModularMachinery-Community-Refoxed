@@ -14,6 +14,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
+import java.util.Optional;
+
 /**
  * Client request to edit one parameter of the currently open smart-interface menu.
  *
@@ -42,8 +44,7 @@ public record PktSmartInterfaceUpdatePayload(BlockPos pos, String interfaceType,
             var registration = MachineDefinitions.getRegistration(machineId);
             if (registration == null) return;
             SmartInterfaceType type = registration.smartInterfaceTypes().get(interfaceType);
-            if (!typeAccepts(type, value)) return;
-            smartInterface.setValue(interfaceType, value);
+            validatedValue(type, value).ifPresent(validated -> smartInterface.setValue(interfaceType, validated));
         });
     }
 
@@ -57,5 +58,9 @@ public record PktSmartInterfaceUpdatePayload(BlockPos pos, String interfaceType,
 
     static boolean typeAccepts(SmartInterfaceType type, float value) {
         return type != null && type.accepts(value);
+    }
+
+    static Optional<Float> validatedValue(SmartInterfaceType type, float value) {
+        return type == null ? Optional.empty() : Optional.of(type.validatedValue(value));
     }
 }

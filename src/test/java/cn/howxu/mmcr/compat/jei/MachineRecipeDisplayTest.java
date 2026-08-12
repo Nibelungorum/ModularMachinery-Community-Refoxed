@@ -64,27 +64,34 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
-    void display_uses_custom_tooltip_for_interface_input() {
+    void display_uses_i18n_tooltip_for_interface_input() {
         var machineId = MMCR.id("interface_jei_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId).localizedName("Interface JEI")
-                .smartInterfaceType(new SmartInterfaceType("mode", 0F, 0, "", "", "", "",
-                        "Mode: %.1f..%.1f", 2)).build());
+                .smartInterfaceType(new SmartInterfaceType("mode", 0F, 0)).build());
         MachineRecipeDisplay display = displayFor(SmartInterfaceRequirement.input("mode", 1F, 2F), machineId);
 
-        assertThat(display.tooltips()).contains("Mode: 1.0..2.0");
+        assertThat(display.tooltips()).singleElement().satisfies(tooltip -> {
+            var contents = (net.minecraft.network.chat.contents.TranslatableContents) tooltip.getContents();
+            assertThat(contents.getKey()).isEqualTo("jei.mmcr.smart_interface.requirement.input");
+            assertThat(((net.minecraft.network.chat.contents.TranslatableContents)
+                    ((net.minecraft.network.chat.Component) contents.getArgs()[0]).getContents()).getKey())
+                    .isEqualTo("mmcr.smart_interface.type.mode");
+            assertThat(contents.getArgs()[1]).isEqualTo("1.0 - 2.0");
+        });
     }
 
     @Test
-    void display_falls_back_when_interface_tooltip_argument_count_does_not_match() {
+    void display_uses_i18n_tooltip_for_interface_output() {
         var machineId = MMCR.id("interface_jei_fallback");
         MachineDefinitions.register(MachineRegistration.builder(machineId).localizedName("Interface JEI Fallback")
-                .smartInterfaceType(new SmartInterfaceType("mode", 0F, 0, "", "", "", "",
-                        "Mode: %.1f", 2)).build());
+                .smartInterfaceType(new SmartInterfaceType("mode", 0F, 0)).build());
         MachineRecipeDisplay display = displayFor(SmartInterfaceRequirement.output("mode", 4F), machineId);
 
         assertThat(display.smartInterfaceOutputs()).singleElement().satisfies(output -> {
-            assertThat(output.label()).isEqualTo("mode: 4.0");
-            assertThat(output.tooltip()).isEqualTo("Smart interface mode: 4.0");
+            assertThat(((net.minecraft.network.chat.contents.TranslatableContents) output.label().getContents()).getKey())
+                    .isEqualTo("mmcr.smart_interface.value");
+            assertThat(((net.minecraft.network.chat.contents.TranslatableContents) output.tooltip().getContents()).getKey())
+                    .isEqualTo("jei.mmcr.smart_interface.requirement.output");
         });
     }
 
@@ -92,22 +99,24 @@ class MachineRecipeDisplayTest {
     void smart_interface_jei_text_uses_localized_type_compact_ranges_and_integer_values() {
         var machineId = MMCR.id("interface_jei_compact");
         MachineDefinitions.register(MachineRegistration.builder(machineId).localizedName("Interface JEI Compact")
-                .smartInterfaceType(new SmartInterfaceType("Mode", 0F, 0, "模式", "", "", "",
-                        "", 0, SmartInterfaceType.ValueType.INTEGER))
-                .smartInterfaceType(new SmartInterfaceType("Temperature", 400F, 1, "温度", "", "", "",
-                        "", 0, SmartInterfaceType.ValueType.INTEGER))
+                .smartInterfaceType(new SmartInterfaceType("Mode", 0F, 0, SmartInterfaceType.ValueType.INTEGER))
+                .smartInterfaceType(new SmartInterfaceType("Temperature", 400F, 1, SmartInterfaceType.ValueType.INTEGER))
                 .build());
 
         MachineRecipeDisplay mode = displayFor(SmartInterfaceRequirement.input("Mode", 1F), machineId);
         MachineRecipeDisplay temperature = displayFor(SmartInterfaceRequirement.input("Temperature", 5200F), machineId);
 
         assertThat(mode.smartInterfaceInputs()).singleElement().satisfies(input -> {
-            assertThat(input.label()).isEqualTo("模式: 1");
-            assertThat(input.tooltip()).isEqualTo("Smart interface 模式: 1");
+            assertThat(((net.minecraft.network.chat.contents.TranslatableContents) input.label().getContents()).getKey())
+                    .isEqualTo("mmcr.smart_interface.value");
+            assertThat(((net.minecraft.network.chat.contents.TranslatableContents) input.tooltip().getContents()).getArgs()[1])
+                    .isEqualTo("1");
         });
         assertThat(temperature.smartInterfaceInputs()).singleElement().satisfies(input -> {
-            assertThat(input.label()).isEqualTo("温度: 5200");
-            assertThat(input.tooltip()).isEqualTo("Smart interface 温度: 5200");
+            assertThat(((net.minecraft.network.chat.contents.TranslatableContents) input.label().getContents()).getKey())
+                    .isEqualTo("mmcr.smart_interface.value");
+            assertThat(((net.minecraft.network.chat.contents.TranslatableContents) input.tooltip().getContents()).getArgs()[1])
+                    .isEqualTo("5200");
         });
     }
 
@@ -116,7 +125,7 @@ class MachineRecipeDisplayTest {
         MachineDefinitions.clearForTesting();
         MachineDefinitions.beginRegistryPhase();
         MachineDefinitions.register(MachineRegistration.builder(MMCR.id("jei_interface_modifier"))
-                .smartInterfaceType(new SmartInterfaceType("temperature", 20F, 0, "", "", "", "", "", 0))
+                .smartInterfaceType(new SmartInterfaceType("temperature", 20F, 0))
                 .smartInterfaceModifier(SmartInterfaceModifier.energy("temperature", 0F, 100F, 1F, 2F,
                         RecipeModifier.Operation.MULTIPLY))
                 .build());
@@ -129,7 +138,7 @@ class MachineRecipeDisplayTest {
         assertThat(display.smartInterfaceModifiers()).containsExactly(new MachineRecipeDisplay.SmartInterfaceModifierDisplay(
                 "temperature", IntegrationTypeHelper.TARGET_ENERGY, RecipeModifier.IOType.INPUT, false,
                 0F, 100F, 1F, 2F, RecipeModifier.Operation.MULTIPLY));
-        assertThat(display.tooltips()).anyMatch(text -> text.contains("temperature") && text.contains("energy"));
+        assertThat(display.tooltips()).anyMatch(text -> text.getString().contains("temperature") && text.getString().contains("energy"));
     }
 
     @Test

@@ -508,12 +508,7 @@ public final class RecipeCraftingContext {
     }
 
     public String smartInterfaceFailureMessage(String type) {
-        var machine = controller.getFoundMachine();
-        var registration = machine == null ? null : MachineDefinitions.getRegistration(machine.registryName());
-        if (registration == null) return FAILURE_MISSING_INPUT;
-        var smartInterfaceType = registration.smartInterfaceTypes().get(type);
-        if (smartInterfaceType == null || smartInterfaceType.notEqualMessage().isBlank()) return FAILURE_MISSING_INPUT;
-        return smartInterfaceType.notEqualMessage();
+        return FAILURE_MISSING_INPUT;
     }
 
     private Optional<SmartInterfaceBinding> smartInterface(String type) {
