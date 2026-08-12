@@ -55,7 +55,7 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
     @Override
     protected void init() {
         super.init();
-        ControlLayout layout = controlLayout(LINE_HEIGHT);
+        ControlLayout layout = controlLayout();
         valueInput = addRenderableWidget(new NumericEditBox(font, leftPos + CONTENT_X, topPos + layout.inputY(), INPUT_WIDTH, INPUT_HEIGHT,
                 Component.translatable("mmcr.smart_interface.input")));
         valueInput.setMaxLength(16);
@@ -141,8 +141,8 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
         return parameterCount <= 0 ? 0 : Math.clamp(page, 0, parameterCount - 1);
     }
 
-    static ControlLayout controlLayout(int infoLineHeight) {
-        int inputY = TITLE_Y + LINE_HEIGHT * 2 + infoLineHeight + CONTROL_GAP;
+    static ControlLayout controlLayout() {
+        int inputY = TITLE_Y + LINE_HEIGHT * 3 + CONTROL_GAP;
         return new ControlLayout(inputY, inputY + SAVE_HEIGHT + CONTROL_GAP);
     }
 
@@ -192,7 +192,7 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
         boolean hasParameters = count > 0;
         SmartInterfaceType type = selectedType();
         valueInput.setValueType(type == null ? SmartInterfaceType.ValueType.FLOAT : type.valueType());
-        ControlLayout layout = controlLayout(infoLineHeight(type));
+        ControlLayout layout = controlLayout();
         valueInput.setX(leftPos + CONTENT_X);
         valueInput.setY(topPos + layout.inputY());
         save.setX(leftPos + SAVE_X);
@@ -209,11 +209,6 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
         previous.active = showing > 0;
         next.visible = count > 1;
         next.active = showing + 1 < count;
-    }
-
-    private int infoLineHeight(@Nullable SmartInterfaceType type) {
-        if (type == null) return LINE_HEIGHT;
-        return LINE_HEIGHT * Math.max(1, font.split(descriptionLabel(type), imageWidth - CONTENT_X * 2).size());
     }
 
     static Component currentValueLabel(SmartInterfaceType type, float value) {
