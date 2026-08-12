@@ -135,10 +135,10 @@ public record MachineRecipeDisplay(
     private static java.util.Optional<SmartInterfaceDisplay> smartInterfaceDisplay(SmartInterfaceType type,
             SmartInterfaceRequirement requirement) {
         if (type == null) return java.util.Optional.empty();
-        String tooltip = standardSmartInterfaceText(requirement);
+        String displayType = type.headerInfo().isBlank() ? requirement.interfaceType() : type.headerInfo();
+        String tooltip = standardSmartInterfaceText(displayType, type.valueType(), requirement);
         if (!type.jeiTooltip().isBlank()) {
-            Object[] arguments = requirement.minValue() == requirement.maxValue()
-                    ? new Object[]{requirement.minValue()} : new Object[]{requirement.minValue(), requirement.maxValue()};
+            Object[] arguments = tooltipArguments(type.valueType(), requirement);
             if (arguments.length == type.jeiTooltipArgsCount()) {
                 try {
                     tooltip = String.format(java.util.Locale.ROOT, type.jeiTooltip(), arguments);
@@ -147,19 +147,40 @@ public record MachineRecipeDisplay(
                 }
             }
         }
-        return java.util.Optional.of(new SmartInterfaceDisplay(requirement.interfaceType(), requirement.minValue(),
-                requirement.maxValue(), requirement.io() == RecipeModifier.IOType.INPUT, tooltip));
+        return java.util.Optional.of(new SmartInterfaceDisplay(displayType, requirement.minValue(), requirement.maxValue(),
+                requirement.io() == RecipeModifier.IOType.INPUT, tooltip, type.valueType()));
     }
 
-    private static String standardSmartInterfaceText(SmartInterfaceRequirement requirement) {
-        return requirement.io() == RecipeModifier.IOType.INPUT
-                ? "Smart interface " + requirement.interfaceType() + ": [" + requirement.minValue() + ", " + requirement.maxValue() + "]"
-                : "Smart interface " + requirement.interfaceType() + ": " + requirement.minValue();
+    private static Object[] tooltipArguments(SmartInterfaceType.ValueType valueType, SmartInterfaceRequirement requirement) {
+        if (requirement.minValue() == requirement.maxValue()) return new Object[]{formatArgument(valueType, requirement.minValue())};
+        return new Object[]{formatArgument(valueType, requirement.minValue()), formatArgument(valueType, requirement.maxValue())};
     }
 
-    public record SmartInterfaceDisplay(String type, float minValue, float maxValue, boolean input, String tooltip) {
+    private static Object formatArgument(SmartInterfaceType.ValueType valueType, float value) {
+        return valueType == SmartInterfaceType.ValueType.INTEGER && value == Math.rint(value) ? (int) value : value;
+    }
+
+    private static String standardSmartInterfaceText(String displayType, SmartInterfaceType.ValueType valueType,
+            SmartInterfaceRequirement requirement) {
+        return "Smart interface " + displayType + ": " + valueText(valueType, requirement.minValue(), requirement.maxValue());
+    }
+
+    private static String valueText(SmartInterfaceType.ValueType valueType, float minValue, float maxValue) {
+        String min = formatValue(valueType, minValue);
+        if (minValue == maxValue) return min;
+        return "[" + min + ", " + formatValue(valueType, maxValue) + "]";
+    }
+
+    private static String formatValue(SmartInterfaceType.ValueType valueType, float value) {
+        return valueType == SmartInterfaceType.ValueType.INTEGER && value == Math.rint(value)
+                ? Integer.toString((int) value)
+                : Float.toString(value);
+    }
+
+    public record SmartInterfaceDisplay(String type, float minValue, float maxValue, boolean input, String tooltip,
+            SmartInterfaceType.ValueType valueType) {
         public String label() {
-            return input ? type + ": [" + minValue + ", " + maxValue + "]" : type + ": " + minValue;
+            return type + ": " + valueText(valueType, minValue, maxValue);
         }
     }
 

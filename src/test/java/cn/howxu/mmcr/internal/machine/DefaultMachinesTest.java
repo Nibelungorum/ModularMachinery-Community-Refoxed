@@ -179,8 +179,18 @@ class DefaultMachinesTest {
                 .anySatisfy(predicate -> assertThat(predicate.matches(ModBlocks.SMART_INTERFACE.get().defaultBlockState())).isTrue());
         var registration = MachineDefinitions.getRegistration(MMCR.id("purpur_furnace"));
         assertThat(registration.allowMultithreading()).isTrue();
-        assertThat(registration.smartInterfaceTypes()).containsKey("Mode");
+        assertThat(registration.smartInterfaceTypes()).containsKeys("Mode", "Temperature", "ConversionRate");
         assertThat(registration.smartInterfaceTypes().get("Mode").defaultValue()).isEqualTo(1F);
+        assertThat(registration.smartInterfaceTypes().get("Mode").valueType())
+                .isEqualTo(cn.howxu.mmcr.api.machine.SmartInterfaceType.ValueType.INTEGER);
+        assertThat(registration.smartInterfaceTypes().get("Temperature")).satisfies(type -> {
+            assertThat(type.defaultValue()).isEqualTo(400F);
+            assertThat(type.valueType()).isEqualTo(cn.howxu.mmcr.api.machine.SmartInterfaceType.ValueType.INTEGER);
+        });
+        assertThat(registration.smartInterfaceTypes().get("ConversionRate")).satisfies(type -> {
+            assertThat(type.defaultValue()).isEqualTo(0.5F);
+            assertThat(type.valueType()).isEqualTo(cn.howxu.mmcr.api.machine.SmartInterfaceType.ValueType.FLOAT);
+        });
         assertThat(requirementIds(machine)).contains("energy_input_hatch>=tiny", "item_input_bus>=tiny", "item_output_bus>=tiny");
     }
 

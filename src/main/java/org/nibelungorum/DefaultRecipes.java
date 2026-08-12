@@ -243,19 +243,54 @@ public final class DefaultRecipes {
 
     private static List<MachineRecipe> purpurFurnaceRecipes() {
         return List.of(
-                purpurFurnaceRecipe("mode_1", 1F, Items.DIAMOND, 2),
-                purpurFurnaceRecipe("mode_2", 2F, Items.GOLD_INGOT, 4),
-                purpurFurnaceRecipe("mode_3", 3F, Items.IRON_INGOT, 8));
+                purpurFurnaceRecipe("mode_1", 200, 5, Items.DIAMOND, 2,
+                        SmartInterfaceRequirement.input("Mode", 1F)),
+                purpurFurnaceRecipe("mode_2", 200, 5, Items.GOLD_INGOT, 4,
+                        SmartInterfaceRequirement.input("Mode", 2F)),
+                purpurFurnaceRecipe("mode_3", 200, 5, Items.IRON_INGOT, 8,
+                        SmartInterfaceRequirement.input("Mode", 3F)),
+                purpurFurnaceRecipe("temperature_400", 320, 3, Items.APPLE, 8,
+                        SmartInterfaceRequirement.input("Temperature", 400F)),
+                purpurFurnaceRecipe("temperature_1600", 240, 6, Items.BAKED_POTATO, 6,
+                        SmartInterfaceRequirement.input("Temperature", 1600F)),
+                purpurFurnaceRecipe("temperature_3200", 160, 9, Items.BRICK, 4,
+                        SmartInterfaceRequirement.input("Temperature", 3200F)),
+                purpurFurnaceRecipe("temperature_6800", 60, 14, Items.CHARCOAL, 2,
+                        SmartInterfaceRequirement.input("Temperature", 6800F)),
+                purpurFurnaceRecipe("conversion_0", 200, 2, Items.STICK, 1,
+                        SmartInterfaceRequirement.input("ConversionRate", 0F)),
+                purpurFurnaceRecipe("conversion_50", 200, 6, Items.BONE_MEAL, 4,
+                        SmartInterfaceRequirement.input("ConversionRate", 0.5F)),
+                purpurFurnaceRecipe("conversion_100", 200, 12, Items.GLOWSTONE_DUST, 8,
+                        SmartInterfaceRequirement.input("ConversionRate", 1F)),
+                purpurFurnaceRecipe("mode_temperature", 120, 10, Items.POPPED_CHORUS_FRUIT, 3,
+                        SmartInterfaceRequirement.input("Mode", 2F),
+                        SmartInterfaceRequirement.input("Temperature", 3200F)),
+                purpurFurnaceRecipe("mode_conversion", 200, 9, Items.STRING, 6,
+                        SmartInterfaceRequirement.input("Mode", 3F),
+                        SmartInterfaceRequirement.input("ConversionRate", 0.75F)),
+                purpurFurnaceRecipe("temperature_conversion", 90, 15, Items.CLAY_BALL, 5,
+                        SmartInterfaceRequirement.input("Temperature", 5200F),
+                        SmartInterfaceRequirement.input("ConversionRate", 0.8F)),
+                purpurFurnaceRecipe("mode_temperature_conversion", 80, 18, Items.ENDER_PEARL, 4,
+                        SmartInterfaceRequirement.input("Mode", 1F),
+                        SmartInterfaceRequirement.input("Temperature", 5200F),
+                        SmartInterfaceRequirement.input("ConversionRate", 1F)));
     }
 
-    private static MachineRecipe purpurFurnaceRecipe(String mode, float value, Item output, int count) {
+    private static MachineRecipe purpurFurnaceRecipe(String path, int ticks, int energyPerTick, Item output, int count,
+                                                     SmartInterfaceRequirement... smartRequirements) {
         var coal = itemInput(Items.COAL, 1);
-        var energy = energyInput(5);
+        var energy = energyInput(energyPerTick);
         var result = item(output, count);
-        return new MachineRecipe(MMCR.id("purpur_furnace_" + mode), PURPUR_FURNACE_ID, 200,
+        List<MachineRequirement> requirements = new java.util.ArrayList<>();
+        requirements.add(MachineRequirement.fromInput(coal));
+        requirements.add(MachineRequirement.fromInput(energy));
+        requirements.add(MachineRequirement.itemOutput(result));
+        requirements.addAll(List.of(smartRequirements));
+        return new MachineRecipe(MMCR.id("purpur_furnace_" + path), PURPUR_FURNACE_ID, ticks,
                 List.of(coal, energy), List.of(result), List.of(), 0, 1, true, List.of(),
-                List.of(MachineRequirement.fromInput(coal), MachineRequirement.fromInput(energy),
-                        MachineRequirement.itemOutput(result), SmartInterfaceRequirement.input("Mode", value)), true, List.of());
+                requirements, true, List.of());
     }
 
     private static Definition thermalSmeltingDefinition(String level, Identifier levelId, int ticks,

@@ -89,6 +89,29 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
+    void smart_interface_jei_text_uses_localized_type_compact_ranges_and_integer_values() {
+        var machineId = MMCR.id("interface_jei_compact");
+        MachineDefinitions.register(MachineRegistration.builder(machineId).localizedName("Interface JEI Compact")
+                .smartInterfaceType(new SmartInterfaceType("Mode", 0F, 0, "模式", "", "", "",
+                        "", 0, SmartInterfaceType.ValueType.INTEGER))
+                .smartInterfaceType(new SmartInterfaceType("Temperature", 400F, 1, "温度", "", "", "",
+                        "", 0, SmartInterfaceType.ValueType.INTEGER))
+                .build());
+
+        MachineRecipeDisplay mode = displayFor(SmartInterfaceRequirement.input("Mode", 1F), machineId);
+        MachineRecipeDisplay temperature = displayFor(SmartInterfaceRequirement.input("Temperature", 5200F), machineId);
+
+        assertThat(mode.smartInterfaceInputs()).singleElement().satisfies(input -> {
+            assertThat(input.label()).isEqualTo("模式: 1");
+            assertThat(input.tooltip()).isEqualTo("Smart interface 模式: 1");
+        });
+        assertThat(temperature.smartInterfaceInputs()).singleElement().satisfies(input -> {
+            assertThat(input.label()).isEqualTo("温度: 5200");
+            assertThat(input.tooltip()).isEqualTo("Smart interface 温度: 5200");
+        });
+    }
+
+    @Test
     void display_includes_smart_interface_modifiers_from_machine_registration() {
         MachineDefinitions.clearForTesting();
         MachineDefinitions.beginRegistryPhase();

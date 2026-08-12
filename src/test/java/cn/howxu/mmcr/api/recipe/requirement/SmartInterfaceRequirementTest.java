@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
@@ -93,6 +94,44 @@ class SmartInterfaceRequirementTest {
         assertThat(encodedInput.toString()).contains("smart_interface", "interface_type", "min_value", "max_value");
         assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE, encodedInput).getOrThrow()).isEqualTo(input);
         assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE, encodedOutput).getOrThrow()).isEqualTo(output);
+    }
+
+    @Test
+    void input_requirement_matches_only_its_named_interface_type() throws Exception {
+        var smartInterface = smartInterface(new BlockPos(1, 0, 0));
+        var controller = controllerWith(smartInterface);
+        assertThat(smartInterface.claimController(BlockPos.ZERO, MMCR.id("test_machine"), smartTypes(), false)).isTrue();
+        assertThat(smartInterface.setValue("Mode", 3F)).isTrue();
+        assertThat(smartInterface.setValue("Temperature", 3200F)).isTrue();
+        assertThat(smartInterface.setValue("ConversionRate", 0F)).isTrue();
+        var context = new RecipeCraftingContext(controller);
+
+        assertThat(SmartInterfaceRequirement.input("Temperature", 3200F).simulate(context, 0)).isTrue();
+        assertThat(SmartInterfaceRequirement.input("Temperature", 1600F).simulate(context, 0)).isFalse();
+    }
+
+    @Test
+    void parallel_input_simulation_does_not_scale_smart_interface_values() throws Exception {
+        var smartInterface = smartInterface(new BlockPos(1, 0, 0));
+        var controller = controllerWith(smartInterface);
+        assertThat(smartInterface.claimController(BlockPos.ZERO, MMCR.id("test_machine"), smartTypes(), false)).isTrue();
+        assertThat(smartInterface.setValue("Mode", 2F)).isTrue();
+        var recipe = new MachineRecipe(MMCR.id("smart_parallel"), MMCR.id("test_machine"), 20,
+                List.of(), List.of(), List.of(), 0, 4, true, List.of(),
+                List.of(SmartInterfaceRequirement.input("Mode", 2F)), true, List.of());
+        var context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateInputs(recipe, 4)).isTrue();
+    }
+
+    private static Map<String, SmartInterfaceType> smartTypes() {
+        return Map.of(
+                "Mode", new SmartInterfaceType("Mode", 1F, 0, "", "", "", "", "", 0,
+                        SmartInterfaceType.ValueType.INTEGER),
+                "Temperature", new SmartInterfaceType("Temperature", 400F, 1, "", "", "", "", "", 0,
+                        SmartInterfaceType.ValueType.INTEGER),
+                "ConversionRate", new SmartInterfaceType("ConversionRate", 0.5F, 2, "", "", "", "", "", 0,
+                        SmartInterfaceType.ValueType.FLOAT));
     }
 
     private static SmartInterfaceBlockEntity smartInterface(BlockPos pos) {

@@ -398,9 +398,11 @@ public final class DefaultMachines {
     private static Machine purpurFurnace() {
         Block controller = ModBlocks.controllerFor(PURPUR_FURNACE_ID).get();
         List<BlockPredicate> interfaceSlots = new ArrayList<>(List.of(
+                new BlockPredicate.OfBlock(Blocks.PURPUR_PILLAR),
                 portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.ITEM),
                 portFamily(IOType.OUTPUT, PortTierRequirementSpec.PortCategory.ITEM),
                 portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.ENERGY),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get()),
                 new BlockPredicate.OfBlock(ModBlocks.SMART_INTERFACE.get())));
         for (ParallelTier tier : ParallelTier.values()) {
             interfaceSlots.add(new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get(tier.idSuffix()).get()));

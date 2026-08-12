@@ -198,9 +198,49 @@ class DefaultRecipesTest {
         installDefaultRuntimeContent();
         DefaultRecipes.ensureRegistered();
 
-        assertPurpurFurnaceRecipe("purpur_furnace_mode_1", 1F, Items.DIAMOND, 2);
-        assertPurpurFurnaceRecipe("purpur_furnace_mode_2", 2F, Items.GOLD_INGOT, 4);
-        assertPurpurFurnaceRecipe("purpur_furnace_mode_3", 3F, Items.IRON_INGOT, 8);
+        assertPurpurFurnaceRecipe("purpur_furnace_mode_1", Items.DIAMOND, 2,
+                SmartInterfaceRequirement.input("Mode", 1F));
+        assertPurpurFurnaceRecipe("purpur_furnace_mode_2", Items.GOLD_INGOT, 4,
+                SmartInterfaceRequirement.input("Mode", 2F));
+        assertPurpurFurnaceRecipe("purpur_furnace_mode_3", Items.IRON_INGOT, 8,
+                SmartInterfaceRequirement.input("Mode", 3F));
+    }
+
+    @Test
+    void purpur_furnace_recipes_cover_temperature_conversion_and_interface_combinations() {
+        installDefaultRuntimeContent();
+        DefaultRecipes.ensureRegistered();
+
+        assertPurpurFurnaceRecipe("purpur_furnace_temperature_400", Items.APPLE, 8,
+                320, 3, SmartInterfaceRequirement.input("Temperature", 400F));
+        assertPurpurFurnaceRecipe("purpur_furnace_temperature_1600", Items.BAKED_POTATO, 6,
+                240, 6, SmartInterfaceRequirement.input("Temperature", 1600F));
+        assertPurpurFurnaceRecipe("purpur_furnace_temperature_3200", Items.BRICK, 4,
+                160, 9, SmartInterfaceRequirement.input("Temperature", 3200F));
+        assertPurpurFurnaceRecipe("purpur_furnace_temperature_6800", Items.CHARCOAL, 2,
+                60, 14, SmartInterfaceRequirement.input("Temperature", 6800F));
+
+        assertPurpurFurnaceRecipe("purpur_furnace_conversion_0", Items.STICK, 1,
+                200, 2, SmartInterfaceRequirement.input("ConversionRate", 0F));
+        assertPurpurFurnaceRecipe("purpur_furnace_conversion_50", Items.BONE_MEAL, 4,
+                200, 6, SmartInterfaceRequirement.input("ConversionRate", 0.5F));
+        assertPurpurFurnaceRecipe("purpur_furnace_conversion_100", Items.GLOWSTONE_DUST, 8,
+                200, 12, SmartInterfaceRequirement.input("ConversionRate", 1F));
+
+        assertPurpurFurnaceRecipe("purpur_furnace_mode_temperature", Items.POPPED_CHORUS_FRUIT, 3,
+                120, 10, SmartInterfaceRequirement.input("Mode", 2F),
+                SmartInterfaceRequirement.input("Temperature", 3200F));
+        assertPurpurFurnaceRecipe("purpur_furnace_mode_conversion", Items.STRING, 6,
+                200, 9, SmartInterfaceRequirement.input("Mode", 3F),
+                SmartInterfaceRequirement.input("ConversionRate", 0.75F));
+        assertPurpurFurnaceRecipe("purpur_furnace_temperature_conversion", Items.CLAY_BALL, 5,
+                90, 15, SmartInterfaceRequirement.input("Temperature", 5200F),
+                SmartInterfaceRequirement.input("ConversionRate", 0.8F));
+
+        assertPurpurFurnaceRecipe("purpur_furnace_mode_temperature_conversion", Items.ENDER_PEARL, 4,
+                80, 18, SmartInterfaceRequirement.input("Mode", 1F),
+                SmartInterfaceRequirement.input("Temperature", 5200F),
+                SmartInterfaceRequirement.input("ConversionRate", 1F));
     }
 
     @Test
@@ -283,8 +323,8 @@ class DefaultRecipesTest {
         assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker"))).hasSize(21);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("reactor"))).hasSize(21);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("thermal_smelting_furnace"))).hasSize(16);
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("purpur_furnace"))).hasSize(3);
-        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(105);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("purpur_furnace"))).hasSize(14);
+        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(116);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker")))
                 .anySatisfy(recipe -> assertThat(recipe.fluidOutputs()).isNotEmpty());
         assertThat(RecipeRegistry.recipes())
@@ -429,19 +469,26 @@ class DefaultRecipesTest {
         MachineStructureRegistry.replaceDynamic(DefaultMachines.structures());
     }
 
-    private static void assertPurpurFurnaceRecipe(String id, float mode, net.minecraft.world.item.Item output, int count) {
+    private static void assertPurpurFurnaceRecipe(String id, net.minecraft.world.item.Item output, int count,
+                                                  SmartInterfaceRequirement... requirements) {
+        assertPurpurFurnaceRecipe(id, output, count, 200, 5, requirements);
+    }
+
+    private static void assertPurpurFurnaceRecipe(String id, net.minecraft.world.item.Item output, int count,
+                                                  int tickTime, int energy,
+                                                  SmartInterfaceRequirement... requirements) {
         var recipe = RecipeRegistry.getRecipe(MMCR.id(id));
         assertThat(recipe.machineId()).isEqualTo(MMCR.id("purpur_furnace"));
-        assertThat(recipe.tickTime()).isEqualTo(200);
+        assertThat(recipe.tickTime()).isEqualTo(tickTime);
         assertThat(recipe.inputs()).hasSize(2);
         assertThat(((MachineIngredient.ItemIngredient) recipe.inputs().get(0)).item().items().toList().getFirst().value()).isEqualTo(Items.COAL);
-        assertThat(((MachineIngredient.EnergyIngredient) recipe.inputs().get(1)).fePerTick()).isEqualTo(5);
+        assertThat(((MachineIngredient.EnergyIngredient) recipe.inputs().get(1)).fePerTick()).isEqualTo(energy);
         assertThat(recipe.outputs()).singleElement().satisfies(stack -> {
             assertThat(stack.getItem()).isEqualTo(output);
             assertThat(stack.getCount()).isEqualTo(count);
         });
-        assertThat(recipe.requirements()).filteredOn(SmartInterfaceRequirement.class::isInstance).singleElement()
-                .isEqualTo(SmartInterfaceRequirement.input("Mode", mode));
+        assertThat(recipe.requirements()).filteredOn(SmartInterfaceRequirement.class::isInstance)
+                .containsExactly(requirements);
     }
 
     private static ItemStack namedStack(net.minecraft.world.item.Item item, String name) {

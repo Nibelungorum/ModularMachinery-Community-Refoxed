@@ -126,7 +126,14 @@ public final class BuiltinMachines {
                 .allowParallelism(true)
                 .maxParallelAmount(4)
                 .smartInterfaceType(new SmartInterfaceType("Mode", 1F, 0,
-                        "模式", "Mode: %.0f", "1: 钻石, 2: 金锭, 3: 铁锭", "模式不匹配", "模式: %.0f", 1))
+                        "模式", "Mode: %.0f", "1: 钻石, 2: 金锭, 3: 铁锭", "模式不匹配", "模式: %.0f", 1,
+                        SmartInterfaceType.ValueType.INTEGER))
+                .smartInterfaceType(new SmartInterfaceType("Temperature", 400F, 1,
+                        "温度", "Temperature: %.0f K", "400-6800，越高越快但产率越低", "温度不匹配", "温度: %.0f K", 1,
+                        SmartInterfaceType.ValueType.INTEGER))
+                .smartInterfaceType(new SmartInterfaceType("ConversionRate", 0.5F, 2,
+                        "转化率", "Conversion: %.2f", "0.0-1.0，越高耗能和产量越高", "转化率不匹配", "转化率: %.2f", 1,
+                        SmartInterfaceType.ValueType.FLOAT))
                 .build());
     }
 }
