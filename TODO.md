@@ -1,9 +1,3 @@
-还有俩Bug:
-
-Jade的同步，当合成结束后，Jade依然显示工作中
-
-当机器SharedInput时，钻石剑附魔锋利II无产出的配方，无法在线程0进行
-
 实施计划已完成并保存至：
 docs/superpowers/plans/2026-08-11-smart-interface-implementation.md
 计划分为 7 个可独立验证和提交的任务：类型声明、方块实体持久化、结构绑定、配方需求、菜单与网络、KubeJS/JEI 集成、资源与端到端验证。

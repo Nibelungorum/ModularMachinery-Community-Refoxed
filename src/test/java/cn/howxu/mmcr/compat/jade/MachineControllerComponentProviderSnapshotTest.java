@@ -66,6 +66,21 @@ class MachineControllerComponentProviderSnapshotTest {
     }
 
     @Test
+    void inactive_snapshot_ignores_stale_active_recipe_from_previous_jade_payload() {
+        CompoundTag tag = new CompoundTag();
+        tag.putBoolean("formed", true);
+        tag.putBoolean("active", false);
+        tag.putString("activeRecipe", "mmcr:finished_recipe");
+        tag.putInt("tick", 20);
+        tag.putInt("totalTick", 20);
+
+        MachineControllerComponentProvider.Snapshot snapshot = MachineControllerComponentProvider.Snapshot.from(tag);
+
+        assertThat(snapshot.status()).isEqualTo("idle");
+        assertThat(snapshot.hasProgress()).isFalse();
+    }
+
+    @Test
     void keeps_backward_safe_parallel_and_factory_defaults() {
         MachineControllerComponentProvider.Snapshot snapshot = MachineControllerComponentProvider.Snapshot.from(new CompoundTag());
 

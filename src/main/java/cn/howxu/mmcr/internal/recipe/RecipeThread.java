@@ -76,6 +76,7 @@ public abstract class RecipeThread {
             contextPool.returnContext(nextContext);
             lastFailureUnloc = nextContext.getLastFailureUnloc();
             status = Status.FAILED;
+            onStartFailed();
             return false;
         }
         activeRecipe = next;
@@ -107,6 +108,7 @@ requested -> {
                 status = Status.FAILED;
                 clearPendingStart(startToken, nextContext);
                 contextPool.returnContext(nextContext);
+                onStartFailed();
             }
             return granted;
         },
@@ -307,6 +309,7 @@ requested -> {
 
     protected abstract void onStarted();
     protected abstract void onFinished();
+    protected void onStartFailed() { }
     protected String laneId() { return "base"; }
 
     public @Nullable ActiveMachineRecipe getActiveRecipe() { return activeRecipe; }

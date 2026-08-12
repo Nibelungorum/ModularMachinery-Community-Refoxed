@@ -113,6 +113,12 @@ public final class FactoryRecipeThread extends RecipeThread {
         lastRecipeModifierSnapshotVersion = modifierSnapshotVersion;
     }
 
+    @Override protected void onStartFailed() {
+        lastRecipe = null;
+        lastRecipeStructureVersion = Long.MIN_VALUE;
+        lastRecipeModifierSnapshotVersion = Long.MIN_VALUE;
+    }
+
     public void setActiveRecipeForTesting(@Nullable ActiveMachineRecipe activeRecipe) {
         this.activeRecipe = activeRecipe;
     }

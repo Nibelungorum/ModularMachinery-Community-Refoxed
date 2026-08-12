@@ -18,6 +18,8 @@ import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
@@ -29,12 +31,17 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.RegistryOps;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -42,6 +49,9 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.neoforged.neoforge.items.ItemStackHandler;
+import com.google.gson.JsonObject;
+import com.mojang.serialization.Dynamic;
+import com.mojang.serialization.JsonOps;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -291,6 +301,43 @@ class FactoryRecipeSchedulerTest {
     }
 
     @Test
+    void failed_shared_restart_forgets_cached_recipe_and_allows_fallback_search() throws Exception {
+        Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+        Items.IRON_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 64).build());
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
+        BlockPos controllerPos = new BlockPos(0, 64, 0);
+        MachineControllerBlockEntity controller = controllerWithInput(MMCR.id("factory_cached_shared_failure"), controllerPos, input);
+        ServerLevel level = serverLevel(List.of(controller, input));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, input, "level", level);
+        StructureClaimRegistry registry = StructureClaimRegistry.get(level);
+        registry.claim(controllerPos, List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
+                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)));
+        StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
+        MachineRecipe cached = new MachineRecipe(MMCR.id("factory_cached_shared_sword"), MMCR.id("factory_cached_shared_failure"),
+                20, List.of(), List.of(), List.of(), 0, 0, false, List.of(), List.of(enchantedInput(2)), true);
+        MachineRecipe fallback = new MachineRecipe(MMCR.id("factory_cached_shared_iron"), MMCR.id("factory_cached_shared_failure"),
+                20, List.of(), List.of(), List.of(), 0, 0, false, List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)), true);
+        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1, pool);
+        FactoryRecipeThread baseThread = scheduler.allThreads().getFirst();
+        baseThread.rememberLastRecipe(cached, controller.getStructureVersion(), controller.getModifierSnapshotVersion());
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 1));
+
+        scheduler.tickThreads(controller, List.of(cached, fallback), controller.getStructureVersion(), 1, pool);
+        SharedIoCoordinator.get(level).resolve(domain);
+        scheduler.tickThreads(controller, List.of(cached, fallback), controller.getStructureVersion(), 1, pool);
+        SharedIoCoordinator.get(level).resolve(domain);
+
+        assertThat(baseThread.getActiveRecipe()).isNotNull();
+        assertThat(baseThread.getActiveRecipe().getRecipe()).isSameAs(fallback);
+        SharedIoCoordinator.discard(level);
+        StructureClaimRegistry.discard(level);
+    }
+
+    @Test
     void thread_zero_starts_recipe_without_a_thread_disperser() throws Exception {
         MachineControllerBlockEntity controller = controller(MMCR.id("factory_base_thread_machine"));
         MachineRecipe recipe = recipe("factory_base_thread_recipe", 0);
@@ -399,6 +446,48 @@ class FactoryRecipeSchedulerTest {
         assertThat(scheduler.usedParallelism()).isEqualTo(10);
         assertThat(scheduler.allThreads()).extracting(FactoryRecipeThread::usedParallelism).containsExactly(8, 2);
         assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        SharedIoCoordinator.discard(level);
+        StructureClaimRegistry.discard(level);
+    }
+
+    @Test
+    void sharedBaseThreadStartsNoOutputRecipeWithEnchantedInput() throws Exception {
+        Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, enchantedSword("minecraft:sharpness", 2));
+        BlockPos firstControllerPos = new BlockPos(0, 64, 0);
+        BlockPos secondControllerPos = new BlockPos(2, 64, 0);
+        MachineControllerBlockEntity firstController = controllerWithInput(MMCR.id("factory_shared_enchanted"), firstControllerPos, input);
+        MachineControllerBlockEntity secondController = controllerWithInput(MMCR.id("factory_shared_enchanted"), secondControllerPos, input);
+        ServerLevel level = serverLevel(List.of(firstController, secondController, input));
+        setField(BlockEntity.class, firstController, "level", level);
+        setField(BlockEntity.class, secondController, "level", level);
+        setField(BlockEntity.class, input, "level", level);
+        StructureClaimRegistry registry = StructureClaimRegistry.get(level);
+        List<StructureClaimRegistry.Claim> sharedInput = List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
+                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED));
+        registry.claim(firstControllerPos, sharedInput);
+        registry.claim(secondControllerPos, List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
+                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)));
+        StructureClaimRegistry.ResourceDomain domain = registry.domainFor(firstControllerPos);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_shared_enchanted_recipe"), MMCR.id("factory_shared_enchanted"),
+                20, List.of(), List.of(), List.of(), 0, 0, false, List.of(), List.of(enchantedInput(2)), true);
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1, new RecipeCraftingContextPool());
+
+        scheduler.tickThreads(firstController, List.of(recipe), firstController.getStructureVersion(), 1, new RecipeCraftingContextPool());
+        SharedIoCoordinator.get(level).resolve(domain);
+
+        FactoryRecipeScheduler.ThreadSnapshot snapshot = scheduler.threadSnapshots().getFirst();
+        assertThat(snapshot.index()).isZero();
+        assertThat(snapshot.active()).isTrue();
+        assertThat(snapshot.recipeId()).isEqualTo(recipe.id().toString());
+        for (int tick = 0; tick < recipe.getRecipeTotalTickTime(); tick++) {
+            scheduler.tickThreads(firstController, List.of(), firstController.getStructureVersion(), 1, new RecipeCraftingContextPool());
+            SharedIoCoordinator.get(level).resolve(domain);
+        }
+
+        assertThat(scheduler.threadSnapshots().getFirst().active()).isFalse();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).is(Items.DIAMOND_SWORD)).isTrue();
         SharedIoCoordinator.discard(level);
         StructureClaimRegistry.discard(level);
     }
@@ -1010,6 +1099,27 @@ class FactoryRecipeSchedulerTest {
     private static MachineRecipe parallelizedRecipe(String id, int maxThreads) {
         return new MachineRecipe(MMCR.id(id), MMCR.id("factory_machine"), 20, List.of(), List.of(), List.of(), 0, maxThreads,
                 false, List.of(), List.of(), true);
+    }
+
+    private static ItemRequirement enchantedInput(int sharpnessLevel) {
+        var enchantments = new JsonObject();
+        enchantments.addProperty("minecraft:sharpness", sharpnessLevel);
+        var predicates = new DataComponentPredicateSet(Map.of(
+                DataComponents.ENCHANTMENTS,
+                ComponentPredicate.exact(new Dynamic<>(RegistryOps.create(JsonOps.INSTANCE, VanillaRegistries.createLookup()), enchantments))));
+        return new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.DIAMOND_SWORD), 1,
+                ItemStack.EMPTY, 1F, List.of(), predicates, 0F);
+    }
+
+    private static ItemStack enchantedSword(String enchantmentId, int level) {
+        var lookup = VanillaRegistries.createLookup();
+        var enchantment = lookup.lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(ResourceKey.create(
+                Registries.ENCHANTMENT, Identifier.parse(enchantmentId)));
+        ItemStack sword = new ItemStack(Items.DIAMOND_SWORD);
+        var enchantments = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
+        enchantments.set(enchantment, level);
+        sword.set(DataComponents.ENCHANTMENTS, enchantments.toImmutable());
+        return sword;
     }
 
     private static MachineControllerBlockEntity controller(net.minecraft.resources.Identifier machineId) throws Exception {

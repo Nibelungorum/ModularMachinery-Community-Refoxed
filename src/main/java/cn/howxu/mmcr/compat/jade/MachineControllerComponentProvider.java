@@ -153,7 +153,7 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
         }
 
         private boolean hasActiveWork() {
-            return !activeRecipe.isEmpty() || factoryLanes > 0;
+            return active && (!activeRecipe.isEmpty() || factoryLanes > 0);
         }
     }
 }
