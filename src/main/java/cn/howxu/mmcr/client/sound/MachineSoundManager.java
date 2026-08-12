@@ -3,6 +3,7 @@ package cn.howxu.mmcr.client.sound;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -10,6 +11,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.sounds.SoundEvent;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -103,13 +105,31 @@ public class MachineSoundManager {
     }
 
     private static ControllerDescriptor descriptorFor(ClientLevel level, MachineControllerBlockEntity controller) {
+        return descriptorFor(new ControllerKey(level.dimension(), controller.getBlockPos()), controller);
+    }
+
+    private static Identifier controllerMachineId(MachineControllerBlockEntity controller) {
+        Identifier stateMachineId = machineIdFromState(controller.getBlockState());
+        if (stateMachineId != null) return stateMachineId;
+        if (controller.getMachine() != null) return controller.getMachine().registryName();
+        if (controller.getFoundMachine() != null) return controller.getFoundMachine().registryName();
+        return null;
+    }
+
+    static Identifier machineIdFromState(BlockState state) {
+        if (state.getBlock() instanceof MachineControllerBlock block) return block.machineId();
+        return null;
+    }
+
+    static ControllerDescriptor descriptorForTest(ResourceKey<Level> dimension, MachineControllerBlockEntity controller) {
+        return descriptorFor(new ControllerKey(dimension, controller.getBlockPos()), controller);
+    }
+
+    private static ControllerDescriptor descriptorFor(ControllerKey key, MachineControllerBlockEntity controller) {
         Identifier soundId = null;
-        if (controller.getFoundMachine() != null) {
-            MachineRegistration registration = MachineDefinitions.getRegistration(controller.getFoundMachine().registryName());
-            soundId = registration == null ? null : registration.runningSoundId();
-        }
-        return new ControllerDescriptor(
-                new ControllerKey(level.dimension(), controller.getBlockPos()), soundId, controller.isRuntimeActive());
+        MachineRegistration registration = MachineDefinitions.getRegistration(controllerMachineId(controller));
+        if (registration != null) soundId = registration.runningSoundId();
+        return new ControllerDescriptor(key, soundId, controller.isRuntimeActive());
     }
 
     record ControllerKey(ResourceKey<Level> dimension, BlockPos pos) {
