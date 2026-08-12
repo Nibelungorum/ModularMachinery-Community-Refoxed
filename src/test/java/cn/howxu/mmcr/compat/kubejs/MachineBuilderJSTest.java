@@ -132,6 +132,16 @@ class MachineBuilderJSTest {
     }
 
     @Test
+    void builder_declares_configured_smart_interface() {
+        var registration = new MachineBuilderJS("mmcr:interface_builder_test")
+                .localizedName("Interface Builder Test")
+                .smartInterface("speed", 2F).priority(10).valueInfo("Speed: %.1f").end()
+                .createObject();
+
+        assertThat(registration.smartInterfaceTypes().get("speed").priority()).isEqualTo(10);
+    }
+
+    @Test
     void builder_sets_machine_basic_block_for_all_base_textures() {
         var registration = new MachineBuilderJS("mmcr:electric_press")
                 .localizedName("Electric Press")

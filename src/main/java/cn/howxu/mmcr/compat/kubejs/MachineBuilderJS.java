@@ -4,8 +4,12 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
 import net.minecraft.resources.Identifier;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient String localizedName = "Unknown Machine";
@@ -23,6 +27,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient Identifier machineBasicBlock;
     public transient Identifier controllerBaseTexture;
     public transient Identifier formedPortBaseTexture;
+    private final List<SmartInterfaceType> smartInterfaceTypes = new ArrayList<>();
 
     public MachineBuilderJS(Identifier id) {
         super(id);
@@ -39,7 +44,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
 
     @Override
     public MachineRegistration createObject() {
-        return MachineRegistration.builder(id)
+        var registration = MachineRegistration.builder(id)
                 .localizedName(localizedName)
                 .controllerSpec(controllerSpec())
                 .appearance(appearanceSpec())
@@ -47,8 +52,9 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .allowModifiers(allowModifiers)
                 .allowMultithreading(allowMultithreading)
                 .allowParallelism(allowParallelism)
-                .maxParallelAmount(maxParallelAmount)
-                .build();
+                .maxParallelAmount(maxParallelAmount);
+        smartInterfaceTypes.forEach(registration::smartInterfaceType);
+        return registration.build();
     }
 
     public MachineBuilderJS controllerTextures(String front, String otherFive) {
@@ -198,6 +204,10 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return machineBasicBlock(machineBasicBlock);
     }
 
+    public SmartInterfaceTypeBuilderJS smartInterface(String type, float defaultValue) {
+        return new SmartInterfaceTypeBuilderJS(this, type, defaultValue);
+    }
+
     public void registerObject() {
         MachineDefinitions.register(createObject());
     }
@@ -228,5 +238,65 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 base.machineBasicBlock(),
                 controllerBaseTexture != null ? controllerBaseTexture : base.controllerBaseTexture(),
                 formedPortBaseTexture != null ? formedPortBaseTexture : base.formedPortBaseTexture());
+    }
+
+    public static final class SmartInterfaceTypeBuilderJS {
+        private final MachineBuilderJS parent;
+        private final String type;
+        private final float defaultValue;
+        private int priority;
+        private String headerInfo = "";
+        private String valueInfo = "";
+        private String footerInfo = "";
+        private String notEqualMessage = "";
+        private String jeiTooltip = "";
+        private int jeiTooltipArgsCount;
+
+        private SmartInterfaceTypeBuilderJS(MachineBuilderJS parent, String type, float defaultValue) {
+            this.parent = parent;
+            this.type = type;
+            this.defaultValue = defaultValue;
+        }
+
+        public SmartInterfaceTypeBuilderJS priority(int priority) {
+            this.priority = priority;
+            return this;
+        }
+
+        public SmartInterfaceTypeBuilderJS headerInfo(String headerInfo) {
+            this.headerInfo = headerInfo;
+            return this;
+        }
+
+        public SmartInterfaceTypeBuilderJS valueInfo(String valueInfo) {
+            this.valueInfo = valueInfo;
+            return this;
+        }
+
+        public SmartInterfaceTypeBuilderJS footerInfo(String footerInfo) {
+            this.footerInfo = footerInfo;
+            return this;
+        }
+
+        public SmartInterfaceTypeBuilderJS notEqualMessage(String notEqualMessage) {
+            this.notEqualMessage = notEqualMessage;
+            return this;
+        }
+
+        public SmartInterfaceTypeBuilderJS jeiTooltip(String jeiTooltip) {
+            this.jeiTooltip = jeiTooltip;
+            return this;
+        }
+
+        public SmartInterfaceTypeBuilderJS jeiTooltipArgsCount(int jeiTooltipArgsCount) {
+            this.jeiTooltipArgsCount = jeiTooltipArgsCount;
+            return this;
+        }
+
+        public MachineBuilderJS end() {
+            parent.smartInterfaceTypes.add(new SmartInterfaceType(type, defaultValue, priority, headerInfo, valueInfo,
+                    footerInfo, notEqualMessage, jeiTooltip, jeiTooltipArgsCount));
+            return parent;
+        }
     }
 }
