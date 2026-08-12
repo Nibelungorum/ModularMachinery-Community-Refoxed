@@ -9,6 +9,7 @@ import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 import dev.latvian.mods.kubejs.recipe.RecipesKubeEvent;
 import dev.latvian.mods.kubejs.util.RegistryOpsContainer;
+import net.minecraft.core.BlockPos;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.resources.RegistryOps;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.ScopedValue;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -45,6 +47,20 @@ class PluginBindingTest {
     @Test
     void plugin_exposes_smart_interface_update_event() {
         assertThat(Plugin.events()).containsKey("mmcr.smart_interface.updated");
+    }
+
+    @Test
+    void smart_interface_update_event_exposes_interface_owned_shape() {
+        SmartInterfaceUpdateEventJS event = new SmartInterfaceUpdateEventJS(
+                new BlockPos(1, 2, 3), MMCR.id("test_machine"), "temperature", 20F, 30F,
+                List.of(new BlockPos(0, 0, 0), new BlockPos(9, 0, 0)));
+
+        assertThat(event.interfacePos()).isEqualTo(new BlockPos(1, 2, 3));
+        assertThat(event.machineId()).isEqualTo(MMCR.id("test_machine"));
+        assertThat(event.type()).isEqualTo("temperature");
+        assertThat(event.controllerCount()).isEqualTo(2);
+        assertThat(event.controllerPositions()).containsExactly(new BlockPos(0, 0, 0), new BlockPos(9, 0, 0));
+        assertThat(event.controllerPos()).isEqualTo(new BlockPos(0, 0, 0));
     }
 
     @Test

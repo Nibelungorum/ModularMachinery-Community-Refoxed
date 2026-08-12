@@ -5,6 +5,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
 
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -12,16 +13,22 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record SmartInterfaceUpdateEventJS(BlockPos interfacePos, BlockPos controllerPos, Identifier machineId,
-        String type, @Nullable Float oldValue, @Nullable Float newValue) implements KubeEvent {
+public record SmartInterfaceUpdateEventJS(BlockPos interfacePos, Identifier machineId, String type,
+        @Nullable Float oldValue, @Nullable Float newValue, List<BlockPos> controllerPositions) implements KubeEvent {
     public SmartInterfaceUpdateEventJS {
         interfacePos = interfacePos.immutable();
-        controllerPos = controllerPos.immutable();
+        controllerPositions = controllerPositions == null ? List.of()
+                : controllerPositions.stream()
+                .map(BlockPos::immutable)
+                .sorted(Comparator.comparingLong(BlockPos::asLong))
+                .toList();
     }
 
-    public SmartInterfaceUpdateEventJS(BlockPos interfacePos, Identifier machineId, String type,
-            @Nullable Float oldValue, @Nullable Float newValue, List<BlockPos> controllerPositions) {
-        this(interfacePos, controllerPositions == null || controllerPositions.isEmpty() ? BlockPos.ZERO : controllerPositions.getFirst(),
-                machineId, type, oldValue, newValue);
+    public int controllerCount() {
+        return controllerPositions.size();
+    }
+
+    public @Nullable BlockPos controllerPos() {
+        return controllerPositions.isEmpty() ? null : controllerPositions.getFirst();
     }
 }
