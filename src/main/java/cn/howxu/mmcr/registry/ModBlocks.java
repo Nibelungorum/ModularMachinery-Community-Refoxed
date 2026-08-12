@@ -10,6 +10,7 @@ import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineCasingBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
+import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.DebugInfiniteEnergySourceBlockEntity;
 import cn.howxu.mmcr.internal.tile.DebugInfiniteFluidSourceBlockEntity;
@@ -37,6 +38,7 @@ public final class ModBlocks {
         PortKinds.all().forEach(ModBlocks::registerIoPort);
         for (ParallelTier tier : ParallelTier.values()) registerParallelController(tier);
         registerFactoryController();
+        registerSmartInterface();
         registerDebugSource("debug_infinite_energy_source", null);
         registerDebugSource("debug_infinite_water_source", Fluids.WATER);
         registerDebugSource("debug_infinite_lava_source", Fluids.LAVA);
@@ -45,6 +47,7 @@ public final class ModBlocks {
     public static final DeferredHolder<Block, Block> BLAST_FURNACE_CONTROLLER = controllerFor(MMCR.id("blast_furnace"));
     public static final DeferredHolder<Block, Block> CONTROLLER = BLAST_FURNACE_CONTROLLER;
     public static final DeferredHolder<Block, Block> BASIC_CASING = BLOCKS.get("basic_casing");
+    public static final DeferredHolder<Block, Block> SMART_INTERFACE = BLOCKS.get("smart_interface");
 
     /** Compatibility alias for {@link #BASIC_CASING}; the block id was renamed from {@code casing} to {@code basic_casing}. */
     public static final DeferredHolder<Block, Block> CASING = BASIC_CASING;
@@ -99,6 +102,13 @@ public final class ModBlocks {
                 () -> ModBlockEntities.BES.get(name).get();
         BLOCKS.put(name, REGISTER.registerBlock(name,
                 properties -> new FactorySchedulerBlock(beTypeSupplier, properties)));
+    }
+
+    private static void registerSmartInterface() {
+        String name = "smart_interface";
+        Supplier<? extends BlockEntityType<?>> beTypeSupplier = () -> ModBlockEntities.SMART_INTERFACE.get();
+        BLOCKS.put(name, REGISTER.registerBlock(name,
+                properties -> new SmartInterfaceBlock(beTypeSupplier, properties)));
     }
 
     private static void registerDebugSource(String name, Fluid fluid) {

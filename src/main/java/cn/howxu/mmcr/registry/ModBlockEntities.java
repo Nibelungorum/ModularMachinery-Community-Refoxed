@@ -9,6 +9,7 @@ import cn.howxu.mmcr.internal.tile.DebugInfiniteFluidSourceBlockEntity;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -44,6 +45,7 @@ public final class ModBlockEntities {
         });
         for (ParallelTier tier : ParallelTier.values()) registerParallelController(tier);
         registerFactoryController();
+        registerSmartInterface();
         registerDebugBe("debug_infinite_energy_source", (pos, state) ->
                 new DebugInfiniteEnergySourceBlockEntity(pos, state));
         Map<Fluid, String> debugFluidBe = Map.of(
@@ -52,6 +54,8 @@ public final class ModBlockEntities {
         debugFluidBe.forEach((fluid, name) -> registerDebugBe(name, (pos, state) ->
                 new DebugInfiniteFluidSourceBlockEntity(pos, state, fluid)));
     }
+
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<?>> SMART_INTERFACE = BES.get("smart_interface");
 
     private static void registerMachineController(Identifier machineId) {
         String name = MachineControllerSpec.defaultsFor(machineId).id().getPath();
@@ -71,6 +75,11 @@ public final class ModBlockEntities {
         BES.put(name, register(name, () -> new BlockEntityType<>(
                 FactorySchedulerBlockEntity::new,
                 ModBlocks.BLOCKS.get(name).get())));
+    }
+
+    private static void registerSmartInterface() {
+        BES.put("smart_interface", register("smart_interface", () -> new BlockEntityType<>(
+                SmartInterfaceBlockEntity::new, ModBlocks.SMART_INTERFACE.get())));
     }
 
     public static DeferredHolder<BlockEntityType<?>, BlockEntityType<?>> controllerFor(Identifier machineId) {
