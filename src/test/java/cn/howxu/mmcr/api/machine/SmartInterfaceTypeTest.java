@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 class SmartInterfaceTypeTest {
@@ -25,5 +26,31 @@ class SmartInterfaceTypeTest {
                 () -> new SmartInterfaceType(" ", 0F, 0, null, null, null, null, null, -1));
         assertThatIllegalArgumentException().isThrownBy(
                 () -> new SmartInterfaceType("mode", Float.NaN, 0, null, null, null, null, null, -1));
+    }
+
+    @Test
+    void default_value_type_is_float_for_existing_constructor() {
+        SmartInterfaceType type = new SmartInterfaceType("temperature", 20F, 0, "", "", "", "", "", 0);
+
+        assertThat(type.valueType()).isEqualTo(SmartInterfaceType.ValueType.FLOAT);
+        assertThat(type.accepts(20.5F)).isTrue();
+    }
+
+    @Test
+    void integer_value_type_accepts_only_integral_finite_values() {
+        SmartInterfaceType type = new SmartInterfaceType("ratio", 2F, 0, "", "", "", "", "", 0,
+                SmartInterfaceType.ValueType.INTEGER);
+
+        assertThat(type.accepts(2F)).isTrue();
+        assertThat(type.accepts(2.25F)).isFalse();
+        assertThat(type.accepts(Float.NaN)).isFalse();
+    }
+
+    @Test
+    void integer_value_type_rejects_non_integer_default() {
+        assertThatThrownBy(() -> new SmartInterfaceType("ratio", 2.5F, 0, "", "", "", "", "", 0,
+                SmartInterfaceType.ValueType.INTEGER))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("integer");
     }
 }

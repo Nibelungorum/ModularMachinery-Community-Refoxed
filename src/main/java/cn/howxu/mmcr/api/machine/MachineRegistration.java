@@ -3,8 +3,11 @@ package cn.howxu.mmcr.api.machine;
 import net.minecraft.resources.Identifier;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.Objects;
 
 /**
  * Startup-time machine declaration. A registration must exist before controller
@@ -22,7 +25,9 @@ public record MachineRegistration(
         boolean allowMultithreading,
         boolean allowParallelism,
         int maxParallelAmount,
-        Map<String, SmartInterfaceType> smartInterfaceTypes
+        Map<String, SmartInterfaceType> smartInterfaceTypes,
+        boolean shareSmartInterfaces,
+        List<SmartInterfaceModifier> smartInterfaceModifiers
 ) {
     public MachineRegistration {
         if (id == null) throw new IllegalArgumentException("id null");
@@ -32,6 +37,7 @@ public record MachineRegistration(
         recipeFamilyId = recipeFamilyId == null ? id : recipeFamilyId;
         maxParallelAmount = Math.max(1, maxParallelAmount);
         smartInterfaceTypes = Collections.unmodifiableMap(new LinkedHashMap<>(smartInterfaceTypes));
+        smartInterfaceModifiers = smartInterfaceModifiers == null ? List.of() : List.copyOf(smartInterfaceModifiers);
     }
 
     public static Builder builder(Identifier id) {
@@ -49,6 +55,8 @@ public record MachineRegistration(
         private boolean allowParallelism;
         private int maxParallelAmount = 1;
         private final Map<String, SmartInterfaceType> smartInterfaceTypes = new LinkedHashMap<>();
+        private boolean shareSmartInterfaces;
+        private final List<SmartInterfaceModifier> smartInterfaceModifiers = new ArrayList<>();
 
         private Builder(Identifier id) {
             this.id = id;
@@ -101,9 +109,20 @@ public record MachineRegistration(
             return this;
         }
 
+        public Builder shareSmartInterfaces(boolean shareSmartInterfaces) {
+            this.shareSmartInterfaces = shareSmartInterfaces;
+            return this;
+        }
+
+        public Builder smartInterfaceModifier(SmartInterfaceModifier modifier) {
+            smartInterfaceModifiers.add(Objects.requireNonNull(modifier));
+            return this;
+        }
+
         public MachineRegistration build() {
             return new MachineRegistration(id, localizedName, controllerSpec, appearance, recipeFamilyId, allowModifiers,
-                    allowMultithreading, allowParallelism, maxParallelAmount, smartInterfaceTypes);
+                    allowMultithreading, allowParallelism, maxParallelAmount, smartInterfaceTypes, shareSmartInterfaces,
+                    smartInterfaceModifiers);
         }
     }
 }

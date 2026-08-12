@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -64,5 +66,30 @@ class MachineRegistrationTest {
 
         assertThat(zero.maxParallelAmount()).isEqualTo(1);
         assertThat(negative.maxParallelAmount()).isEqualTo(1);
+    }
+
+    @Test
+    void smart_interface_sharing_defaults_to_false() {
+        MachineRegistration registration = MachineRegistration.builder(MMCR.id("smart_default")).build();
+
+        assertThat(registration.shareSmartInterfaces()).isFalse();
+        assertThat(registration.smartInterfaceModifiers()).isEmpty();
+    }
+
+    @Test
+    void builder_stores_smart_interface_modifiers() {
+        SmartInterfaceModifier modifier = SmartInterfaceModifier.duration("temperature", 0F, 100F, 2F, 0.5F,
+                RecipeModifier.Operation.MULTIPLY);
+
+        MachineRegistration registration = MachineRegistration.builder(MMCR.id("thermal"))
+                .shareSmartInterfaces(true)
+                .smartInterfaceModifier(modifier)
+                .build();
+
+        assertThat(registration.shareSmartInterfaces()).isTrue();
+        assertThat(registration.smartInterfaceModifiers()).containsExactly(modifier);
+        assertThat(modifier.toRecipeModifier(50F)).isEqualTo(new RecipeModifier(
+                IntegrationTypeHelper.TARGET_DURATION, RecipeModifier.IOType.INPUT, 1.25F,
+                RecipeModifier.Operation.MULTIPLY, false));
     }
 }
