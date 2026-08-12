@@ -17,11 +17,14 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.IllegalFormatException;
+import java.util.List;
+import java.util.Optional;
 
 /**
- * Client presentation and editing controls for smart-interface bindings.
+ * Client presentation and editing controls for smart-interface parameters.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -71,17 +74,20 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
 
     @Override
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
-        SmartInterfaceBlockEntity.Binding binding = binding();
-        if (binding == null) {
+        SmartInterfaceBlockEntity smartInterface = smartInterface();
+        String typeName = selectedTypeName();
+        if (smartInterface == null || typeName == null) {
             graphics.text(font, Component.translatable("mmcr.smart_interface.empty_binding"), 7, 16, 0xFFFFFF, true);
             return;
         }
-        SmartInterfaceType type = type(binding);
-        graphics.text(font, Component.translatable("mmcr.smart_interface.title", showing + 1, bindingCount()), 4, 4, 0xFFFFFF, true);
-        graphics.text(font, Component.literal(binding.controllerPos().toShortString()), 7, 16, 0xFFFFFF, true);
+        SmartInterfaceType type = selectedType();
+        graphics.text(font, Component.translatable("mmcr.smart_interface.title", showing + 1, parameterTypes().size()), 4, 4, 0xFFFFFF, true);
+        String machineId = smartInterface.machineId().map(Identifier::toString).orElse("");
+        graphics.text(font, Component.literal(machineId + " (" + smartInterface.controllerPositions().size() + ")"), 7, 16, 0xFFFFFF, true);
         if (type == null) return;
         graphics.text(font, Component.translatable(type.headerInfo()), 7, 26, 0xFFFFFF, true);
-        graphics.text(font, Component.literal(valueInfo(type.valueInfo(), binding.value())), 7, 36, 0xFFFFFF, true);
+        float value = smartInterface.value(typeName).orElse(type.defaultValue());
+        graphics.text(font, Component.literal(valueInfo(type, value)), 7, 36, 0xFFFFFF, true);
         graphics.text(font, Component.translatable(type.footerInfo()), 7, 46, 0xFFFFFF, true);
     }
 
@@ -91,21 +97,27 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
         graphics.blit(RenderPipelines.GUI_TEXTURED, TEXTURE, leftPos, topPos, 0, 0, imageWidth, imageHeight, 256, 256);
     }
 
-    static String valueInfo(String format, float value) {
-        if (format == null || format.isEmpty()) return "Value: " + value;
+    static String valueInfo(SmartInterfaceType type, float value) {
+        boolean integer = type != null && type.valueType() == SmartInterfaceType.ValueType.INTEGER;
+        String fallback = "Value: " + (integer ? Integer.toString((int) value) : Float.toString(value));
+        String format = type == null ? "" : type.valueInfo();
+        if (format == null || format.isEmpty()) return fallback;
         try {
-            return String.format(format, value);
+            return integer ? String.format(format, (int) value) : String.format(format, value);
         } catch (IllegalFormatException ignored) {
-            return "Value: " + value;
+            return fallback;
         }
     }
 
-    static Float parseFiniteValue(String value) {
+    static Optional<Float> parseValue(String value, SmartInterfaceType.ValueType valueType) {
         try {
             float parsed = Float.parseFloat(value);
-            return Float.isFinite(parsed) ? parsed : null;
+            SmartInterfaceType.ValueType type = valueType == null ? SmartInterfaceType.ValueType.FLOAT : valueType;
+            if (!Float.isFinite(parsed)) return Optional.empty();
+            if (type == SmartInterfaceType.ValueType.INTEGER && parsed != Math.rint(parsed)) return Optional.empty();
+            return Optional.of(parsed);
         } catch (NumberFormatException ignored) {
-            return null;
+            return Optional.empty();
         }
     }
 
@@ -113,45 +125,55 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
         return Character.isDigit(codepoint) || codepoint == '.' || codepoint == 'E';
     }
 
-    static int clampPage(int page, int bindingCount) {
-        return bindingCount <= 0 ? 0 : Math.clamp(page, 0, bindingCount - 1);
+    static int clampPage(int page, int parameterCount) {
+        return parameterCount <= 0 ? 0 : Math.clamp(page, 0, parameterCount - 1);
     }
 
     private void select(int index) {
-        showing = clampPage(index, bindingCount());
+        showing = clampPage(index, parameterTypes().size());
         updateWidgets();
     }
 
     private void sendValue() {
-        Float value = parseFiniteValue(valueInput.getValue());
-        if (value == null || binding() == null) return;
-        ClientPacketDistributor.sendToServer(new PktSmartInterfaceUpdatePayload(menu.pos(), showing, value));
+        SmartInterfaceType type = selectedType();
+        String typeName = selectedTypeName();
+        if (type == null || typeName == null) return;
+        Optional<Float> value = parseValue(valueInput.getValue(), type.valueType());
+        if (value.isEmpty()) return;
+        ClientPacketDistributor.sendToServer(new PktSmartInterfaceUpdatePayload(menu.pos(), typeName, value.get()));
         valueInput.setValue("");
     }
 
-    private SmartInterfaceBlockEntity.Binding binding() {
+    private List<String> parameterTypes() {
         SmartInterfaceBlockEntity smartInterface = smartInterface();
-        return smartInterface == null ? null : smartInterface.binding(showing).orElse(null);
+        return smartInterface == null ? List.of() : smartInterface.parameterTypes();
     }
 
-    private int bindingCount() {
+    private @Nullable String selectedTypeName() {
+        List<String> types = parameterTypes();
+        return showing < 0 || showing >= types.size() ? null : types.get(showing);
+    }
+
+    private @Nullable SmartInterfaceType selectedType() {
         SmartInterfaceBlockEntity smartInterface = smartInterface();
-        if (smartInterface == null) return 0;
-        int count = 0;
-        while (smartInterface.binding(count).isPresent()) count++;
-        return count;
+        String typeName = selectedTypeName();
+        if (smartInterface == null || typeName == null) return null;
+        var machineId = smartInterface.machineId().orElse(null);
+        if (machineId == null) return null;
+        var machine = MachineDefinitions.getRegistration(machineId);
+        return machine == null ? null : machine.smartInterfaceTypes().get(typeName);
     }
 
     private void updateWidgets() {
         if (valueInput == null) return;
-        int count = bindingCount();
+        int count = parameterTypes().size();
         showing = clampPage(showing, count);
-        boolean bound = count > 0;
-        valueInput.visible = bound;
-        valueInput.active = bound;
-        previous.visible = bound;
+        boolean hasParameters = count > 0;
+        valueInput.visible = hasParameters;
+        valueInput.active = hasParameters;
+        previous.visible = hasParameters;
         previous.active = showing > 0;
-        next.visible = bound;
+        next.visible = hasParameters;
         next.active = showing + 1 < count;
     }
 
@@ -161,8 +183,4 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
                 ? smartInterface : null;
     }
 
-    private static SmartInterfaceType type(SmartInterfaceBlockEntity.Binding binding) {
-        var machine = MachineDefinitions.getRegistration(binding.machineId());
-        return machine == null ? null : machine.smartInterfaceTypes().get(binding.type());
-    }
 }
