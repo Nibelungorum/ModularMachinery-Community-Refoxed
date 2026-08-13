@@ -28,6 +28,7 @@ import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
+import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
@@ -52,6 +53,8 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
@@ -130,6 +133,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private @Nullable StructureClaimRegistry.ResourceDomain pendingSharedStartDomain;
     private boolean sharedTickPending;
     private @Nullable StructureClaimRegistry.ResourceDomain pendingSharedTickDomain;
+    private boolean syncedRuntimeActive;
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
@@ -262,9 +266,11 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     public boolean hasClientActiveRecipe() { return clientActive; }
 
     public boolean isRuntimeActive() {
+        if (level != null && level.isClientSide()) return clientActive || getBlockState().getValue(MachineControllerBlock.ACTIVE);
+        if (!isFormed() || redstonePaused || !isStructureAreaLoaded()) return false;
         if (active != null) return true;
         FactorySchedulerBlockEntity factory = getFactoryController();
-        return factory != null && factory.activeThreadCount() > 0;
+        return factory != null && factory.activeLaneCount() > 0;
     }
 
     public int currentParallelism() {
@@ -414,16 +420,19 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             redstonePaused = true;
             FactorySchedulerBlockEntity factory = getFactoryController();
             if (factory != null) factory.pause();
+            syncRuntimeStateIfChanged();
             if (active != null && context != null) {
                 pausedActive = active;
                 pausedContext = context;
                 active = null;
                 context = null;
                 setActiveState(false);
+                syncRuntimeStateIfChanged();
                 broadcastStateIfChanged(true);
             } else if (active != null || context != null) {
                 active = null;
                 context = null;
+                syncRuntimeStateIfChanged();
             }
             structureDirty = true;
             if (shouldCheckStructure()) checkStructure();
@@ -434,6 +443,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         redstonePaused = false;
         FactorySchedulerBlockEntity factory = getFactoryController();
         if (factory != null) factory.resume();
+        syncRuntimeStateIfChanged();
         if (shouldCheckStructure()) checkStructure();
         if (active == null && pausedActive != null && pausedContext != null) {
             active = pausedActive;
@@ -444,6 +454,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             structureDirty = true;
             markRecipeDirty();
             setActiveState(true);
+            syncRuntimeStateIfChanged();
         } else if (pausedActive != null || pausedContext != null) {
             pausedActive = null;
             pausedContext = null;
@@ -479,6 +490,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         factory.syncCoreThreads(this, machine, candidates, pool);
         factory.tickScheduler(this, candidates, structureVersion, maxParallelism, pool);
         setActiveState(factory.activeThreadCount() > 0);
+        syncRuntimeStateIfChanged();
         if (factory.activeThreadCount() > 0) {
             lastFailureUnloc = null;
             recipeFailure = null;
@@ -487,7 +499,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     @Override
     public void syncFactoryScheduler() {
-        setChanged();
+        syncRuntimeStateIfChanged();
     }
 
     private void checkStructure() {
@@ -1065,6 +1077,17 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         }
     }
 
+    void syncRuntimeStateIfChanged() {
+        if (getBlockState() == null) return;
+        boolean next = isRuntimeActive();
+        if (next == syncedRuntimeActive) return;
+        syncedRuntimeActive = next;
+        setChanged();
+        if (level != null && !level.isClientSide()) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
+        }
+    }
+
     private boolean compiledBoundsTouchesChunk(ChunkPos chunkPos) {
         BoundingBox box = foundCompiledPattern.boundingBox(controllerFacing);
         int minChunkX = (getBlockPos().getX() + box.minX()) >> 4;
@@ -1076,12 +1099,16 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     private void pauseActiveForUnloadedStructure() {
         stopFactoryController();
-        if (active == null) return;
+        if (active == null) {
+            syncRuntimeStateIfChanged();
+            return;
+        }
         pausedActive = active;
         pausedContext = context;
         active = null;
         context = null;
         setActiveState(false);
+        syncRuntimeStateIfChanged();
     }
 
     private void resumePausedRecipeAfterStructureCheck() {
@@ -1092,6 +1119,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         pausedActive = null;
         pausedContext = null;
         setActiveState(true);
+        syncRuntimeStateIfChanged();
     }
 
     private ComponentCounts componentCounts() {
@@ -1166,6 +1194,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         clearCandidateCache();
         if (wasFormed) setFormed(false);
         setChanged();
+        syncRuntimeStateIfChanged();
     }
 
     private void unbindSmartInterfaces() {
@@ -1297,6 +1326,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         }
         next.refreshTotalTick(nextContext);
         setActiveState(true);
+        syncRuntimeStateIfChanged();
         rememberLastRecipe(next.getRecipe());
         recipeSearchRetryCounter = 0;
         lastFailureUnloc = null;
@@ -1358,6 +1388,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             }
             next.refreshTotalTick(nextContext);
             setActiveState(true);
+            syncRuntimeStateIfChanged();
             recipeSearchRetryCounter = 0;
             lastFailureUnloc = null;
             recipeFailure = null;
@@ -1407,10 +1438,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                     context.commitSynchronousOutputs(active.getRecipe(), active.getParallelism()), gameTime);
             if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
                 lastFailureUnloc = null;
+                playFinishSound();
                 returnContext(context);
                 active = null;
                 context = null;
                 setActiveState(false);
+                syncRuntimeStateIfChanged();
             } else {
                 lastFailureUnloc = context.getLastFailureUnloc();
             }
@@ -1431,16 +1464,19 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
             lastFailureUnloc = null;
             recipeFailure = null;
+            playFinishSound();
             returnContext(context);
             active = null;
             context = null;
             setActiveState(false);
+            syncRuntimeStateIfChanged();
         } else if (status == ActiveMachineRecipe.TickStatus.CANCELLED) {
             lastFailureUnloc = context.getLastFailureUnloc();
             returnContext(context);
             active = null;
             context = null;
             setActiveState(false);
+            syncRuntimeStateIfChanged();
         } else if (status == ActiveMachineRecipe.TickStatus.WAITING) {
             lastFailureUnloc = context.getLastFailureUnloc();
             if (active.getRecipe().doesCancelRecipeOnPerTickFailure()) {
@@ -1448,6 +1484,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 active = null;
                 context = null;
                 setActiveState(false);
+                syncRuntimeStateIfChanged();
             }
         } else {
             lastFailureUnloc = null;
@@ -1490,6 +1527,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                     active = next;
                     context = nextContext;
                     setActiveState(true);
+                    syncRuntimeStateIfChanged();
                     rememberLastRecipe(next.getRecipe());
                     recipeSearchRetryCounter = 0;
                     lastFailureUnloc = null;
@@ -1583,10 +1621,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         ActiveMachineRecipe.TickStatus status = recipe.applyTickGrant(resourcesGranted, outputsCommitted, gameTime);
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
             lastFailureUnloc = null;
+            playFinishSound();
             returnContext(recipeContext);
             active = null;
             context = null;
             setActiveState(false);
+            syncRuntimeStateIfChanged();
         } else if (status == ActiveMachineRecipe.TickStatus.WAITING) {
             lastFailureUnloc = recipeContext.getLastFailureUnloc();
             if (recipe.getRecipe().doesCancelRecipeOnPerTickFailure()) {
@@ -1594,11 +1634,21 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 active = null;
                 context = null;
                 setActiveState(false);
+                syncRuntimeStateIfChanged();
             }
         } else {
             lastFailureUnloc = null;
         }
         setChanged();
+    }
+
+    void playFinishSound() {
+        if (!(level instanceof ServerLevel serverLevel) || foundMachine == null) return;
+        MachineRegistration registration = MachineDefinitions.getRegistration(foundMachine.registryName());
+        SoundEvent sound = registration == null ? null : MachineSoundRegistry.get(registration.finishSoundId());
+        if (sound != null) {
+            serverLevel.playSound(null, worldPosition, sound, SoundSource.BLOCKS, 1.0F, 1.0F);
+        }
     }
 
     private boolean isCurrentSharedDomain(@Nullable StructureClaimRegistry.ResourceDomain domain) {

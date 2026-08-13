@@ -83,8 +83,12 @@ public class FactorySchedulerBlockEntity extends BlockEntity {
     }
 
     public boolean startLane(FactoryRecipeScheduler.Lane lane) {
+        boolean wasActive = scheduler.activeLaneCount() > 0;
         boolean started = scheduler.startLane(lane);
-        if (started) setChanged();
+        if (started) {
+            setChanged();
+            notifyRuntimeActiveBoundary(null, wasActive);
+        }
         return started;
     }
 
@@ -96,15 +100,20 @@ public class FactorySchedulerBlockEntity extends BlockEntity {
         tickThreadLimitSync(syncListener);
         int before = scheduler.activeLaneCount();
         scheduler.tick();
-        if (scheduler.activeLaneCount() != before) setChanged();
+        int after = scheduler.activeLaneCount();
+        if (after != before) setChanged();
+        notifyRuntimeActiveBoundary(syncListener, before > 0, after > 0);
     }
 
     public void tickScheduler(MachineControllerBlockEntity controller, List<MachineRecipe> candidates,
                               long structureVersion, int parallelLimit, RecipeCraftingContextPool contextPool) {
         tickThreadLimitSync(controller);
         int before = scheduler.activeThreadCount();
-        scheduler.tickThreads(controller, candidates, structureVersion, parallelLimit, contextPool);
-        if (scheduler.activeThreadCount() != before) setChanged();
+        scheduler.tickThreads(controller, candidates, structureVersion, parallelLimit, contextPool,
+                controller == null ? () -> { } : controller::playFinishSound);
+        int after = scheduler.activeThreadCount();
+        if (after != before) setChanged();
+        notifyRuntimeActiveBoundary(controller, before > 0, after > 0);
         if (controller != null) syncOpenControllerMenus(controller);
     }
 
@@ -119,7 +128,6 @@ public class FactorySchedulerBlockEntity extends BlockEntity {
         int current = threadCount();
         if (current == threadLimit) return;
         setThreadLimit(current);
-        if (syncListener != null) syncListener.syncFactoryScheduler();
     }
 
     private void tickThreadLimitSync(SyncListener syncListener) {
@@ -129,14 +137,18 @@ public class FactorySchedulerBlockEntity extends BlockEntity {
     }
 
     public void stopAll() {
+        boolean wasActive = scheduler.activeLaneCount() > 0;
         scheduler.stopAll();
         lastSyncedSnapshot = null;
+        notifyRuntimeActiveBoundary(null, wasActive);
     }
 
     public void pause() {
+        boolean wasActive = scheduler.activeLaneCount() > 0;
         scheduler.pause();
         lastSyncedSnapshot = null;
         setChanged();
+        notifyRuntimeActiveBoundary(null, wasActive);
     }
 
     public void resume() {
@@ -150,8 +162,18 @@ public class FactorySchedulerBlockEntity extends BlockEntity {
 
     public void syncCoreThreads(MachineControllerBlockEntity controller, Machine machine,
                                 List<MachineRecipe> candidates, RecipeCraftingContextPool contextPool) {
+        boolean wasActive = scheduler.activeThreadCount() > 0;
         scheduler.syncCoreThreads(controller, machine, candidates, contextPool);
         lastSyncedSnapshot = null;
+        notifyRuntimeActiveBoundary(controller, wasActive, scheduler.activeThreadCount() > 0);
+    }
+
+    private void notifyRuntimeActiveBoundary(@Nullable SyncListener syncListener, boolean wasActive) {
+        notifyRuntimeActiveBoundary(syncListener, wasActive, scheduler.activeLaneCount() > 0);
+    }
+
+    private void notifyRuntimeActiveBoundary(@Nullable SyncListener syncListener, boolean wasActive, boolean activeNow) {
+        if (syncListener != null && wasActive != activeNow) syncListener.syncFactoryScheduler();
     }
 
     public List<FactoryRecipeScheduler.ThreadSnapshot> threadSnapshots(MachineControllerBlockEntity controller) {

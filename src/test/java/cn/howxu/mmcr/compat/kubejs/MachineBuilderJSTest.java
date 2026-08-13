@@ -14,6 +14,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
+import java.util.Set;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -212,5 +215,12 @@ class MachineBuilderJSTest {
         assertThatThrownBy(builder::registerObject)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("registry phase");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Set<Identifier> requestedMachineSoundIds() throws Exception {
+        Method method = MachineSoundRegistry.class.getDeclaredMethod("requestedIds");
+        method.setAccessible(true);
+        return (Set<Identifier>) method.invoke(null);
     }
 }

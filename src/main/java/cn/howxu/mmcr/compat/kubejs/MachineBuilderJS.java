@@ -68,6 +68,44 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return registration.build();
     }
 
+    public MachineBuilderJS runningSound(String soundId) {
+        return runningSound(Identifier.parse(soundId));
+    }
+
+    public MachineBuilderJS runningSound(Identifier soundId) {
+        this.runningSoundId = soundId;
+        return this;
+    }
+
+    public MachineBuilderJS finishSound(String soundId) {
+        return finishSound(Identifier.parse(soundId));
+    }
+
+    public MachineBuilderJS finishSound(Identifier soundId) {
+        this.finishSoundId = soundId;
+        return this;
+    }
+
+    public MachineBuilderJS registerRunningSound(String soundId) {
+        return registerRunningSound(Identifier.parse(soundId));
+    }
+
+    public MachineBuilderJS registerRunningSound(Identifier soundId) {
+        this.runningSoundId = soundId;
+        MachineSoundRegistry.requestRegistration(soundId);
+        return this;
+    }
+
+    public MachineBuilderJS registerFinishSound(String soundId) {
+        return registerFinishSound(Identifier.parse(soundId));
+    }
+
+    public MachineBuilderJS registerFinishSound(Identifier soundId) {
+        this.finishSoundId = soundId;
+        MachineSoundRegistry.requestRegistration(soundId);
+        return this;
+    }
+
     public MachineBuilderJS controllerTextures(String front, String otherFive) {
         return controllerTextures(Identifier.parse(front), Identifier.parse(otherFive));
     }

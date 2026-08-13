@@ -15,6 +15,7 @@ public final class FactoryRecipeLane implements FactoryRecipeScheduler.Lane {
     private final ActiveMachineRecipe recipe;
     private final RecipeCraftingContext context;
     private final Consumer<RecipeCraftingContext> contextReturner;
+    private final Runnable onFinished;
     private boolean started;
     private boolean closed;
     private String lastFailureUnloc;
@@ -22,12 +23,21 @@ public final class FactoryRecipeLane implements FactoryRecipeScheduler.Lane {
     public FactoryRecipeLane(ActiveMachineRecipe recipe,
                              RecipeCraftingContext context,
                              Consumer<RecipeCraftingContext> contextReturner) {
+        this(recipe, context, contextReturner, () -> { });
+    }
+
+    public FactoryRecipeLane(ActiveMachineRecipe recipe,
+                             RecipeCraftingContext context,
+                             Consumer<RecipeCraftingContext> contextReturner,
+                             Runnable onFinished) {
         if (recipe == null) throw new IllegalArgumentException("recipe null");
         if (context == null) throw new IllegalArgumentException("context null");
         if (contextReturner == null) throw new IllegalArgumentException("contextReturner null");
+        if (onFinished == null) throw new IllegalArgumentException("onFinished null");
         this.recipe = recipe;
         this.context = context;
         this.contextReturner = contextReturner;
+        this.onFinished = onFinished;
     }
 
     public ActiveMachineRecipe recipe() {
@@ -69,6 +79,7 @@ public final class FactoryRecipeLane implements FactoryRecipeScheduler.Lane {
             ActiveMachineRecipe.TickStatus status = recipe.applyTickGrant(true,
                     context.commitSynchronousOutputs(recipe.getRecipe(), recipe.getParallelism()), tickTime);
             if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
+                onFinished.run();
                 close();
                 return true;
             }
@@ -86,6 +97,7 @@ public final class FactoryRecipeLane implements FactoryRecipeScheduler.Lane {
                 && context.commitSynchronousOutputs(recipe.getRecipe(), recipe.getParallelism());
         ActiveMachineRecipe.TickStatus status = recipe.applyTickGrant(resourcesGranted, outputsCommitted, tickTime);
         if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
+            onFinished.run();
             close();
             return true;
         }
@@ -96,6 +108,10 @@ public final class FactoryRecipeLane implements FactoryRecipeScheduler.Lane {
         }
         if (status == ActiveMachineRecipe.TickStatus.WAITING) {
             lastFailureUnloc = context.getLastFailureUnloc();
+            if (recipe.getRecipe().doesCancelRecipeOnPerTickFailure()) {
+                close();
+                return true;
+            }
         } else {
             lastFailureUnloc = null;
         }

@@ -12,6 +12,7 @@ import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.LinkedHashMap;
@@ -31,6 +32,7 @@ public final class FactoryRecipeScheduler {
     private boolean paused;
     private final List<Lane> lanes = new ArrayList<>();
     private final List<FactoryRecipeThread> threads = new ArrayList<>();
+    private final Map<FactoryRecipeThread, Boolean> threadWasActive = new IdentityHashMap<>();
     private final RecipeCraftingContextPool contextPool;
     private long nextFactoryLaneId;
 
@@ -79,6 +81,7 @@ public final class FactoryRecipeScheduler {
         lanes.clear();
         for (FactoryRecipeThread thread : threads) thread.invalidate();
         threads.clear();
+        threadWasActive.clear();
         ensureBaseThread(null, contextPool);
     }
 
@@ -107,6 +110,7 @@ public final class FactoryRecipeScheduler {
         while (threads.size() > this.threadLimit) {
             FactoryRecipeThread removed = threads.removeLast();
             removed.invalidate();
+            threadWasActive.remove(removed);
         }
         while (lanes.size() > this.threadLimit) {
             Lane removed = lanes.removeLast();
@@ -138,8 +142,14 @@ public final class FactoryRecipeScheduler {
 
     public void ensureBaseThread(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
         if (!threads.isEmpty() && threads.getFirst().isBaseThread()) return;
-        threads.removeIf(FactoryRecipeThread::isBaseThread);
-        threads.addFirst(FactoryRecipeThread.base(controller, contextPool == null ? this.contextPool : contextPool));
+        threads.removeIf(thread -> {
+            if (!thread.isBaseThread()) return false;
+            threadWasActive.remove(thread);
+            return true;
+        });
+        FactoryRecipeThread base = FactoryRecipeThread.base(controller, contextPool == null ? this.contextPool : contextPool);
+        threads.addFirst(base);
+        threadWasActive.put(base, false);
     }
 
     public List<ThreadSnapshot> threadSnapshots() {
@@ -218,7 +228,10 @@ public final class FactoryRecipeScheduler {
                 reconciled.add(thread);
             }
         }
-        for (FactoryRecipeThread removed : existingCoreThreads.values()) removed.invalidate();
+        for (FactoryRecipeThread removed : existingCoreThreads.values()) {
+            removed.invalidate();
+            threadWasActive.remove(removed);
+        }
         reconciled.addAll(dynamicThreads);
         threads.clear();
         threads.addAll(reconciled);
@@ -226,14 +239,29 @@ public final class FactoryRecipeScheduler {
 
     public void tickThreads(MachineControllerBlockEntity controller, List<MachineRecipe> candidates,
                             long structureVersion, int parallelLimit, RecipeCraftingContextPool contextPool) {
+        tickThreads(controller, candidates, structureVersion, parallelLimit, contextPool, () -> { });
+    }
+
+    public void tickThreads(MachineControllerBlockEntity controller, List<MachineRecipe> candidates,
+                            long structureVersion, int parallelLimit, RecipeCraftingContextPool contextPool,
+                            Runnable onFinished) {
         if (paused) return;
+        if (onFinished == null) onFinished = () -> { };
         ensureBaseThread(controller, contextPool);
         this.perThreadParallelLimit = Math.max(1, parallelLimit);
         for (FactoryRecipeThread thread : List.copyOf(threads)) {
             thread.bindController(controller);
+            boolean wasActive = threadWasActive.getOrDefault(thread, false) || thread.getActiveRecipe() != null;
             thread.tick();
+            if (wasActive && thread.getActiveRecipe() == null && thread.getStatus() == RecipeThread.Status.IDLE) {
+                onFinished.run();
+            }
+            threadWasActive.put(thread, thread.getActiveRecipe() != null);
             thread.tickIdle();
-            if (thread.isTimedOut()) threads.remove(thread);
+            if (thread.isTimedOut()) {
+                threads.remove(thread);
+                threadWasActive.remove(thread);
+            }
         }
         if (controller == null || candidates == null || candidates.isEmpty()) return;
 
@@ -252,13 +280,16 @@ public final class FactoryRecipeScheduler {
             FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, contextPool == null ? this.contextPool : contextPool,
                     "factory-" + nextFactoryLaneId++);
             threads.add(thread);
+            threadWasActive.put(thread, false);
             if (!thread.searchAndStartRecipe(availableCandidates, availableParallelism(), structureVersion)) break;
         }
+        for (FactoryRecipeThread thread : threads) threadWasActive.put(thread, thread.getActiveRecipe() != null);
     }
 
     public void addThreadForTesting(FactoryRecipeThread thread) {
         ensureBaseThread(null, contextPool);
         if (thread != null && !threads.contains(thread)) threads.add(thread);
+        if (thread != null) threadWasActive.putIfAbsent(thread, thread.getActiveRecipe() != null);
     }
 
     public void save(ValueOutput output) {
@@ -270,6 +301,7 @@ public final class FactoryRecipeScheduler {
 
     public void load(ValueInput input, MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
         threads.clear();
+        threadWasActive.clear();
         threadLimit = Math.max(1, input.getIntOr("thread_limit", threadLimit));
         paused = input.getBooleanOr("paused", false);
         int count = Math.max(0, input.getIntOr("thread_count", 0));
@@ -286,6 +318,7 @@ public final class FactoryRecipeScheduler {
             }
         }
         ensureBaseThread(controller, contextPool);
+        for (FactoryRecipeThread thread : threads) threadWasActive.put(thread, thread.getActiveRecipe() != null);
     }
 
     public static RecipeSnapshot captureSnapshot(Identifier recipeId,

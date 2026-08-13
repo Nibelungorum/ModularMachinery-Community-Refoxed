@@ -9,6 +9,7 @@ import cn.howxu.mmcr.client.model.DynamicOverlayBakedModel;
 import cn.howxu.mmcr.client.model.MachineAppearanceCache;
 import cn.howxu.mmcr.client.model.RuntimeMachineModelRegistry;
 import cn.howxu.mmcr.client.model.RuntimeMachineResourcePack;
+import cn.howxu.mmcr.client.sound.MachineSoundManager;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.packs.PackType;
@@ -16,20 +17,37 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.event.RegisterBlockStateModels;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterItemModelsEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.event.AddPackFindersEvent;
+import net.neoforged.neoforge.event.level.LevelEvent;
+import net.neoforged.neoforge.common.NeoForge;
 
 @Mod(value = MMCR.MODID, dist = Dist.CLIENT)
 public class Client {
+    private final MachineSoundManager machineSoundManager = new MachineSoundManager();
+
     public Client(IEventBus modBus) {
         modBus.addListener(Client::registerMenuScreens);
         modBus.addListener(Client::registerModelLoaders);
         modBus.addListener(Client::registerItemModels);
         modBus.addListener(Client::registerRuntimeResourcePack);
+        NeoForge.EVENT_BUS.addListener(this::tickMachineSounds);
+        NeoForge.EVENT_BUS.addListener(this::clearMachineSounds);
         MachineAppearanceCache.loadPersistedSnapshot();
         MachineAppearanceCache.addInvalidationListener(Client::invalidateMachineModels);
         ControllerSpecCache.addInvalidationListener(Client::invalidateMachineModels);
+    }
+
+    private void tickMachineSounds(ClientTickEvent.Post event) {
+        machineSoundManager.clientTick(Minecraft.getInstance());
+    }
+
+    private void clearMachineSounds(LevelEvent.Unload event) {
+        if (event.getLevel().isClientSide()) {
+            machineSoundManager.clear();
+        }
     }
 
     private static void invalidateMachineModels() {
