@@ -1970,6 +1970,7 @@ class MachineControllerBlockEntityTest {
 
         assertThat(formed).isTrue();
         assertThat(controller.getFoundPattern().pattern()).containsKey(expected);
+        assertThat(controller.assemblyPattern(machine)).isSameAs(controller.getFoundPattern());
         assertThat(controller.getFoundModifiers()).containsKey("matched_roll_modifier");
         assertThat(controller.getFoundModifiers().get("matched_roll_modifier"))
                 .extracting(RecipeModifier::getModifier)

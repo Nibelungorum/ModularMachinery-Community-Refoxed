@@ -77,7 +77,7 @@ public class TerminalAssemblyGameTest {
     private static List<MultiblockAssemblyService.Placement> template(MachineControllerBlockEntity controller) {
         var machine = controller.boundMachine().orElseThrow();
         return MultiblockAssemblyService.createTemplatePlacements(controller.getBlockPos(),
-                controller.assemblyCandidatePatterns(machine).getFirst());
+                controller.assemblyPattern(machine));
     }
 
     private static ServerPlayer servicePlayer(GameTestHelper helper) {

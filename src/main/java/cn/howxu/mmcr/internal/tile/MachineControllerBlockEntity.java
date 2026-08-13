@@ -664,9 +664,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         return Optional.ofNullable(machine);
     }
 
-    public List<BlockArray> assemblyCandidatePatterns(Machine candidate) {
+    public BlockArray assemblyPattern(Machine candidate) {
+        if (foundPattern != null) return foundPattern;
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
-        return candidatePatterns(candidate, facing);
+        return candidatePatterns(candidate, facing).getFirst().pattern();
     }
 
     public boolean sendStructurePreview(ServerPlayer player) {

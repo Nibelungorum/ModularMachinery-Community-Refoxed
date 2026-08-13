@@ -68,7 +68,7 @@ public final class MultiblockAssemblyService {
         if (machine.isEmpty()) {
             return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.no_machine"));
         }
-        BlockArray pattern = controller.assemblyCandidatePatterns(machine.get()).getFirst();
+        BlockArray pattern = controller.assemblyPattern(machine.get());
         List<Placement> placements = createTemplatePlacements(controller.getBlockPos(), pattern).stream()
                 .filter(placement -> player.level().getBlockState(placement.pos()).isAir())
                 .toList();
@@ -97,7 +97,7 @@ public final class MultiblockAssemblyService {
         if (machine.isEmpty()) {
             return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.no_machine"));
         }
-        BlockArray pattern = controller.assemblyCandidatePatterns(machine.get()).getFirst();
+        BlockArray pattern = controller.assemblyPattern(machine.get());
         List<Placement> template = createTemplatePlacements(controller.getBlockPos(), pattern);
         int removed = 0;
         for (Placement placement : template) {
