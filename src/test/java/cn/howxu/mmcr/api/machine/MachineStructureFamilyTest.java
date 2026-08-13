@@ -141,6 +141,19 @@ class MachineStructureFamilyTest {
     }
 
     @Test
+    void fullDeclarationRejectsMultipleControllers() {
+        BlockArray invalid = array(Map.of(
+                BlockPos.ZERO, controller(),
+                new BlockPos(2, 0, 0), controller()));
+
+        assertThatThrownBy(() -> MachineStructureFamily.of(definition("multiple_controllers",
+                Declaration.full(invalid))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("stage 1")
+                .hasMessageContaining("controller");
+    }
+
+    @Test
     void extensionRejectsConflictingPredicate() {
         BlockArray base = array(Map.of(BlockPos.ZERO, controller(), new BlockPos(1, 0, 0), casing()));
 

@@ -53,7 +53,6 @@ public record MachineStructureFamily(List<MachineStructureStage> stages) {
             } else {
                 pattern = mergeMap(pattern, declaration.pattern().pattern(), stageNumber, "predicate");
                 tags = mergeMap(tags, declaration.pattern().tagsByPosition(), stageNumber, "tags");
-                rejectSecondController(pattern, declaration.pattern().pattern(), stageNumber);
                 if (declaration.portRequirements() != null) portRequirements = declaration.portRequirements();
                 if (declaration.portTierRequirements() != null) portTierRequirements = declaration.portTierRequirements();
                 dynamicPatterns = mergeList(dynamicPatterns, declaration.dynamicPatterns(), stageNumber, "dynamic pattern");
@@ -62,6 +61,7 @@ public record MachineStructureFamily(List<MachineStructureStage> stages) {
                 levelSlots = mergeMap(levelSlots, declaration.levelSlots(), stageNumber, "level slot");
             }
 
+            rejectMultipleControllers(pattern, stageNumber);
             stages.add(new MachineStructureStage(stageNumber, new BlockArray(pattern, tags),
                     portRequirements, portTierRequirements, dynamicPatterns, modifierReplacements, levelSlots));
         }
@@ -76,12 +76,9 @@ public record MachineStructureFamily(List<MachineStructureStage> stages) {
         return requirements == null ? PortTierRequirementSpec.none() : requirements;
     }
 
-    private static void rejectSecondController(Map<BlockPos, BlockPredicate> merged,
-                                               Map<BlockPos, BlockPredicate> extension, int stageNumber) {
-        long controllerCount = merged.values().stream().filter(MachineStructureFamily::isController).count();
-        if (controllerCount > 1 || extension.entrySet().stream()
-                .anyMatch(entry -> isController(entry.getValue()) && !merged.containsKey(entry.getKey()))) {
-            throw new IllegalArgumentException("stage " + stageNumber + " introduces a second controller");
+    private static void rejectMultipleControllers(Map<BlockPos, BlockPredicate> pattern, int stageNumber) {
+        if (pattern.values().stream().filter(MachineStructureFamily::isController).count() > 1) {
+            throw new IllegalArgumentException("stage " + stageNumber + " contains multiple controllers");
         }
     }
 
