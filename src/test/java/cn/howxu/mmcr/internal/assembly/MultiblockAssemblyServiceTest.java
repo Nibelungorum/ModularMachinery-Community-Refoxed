@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MultiblockAssemblyServiceTest {
 
@@ -47,5 +49,20 @@ class MultiblockAssemblyServiceTest {
 
         assertEquals(1, placements.size());
         assertEquals(Blocks.COPPER_BLOCK, placements.getFirst().state().getBlock());
+    }
+
+    @Test
+    void placementRetainsPredicateForDemolishMatching() {
+        BlockPredicate predicate = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(Blocks.COPPER_BLOCK),
+                new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)
+        ));
+        BlockArray pattern = new BlockArray(Map.of(BlockPos.ZERO.east(), predicate));
+
+        var placement = MultiblockAssemblyService.createTemplatePlacements(BlockPos.ZERO, pattern).getFirst();
+
+        assertTrue(placement.matches(Blocks.COPPER_BLOCK.defaultBlockState()));
+        assertTrue(placement.matches(Blocks.IRON_BLOCK.defaultBlockState()));
+        assertFalse(placement.matches(Blocks.GOLD_BLOCK.defaultBlockState()));
     }
 }

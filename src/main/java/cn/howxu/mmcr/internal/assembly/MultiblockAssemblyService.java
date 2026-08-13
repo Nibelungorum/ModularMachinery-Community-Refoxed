@@ -24,7 +24,15 @@ public final class MultiblockAssemblyService {
 
     private MultiblockAssemblyService() {}
 
-    public record Placement(BlockPos pos, BlockState state, ItemStack requirement) {}
+    public record Placement(BlockPos pos, BlockState state, ItemStack requirement, BlockPredicate predicate) {
+        public Placement(BlockPos pos, BlockState state, ItemStack requirement) {
+            this(pos, state, requirement, new BlockPredicate.OfBlockState(state));
+        }
+
+        public boolean matches(BlockState current) {
+            return predicate.matches(current);
+        }
+    }
 
     public record Removal(BlockPos pos, BlockState state, ItemStack drop) {}
 
@@ -40,7 +48,7 @@ public final class MultiblockAssemblyService {
             MultiblockPreviewBuilder.previewState(predicate).ifPresent(state -> {
                 ItemStack requirement = requirementFor(state);
                 if (!requirement.isEmpty()) {
-                    placements.add(new Placement(controllerPos.offset(entry.getKey()), state, requirement));
+                    placements.add(new Placement(controllerPos.offset(entry.getKey()), state, requirement, predicate));
                 }
             });
         }
@@ -96,7 +104,7 @@ public final class MultiblockAssemblyService {
             if (removed >= maxBlocks) break;
             BlockState current = player.level().getBlockState(placement.pos());
             if (current.isAir()) continue;
-            if (!current.is(placement.state().getBlock())) continue;
+            if (!placement.matches(current)) continue;
             ItemStack drop = current.getBlock().asItem().getDefaultInstance();
             player.level().removeBlock(placement.pos(), false);
             if (!drop.isEmpty()) sink.accept(drop);

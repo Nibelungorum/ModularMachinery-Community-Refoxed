@@ -83,10 +83,13 @@ public final class BuildCommand {
             return 0;
         }
 
-        ctx.getSource().sendSuccess(() -> Component.translatable(
-                "command.mmcr.build.success", machine.displayName(), controller.toShortString(),
-                selection.isFallback() ? Component.translatable("command.mmcr.build.default")
-                        : Component.empty()),
+        MultiblockAssemblyService.Result serviceResult = result;
+        ctx.getSource().sendSuccess(() -> Component.translatable(serviceResult.message().key(), serviceResult.message().args())
+                        .append(Component.literal(" "))
+                        .append(Component.translatable(
+                                "command.mmcr.build.success", machine.displayName(), controller.toShortString(),
+                                selection.isFallback() ? Component.translatable("command.mmcr.build.default")
+                                        : Component.empty())),
                 true);
         return 1;
     }
