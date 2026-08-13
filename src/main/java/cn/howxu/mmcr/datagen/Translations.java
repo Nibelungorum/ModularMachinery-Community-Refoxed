@@ -26,7 +26,6 @@ public final class Translations {
                     Map.entry("block.mmcr.alloy_furnace_controller", "Alloy Furnace Controller"),
                     Map.entry("block.mmcr.cracker_controller",       "Cracker Controller"),
                     Map.entry("block.mmcr.basic_casing",            "Basic Machine Casing"),
-                    Map.entry("mmcr.runtime_resource_pack.name",            "MMCR Dynamical Resources"),
                     blockEntry("item_input_bus",       "Normal Item Input Bus"),
                     blockEntry("item_input_bus_tiny",         "Tiny Item Input Bus"),
                     blockEntry("item_input_bus_small",        "Small Item Input Bus"),
@@ -357,7 +356,6 @@ public final class Translations {
                     Map.entry("jei.mmcr.transfer.not_enough_slots", "Not enough item bus slots for this recipe"))),
 Map.entry("zh_cn", Map.ofEntries(
                     Map.entry("itemGroup.mmcr",                    "模块化机械社区版"),
-                    Map.entry("mmcr.runtime_resource_pack.name",            "MMCR 动态资源"),
                     Map.entry("block.mmcr.blast_furnace_controller", "高炉控制器"),
                     Map.entry("block.mmcr.alloy_furnace_controller", "合金炉控制器"),
                     Map.entry("block.mmcr.cracker_controller",       "裂化器控制器"),

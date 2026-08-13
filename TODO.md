@@ -35,8 +35,7 @@
 
 我想问你我这UI资源从哪来T_T
 
-- [ ] 自动输入自动输出功能(使用原版的控件，嗯对，参考MEK)
-
+- [X] 自动输入自动输出功能(使用原版的控件，嗯对，参考MEK)
 
 - [X] 声音事件
 
@@ -46,14 +45,6 @@
 我突然觉得这个东西没什么必要啊说实话
 
 - [ ] 插件型机器 参考太空电梯
-
-已在新 worktree 实现并提交：/home/howxu/Projects/ModularMachinery-Community-Refoxed/.worktrees/horizontal-vertical-preview
-- 改动：只补了 MachineControllerLevelTest 回归测试，覆盖 .allowVerticalFacing() 同时允许水平/竖直成型，以及你提到的 ingame preview 水平放置时应按控制器 FACING 生成预览。
-- 结论：生产代码未改；现有 createStructurePreviewSnapshot() 已经走 candidatePatterns(machine, facing)，本次用非对称 pattern 防止“默认竖直预览”回归。
-- 提交：bd77f6c test: cover vertical controller preview orientation
-- 已验证：rtk gradlew test --tests cn.howxu.mmcr.internal.tile.MachineControllerLevelTest --no-daemon PASS；rtk gradlew test --no-daemon PASS。
-- runGameTestServer 我刚跑了但失败了；按你说的先不管，未基于它判定本任务失败。
-- 状态：worktree 当前干净，主工作区原有 TODO.md 改动未触碰。
 
 新增一个模块接口，用来解决插槽机器的问题
 

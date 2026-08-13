@@ -32,7 +32,7 @@ import java.util.Set;
 public final class RuntimeMachineResourcePack implements PackResources {
     private static final String PACK_ID = "mmcr/runtime_machine_models";
     private static final PackLocationInfo LOCATION = new PackLocationInfo(
-            PACK_ID, Component.literal("mmcr.runtime_resource_pack.name"), PackSource.BUILT_IN, Optional.empty());
+            PACK_ID, Component.literal("MMCR Dynamical Resources"), PackSource.BUILT_IN, Optional.empty());
 
     private final PackLocationInfo location;
 
@@ -103,7 +103,7 @@ public final class RuntimeMachineResourcePack implements PackResources {
     public <T> T getMetadataSection(MetadataSectionType<T> type) throws IOException {
         if (type == PackMetadataSection.CLIENT_TYPE || type == PackMetadataSection.FALLBACK_TYPE) {
             return (T) new PackMetadataSection(
-                    Component.literal("mmcr.runtime_resource_pack.name"),
+                    Component.literal("MMCR Dynamical Resources"),
                     new InclusiveRange<>(PackFormat.of(1), PackFormat.of(Integer.MAX_VALUE)));
         }
         return null;
