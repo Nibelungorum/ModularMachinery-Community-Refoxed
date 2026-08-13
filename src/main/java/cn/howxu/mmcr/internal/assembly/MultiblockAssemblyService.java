@@ -5,6 +5,8 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
@@ -36,7 +38,7 @@ public final class MultiblockAssemblyService {
             if (entry.getKey().equals(BlockPos.ZERO)) continue;
             BlockPredicate predicate = entry.getValue();
             MultiblockPreviewBuilder.previewState(predicate).ifPresent(state -> {
-                ItemStack requirement = state.getBlock().asItem().getDefaultInstance();
+                ItemStack requirement = requirementFor(state);
                 if (!requirement.isEmpty()) {
                     placements.add(new Placement(controllerPos.offset(entry.getKey()), state, requirement));
                 }
@@ -108,6 +110,14 @@ public final class MultiblockAssemblyService {
             return new Result(InteractionResult.SUCCESS, removed, new ComponentKey("message.mmcr.terminal.demolish.limit", removed, maxBlocks));
         }
         return new Result(InteractionResult.SUCCESS, removed, new ComponentKey("message.mmcr.terminal.demolish.success", removed));
+    }
+
+    private static ItemStack requirementFor(BlockState state) {
+        try {
+            return state.getBlock().asItem().getDefaultInstance();
+        } catch (NullPointerException ignored) {
+            return new ItemStack(Holder.direct(state.getBlock().asItem(), DataComponentMap.EMPTY));
+        }
     }
 
     private static void merge(List<ItemStack> requirements, ItemStack stack) {

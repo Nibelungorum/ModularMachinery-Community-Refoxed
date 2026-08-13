@@ -1,11 +1,10 @@
 package cn.howxu.mmcr.internal.command;
 
-import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.machine.BlockPredicate;
-import cn.howxu.mmcr.api.machine.BlockRotator;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineSelector;
+import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.context.CommandContext;
@@ -17,14 +16,14 @@ import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.IdentifierArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import net.minecraft.world.level.gameevent.GameEvent;
 
 public final class BuildCommand {
 
@@ -58,10 +57,10 @@ public final class BuildCommand {
         ServerLevel level = player.level();
         MachineSelector.Result selection = MachineSelector.select(requested, MachineRegistry.getAll());
         if (selection.machine() == null) {
-            ctx.getSource().sendFailure(net.minecraft.network.chat.Component.translatable(
+            ctx.getSource().sendFailure(Component.translatable(
                     "command.mmcr.build.no_machine",
-                    requested == null ? net.minecraft.network.chat.Component.empty()
-                            : net.minecraft.network.chat.Component.literal(requested.toString())));
+                    requested == null ? Component.empty()
+                            : Component.literal(requested.toString())));
             return 0;
         }
         Machine machine = selection.machine();
@@ -69,13 +68,25 @@ public final class BuildCommand {
         // 控制器朝玩家相反方向(类似放方块瞬间 controller 自动朝向玩家视线方向)
         Direction ctrlFacing = player.getDirection().getOpposite();
         BlockPos controller = anchorInFrontOf(player);
-        placeMachine(level, machine, controller, ctrlFacing);
-        forceTickController(level, controller);
+        placeController(level, machine, controller, ctrlFacing);
+        MultiblockAssemblyService.Result result = null;
+        BlockEntity blockEntity = level.getBlockEntity(controller);
+        if (blockEntity instanceof MachineControllerBlockEntity controllerBlockEntity) {
+            result = MultiblockAssemblyService.build(player, controllerBlockEntity, true);
+        }
+        if (result == null) {
+            ctx.getSource().sendFailure(Component.literal("MMCR: controller block entity was not created."));
+            return 0;
+        }
+        if (result.interactionResult() == InteractionResult.FAIL) {
+            ctx.getSource().sendFailure(Component.translatable(result.message().key(), result.message().args()));
+            return 0;
+        }
 
-        ctx.getSource().sendSuccess(() -> net.minecraft.network.chat.Component.translatable(
+        ctx.getSource().sendSuccess(() -> Component.translatable(
                 "command.mmcr.build.success", machine.displayName(), controller.toShortString(),
-                selection.isFallback() ? net.minecraft.network.chat.Component.translatable("command.mmcr.build.default")
-                        : net.minecraft.network.chat.Component.empty()),
+                selection.isFallback() ? Component.translatable("command.mmcr.build.default")
+                        : Component.empty()),
                 true);
         return 1;
     }
@@ -86,46 +97,10 @@ public final class BuildCommand {
         return feet.relative(player.getDirection());
     }
 
-    /**
-     * 按 pattern 相对 controller 的偏移逐格 setBlock;结构坐标随 controller 朝向旋转。
-     */
-    private static void placeMachine(ServerLevel level, Machine machine, BlockPos controller, Direction ctrlFacing) {
+    private static void placeController(ServerLevel level, Machine machine, BlockPos controller, Direction ctrlFacing) {
         BlockState controllerState = ModBlocks.controllerFor(machine.registryName()).get().defaultBlockState()
                 .setValue(BlockStateProperties.FACING, ctrlFacing);
-        setBlock(level, controller, controllerState);
-
-        for (var entry : machine.pattern().pattern().entrySet()) {
-            if (entry.getKey().equals(BlockPos.ZERO)) continue;
-            BlockPos world = controller.offset(BlockRotator.rotateSouthTo(entry.getKey(), ctrlFacing));
-            BlockState state = resolveBlockState(entry.getValue());
-            if (state == null) continue;
-            setBlock(level, world, state);
-        }
-    }
-
-    /** 写盘后立即强制控制器 tick 一次,form 状态同步到 FORMED BlockState。 */
-    private static void forceTickController(ServerLevel level, BlockPos controller) {
-        BlockEntity be = level.getBlockEntity(controller);
-        if (be instanceof cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity ctrl) {
-            ctrl.serverTick();
-        }
-    }
-
-    private static BlockState resolveBlockState(BlockPredicate predicate) {
-        return switch (predicate) {
-            case BlockPredicate.OfBlock of -> of.block().defaultBlockState();
-            case BlockPredicate.AnyOf anyOf -> anyOf.children().stream()
-                    .filter(c -> c instanceof BlockPredicate.OfBlock)
-                    .map(c -> ((BlockPredicate.OfBlock) c).block().defaultBlockState())
-                    .findFirst().orElse(null);
-            case BlockPredicate.Air ignored -> null;
-            default -> Blocks.STONE.defaultBlockState();
-        };
-    }
-
-    private static void setBlock(ServerLevel level, BlockPos pos, BlockState state) {
-        if (level.getBlockState(pos).is(state.getBlock())) return;
-        level.setBlock(pos, state, 3);
-        level.gameEvent(null, GameEvent.BLOCK_PLACE, pos);
+        if (level.getBlockState(controller).is(controllerState.getBlock())) return;
+        level.setBlock(controller, controllerState, 3);
     }
 }

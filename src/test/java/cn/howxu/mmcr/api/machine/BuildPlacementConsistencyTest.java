@@ -1,16 +1,17 @@
 package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import org.nibelungorum.DefaultMachines;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,10 +24,12 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 验证 BuildCommand.placeMachine 与 StructureMatcher.matches 在同一 ctrlFacing 下
- * 共享 BlockRotator.rotateYCCWSouthUntil,贴盘与检查 position 一致。
+ * 验证 MultiblockAssemblyService 与 StructureMatcher.matches 在同一 ctrlFacing 下
+ * 共享 BlockArrayCache 旋转后的 position 一致。
  */
 class BuildPlacementConsistencyTest {
+
+    private static final Identifier MACHINE_ID = Identifier.fromNamespaceAndPath("mmcr", "blast_furnace");
 
     @BeforeAll
     static void setup() throws Exception {
@@ -86,10 +89,21 @@ class BuildPlacementConsistencyTest {
                 .isFalse();
     }
 
+    @Test
+    void unsupported_predicates_are_not_placed_as_stone_fallback() {
+        Machine machine = fixture();
+        BlockArray rotatedPattern = new BlockArray(Map.of(
+                BlockPos.ZERO, new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine.registryName()).get()),
+                BlockPos.ZERO.east(), new BlockPredicate.Any()
+        ));
+
+        var placements = MultiblockAssemblyService.createTemplatePlacements(BlockPos.ZERO, rotatedPattern);
+
+        assertThat(placements).noneMatch(placement -> placement.state().is(Blocks.STONE));
+    }
+
     /**
-     * 模拟 BuildCommand.placeMachine 的写盘:
-     * 对 pattern 每格 (rel, predicate),按 controller facing 旋转后写到 worldPos,
-     * 解析 predicate 为 BlockState 写到 written map。
+     * 模拟 assembly service 写盘:先放 controller,再按已旋转 pattern 生成待放置方块。
      */
     private static Map<BlockPos, BlockState> buildPlacement(Machine machine, BlockPos controller, Direction ctrlFacing) {
         Map<BlockPos, BlockState> written = new LinkedHashMap<>();
@@ -98,24 +112,11 @@ class BuildPlacementConsistencyTest {
                 ? ctrlBase.setValue(BlockStateProperties.FACING, ctrlFacing)
                 : ctrlBase;
         written.put(controller, ctrlFinal);
-        for (var entry : machine.pattern().pattern().entrySet()) {
-            if (entry.getKey().equals(BlockPos.ZERO)) continue;
-            BlockPos world = controller.offset(BlockRotator.rotateSouthTo(entry.getKey(), ctrlFacing));
-            written.put(world, resolve(entry.getValue()));
+        BlockArray rotatedPattern = BlockArrayCache.get(machine.pattern(), ctrlFacing);
+        for (var placement : MultiblockAssemblyService.createTemplatePlacements(controller, rotatedPattern)) {
+            written.put(placement.pos(), placement.state());
         }
         return written;
-    }
-
-    private static BlockState resolve(BlockPredicate p) {
-        return switch (p) {
-            case BlockPredicate.OfBlock of -> of.block().defaultBlockState();
-            case BlockPredicate.AnyOf anyOf -> anyOf.children().stream()
-                    .map(BuildPlacementConsistencyTest::resolve)
-                    .filter(java.util.Objects::nonNull)
-                    .findFirst().orElse(null);
-            case BlockPredicate.Air ignored -> null;
-            default -> Blocks.STONE.defaultBlockState();
-        };
     }
 
     /**
@@ -124,24 +125,26 @@ class BuildPlacementConsistencyTest {
      */
     private static Level levelFor(Map<BlockPos, BlockState> states) {
         Map<BlockPos, Block> blocks = new HashMap<>();
-        for (var entry : states.entrySet()) blocks.put(entry.getKey(), entry.getValue().getBlock());
+        for (var entry : states.entrySet()) {
+            if (entry.getValue() != null) blocks.put(entry.getKey(), entry.getValue().getBlock());
+        }
         return LevelStub.create(blocks);
     }
 
     private static Machine fixture() {
-        Machine machine = DefaultMachines.blastFurnace(
-                Blocks.STONE,
-                Blocks.OAK_PLANKS,
-                Blocks.SPRUCE_PLANKS,
-                Blocks.BIRCH_PLANKS,
-                Blocks.JUNGLE_PLANKS,
-                Blocks.ACACIA_PLANKS,
-                Blocks.DARK_OAK_PLANKS);
+        BlockArray pattern = BlockArray.builder()
+                .pattern("AAA", "ACA", "AAA")
+                .pattern("ABA", "A A", "ABA")
+                .pattern("AAA", "ACA", "AAA")
+                .set('A', new BlockPredicate.OfBlock(Blocks.STONE))
+                .set('B', new BlockPredicate.OfBlock(Blocks.OAK_PLANKS))
+                .set('C', new BlockPredicate.OfBlock(ModBlocks.controllerFor(MACHINE_ID).get()))
+                .build();
         return new DynamicMachine(
-                machine.registryName(),
-                machine.localizedName(),
-                machine.pattern(),
-                machine.controller(),
+                MACHINE_ID,
+                "machine.mmcr.blast_furnace",
+                pattern,
+                MachineControllerSpec.defaultsFor(MACHINE_ID),
                 PortRequirementSpec.none(),
                 PortTierRequirementSpec.none(),
                 List.of(),
