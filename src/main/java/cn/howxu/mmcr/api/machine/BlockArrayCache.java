@@ -21,7 +21,7 @@ public final class BlockArrayCache {
 
     public static synchronized BlockArray get(BlockArray pattern, Direction facing, Direction rollFacing) {
         if (pattern.isEmpty()) return pattern;
-        Direction normalizedRoll = facing.getAxis().isVertical() ? rollFacing : Direction.SOUTH;
+        Direction normalizedRoll = BlockRotator.normalizedRoll(facing, rollFacing);
         Key key = new Key(pattern, facing, normalizedRoll);
         BlockArray cached = CACHE.get(key);
         if (cached != null) return cached;

@@ -142,7 +142,7 @@ public record DynamicMachine(
     public Map<BlockPos, List<SingleBlockModifierReplacement>> rotatedModifierReplacements(
             Direction facing, Direction rollFacing) {
         Map<BlockPos, List<SingleBlockModifierReplacement>> rotated = new LinkedHashMap<>();
-        Direction normalizedRoll = facing.getAxis().isVertical() ? rollFacing : Direction.SOUTH;
+        Direction normalizedRoll = BlockRotator.normalizedRoll(facing, rollFacing);
         for (var entry : modifierReplacements.entrySet()) {
             BlockPos rotatedPos = BlockRotator.rotateSouthTo(entry.getKey(), facing, normalizedRoll);
             List<SingleBlockModifierReplacement> replacements = entry.getValue().stream()

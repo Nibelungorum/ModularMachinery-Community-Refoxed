@@ -797,7 +797,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             return List.of(BlockArrayCache.get(candidate.pattern(), facing));
         }
 
-        Direction rollFacing = getBlockState().getValue(MachineControllerBlock.ROLL_FACING);
+        Direction rollFacing = BlockRotator.normalizedRoll(facing, getBlockState().getValue(MachineControllerBlock.ROLL_FACING));
         if (!candidate.controller().fullyRotationallySymmetric()) {
             return List.of(BlockArrayCache.get(candidate.pattern(), facing, rollFacing));
         }
@@ -882,6 +882,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private @Nullable CompiledMachinePattern compiledFor(Machine candidate, BlockArray rotatedPattern, Direction facing) {
+        if (facing.getAxis().isVertical()) return null;
         CompiledMachinePattern compiled = MachineRegistry.getCompiled(candidate.registryName());
         if (compiled == null || compiled.rotatedPattern(facing) != rotatedPattern) return null;
         return compiled;
@@ -950,7 +951,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         }
         Map<BlockPos, Identifier> slots = new LinkedHashMap<>();
         Direction rollFacing = getBlockState().getValue(MachineControllerBlock.ROLL_FACING);
-        Direction normalizedRoll = facing.getAxis().isVertical() ? rollFacing : Direction.SOUTH;
+        Direction normalizedRoll = BlockRotator.normalizedRoll(facing, rollFacing);
         for (var entry : definition.levelSlots().entrySet()) {
             slots.put(BlockRotator.rotateSouthTo(entry.getKey(), facing, normalizedRoll), entry.getValue());
         }
