@@ -62,7 +62,7 @@ class DefaultRecipesTest {
 
         assertThat(machine).isNotNull();
         var recipes = RecipeRegistry.byMachine(machine);
-        assertThat(recipes).hasSize(21);
+        assertThat(recipes).hasSize(24);
 
         var recipe = RecipeRegistry.getRecipe(MMCR.id("blast_furnace_iron_to_nugget"));
         assertThat(recipe.id()).isEqualTo(MMCR.id("blast_furnace_iron_to_nugget"));
@@ -318,13 +318,13 @@ class DefaultRecipesTest {
         DefaultRecipes.ensureRegistered();
         DefaultRecipes.ensureRegistered();
 
-        assertThat(RecipeRegistry.byMachineId(MMCR.id("blast_furnace"))).hasSize(21);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("blast_furnace"))).hasSize(24);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("alloy_furnace"))).hasSize(23);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker"))).hasSize(21);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("reactor"))).hasSize(21);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("thermal_smelting_furnace"))).hasSize(16);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("purpur_furnace"))).hasSize(14);
-        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(116);
+        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(119);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker")))
                 .anySatisfy(recipe -> assertThat(recipe.fluidOutputs()).isNotEmpty());
         assertThat(RecipeRegistry.recipes())
@@ -376,7 +376,11 @@ class DefaultRecipesTest {
         installDefaultRuntimeContent();
         DefaultRecipes.ensureRegistered();
 
-        for (String machine : java.util.List.of("blast_furnace", "alloy_furnace", "cracker", "reactor", "thermal_smelting_furnace")) {
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("blast_furnace")))
+                .filteredOn(recipe -> recipe.id().getPath().startsWith("blast_furnace_component_"))
+                .hasSize(14);
+
+        for (String machine : java.util.List.of("alloy_furnace", "cracker", "reactor", "thermal_smelting_furnace")) {
             assertThat(RecipeRegistry.byMachineId(MMCR.id(machine)))
                     .filteredOn(recipe -> recipe.id().getPath().startsWith(machine + "_component_"))
                     .hasSize(11);

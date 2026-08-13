@@ -11,8 +11,11 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderSet;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -37,7 +40,7 @@ class ParallelRecipeCalculatorTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
-        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.IRON_INGOT, Items.OAK_LOG);
     }
 
     @Test
@@ -50,6 +53,31 @@ class ParallelRecipeCalculatorTest {
 
         assertThat(context.maxInputParallelism(recipe, 8)).isEqualTo(3);
         assertThat(ParallelRecipeCalculator.maxStartableParallelism(context, recipe, 8)).isEqualTo(3);
+    }
+
+    @Test
+    void tagItemInputFallsBackWithoutDereferencingDuringParallelCalculation() throws Exception {
+        ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
+        bus.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.OAK_LOG, 11));
+        MachineControllerBlockEntity controller = controllerWithComponents(bus);
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("parallel_tag_input"),
+                MMCR.id("blast_furnace"),
+                20,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT,
+                        Ingredient.of(HolderSet.emptyNamed(BuiltInRegistries.ITEM, ItemTags.LOGS)), 3, ItemStack.EMPTY)),
+                true);
+
+        assertThat(context.maxInputParallelism(recipe, 8)).isEqualTo(-1);
+        assertThat(ParallelRecipeCalculator.maxStartableParallelism(context, recipe, 8)).isZero();
     }
 
     private static MachineRecipe inputRecipe(String path, Item item, int count) {
@@ -102,8 +130,10 @@ class ParallelRecipeCalculatorTest {
         return controller;
     }
 
-    private static void bindItemComponents(Item item) {
-        item.builtInRegistryHolder().bindComponents(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
+    private static void bindItemComponents(Item... items) {
+        for (Item item : items) {
+            item.builtInRegistryHolder().bindComponents(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
+        }
     }
 
     private static void setField(Class<?> declaringClass, Object target, String name, Object value) throws ReflectiveOperationException {

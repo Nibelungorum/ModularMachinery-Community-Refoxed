@@ -1,6 +1,6 @@
 智能接口的UI 上一个和下一个
 
-KubeJS tag+data组合拳 以及游戏内注册测试tag和tag带data (估计又是一天时间过去了)
+- [X] KubeJS tag+data组合拳 以及游戏内注册测试tag和tag带data (估计又是一天时间过去了)
 
 - [ ] kubejs集成的测试
 

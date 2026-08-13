@@ -39,7 +39,7 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
     private static final int SAVE_HEIGHT = 20;
     private static final int NAVIGATION_WIDTH = 50;
     private static final int NAVIGATION_HEIGHT = 20;
-    private static final int NEXT_X = 62;
+    private static final int NEXT_X = 119;
     private static final int LABEL_COLOR = 0xFF404040;
     private int showing;
     private NumericEditBox valueInput;
@@ -62,9 +62,9 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
         save = addRenderableWidget(Button.builder(Component.translatable("mmcr.smart_interface.save"), button -> sendValue())
                 .bounds(leftPos + SAVE_X, topPos + layout.inputY() - 1, SAVE_WIDTH, SAVE_HEIGHT).build());
         previous = addRenderableWidget(Button.builder(Component.translatable("mmcr.smart_interface.previous"), button -> select(showing - 1))
-                .bounds(leftPos + CONTENT_X, topPos + layout.navigationY(), NAVIGATION_WIDTH, NAVIGATION_HEIGHT).build());
+                .bounds(leftPos + layout.previousX(), topPos + layout.navigationY(), NAVIGATION_WIDTH, NAVIGATION_HEIGHT).build());
         next = addRenderableWidget(Button.builder(Component.translatable("mmcr.smart_interface.next"), button -> select(showing + 1))
-                .bounds(leftPos + NEXT_X, topPos + layout.navigationY(), NAVIGATION_WIDTH, NAVIGATION_HEIGHT).build());
+                .bounds(leftPos + layout.nextX(), topPos + layout.navigationY(), NAVIGATION_WIDTH, NAVIGATION_HEIGHT).build());
         updateWidgets();
     }
 
@@ -142,11 +142,11 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
     }
 
     static ControlLayout controlLayout() {
-        int inputY = TITLE_Y + LINE_HEIGHT * 3 + CONTROL_GAP;
-        return new ControlLayout(inputY, inputY + SAVE_HEIGHT + CONTROL_GAP);
+        int inputY = TITLE_Y + LINE_HEIGHT * 3 + 2;
+        return new ControlLayout(inputY, inputY + SAVE_HEIGHT + 2, CONTENT_X, NEXT_X);
     }
 
-    record ControlLayout(int inputY, int navigationY) {
+    record ControlLayout(int inputY, int navigationY, int previousX, int nextX) {
     }
 
     private void select(int index) {
@@ -197,9 +197,9 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
         valueInput.setY(topPos + layout.inputY());
         save.setX(leftPos + SAVE_X);
         save.setY(topPos + layout.inputY() - 1);
-        previous.setX(leftPos + CONTENT_X);
+        previous.setX(leftPos + layout.previousX());
         previous.setY(topPos + layout.navigationY());
-        next.setX(leftPos + NEXT_X);
+        next.setX(leftPos + layout.nextX());
         next.setY(topPos + layout.navigationY());
         valueInput.visible = hasParameters;
         valueInput.active = hasParameters;

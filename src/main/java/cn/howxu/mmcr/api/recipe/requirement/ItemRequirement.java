@@ -74,7 +74,11 @@ public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient ite
         if (io != RecipeModifier.IOType.INPUT || item == null || count <= 0) return -1;
         if (consumeChance == 0F) return Math.max(1, limit);
         if (!tags.isEmpty() || !components.isEmpty()) return -1;
-        if (item.items().count() != 1) return -1;
+        try {
+            if (item.items().count() != 1) return -1;
+        } catch (UnsupportedOperationException ignored) {
+            return -1;
+        }
         int available = context.countMatchingItemInputs(item, List.of());
         return Math.min(Math.max(1, limit), available / count);
     }

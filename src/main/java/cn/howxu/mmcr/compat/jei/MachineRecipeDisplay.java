@@ -15,9 +15,12 @@ import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import com.mojang.serialization.DynamicOps;
+import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.resources.RegistryOps;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 
@@ -70,10 +73,10 @@ public record MachineRecipeDisplay(
         for (var requirement : requirements) {
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT) {
                 DataComponentPredicateSet components = item.components();
-                List<ItemStack> baseStacks = item.item().items()
+                List<ItemStack> baseStacks = safeItems(item.item())
                         .map(holder -> new ItemStack(holder.value(), item.count()))
                         .toList();
-                itemInputs.add(new ItemInputDisplay(baseStacks, item.count(), item.consumeChance(), components, componentOps));
+                itemInputs.add(new ItemInputDisplay(item.item(), baseStacks, item.count(), item.consumeChance(), components, componentOps));
             } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.INPUT) {
                 fluidInputs.add(fluid.fluid());
                 fluidInputAmounts.add(fluid.amount());
@@ -123,6 +126,14 @@ public record MachineRecipeDisplay(
                 List.copyOf(smartInterfaceOutputs),
                 List.copyOf(smartInterfaceModifiers)
         );
+    }
+
+    private static java.util.stream.Stream<Holder<Item>> safeItems(Ingredient ingredient) {
+        try {
+            return ingredient.items();
+        } catch (UnsupportedOperationException ignored) {
+            return java.util.stream.Stream.empty();
+        }
     }
 
     public List<Component> tooltips() {
@@ -191,6 +202,7 @@ public record MachineRecipeDisplay(
      * path the anvil plugin uses.
      */
     public record ItemInputDisplay(
+            Ingredient ingredient,
             List<ItemStack> baseStacks,
             int count,
             float consumeChance,
@@ -204,7 +216,7 @@ public record MachineRecipeDisplay(
         }
 
         public ItemInputDisplay(List<ItemStack> baseStacks, int count, float consumeChance) {
-            this(baseStacks, count, consumeChance, DataComponentPredicateSet.EMPTY, com.mojang.serialization.JsonOps.INSTANCE);
+            this(null, baseStacks, count, consumeChance, DataComponentPredicateSet.EMPTY, com.mojang.serialization.JsonOps.INSTANCE);
         }
 
         public List<ItemStack> stacks() {

@@ -24,11 +24,13 @@ import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
 import cn.howxu.mmcr.datagen.Translations;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.Holder;
+import net.minecraft.core.HolderSet;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -331,6 +333,25 @@ class MachineRecipeDisplayTest {
         ItemStack input = display.itemInputs().getFirst().stacks().getFirst();
         assertThat(input.isComponentsPatchEmpty()).isTrue();
         assertThat(display.itemInputs().getFirst().hasUnexportedComponentConstraints()).isTrue();
+    }
+
+    @Test
+    void displayDoesNotDereferenceUnboundTagInputs() {
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("tag_input_display"),
+                MMCR.id("blast_furnace"),
+                40,
+                List.of(new MachineIngredient.ItemIngredient(
+                        Ingredient.of(HolderSet.emptyNamed(net.minecraft.core.registries.BuiltInRegistries.ITEM, ItemTags.LOGS)), 1)),
+                List.of()
+        );
+
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+
+        assertThat(display.itemInputs()).singleElement().satisfies(input -> {
+            assertThat(input.ingredient()).isNotNull();
+            assertThat(input.stacks()).isEmpty();
+        });
     }
 
     @Test

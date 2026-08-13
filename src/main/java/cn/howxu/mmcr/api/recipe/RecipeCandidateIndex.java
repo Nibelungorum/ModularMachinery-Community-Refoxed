@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.recipe;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import net.minecraft.core.Holder;
 import net.minecraft.world.item.Item;
 
 import java.util.Collection;
@@ -85,7 +86,12 @@ public final class RecipeCandidateIndex {
                 continue;
             }
             hasItemInput = true;
-            List<net.minecraft.core.Holder<Item>> matchingItems = item.item().items().toList();
+            List<Holder<Item>> matchingItems;
+            try {
+                matchingItems = item.item().items().toList();
+            } catch (UnsupportedOperationException ignored) {
+                return null;
+            }
             if (matchingItems.size() != 1) return null;
             requiredItems.add(matchingItems.getFirst().value());
         }

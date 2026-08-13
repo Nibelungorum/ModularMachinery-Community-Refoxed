@@ -246,7 +246,11 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                         ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
             }
             jeiSlot.addRichTooltipCallback((view, tooltip) -> appendInputTooltip(tooltip, item));
-            jeiSlot.addItemStacks(stacks);
+            if (item.ingredient() != null && (item.components().isEmpty() || stacks.isEmpty())) {
+                jeiSlot.add(item.ingredient());
+            } else {
+                jeiSlot.addItemStacks(stacks);
+            }
         } else {
             MachineRecipeDisplay.ItemOutputDisplay output = recipe.itemOutputs().get(entry.index());
             ItemStack stack = output.stack();

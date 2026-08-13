@@ -417,7 +417,11 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     }
 
     private static boolean ingredientsOverlap(ItemRequirement left, ItemRequirement right) {
-        return left.item().items().anyMatch(leftItem -> right.item().items().anyMatch(rightItem -> leftItem.equals(rightItem)));
+        try {
+            return left.item().items().anyMatch(leftItem -> right.item().items().anyMatch(rightItem -> leftItem.equals(rightItem)));
+        } catch (UnsupportedOperationException ignored) {
+            return true;
+        }
     }
 
     public List<RecipeModifier> modifiers() {

@@ -16,12 +16,15 @@ import com.google.gson.JsonParser;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.core.Holder;
+import net.minecraft.core.HolderSet;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.tags.ItemTags;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -66,6 +69,9 @@ public final class DefaultRecipes {
             recipes.put(recipe.id(), recipe);
         }
         for (MachineRecipe recipe : componentExampleRecipes()) {
+            recipes.put(recipe.id(), recipe);
+        }
+        for (MachineRecipe recipe : tagExampleRecipes()) {
             recipes.put(recipe.id(), recipe);
         }
         for (MachineRecipe recipe : purpurFurnaceRecipes()) {
@@ -139,6 +145,22 @@ public final class DefaultRecipes {
         );
     }
 
+    private static List<MachineRecipe> tagExampleRecipes() {
+        return List.of(
+                componentRecipe(BLAST_FURNACE_ID, "blast_furnace_component_tag_input",
+                        List.of(tagItemInput(ItemTags.LOGS, 1)),
+                        List.of(item(Items.CHARCOAL, 1))),
+                componentRecipe(BLAST_FURNACE_ID, "blast_furnace_component_tag_named_input",
+                        List.of(tagComponentItemInput(ItemTags.LOGS, 1, namedPredicate("Validated"), 1F)),
+                        List.of(item(Items.EMERALD, 1))),
+                componentRecipe(BLAST_FURNACE_ID, "blast_furnace_component_tag_enchanted_input",
+                        List.of(tagComponentItemInput(ItemTags.SWORDS, 1, componentsFromData("""
+                                {"minecraft:enchantments": {"minecraft:sharpness": 2}}
+                                """), 1F)),
+                        List.of(item(Items.DIAMOND, 1)))
+        );
+    }
+
     private static MachineRecipe complexRecipe(Identifier machineId, String path) {
         var stick = new MachineIngredient.ItemIngredient(Ingredient.of(Items.STICK), 1, DataComponentPredicateSet.EMPTY, 0F);
         var ironNugget = new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_NUGGET), 1, DataComponentPredicateSet.EMPTY, 0.5F);
@@ -166,6 +188,20 @@ public final class DefaultRecipes {
 
     private static MachineIngredient componentItemInput(Item item, int count, String name, float consumeChance) {
         return new MachineIngredient.ItemIngredient(Ingredient.of(item), count, namedPredicate(name), consumeChance);
+    }
+
+    private static MachineIngredient tagItemInput(TagKey<Item> tag, int count) {
+        return new MachineIngredient.ItemIngredient(Ingredient.of(tagItems(tag)), count);
+    }
+
+    private static MachineIngredient tagComponentItemInput(TagKey<Item> tag, int count,
+                                                          DataComponentPredicateSet components, float consumeChance) {
+        return new MachineIngredient.ItemIngredient(Ingredient.of(tagItems(tag)), count, components, consumeChance);
+    }
+
+    private static HolderSet.Named<Item> tagItems(TagKey<Item> tag) {
+        return BuiltInRegistries.ITEM.get(tag)
+                .orElseGet(() -> HolderSet.emptyNamed(BuiltInRegistries.ITEM, tag));
     }
 
     private static MachineRecipe enchantedNonConsumableRecipe(Identifier machineId, String path) {
@@ -217,6 +253,17 @@ public final class DefaultRecipes {
 
     private static DataComponentPredicateSet componentsFromData(JsonObject root) {
         JsonObject components = root.getAsJsonObject("components");
+        Map<DataComponentType<?>, ComponentPredicate> predicates = new java.util.LinkedHashMap<>();
+        for (var entry : components.entrySet()) {
+            DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(Identifier.parse(entry.getKey()));
+            if (type == null) throw new IllegalArgumentException("Unknown data component type " + entry.getKey());
+            predicates.put(type, ComponentPredicate.exact(new Dynamic<>(JsonOps.INSTANCE, entry.getValue())));
+        }
+        return new DataComponentPredicateSet(predicates);
+    }
+
+    private static DataComponentPredicateSet componentsFromData(String componentsData) {
+        JsonObject components = JsonParser.parseString(componentsData).getAsJsonObject();
         Map<DataComponentType<?>, ComponentPredicate> predicates = new java.util.LinkedHashMap<>();
         for (var entry : components.entrySet()) {
             DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(Identifier.parse(entry.getKey()));

@@ -3,7 +3,10 @@ package cn.howxu.mmcr.api.recipe;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.core.HolderSet;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -46,6 +49,15 @@ class RecipeCandidateIndexTest {
         RecipeCandidateIndex index = RecipeCandidateIndex.build(List.of(alternatives));
 
         assertThat(index.candidates(List.of(Items.DIAMOND))).containsExactly(alternatives);
+    }
+
+    @Test
+    void tagIngredientFallsBackWithoutDereferencingDuringIndexBuild() {
+        MachineRecipe tagged = itemRecipe("tagged", Ingredient.of(HolderSet.emptyNamed(BuiltInRegistries.ITEM, ItemTags.SWORDS)));
+
+        RecipeCandidateIndex index = RecipeCandidateIndex.build(List.of(tagged));
+
+        assertThat(index.candidates(List.of(Items.DIAMOND))).containsExactly(tagged);
     }
 
     private static MachineRecipe itemRecipe(String path, Ingredient ingredient) {
