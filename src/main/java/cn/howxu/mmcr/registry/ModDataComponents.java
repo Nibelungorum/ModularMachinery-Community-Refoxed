@@ -2,6 +2,7 @@ package cn.howxu.mmcr.registry;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.item.MultiblockDetectorSelection;
+import cn.howxu.mmcr.internal.item.TerminalMode;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.core.component.DataComponentType;
 import net.neoforged.bus.api.IEventBus;
@@ -22,6 +23,11 @@ public final class ModDataComponents {
             MULTIBLOCK_DETECTOR_SELECTION = REGISTER.registerComponentType("multiblock_detector_selection", builder ->
                     builder.persistent(MultiblockDetectorSelection.CODEC)
                             .networkSynchronized(MultiblockDetectorSelection.STREAM_CODEC));
+
+    public static final DeferredHolder<DataComponentType<?>, DataComponentType<TerminalMode>>
+            TERMINAL_MODE = REGISTER.registerComponentType("terminal_mode", builder ->
+                    builder.persistent(TerminalMode.CODEC)
+                            .networkSynchronized(TerminalMode.STREAM_CODEC));
 
     public static void register(IEventBus bus) {
         REGISTER.register(bus);
