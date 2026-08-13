@@ -14,6 +14,8 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -77,6 +79,53 @@ class MachineControllerLevelTest {
         assertThat(mismatch.worldPos()).isEqualTo(controller.getBlockPos().offset(2, 0, 0));
     }
 
+    @Test
+    void defaultControllerSpecFormsHorizontallyAndRejectsVerticalFacing() throws Exception {
+        MachineControllerBlockEntity controller = controllerWithPattern(MachineControllerSpec.defaultsFor(MACHINE_ID), Direction.SOUTH,
+                Map.of(new BlockPos(1, 0, 0), Blocks.IRON_BLOCK));
+
+        assertThat(tryForm(controller, Direction.SOUTH)).isTrue();
+        resetFormed(controller);
+        assertThat(tryForm(controller, Direction.UP)).isFalse();
+    }
+
+    @Test
+    void allowVerticalFacingFormsHorizontallyAndVerticallyFromSameBasePattern() throws Exception {
+        MachineControllerSpec spec = controllerSpec(true, false, false);
+
+        assertThat(tryForm(controllerWithPattern(spec, Direction.SOUTH,
+                Map.of(new BlockPos(1, 0, 0), Blocks.IRON_BLOCK)), Direction.SOUTH)).isTrue();
+        assertThat(tryForm(controllerWithPattern(spec, Direction.UP,
+                Map.of(new BlockPos(1, 0, 0), Blocks.IRON_BLOCK)), Direction.UP)).isTrue();
+    }
+
+    @Test
+    void requireVerticalFacingRejectsHorizontalAndAcceptsVerticalFormation() throws Exception {
+        MachineControllerSpec spec = controllerSpec(true, true, false);
+
+        assertThat(tryForm(controllerWithPattern(spec, Direction.SOUTH,
+                Map.of(new BlockPos(1, 0, 0), Blocks.IRON_BLOCK)), Direction.SOUTH)).isFalse();
+        assertThat(tryForm(controllerWithPattern(spec, Direction.UP,
+                Map.of(new BlockPos(1, 0, 0), Blocks.IRON_BLOCK)), Direction.UP)).isTrue();
+    }
+
+    @Test
+    void previewSnapshotForVerticalAllowedMachineFollowsHorizontalControllerFacing() throws Exception {
+        MachineControllerSpec spec = controllerSpec(true, false, false);
+        BlockPos horizontalSouthPos = new BlockPos(1, 0, 1);
+        BlockPos verticalUpRolledEastPos = new BlockPos(1, 0, -1);
+        MachineControllerBlockEntity controller = controllerWithPattern(spec, Direction.SOUTH, Direction.EAST,
+                Map.of(horizontalSouthPos, Blocks.IRON_BLOCK), Map.of());
+
+        MultiblockPreviewSnapshot snapshot = controller.createStructurePreviewSnapshot(16).orElseThrow();
+
+        assertThat(snapshot.entries())
+                .extracting(MultiblockPreviewSnapshot.Entry::relativePos)
+                // SOUTH leaves the base pattern at (1,0,1); UP with the current EAST roll would rotate it to (1,0,-1).
+                .contains(horizontalSouthPos)
+                .doesNotContain(verticalUpRolledEastPos);
+    }
+
     private MachineControllerBlockEntity controllerWithSlots(Block first, Block second) throws Exception {
         MachineDefinitions.clearForTesting();
         MachineDefinitions.register(MachineRegistration.builder(MACHINE_ID).localizedName("Level Machine").build());
@@ -103,8 +152,8 @@ class MachineControllerLevelTest {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         var controllerBlock = testControllerBlock();
         var controllerState = controllerBlock.defaultBlockState()
-                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FACING, Direction.SOUTH)
-                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ROLL_FACING, Direction.NORTH);
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH)
+                .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH);
         setField(BlockEntity.class, controller, "worldPosition", controllerPos);
         setField(BlockEntity.class, controller, "blockState", controllerState);
         Level level = LevelStub.create(Map.of(
@@ -121,32 +170,97 @@ class MachineControllerLevelTest {
         return (MachineControllerBlockEntity) ((sun.misc.Unsafe) unsafeField.get(null)).allocateInstance(MachineControllerBlockEntity.class);
     }
 
-    private static cn.howxu.mmcr.internal.block.MachineControllerBlock testControllerBlock() throws Exception {
+    private static MachineControllerBlockEntity controllerWithPattern(MachineControllerSpec spec, Direction facing,
+                                                                      Map<BlockPos, Block> blocks) throws Exception {
+        return controllerWithPattern(spec, facing, Direction.SOUTH,
+                Map.of(new BlockPos(1, 0, 0), Blocks.IRON_BLOCK), blocks);
+    }
+
+    private static MachineControllerBlockEntity controllerWithPattern(MachineControllerSpec spec, Direction facing,
+                                                                      Direction rollFacing,
+                                                                      Map<BlockPos, Block> patternBlocks,
+                                                                      Map<BlockPos, Block> blocks) throws Exception {
+        MachineDefinitions.clearForTesting();
+        MachineDefinitions.register(MachineRegistration.builder(MACHINE_ID)
+                .localizedName("Facing Machine")
+                .controllerSpec(spec)
+                .build());
+        Map<BlockPos, BlockPredicate> patternPredicates = new LinkedHashMap<>();
+        patternBlocks.forEach((pos, block) -> patternPredicates.put(pos, new BlockPredicate.OfBlock(block)));
+        BlockArray pattern = new BlockArray(patternPredicates);
+        MachineStructureRegistry.replaceDynamic(Map.of(MACHINE_ID, new MachineStructureDefinition(
+                MACHINE_ID, pattern, null, null, List.of(), Map.of(), Map.of())));
+
+        MachineControllerBlockEntity controller = allocateController();
+        setField(MachineControllerBlockEntity.class, controller, "foundModifiers", new LinkedHashMap<>());
+        setField(MachineControllerBlockEntity.class, controller, "foundLevels", Map.of());
+        setField(MachineControllerBlockEntity.class, controller, "components", new java.util.ArrayList<>());
+        setField(MachineControllerBlockEntity.class, controller, "linkedPortPositions", new java.util.HashSet<>());
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        var controllerBlock = testControllerBlock();
+        var controllerState = controllerBlock.defaultBlockState()
+                .setValue(MachineControllerBlock.FACING, facing)
+                .setValue(MachineControllerBlock.ROLL_FACING, rollFacing);
+        setField(BlockEntity.class, controller, "worldPosition", controllerPos);
+        setField(BlockEntity.class, controller, "blockState", controllerState);
+        Map<BlockPos, Block> levelBlocks = new LinkedHashMap<>();
+        levelBlocks.put(controllerPos, controllerBlock);
+        blocks.forEach((pos, block) -> levelBlocks.put(controllerPos.offset(pos), block));
+        setField(BlockEntity.class, controller, "level", LevelStub.create(levelBlocks, List.of(controller)));
+        return controller;
+    }
+
+    private static MachineControllerBlock testControllerBlock() throws Exception {
         Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
         unsafeField.setAccessible(true);
-        var block = (cn.howxu.mmcr.internal.block.MachineControllerBlock) ((sun.misc.Unsafe) unsafeField.get(null))
-                .allocateInstance(cn.howxu.mmcr.internal.block.MachineControllerBlock.class);
-        setField(cn.howxu.mmcr.internal.block.MachineControllerBlock.class, block, "machineId", MACHINE_ID);
+        var block = (MachineControllerBlock) ((sun.misc.Unsafe) unsafeField.get(null))
+                .allocateInstance(MachineControllerBlock.class);
+        setField(MachineControllerBlock.class, block, "machineId", MACHINE_ID);
         setField(net.minecraft.world.level.block.state.BlockBehaviour.class, block, "properties", Blocks.IRON_BLOCK.properties());
         var builder = new net.minecraft.world.level.block.state.StateDefinition.Builder<Block, net.minecraft.world.level.block.state.BlockState>(block);
-        builder.add(cn.howxu.mmcr.internal.block.MachineControllerBlock.FACING,
-                cn.howxu.mmcr.internal.block.MachineControllerBlock.ROLL_FACING,
-                cn.howxu.mmcr.internal.block.MachineControllerBlock.FORMED,
-                cn.howxu.mmcr.internal.block.MachineControllerBlock.ACTIVE);
+        builder.add(MachineControllerBlock.FACING,
+                MachineControllerBlock.ROLL_FACING,
+                MachineControllerBlock.FORMED,
+                MachineControllerBlock.ACTIVE);
         var stateDefinition = builder.create(Block::defaultBlockState, net.minecraft.world.level.block.state.BlockState::new);
         setField(Block.class, block, "stateDefinition", stateDefinition);
         setField(Block.class, block, "defaultBlockState", stateDefinition.any()
-                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FACING, Direction.NORTH)
-                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ROLL_FACING, Direction.NORTH)
-                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FORMED, false)
-                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ACTIVE, false));
+                .setValue(MachineControllerBlock.FACING, Direction.NORTH)
+                .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH)
+                .setValue(MachineControllerBlock.FORMED, false)
+                .setValue(MachineControllerBlock.ACTIVE, false));
         return block;
     }
 
     private static boolean tryForm(MachineControllerBlockEntity controller) throws Exception {
+        return tryForm(controller, Direction.SOUTH);
+    }
+
+    private static boolean tryForm(MachineControllerBlockEntity controller, Direction facing) throws Exception {
         Method method = MachineControllerBlockEntity.class.getDeclaredMethod("tryFormMachine", cn.howxu.mmcr.api.machine.Machine.class, Direction.class);
         method.setAccessible(true);
-        return (boolean) method.invoke(controller, MachineRegistry.getMachine(MACHINE_ID), Direction.SOUTH);
+        return (boolean) method.invoke(controller, MachineRegistry.getMachine(MACHINE_ID), facing);
+    }
+
+    private static void resetFormed(MachineControllerBlockEntity controller) throws Exception {
+        setField(MachineControllerBlockEntity.class, controller, "foundMachine", null);
+        setField(MachineControllerBlockEntity.class, controller, "foundPattern", null);
+        setField(MachineControllerBlockEntity.class, controller, "foundCompiledPattern", null);
+        setField(MachineControllerBlockEntity.class, controller, "controllerFacing", null);
+        setField(BlockEntity.class, controller, "blockState", controller.getBlockState().setValue(MachineControllerBlock.FORMED, false));
+    }
+
+    private static MachineControllerSpec controllerSpec(boolean allowVerticalFacing, boolean requireVerticalFacing,
+                                                        boolean fullyRotationallySymmetric) {
+        return new MachineControllerSpec(
+                Identifier.fromNamespaceAndPath(MACHINE_ID.getNamespace(), MACHINE_ID.getPath() + "_controller"),
+                Identifier.parse("mmcr:block/controller_front"),
+                Identifier.parse("mmcr:block/controller_side"),
+                Identifier.parse("mmcr:block/controller_top"),
+                Identifier.parse("mmcr:block/controller_bottom"),
+                allowVerticalFacing,
+                fullyRotationallySymmetric,
+                requireVerticalFacing);
     }
 
     private static MachineLevel level(String id, int priority, Block block) {
