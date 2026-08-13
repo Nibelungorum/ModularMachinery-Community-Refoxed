@@ -102,14 +102,10 @@ class ItemBusMenuTest {
     }
 
     @Test
-    void title_is_hidden_for_reinforced_huge_and_ludicrous_buses() {
-        assertThat(ItemBusMenu.showsTitleForSize(ItemBusSize.TINY)).isTrue();
-        assertThat(ItemBusMenu.showsTitleForSize(ItemBusSize.SMALL)).isTrue();
-        assertThat(ItemBusMenu.showsTitleForSize(ItemBusSize.NORMAL)).isTrue();
-        assertThat(ItemBusMenu.showsTitleForSize(ItemBusSize.REINFORCED)).isFalse();
-        assertThat(ItemBusMenu.showsTitleForSize(ItemBusSize.BIG)).isTrue();
-        assertThat(ItemBusMenu.showsTitleForSize(ItemBusSize.HUGE)).isFalse();
-        assertThat(ItemBusMenu.showsTitleForSize(ItemBusSize.LUDICROUS)).isFalse();
+    void title_is_hidden_for_all_item_bus_sizes() {
+        for (ItemBusSize size : ItemBusSize.values()) {
+            assertThat(ItemBusMenu.showsTitleForSize(size)).isFalse();
+        }
     }
 
     @Test

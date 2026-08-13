@@ -126,10 +126,7 @@ public class ItemBusMenu extends AbstractMachineMenu {
     }
 
     public static boolean showsTitleForSize(ItemBusSize size) {
-        return switch (size) {
-            case REINFORCED, HUGE, LUDICROUS -> false;
-            default -> true;
-        };
+        return false;
     }
 
     public static int playerInventorySlotStart(int busSlots) {

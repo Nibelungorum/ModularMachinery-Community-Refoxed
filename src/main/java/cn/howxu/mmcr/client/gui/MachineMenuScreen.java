@@ -4,14 +4,20 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.internal.autoio.AutoIOAction;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
 import cn.howxu.mmcr.internal.menu.FactorySchedulerMenu;
 import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
+import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
+import cn.howxu.mmcr.util.IOType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.MenuAccess;
 import net.minecraft.client.renderer.block.FluidModel;
@@ -20,6 +26,8 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.ModelManager;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
@@ -28,11 +36,14 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.level.material.Fluid;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.fluid.FluidTintSource;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 /** 一个屏幕入口,按具体菜单类型分派纹理 / 尺寸 / 自定义渲染。 */
@@ -75,6 +86,11 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     static final int ENERGY_Y = 10;
     private static final int ENERGY_W = 20;
     private static final int ENERGY_H = 61;
+    private boolean autoIOPage;
+    private Button autoIOPageButton;
+    private Button autoIOToggleButton;
+    private final EnumMap<Direction, Button> autoIOSideButtons = new EnumMap<>(Direction.class);
+
     public MachineMenuScreen(AbstractContainerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title,
                 menu instanceof MachineControllerMenu ? 176 : 176,
@@ -83,7 +99,8 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         boolean energyMenu = menu instanceof EnergyHatchMenu;
         boolean itemBusMenu = menu instanceof ItemBusMenu;
         boolean factoryMenu = menu instanceof FactorySchedulerMenu;
-        boolean showTitle = !(menu instanceof ItemBusMenu itemBus) || itemBus.showsTitle();
+        boolean showTitle = showsPortTitle(fluidMenu, energyMenu, itemBusMenu)
+                && (!(menu instanceof ItemBusMenu itemBus) || itemBus.showsTitle());
         this.titleLabelX = titleX(titleLabelX, fluidMenu, energyMenu, itemBusMenu, factoryMenu);
         this.titleLabelY = showTitle ? titleY(titleLabelY, fluidMenu || energyMenu, itemBusMenu, factoryMenu) : hiddenInventoryLabelY();
         this.inventoryLabelY = hiddenInventoryLabelY();
@@ -139,6 +156,20 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         return HIDDEN_INVENTORY_LABEL_Y;
     }
 
+    static boolean showsPortTitle(boolean fluidMenu, boolean energyMenu, boolean itemBusMenu) {
+        return !(fluidMenu || energyMenu || itemBusMenu);
+    }
+
+    static Direction autoIODirectionAt(int x, int y) {
+        if (x == 1 && y == 0) return Direction.UP;
+        if (x == 0 && y == 1) return Direction.WEST;
+        if (x == 1 && y == 1) return Direction.NORTH;
+        if (x == 2 && y == 1) return Direction.EAST;
+        if (x == 1 && y == 2) return Direction.DOWN;
+        if (x == 2 && y == 2) return Direction.SOUTH;
+        return null;
+    }
+
     static int titleColor(boolean controllerMenu) {
         return controllerMenu ? CONTROLLER_TITLE_COLOR : TITLE_COLOR;
     }
@@ -184,6 +215,18 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     }
 
     @Override
+    protected void init() {
+        super.init();
+        if (isPortMenu()) initAutoIOButtons();
+    }
+
+    @Override
+    protected void containerTick() {
+        super.containerTick();
+        updateAutoIOWidgets();
+    }
+
+    @Override
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         graphics.text(font, title, titleLabelX, titleLabelY, titleColor(menu instanceof MachineControllerMenu), false);
         if (menu instanceof MachineControllerMenu mc) renderControllerStatus(graphics, mc, 0, 0);
@@ -214,8 +257,86 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
                     blit.sourceWidth(), blit.sourceHeight());
         }
 
-        if (menu instanceof FluidHatchMenu fh)        renderFluidTank(graphics, fh, x, y);
-        else if (menu instanceof EnergyHatchMenu eh)  renderEnergyBar(graphics, eh, x, y);
+        if (!autoIOPage && menu instanceof FluidHatchMenu fh)        renderFluidTank(graphics, fh, x, y);
+        else if (!autoIOPage && menu instanceof EnergyHatchMenu eh)  renderEnergyBar(graphics, eh, x, y);
+    }
+
+    private boolean isPortMenu() {
+        return menu instanceof ItemBusMenu || menu instanceof FluidHatchMenu || menu instanceof EnergyHatchMenu;
+    }
+
+    private BlockPos portPos() {
+        if (menu instanceof ItemBusMenu itemBus) return itemBus.pos();
+        if (menu instanceof FluidHatchMenu fluidHatch) return fluidHatch.pos();
+        if (menu instanceof EnergyHatchMenu energyHatch) return energyHatch.pos();
+        return BlockPos.ZERO;
+    }
+
+    private IOPortBlockEntity portEntity() {
+        if (Minecraft.getInstance().level == null) return null;
+        return Minecraft.getInstance().level.getBlockEntity(portPos()) instanceof IOPortBlockEntity port ? port : null;
+    }
+
+    private void initAutoIOButtons() {
+        autoIOPageButton = addRenderableWidget(Button.builder(Component.literal("⇄"), button -> {
+            autoIOPage = !autoIOPage;
+            updateAutoIOWidgets();
+        }).bounds(leftPos + 4, topPos + 4, 20, 20).tooltip(Tooltip.create(Component.translatable("mmcr.auto_io.control"))).build());
+
+        autoIOToggleButton = addRenderableWidget(Button.builder(autoIOToggleLabel(), button ->
+                ClientPacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), AutoIOAction.TOGGLE_ENABLED, null)))
+                .bounds(leftPos + 53, topPos + imageHeight - 72, 70, 20).build());
+
+        for (int y = 0; y < 3; y++) {
+            for (int x = 0; x < 3; x++) {
+                Direction side = autoIODirectionAt(x, y);
+                if (side == null) continue;
+                Button button = addRenderableWidget(Button.builder(Component.empty(), clicked ->
+                        ClientPacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), AutoIOAction.TOGGLE_SIDE, side)))
+                        .bounds(leftPos + 56 + x * 24, topPos + 28 + y * 24, 20, 20).build());
+                autoIOSideButtons.put(side, button);
+            }
+        }
+        updateAutoIOWidgets();
+    }
+
+    private void updateAutoIOWidgets() {
+        if (autoIOPageButton != null) autoIOPageButton.setMessage(Component.literal(autoIOPage ? "←" : "⇄"));
+        if (autoIOToggleButton != null) {
+            autoIOToggleButton.visible = autoIOPage;
+            autoIOToggleButton.active = autoIOPage;
+            autoIOToggleButton.setMessage(autoIOToggleLabel());
+            autoIOToggleButton.setTooltip(Tooltip.create(autoIOToggleTooltip()));
+        }
+        for (var entry : autoIOSideButtons.entrySet()) {
+            Button button = entry.getValue();
+            button.visible = autoIOPage;
+            button.active = autoIOPage;
+            button.setTooltip(Tooltip.create(autoIOSideTooltip(entry.getKey())));
+        }
+    }
+
+    private Component autoIOToggleLabel() {
+        return Component.translatable(isOutputPort() ? "mmcr.auto_io.auto_output" : "mmcr.auto_io.auto_input");
+    }
+
+    private boolean isOutputPort() {
+        return menu instanceof ItemBusMenu itemBus && itemBus.owner() != null && itemBus.owner().ioType() == IOType.OUTPUT
+                || menu instanceof FluidHatchMenu fluidHatch && fluidHatch.owner() != null && fluidHatch.owner().ioType() == IOType.OUTPUT
+                || menu instanceof EnergyHatchMenu energyHatch && energyHatch.owner() != null && energyHatch.owner().ioType() == IOType.OUTPUT;
+    }
+
+    private Component autoIOToggleTooltip() {
+        IOPortBlockEntity port = portEntity();
+        boolean enabled = port != null && port.autoIOConfig().enabled();
+        return Component.translatable(enabled ? "mmcr.auto_io.enabled" : "mmcr.auto_io.disabled");
+    }
+
+    private Component autoIOSideTooltip(Direction side) {
+        IOPortBlockEntity port = portEntity();
+        boolean enabled = port != null && port.autoIOConfig().isSideEnabled(side);
+        return Component.translatable("mmcr.auto_io.side", Component.translatable("mmcr.direction." + side.name().toLowerCase(Locale.ROOT)),
+                Component.translatable(enabled ? "mmcr.auto_io.enabled" : "mmcr.auto_io.disabled"));
     }
 
     /**

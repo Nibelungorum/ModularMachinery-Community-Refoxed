@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.menu.FactorySchedulerMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.world.level.block.Blocks;
@@ -48,6 +49,9 @@ class MenuScreenTest {
         assertThat(MachineMenuScreen.titleX(8, false, true, false)).isEqualTo(40);
         assertThat(MachineMenuScreen.titleX(8, false, false, true)).isEqualTo(4);
         assertThat(MachineMenuScreen.titleY(6, false, true)).isEqualTo(4);
+        assertThat(MachineMenuScreen.showsPortTitle(true, false, false)).isFalse();
+        assertThat(MachineMenuScreen.showsPortTitle(false, true, false)).isFalse();
+        assertThat(MachineMenuScreen.showsPortTitle(false, false, true)).isFalse();
         assertThat(MachineMenuScreen.hiddenInventoryLabelY()).isEqualTo(-1000);
         assertThat(MachineMenuScreen.TITLE_COLOR).isEqualTo(-12566464);
         assertThat(MachineMenuScreen.CONTROLLER_TITLE_COLOR).isEqualTo(0xFFE8E8E8);
@@ -55,6 +59,17 @@ class MenuScreenTest {
         assertThat(MachineMenuScreen.titleColor(true)).isEqualTo(MachineMenuScreen.CONTROLLER_TITLE_COLOR);
         assertThat(MachineMenuScreen.controllerStatusX(10)).isEqualTo(10);
         assertThat(MachineMenuScreen.controllerStatusY(10)).isEqualTo(22);
+    }
+
+    @Test
+    void auto_io_direction_layout_is_fixed_north_centered() {
+        assertThat(MachineMenuScreen.autoIODirectionAt(0, 0)).isNull();
+        assertThat(MachineMenuScreen.autoIODirectionAt(1, 0)).isEqualTo(Direction.UP);
+        assertThat(MachineMenuScreen.autoIODirectionAt(0, 1)).isEqualTo(Direction.WEST);
+        assertThat(MachineMenuScreen.autoIODirectionAt(1, 1)).isEqualTo(Direction.NORTH);
+        assertThat(MachineMenuScreen.autoIODirectionAt(2, 1)).isEqualTo(Direction.EAST);
+        assertThat(MachineMenuScreen.autoIODirectionAt(1, 2)).isEqualTo(Direction.DOWN);
+        assertThat(MachineMenuScreen.autoIODirectionAt(2, 2)).isEqualTo(Direction.SOUTH);
     }
 
     @Test
