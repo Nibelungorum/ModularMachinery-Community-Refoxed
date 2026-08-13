@@ -40,6 +40,11 @@ public final class AutoIOConfig {
         else enabledSides.add(side);
     }
 
+    public void setSide(Direction side, boolean enabled) {
+        if (enabled) enabledSides.add(side);
+        else enabledSides.remove(side);
+    }
+
     public void save(ValueOutput output) {
         output.putBoolean(ENABLED_KEY, enabled);
         output.putInt(SIDES_KEY, toMask(enabledSides));

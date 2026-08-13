@@ -103,7 +103,7 @@ public final class RuntimeMachineResourcePack implements PackResources {
     public <T> T getMetadataSection(MetadataSectionType<T> type) throws IOException {
         if (type == PackMetadataSection.CLIENT_TYPE || type == PackMetadataSection.FALLBACK_TYPE) {
             return (T) new PackMetadataSection(
-                    Component.literal("MMCR Dynamical Resources"),
+                    Component.literal("Runtime BuildIn"),
                     new InclusiveRange<>(PackFormat.of(1), PackFormat.of(Integer.MAX_VALUE)));
         }
         return null;

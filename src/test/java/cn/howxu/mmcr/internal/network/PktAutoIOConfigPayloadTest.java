@@ -29,25 +29,25 @@ class PktAutoIOConfigPayloadTest {
     }
 
     @Test
-    void enabled_toggle_accepts_port_menu_without_side() {
+    void enabled_set_accepts_port_menu_without_side() {
         ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null), BlockPos.ZERO);
 
-        assertThat(PktAutoIOConfigPayload.canUpdate(menu, BlockPos.ZERO, AutoIOAction.TOGGLE_ENABLED, null)).isTrue();
+        assertThat(PktAutoIOConfigPayload.canUpdate(menu, BlockPos.ZERO, AutoIOAction.SET_ENABLED, null)).isTrue();
     }
 
     @Test
-    void side_toggle_requires_side() {
+    void side_set_requires_side() {
         ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null), BlockPos.ZERO);
 
-        assertThat(PktAutoIOConfigPayload.canUpdate(menu, BlockPos.ZERO, AutoIOAction.TOGGLE_SIDE, null)).isFalse();
-        assertThat(PktAutoIOConfigPayload.canUpdate(menu, BlockPos.ZERO, AutoIOAction.TOGGLE_SIDE, Direction.EAST)).isTrue();
+        assertThat(PktAutoIOConfigPayload.canUpdate(menu, BlockPos.ZERO, AutoIOAction.SET_SIDE, null)).isFalse();
+        assertThat(PktAutoIOConfigPayload.canUpdate(menu, BlockPos.ZERO, AutoIOAction.SET_SIDE, Direction.EAST)).isTrue();
     }
 
     @Test
-    void wrong_position_is_rejected() {
+    void wrong_position_is_rejected_for_set_action() {
         ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null), BlockPos.ZERO);
 
-        assertThat(PktAutoIOConfigPayload.canUpdate(menu, new BlockPos(1, 0, 0), AutoIOAction.TOGGLE_ENABLED, null)).isFalse();
+        assertThat(PktAutoIOConfigPayload.canUpdate(menu, new BlockPos(1, 0, 0), AutoIOAction.SET_ENABLED, null)).isFalse();
     }
 
     private static void bind(Object deferredHolder, MenuType<ItemBusMenu> menuType) throws Exception {

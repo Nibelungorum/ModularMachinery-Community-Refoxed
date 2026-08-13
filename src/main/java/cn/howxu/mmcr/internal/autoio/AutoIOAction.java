@@ -6,6 +6,6 @@ package cn.howxu.mmcr.internal.autoio;
  * @author howxu <dev@howxu.cn>
  */
 public enum AutoIOAction {
-    TOGGLE_ENABLED,
-    TOGGLE_SIDE
+    SET_ENABLED,
+    SET_SIDE
 }

@@ -14,8 +14,12 @@ import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
@@ -70,15 +74,38 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
     public abstract AutoIOCapabilityType autoIOCapabilityType();
 
+    public record AdjacentSide(Direction side, BlockState state, ItemStack icon, Component name) {
+    }
+
+    public AdjacentSide adjacentSide(Direction side) {
+        BlockState adjacentState = level == null || side == null
+                ? Blocks.AIR.defaultBlockState()
+                : level.getBlockState(worldPosition.relative(side));
+        ItemStack icon = adjacentState.getBlock().asItem() == Items.AIR
+                ? ItemStack.EMPTY
+                : adjacentState.getBlock().asItem().getDefaultInstance();
+        return new AdjacentSide(side, adjacentState, icon, adjacentState.getBlock().getName());
+    }
+
+    public void setAutoIOEnabled(boolean enabled) {
+        if (autoIOConfig.enabled() == enabled) return;
+        autoIOConfig.setEnabled(enabled);
+        markAutoIOConfigChanged();
+    }
+
     public void toggleAutoIOEnabled() {
-        autoIOConfig.setEnabled(!autoIOConfig.enabled());
+        setAutoIOEnabled(!autoIOConfig.enabled());
+    }
+
+    public void setAutoIOSide(Direction side, boolean enabled) {
+        if (side == null || autoIOConfig.isSideEnabled(side) == enabled) return;
+        autoIOConfig.setSide(side, enabled);
         markAutoIOConfigChanged();
     }
 
     public void toggleAutoIOSide(Direction side) {
         if (side == null) return;
-        autoIOConfig.toggleSide(side);
-        markAutoIOConfigChanged();
+        setAutoIOSide(side, !autoIOConfig.isSideEnabled(side));
     }
 
     private void markAutoIOConfigChanged() {

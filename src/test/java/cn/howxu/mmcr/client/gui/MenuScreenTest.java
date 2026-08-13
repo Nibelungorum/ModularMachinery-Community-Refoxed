@@ -14,6 +14,7 @@ import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.level.block.Blocks;
@@ -219,6 +220,38 @@ class MenuScreenTest {
     }
 
     @Test
+    void auto_io_page_uses_smart_interface_texture_for_item_bus() {
+        assertThat(screenTextureFor(new ItemBusMenu(1, new Inventory(null, null)), true))
+                .isEqualTo(MMCR.id("textures/gui/guismartinterface.png"));
+    }
+
+    @Test
+    void auto_io_page_hides_item_bus_port_slots() {
+        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null));
+        Slot portSlot = menu.getSlot(0);
+        Slot playerSlot = menu.getSlot(menu.playerInventorySlotStart());
+
+        assertThat(MachineMenuScreen.hidesSlotOnAutoIOPage(menu, true, portSlot, 0, menu.busSlotCount())).isTrue();
+        assertThat(MachineMenuScreen.hidesSlotOnAutoIOPage(menu, true, playerSlot, menu.playerInventorySlotStart(), menu.busSlotCount())).isFalse();
+        assertThat(MachineMenuScreen.hidesSlotOnAutoIOPage(menu, false, portSlot, 0, menu.busSlotCount())).isFalse();
+    }
+
+    @Test
+    void normal_item_bus_page_does_not_hide_slots_after_auto_io_mode() {
+        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null));
+        Slot portSlot = menu.getSlot(0);
+
+        assertThat(MachineMenuScreen.hidesSlotOnAutoIOPage(menu, false, portSlot, 0, menu.busSlotCount())).isFalse();
+    }
+
+    @Test
+    void auto_io_side_line_uses_direction_and_block_name() {
+        Component line = MachineMenuScreen.autoIOSideLine(Direction.EAST, Blocks.CHEST.getName());
+
+        assertThat(line.getString()).isEqualTo("mmcr.auto_io.side_block");
+    }
+
+    @Test
     void factory_controller_title_offsets_match_tiny_item_bus() {
         assertThat(MachineMenuScreen.titleX(8, false, false, true)).isEqualTo(4);
         assertThat(MachineMenuScreen.titleY(6, false, true)).isEqualTo(4);
@@ -226,14 +259,18 @@ class MenuScreenTest {
         assertThat(MachineMenuScreen.titleY(6, false, false, true)).isEqualTo(4);
     }
 
-    private static Identifier screenTextureFor(AbstractContainerMenu menu) {
+    private static Identifier screenTextureFor(AbstractContainerMenu menu, boolean autoIOPage) {
         try {
-            Method method = MachineMenuScreen.class.getDeclaredMethod("textureFor", AbstractContainerMenu.class);
+            Method method = MachineMenuScreen.class.getDeclaredMethod("textureFor", AbstractContainerMenu.class, boolean.class);
             method.setAccessible(true);
-            return (Identifier) method.invoke(null, menu);
+            return (Identifier) method.invoke(null, menu, autoIOPage);
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to resolve screen texture", e);
         }
+    }
+
+    private static Identifier screenTextureFor(AbstractContainerMenu menu) {
+        return screenTextureFor(menu, false);
     }
 
     private static MachineMenuScreen screenForMenu(AbstractContainerMenu menu) {

@@ -22,7 +22,7 @@ import org.jetbrains.annotations.Nullable;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record PktAutoIOConfigPayload(BlockPos pos, AutoIOAction action, @Nullable Direction side)
+public record PktAutoIOConfigPayload(BlockPos pos, AutoIOAction action, @Nullable Direction side, boolean enabled)
         implements CustomPacketPayload {
     public static final Type<PktAutoIOConfigPayload> TYPE = new Type<>(MMCR.id("auto_io_config"));
     public static final StreamCodec<ByteBuf, PktAutoIOConfigPayload> STREAM_CODEC = StreamCodec.composite(
@@ -30,7 +30,8 @@ public record PktAutoIOConfigPayload(BlockPos pos, AutoIOAction action, @Nullabl
             ByteBufCodecs.idMapper(index -> AutoIOAction.values()[index], AutoIOAction::ordinal), PktAutoIOConfigPayload::action,
             ByteBufCodecs.optional(ByteBufCodecs.idMapper(index -> Direction.values()[index], Direction::ordinal)),
             payload -> java.util.Optional.ofNullable(payload.side),
-            (pos, action, side) -> new PktAutoIOConfigPayload(pos, action, side.orElse(null)));
+            ByteBufCodecs.BOOL, PktAutoIOConfigPayload::enabled,
+            (pos, action, side, enabled) -> new PktAutoIOConfigPayload(pos, action, side.orElse(null), enabled));
 
     @Override
     public Type<? extends CustomPacketPayload> type() {
@@ -42,8 +43,8 @@ public record PktAutoIOConfigPayload(BlockPos pos, AutoIOAction action, @Nullabl
             if (!(context.player() instanceof ServerPlayer player)) return;
             if (!canUpdate(player.containerMenu, pos, action, side)) return;
             if (!(player.level().getBlockEntity(pos) instanceof IOPortBlockEntity port)) return;
-            if (action == AutoIOAction.TOGGLE_ENABLED) port.toggleAutoIOEnabled();
-            else if (action == AutoIOAction.TOGGLE_SIDE) port.toggleAutoIOSide(side);
+            if (action == AutoIOAction.SET_ENABLED) port.setAutoIOEnabled(enabled);
+            else if (action == AutoIOAction.SET_SIDE) port.setAutoIOSide(side, enabled);
         });
     }
 
@@ -53,6 +54,6 @@ public record PktAutoIOConfigPayload(BlockPos pos, AutoIOAction action, @Nullabl
                 || menu instanceof FluidHatchMenu fluidHatch && fluidHatch.pos().equals(pos)
                 || menu instanceof EnergyHatchMenu energyHatch && energyHatch.pos().equals(pos);
         if (!portMenu) return false;
-        return action != AutoIOAction.TOGGLE_SIDE || side != null;
+        return action != AutoIOAction.SET_SIDE || side != null;
     }
 }

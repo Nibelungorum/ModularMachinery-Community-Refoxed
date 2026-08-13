@@ -9,6 +9,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
@@ -74,6 +75,18 @@ class AutoIOPortTest {
         port.toggleAutoIOEnabled();
 
         assertThat(LevelStub.sentBlockUpdates(level)).isEqualTo(1);
+    }
+
+    @Test
+    void adjacentSideUsesAirWhenPortHasNoLevel() {
+        IOPortBlockEntity port = port("item_input_bus_normal");
+
+        IOPortBlockEntity.AdjacentSide side = port.adjacentSide(Direction.EAST);
+
+        assertThat(side.side()).isEqualTo(Direction.EAST);
+        assertThat(side.state().isAir()).isTrue();
+        assertThat(side.icon().isEmpty()).isTrue();
+        assertThat(side.name().getString()).isEqualTo(Blocks.AIR.getName().getString());
     }
 
     private static IOPortBlockEntity port(String id) {

@@ -57,6 +57,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     private static final Identifier TANK_TEXTURE        = MMCR.id("textures/gui/guitank.png");
     private static final Identifier GUI_BAR_TEXTURE     = MMCR.id("textures/gui/guibar.png");
     private static final Identifier CONTROLLER_TEXTURE  = MMCR.id("textures/gui/guicontroller_large.png");
+    private static final Identifier SMART_INTERFACE_TEXTURE = MMCR.id("textures/gui/guismartinterface.png");
     private static final int FLUID_BAR_OVERLAY_SOURCE_X = 176;
     private static final int ENERGY_BAR_SOURCE_X = 196;
     private static final NumberFormat NUMBER_FORMAT = NumberFormat.getIntegerInstance();
@@ -89,6 +90,9 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     static final int ENERGY_Y = 10;
     private static final int ENERGY_W = 20;
     private static final int ENERGY_H = 61;
+    private static final int AUTO_IO_SIDE_ROW_Y = 28;
+    private static final int AUTO_IO_SIDE_ROW_H = 18;
+    private static final int AUTO_IO_SIDE_TEXT_X = 54;
     private boolean autoIOPage;
     private Button autoIOPageButton;
     private Button autoIOToggleButton;
@@ -177,6 +181,10 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         return slotIndex >= 0 && slotIndex < portSlotCount;
     }
 
+    static boolean hidesSlotOnAutoIOPage(AbstractContainerMenu menu, boolean autoIOPage, Slot slot, int slotIdx, int portSlotCount) {
+        return autoIOPage && menu instanceof ItemBusMenu && slot != null && isPortSlotIndex(slotIdx, portSlotCount);
+    }
+
     static int titleColor(boolean controllerMenu) {
         return controllerMenu ? CONTROLLER_TITLE_COLOR : TITLE_COLOR;
     }
@@ -243,6 +251,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
         extractBackground(graphics, mouseX, mouseY, partialTicks);
         super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
+        if (autoIOPage && isPortMenu()) renderAutoIOSideRows(graphics, (width - imageWidth) / 2, (height - imageHeight) / 2);
         extractTooltip(graphics, mouseX, mouseY);
     }
 
@@ -257,16 +266,21 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         super.extractBackground(graphics, mouseX, mouseY, partialTicks);
         int x = (width - imageWidth) / 2;
         int y = (height - imageHeight) / 2;
-        if (menu instanceof ItemBusMenu) {
+        if (autoIOPage && menu instanceof ItemBusMenu) {
+            BackgroundBlit blit = backgroundBlit(0, 0, imageWidth, Math.min(imageHeight, BASE_BUS_BACKGROUND_HEIGHT));
+            graphics.blit(RenderPipelines.GUI_TEXTURED, textureFor(menu, true),
+                    x, y, 0, 0, blit.width(), blit.height(),
+                    blit.sourceWidth(), blit.sourceHeight());
+        } else if (menu instanceof ItemBusMenu) {
             for (BackgroundBlit blit : itemBusBackgroundBlits(imageHeight)) {
                 BackgroundBlit drawBlit = backgroundBlit(blit.destY(), blit.sourceY(), imageWidth, blit.height());
-                graphics.blit(RenderPipelines.GUI_TEXTURED, textureFor(menu),
+                graphics.blit(RenderPipelines.GUI_TEXTURED, textureFor(menu, false),
                         x, y + drawBlit.destY(), 0, drawBlit.sourceY(), drawBlit.width(), drawBlit.height(),
                         drawBlit.sourceWidth(), drawBlit.sourceHeight());
             }
         } else {
             BackgroundBlit blit = backgroundBlit(0, 0, imageWidth, imageHeight);
-            graphics.blit(RenderPipelines.GUI_TEXTURED, textureFor(menu), x, y, 0, 0, blit.width(), blit.height(),
+            graphics.blit(RenderPipelines.GUI_TEXTURED, textureFor(menu, autoIOPage), x, y, 0, 0, blit.width(), blit.height(),
                     blit.sourceWidth(), blit.sourceHeight());
         }
 
@@ -295,7 +309,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     }
 
     private boolean isAutoIOPortSlot(Slot slot, int slotIdx) {
-        return autoIOPage && menu instanceof ItemBusMenu && slot != null && isPortSlotIndex(slotIdx, portSlotCount());
+        return hidesSlotOnAutoIOPage(menu, autoIOPage, slot, slotIdx, portSlotCount());
     }
 
     private void initAutoIOButtons() {
@@ -304,16 +318,23 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
             updateAutoIOWidgets();
         }).bounds(leftPos + 4, topPos + 4, 20, 20).tooltip(Tooltip.create(Component.translatable("mmcr.auto_io.control"))).build());
 
-        autoIOToggleButton = addRenderableWidget(Button.builder(autoIOToggleLabel(), button ->
-                ClientPacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), AutoIOAction.TOGGLE_ENABLED, null)))
+        autoIOToggleButton = addRenderableWidget(Button.builder(autoIOToggleLabel(), button -> {
+            IOPortBlockEntity port = portEntity();
+            boolean enabled = port == null || !port.autoIOConfig().enabled();
+            ClientPacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), AutoIOAction.SET_ENABLED, null, enabled));
+        })
                 .bounds(leftPos + 53, topPos + imageHeight - 72, 70, 20).build());
 
         for (int y = 0; y < 3; y++) {
             for (int x = 0; x < 3; x++) {
                 Direction side = autoIODirectionAt(x, y);
                 if (side == null) continue;
-                Button button = addRenderableWidget(new AutoIOSideButton(leftPos + 56 + x * 24, topPos + 28 + y * 24,
-                        clicked -> ClientPacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), AutoIOAction.TOGGLE_SIDE, side)),
+                Button button = addRenderableWidget(new AutoIOSideButton(leftPos + 8, topPos + AUTO_IO_SIDE_ROW_Y + side.ordinal() * AUTO_IO_SIDE_ROW_H,
+                        clicked -> {
+                            IOPortBlockEntity port = portEntity();
+                            boolean enabled = port == null || !port.autoIOConfig().isSideEnabled(side);
+                            ClientPacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), AutoIOAction.SET_SIDE, side, enabled));
+                        },
                         () -> portEntity() != null && portEntity().autoIOConfig().isSideEnabled(side)));
                 autoIOSideButtons.put(side, button);
             }
@@ -370,6 +391,23 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
                 Component.translatable(enabled ? "mmcr.auto_io.enabled" : "mmcr.auto_io.disabled"));
     }
 
+    static Component autoIOSideLine(Direction side, Component blockName) {
+        return Component.translatable("mmcr.auto_io.side_block",
+                Component.translatable("mmcr.direction." + side.name().toLowerCase(Locale.ROOT)), blockName);
+    }
+
+    private void renderAutoIOSideRows(GuiGraphicsExtractor g, int x, int y) {
+        IOPortBlockEntity port = portEntity();
+        int row = 0;
+        for (Direction side : Direction.values()) {
+            IOPortBlockEntity.AdjacentSide adjacent = port == null ? null : port.adjacentSide(side);
+            Component blockName = adjacent == null ? Component.translatable("block.minecraft.air") : adjacent.name();
+            int rowY = y + AUTO_IO_SIDE_ROW_Y + row * AUTO_IO_SIDE_ROW_H;
+            g.text(font, autoIOSideLine(side, blockName), x + AUTO_IO_SIDE_TEXT_X, rowY, TITLE_COLOR, false);
+            row++;
+        }
+    }
+
     /**
      * 一个分段的 item bus 背景贴图指令。源区域(sourceY, height)必须在 {@link #GUI_TEXTURE_SIZE} 范围内,
      * 因为 {@code inventory_normal.png} 高度为 {@value #GUI_TEXTURE_SIZE}px。
@@ -408,6 +446,11 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     static final int SLOT_SIZE = 18;
 
     private static Identifier textureFor(AbstractContainerMenu menu) {
+        return textureFor(menu, false);
+    }
+
+    static Identifier textureFor(AbstractContainerMenu menu, boolean autoIOPage) {
+        if (autoIOPage && menu instanceof ItemBusMenu) return SMART_INTERFACE_TEXTURE;
         if (menu instanceof ItemBusMenu itemBus)     return MMCR.id(itemBus.texturePath());
         if (menu instanceof FluidHatchMenu)         return TANK_TEXTURE;
         if (menu instanceof EnergyHatchMenu)        return TANK_TEXTURE;
