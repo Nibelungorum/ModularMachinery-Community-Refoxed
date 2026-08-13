@@ -157,8 +157,9 @@ public class MachineControllerBlock extends Block implements EntityBlock {
                 && player.getOffhandItem().isEmpty()
                 && level.getBlockEntity(pos) instanceof MachineControllerBlockEntity controller
                 && !controller.isFormed()
-                && player instanceof ServerPlayer serverPlayer
-                && controller.diagnoseFirstStructureMismatch(serverPlayer)) {
+                && player instanceof ServerPlayer serverPlayer) {
+            controller.sendStructurePreview(serverPlayer);
+            controller.diagnoseFirstStructureMismatch(serverPlayer);
             return InteractionResult.SUCCESS;
         }
 
