@@ -659,6 +659,16 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         return Optional.empty();
     }
 
+    public Optional<Machine> boundMachine() {
+        if (machine == null) bindDefaultMachine();
+        return Optional.ofNullable(machine);
+    }
+
+    public List<BlockArray> assemblyCandidatePatterns(Machine candidate) {
+        Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
+        return candidatePatterns(candidate, facing);
+    }
+
     public boolean sendStructurePreview(ServerPlayer player) {
         Optional<MultiblockPreviewSnapshot> snapshot = createStructurePreviewSnapshot(PktMultiblockPreviewPayload.MAX_ENTRIES);
         if (snapshot.isEmpty()) return false;
