@@ -3,6 +3,7 @@ package cn.howxu.mmcr.registry;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.item.InterfaceBlockItem;
 import cn.howxu.mmcr.internal.item.MultiblockDetectorItem;
+import cn.howxu.mmcr.internal.item.TerminalItem;
 import cn.howxu.mmcr.internal.item.ThreadDisperserItem;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -24,6 +25,9 @@ public final class ModItems {
 
     public static final DeferredHolder<Item, Item> THREAD_DISPERSER =
             REGISTER.register("thread_disperser", ThreadDisperserItem::new);
+
+    public static final DeferredHolder<Item, Item> TERMINAL =
+            REGISTER.register("terminal", TerminalItem::new);
 
     public static final LinkedHashMap<String, DeferredHolder<Item, Item>> ITEMS = new LinkedHashMap<>();
     private static Map<Item, Identifier> controllerMachineIds = Map.of();
@@ -47,6 +51,7 @@ public final class ModItems {
         });
         ITEMS.put("multiblock_detector", MULTIBLOCK_DETECTOR);
         ITEMS.put("thread_disperser", THREAD_DISPERSER);
+        ITEMS.put("terminal", TERMINAL);
     }
 
     public static Identifier machineIdForControllerItem(Item item) {

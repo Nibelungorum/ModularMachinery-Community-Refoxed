@@ -56,6 +56,7 @@ class ModelGenTest {
         assertThat(Files.exists(root.resolve("blockstates/factory_scheduler.json"))).isFalse();
         assertThat(Files.exists(root.resolve("models/block/factory_scheduler.json"))).isFalse();
         assertThat(Files.exists(root.resolve("models/item/factory_scheduler.json"))).isFalse();
+        assertThat(ModelGen.collectKnownItemNames()).contains("terminal");
         assertThat(Files.exists(root.resolve("models/item/thread_disperser.json"))).isTrue();
         assertThat(Files.exists(root.resolve("textures/block/overlay_factory_controller.png"))).isTrue();
         assertThat(Files.exists(root.resolve("textures/item/thread_disperser.png"))).isTrue();
