@@ -41,9 +41,9 @@ class IOPortSizeTest {
         FluidHatchBlockEntity normal = fluidHatch("fluid_input_hatch");
         FluidHatchBlockEntity vacuum = fluidHatch("fluid_output_hatch_vacuum");
 
-        assertThat(tank(tiny).getCapacity()).isEqualTo(100);
-        assertThat(tank(normal).getCapacity()).isEqualTo(1000);
-        assertThat(tank(vacuum).getCapacity()).isEqualTo(32000);
+        assertThat(tank(tiny).getCapacity()).isEqualTo(8000);
+        assertThat(tank(normal).getCapacity()).isEqualTo(16000);
+        assertThat(tank(vacuum).getCapacity()).isEqualTo(Integer.MAX_VALUE);
     }
 
     @Test
@@ -52,16 +52,16 @@ class IOPortSizeTest {
         EnergyHatchBlockEntity normal = energyHatch("energy_input_hatch");
         EnergyHatchBlockEntity ultimate = energyHatch("energy_output_hatch_ultimate");
 
-        assertThat(storage(tiny).getMaxEnergyStored()).isEqualTo(2048);
-        assertThat(storage(normal).getMaxEnergyStored()).isEqualTo(8192);
-        assertThat(storage(ultimate).getMaxEnergyStored()).isEqualTo(2097152);
+        assertThat(storage(tiny).getMaxEnergyStored()).isEqualTo(400000);
+        assertThat(storage(normal).getMaxEnergyStored()).isEqualTo(1600000);
+        assertThat(storage(ultimate).getMaxEnergyStored()).isEqualTo(Integer.MAX_VALUE);
     }
 
     @Test
     void energyHatchClampsLoadedEnergyToCapacity() {
         EnergyHatchBlockEntity hatch = energyHatch("energy_input_hatch");
-        storage(hatch).receiveEnergy(8192, false);
-        setEnergy(storage(hatch), 100000);
+        storage(hatch).receiveEnergy(1600000, false);
+        setEnergy(storage(hatch), 2000000);
 
         assertThat(hatch.getEnergyStorage(null).getEnergyStored()).isEqualTo(storage(hatch).getMaxEnergyStored());
     }
@@ -69,27 +69,36 @@ class IOPortSizeTest {
     @Test
     void energyHatchDoesNotExtractMoreThanCapacityWhenOverfilled() {
         EnergyHatchBlockEntity hatch = energyHatch("energy_output_hatch");
-        storage(hatch).receiveEnergy(8192, false);
-        setEnergy(storage(hatch), 100000);
+        storage(hatch).receiveEnergy(1600000, false);
+        setEnergy(storage(hatch), 2000000);
 
-        assertThat(hatch.getEnergyStorage(null).extractEnergy(20000, true)).isEqualTo(storage(hatch).getMaxEnergyStored());
+        assertThat(hatch.getEnergyStorage(null).extractEnergy(20000, true)).isEqualTo(20000);
     }
 
     @Test
     void energyHatchExtractsTransferLimitWhenNormallyFilled() {
         EnergyHatchBlockEntity hatch = energyHatch("energy_output_hatch");
-        storage(hatch).receiveEnergy(8192, false);
+        storage(hatch).receiveEnergy(1600000, false);
 
-        assertThat(hatch.getEnergyStorage(null).extractEnergy(20000, true)).isEqualTo(512);
+        assertThat(hatch.getEnergyStorage(null).extractEnergy(20000, true)).isEqualTo(1600);
     }
 
     @Test
     void fluidHatchReportsNoMoreFluidThanCapacityWhenOverfilled() {
         FluidHatchBlockEntity hatch = fluidHatch("fluid_input_hatch");
         tank(hatch).fill(new FluidStack(net.minecraft.world.level.material.Fluids.WATER, 1000), FluidTank.FluidAction.EXECUTE);
-        setFluidAmount(tank(hatch), 8000);
+        setFluidAmount(tank(hatch), 20000);
 
         assertThat(hatch.getFluidHandler(null).getFluidInTank(0).getAmount()).isEqualTo(tank(hatch).getCapacity());
+    }
+
+    @Test
+    void fluidHatchLimitsFillAndDrainToTransferRate() {
+        FluidHatchBlockEntity hatch = fluidHatch("fluid_input_hatch");
+
+        assertThat(tank(hatch).fill(new FluidStack(net.minecraft.world.level.material.Fluids.WATER, 2000),
+                FluidTank.FluidAction.EXECUTE)).isEqualTo(400);
+        assertThat(tank(hatch).drain(2000, FluidTank.FluidAction.SIMULATE).getAmount()).isEqualTo(400);
     }
 
     private static ItemBusBlockEntity itemBus(String id) {

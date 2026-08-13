@@ -12,7 +12,6 @@ import cn.howxu.mmcr.registry.ModItems;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
@@ -30,7 +29,7 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-public class FactorySchedulerBlockEntity extends BlockEntity {
+public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
 
     private static final int THREAD_LIMIT_SYNC_INTERVAL = 40;
 

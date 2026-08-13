@@ -11,6 +11,7 @@ import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.Map;
 
 /**
@@ -27,6 +28,7 @@ public record PktControllerSpecsPayload(Map<Identifier, MachineControllerSpec> s
             ByteBufCodecs.BOOL, MachineControllerSpec::allowVerticalFacing,
             ByteBufCodecs.BOOL, MachineControllerSpec::fullyRotationallySymmetric,
             ByteBufCodecs.BOOL, MachineControllerSpec::requireVerticalFacing,
+            ByteBufCodecs.collection(ArrayList::new, ByteBufCodecs.STRING_UTF8), MachineControllerSpec::tooltip,
             MachineControllerSpec::new);
 
     public static final Type<PktControllerSpecsPayload> TYPE = new Type<>(MMCR.id("controller_specs"));

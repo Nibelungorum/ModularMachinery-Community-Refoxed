@@ -54,7 +54,6 @@ public final class ModelGen extends ModelProvider {
 
     static List<String> collectKnownItemNames() {
         List<String> names = new ArrayList<>(collectKnownBlockNames());
-        names.add("wrench");
         names.add("multiblock_detector");
         return List.copyOf(names);
     }
@@ -66,7 +65,6 @@ public final class ModelGen extends ModelProvider {
                 blockRegistration.register(blockHolder::get, name);
             }
         });
-        itemRegistration.register(ModItems.WRENCH::get, "wrench");
         itemRegistration.register(ModItems.MULTIBLOCK_DETECTOR::get, "multiblock_detector");
     }
 

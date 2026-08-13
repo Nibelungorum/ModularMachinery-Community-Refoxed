@@ -126,6 +126,16 @@ class MachineBuilderJSTest {
     }
 
     @Test
+    void startup_builder_sets_controller_tooltip_lines() {
+        var registration = new MachineBuilderJS(MMCR.id("arc_furnace"))
+                .controllerTooltip("tooltip.mmcr.arc_furnace.0", "tooltip.mmcr.arc_furnace.1")
+                .createObject();
+
+        assertThat(registration.controllerSpec().tooltip())
+                .containsExactly("tooltip.mmcr.arc_furnace.0", "tooltip.mmcr.arc_furnace.1");
+    }
+
+    @Test
     void startup_builder_sets_concurrency_capabilities() {
         var registration = new MachineBuilderJS(MMCR.id("concurrent_press"))
                 .allowMultithreading()

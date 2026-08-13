@@ -6,21 +6,23 @@ package cn.howxu.mmcr.internal.port;
  * @author howxu <dev@howxu.cn>
  */
 public enum FluidHatchSize {
-    TINY("tiny", 100),
-    SMALL("small", 400),
-    NORMAL("normal", 1000),
-    REINFORCED("reinforced", 2000),
-    BIG("big", 4500),
-    HUGE("huge", 8000),
-    LUDICROUS("ludicrous", 16000),
-    VACUUM("vacuum", 32000);
+    TINY("tiny", 8000, 100),
+    SMALL("small", 12000, 200),
+    NORMAL("normal", 16000, 400),
+    REINFORCED("reinforced", 32000, 1000),
+    BIG("big", 64000, 2400),
+    HUGE("huge", 128000, 3200),
+    LUDICROUS("ludicrous", 512000, 6400),
+    VACUUM("vacuum", Integer.MAX_VALUE, 40000);
 
     private final String id;
     private final int capacity;
+    private final int transfer;
 
-    FluidHatchSize(String id, int capacity) {
+    FluidHatchSize(String id, int capacity, int transfer) {
         this.id = id;
         this.capacity = capacity;
+        this.transfer = transfer;
     }
 
     public String id() {
@@ -29,5 +31,9 @@ public enum FluidHatchSize {
 
     public int capacity() {
         return capacity;
+    }
+
+    public int transfer() {
+        return transfer;
     }
 }

@@ -1,7 +1,6 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
-import cn.howxu.mmcr.internal.tile.InfiniteEnergyHandler;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
@@ -11,6 +10,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 import net.neoforged.neoforge.transfer.energy.EnergyHandlerUtil;
+import net.neoforged.neoforge.transfer.energy.InfiniteEnergyHandler;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 public class EnergyHatchCapabilityGameTest {

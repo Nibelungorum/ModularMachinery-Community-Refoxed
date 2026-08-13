@@ -41,6 +41,7 @@ import cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.recipe.RecipeStartDelay;
 import cn.howxu.mmcr.registry.ModBlockEntities;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
@@ -626,6 +627,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 return true;
             }
         }
+        if (lastFormationFailure != null) {
+            sendFormationFailureDiagnostic(player, lastFormationFailure);
+            return true;
+        }
         return false;
     }
 
@@ -633,36 +638,42 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         BlockPos pos = mismatch.worldPos();
         player.sendSystemMessage(Component.translatable(
                 "message.mmcr.multiblock_mismatch",
-                pos.getX() + ", " + pos.getY() + ", " + pos.getZ(),
+                styledPosition(pos),
                 describeExpected(mismatch.expected()),
-                mismatch.actualState().getBlock().getName()));
+                mismatch.actualState().getBlock().getName().copy().withStyle(ChatFormatting.RED)));
         PacketDistributor.sendToPlayer(player, new PktMultiblockMismatchHighlightPayload(level.dimension(), pos));
     }
 
+    private void sendFormationFailureDiagnostic(ServerPlayer player, PortRequirementSpec.Failure failure) {
+        player.sendSystemMessage(Component.translatable(
+                "message.mmcr.multiblock_requirement_mismatch",
+                Component.literal(failure.portId()).withStyle(ChatFormatting.GREEN),
+                Component.literal(Integer.toString(failure.actual())).withStyle(ChatFormatting.RED),
+                Component.literal(Integer.toString(failure.requiredMin())).withStyle(ChatFormatting.GREEN),
+                Component.literal(failure.requiredMax().isPresent() ? Integer.toString(failure.requiredMax().getAsInt()) : "unbounded")
+                        .withStyle(ChatFormatting.GREEN),
+                Component.literal(failure.reason().name()).withStyle(ChatFormatting.RED)));
+    }
+
     private static Component describeExpected(BlockPredicate expected) {
+        return rawExpectedDescription(expected).copy().withStyle(ChatFormatting.GREEN);
+    }
+
+    private static Component rawExpectedDescription(BlockPredicate expected) {
         return switch (expected) {
             case BlockPredicate.OfBlock ofBlock -> ofBlock.block().getName();
             case BlockPredicate.OfBlockState ofState -> ofState.state().getBlock().getName();
             case BlockPredicate.OfTag ofTag -> Component.literal("#" + ofTag.tag().location());
-            case BlockPredicate.AnyOf anyOf -> Component.literal(anyOf.children().stream()
-                    .map(MachineControllerBlockEntity::expectedText)
-                    .distinct()
-                    .limit(4)
-                    .collect(java.util.stream.Collectors.joining(" / ")));
+            case BlockPredicate.AnyOf anyOf -> anyOf.children().isEmpty()
+                    ? Component.literal("<empty>")
+                    : rawExpectedDescription(anyOf.children().getFirst());
             case BlockPredicate.Air ignored -> Component.translatable("block.minecraft.air");
             case BlockPredicate.Any ignored -> Component.literal("any block");
         };
     }
 
-    private static String expectedText(BlockPredicate expected) {
-        return switch (expected) {
-            case BlockPredicate.OfBlock ofBlock -> ofBlock.block().getName().getString();
-            case BlockPredicate.OfBlockState ofState -> ofState.state().getBlock().getName().getString();
-            case BlockPredicate.OfTag ofTag -> "#" + ofTag.tag().location();
-            case BlockPredicate.Air ignored -> Component.translatable("block.minecraft.air").getString();
-            case BlockPredicate.Any ignored -> "any block";
-            case BlockPredicate.AnyOf ignored -> expected.toString();
-        };
+    private static Component styledPosition(BlockPos pos) {
+        return Component.literal(pos.getX() + ", " + pos.getY() + ", " + pos.getZ()).withStyle(ChatFormatting.GREEN);
     }
 
     private List<BlockArray> candidatePatterns(Machine candidate, Direction facing) {
@@ -795,11 +806,25 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 + " reason=unknownMismatch";
     }
 
+    static String formationFailureDiagnostic(Machine candidate, Direction facing, BlockPos ctrlPos,
+                                             PortRequirementSpec.Failure failure) {
+        return "machine=" + candidate.registryName()
+                + " facing=" + facing.name()
+                + " controllerPos=" + ctrlPos
+                + " reason=portRequirementMismatch"
+                + " portId=" + failure.portId()
+                + " actual=" + failure.actual()
+                + " requiredMin=" + failure.requiredMin()
+                + " requiredMax=" + (failure.requiredMax().isPresent() ? failure.requiredMax().getAsInt() : "unbounded")
+                + " failureReason=" + failure.reason();
+    }
+
     private void recordFormationFailure(Machine candidate, PortRequirementSpec.Failure failure) {
         if (failure.equals(lastFormationFailure)) return;
         lastFormationFailure = failure;
-        lastStructureMismatchDiagnostic = null;
-        String max = failure.requiredMax().isPresent() ? Integer.toString(failure.requiredMax().getAsInt()) : "unbounded";
+        String diagnostic = formationFailureDiagnostic(candidate,
+                getBlockState().getValue(MachineControllerBlock.FACING), getBlockPos(), failure);
+        lastStructureMismatchDiagnostic = diagnostic;
     }
 
     private StructureMatcher.LevelResolution resolveLevels(Machine candidate, Direction facing) {
@@ -933,6 +958,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 continue;
             }
             if (level.getBlockEntity(worldPos) instanceof FactorySchedulerBlockEntity scheduler) {
+                scheduler.linkControllerAppearance(getBlockPos(), foundMachine.appearance().formedPortBaseTexture());
+                linkedPortPositions().add(worldPos.immutable());
                 components.add(new ProcessingComponent(null, scheduler, worldPos, relativePos, foundPattern.tagsAt(relativePos), null));
                 continue;
             }

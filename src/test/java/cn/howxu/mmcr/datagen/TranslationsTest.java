@@ -38,27 +38,27 @@ class TranslationsTest {
 
     private static String enDisplayName(ParallelTier tier) {
         return switch (tier) {
-            case NORMAL -> "Normal Parallel Controller 4x";
-            case PLUS -> "Plus Parallel Controller 16x";
-            case REINFORCED -> "Reinforced Parallel Controller 64x";
-            case PRO -> "Pro Parallel Controller 256x";
-            case ELITE -> "Elite Parallel Controller 1024x";
-            case FANTASY -> "Fantasy Parallel Controller 4096x";
-            case MAX -> "Max Parallel Controller 16384x";
-            case ULTIMATE -> "Ultimate Parallel Controller 2147483647x";
+            case NORMAL -> "Normal Parallel Controller";
+            case PLUS -> "Plus Parallel Controller";
+            case REINFORCED -> "Reinforced Parallel Controller";
+            case PRO -> "Pro Parallel Controller";
+            case ELITE -> "Elite Parallel Controller";
+            case FANTASY -> "Fantasy Parallel Controller";
+            case MAX -> "Max Parallel Controller";
+            case ULTIMATE -> "Ultimate Parallel Controller";
         };
     }
 
     private static String zhDisplayName(ParallelTier tier) {
         return switch (tier) {
-            case NORMAL -> "普通并行器 4x";
-            case PLUS -> "进阶并行器 16x";
-            case REINFORCED -> "强化并行器 64x";
-            case PRO -> "专业并行器 256x";
-            case ELITE -> "精英并行器 1024x";
-            case FANTASY -> "幻想并行器 4096x";
-            case MAX -> "极限并行器 16384x";
-            case ULTIMATE -> "终极并行器 2147483647x";
+            case NORMAL -> "普通并行器";
+            case PLUS -> "进阶并行器";
+            case REINFORCED -> "强化并行器";
+            case PRO -> "专业并行器";
+            case ELITE -> "精英并行器";
+            case FANTASY -> "幻想并行器";
+            case MAX -> "极限并行器";
+            case ULTIMATE -> "终极并行器";
         };
     }
 
@@ -67,10 +67,12 @@ class TranslationsTest {
         assertEquals("Factory Controller", Translations.ALL.get("en_us").get("block.mmcr.factory_controller"));
         assertEquals("Factory Controller", Translations.ALL.get("en_us").get("item.mmcr.factory_controller"));
         assertEquals("Thread Disperser", Translations.ALL.get("en_us").get("item.mmcr.thread_disperser"));
+        assertEquals("Enables multithreaded recipes", Translations.ALL.get("en_us").get("tooltip.mmcr.thread_disperser.multithreading"));
         assertEquals("Factory Controller", Translations.ALL.get("en_us").get("container.mmcr.factory_controller"));
         assertEquals("工厂控制器", Translations.ALL.get("zh_cn").get("block.mmcr.factory_controller"));
         assertEquals("工厂控制器", Translations.ALL.get("zh_cn").get("item.mmcr.factory_controller"));
         assertEquals("线程分散器", Translations.ALL.get("zh_cn").get("item.mmcr.thread_disperser"));
+        assertEquals("提供多线程能力", Translations.ALL.get("zh_cn").get("tooltip.mmcr.thread_disperser.multithreading"));
         assertEquals("工厂控制器", Translations.ALL.get("zh_cn").get("container.mmcr.factory_controller"));
     }
 
@@ -127,5 +129,27 @@ class TranslationsTest {
                 "mmcr.smart_interface.invalid_number",
                 "jei.mmcr.smart_interface.requirement.input",
                 "jei.mmcr.smart_interface.requirement.output");
+    }
+
+    @Test
+    void translations_include_interface_tooltip_labels() {
+        assertThat(Translations.ALL.get("en_us")).containsEntry("tooltip.mmcr.interface.capacity", "Capacity: %s")
+                .containsEntry("tooltip.mmcr.interface.capacity_with_unit", "Capacity: %s%s")
+                .containsEntry("tooltip.mmcr.interface.capacity_label", "Capacity: ")
+                .containsEntry("tooltip.mmcr.interface.rate", "Rate: %s")
+                .containsEntry("tooltip.mmcr.interface.rate_label", "Rate: ")
+                .containsEntry("tooltip.mmcr.interface.parallel", "Parallel: %s")
+                .containsEntry("tooltip.mmcr.interface.unit.slots", " slots")
+                .containsEntry("tooltip.mmcr.factory_controller.multithreading", "Enables multithreaded factory scheduling")
+                .containsEntry("tooltip.mmcr.thread_disperser.multithreading", "Enables multithreaded recipes");
+        assertThat(Translations.ALL.get("zh_cn")).containsEntry("tooltip.mmcr.interface.capacity", "容量: %s")
+                .containsEntry("tooltip.mmcr.interface.capacity_with_unit", "容量: %s%s")
+                .containsEntry("tooltip.mmcr.interface.capacity_label", "容量: ")
+                .containsEntry("tooltip.mmcr.interface.rate", "速率: %s")
+                .containsEntry("tooltip.mmcr.interface.rate_label", "速率: ")
+                .containsEntry("tooltip.mmcr.interface.parallel", "并行: %s")
+                .containsEntry("tooltip.mmcr.interface.unit.slots", "格")
+                .containsEntry("tooltip.mmcr.factory_controller.multithreading", "提供工厂多线程调度能力")
+                .containsEntry("tooltip.mmcr.thread_disperser.multithreading", "提供多线程能力");
     }
 }

@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -22,6 +23,7 @@ class MachineControllerSpecTest {
         assertThat(spec.allowVerticalFacing()).isFalse();
         assertThat(spec.fullyRotationallySymmetric()).isFalse();
         assertThat(spec.requireVerticalFacing()).isFalse();
+        assertThat(spec.tooltip()).isEmpty();
     }
 
     @Test
@@ -74,5 +76,16 @@ class MachineControllerSpecTest {
         MachineControllerSpec spec = new MachineControllerSpec(id, texture, texture, texture, texture, true, true, true);
 
         assertThat(spec.requireVerticalFacing()).isTrue();
+    }
+
+    @Test
+    void spec_can_store_controller_tooltip_lines() {
+        Identifier id = MMCR.id("cracker_controller");
+        Identifier texture = MMCR.id("block/basic_controller");
+
+        MachineControllerSpec spec = new MachineControllerSpec(id, texture, texture, texture, texture,
+                false, false, false, List.of("tooltip.mmcr.cracker.0", "tooltip.mmcr.cracker.1"));
+
+        assertThat(spec.tooltip()).containsExactly("tooltip.mmcr.cracker.0", "tooltip.mmcr.cracker.1");
     }
 }

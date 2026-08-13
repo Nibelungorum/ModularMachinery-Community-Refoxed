@@ -4,7 +4,6 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
-import cn.howxu.mmcr.internal.block.DebugSourceBlock;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineCasingBlock;
@@ -12,13 +11,9 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
-import cn.howxu.mmcr.internal.tile.DebugInfiniteEnergySourceBlockEntity;
-import cn.howxu.mmcr.internal.tile.DebugInfiniteFluidSourceBlockEntity;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
-import net.minecraft.world.level.material.Fluid;
-import net.minecraft.world.level.material.Fluids;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -39,9 +34,6 @@ public final class ModBlocks {
         for (ParallelTier tier : ParallelTier.values()) registerParallelController(tier);
         registerFactoryController();
         registerSmartInterface();
-        registerDebugSource("debug_infinite_energy_source", null);
-        registerDebugSource("debug_infinite_water_source", Fluids.WATER);
-        registerDebugSource("debug_infinite_lava_source", Fluids.LAVA);
     }
 
     public static final DeferredHolder<Block, Block> BLAST_FURNACE_CONTROLLER = controllerFor(MMCR.id("blast_furnace"));
@@ -109,14 +101,6 @@ public final class ModBlocks {
         Supplier<? extends BlockEntityType<?>> beTypeSupplier = () -> ModBlockEntities.SMART_INTERFACE.get();
         BLOCKS.put(name, REGISTER.registerBlock(name,
                 properties -> new SmartInterfaceBlock(beTypeSupplier, properties)));
-    }
-
-    private static void registerDebugSource(String name, Fluid fluid) {
-        BLOCKS.put(name, REGISTER.registerBlock(name,
-                properties -> new DebugSourceBlock((pos, state) -> {
-                    if (fluid == null) return new DebugInfiniteEnergySourceBlockEntity(pos, state);
-                    return new DebugInfiniteFluidSourceBlockEntity(pos, state, fluid);
-                }, properties)));
     }
 
     public static void register(IEventBus bus) {

@@ -1,11 +1,9 @@
 package cn.howxu.mmcr.internal.event;
 
 import cn.howxu.mmcr.internal.port.IOPortKind;
-import cn.howxu.mmcr.internal.tile.DebugInfiniteFluidSourceBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
-import cn.howxu.mmcr.internal.tile.InfiniteEnergyHandler;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.PortKinds;
@@ -19,7 +17,6 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
 import net.neoforged.neoforge.items.ItemStackHandler;
-import net.neoforged.neoforge.transfer.InfiniteResourceHandler;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.TransferPreconditions;
 import net.neoforged.neoforge.transfer.energy.EnergyHandler;
@@ -52,22 +49,6 @@ public final class ModCapabilities {
                 ModBlockEntities.BES.get("factory_controller").get(),
                 (be, side) -> be instanceof FactorySchedulerBlockEntity scheduler
                         ? new LegacyItemHandlerAdapter(scheduler.getItemStackHandler(side), true, true)
-                        : null);
-        event.registerBlockEntity(
-                ENERGY_BLOCK,
-                ModBlockEntities.BES.get("debug_infinite_energy_source").get(),
-                (be, side) -> InfiniteEnergyHandler.INSTANCE);
-        event.registerBlockEntity(
-                FLUID_BLOCK,
-                ModBlockEntities.BES.get("debug_infinite_water_source").get(),
-                (be, side) -> be instanceof DebugInfiniteFluidSourceBlockEntity fs
-                        ? new InfiniteResourceHandler<>(FluidResource.of(fs.getFluid()))
-                        : null);
-        event.registerBlockEntity(
-                FLUID_BLOCK,
-                ModBlockEntities.BES.get("debug_infinite_lava_source").get(),
-                (be, side) -> be instanceof DebugInfiniteFluidSourceBlockEntity fs
-                        ? new InfiniteResourceHandler<>(FluidResource.of(fs.getFluid()))
                         : null);
     }
 

@@ -21,6 +21,9 @@ dependencies {
 
     runtimeOnly "curse.maven:athena-841890:7970442"
     runtimeOnly "curse.maven:geckolib-388172:8327201"
+
+    // spark
+    runtimeOnly "curse.maven:spark-361579:8275631"
     // Oritech
     runtimeOnly "curse.maven:oritech-1030830:8571095"
     // pipez 1.2.31+26.1.2

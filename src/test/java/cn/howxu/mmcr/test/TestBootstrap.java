@@ -93,9 +93,6 @@ public final class TestBootstrap {
         for (ParallelTier tier : ParallelTier.values()) bindParallelController(tier);
         bindFactoryController();
         bindSmartInterface();
-        bind(ModBlocks.BLOCKS.get("debug_infinite_energy_source"), Blocks.STONE);
-        bind(ModBlocks.BLOCKS.get("debug_infinite_water_source"), Blocks.STONE);
-        bind(ModBlocks.BLOCKS.get("debug_infinite_lava_source"), Blocks.STONE);
         bind(ModItems.THREAD_DISPERSER, registerItem(ModItems.THREAD_DISPERSER));
         MachineLevelRegistry.beginRegistration();
         DefaultMachineLevels.register();

@@ -32,16 +32,19 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.client.model.MachineModelDataKeys;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.ProblemReporter;
@@ -302,6 +305,32 @@ class MachineControllerBlockEntityTest {
                 onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("factory_controller").get()));
         setField(MachineControllerBlockEntity.class, controller, "machine", nonFactoryMachine);
         assertThat(controller.getFactoryController()).isNull();
+    }
+
+    @Test
+    void formed_factory_controller_exposes_formed_base_texture_to_dynamic_model_data() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        Identifier formedTexture = Identifier.parse("kubejs:block/formed_factory_casing");
+        var factoryMachine = new DynamicMachine(
+                MMCR.id("formed_factory_appearance_machine"),
+                "Formed Factory Appearance",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("factory_controller").get()),
+                MachineControllerSpec.defaultsFor(MMCR.id("formed_factory_appearance_machine")),
+                new MachineAppearanceSpec(MMCR.id("basic_casing"), MMCR.id("block/basic_casing"), formedTexture),
+                PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(),
+                List.of(),
+                Map.of(),
+                1,
+                false,
+                true,
+                4);
+        FactorySchedulerBlockEntity factory = factoryController(controllerPos.offset(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerForFactoryFormation(factoryMachine, controllerPos, factory);
+
+        assertThat(invokeTryFormMachine(controller, factoryMachine, Direction.SOUTH)).isTrue();
+
+        assertThat(factory.getModelData().get(MachineModelDataKeys.PORT_BASE_TEXTURE)).isEqualTo(formedTexture);
     }
 
     @Test
@@ -1237,6 +1266,37 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.getComponents()).isEmpty();
         assertThat(controller.getLastFormationFailure()).isNotNull();
         assertThat(controller.getLastFormationFailure().portId()).isEqualTo(PortKinds.ENERGY_INPUT.id());
+    }
+
+    @Test
+    void expected_description_for_anyof_uses_first_child_only_and_colors_it() throws Exception {
+        Method describeExpected = MachineControllerBlockEntity.class.getDeclaredMethod("describeExpected", BlockPredicate.class);
+        describeExpected.setAccessible(true);
+        Component description = (Component) describeExpected.invoke(null, new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(Blocks.STONE),
+                new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))));
+
+        assertThat(description.getString()).isEqualTo(Blocks.STONE.getName().getString());
+        assertThat(description.getStyle().getColor().getValue()).isEqualTo(ChatFormatting.GREEN.getColor());
+    }
+
+    @Test
+    void port_requirement_failure_diagnostic_has_distinct_reason() {
+        DynamicMachine machine = new DynamicMachine(MMCR.id("port_failure_diagnostic_machine"), "Port Failure", new BlockArray(Map.of()));
+        var failure = new PortRequirementSpec.Failure(
+                PortKinds.ENERGY_INPUT.id(), 0, 1, java.util.OptionalInt.empty(), PortRequirementSpec.FailureReason.MISSING);
+
+        String diagnostic = MachineControllerBlockEntity.formationFailureDiagnostic(
+                machine, Direction.SOUTH, new BlockPos(10, 4, 10), failure);
+
+        assertThat(diagnostic)
+                .contains("machine=mmcr:port_failure_diagnostic_machine")
+                .contains("reason=portRequirementMismatch")
+                .contains("portId=" + PortKinds.ENERGY_INPUT.id())
+                .contains("actual=0")
+                .contains("requiredMin=1")
+                .contains("requiredMax=unbounded")
+                .contains("failureReason=MISSING");
     }
 
     @Test
@@ -2274,6 +2334,7 @@ class MachineControllerBlockEntityTest {
             setField(FactorySchedulerBlockEntity.class, entity, "threadLimit", 4);
             setField(FactorySchedulerBlockEntity.class, entity, "scheduler", new cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler(4));
             setField(FactorySchedulerBlockEntity.class, entity, "handler", threadDisperserHandler(dispersers));
+            initializeLinkedAppearance(entity);
             return entity;
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate factory controller", e);

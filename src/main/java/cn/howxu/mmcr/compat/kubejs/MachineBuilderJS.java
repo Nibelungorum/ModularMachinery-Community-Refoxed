@@ -32,6 +32,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient Identifier formedPortBaseTexture;
     public transient Identifier runningSoundId;
     public transient Identifier finishSoundId;
+    private final List<String> controllerTooltip = new ArrayList<>();
     private final List<SmartInterfaceType> smartInterfaceTypes = new ArrayList<>();
     private boolean shareSmartInterfaces;
     private final List<SmartInterfaceModifier> smartInterfaceModifiers = new ArrayList<>();
@@ -108,6 +109,14 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public MachineBuilderJS registerFinishSound(Identifier soundId) {
         this.finishSoundId = soundId;
         MachineSoundRegistry.requestRegistration(soundId);
+        return this;
+    }
+
+    public MachineBuilderJS controllerTooltip(String... lines) {
+        if (lines == null) return this;
+        for (String line : lines) {
+            if (line != null && !line.isBlank()) controllerTooltip.add(line);
+        }
         return this;
     }
 
@@ -382,7 +391,8 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 controllerBottomTexture != null ? controllerBottomTexture : defaults.bottomTexture(),
                 allowVerticalFacing,
                 fullyRotationallySymmetric,
-                requireVerticalFacing);
+                requireVerticalFacing,
+                controllerTooltip);
     }
 
     private MachineAppearanceSpec appearanceSpec() {

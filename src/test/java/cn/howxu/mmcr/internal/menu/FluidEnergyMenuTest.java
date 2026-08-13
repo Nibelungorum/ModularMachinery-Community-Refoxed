@@ -24,14 +24,14 @@ class FluidEnergyMenuTest {
 
     @Test
     void fluid_menu_surfaces_variant_capacity() {
-        assertThat(FluidHatchMenu.fluidCapacity(fluidHatch("fluid_input_hatch_tiny"))).isEqualTo(100);
-        assertThat(FluidHatchMenu.fluidCapacity(fluidHatch("fluid_output_hatch_vacuum"))).isEqualTo(32000);
+        assertThat(FluidHatchMenu.fluidCapacity(fluidHatch("fluid_input_hatch_tiny"))).isEqualTo(8000);
+        assertThat(FluidHatchMenu.fluidCapacity(fluidHatch("fluid_output_hatch_vacuum"))).isEqualTo(Integer.MAX_VALUE);
     }
 
     @Test
     void energy_menu_surfaces_variant_capacity() {
-        assertThat(EnergyHatchMenu.energyCapacity(energyHatch("energy_input_hatch_tiny"))).isEqualTo(2048);
-        assertThat(EnergyHatchMenu.energyCapacity(energyHatch("energy_output_hatch_ultimate"))).isEqualTo(2097152);
+        assertThat(EnergyHatchMenu.energyCapacity(energyHatch("energy_input_hatch_tiny"))).isEqualTo(400000);
+        assertThat(EnergyHatchMenu.energyCapacity(energyHatch("energy_output_hatch_ultimate"))).isEqualTo(Integer.MAX_VALUE);
     }
 
     private static FluidHatchBlockEntity fluidHatch(String id) {
