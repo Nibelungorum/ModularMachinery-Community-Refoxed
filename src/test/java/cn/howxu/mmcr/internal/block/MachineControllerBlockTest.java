@@ -39,8 +39,8 @@ class MachineControllerBlockTest {
     }
 
     @Test
-    void cracker_controller_definition_requires_vertical_placement() {
-        assertThat(cn.howxu.mmcr.api.machine.MachineDefinitions.getRegistration(MMCR.id("cracker")).controllerSpec().requireVerticalFacing()).isTrue();
+    void cracker_controller_definition_does_not_require_vertical_placement() {
+        assertThat(cn.howxu.mmcr.api.machine.MachineDefinitions.getRegistration(MMCR.id("cracker")).controllerSpec().requireVerticalFacing()).isFalse();
     }
 
     @Test

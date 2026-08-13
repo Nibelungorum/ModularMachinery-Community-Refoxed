@@ -1834,12 +1834,12 @@ class MachineControllerBlockEntityTest {
                 controllerPos,
                 Direction.UP,
                 Direction.SOUTH,
-                itemInputBus(controllerPos.offset(1, 0, 0)));
+                itemInputBus(controllerPos.offset(-1, 0, 0)));
 
         boolean formed = invokeTryFormMachine(controller, machine, Direction.UP);
 
         assertThat(formed).isTrue();
-        assertThat(controller.getFoundPattern().pattern()).containsKey(new BlockPos(1, 0, 0));
+        assertThat(controller.getFoundPattern().pattern()).containsKey(new BlockPos(-1, 0, 0));
     }
 
     @Test
@@ -1864,7 +1864,7 @@ class MachineControllerBlockEntityTest {
                 controllerPos,
                 Direction.UP,
                 Direction.NORTH,
-                itemInputBus(controllerPos.offset(1, 0, 0)));
+                itemInputBus(controllerPos.offset(-1, 0, 0)));
 
         boolean formed = invokeTryFormMachine(controller, machine, Direction.UP);
 
