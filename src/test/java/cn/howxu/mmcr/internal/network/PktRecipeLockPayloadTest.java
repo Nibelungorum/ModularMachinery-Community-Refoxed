@@ -30,4 +30,18 @@ class PktRecipeLockPayloadTest {
         assertThat(scheduler.toggleRecipeLock(999)).isFalse();
         assertThat(scheduler.allThreads().getFirst().isRecipeLocked()).isFalse();
     }
+
+    @Test
+    void machine_state_payload_preserves_the_complete_locked_recipe_id() {
+        PktMachineStatePayload payload = new PktMachineStatePayload(new BlockPos(1, 2, 3), "", true, false,
+                java.util.List.of(), true, "other_namespace:recipe_with_a_long_id");
+
+        assertThat(payload.lockedRecipeId()).isEqualTo("other_namespace:recipe_with_a_long_id");
+    }
+
+    @Test
+    void lock_state_change_is_not_suppressed_by_ordinary_state_deduplication() {
+        assertThat(PktMachineStatePayload.stateChanged(true, false, true,
+                "other_namespace:recipe_with_a_long_id", true, false, false, "")).isTrue();
+    }
 }

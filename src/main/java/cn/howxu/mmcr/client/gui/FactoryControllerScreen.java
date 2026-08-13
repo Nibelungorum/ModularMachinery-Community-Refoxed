@@ -46,7 +46,6 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     private int scrollOffset;
     private boolean draggingScrollbar;
     private int scrollbarDragOffsetY;
-    private Button lockButton;
 
     public FactoryControllerScreen(FactoryControllerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, IMAGE_WIDTH, IMAGE_HEIGHT);
@@ -59,7 +58,7 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     @Override
     protected void init() {
         super.init();
-        lockButton = addRenderableWidget(Button.builder(Component.translatable("gui.mmcr.controller.recipe_lock"),
+        addRenderableWidget(Button.builder(Component.translatable("gui.mmcr.controller.recipe_lock"),
                 button -> menu.requestRecipeLock()).bounds(leftPos + 113, topPos + 181, 159, 20).build());
     }
 

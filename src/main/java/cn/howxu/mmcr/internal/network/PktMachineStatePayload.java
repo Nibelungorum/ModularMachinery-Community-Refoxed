@@ -15,6 +15,13 @@ import java.util.List;
 public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean formed, boolean active,
                                      List<String> foundLevelIds, boolean recipeLocked, String lockedRecipeId) implements CustomPacketPayload {
 
+    public static boolean stateChanged(boolean formed, boolean active, boolean recipeLocked, String lockedRecipeId,
+                                       boolean lastFormed, boolean lastActive, boolean lastRecipeLocked,
+                                       String lastLockedRecipeId) {
+        return formed != lastFormed || active != lastActive || recipeLocked != lastRecipeLocked
+                || !lockedRecipeId.equals(lastLockedRecipeId);
+    }
+
     public PktMachineStatePayload(BlockPos pos, String recipeName, boolean formed, boolean active,
                                   List<String> foundLevelIds) {
         this(pos, recipeName, formed, active, foundLevelIds, false, "");
