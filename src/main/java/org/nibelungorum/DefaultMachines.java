@@ -268,15 +268,17 @@ public final class DefaultMachines {
                 new BlockPredicate.OfBlock(Blocks.WEATHERED_COPPER)));
 
         BlockArray pattern = BlockArray.builder()
-                .pattern("AAA", "XBX", "XBX", "XDX")
-                .pattern("AAA", "B B", "B B", "DED")
-                .pattern("AAA", "XBX", "XBX", "XDX")
+                .pattern("AAA", "AAA", "AAA")
+                .pattern("XBX", "B B", "XBX")
+                .pattern("XDX", "D D", "XDX")
+                .pattern("XEX", "ECE", "XEX")
                 .set('X', new BlockPredicate.OfBlock(Blocks.POLISHED_DIORITE))
                 .set('A', new BlockPredicate.OfBlock(Blocks.POLISHED_ANDESITE))
                 .set('B', port)
                 .set('D', new BlockPredicate.OfBlock(Blocks.BLUE_ICE))
-                .set('E', new BlockPredicate.OfBlock(controller))
-                .controller('E')
+                .set('E', new BlockPredicate.OfBlock(Blocks.WEATHERED_COPPER))
+                .set('C', new BlockPredicate.OfBlock(controller))
+                .controller('C')
                 .build();
 
         PortRequirementSpec portRequirements = PortRequirementSpec.none();
@@ -294,7 +296,7 @@ public final class DefaultMachines {
                 MachineControllerSpec.defaultsFor(CRACKER_ID).bottomTexture(),
                 true,
                 true,
-                true);
+                false);
         return new DynamicMachine(CRACKER_ID, "machine.mmcr.cracker", pattern, controllerSpec, portRequirements, tierRequirements, List.of(), Map.of());
     }
 
