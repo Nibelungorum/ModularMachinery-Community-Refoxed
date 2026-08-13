@@ -321,9 +321,19 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     }
 
     private boolean isOutputPort() {
-        return menu instanceof ItemBusMenu itemBus && itemBus.owner() != null && itemBus.owner().ioType() == IOType.OUTPUT
-                || menu instanceof FluidHatchMenu fluidHatch && fluidHatch.owner() != null && fluidHatch.owner().ioType() == IOType.OUTPUT
-                || menu instanceof EnergyHatchMenu energyHatch && energyHatch.owner() != null && energyHatch.owner().ioType() == IOType.OUTPUT;
+        IOPortBlockEntity port = portEntity();
+        return isOutputPort(port == null ? null : port.ioType(), ownerIOType());
+    }
+
+    static boolean isOutputPort(IOType resolvedIOType, IOType ownerIOType) {
+        return (resolvedIOType == null ? ownerIOType : resolvedIOType) == IOType.OUTPUT;
+    }
+
+    private IOType ownerIOType() {
+        if (menu instanceof ItemBusMenu itemBus && itemBus.owner() != null) return itemBus.owner().ioType();
+        if (menu instanceof FluidHatchMenu fluidHatch && fluidHatch.owner() != null) return fluidHatch.owner().ioType();
+        if (menu instanceof EnergyHatchMenu energyHatch && energyHatch.owner() != null) return energyHatch.owner().ioType();
+        return null;
     }
 
     private Component autoIOToggleTooltip() {

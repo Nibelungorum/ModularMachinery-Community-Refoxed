@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.menu.FactorySchedulerMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
@@ -70,6 +71,15 @@ class MenuScreenTest {
         assertThat(MachineMenuScreen.autoIODirectionAt(2, 1)).isEqualTo(Direction.EAST);
         assertThat(MachineMenuScreen.autoIODirectionAt(1, 2)).isEqualTo(Direction.DOWN);
         assertThat(MachineMenuScreen.autoIODirectionAt(2, 2)).isEqualTo(Direction.SOUTH);
+    }
+
+    @Test
+    void auto_io_label_uses_resolved_port_io_type_before_owner_fallback() {
+        assertThat(MachineMenuScreen.isOutputPort(IOType.OUTPUT, null)).isTrue();
+        assertThat(MachineMenuScreen.isOutputPort(IOType.OUTPUT, IOType.INPUT)).isTrue();
+        assertThat(MachineMenuScreen.isOutputPort(IOType.INPUT, IOType.OUTPUT)).isFalse();
+        assertThat(MachineMenuScreen.isOutputPort(null, IOType.OUTPUT)).isTrue();
+        assertThat(MachineMenuScreen.isOutputPort(null, null)).isFalse();
     }
 
     @Test
