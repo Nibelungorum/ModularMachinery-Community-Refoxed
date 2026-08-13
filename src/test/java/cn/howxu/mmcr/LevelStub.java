@@ -108,6 +108,10 @@ public final class LevelStub {
         ((TestLevel) level).directSignals.put(pos, signal);
     }
 
+    public static void setGameTime(Level level, long gameTime) {
+        ((TestLevel) level).gameTime = gameTime;
+    }
+
     private static Level createFromStates(Map<BlockPos, BlockState> blocks) {
         try {
             var level = (TestLevel) unsafe().allocateInstance(TestLevel.class);
@@ -133,6 +137,7 @@ public final class LevelStub {
         private Map<BlockPos, BlockEntity> blockEntities = Map.of();
         private Map<BlockPos, Integer> directSignals = new HashMap<>();
         private Set<Long> loadedChunks;
+        private long gameTime;
 
         private TestLevel() {
             super(null, Level.OVERWORLD, null, null, false, false, 0L, 0);
@@ -198,6 +203,7 @@ public final class LevelStub {
         @Override public boolean hasChunk(int chunkX, int chunkZ) {
             return loadedChunks == null || loadedChunks.contains(chunkKey(chunkX, chunkZ));
         }
+        @Override public long getGameTime() { return gameTime; }
         @Override public RandomSource getRandom() { return RandomSource.create(0L); }
         @Override public int getSeaLevel() { return 0; }
         @Override public FeatureFlagSet enabledFeatures() { return FeatureFlagSet.of(); }

@@ -110,9 +110,10 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
     protected void runAutoIOCycle() {
         if (autoIOConfig == null || level == null || level.isClientSide() || !autoIOConfig.enabled() || autoIOConfig.enabledSides().isEmpty()) return;
-        AutoIOTransferHandler handler = AutoIOTransferHandlers.handlerFor(this).orElse(null);
+        AutoIOTransferHandler handler = autoIOTransferHandler();
         if (handler == null) return;
         if (consumeAutoIOCacheDirty()) rebuildAutoIOCandidates(handler);
+        else if (autoIOCandidateSides.isEmpty() && (getLevel().getGameTime() % autoIODelay) == 0) rebuildAutoIOCandidates(handler);
         if (autoIOCandidateSides.isEmpty()) return;
         if ((getLevel().getGameTime() % autoIODelay) != 0) return;
 
@@ -129,6 +130,10 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         for (Direction side : autoIOConfig.enabledSides()) {
             if (handler.hasAdjacentTarget(this, side)) autoIOCandidateSides.add(side);
         }
+    }
+
+    protected AutoIOTransferHandler autoIOTransferHandler() {
+        return AutoIOTransferHandlers.handlerFor(this).orElse(null);
     }
 
     private void incrementAutoIOSuccess() {
