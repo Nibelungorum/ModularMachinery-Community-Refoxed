@@ -171,7 +171,8 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     public boolean hasActiveRecipe() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? active.get() != 0 : controller.isRuntimeActive() || controller.hasClientActiveRecipe() || active.get() != 0;
+        return controller == null ? active.get() != 0 : controller.isRuntimeActive() || controller.hasClientActiveRecipe()
+                || activeFactoryThread(controller) != null || active.get() != 0;
     }
 
     public int activeRecipeTick() {

@@ -151,7 +151,7 @@ public final class DefaultRecipes {
                         List.of(tagItemInput(ItemTags.LOGS, 1)),
                         List.of(item(Items.CHARCOAL, 1))),
                 componentRecipe(BLAST_FURNACE_ID, "blast_furnace_component_tag_named_input",
-                        List.of(tagComponentItemInput(ItemTags.LOGS, 1, namedPredicate("Validated"), 1F)),
+                        List.of(tagComponentItemInput(ItemTags.PLANKS, 1, namedPredicate("Validated"), 1F)),
                         List.of(item(Items.EMERALD, 1))),
                 componentRecipe(BLAST_FURNACE_ID, "blast_furnace_component_tag_enchanted_input",
                         List.of(tagComponentItemInput(ItemTags.SWORDS, 1, componentsFromData("""

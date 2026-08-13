@@ -37,21 +37,8 @@
 
 - [ ] 自动输入自动输出功能(使用原版的控件，嗯对，参考MEK)
 
-- [ ] 声音事件
+- [X] 声音事件
 
-实现完成并已通过最终 review。
-- Worktree：.worktrees/machine-sounds
-- 分支：feat/machine-sounds
-- 基于：dev/neo/26.1.2
-- 提交范围：2be3758..fc88c5a，共 9 个实现/修复/测试提交
-- 验证：focused suite 最终 BUILD SUCCESSFUL in 8s；此前 compileJava 也已通过 BUILD SUCCESSFUL in 10s
-- Review：final whole-branch re-review 结论 Ready，无 Critical/Important findings
-- 遗留：未执行手动集成客户端验收，因为当前会话没有获批替代客户端启动流程，且项目禁止 ./gradlew runClient --no-daemon
-Implementation complete. What would you like to do?
-1. Merge back to dev/neo/26.1.2 locally
-2. Push and create a Pull Request
-3. Keep the branch as-is
-4. Discard this work
 
 - [ ] 接口集成(AE2 总成型接口[新UI?] MEK气体接口(涉及配方modify) 输入输出总成)
 
@@ -70,7 +57,7 @@ Implementation complete. What would you like to do?
 
 - [ ] 重构其它地方
 
-
+- [ ] 算力系统
 
 - [X] 多线程 Stage 5已经实现了
 

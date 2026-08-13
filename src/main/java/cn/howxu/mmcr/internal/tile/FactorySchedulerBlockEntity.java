@@ -97,11 +97,13 @@ public class FactorySchedulerBlockEntity extends BlockEntity {
     }
 
     public void tickScheduler(SyncListener syncListener) {
-        tickThreadLimitSync(syncListener);
+        int previousThreadLimit = threadLimit;
+        boolean threadLimitChanged = tickThreadLimitSync(null);
         int before = scheduler.activeLaneCount();
         scheduler.tick();
         int after = scheduler.activeLaneCount();
         if (after != before) setChanged();
+        if (threadLimitChanged && previousThreadLimit < threadLimit && syncListener != null) syncListener.syncFactoryScheduler();
         notifyRuntimeActiveBoundary(syncListener, before > 0, after > 0);
     }
 
@@ -130,10 +132,12 @@ public class FactorySchedulerBlockEntity extends BlockEntity {
         setThreadLimit(current);
     }
 
-    private void tickThreadLimitSync(SyncListener syncListener) {
-        if (++threadLimitSyncTicks < THREAD_LIMIT_SYNC_INTERVAL) return;
+    private boolean tickThreadLimitSync(SyncListener syncListener) {
+        if (++threadLimitSyncTicks < THREAD_LIMIT_SYNC_INTERVAL) return false;
         threadLimitSyncTicks = 0;
+        int before = threadLimit;
         syncThreadLimit(syncListener);
+        return before != threadLimit;
     }
 
     public void stopAll() {
