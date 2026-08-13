@@ -1378,15 +1378,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             return true;
         }
         if (recipeSearchRetryCounter <= 0) return true;
-        long ticks = recipeSearchAttemptCounter;
-        if (level != null) {
-            try {
-                ticks = level.getGameTime();
-            } catch (NullPointerException ignored) {
-                ticks = recipeSearchAttemptCounter;
-            }
-        }
-        return ticks % nextRecipeSearchDelay() == 0;
+        return recipeSearchClock() % nextRecipeSearchDelay() == 0;
     }
 
     private int nextRecipeSearchDelay() {
@@ -1450,9 +1442,14 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private long currentGameTime() {
+        return recipeSearchClock();
+    }
+
+    private long recipeSearchClock() {
         if (level == null) return recipeSearchAttemptCounter;
         try {
-            return level.getGameTime();
+            long gameTime = level.getGameTime();
+            return gameTime == 0L && recipeSearchAttemptCounter > 0 ? recipeSearchAttemptCounter : gameTime;
         } catch (NullPointerException ignored) {
             return recipeSearchAttemptCounter;
         }
