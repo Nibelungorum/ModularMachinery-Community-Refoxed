@@ -39,11 +39,13 @@ public final class BlockArrayCache {
     static Map<Key, BlockArray> buildCacheSnapshot(Collection<Machine> machines) {
         Map<Key, BlockArray> replacement = new LinkedHashMap<>();
         for (Machine machine : machines) {
-            for (Direction facing : Direction.Plane.HORIZONTAL) {
-                add(replacement, machine.pattern(), facing);
-                for (DynamicPatternSpec dynamicPattern : machine.dynamicPatterns()) {
-                    add(replacement, dynamicPattern.startPattern(), facing);
-                    if (dynamicPattern.endPattern() != null) add(replacement, dynamicPattern.endPattern(), facing);
+            for (MachineStructureStage stage : machine.structureStages()) {
+                for (Direction facing : Direction.Plane.HORIZONTAL) {
+                    add(replacement, stage.pattern(), facing);
+                    for (DynamicPatternSpec dynamicPattern : stage.dynamicPatterns()) {
+                        add(replacement, dynamicPattern.startPattern(), facing);
+                        if (dynamicPattern.endPattern() != null) add(replacement, dynamicPattern.endPattern(), facing);
+                    }
                 }
             }
         }

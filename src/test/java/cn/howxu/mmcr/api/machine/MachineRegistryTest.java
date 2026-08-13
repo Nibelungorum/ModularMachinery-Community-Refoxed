@@ -139,4 +139,37 @@ class MachineRegistryTest {
         assertThat(runtime.parallelizable()).isTrue();
         assertThat(runtime.maxParallelism()).isEqualTo(9);
     }
+
+    @Test
+    void expandable_machine_compiles_every_stage_and_compatibility_returns_stage_one() {
+        Identifier id = Identifier.parse("mmcr:expandable");
+        MachineDefinitions.register(MachineRegistration.builder(id).expandableStructure().build());
+        MachineStructureDefinition definition = new MachineStructureDefinition(id, List.of(
+                MachineStructureDefinition.Declaration.full(new BlockArray(Map.of(
+                        BlockPos.ZERO, new BlockPredicate.Any()))),
+                MachineStructureDefinition.Declaration.extension(new BlockArray(Map.of(
+                        new BlockPos(2, 0, 0), new BlockPredicate.Any())))));
+
+        MachineRegistry.installStructures(Map.of(id, definition));
+
+        assertThat(MachineRegistry.getCompiledStages(id)).hasSize(2);
+        assertThat(MachineRegistry.getCompiled(id)).isSameAs(MachineRegistry.getCompiledStages(id).getFirst());
+        assertThat(MachineRegistry.getCompiledStages(id).get(1).machine().pattern().pattern())
+                .containsKey(new BlockPos(2, 0, 0));
+    }
+
+    @Test
+    void unmarked_machine_rejects_multiple_structure_stages() {
+        Identifier id = Identifier.parse("mmcr:not_expandable");
+        MachineDefinitions.register(MachineRegistration.builder(id).build());
+        MachineStructureDefinition definition = new MachineStructureDefinition(id, List.of(
+                MachineStructureDefinition.Declaration.full(new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.Any()))),
+                MachineStructureDefinition.Declaration.extension(new BlockArray(Map.of(
+                        new BlockPos(1, 0, 0), new BlockPredicate.Any())))));
+
+        assertThatThrownBy(() -> MachineRegistry.installStructures(Map.of(id, definition)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining(id.toString())
+                .hasMessageContaining("expandableStructure");
+    }
 }

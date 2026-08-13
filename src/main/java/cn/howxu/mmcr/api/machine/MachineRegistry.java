@@ -4,13 +4,14 @@ import net.minecraft.resources.Identifier;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 public final class MachineRegistry {
 
     private static final Map<Identifier, Machine> STATIC_MACHINES = new LinkedHashMap<>();
     private static volatile Map<Identifier, Machine> STRUCTURE_MACHINES = Map.of();
-    private static volatile Map<Identifier, CompiledMachinePattern> COMPILED = Map.of();
+    private static volatile Map<Identifier, List<CompiledMachinePattern>> COMPILED = Map.of();
 
     private MachineRegistry() {
     }
@@ -20,8 +21,8 @@ public final class MachineRegistry {
             throw new IllegalStateException("Machine already registered: " + machine.registryName());
         }
         STATIC_MACHINES.put(machine.registryName(), machine);
-        Map<Identifier, CompiledMachinePattern> compiled = new LinkedHashMap<>(COMPILED);
-        compiled.put(machine.registryName(), MachinePatternCompiler.compile(machine));
+        Map<Identifier, List<CompiledMachinePattern>> compiled = new LinkedHashMap<>(COMPILED);
+        compiled.put(machine.registryName(), MachinePatternCompiler.compileStages(machine, null));
         COMPILED = Map.copyOf(compiled);
     }
 
@@ -35,11 +36,17 @@ public final class MachineRegistry {
     }
 
     public static CompiledMachinePattern getCompiled(Identifier id) {
-        return COMPILED.get(id);
+        return getCompiledStages(id).isEmpty() ? null : getCompiledStages(id).getFirst();
+    }
+
+    public static List<CompiledMachinePattern> getCompiledStages(Identifier id) {
+        return COMPILED.getOrDefault(id, List.of());
     }
 
     public static Map<Identifier, CompiledMachinePattern> getAllCompiled() {
-        return Collections.unmodifiableMap(COMPILED);
+        Map<Identifier, CompiledMachinePattern> firstStages = new LinkedHashMap<>();
+        COMPILED.forEach((id, stages) -> { if (!stages.isEmpty()) firstStages.put(id, stages.getFirst()); });
+        return Collections.unmodifiableMap(firstStages);
     }
 
     public static boolean containsStatic(Identifier id) {
@@ -59,9 +66,9 @@ public final class MachineRegistry {
         Map<Identifier, Machine> allMachines = new LinkedHashMap<>(STATIC_MACHINES);
         allMachines.putAll(structureMachines);
         Map<BlockArrayCache.Key, BlockArray> cache = BlockArrayCache.buildCacheSnapshot(allMachines.values());
-        Map<Identifier, CompiledMachinePattern> compiled = new LinkedHashMap<>();
+        Map<Identifier, List<CompiledMachinePattern>> compiled = new LinkedHashMap<>();
         for (Machine machine : allMachines.values()) {
-            compiled.put(machine.registryName(), MachinePatternCompiler.compile(machine, cache));
+            compiled.put(machine.registryName(), MachinePatternCompiler.compileStages(machine, cache));
         }
 
         STRUCTURE_MACHINES = Map.copyOf(structureMachines);
@@ -72,9 +79,9 @@ public final class MachineRegistry {
     public static void rebuildCompiledCache() {
         Map<Identifier, Machine> machines = mergedMachines();
         Map<BlockArrayCache.Key, BlockArray> cache = BlockArrayCache.buildCacheSnapshot(machines.values());
-        Map<Identifier, CompiledMachinePattern> compiled = new LinkedHashMap<>();
+        Map<Identifier, List<CompiledMachinePattern>> compiled = new LinkedHashMap<>();
         for (Machine machine : machines.values()) {
-            compiled.put(machine.registryName(), MachinePatternCompiler.compile(machine, cache));
+            compiled.put(machine.registryName(), MachinePatternCompiler.compileStages(machine, cache));
         }
         BlockArrayCache.installCache(cache);
         COMPILED = Map.copyOf(compiled);

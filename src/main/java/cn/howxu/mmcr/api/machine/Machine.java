@@ -4,6 +4,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
 import java.util.List;
+import java.util.Map;
 
 public interface Machine {
     Identifier registryName();
@@ -43,6 +44,11 @@ public interface Machine {
 
     default List<DynamicPatternSpec> dynamicPatterns() {
         return List.of();
+    }
+
+    default List<MachineStructureStage> structureStages() {
+        return List.of(new MachineStructureStage(1, pattern(), portRequirements(), portTierRequirements(),
+                dynamicPatterns(), Map.of(), Map.of()));
     }
 
     default int maxParallelism() {

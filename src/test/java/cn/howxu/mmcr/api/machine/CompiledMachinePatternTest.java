@@ -104,6 +104,33 @@ class CompiledMachinePatternTest {
         assertThat(compiled.modifierReplacements(Direction.UP, Direction.NORTH)).isEmpty();
     }
 
+    @Test
+    void compiler_preserves_stage_specific_pattern_data() {
+        Identifier id = Identifier.parse("mmcr:compiled_stage");
+        BlockArray first = pattern();
+        BlockArray second = new BlockArray(Map.of(new BlockPos(2, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE)));
+        Machine machine = new DynamicMachine(id, "Compiled Stage", first);
+        machine = new Machine() {
+            @Override public Identifier registryName() { return machineId(); }
+            @Override public BlockArray pattern() { return first; }
+            @Override public MachineControllerSpec controller() { return MachineControllerSpec.defaultsFor(id); }
+            @Override public List<MachineStructureStage> structureStages() {
+                return List.of(new MachineStructureStage(1, first, PortRequirementSpec.none(),
+                        PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of()),
+                        new MachineStructureStage(2, second, PortRequirementSpec.none(),
+                                PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of()));
+            }
+            private Identifier machineId() { return id; }
+        };
+
+        List<CompiledMachinePattern> stages = MachinePatternCompiler.compileStages(machine, null);
+
+        assertThat(stages).extracting(CompiledMachinePattern::stageNumber).containsExactly(1, 2);
+        assertThat(stages.get(0).boundingBox(Direction.SOUTH).maxX()).isEqualTo(1);
+        assertThat(stages.get(1).boundingBox(Direction.SOUTH).maxX()).isEqualTo(2);
+        assertThat(stages.get(1).machine().pattern()).isEqualTo(second);
+    }
+
     private static BlockArray pattern() {
         return new BlockArray(Map.of(
                 BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.FURNACE),

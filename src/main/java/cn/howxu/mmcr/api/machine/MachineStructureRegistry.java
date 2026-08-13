@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.machine;
 import net.minecraft.resources.Identifier;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -39,6 +40,11 @@ public final class MachineStructureRegistry {
     }
 
     public static Machine toRuntimeMachine(MachineRegistration registration, MachineStructureDefinition structure) {
+        List<MachineStructureStage> stages = MachineStructureFamily.of(structure).stages();
+        if (stages.size() > 1 && !registration.expandableStructure()) {
+            throw new IllegalArgumentException("Machine " + registration.id()
+                    + " declares multiple structure stages but is not marked expandableStructure");
+        }
         return new DynamicMachine(
                 registration.id(),
                 registration.displayNameKey(),
@@ -52,7 +58,8 @@ public final class MachineStructureRegistry {
                 registration.maxParallelAmount(),
                 registration.allowParallelism(),
                 registration.allowMultithreading(),
-                1);
+                1,
+                List.of(), stages);
     }
 
     public static void clearForTesting() {

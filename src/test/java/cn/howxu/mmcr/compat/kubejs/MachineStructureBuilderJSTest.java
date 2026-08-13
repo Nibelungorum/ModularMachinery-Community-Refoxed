@@ -2,6 +2,8 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -21,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MachineStructureBuilderJSTest {
 
@@ -64,5 +67,39 @@ class MachineStructureBuilderJSTest {
         assertThat(definition.levelSlots()).containsExactly(Map.entry(BlockPos.ZERO, coilType));
         assertThat(definition.pattern().pattern().get(BlockPos.ZERO)
                 .matches(Blocks.COPPER_BLOCK.defaultBlockState())).isTrue();
+    }
+
+    @Test
+    void builder_supports_full_structure_and_extension_declarations() {
+        BlockPredicate casingPredicate = new BlockPredicate.OfBlock(Blocks.IRON_BLOCK);
+        var definition = new MachineStructureBuilderJS("mmcr:expandable")
+                .pattern("C", Map.of("C", Blocks.IRON_BLOCK))
+                .extension(new BlockArray(Map.of(new BlockPos(1, 0, 0), casingPredicate)))
+                .createObject();
+
+        assertThat(definition.declarations()).extracting(Declaration::kind)
+                .containsExactly(Declaration.Kind.FULL, Declaration.Kind.EXTENSION);
+    }
+
+    @Test
+    void builder_supports_multiple_full_structure_declarations() {
+        BlockArray alternative = new BlockArray(Map.of(new BlockPos(2, 0, 0), new BlockPredicate.Any()));
+
+        var definition = new MachineStructureBuilderJS("mmcr:alternatives")
+                .pattern("C", Map.of("C", Blocks.IRON_BLOCK))
+                .fullStructure(alternative)
+                .createObject();
+
+        assertThat(definition.declarations()).extracting(Declaration::kind)
+                .containsExactly(Declaration.Kind.FULL, Declaration.Kind.FULL);
+        assertThat(definition.declarations().get(1).pattern()).isEqualTo(alternative);
+    }
+
+    @Test
+    void extension_requires_an_existing_full_structure() {
+        assertThatThrownBy(() -> new MachineStructureBuilderJS("mmcr:expandable")
+                .extension(new BlockArray(Map.of())))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("extension requires a full structure first");
     }
 }

@@ -21,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration;
 
 /**
  * Server-script builder for reloadable machine structures.
@@ -32,6 +33,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     public transient PortRequirementSpec portRequirements = PortRequirementSpec.none();
     public transient Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements = new LinkedHashMap<>();
     public transient Map<BlockPos, Identifier> levelSlots = new LinkedHashMap<>();
+    private final List<Declaration> declarations = new ArrayList<>();
 
     public MachineStructureBuilderJS(Identifier id) {
         super(id);
@@ -70,6 +72,20 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         }
 
         pattern = new BlockArray(Map.copyOf(blocks));
+        declarations.clear();
+        declarations.add(new Declaration(Declaration.Kind.FULL, pattern, portRequirements,
+                PortTierRequirementSpec.none(), List.of(), modifierReplacements, levelSlots));
+        return this;
+    }
+
+    public MachineStructureBuilderJS fullStructure(BlockArray pattern) {
+        declarations.add(Declaration.full(Objects.requireNonNull(pattern)));
+        return this;
+    }
+
+    public MachineStructureBuilderJS extension(BlockArray pattern) {
+        if (declarations.isEmpty()) throw new IllegalStateException("extension requires a full structure first");
+        declarations.add(Declaration.extension(Objects.requireNonNull(pattern)));
         return this;
     }
 
@@ -82,7 +98,15 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
 
     @Override
     public MachineStructureDefinition createObject() {
-        return new MachineStructureDefinition(id, pattern, portRequirements, PortTierRequirementSpec.none(), List.of(), modifierReplacements, levelSlots);
+        if (declarations.isEmpty()) {
+            return new MachineStructureDefinition(id, pattern, portRequirements, PortTierRequirementSpec.none(),
+                    List.of(), modifierReplacements, levelSlots);
+        }
+        List<Declaration> result = new ArrayList<>(declarations);
+        Declaration first = result.getFirst();
+        result.set(0, new Declaration(first.kind(), first.pattern(), portRequirements,
+                PortTierRequirementSpec.none(), List.of(), modifierReplacements, levelSlots));
+        return new MachineStructureDefinition(id, result);
     }
 
     private static BlockPredicate toPredicate(Object value) {
