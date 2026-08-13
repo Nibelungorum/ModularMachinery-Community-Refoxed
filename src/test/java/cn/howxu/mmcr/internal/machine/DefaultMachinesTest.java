@@ -211,7 +211,8 @@ class DefaultMachinesTest {
         assertThat(machine.displayNameKey()).isEqualTo("machine.mmcr.cracker");
         assertThat(machine.controller().id()).isEqualTo(MMCR.id("cracker_controller"));
         assertThat(machine.controller().allowVerticalFacing()).isTrue();
-        assertThat(defaultCrackerTemplate().controller().requireVerticalFacing()).isFalse();
+        assertThat(machine.controller().requireVerticalFacing()).isFalse();
+        assertThat(machine.portRequirements().isEmpty()).isTrue();
         assertThat(machine.pattern().width()).isEqualTo(3);
         assertThat(machine.pattern().height()).isEqualTo(3);
         assertThat(machine.pattern().length()).isEqualTo(4);
