@@ -79,9 +79,15 @@ public record CompiledMachinePattern(
     public Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements(
         Direction facing, Direction rollFacing) {
         if (!facing.getAxis().isVertical()) return modifierReplacements(facing);
-        return machine instanceof DynamicMachine dynamic
-                ? dynamic.rotatedModifierReplacements(facing, rollFacing)
-                : Map.of();
+        Map<BlockPos, List<SingleBlockModifierReplacement>> raw = modifierReplacements(Direction.SOUTH);
+        Map<BlockPos, List<SingleBlockModifierReplacement>> rotated = new LinkedHashMap<>();
+        Direction normalizedRoll = BlockRotator.normalizedRoll(facing, rollFacing);
+        for (var entry : raw.entrySet()) {
+            BlockPos rotatedPos = BlockRotator.rotateSouthTo(entry.getKey(), facing, normalizedRoll);
+            rotated.put(rotatedPos, entry.getValue().stream()
+                    .map(replacement -> replacement.copyAt(rotatedPos)).toList());
+        }
+        return Map.copyOf(rotated);
     }
 
     private static <T> Map<Direction, T> copyEnumMap(Map<Direction, T> source) {

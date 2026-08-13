@@ -131,6 +131,43 @@ class CompiledMachinePatternTest {
         assertThat(stages.get(1).machine().pattern()).isEqualTo(second);
     }
 
+    @Test
+    void stage_compiled_modifier_replacements_support_vertical_roll_without_parent_type_checks() {
+        Identifier id = Identifier.parse("mmcr:compiled_stage_modifiers");
+        BlockPos rawPosition = new BlockPos(1, 0, 0);
+        var replacement = new SingleBlockModifierReplacement("stage_modifier", rawPosition,
+                new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), "", ItemStack.EMPTY);
+        BlockArray first = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE)));
+        BlockPos stagePort = new BlockPos(2, 0, 0);
+        BlockArray second = new BlockArray(Map.of(rawPosition, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
+                stagePort, new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get())));
+        DynamicPatternSpec dynamic = new DynamicPatternSpec("stage_dynamic", new BlockArray(Map.of()), null,
+                0, 1, BlockPos.ZERO, BlockPos.ZERO, java.util.Set.of(Direction.SOUTH));
+        Machine machine = new Machine() {
+            @Override public Identifier registryName() { return id; }
+            @Override public BlockArray pattern() { return first; }
+            @Override public MachineControllerSpec controller() { return MachineControllerSpec.defaultsFor(id); }
+            @Override public List<MachineStructureStage> structureStages() {
+                return List.of(new MachineStructureStage(1, first, PortRequirementSpec.none(), PortTierRequirementSpec.none(),
+                                List.of(), Map.of(), Map.of()),
+                        new MachineStructureStage(2, second, PortRequirementSpec.none(), PortTierRequirementSpec.none(),
+                                List.of(dynamic), Map.of(rawPosition, List.of(replacement)), Map.of()));
+            }
+        };
+
+        List<MachineStructureStage> parentStages = machine.structureStages();
+        CompiledMachinePattern compiled = MachinePatternCompiler.compileStages(machine, null).get(1);
+        BlockPos rotated = BlockRotator.rotateSouthTo(rawPosition, Direction.UP, Direction.EAST);
+
+        assertThat(compiled.modifierReplacements(Direction.UP, Direction.EAST)).containsKey(rotated);
+        assertThat(compiled.modifierReplacements(Direction.SOUTH)).containsKey(rawPosition);
+        assertThat(compiled.dynamicPatterns()).hasSize(1);
+        assertThat(compiled.componentPositions(Direction.SOUTH)).contains(stagePort);
+        assertThat(compiled.portPositions(Direction.SOUTH)).contains(stagePort);
+        assertThat(machine.structureStages()).isEqualTo(parentStages);
+        assertThat(machine.pattern()).isEqualTo(first);
+    }
+
     private static BlockArray pattern() {
         return new BlockArray(Map.of(
                 BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.FURNACE),

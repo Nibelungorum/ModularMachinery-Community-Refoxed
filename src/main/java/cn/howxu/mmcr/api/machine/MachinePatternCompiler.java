@@ -63,7 +63,7 @@ public final class MachinePatternCompiler {
             boundingBoxes.put(facing, boundingBox(rotated));
             componentPositions.put(facing, componentPositions(rotated));
             portPositions.put(facing, portPositions(rotated));
-            modifierReplacements.put(facing, rotatedModifierReplacements(machine, stage, facing));
+            modifierReplacements.put(facing, rotatedModifierReplacements(stage, facing));
         }
 
         return new CompiledMachinePattern(stage.number() == 1 ? parent : machine, stage.number(), rotatedPatterns, boundingBoxes, componentPositions, portPositions,
@@ -71,7 +71,7 @@ public final class MachinePatternCompiler {
     }
 
     private static Map<BlockPos, List<SingleBlockModifierReplacement>> rotatedModifierReplacements(
-            Machine machine, MachineStructureStage stage, Direction facing) {
+            MachineStructureStage stage, Direction facing) {
         Map<BlockPos, List<SingleBlockModifierReplacement>> replacements = new java.util.LinkedHashMap<>();
         for (var entry : stage.modifierReplacements().entrySet()) {
             BlockPos rotatedPos = BlockRotator.rotateSouthTo(entry.getKey(), facing, Direction.SOUTH);
