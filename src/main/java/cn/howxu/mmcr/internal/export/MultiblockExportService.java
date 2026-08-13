@@ -36,17 +36,25 @@ public final class MultiblockExportService {
     }
 
     public static BlockPos normalizeOffset(BlockPos offset, Direction controllerFace) {
-        if (controllerFace.getAxis().isVertical()) return offset;
-        return BlockRotator.normalizeFromFace(offset, controllerFace);
+        return normalizeOffset(offset, controllerFace, Direction.SOUTH);
+    }
+
+    public static BlockPos normalizeOffset(BlockPos offset, Direction controllerFace, Direction rollFacing) {
+        return BlockRotator.normalizeFromFace(offset, controllerFace, rollFacing);
     }
 
     public static String renderJava(List<SnapshotEntry> entries, Direction controllerFace) {
+        return renderJava(entries, controllerFace, Direction.SOUTH);
+    }
+
+    public static String renderJava(List<SnapshotEntry> entries, Direction controllerFace, Direction rollFacing) {
+        Direction normalizedRoll = BlockRotator.normalizedRoll(controllerFace, rollFacing);
         List<RenderedEntry> rendered = entries.stream()
                 .filter(entry -> !entry.air())
-                .map(entry -> new RenderedEntry(normalizeOffset(entry.offset(), controllerFace), entry.blockId()))
+                .map(entry -> new RenderedEntry(normalizeOffset(entry.offset(), controllerFace, normalizedRoll), entry.blockId()))
                 .sorted(Comparator
-                        .comparingInt((RenderedEntry entry) -> entry.pos().getY())
-                        .thenComparingInt(entry -> entry.pos().getZ())
+                        .comparingInt((RenderedEntry entry) -> entry.pos().getZ())
+                        .thenComparingInt(entry -> entry.pos().getY())
                         .thenComparingInt(entry -> entry.pos().getX())
                         .thenComparing(entry -> entry.blockId().toString()))
                 .toList();
@@ -111,7 +119,12 @@ public final class MultiblockExportService {
 
     public static Path writeExport(Path gameDir, LocalDateTime timestamp, List<SnapshotEntry> entries,
                                    Direction controllerFace) throws IOException {
-        String text = renderJava(entries, controllerFace);
+        return writeExport(gameDir, timestamp, entries, controllerFace, Direction.SOUTH);
+    }
+
+    public static Path writeExport(Path gameDir, LocalDateTime timestamp, List<SnapshotEntry> entries,
+                                   Direction controllerFace, Direction rollFacing) throws IOException {
+        String text = renderJava(entries, controllerFace, rollFacing);
         Path path = nextExportPath(gameDir, timestamp);
         Files.writeString(path, text);
         return path;

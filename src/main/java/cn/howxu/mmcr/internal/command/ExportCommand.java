@@ -11,6 +11,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -83,11 +84,12 @@ public final class ExportCommand {
         var server = level.getServer();
         var gameDir = server.getServerDirectory();
         var face = selection.controllerFace();
+        var roll = controllerRoll(level, controller);
         ctx.getSource().sendSuccess(() -> Component.translatable("command.mmcr.export.started", volume), false);
 
         MultiblockExportService.executor().submit(() -> {
             try {
-                var path = MultiblockExportService.writeExport(gameDir, LocalDateTime.now(), snapshot, face);
+                var path = MultiblockExportService.writeExport(gameDir, LocalDateTime.now(), snapshot, face, roll);
                 server.executeIfPossible(() -> player.sendSystemMessage(Component.translatable(
                         "command.mmcr.export.written", gameDir.relativize(path).toString())));
             } catch (Exception e) {
@@ -106,6 +108,13 @@ public final class ExportCommand {
         boolean offDetector = off.is(ModItems.MULTIBLOCK_DETECTOR.get());
         if (mainDetector == offDetector) return null;
         return mainDetector ? main : off;
+    }
+
+    private static Direction controllerRoll(ServerLevel level, BlockPos controller) {
+        BlockState state = level.getBlockState(controller);
+        return state.hasProperty(cn.howxu.mmcr.internal.block.MachineControllerBlock.ROLL_FACING)
+                ? state.getValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ROLL_FACING)
+                : Direction.SOUTH;
     }
 
     private static List<MultiblockExportService.SnapshotEntry> snapshot(ServerLevel level, BlockPos controller,

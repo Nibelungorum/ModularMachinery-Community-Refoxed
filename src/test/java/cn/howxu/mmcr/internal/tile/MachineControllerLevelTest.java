@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.tile;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.BlockRotator;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
@@ -92,21 +93,35 @@ class MachineControllerLevelTest {
     @Test
     void allowVerticalFacingFormsHorizontallyAndVerticallyFromSameBasePattern() throws Exception {
         MachineControllerSpec spec = controllerSpec(true, false, false);
+        BlockPos rawEast = new BlockPos(1, 0, 0);
+        BlockPos verticalEast = BlockRotator.rotateSouthTo(rawEast, Direction.UP, Direction.SOUTH);
 
         assertThat(tryForm(controllerWithPattern(spec, Direction.SOUTH,
-                Map.of(new BlockPos(1, 0, 0), Blocks.IRON_BLOCK)), Direction.SOUTH)).isTrue();
+                Map.of(rawEast, Blocks.IRON_BLOCK)), Direction.SOUTH)).isTrue();
         assertThat(tryForm(controllerWithPattern(spec, Direction.UP,
-                Map.of(new BlockPos(1, 0, 0), Blocks.IRON_BLOCK)), Direction.UP)).isTrue();
+                Map.of(verticalEast, Blocks.IRON_BLOCK)), Direction.UP)).isTrue();
+    }
+
+    @Test
+    void allowVerticalFacingFormsUsingRollAwareVerticalRotation() throws Exception {
+        MachineControllerSpec spec = controllerSpec(true, false, false);
+        BlockPos rawForward = new BlockPos(0, 0, 1);
+        BlockPos worldUp = BlockRotator.rotateSouthTo(rawForward, Direction.UP, Direction.SOUTH);
+
+        assertThat(tryForm(controllerWithPattern(spec, Direction.UP, Direction.SOUTH,
+                Map.of(rawForward, Blocks.IRON_BLOCK), Map.of(worldUp, Blocks.IRON_BLOCK)), Direction.UP)).isTrue();
     }
 
     @Test
     void requireVerticalFacingRejectsHorizontalAndAcceptsVerticalFormation() throws Exception {
         MachineControllerSpec spec = controllerSpec(true, true, false);
+        BlockPos rawEast = new BlockPos(1, 0, 0);
+        BlockPos verticalEast = BlockRotator.rotateSouthTo(rawEast, Direction.UP, Direction.SOUTH);
 
         assertThat(tryForm(controllerWithPattern(spec, Direction.SOUTH,
-                Map.of(new BlockPos(1, 0, 0), Blocks.IRON_BLOCK)), Direction.SOUTH)).isFalse();
+                Map.of(rawEast, Blocks.IRON_BLOCK)), Direction.SOUTH)).isFalse();
         assertThat(tryForm(controllerWithPattern(spec, Direction.UP,
-                Map.of(new BlockPos(1, 0, 0), Blocks.IRON_BLOCK)), Direction.UP)).isTrue();
+                Map.of(verticalEast, Blocks.IRON_BLOCK)), Direction.UP)).isTrue();
     }
 
     @Test
@@ -124,6 +139,22 @@ class MachineControllerLevelTest {
                 // SOUTH leaves the base pattern at (1,0,1); UP with the current EAST roll would rotate it to (1,0,-1).
                 .contains(horizontalSouthPos)
                 .doesNotContain(verticalUpRolledEastPos);
+    }
+
+    @Test
+    void previewSnapshotForVerticalAllowedMachineUsesRollAwareVerticalRotation() throws Exception {
+        MachineControllerSpec spec = controllerSpec(true, false, false);
+        BlockPos rawForward = new BlockPos(0, 0, 1);
+        BlockPos verticalUpPos = BlockRotator.rotateSouthTo(rawForward, Direction.UP, Direction.SOUTH);
+        MachineControllerBlockEntity controller = controllerWithPattern(spec, Direction.UP, Direction.SOUTH,
+                Map.of(rawForward, Blocks.IRON_BLOCK), Map.of());
+
+        MultiblockPreviewSnapshot snapshot = controller.createStructurePreviewSnapshot(16).orElseThrow();
+
+        assertThat(snapshot.entries())
+                .extracting(MultiblockPreviewSnapshot.Entry::relativePos)
+                .contains(verticalUpPos)
+                .doesNotContain(rawForward);
     }
 
     private MachineControllerBlockEntity controllerWithSlots(Block first, Block second) throws Exception {

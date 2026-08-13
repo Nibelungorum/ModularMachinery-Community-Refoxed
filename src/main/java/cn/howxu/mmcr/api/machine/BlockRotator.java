@@ -33,32 +33,41 @@ public final class BlockRotator {
     }
 
     public static BlockPos rotateSouthTo(BlockPos pos, Direction target) {
-        return switch (target) {
-            case NORTH, SOUTH, EAST, WEST -> rotateYCCWSouthUntil(pos, target);
-            case UP -> pos;
-            case DOWN -> new BlockPos(-pos.getX(), pos.getY(), -pos.getZ());
-        };
+        return rotateSouthTo(pos, target, Direction.SOUTH);
     }
 
     public static BlockPos rotateSouthTo(BlockPos pos, Direction target, Direction rollFacing) {
-        BlockPos rotated = rotateSouthTo(pos, target);
-        if (!target.getAxis().isVertical()) return rotated;
-
-        Direction current = Direction.SOUTH;
-        BlockPos rolled = rotated;
-        while (current != rollFacing) {
-            current = current.getCounterClockWise();
-            rolled = rotateYCCW(rolled);
+        Direction normalizedRoll = normalizedRoll(target, rollFacing);
+        if (!target.getAxis().isVertical()) {
+            return rotateYCCWSouthUntil(pos, target);
         }
-        return rolled;
+
+        Direction front = target;
+        Direction up = normalizedRoll;
+        Direction xAxis = cross(up, front);
+        return project(pos, xAxis, up, front);
     }
 
     public static BlockPos normalizeFromFace(BlockPos offset, Direction sourceFace) {
-        return switch (sourceFace) {
-            case NORTH, SOUTH, EAST, WEST -> normalizeHorizontal(offset, sourceFace);
-            case UP -> offset;
-            case DOWN -> new BlockPos(-offset.getX(), offset.getY(), -offset.getZ());
-        };
+        return normalizeFromFace(offset, sourceFace, Direction.SOUTH);
+    }
+
+    public static BlockPos normalizeFromFace(BlockPos offset, Direction sourceFace, Direction rollFacing) {
+        Direction normalizedRoll = normalizedRoll(sourceFace, rollFacing);
+        if (!sourceFace.getAxis().isVertical()) {
+            return normalizeHorizontal(offset, sourceFace);
+        }
+
+        Direction front = sourceFace;
+        Direction up = normalizedRoll;
+        Direction xAxis = cross(up, front);
+        return unproject(offset, xAxis, up, front);
+    }
+
+    public static Direction normalizedRoll(Direction facing, Direction rollFacing) {
+        if (!facing.getAxis().isVertical()) return Direction.SOUTH;
+        if (rollFacing == null || !rollFacing.getAxis().isHorizontal()) return Direction.SOUTH;
+        return rollFacing;
     }
 
     private static BlockPos normalizeHorizontal(BlockPos offset, Direction sourceFace) {
@@ -69,5 +78,32 @@ public final class BlockRotator {
             normalized = rotateYCCW(normalized);
         }
         return normalized;
+    }
+
+    private static BlockPos project(BlockPos pos, Direction xAxis, Direction yAxis, Direction zAxis) {
+        return new BlockPos(
+                xAxis.getStepX() * pos.getX() + yAxis.getStepX() * pos.getY() + zAxis.getStepX() * pos.getZ(),
+                xAxis.getStepY() * pos.getX() + yAxis.getStepY() * pos.getY() + zAxis.getStepY() * pos.getZ(),
+                xAxis.getStepZ() * pos.getX() + yAxis.getStepZ() * pos.getY() + zAxis.getStepZ() * pos.getZ());
+    }
+
+    private static BlockPos unproject(BlockPos pos, Direction xAxis, Direction yAxis, Direction zAxis) {
+        return new BlockPos(dot(pos, xAxis), dot(pos, yAxis), dot(pos, zAxis));
+    }
+
+    private static int dot(BlockPos pos, Direction axis) {
+        return pos.getX() * axis.getStepX() + pos.getY() * axis.getStepY() + pos.getZ() * axis.getStepZ();
+    }
+
+    private static Direction cross(Direction a, Direction b) {
+        int x = a.getStepY() * b.getStepZ() - a.getStepZ() * b.getStepY();
+        int y = a.getStepZ() * b.getStepX() - a.getStepX() * b.getStepZ();
+        int z = a.getStepX() * b.getStepY() - a.getStepY() * b.getStepX();
+        for (Direction direction : Direction.values()) {
+            if (direction.getStepX() == x && direction.getStepY() == y && direction.getStepZ() == z) {
+                return direction;
+            }
+        }
+        throw new IllegalArgumentException("Directions must be perpendicular: " + a + ", " + b);
     }
 }

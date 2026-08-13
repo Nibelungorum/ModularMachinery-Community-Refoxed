@@ -101,6 +101,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private BlockArray foundPattern;
     private CompiledMachinePattern foundCompiledPattern;
     private Direction controllerFacing;
+    private Direction matchedRollFacing = Direction.SOUTH;
     private ActiveMachineRecipe active;
     private RecipeCraftingContext context;
     private final List<ProcessingComponent> components = new ArrayList<>();
@@ -529,12 +530,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 structureDirty = true;
                 return;
             }
-            var replacements = replacementsFor(foundMachine, foundCompiledPattern, facing, foundPattern);
+            var replacements = replacementsFor(foundMachine, foundCompiledPattern, facing, foundPattern, matchedRollFacing);
             boolean stillMatches = foundCompiledPattern == null || !replacements.isEmpty()
                     ? StructureMatcher.matchesRotated(foundPattern, level, getBlockPos(), replacements)
-                    : StructureMatcher.matchesCompiled(foundCompiledPattern, facing, getBlockState().getValue(MachineControllerBlock.ROLL_FACING), level, getBlockPos());
+                    : StructureMatcher.matchesCompiled(foundCompiledPattern, facing, matchedRollFacing, level, getBlockPos());
             if (stillMatches) {
-                var levels = resolveLevels(foundMachine, facing);
+                var levels = resolveLevels(foundMachine, facing, matchedRollFacing);
                 if (levels.mismatch() != null) {
                     recordLevelMismatch(levels.mismatch());
                     resetMachine(false);
@@ -616,8 +617,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (!facing.getAxis().isVertical() && candidate.controller().requireVerticalFacing()) return false;
         if (facing.getAxis().isVertical() && !candidate.controller().allowVerticalFacing()) return false;
 
-        for (BlockArray rotatedPattern : candidatePatterns(candidate, facing)) {
-            if (tryFormMachine(candidate, facing, rotatedPattern)) return true;
+        for (CandidatePattern candidatePattern : candidatePatterns(candidate, facing)) {
+            if (tryFormMachine(candidate, facing, candidatePattern)) return true;
         }
         return false;
     }
@@ -628,9 +629,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (machine == null) return false;
 
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
-        for (BlockArray rotatedPattern : candidatePatterns(machine, facing)) {
+        for (CandidatePattern candidatePattern : candidatePatterns(machine, facing)) {
+            BlockArray rotatedPattern = candidatePattern.pattern();
             CompiledMachinePattern compiled = compiledFor(machine, rotatedPattern, facing);
-            Map<BlockPos, List<SingleBlockModifierReplacement>> replacements = replacementsFor(machine, compiled, facing, rotatedPattern);
+            Map<BlockPos, List<SingleBlockModifierReplacement>> replacements = replacementsFor(machine, compiled, facing, rotatedPattern, candidatePattern.rollFacing());
             var mismatch = StructureMatcher.firstMismatch(rotatedPattern, level, getBlockPos(), replacements);
             if (mismatch.isPresent()) {
                 sendStructureMismatchDiagnostic(player, mismatch.get());
@@ -650,8 +652,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (machine == null) return Optional.empty();
 
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
-        for (BlockArray rotatedPattern : candidatePatterns(machine, facing)) {
-            MultiblockPreviewSnapshot snapshot = MultiblockPreviewBuilder.build(level, getBlockPos(), rotatedPattern, maxEntries);
+        for (CandidatePattern candidatePattern : candidatePatterns(machine, facing)) {
+            MultiblockPreviewSnapshot snapshot = MultiblockPreviewBuilder.build(level, getBlockPos(), candidatePattern.pattern(), maxEntries);
             if (!snapshot.isEmpty()) return Optional.of(snapshot);
         }
         return Optional.empty();
@@ -792,35 +794,36 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         return Component.literal(pos.getX() + ", " + pos.getY() + ", " + pos.getZ()).withStyle(ChatFormatting.GREEN);
     }
 
-    private List<BlockArray> candidatePatterns(Machine candidate, Direction facing) {
+    private List<CandidatePattern> candidatePatterns(Machine candidate, Direction facing) {
         if (!facing.getAxis().isVertical()) {
-            return List.of(BlockArrayCache.get(candidate.pattern(), facing));
+            return List.of(new CandidatePattern(BlockArrayCache.get(candidate.pattern(), facing), Direction.SOUTH));
         }
 
-        Direction rollFacing = getBlockState().getValue(MachineControllerBlock.ROLL_FACING);
+        Direction rollFacing = BlockRotator.normalizedRoll(facing, getBlockState().getValue(MachineControllerBlock.ROLL_FACING));
         if (!candidate.controller().fullyRotationallySymmetric()) {
-            return List.of(BlockArrayCache.get(candidate.pattern(), facing, rollFacing));
+            return List.of(new CandidatePattern(BlockArrayCache.get(candidate.pattern(), facing, rollFacing), rollFacing));
         }
 
-        List<BlockArray> patterns = new ArrayList<>(4);
+        List<CandidatePattern> patterns = new ArrayList<>(4);
         for (Direction candidateRoll : Direction.Plane.HORIZONTAL) {
-            patterns.add(BlockArrayCache.get(candidate.pattern(), facing, candidateRoll));
+            patterns.add(new CandidatePattern(BlockArrayCache.get(candidate.pattern(), facing, candidateRoll), candidateRoll));
         }
         return patterns;
     }
 
-    private boolean tryFormMachine(Machine candidate, Direction facing, BlockArray rotatedPattern) {
+    private boolean tryFormMachine(Machine candidate, Direction facing, CandidatePattern candidatePattern) {
+        BlockArray rotatedPattern = candidatePattern.pattern();
         var compiled = compiledFor(candidate, rotatedPattern, facing);
-        var replacements = replacementsFor(candidate, compiled, facing, rotatedPattern);
+        var replacements = replacementsFor(candidate, compiled, facing, rotatedPattern, candidatePattern.rollFacing());
         boolean matches = compiled == null
                 ? StructureMatcher.matchesRotated(rotatedPattern, level, getBlockPos(), replacements)
-                : StructureMatcher.matchesCompiled(compiled, facing, getBlockState().getValue(MachineControllerBlock.ROLL_FACING), level, getBlockPos());
+                : StructureMatcher.matchesCompiled(compiled, facing, candidatePattern.rollFacing(), level, getBlockPos());
         if (!matches) {
             recordStructureMismatch(candidate, facing, rotatedPattern, replacements);
             return false;
         }
 
-        var levels = resolveLevels(candidate, facing);
+        var levels = resolveLevels(candidate, facing, candidatePattern.rollFacing());
         if (levels.mismatch() != null) {
             recordLevelMismatch(levels.mismatch());
             return false;
@@ -858,13 +861,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
         lastFormationFailure = null;
         lastStructureMismatchDiagnostic = null;
-        onStructureFormed(candidate, rotatedPattern, compiled, facing, replacements, levels.foundLevels());
+        onStructureFormed(candidate, rotatedPattern, compiled, facing, candidatePattern.rollFacing(), replacements, levels.foundLevels());
         return true;
     }
 
     private Map<BlockPos, List<SingleBlockModifierReplacement>> replacementsFor(
-            Machine candidate, CompiledMachinePattern compiled, Direction facing, BlockArray rotatedPattern) {
-        Direction rollFacing = getBlockState().getValue(MachineControllerBlock.ROLL_FACING);
+            Machine candidate, CompiledMachinePattern compiled, Direction facing, BlockArray rotatedPattern, Direction rollFacing) {
         if (compiled != null && compiled.rotatedPattern(facing) == rotatedPattern) {
             return compiled.modifierReplacements(facing, rollFacing);
         }
@@ -882,6 +884,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private @Nullable CompiledMachinePattern compiledFor(Machine candidate, BlockArray rotatedPattern, Direction facing) {
+        if (facing.getAxis().isVertical()) return null;
         CompiledMachinePattern compiled = MachineRegistry.getCompiled(candidate.registryName());
         if (compiled == null || compiled.rotatedPattern(facing) != rotatedPattern) return null;
         return compiled;
@@ -943,14 +946,13 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         lastStructureMismatchDiagnostic = diagnostic;
     }
 
-    private StructureMatcher.LevelResolution resolveLevels(Machine candidate, Direction facing) {
+    private StructureMatcher.LevelResolution resolveLevels(Machine candidate, Direction facing, Direction rollFacing) {
         MachineStructureDefinition definition = MachineStructureRegistry.dynamicSnapshot().get(candidate.registryName());
         if (definition == null || definition.levelSlots().isEmpty()) {
             return new StructureMatcher.LevelResolution(Map.of(), null);
         }
         Map<BlockPos, Identifier> slots = new LinkedHashMap<>();
-        Direction rollFacing = getBlockState().getValue(MachineControllerBlock.ROLL_FACING);
-        Direction normalizedRoll = facing.getAxis().isVertical() ? rollFacing : Direction.SOUTH;
+        Direction normalizedRoll = BlockRotator.normalizedRoll(facing, rollFacing);
         for (var entry : definition.levelSlots().entrySet()) {
             slots.put(BlockRotator.rotateSouthTo(entry.getKey(), facing, normalizedRoll), entry.getValue());
         }
@@ -964,12 +966,13 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private void onStructureFormed(Machine matchedMachine, BlockArray rotatedPattern, CompiledMachinePattern compiledPattern,
-                                   Direction facing, Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
+                                   Direction facing, Direction rollFacing, Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
                                    Map<Identifier, MachineLevel> levels) {
         foundMachine = matchedMachine;
         foundPattern = rotatedPattern;
         foundCompiledPattern = compiledPattern;
         controllerFacing = facing;
+        matchedRollFacing = rollFacing;
         machine = matchedMachine;
         if (level instanceof ServerLevel serverLevel) {
             resourceDomain = StructureClaimRegistry.get(serverLevel).domainFor(getBlockPos());
@@ -1291,6 +1294,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     private record ComponentCounts(int itemInputs, int itemOutputs, int fluidInputs, int fluidOutputs, int energyInputs, int energyOutputs) { }
 
+    private record CandidatePattern(BlockArray pattern, Direction rollFacing) { }
+
     private void resetMachine() {
         resetMachine(true);
     }
@@ -1308,6 +1313,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         foundPattern = null;
         foundCompiledPattern = null;
         controllerFacing = null;
+        matchedRollFacing = Direction.SOUTH;
         foundModifiers.clear();
         foundLevels = Map.of();
         FORMED_CONTROLLERS.remove(this);

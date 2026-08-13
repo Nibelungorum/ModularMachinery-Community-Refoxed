@@ -211,20 +211,18 @@ class DefaultMachinesTest {
         assertThat(machine.displayNameKey()).isEqualTo("machine.mmcr.cracker");
         assertThat(machine.controller().id()).isEqualTo(MMCR.id("cracker_controller"));
         assertThat(machine.controller().allowVerticalFacing()).isTrue();
+        assertThat(machine.controller().requireVerticalFacing()).isFalse();
         assertThat(machine.portRequirements().isEmpty()).isTrue();
+        assertThat(machine.pattern().width()).isEqualTo(3);
+        assertThat(machine.pattern().height()).isEqualTo(3);
+        assertThat(machine.pattern().length()).isEqualTo(4);
         assertThat(machine.pattern().get(BlockPos.ZERO))
                 .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(machine.registryName()).get()));
-        assertThat(machine.pattern().get(new BlockPos(0, -2, 0))).isNull();
-        assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(crackerPortPredicateState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(ModBlocks.BLOCKS.get("fluid_output_hatch_huge").get().defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(ModBlocks.BLOCKS.get("energy_input_hatch_reinforced").get().defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(-1, -1, 0)).matches(net.minecraft.world.level.block.Blocks.WEATHERED_COPPER.defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(0, -3, -1)).matches(net.minecraft.world.level.block.Blocks.POLISHED_ANDESITE.defaultBlockState())).isTrue();
-        assertThat(machine.pattern().get(new BlockPos(1, 0, 0)).matches(net.minecraft.world.level.block.Blocks.BLUE_ICE.defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(0, -1, -3)).matches(net.minecraft.world.level.block.Blocks.POLISHED_ANDESITE.defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, -2)).matches(crackerPortPredicateState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(0, 0, -2))).isNull();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, -1)).matches(net.minecraft.world.level.block.Blocks.BLUE_ICE.defaultBlockState())).isTrue();
+        assertThat(machine.pattern().get(new BlockPos(-1, 0, 0)).matches(net.minecraft.world.level.block.Blocks.WEATHERED_COPPER.defaultBlockState())).isTrue();
     }
 
     @Test
@@ -257,12 +255,8 @@ class DefaultMachinesTest {
     }
 
     @Test
-    void default_cracker_only_matches_when_controller_faces_vertically() {
-        Machine machine = DefaultMachines.cracker(
-                ModBlocks.BLOCKS.get("item_input_bus").get(),
-                ModBlocks.BLOCKS.get("item_output_bus").get(),
-                ModBlocks.BLOCKS.get("fluid_output_hatch").get(),
-                ModBlocks.BLOCKS.get("energy_input_hatch").get());
+    void default_cracker_can_match_when_controller_faces_vertically() {
+        Machine machine = defaultCrackerTemplate();
         BlockPos controller = new BlockPos(10, 4, 10);
         Map<BlockPos, Block> blocks = new HashMap<>();
         for (var entry : machine.pattern().pattern().entrySet()) {
@@ -280,7 +274,7 @@ class DefaultMachinesTest {
 
         assertThat(StructureMatcher.matches(machine.pattern(), LevelStub.create(blocks), controller, Direction.UP))
                 .isTrue();
-        assertThat(machine.controller().requireVerticalFacing()).isTrue();
+        assertThat(machine.controller().requireVerticalFacing()).isFalse();
     }
 
     @Test
@@ -362,6 +356,14 @@ class DefaultMachinesTest {
 
     private static net.minecraft.world.level.block.state.BlockState crackerPortPredicateState() {
         return ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState();
+    }
+
+    private static Machine defaultCrackerTemplate() {
+        return DefaultMachines.cracker(
+                ModBlocks.BLOCKS.get("item_input_bus").get(),
+                ModBlocks.BLOCKS.get("item_output_bus").get(),
+                ModBlocks.BLOCKS.get("fluid_output_hatch").get(),
+                ModBlocks.BLOCKS.get("energy_input_hatch").get());
     }
 
     private static void installDefaultStructures() {

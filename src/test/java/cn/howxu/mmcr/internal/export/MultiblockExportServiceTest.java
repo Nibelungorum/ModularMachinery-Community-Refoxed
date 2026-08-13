@@ -31,11 +31,15 @@ class MultiblockExportServiceTest {
     }
 
     @Test
-    void normalizeOffsetKeepsVerticalCapturesInWorldAxes() {
+    void normalizeOffsetRotatesBackToCapturedFaceForVerticalFaces() {
         BlockPos worldOffset = new BlockPos(2, 1, -3);
 
-        assertThat(MultiblockExportService.normalizeOffset(worldOffset, Direction.UP)).isEqualTo(worldOffset);
-        assertThat(MultiblockExportService.normalizeOffset(worldOffset, Direction.DOWN)).isEqualTo(worldOffset);
+        assertThat(BlockRotator.rotateSouthTo(
+                MultiblockExportService.normalizeOffset(worldOffset, Direction.UP), Direction.UP))
+                .isEqualTo(worldOffset);
+        assertThat(BlockRotator.rotateSouthTo(
+                MultiblockExportService.normalizeOffset(worldOffset, Direction.DOWN), Direction.DOWN))
+                .isEqualTo(worldOffset);
     }
 
     @Test
@@ -91,54 +95,56 @@ class MultiblockExportServiceTest {
     }
 
     @Test
-    void renderJavaExportsZSlicesInsteadOfYLayersForTallStructuresFacingUp() {
-        assertTallStructureExport(Direction.UP);
+    void renderJavaExportsLyingFlatTemplateForUpFacingCapture() {
+        assertTallStructureExport(Direction.UP, Direction.SOUTH);
     }
 
     @Test
-    void renderJavaExportsZSlicesInsteadOfYLayersForTallStructuresFacingDown() {
-        assertTallStructureExport(Direction.DOWN);
+    void renderJavaExportsLyingFlatTemplateForDownFacingCapture() {
+        assertTallStructureExport(Direction.DOWN, Direction.SOUTH);
     }
 
-    private static void assertTallStructureExport(Direction controllerFace) {
-        Identifier a = Identifier.fromNamespaceAndPath("minecraft", "polished_andesite");
-        Identifier x = Identifier.fromNamespaceAndPath("minecraft", "polished_diorite");
-        Identifier b = Identifier.fromNamespaceAndPath("minecraft", "waxed_copper_block");
-        Identifier d = Identifier.fromNamespaceAndPath("minecraft", "blue_ice");
-        Identifier e = Identifier.fromNamespaceAndPath("minecraft", "crying_obsidian");
-
-        String[] yLayers = {
+    private static void assertTallStructureExport(Direction controllerFace, Direction rollFacing) {
+        String[] rawSlices = {
                 "AAA|AAA|AAA",
                 "XBX|B B|XBX",
-                "XBX|B B|XBX",
-                "XDX|DED|XDX"
+                "XDX|D D|XDX",
+                "XEX|ECE|XEX"
         };
         List<MultiblockExportService.SnapshotEntry> entries = new java.util.ArrayList<>();
-        for (int y = 0; y < yLayers.length; y++) {
-            String[] rows = yLayers[y].split("\\|");
-            for (int z = 0; z < rows.length; z++) {
-                for (int xi = 0; xi < rows[z].length(); xi++) {
-                    char c = rows[z].charAt(xi);
+        for (int z = 0; z < rawSlices.length; z++) {
+            String[] rows = rawSlices[z].split("\\|");
+            for (int y = 0; y < rows.length; y++) {
+                for (int x = 0; x < rows[y].length(); x++) {
+                    char c = rows[y].charAt(x);
                     if (c == ' ') continue;
-                    Identifier id = switch (c) {
-                        case 'A' -> a;
-                        case 'X' -> x;
-                        case 'B' -> b;
-                        case 'D' -> d;
-                        case 'E' -> e;
-                        default -> throw new IllegalStateException("Unexpected symbol: " + c);
-                    };
-                    entries.add(new MultiblockExportService.SnapshotEntry(new BlockPos(xi - 1, y - 3, z - 1), id, false));
+                    BlockPos raw = new BlockPos(x - 1, y - 1, z - 3);
+                    if (c == 'C') raw = BlockPos.ZERO;
+                    BlockPos world = BlockRotator.rotateSouthTo(raw, controllerFace, rollFacing);
+                    entries.add(new MultiblockExportService.SnapshotEntry(world, idFor(c), false));
                 }
             }
         }
 
-        String java = MultiblockExportService.renderJava(entries, controllerFace);
+        String java = MultiblockExportService.renderJava(entries, controllerFace, rollFacing);
 
-        assertThat(java).contains(".pattern(\"AAA\", \"XBX\", \"XBX\", \"XDX\")");
-        assertThat(java).contains(".pattern(\"AAA\", \"B B\", \"B B\", \"DED\")");
-        assertThat(java).contains(".pattern(\"AAA\", \"XBX\", \"XBX\", \"XDX\")");
-        assertThat(java).doesNotContain(".pattern(\"AAA\", \"AAA\", \"AAA\")");
+        assertThat(java).contains(".pattern(\"AAA\", \"AAA\", \"AAA\")");
+        assertThat(java).contains(".pattern(\"XBX\", \"B B\", \"XBX\")");
+        assertThat(java).contains(".pattern(\"XDX\", \"D D\", \"XDX\")");
+        assertThat(java).contains(".pattern(\"XEX\", \"ECE\", \"XEX\")");
+        assertThat(java).doesNotContain(".pattern(\"AAA\", \"XBX\", \"XDX\", \"XEX\")");
+    }
+
+    private static Identifier idFor(char c) {
+        return switch (c) {
+            case 'A' -> Identifier.fromNamespaceAndPath("minecraft", "polished_andesite");
+            case 'X' -> Identifier.fromNamespaceAndPath("minecraft", "polished_diorite");
+            case 'B' -> Identifier.fromNamespaceAndPath("minecraft", "waxed_copper_block");
+            case 'D' -> Identifier.fromNamespaceAndPath("minecraft", "blue_ice");
+            case 'E' -> Identifier.fromNamespaceAndPath("minecraft", "crying_obsidian");
+            case 'C' -> Identifier.fromNamespaceAndPath("mmcr", "cracker_controller");
+            default -> throw new IllegalStateException("Unexpected symbol: " + c);
+        };
     }
 
     @Test

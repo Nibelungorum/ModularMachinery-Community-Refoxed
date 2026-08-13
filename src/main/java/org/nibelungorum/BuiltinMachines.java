@@ -79,7 +79,7 @@ public final class BuiltinMachines {
                     defaults.bottomTexture(),
                     true,
                     true,
-                    true);
+                    false);
             return MachineRegistration.builder(CRACKER_ID)
                     .displayNameKey("machine.mmcr.cracker")
                     .controllerSpec(controller)
