@@ -112,6 +112,10 @@ public final class LevelStub {
         ((TestLevel) level).gameTime = gameTime;
     }
 
+    public static int sentBlockUpdates(Level level) {
+        return ((TestLevel) level).sentBlockUpdates;
+    }
+
     private static Level createFromStates(Map<BlockPos, BlockState> blocks) {
         try {
             var level = (TestLevel) unsafe().allocateInstance(TestLevel.class);
@@ -138,6 +142,7 @@ public final class LevelStub {
         private Map<BlockPos, Integer> directSignals = new HashMap<>();
         private Set<Long> loadedChunks;
         private long gameTime;
+        private int sentBlockUpdates;
 
         private TestLevel() {
             super(null, Level.OVERWORLD, null, null, false, false, 0L, 0);
@@ -172,7 +177,7 @@ public final class LevelStub {
             return true;
         }
 
-        @Override public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) {}
+        @Override public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) { sentBlockUpdates++; }
         @Override public void playSeededSound(Entity entity, double x, double y, double z, Holder<SoundEvent> sound, SoundSource source, float volume, float pitch, long seed) {}
         @Override public void playSeededSound(Entity sourceEntity, Entity entity, Holder<SoundEvent> sound, SoundSource source, float volume, float pitch, long seed) {}
         @Override public void explode(Entity source, DamageSource damageSource, ExplosionDamageCalculator calculator, double x, double y, double z, float radius, boolean fire, ExplosionInteraction interaction, ParticleOptions smallExplosionParticles, ParticleOptions largeExplosionParticles, WeightedList<net.minecraft.core.particles.ExplosionParticleInfo> blockInteractionParticles, Holder<SoundEvent> explosionSound) {}

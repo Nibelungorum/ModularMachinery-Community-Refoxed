@@ -15,6 +15,7 @@ import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
@@ -71,15 +72,21 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
     public void toggleAutoIOEnabled() {
         autoIOConfig.setEnabled(!autoIOConfig.enabled());
-        markAutoIOCacheDirty();
-        setChanged();
+        markAutoIOConfigChanged();
     }
 
     public void toggleAutoIOSide(Direction side) {
         if (side == null) return;
         autoIOConfig.toggleSide(side);
+        markAutoIOConfigChanged();
+    }
+
+    private void markAutoIOConfigChanged() {
         markAutoIOCacheDirty();
         setChanged();
+        if (level != null && !level.isClientSide()) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
+        }
     }
 
     public void markAutoIOCacheDirty() {

@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.tile;
 
+import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -62,6 +63,17 @@ class AutoIOPortTest {
         assertThat(port("item_input_bus_normal").autoIOCapabilityType()).isEqualTo(AutoIOCapabilityType.ITEM);
         assertThat(port("fluid_input_hatch_tiny").autoIOCapabilityType()).isEqualTo(AutoIOCapabilityType.FLUID);
         assertThat(port("energy_input_hatch_tiny").autoIOCapabilityType()).isEqualTo(AutoIOCapabilityType.ENERGY);
+    }
+
+    @Test
+    void toggling_auto_io_syncs_port_update_to_clients() {
+        IOPortBlockEntity port = port("item_input_bus_normal");
+        var level = LevelStub.createWithBlockEntities(java.util.List.of(port));
+        port.setLevel(level);
+
+        port.toggleAutoIOEnabled();
+
+        assertThat(LevelStub.sentBlockUpdates(level)).isEqualTo(1);
     }
 
     private static IOPortBlockEntity port(String id) {

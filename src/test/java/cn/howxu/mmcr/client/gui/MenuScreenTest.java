@@ -8,14 +8,19 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.menu.FactorySchedulerMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
+import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.inventory.Slot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
@@ -29,6 +34,7 @@ class MenuScreenTest {
     @BeforeAll
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
+        bind(ModUIs.ITEM_BUS, new MenuType<>((containerId, playerInventory) -> new ItemBusMenu(containerId, playerInventory), FeatureFlags.VANILLA_SET));
     }
 
     @Test
@@ -87,6 +93,20 @@ class MenuScreenTest {
         assertThat(MachineMenuScreen.isPortSlotIndex(0, 6)).isTrue();
         assertThat(MachineMenuScreen.isPortSlotIndex(5, 6)).isTrue();
         assertThat(MachineMenuScreen.isPortSlotIndex(6, 6)).isFalse();
+    }
+
+    @Test
+    void auto_io_page_allows_player_hotbar_slots_with_low_backing_indices() throws Exception {
+        MachineMenuScreen screen = screenForMenu(new ItemBusMenu(1, new Inventory(null, null)));
+        Field autoIOPage = MachineMenuScreen.class.getDeclaredField("autoIOPage");
+        autoIOPage.setAccessible(true);
+        autoIOPage.setBoolean(screen, true);
+
+        Method isAutoIOPortSlot = MachineMenuScreen.class.getDeclaredMethod("isAutoIOPortSlot", net.minecraft.world.inventory.Slot.class, int.class);
+        isAutoIOPortSlot.setAccessible(true);
+
+        Slot hotbarSlot = new Slot(new net.minecraft.world.SimpleContainer(9), 0, 8, 142);
+        assertThat((boolean) isAutoIOPortSlot.invoke(screen, hotbarSlot, 33)).isFalse();
     }
 
     @Test
@@ -216,6 +236,25 @@ class MenuScreenTest {
         }
     }
 
+    private static MachineMenuScreen screenForMenu(AbstractContainerMenu menu) {
+        try {
+            Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+            unsafeField.setAccessible(true);
+            sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+            MachineMenuScreen screen = (MachineMenuScreen) unsafe.allocateInstance(MachineMenuScreen.class);
+            setField(net.minecraft.client.gui.screens.inventory.AbstractContainerScreen.class, screen, "menu", menu);
+            return screen;
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("Unable to allocate menu screen", e);
+        }
+    }
+
+    private static void setField(Class<?> owner, Object target, String name, Object value) throws ReflectiveOperationException {
+        Field field = owner.getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+
     private static FactorySchedulerMenu factoryMenuWithoutConstructor() {
         try {
             Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
@@ -225,5 +264,20 @@ class MenuScreenTest {
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate factory menu", e);
         }
+    }
+
+    private static void bind(Object deferredHolder, MenuType<ItemBusMenu> menuType) throws Exception {
+        Class<?> type = deferredHolder.getClass();
+        Field holder = null;
+        while (type != null && holder == null) {
+            try {
+                holder = type.getDeclaredField("holder");
+            } catch (NoSuchFieldException ignored) {
+                type = type.getSuperclass();
+            }
+        }
+        if (holder == null) throw new NoSuchFieldException("holder");
+        holder.setAccessible(true);
+        holder.set(deferredHolder, Holder.direct(menuType));
     }
 }

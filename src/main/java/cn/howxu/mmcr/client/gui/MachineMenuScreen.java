@@ -248,7 +248,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
 
     @Override
     protected void slotClicked(Slot slot, int slotIdx, int mouseButton, ContainerInput clickType) {
-        if (isAutoIOPortSlot(slot)) return;
+        if (isAutoIOPortSlot(slot, slotIdx)) return;
         super.slotClicked(slot, slotIdx, mouseButton, clickType);
     }
 
@@ -294,8 +294,8 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         return menu instanceof ItemBusMenu itemBus ? itemBus.busSlotCount() : 0;
     }
 
-    private boolean isAutoIOPortSlot(Slot slot) {
-        return autoIOPage && menu instanceof ItemBusMenu && slot != null && isPortSlotIndex(slot.index, portSlotCount());
+    private boolean isAutoIOPortSlot(Slot slot, int slotIdx) {
+        return autoIOPage && menu instanceof ItemBusMenu && slot != null && isPortSlotIndex(slotIdx, portSlotCount());
     }
 
     private void initAutoIOButtons() {
