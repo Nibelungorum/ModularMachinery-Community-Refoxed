@@ -77,6 +77,16 @@ class TranslationsTest {
     }
 
     @Test
+    void terminal_item_tooltip_and_switch_message_are_translated_for_both_locales() {
+        assertEquals("Terminal", Translations.ALL.get("en_us").get("item.mmcr.terminal"));
+        assertEquals("Mode: %s", Translations.ALL.get("en_us").get("tooltip.mmcr.terminal.mode"));
+        assertEquals("Switched to: %s", Translations.ALL.get("en_us").get("message.mmcr.terminal.switched"));
+        assertEquals("终端", Translations.ALL.get("zh_cn").get("item.mmcr.terminal"));
+        assertEquals("模式: %s", Translations.ALL.get("zh_cn").get("tooltip.mmcr.terminal.mode"));
+        assertEquals("切换到: %s", Translations.ALL.get("zh_cn").get("message.mmcr.terminal.switched"));
+    }
+
+    @Test
     void controller_parallel_thread_and_port_labels_are_generated_for_both_locales() {
         assertEquals("Parallel Slots", Translations.ALL.get("en_us").get("jade.mmcr.machine_controller.parallel_slots"));
         assertEquals("Multithreading", Translations.ALL.get("en_us").get("jade.mmcr.machine_controller.threads"));
