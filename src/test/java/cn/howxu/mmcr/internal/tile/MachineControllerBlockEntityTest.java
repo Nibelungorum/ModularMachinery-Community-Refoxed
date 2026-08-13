@@ -1941,6 +1941,42 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void vertical_symmetric_machine_uses_matched_roll_for_position_modifiers() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockPos rawPos = new BlockPos(1, 0, 0);
+        Direction matchedRoll = Direction.NORTH;
+        BlockPos expected = BlockRotator.rotateSouthTo(rawPos, Direction.UP, matchedRoll);
+        var defaults = cn.howxu.mmcr.api.machine.MachineControllerSpec.defaultsFor(MMCR.id("vertical_symmetric_matched_modifier_roll"));
+        var spec = new cn.howxu.mmcr.api.machine.MachineControllerSpec(
+                defaults.id(), defaults.frontTexture(), defaults.sideTexture(), defaults.topTexture(), defaults.bottomTexture(), true, true);
+        var replacement = new SingleBlockModifierReplacement(
+                "matched_roll_modifier", rawPos, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
+                List.of(new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.INPUT,
+                        4F, RecipeModifier.Operation.ADD, false)), "", ItemStack.EMPTY);
+        DynamicMachine machine = new DynamicMachine(
+                MMCR.id("vertical_symmetric_matched_modifier_roll"), "Vertical Symmetric Matched Modifier Roll",
+                new BlockArray(Map.of(rawPos, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))),
+                spec, PortRequirementSpec.none(), List.of(), Map.of(rawPos, List.of(replacement)));
+        MachineControllerBlockEntity controller = controllerForFormation(
+                machine,
+                controllerPos,
+                Direction.UP,
+                Direction.SOUTH,
+                itemInputBus(controllerPos.offset(expected)));
+        Level level = levelOf(controller);
+        level.setBlock(controllerPos.offset(expected), Blocks.GOLD_BLOCK.defaultBlockState(), 3);
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.UP);
+
+        assertThat(formed).isTrue();
+        assertThat(controller.getFoundPattern().pattern()).containsKey(expected);
+        assertThat(controller.getFoundModifiers()).containsKey("matched_roll_modifier");
+        assertThat(controller.getFoundModifiers().get("matched_roll_modifier"))
+                .extracting(RecipeModifier::getModifier)
+                .containsExactly(4F);
+    }
+
+    @Test
     void require_vertical_machine_rejects_matching_horizontal_structure() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
