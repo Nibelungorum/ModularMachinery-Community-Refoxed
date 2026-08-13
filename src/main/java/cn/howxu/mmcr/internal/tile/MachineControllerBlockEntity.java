@@ -77,11 +77,13 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -90,6 +92,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private static final Logger LOG = LoggerFactory.getLogger(MachineControllerBlockEntity.class);
     private static final AtomicInteger INSTANCE_COUNTER = new AtomicInteger();
     private static final Set<MachineControllerBlockEntity> FORMED_CONTROLLERS = ConcurrentHashMap.newKeySet();
+    private static final int PREVIEW_RECEIVER_WINDOW_TICKS = 8 * 20;
     private final int instanceId = INSTANCE_COUNTER.incrementAndGet();
 
     private Machine machine;
@@ -140,6 +143,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private boolean sharedTickPending;
     private @Nullable StructureClaimRegistry.ResourceDomain pendingSharedTickDomain;
     private boolean syncedRuntimeActive;
+    private Map<UUID, Long> previewReceivers = new LinkedHashMap<>();
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
@@ -193,6 +197,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         boolean before = isFormed();
         if (before == f) return;
         level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.FORMED, f), 3);
+        if (f) notifyPreviewReceiversStructureFormed();
     }
 
     public MachineRecipe getActiveRecipe() { return active == null ? null : active.getRecipe(); }
@@ -655,7 +660,51 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         Optional<MultiblockPreviewSnapshot> snapshot = createStructurePreviewSnapshot(PktMultiblockPreviewPayload.MAX_ENTRIES);
         if (snapshot.isEmpty()) return false;
         PacketDistributor.sendToPlayer(player, new PktMultiblockPreviewPayload(snapshot.get()));
+        rememberPreviewReceiver(player.getUUID(), level.getGameTime(), PREVIEW_RECEIVER_WINDOW_TICKS);
         return true;
+    }
+
+    void rememberPreviewReceiverForTesting(UUID playerId, long now, int durationTicks) {
+        rememberPreviewReceiver(playerId, now, durationTicks);
+    }
+
+    Set<UUID> consumeActivePreviewReceiverIdsForTesting(long now) {
+        return consumeActivePreviewReceiverIds(now);
+    }
+
+    private void rememberPreviewReceiver(UUID playerId, long now, int durationTicks) {
+        previewReceivers().put(playerId, now + Math.max(1, durationTicks));
+    }
+
+    private Set<UUID> consumeActivePreviewReceiverIds(long now) {
+        Set<UUID> activeReceivers = new HashSet<>();
+        Iterator<Map.Entry<UUID, Long>> iterator = previewReceivers().entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<UUID, Long> entry = iterator.next();
+            if (entry.getValue() > now) activeReceivers.add(entry.getKey());
+            iterator.remove();
+        }
+        return activeReceivers;
+    }
+
+    private Map<UUID, Long> previewReceivers() {
+        if (previewReceivers == null) previewReceivers = new LinkedHashMap<>();
+        return previewReceivers;
+    }
+
+    private void notifyPreviewReceiversStructureFormed() {
+        if (!(level instanceof ServerLevel serverLevel)) {
+            previewReceivers().clear();
+            return;
+        }
+        if (previewReceivers().isEmpty()) return;
+        Set<UUID> receiverIds = consumeActivePreviewReceiverIds(serverLevel.getGameTime());
+        if (receiverIds.isEmpty()) return;
+        PktMultiblockPreviewPayload clearPayload = PktMultiblockPreviewPayload.clear(serverLevel.dimension(), getBlockPos());
+        for (UUID receiverId : receiverIds) {
+            ServerPlayer player = serverLevel.getServer().getPlayerList().getPlayer(receiverId);
+            if (player != null) PacketDistributor.sendToPlayer(player, clearPayload);
+        }
     }
 
     private void sendStructureMismatchDiagnostic(ServerPlayer player, StructureMatcher.Mismatch mismatch) {

@@ -4,20 +4,19 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.ShapeRenderer;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.block.BlockModelRenderState;
+import net.minecraft.client.renderer.block.model.BlockDisplayContext;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 
 import java.util.Comparator;
@@ -30,8 +29,7 @@ import java.util.List;
  */
 @EventBusSubscriber(modid = MMCR.MODID, value = Dist.CLIENT)
 public final class MultiblockPreviewClientHandler {
-    private static final int PREVIEW_COLOR = 0xAA66CCFF;
-    private static final float LINE_WIDTH = 2.0F;
+    private static final BlockDisplayContext BLOCK_DISPLAY_CONTEXT = BlockDisplayContext.create();
 
     private static ResourceKey<Level> dimension;
     private static BlockPos controllerPos;
@@ -45,9 +43,17 @@ public final class MultiblockPreviewClientHandler {
 
     public static void show(ResourceKey<Level> newDimension, BlockPos newControllerPos,
                             List<MultiblockPreviewSnapshot.Entry> newEntries, int durationTicks) {
+        if (newEntries.isEmpty()) {
+            clearPreview(newDimension, newControllerPos);
+            return;
+        }
         Minecraft minecraft = Minecraft.getInstance();
         long now = minecraft.level == null ? 0L : minecraft.level.getGameTime();
         showAtTick(newDimension, newControllerPos, newEntries, durationTicks, now);
+    }
+
+    public static void clearPreview(ResourceKey<Level> previewDimension, BlockPos previewControllerPos) {
+        if (controllerPos != null && previewDimension.equals(dimension) && previewControllerPos.equals(controllerPos)) clear();
     }
 
     static void showAtTick(ResourceKey<Level> newDimension, BlockPos newControllerPos,
@@ -77,7 +83,7 @@ public final class MultiblockPreviewClientHandler {
     }
 
     @SubscribeEvent
-    public static void onRenderAfterWeather(RenderLevelStageEvent.AfterWeather event) {
+    public static void onSubmitCustomGeometry(SubmitCustomGeometryEvent event) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level == null || controllerPos == null || !minecraft.level.dimension().equals(dimension)) return;
         if (!isActive(minecraft.level.getGameTime())) {
@@ -97,6 +103,10 @@ public final class MultiblockPreviewClientHandler {
 
     static void clearForTesting() {
         clear();
+    }
+
+    static boolean rendersPreviewOutlineForTesting() {
+        return false;
     }
 
     private static boolean isActive(long now) {
@@ -133,27 +143,23 @@ public final class MultiblockPreviewClientHandler {
         expiresAtTick = -1L;
     }
 
-    private static void render(RenderLevelStageEvent.AfterWeather event, Minecraft minecraft) {
+    private static void render(SubmitCustomGeometryEvent event, Minecraft minecraft) {
         if (visibleEntries.isEmpty()) return;
         PoseStack poseStack = event.getPoseStack();
-        MultiBufferSource.BufferSource buffer = minecraft.renderBuffers().bufferSource();
-        Vec3 camera = minecraft.gameRenderer.getMainCamera().position();
-        poseStack.pushPose();
-        poseStack.translate(-camera.x, -camera.y, -camera.z);
+        Vec3 camera = event.getLevelRenderState().cameraRenderState.pos;
+        var collector = event.getSubmitNodeCollector();
+        var resolver = minecraft.getBlockModelResolver();
 
         for (MultiblockPreviewSnapshot.Entry entry : visibleEntries) {
             BlockPos worldPos = controllerPos.offset(entry.relativePos());
-            ShapeRenderer.renderShape(
-                    poseStack,
-                    buffer.getBuffer(RenderTypes.lines()),
-                    Shapes.create(new AABB(worldPos).inflate(-0.1D)),
-                    0.0D,
-                    0.0D,
-                    0.0D,
-                    PREVIEW_COLOR,
-                    LINE_WIDTH);
+            poseStack.pushPose();
+            poseStack.translate(worldPos.getX() - camera.x, worldPos.getY() - camera.y, worldPos.getZ() - camera.z);
+
+            BlockModelRenderState renderState = new BlockModelRenderState();
+            resolver.update(renderState, entry.state(), BLOCK_DISPLAY_CONTEXT);
+            renderState.submitMultiLayer(poseStack, collector, LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
+
+            poseStack.popPose();
         }
-        poseStack.popPose();
-        buffer.endBatch(RenderTypes.lines());
     }
 }

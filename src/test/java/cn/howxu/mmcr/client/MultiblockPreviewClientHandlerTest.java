@@ -41,4 +41,22 @@ class MultiblockPreviewClientHandlerTest {
         assertEquals(Integer.MAX_VALUE, MultiblockPreviewClientHandler.selectedLayerForTesting());
         assertEquals(2, MultiblockPreviewClientHandler.visibleEntryCountForTesting());
     }
+
+    @Test
+    void ghostPreviewDoesNotRenderBlueOutline() {
+        assertEquals(false, MultiblockPreviewClientHandler.rendersPreviewOutlineForTesting());
+    }
+
+    @Test
+    void clearPreviewOnlyClearsMatchingController() {
+        MultiblockPreviewClientHandler.clearForTesting();
+        var entries = List.of(new MultiblockPreviewSnapshot.Entry(new BlockPos(0, 0, 0), Blocks.IRON_BLOCK.defaultBlockState()));
+
+        MultiblockPreviewClientHandler.showAtTick(Level.OVERWORLD, BlockPos.ZERO, entries, 200, 0L);
+        MultiblockPreviewClientHandler.clearPreview(Level.OVERWORLD, new BlockPos(1, 0, 0));
+        assertEquals(1, MultiblockPreviewClientHandler.visibleEntryCountForTesting());
+
+        MultiblockPreviewClientHandler.clearPreview(Level.OVERWORLD, BlockPos.ZERO);
+        assertEquals(0, MultiblockPreviewClientHandler.visibleEntryCountForTesting());
+    }
 }

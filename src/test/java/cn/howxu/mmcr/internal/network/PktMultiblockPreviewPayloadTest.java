@@ -44,4 +44,21 @@ class PktMultiblockPreviewPayloadTest {
         assertEquals(Blocks.IRON_BLOCK.defaultBlockState(), decoded.entries().getFirst().state());
         assertEquals(200, decoded.durationTicks());
     }
+
+    @Test
+    void clear_payload_has_empty_entries_and_zero_duration() {
+        var payload = PktMultiblockPreviewPayload.clear(Level.OVERWORLD, new BlockPos(1, 2, 3));
+
+        var buffer = new RegistryFriendlyByteBuf(
+                io.netty.buffer.Unpooled.buffer(),
+                RegistryAccess.EMPTY,
+                ConnectionType.NEOFORGE);
+        PktMultiblockPreviewPayload.STREAM_CODEC.encode(buffer, payload);
+        var decoded = PktMultiblockPreviewPayload.STREAM_CODEC.decode(buffer);
+
+        assertEquals(ResourceKey.create(Registries.DIMENSION, Level.OVERWORLD.identifier()), decoded.dimension());
+        assertEquals(new BlockPos(1, 2, 3), decoded.controllerPos());
+        assertEquals(List.of(), decoded.entries());
+        assertEquals(0, decoded.durationTicks());
+    }
 }

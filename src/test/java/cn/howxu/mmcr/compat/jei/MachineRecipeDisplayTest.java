@@ -427,7 +427,7 @@ class MachineRecipeDisplayTest {
                 .containsKeys("jei.mmcr.machine_recipe.input_overflow", "jei.mmcr.machine_recipe.output_overflow",
                         "jei.mmcr.machine_recipe.overflow_entry", "jei.mmcr.machine_recipe.component_constraints");
         assertThat(Translations.ALL.get("zh_cn"))
-                .containsEntry("jei.mmcr.machine_recipe.output_overflow", "其余产物：")
+                .containsEntry("jei.mmcr.machine_recipe.output_overflow", "其余产物: ")
                 .containsKeys("jei.mmcr.machine_recipe.input_overflow", "jei.mmcr.machine_recipe.overflow_entry",
                         "jei.mmcr.machine_recipe.component_constraints");
     }

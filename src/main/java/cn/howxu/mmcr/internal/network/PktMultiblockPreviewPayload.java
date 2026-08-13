@@ -51,6 +51,10 @@ public record PktMultiblockPreviewPayload(ResourceKey<Level> dimension, BlockPos
         this(snapshot.dimension(), snapshot.controllerPos(), snapshot.entries(), DURATION_TICKS);
     }
 
+    public static PktMultiblockPreviewPayload clear(ResourceKey<Level> dimension, BlockPos controllerPos) {
+        return new PktMultiblockPreviewPayload(dimension, controllerPos, List.of(), 0);
+    }
+
     private static void write(RegistryFriendlyByteBuf buf, PktMultiblockPreviewPayload payload) {
         Identifier.STREAM_CODEC.encode(buf, payload.dimension.identifier());
         buf.writeBlockPos(payload.controllerPos);

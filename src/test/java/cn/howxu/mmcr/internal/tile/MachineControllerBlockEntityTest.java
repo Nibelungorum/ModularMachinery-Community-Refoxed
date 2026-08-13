@@ -76,6 +76,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -112,6 +113,23 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.totalCapacityEnergy()).isZero();
         assertThat(controller.primaryFluid()).isEqualTo(FluidStack.EMPTY);
         assertThat(controller.primaryOutputFluid()).isEqualTo(FluidStack.EMPTY);
+    }
+
+    @Test
+    void preview_receiver_is_consumed_only_inside_preview_window() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+
+        controller.rememberPreviewReceiverForTesting(first, 100L, 160);
+        controller.rememberPreviewReceiverForTesting(second, 100L, 160);
+
+        assertThat(controller.consumeActivePreviewReceiverIdsForTesting(259L)).containsExactlyInAnyOrder(first, second);
+        assertThat(controller.consumeActivePreviewReceiverIdsForTesting(259L)).isEmpty();
+
+        controller.rememberPreviewReceiverForTesting(first, 100L, 160);
+        assertThat(controller.consumeActivePreviewReceiverIdsForTesting(261L)).isEmpty();
     }
 
     @Test

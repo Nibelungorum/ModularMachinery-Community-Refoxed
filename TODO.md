@@ -37,27 +37,43 @@
 
 - [ ] 自动输入自动输出功能(使用原版的控件，嗯对，参考MEK)
 
+Implementation plan 已写完并自检完成：
+- 设计文档：docs/superpowers/specs/2026-08-13-auto-io-control-design.md
+- 实施计划：docs/superpowers/plans/2026-08-13-auto-io-control.md
+- 已按项目规则处理：没有提交 docs/ 或 .superpowers/
+- 计划覆盖：Auto IO 配置模型、端口持久化、物品/流体/能量 transfer handler、性能敏感 tick、服务端包、UI 控制页、标题隐藏、最终验证
+
 - [X] 声音事件
 
-
-- [ ] 接口集成(AE2 总成型接口[新UI?] MEK气体接口(涉及配方modify) 输入输出总成)
-
-- [ ] 额外解锁槽(发电阵列，生物屠宰场类似)系统，这样UI又要改了，干吧跌。
+- [X] 额外解锁槽(发电阵列，生物屠宰场类似)系统，这样UI又要改了，干吧跌。
 把这个单独扔到一个方块里面吧，嗯对
+
+我突然觉得这个东西没什么必要啊说实话
 
 - [ ] 插件型机器 参考太空电梯
 
-- [ ] 可扩展型机器 参考蒸馏塔
+前置实现水平竖直同时支持
+- 设计规格已写入：docs/superpowers/specs/2026-08-13-horizontal-vertical-structure-detection-design.md
+- 实现计划已写入：docs/superpowers/plans/2026-08-13-horizontal-vertical-structure-detection.md
+- 计划结论：优先只补 MachineControllerLevelTest 的回归测试，验证 .allowVerticalFacing() 同时允许水平和竖直成型；只有测试暴露缺口时才最小修改 MachineControllerBlockEntity
+- 已注意项目规则：docs 下文件不应加入 git，也未提交
+- 当前工作区在开始前已有多处用户/协作者改动，我没有回滚或覆盖这些文件
+
+新增一个模块接口，用来解决插槽机器的问题
+
+- [ ] 可扩展型机器 或者说多层级机器 参考蒸馏塔 以及可丢失型合成
+
+- [ ] 接口集成(AE2 总成型接口[新UI?] MEK气体接口(涉及配方modify) 输入输出总成)
 
 - [ ] 异步(这个可能要后面再说了)，大范围异步的线程内资源共享也是开销的一部分
 
-- [ ] Modifer JEI集成(机器预览功能出了再搞)
-
-- [ ] 机器的render和相关api暴露(最后一个再做这个)
-
-- [ ] 重构其它地方
+- [ ] Modifer JEI集成机器预览功能出了再搞
 
 - [ ] 算力系统
+
+- [ ] 自定义function回调
+
+- [ ] 机器的render和相关api暴露(最后一个再做这个)
 
 - [X] 多线程 Stage 5已经实现了
 
