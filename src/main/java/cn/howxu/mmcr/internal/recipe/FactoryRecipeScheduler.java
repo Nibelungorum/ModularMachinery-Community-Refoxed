@@ -160,10 +160,11 @@ public final class FactoryRecipeScheduler {
             snapshots.add(new ThreadSnapshot(index, thread.isBaseThread(), thread.isCoreThread(), active != null,
                     active == null || active.getRecipe() == null ? "" : active.getRecipe().id().toString(),
                     active == null ? 0 : active.getTick(), active == null ? 0 : active.getTotalTick(),
-                    active == null ? 1 : active.getParallelism(), thread.getLastFailureUnloc()));
+                    active == null ? 1 : active.getParallelism(), thread.getLastFailureUnloc(),
+                    thread.isRecipeLocked(), thread.lockedRecipeId() == null ? "" : thread.lockedRecipeId().toString()));
         }
         for (int index = snapshots.size(); index < threadLimit; index++) {
-            snapshots.add(new ThreadSnapshot(index, false, false, false, "", 0, 0, 1, ""));
+            snapshots.add(new ThreadSnapshot(index, false, false, false, "", 0, 0, 1, "", false, ""));
         }
         return List.copyOf(snapshots);
     }
@@ -371,10 +372,17 @@ public final class FactoryRecipeScheduler {
     }
 
     public record ThreadSnapshot(int index, boolean baseThread, boolean coreThread, boolean active,
-                                  String recipeId, int tick, int totalTick, int parallelism, String lastFailureUnloc) {
+                                  String recipeId, int tick, int totalTick, int parallelism, String lastFailureUnloc,
+                                  boolean locked, String lockedRecipeId) {
         public ThreadSnapshot {
             recipeId = recipeId == null ? "" : recipeId;
             lastFailureUnloc = lastFailureUnloc == null ? "" : lastFailureUnloc;
+            lockedRecipeId = lockedRecipeId == null ? "" : lockedRecipeId;
+        }
+
+        public ThreadSnapshot(int index, boolean baseThread, boolean coreThread, boolean active,
+                              String recipeId, int tick, int totalTick, int parallelism, String lastFailureUnloc) {
+            this(index, baseThread, coreThread, active, recipeId, tick, totalTick, parallelism, lastFailureUnloc, false, "");
         }
 
         public ThreadSnapshot(int index, boolean baseThread, boolean coreThread, boolean active,
@@ -383,7 +391,7 @@ public final class FactoryRecipeScheduler {
         }
 
         public static ThreadSnapshot idleBase() {
-            return new ThreadSnapshot(0, true, false, false, "", 0, 0, 1, "");
+            return new ThreadSnapshot(0, true, false, false, "", 0, 0, 1, "", false, "");
         }
     }
 }

@@ -1,12 +1,16 @@
 package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.internal.network.FactoryControllerSnapshot;
+import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
+import net.neoforged.neoforge.network.connection.ConnectionType;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -68,6 +72,48 @@ class FactoryControllerMenuTest {
     }
 
     @Test
+    void selected_thread_exposes_only_its_own_recipe_lock() {
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        menu.applySnapshot(new FactoryControllerSnapshot(BlockPos.ZERO, true, false, 0, 2, 0, 1,
+                "Factory", 0, java.util.List.of(
+                lockedSnapshot(0, false, "mmcr:first"),
+                lockedSnapshot(1, true, "mmcr:second"))));
+
+        assertThat(menu.selectedRecipeLocked()).isFalse();
+        assertThat(menu.selectedLockedRecipeId()).isEmpty();
+
+        menu.selectThread(1);
+
+        assertThat(menu.selectedRecipeLocked()).isTrue();
+        assertThat(menu.selectedLockedRecipeId()).isEqualTo("mmcr:second");
+    }
+
+    @Test
+    void thread_snapshot_compatibility_constructor_defaults_to_unlocked() {
+        FactoryRecipeScheduler.ThreadSnapshot snapshot = new FactoryRecipeScheduler.ThreadSnapshot(
+                0, true, false, false, "", 0, 0, 1, "failure");
+
+        assertThat(snapshot.locked()).isFalse();
+        assertThat(snapshot.lockedRecipeId()).isEmpty();
+        assertThat(snapshot.lastFailureUnloc()).isEqualTo("failure");
+    }
+
+    @Test
+    void payload_round_trip_preserves_thread_recipe_lock() {
+        FactoryControllerSnapshot snapshot = new FactoryControllerSnapshot(BlockPos.ZERO, true, false, 0, 1, 0, 1,
+                "Factory", 0, java.util.List.of(lockedSnapshot(0, true, "mmcr:locked_recipe")));
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.buffer(),
+                RegistryAccess.EMPTY, ConnectionType.NEOFORGE);
+
+        PktFactoryControllerStatePayload.STREAM_CODEC.encode(buffer, new PktFactoryControllerStatePayload(snapshot));
+        FactoryRecipeScheduler.ThreadSnapshot decoded =
+                PktFactoryControllerStatePayload.STREAM_CODEC.decode(buffer).snapshot().threads().getFirst();
+
+        assertThat(decoded.locked()).isTrue();
+        assertThat(decoded.lockedRecipeId()).isEqualTo("mmcr:locked_recipe");
+    }
+
+    @Test
     void snapshot_exposes_the_last_failure_key() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
         menu.applySnapshot(new FactoryControllerSnapshot(BlockPos.ZERO, true, true, 1, 1, 1, 1,
@@ -108,6 +154,11 @@ class FactoryControllerMenuTest {
         return new FactoryControllerSnapshot(BlockPos.ZERO, true, false, 0, indexes.length, 0, 1,
                 java.util.Arrays.stream(indexes).mapToObj(index -> new FactoryRecipeScheduler.ThreadSnapshot(
                         index, index == 0, false, false, "", 0, 0, 1)).toList());
+    }
+
+    private static FactoryRecipeScheduler.ThreadSnapshot lockedSnapshot(int index, boolean locked, String recipeId) {
+        return new FactoryRecipeScheduler.ThreadSnapshot(index, index == 0, false, false,
+                "", 0, 0, 1, "", locked, locked ? recipeId : "");
     }
 
     private static net.minecraft.network.FriendlyByteBuf bufferAt(BlockPos pos) {

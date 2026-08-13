@@ -344,6 +344,23 @@ class FactoryRecipeSchedulerTest {
     }
 
     @Test
+    void threadSnapshotsExposeLockStateAndKeepIdlePlaceholdersUnlocked() {
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2, new RecipeCraftingContextPool());
+        FactoryRecipeThread baseThread = scheduler.allThreads().getFirst();
+        baseThread.setLockedRecipeId(MMCR.id("snapshot_locked_recipe"));
+
+        assertThat(scheduler.threadSnapshots()).satisfiesExactly(
+                snapshot -> {
+                    assertThat(snapshot.locked()).isTrue();
+                    assertThat(snapshot.lockedRecipeId()).isEqualTo("mmcr:snapshot_locked_recipe");
+                },
+                snapshot -> {
+                    assertThat(snapshot.locked()).isFalse();
+                    assertThat(snapshot.lockedRecipeId()).isEmpty();
+                });
+    }
+
+    @Test
     void failed_shared_restart_forgets_cached_recipe_and_allows_fallback_search() throws Exception {
         Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         Items.IRON_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
