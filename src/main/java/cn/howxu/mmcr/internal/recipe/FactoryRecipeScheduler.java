@@ -140,6 +140,11 @@ public final class FactoryRecipeScheduler {
         return List.copyOf(threads);
     }
 
+    public boolean toggleRecipeLock(int index) {
+        if (index < 0 || index >= threads.size()) return false;
+        return threads.get(index).toggleRecipeLock();
+    }
+
     public void ensureBaseThread(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
         if (!threads.isEmpty() && threads.getFirst().isBaseThread()) return;
         threads.removeIf(thread -> {

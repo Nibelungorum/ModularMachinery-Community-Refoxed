@@ -11,6 +11,7 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.client.gui.components.Button;
 
 import java.util.List;
 import java.util.Map;
@@ -45,6 +46,7 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     private int scrollOffset;
     private boolean draggingScrollbar;
     private int scrollbarDragOffsetY;
+    private Button lockButton;
 
     public FactoryControllerScreen(FactoryControllerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, IMAGE_WIDTH, IMAGE_HEIGHT);
@@ -53,6 +55,13 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     }
 
     public static int defaultSelectedThread() { return 0; }
+
+    @Override
+    protected void init() {
+        super.init();
+        lockButton = addRenderableWidget(Button.builder(Component.translatable("gui.mmcr.controller.recipe_lock"),
+                button -> menu.requestRecipeLock()).bounds(leftPos + 113, topPos + 181, 159, 20).build());
+    }
 
     static int threadIndexAt(int left, int top, int scroll, int mouseX, int mouseY) {
         if (mouseX < left || mouseX >= left + THREAD_ROW_WIDTH) return -1;

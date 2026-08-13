@@ -296,6 +296,10 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     protected void init() {
         super.init();
         if (isPortMenu()) initAutoIOButtons();
+        if (menu instanceof MachineControllerMenu controller) {
+            addRenderableWidget(Button.builder(Component.translatable("gui.mmcr.controller.recipe_lock"),
+                    button -> controller.requestRecipeLock()).bounds(leftPos + 8, topPos + 106, 160, 20).build());
+        }
     }
 
     @Override

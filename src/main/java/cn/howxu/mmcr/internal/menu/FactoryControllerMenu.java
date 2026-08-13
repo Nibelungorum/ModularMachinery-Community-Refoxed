@@ -14,6 +14,8 @@ import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
 
 import java.util.List;
 
@@ -115,6 +117,10 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
 
     public boolean selectedRecipeLocked() { return selectedThread().locked(); }
     public String selectedLockedRecipeId() { return selectedThread().lockedRecipeId(); }
+
+    public void requestRecipeLock() {
+        ClientPacketDistributor.sendToServer(new PktRecipeLockPayload(controllerPos, selectedThread().index()));
+    }
 
     public void selectThread(int index) {
         if (snapshot.threads().stream().anyMatch(thread -> thread.index() == index)) selectedThreadIndex = index;

@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import cn.howxu.mmcr.registry.ModUIs;
@@ -16,6 +17,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.Nullable;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 public class MachineControllerMenu extends AbstractMachineMenu {
 
@@ -259,6 +261,8 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     }
 
     public boolean recipeLocked() {
+        if (owner == null && level != null && level.getBlockEntity(pos) instanceof MachineControllerBlockEntity controller
+                && controller.hasClientRecipeLock()) return true;
         if (owner == null) return recipeLocked.get() != 0;
         MachineControllerBlockEntity controller = resolvedOwner();
         var factory = controller.getFactoryController();
@@ -269,9 +273,14 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     public @Nullable String lockedRecipeId() {
         MachineControllerBlockEntity controller = resolvedOwner();
         if (controller == null) return null;
+        if (owner == null && controller.hasClientRecipeLock()) return controller.clientLockedRecipeId();
         var factory = controller.getFactoryController();
         return factory == null ? null : factory.threadSnapshots(controller).stream().findFirst()
                 .map(FactoryRecipeScheduler.ThreadSnapshot::lockedRecipeId).filter(id -> !id.isEmpty()).orElse(null);
+    }
+
+    public void requestRecipeLock() {
+        ClientPacketDistributor.sendToServer(new PktRecipeLockPayload(pos, 0));
     }
 
     public long totalStoredEnergy() {
