@@ -54,6 +54,8 @@ public class EnergyHatchMenu extends AbstractMachineMenu {
         return owner;
     }
 
+    public BlockPos pos() { return pos; }
+
     public EnergyStorage storage() {
         EnergyHatchBlockEntity hatch = resolvedOwner();
         return hatch == null ? null : hatch.getMutableEnergyStorage(null);

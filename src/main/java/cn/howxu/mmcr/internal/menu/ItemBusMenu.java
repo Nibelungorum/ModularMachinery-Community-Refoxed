@@ -71,6 +71,8 @@ public class ItemBusMenu extends AbstractMachineMenu {
         return owner;
     }
 
+    public BlockPos pos() { return pos; }
+
     public int busSlotCount() { return busSlotCount; }
 
     public int busRows() { return busRows; }
