@@ -1,0 +1,14 @@
+{
+  "mmcr.auto_io.control": "Input/Output Control",
+  "mmcr.auto_io.auto_input": "Auto Input",
+  "mmcr.auto_io.auto_output": "Auto Output",
+  "mmcr.auto_io.enabled": "Enabled",
+  "mmcr.auto_io.disabled": "Disabled",
+  "mmcr.auto_io.side": "%s: %s",
+  "mmcr.direction.north": "North",
+  "mmcr.direction.south": "South",
+  "mmcr.direction.east": "East",
+  "mmcr.direction.west": "West",
+  "mmcr.direction.up": "Up",
+  "mmcr.direction.down": "Down"
+}

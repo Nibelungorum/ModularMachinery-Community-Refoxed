@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.tile;
 
+import cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.util.IOType;
@@ -29,7 +30,10 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
             @Override
             public int receiveEnergy(int maxReceive, boolean simulate) {
                 int received = super.receiveEnergy(maxReceive, simulate);
-                if (!simulate && received > 0) setChanged();
+                if (!simulate && received > 0) {
+                    markAutoIOCacheDirty();
+                    setChanged();
+                }
                 return received;
             }
 
@@ -44,7 +48,10 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
                 } else {
                     extracted = super.extractEnergy(maxExtract, simulate);
                 }
-                if (!simulate && extracted > 0) setChanged();
+                if (!simulate && extracted > 0) {
+                    markAutoIOCacheDirty();
+                    setChanged();
+                }
                 return extracted;
             }
         };
@@ -67,6 +74,11 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
 
     @Override
     public abstract IOPortKind kind();
+
+    @Override
+    public AutoIOCapabilityType autoIOCapabilityType() {
+        return AutoIOCapabilityType.ENERGY;
+    }
 
     @Override
     protected void saveAdditional(ValueOutput output) {

@@ -71,6 +71,8 @@ public class ItemBusMenu extends AbstractMachineMenu {
         return owner;
     }
 
+    public BlockPos pos() { return pos; }
+
     public int busSlotCount() { return busSlotCount; }
 
     public int busRows() { return busRows; }
@@ -124,10 +126,7 @@ public class ItemBusMenu extends AbstractMachineMenu {
     }
 
     public static boolean showsTitleForSize(ItemBusSize size) {
-        return switch (size) {
-            case REINFORCED, HUGE, LUDICROUS -> false;
-            default -> true;
-        };
+        return false;
     }
 
     public static int playerInventorySlotStart(int busSlots) {

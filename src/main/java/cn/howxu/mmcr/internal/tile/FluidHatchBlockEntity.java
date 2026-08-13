@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.tile;
 
+import cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
@@ -33,6 +34,7 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
 
             @Override
             protected void onContentsChanged() {
+                markAutoIOCacheDirty();
                 setChanged();
             }
         };
@@ -55,6 +57,11 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
 
     @Override
     public abstract IOPortKind kind();
+
+    @Override
+    public AutoIOCapabilityType autoIOCapabilityType() {
+        return AutoIOCapabilityType.FLUID;
+    }
 
     @Override
     protected void saveAdditional(ValueOutput output) {

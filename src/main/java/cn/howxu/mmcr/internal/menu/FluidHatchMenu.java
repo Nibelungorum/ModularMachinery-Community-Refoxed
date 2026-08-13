@@ -54,6 +54,8 @@ public class FluidHatchMenu extends AbstractMachineMenu {
         return owner;
     }
 
+    public BlockPos pos() { return pos; }
+
     public FluidTank tank() {
         FluidHatchBlockEntity hatch = resolvedOwner();
         return hatch == null ? null : hatch.getFluidTank(null);

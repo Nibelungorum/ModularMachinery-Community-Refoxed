@@ -8,12 +8,19 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.menu.FactorySchedulerMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
+import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.util.IOType;
+import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.inventory.Slot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
@@ -27,6 +34,7 @@ class MenuScreenTest {
     @BeforeAll
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
+        bind(ModUIs.ITEM_BUS, new MenuType<>((containerId, playerInventory) -> new ItemBusMenu(containerId, playerInventory), FeatureFlags.VANILLA_SET));
     }
 
     @Test
@@ -48,6 +56,9 @@ class MenuScreenTest {
         assertThat(MachineMenuScreen.titleX(8, false, true, false)).isEqualTo(40);
         assertThat(MachineMenuScreen.titleX(8, false, false, true)).isEqualTo(4);
         assertThat(MachineMenuScreen.titleY(6, false, true)).isEqualTo(4);
+        assertThat(MachineMenuScreen.showsPortTitle(true, false, false)).isFalse();
+        assertThat(MachineMenuScreen.showsPortTitle(false, true, false)).isFalse();
+        assertThat(MachineMenuScreen.showsPortTitle(false, false, true)).isFalse();
         assertThat(MachineMenuScreen.hiddenInventoryLabelY()).isEqualTo(-1000);
         assertThat(MachineMenuScreen.TITLE_COLOR).isEqualTo(-12566464);
         assertThat(MachineMenuScreen.CONTROLLER_TITLE_COLOR).isEqualTo(0xFFE8E8E8);
@@ -55,6 +66,47 @@ class MenuScreenTest {
         assertThat(MachineMenuScreen.titleColor(true)).isEqualTo(MachineMenuScreen.CONTROLLER_TITLE_COLOR);
         assertThat(MachineMenuScreen.controllerStatusX(10)).isEqualTo(10);
         assertThat(MachineMenuScreen.controllerStatusY(10)).isEqualTo(22);
+    }
+
+    @Test
+    void auto_io_direction_layout_is_fixed_north_centered() {
+        assertThat(MachineMenuScreen.autoIODirectionAt(0, 0)).isNull();
+        assertThat(MachineMenuScreen.autoIODirectionAt(1, 0)).isEqualTo(Direction.UP);
+        assertThat(MachineMenuScreen.autoIODirectionAt(0, 1)).isEqualTo(Direction.WEST);
+        assertThat(MachineMenuScreen.autoIODirectionAt(1, 1)).isEqualTo(Direction.NORTH);
+        assertThat(MachineMenuScreen.autoIODirectionAt(2, 1)).isEqualTo(Direction.EAST);
+        assertThat(MachineMenuScreen.autoIODirectionAt(1, 2)).isEqualTo(Direction.DOWN);
+        assertThat(MachineMenuScreen.autoIODirectionAt(2, 2)).isEqualTo(Direction.SOUTH);
+    }
+
+    @Test
+    void auto_io_label_uses_resolved_port_io_type_before_owner_fallback() {
+        assertThat(MachineMenuScreen.isOutputPort(IOType.OUTPUT, null)).isTrue();
+        assertThat(MachineMenuScreen.isOutputPort(IOType.OUTPUT, IOType.INPUT)).isTrue();
+        assertThat(MachineMenuScreen.isOutputPort(IOType.INPUT, IOType.OUTPUT)).isFalse();
+        assertThat(MachineMenuScreen.isOutputPort(null, IOType.OUTPUT)).isTrue();
+        assertThat(MachineMenuScreen.isOutputPort(null, null)).isFalse();
+    }
+
+    @Test
+    void auto_io_page_hides_only_port_slots() {
+        assertThat(MachineMenuScreen.isPortSlotIndex(0, 6)).isTrue();
+        assertThat(MachineMenuScreen.isPortSlotIndex(5, 6)).isTrue();
+        assertThat(MachineMenuScreen.isPortSlotIndex(6, 6)).isFalse();
+    }
+
+    @Test
+    void auto_io_page_allows_player_hotbar_slots_with_low_backing_indices() throws Exception {
+        MachineMenuScreen screen = screenForMenu(new ItemBusMenu(1, new Inventory(null, null)));
+        Field autoIOPage = MachineMenuScreen.class.getDeclaredField("autoIOPage");
+        autoIOPage.setAccessible(true);
+        autoIOPage.setBoolean(screen, true);
+
+        Method isAutoIOPortSlot = MachineMenuScreen.class.getDeclaredMethod("isAutoIOPortSlot", net.minecraft.world.inventory.Slot.class, int.class);
+        isAutoIOPortSlot.setAccessible(true);
+
+        Slot hotbarSlot = new Slot(new net.minecraft.world.SimpleContainer(9), 0, 8, 142);
+        assertThat((boolean) isAutoIOPortSlot.invoke(screen, hotbarSlot, 33)).isFalse();
     }
 
     @Test
@@ -184,6 +236,25 @@ class MenuScreenTest {
         }
     }
 
+    private static MachineMenuScreen screenForMenu(AbstractContainerMenu menu) {
+        try {
+            Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+            unsafeField.setAccessible(true);
+            sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+            MachineMenuScreen screen = (MachineMenuScreen) unsafe.allocateInstance(MachineMenuScreen.class);
+            setField(net.minecraft.client.gui.screens.inventory.AbstractContainerScreen.class, screen, "menu", menu);
+            return screen;
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("Unable to allocate menu screen", e);
+        }
+    }
+
+    private static void setField(Class<?> owner, Object target, String name, Object value) throws ReflectiveOperationException {
+        Field field = owner.getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+
     private static FactorySchedulerMenu factoryMenuWithoutConstructor() {
         try {
             Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
@@ -193,5 +264,20 @@ class MenuScreenTest {
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate factory menu", e);
         }
+    }
+
+    private static void bind(Object deferredHolder, MenuType<ItemBusMenu> menuType) throws Exception {
+        Class<?> type = deferredHolder.getClass();
+        Field holder = null;
+        while (type != null && holder == null) {
+            try {
+                holder = type.getDeclaredField("holder");
+            } catch (NoSuchFieldException ignored) {
+                type = type.getSuperclass();
+            }
+        }
+        if (holder == null) throw new NoSuchFieldException("holder");
+        holder.setAccessible(true);
+        holder.set(deferredHolder, Holder.direct(menuType));
     }
 }

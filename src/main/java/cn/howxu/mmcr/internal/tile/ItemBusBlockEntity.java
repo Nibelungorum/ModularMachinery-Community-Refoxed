@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.tile;
 
+import cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
@@ -24,6 +25,7 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
         this.handler = new ItemStackHandler(slots) {
             @Override
             protected void onContentsChanged(int slot) {
+                markAutoIOCacheDirty();
                 setChanged();
                 notifyControllerOfInputChange();
             }
@@ -46,6 +48,11 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
 
     @Override
     public abstract IOPortKind kind();
+
+    @Override
+    public AutoIOCapabilityType autoIOCapabilityType() {
+        return AutoIOCapabilityType.ITEM;
+    }
 
     @Override
     protected void saveAdditional(ValueOutput output) {

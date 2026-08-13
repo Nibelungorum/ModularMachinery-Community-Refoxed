@@ -21,6 +21,7 @@ import cn.howxu.mmcr.internal.network.PktMultiblockDetectorPickPayload;
 import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockPreviewPayload;
+import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
 import cn.howxu.mmcr.internal.network.PktSmartInterfaceUpdatePayload;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -129,7 +130,11 @@ public class MMCR {
                     .playToServer(
                             PktSmartInterfaceUpdatePayload.TYPE,
                             PktSmartInterfaceUpdatePayload.STREAM_CODEC,
-                            PktSmartInterfaceUpdatePayload::handle);
+                            PktSmartInterfaceUpdatePayload::handle)
+                    .playToServer(
+                            PktAutoIOConfigPayload.TYPE,
+                            PktAutoIOConfigPayload.STREAM_CODEC,
+                            PktAutoIOConfigPayload::handle);
         });
         modBus.addListener((RegisterGameTestsEvent ev) -> registerGameTests(ev));
         CREATIVE_TABS.register(MODID, () -> CreativeModeTab.builder()
