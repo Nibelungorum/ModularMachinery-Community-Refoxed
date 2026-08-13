@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.autoio.AutoIOConfig;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -56,6 +57,8 @@ class ItemBusBlockEntityTest {
             setField(BlockEntity.class, bus, "blockState", Blocks.CHEST.defaultBlockState());
             setField(ItemInputBusBlockEntity.class, bus, "kind", PortKinds.ITEM_INPUT);
             setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(1));
+            setField(IOPortBlockEntity.class, bus, "autoIOConfig", new AutoIOConfig());
+            setField(IOPortBlockEntity.class, bus, "autoIOCacheDirty", true);
             setField(LinkedAppearanceBlockEntity.class, bus, "appearanceBaseTexture", MMCR.id("block/basic_casing"));
             setField(LinkedAppearanceBlockEntity.class, bus, "linkedControllers", new java.util.TreeMap<>(BlockPos::compareTo));
             setField(LinkedAppearanceBlockEntity.class, bus, "controllerLinkCheckCounter", 0);

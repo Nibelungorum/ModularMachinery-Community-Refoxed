@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.tile;
 
+import cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.util.IOType;
@@ -67,6 +68,11 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
 
     @Override
     public abstract IOPortKind kind();
+
+    @Override
+    public AutoIOCapabilityType autoIOCapabilityType() {
+        return AutoIOCapabilityType.ENERGY;
+    }
 
     @Override
     protected void saveAdditional(ValueOutput output) {
