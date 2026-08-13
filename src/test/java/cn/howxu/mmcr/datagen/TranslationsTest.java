@@ -152,4 +152,20 @@ class TranslationsTest {
                 .containsEntry("tooltip.mmcr.factory_controller.multithreading", "提供工厂多线程调度能力")
                 .containsEntry("tooltip.mmcr.thread_disperser.multithreading", "提供多线程能力");
     }
+
+    @Test
+    void multiblock_requirement_mismatch_message_is_translated_for_both_locales() {
+        assertThat(Translations.ALL.get("en_us"))
+                .containsEntry("message.mmcr.multiblock_requirement_mismatch", "%s")
+                .containsEntry("message.mmcr.multiblock_requirement.minimum", "Requires at least %s %s")
+                .containsEntry("message.mmcr.port_requirement.minimum_tier", "%s or better %s")
+                .containsEntry("message.mmcr.port_requirement.item_input", "item input port")
+                .containsEntry("message.mmcr.port_tier.tiny", "tiny");
+        assertThat(Translations.ALL.get("zh_cn"))
+                .containsEntry("message.mmcr.multiblock_requirement_mismatch", "%s")
+                .containsEntry("message.mmcr.multiblock_requirement.minimum", "至少需要 %s 个%s")
+                .containsEntry("message.mmcr.port_requirement.minimum_tier", "%s及以上%s")
+                .containsEntry("message.mmcr.port_requirement.item_input", "物品输入端口")
+                .containsEntry("message.mmcr.port_tier.tiny", "微型");
+    }
 }

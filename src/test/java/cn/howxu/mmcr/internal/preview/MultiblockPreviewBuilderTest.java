@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.preview;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -47,6 +48,25 @@ class MultiblockPreviewBuilderTest {
                 new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK))));
 
         assertEquals(Blocks.GOLD_BLOCK.defaultBlockState(), result.orElseThrow());
+    }
+
+    @Test
+    void preview_state_prefers_normal_blocks_before_interfaces_in_any_of() {
+        var result = MultiblockPreviewBuilder.previewState(new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()),
+                new BlockPredicate.OfBlock(ModBlocks.SMART_INTERFACE.get()),
+                new BlockPredicate.OfBlock(Blocks.PURPUR_PILLAR))));
+
+        assertEquals(Blocks.PURPUR_PILLAR.defaultBlockState(), result.orElseThrow());
+    }
+
+    @Test
+    void preview_state_prefers_io_interfaces_before_smart_interfaces_in_any_of() {
+        var result = MultiblockPreviewBuilder.previewState(new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(ModBlocks.SMART_INTERFACE.get()),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()))));
+
+        assertEquals(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState(), result.orElseThrow());
     }
 
     @Test

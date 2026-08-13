@@ -32,7 +32,7 @@ import java.util.Set;
 public final class RuntimeMachineResourcePack implements PackResources {
     private static final String PACK_ID = "mmcr/runtime_machine_models";
     private static final PackLocationInfo LOCATION = new PackLocationInfo(
-            PACK_ID, Component.literal("MMCR Runtime Machine Models"), PackSource.BUILT_IN, Optional.empty());
+            PACK_ID, Component.literal("mmcr.runtime_resource_pack.name"), PackSource.BUILT_IN, Optional.empty());
 
     private final PackLocationInfo location;
 
@@ -67,7 +67,7 @@ public final class RuntimeMachineResourcePack implements PackResources {
     @Override
     public IoSupplier<InputStream> getRootResource(String... path) {
         if (path.length == 1 && PackResources.PACK_META.equals(path[0])) {
-            return bytes("{\"pack\":{\"description\":\"MMCR Runtime Machine Models\",\"pack_format\":1}}\n");
+            return bytes("{\"pack\":{\"description\":\"MMCR Runtime Dynamical Resources\",\"pack_format\":1}}\n");
         }
         return null;
     }
@@ -103,7 +103,7 @@ public final class RuntimeMachineResourcePack implements PackResources {
     public <T> T getMetadataSection(MetadataSectionType<T> type) throws IOException {
         if (type == PackMetadataSection.CLIENT_TYPE || type == PackMetadataSection.FALLBACK_TYPE) {
             return (T) new PackMetadataSection(
-                    Component.literal("MMCR Runtime Machine Models"),
+                    Component.literal("mmcr.runtime_resource_pack.name"),
                     new InclusiveRange<>(PackFormat.of(1), PackFormat.of(Integer.MAX_VALUE)));
         }
         return null;

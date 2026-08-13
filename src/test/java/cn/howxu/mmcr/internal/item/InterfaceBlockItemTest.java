@@ -44,12 +44,12 @@ class InterfaceBlockItemTest {
         assertThat(tooltip.get(0).getStyle().getColor()).isNull();
         assertThat(tooltip.get(0).getSiblings().get(0)).isEqualTo(Component.translatable("tooltip.mmcr.interface.capacity_label")
                 .withStyle(ChatFormatting.RED));
-        assertThat(tooltip.get(0).getSiblings().get(1)).isEqualTo(Component.literal("2.1GFE"));
+        assertThat(tooltip.get(0).getSiblings().get(1)).isEqualTo(Component.literal("2MFE"));
         assertThat(tooltip.get(0).getSiblings().get(1).getStyle().getColor()).isNull();
         assertThat(tooltip.get(1).getStyle().getColor()).isNull();
         assertThat(tooltip.get(1).getSiblings().get(0)).isEqualTo(Component.translatable("tooltip.mmcr.interface.rate_label")
                 .withStyle(ChatFormatting.GREEN));
-        assertThat(tooltip.get(1).getSiblings().get(1)).isEqualTo(Component.literal("4MFE/t"));
+        assertThat(tooltip.get(1).getSiblings().get(1)).isEqualTo(Component.literal("128kFE/t"));
         assertThat(tooltip.get(1).getSiblings().get(1).getStyle().getColor()).isNull();
     }
 
@@ -60,10 +60,22 @@ class InterfaceBlockItemTest {
         assertThat(tooltip).hasSize(2);
         assertThat(tooltip.get(0).getSiblings().get(0)).isEqualTo(Component.translatable("tooltip.mmcr.interface.capacity_label")
                 .withStyle(ChatFormatting.RED));
-        assertThat(tooltip.get(0).getSiblings().get(1)).isEqualTo(Component.literal("2.1Gmb"));
+        assertThat(tooltip.get(0).getSiblings().get(1)).isEqualTo(Component.literal("32kmb"));
         assertThat(tooltip.get(1).getSiblings().get(0)).isEqualTo(Component.translatable("tooltip.mmcr.interface.rate_label")
                 .withStyle(ChatFormatting.GREEN));
-        assertThat(tooltip.get(1).getSiblings().get(1)).isEqualTo(Component.literal("40000mb/t"));
+        assertThat(tooltip.get(1).getSiblings().get(1)).isEqualTo(Component.literal("32kmb/t"));
+    }
+
+    @Test
+    void fluid_interface_tooltip_formats_all_sizes_with_compact_units() {
+        assertFluidTooltip(FluidHatchSize.TINY, "100mb", "100mb/t");
+        assertFluidTooltip(FluidHatchSize.SMALL, "400mb", "400mb/t");
+        assertFluidTooltip(FluidHatchSize.NORMAL, "1kmb", "1kmb/t");
+        assertFluidTooltip(FluidHatchSize.REINFORCED, "2kmb", "2kmb/t");
+        assertFluidTooltip(FluidHatchSize.BIG, "4.5kmb", "4.5kmb/t");
+        assertFluidTooltip(FluidHatchSize.HUGE, "8kmb", "8kmb/t");
+        assertFluidTooltip(FluidHatchSize.LUDICROUS, "16kmb", "16kmb/t");
+        assertFluidTooltip(FluidHatchSize.VACUUM, "32kmb", "32kmb/t");
     }
 
     @Test
@@ -75,9 +87,24 @@ class InterfaceBlockItemTest {
     }
 
     @Test
+    void ultimate_parallel_controller_tooltip_shows_exact_parallelism() {
+        List<Component> tooltip = InterfaceTooltips.tooltipLines(ModBlocks.BLOCKS.get("parallel_controller_ultimate").get());
+
+        assertThat(tooltip).containsExactly(Component.translatable("tooltip.mmcr.interface.parallel", "2147483647x")
+                .withStyle(ChatFormatting.LIGHT_PURPLE));
+    }
+
+    @Test
     void factory_controller_tooltip_shows_multithreading() {
         List<Component> tooltip = InterfaceTooltips.tooltipLines(ModBlocks.BLOCKS.get("factory_controller").get());
 
         assertThat(tooltip).containsExactly(Component.translatable("tooltip.mmcr.factory_controller.multithreading"));
+    }
+
+    private static void assertFluidTooltip(FluidHatchSize size, String capacity, String rate) {
+        List<Component> tooltip = InterfaceTooltips.fluidTooltip(size);
+
+        assertThat(tooltip.get(0).getSiblings().get(1)).isEqualTo(Component.literal(capacity));
+        assertThat(tooltip.get(1).getSiblings().get(1)).isEqualTo(Component.literal(rate));
     }
 }

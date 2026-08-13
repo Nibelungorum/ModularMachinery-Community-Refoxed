@@ -20,12 +20,9 @@ public final class MultiblockPreviewBuilder {
 
     public static Optional<BlockState> previewState(BlockPredicate predicate) {
         return switch (predicate) {
-            case BlockPredicate.OfBlockState ofState -> Optional.of(ofState.state());
-            case BlockPredicate.OfBlock ofBlock -> Optional.of(ofBlock.block().defaultBlockState());
-            case BlockPredicate.AnyOf anyOf -> anyOf.children().stream()
-                    .map(MultiblockPreviewBuilder::previewState)
-                    .flatMap(Optional::stream)
-                    .findFirst();
+            case BlockPredicate.OfBlockState ignored -> MultiblockPreviewPredicates.state(predicate);
+            case BlockPredicate.OfBlock ignored -> MultiblockPreviewPredicates.state(predicate);
+            case BlockPredicate.AnyOf ignored -> MultiblockPreviewPredicates.representativeValue(predicate, MultiblockPreviewPredicates::state);
             default -> Optional.empty();
         };
     }

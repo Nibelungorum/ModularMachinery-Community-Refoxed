@@ -19,9 +19,7 @@ class PortSizeTest {
         assertThat(FluidHatchSize.values()).extracting(FluidHatchSize::id)
                 .containsExactly("tiny", "small", "normal", "reinforced", "big", "huge", "ludicrous", "vacuum");
         assertThat(FluidHatchSize.values()).extracting(FluidHatchSize::capacity)
-                .containsExactly(8000, 12000, 16000, 32000, 64000, 128000, 512000, Integer.MAX_VALUE);
-        assertThat(FluidHatchSize.values()).extracting(FluidHatchSize::transfer)
-                .containsExactly(100, 200, 400, 1000, 2400, 3200, 6400, 40000);
+                .containsExactly(100, 400, 1000, 2000, 4500, 8000, 16000, 32000);
     }
 
     @Test
@@ -29,9 +27,8 @@ class PortSizeTest {
         assertThat(EnergyHatchSize.values()).extracting(EnergyHatchSize::id)
                 .containsExactly("tiny", "small", "normal", "reinforced", "big", "huge", "ludicrous", "ultimate");
         assertThat(EnergyHatchSize.values()).extracting(EnergyHatchSize::capacity)
-                .containsExactly(400000, 1000000, 1600000, 6400000, 25600000, 102400000, 256000000,
-                        Integer.MAX_VALUE);
+                .containsExactly(2048, 4096, 8192, 16384, 32768, 131072, 524288, 2097152);
         assertThat(EnergyHatchSize.values()).extracting(EnergyHatchSize::transfer)
-                .containsExactly(1000, 1200, 1600, 6400, 25600, 102400, 256000, 4000000);
+                .containsExactly(128, 512, 512, 2048, 8192, 32768, 131072, 131072);
     }
 }

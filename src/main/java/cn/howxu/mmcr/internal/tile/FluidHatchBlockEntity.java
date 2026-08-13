@@ -21,22 +21,7 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
         int capacity = kind.fluidHatchSize()
                 .orElseThrow(() -> new IllegalStateException("Fluid hatch missing fluid size: " + kind.id()))
                 .capacity();
-        int transfer = kind.fluidHatchSize()
-                .orElseThrow(() -> new IllegalStateException("Fluid hatch missing fluid size: " + kind.id()))
-                .transfer();
         this.tank = new FluidTank(capacity) {
-            @Override
-            public int fill(FluidStack resource, FluidAction action) {
-                FluidStack limited = resource.copy();
-                limited.setAmount(Math.min(limited.getAmount(), transfer));
-                return super.fill(limited, action);
-            }
-
-            @Override
-            public FluidStack drain(int maxDrain, FluidAction action) {
-                return super.drain(Math.min(maxDrain, transfer), action);
-            }
-
             @Override
             public FluidStack getFluidInTank(int tank) {
                 FluidStack stack = super.getFluidInTank(tank);

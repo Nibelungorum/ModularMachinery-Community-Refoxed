@@ -41,6 +41,7 @@ import cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockPreviewPayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
+import cn.howxu.mmcr.internal.preview.MultiblockPreviewPredicates;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
 import cn.howxu.mmcr.internal.recipe.RecipeStartDelay;
 import cn.howxu.mmcr.registry.ModBlockEntities;
@@ -718,14 +719,54 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private void sendFormationFailureDiagnostic(ServerPlayer player, PortRequirementSpec.Failure failure) {
-        player.sendSystemMessage(Component.translatable(
-                "message.mmcr.multiblock_requirement_mismatch",
-                Component.literal(failure.portId()).withStyle(ChatFormatting.GREEN),
-                Component.literal(Integer.toString(failure.actual())).withStyle(ChatFormatting.RED),
-                Component.literal(Integer.toString(failure.requiredMin())).withStyle(ChatFormatting.GREEN),
-                Component.literal(failure.requiredMax().isPresent() ? Integer.toString(failure.requiredMax().getAsInt()) : "unbounded")
-                        .withStyle(ChatFormatting.GREEN),
-                Component.literal(failure.reason().name()).withStyle(ChatFormatting.RED)));
+        player.sendSystemMessage(describeFormationFailure(failure));
+    }
+
+    private static Component describeFormationFailure(PortRequirementSpec.Failure failure) {
+        Component port = describeRequiredPort(failure.portId());
+        if (failure.reason() == PortRequirementSpec.FailureReason.TOO_MANY && failure.requiredMax().isPresent()) {
+            return Component.translatable("message.mmcr.multiblock_requirement.maximum", failure.requiredMax().getAsInt(), port);
+        }
+        if (failure.requiredMax().isPresent() && failure.requiredMin() == failure.requiredMax().getAsInt()) {
+            return Component.translatable("message.mmcr.multiblock_requirement.exact", failure.requiredMin(), port);
+        }
+        return Component.translatable("message.mmcr.multiblock_requirement.minimum", failure.requiredMin(), port);
+    }
+
+    private static Component describeRequiredPort(String portId) {
+        String[] tierRequirement = portId.split(">=", 2);
+        String baseId = tierRequirement[0];
+        Component base = describePortBase(baseId);
+        if (tierRequirement.length == 2) {
+            return Component.translatable("message.mmcr.port_requirement.minimum_tier", describePortTier(tierRequirement[1]), base);
+        }
+        return base;
+    }
+
+    private static Component describePortBase(String portId) {
+        if (portId.startsWith("item_input_bus")) return Component.translatable("message.mmcr.port_requirement.item_input");
+        if (portId.startsWith("item_output_bus")) return Component.translatable("message.mmcr.port_requirement.item_output");
+        if (portId.startsWith("fluid_input_hatch")) return Component.translatable("message.mmcr.port_requirement.fluid_input");
+        if (portId.startsWith("fluid_output_hatch")) return Component.translatable("message.mmcr.port_requirement.fluid_output");
+        if (portId.startsWith("energy_input_hatch")) return Component.translatable("message.mmcr.port_requirement.energy_input");
+        if (portId.startsWith("energy_output_hatch")) return Component.translatable("message.mmcr.port_requirement.energy_output");
+        if (portId.equals("factory_controller")) return Component.translatable("message.mmcr.port_requirement.factory_controller");
+        return Component.literal(portId);
+    }
+
+    private static Component describePortTier(String tierId) {
+        return switch (tierId) {
+            case "tiny" -> Component.translatable("message.mmcr.port_tier.tiny");
+            case "small" -> Component.translatable("message.mmcr.port_tier.small");
+            case "normal" -> Component.translatable("message.mmcr.port_tier.normal");
+            case "reinforced" -> Component.translatable("message.mmcr.port_tier.reinforced");
+            case "big" -> Component.translatable("message.mmcr.port_tier.big");
+            case "huge" -> Component.translatable("message.mmcr.port_tier.huge");
+            case "ludicrous" -> Component.translatable("message.mmcr.port_tier.ludicrous");
+            case "vacuum" -> Component.translatable("message.mmcr.port_tier.vacuum");
+            case "ultimate" -> Component.translatable("message.mmcr.port_tier.ultimate");
+            default -> Component.literal(tierId);
+        };
     }
 
     private static Component describeExpected(BlockPredicate expected) {
@@ -739,7 +780,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             case BlockPredicate.OfTag ofTag -> Component.literal("#" + ofTag.tag().location());
             case BlockPredicate.AnyOf anyOf -> anyOf.children().isEmpty()
                     ? Component.literal("<empty>")
-                    : rawExpectedDescription(anyOf.children().getFirst());
+                    : MultiblockPreviewPredicates.representativeValue(expected,
+                            predicate -> Optional.of(rawExpectedDescription(predicate)))
+                    .orElseGet(() -> rawExpectedDescription(anyOf.children().getFirst()));
             case BlockPredicate.Air ignored -> Component.translatable("block.minecraft.air");
             case BlockPredicate.Any ignored -> Component.literal("any block");
         };
