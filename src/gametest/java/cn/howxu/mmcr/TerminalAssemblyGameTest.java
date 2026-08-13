@@ -51,9 +51,9 @@ public class TerminalAssemblyGameTest {
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         List<MultiblockAssemblyService.Placement> template = template(controller);
-        BlockPos removedPos = template.get(0).pos();
-        BlockPos airPos = template.get(1).pos();
-        BlockPos nonMatchingPos = template.get(2).pos();
+        BlockPos airPos = template.get(0).pos();
+        BlockPos nonMatchingPos = template.get(1).pos();
+        BlockPos removedPos = template.get(2).pos();
         BlockPos cappedMatchingPos = template.get(3).pos();
         for (MultiblockAssemblyService.Placement placement : template) {
             if (!placement.pos().equals(airPos) && !placement.pos().equals(nonMatchingPos)) {
