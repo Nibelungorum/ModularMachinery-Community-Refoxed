@@ -1408,7 +1408,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         RecipeSearchResult result;
         try {
             result = new RecipeSearchTask(this, machineId, structureVersion, getMaxParallelism(), candidates,
-                    contextPool(), cachedCandidateIndex).compute();
+                    contextPool(), cachedCandidateIndex, null).compute();
         } catch (RuntimeException e) {
             LOG.warn("[Ctrl#{}] tryStartNewRecipe: recipe search failed at pos={}; retrying later", instanceId, getBlockPos(), e);
             clearPendingConflictStart();

@@ -106,12 +106,12 @@ public final class FactoryRecipeThread extends RecipeThread {
 
     @Override
     public boolean searchAndStartRecipe(List<MachineRecipe> candidates, int availableParallelism, long structureVersion) {
-        return super.searchAndStartRecipe(candidatesFor(candidates), availableParallelism, structureVersion);
+        return super.searchAndStartRecipe(candidatesFor(candidates), availableParallelism, structureVersion, lockedRecipeId);
     }
 
     public boolean tryRestartLastRecipe(List<MachineRecipe> candidates, int availableParallelism,
                                         long structureVersion, long modifierSnapshotVersion) {
-        if (lastRecipe == null || controller == null || availableParallelism <= 0
+        if (lockedRecipeId != null || lastRecipe == null || controller == null || availableParallelism <= 0
                 || lastRecipeStructureVersion != structureVersion
                 || lastRecipeModifierSnapshotVersion != modifierSnapshotVersion
                 || !candidatesFor(candidates).contains(lastRecipe)) return false;

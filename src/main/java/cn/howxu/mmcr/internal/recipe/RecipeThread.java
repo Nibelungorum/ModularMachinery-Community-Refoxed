@@ -48,11 +48,16 @@ public abstract class RecipeThread {
     }
 
     public boolean searchAndStartRecipe(List<MachineRecipe> candidates, int availableParallelism, long structureVersion) {
+        return searchAndStartRecipe(candidates, availableParallelism, structureVersion, null);
+    }
+
+    protected boolean searchAndStartRecipe(List<MachineRecipe> candidates, int availableParallelism,
+                                           long structureVersion, @Nullable Identifier lockedRecipeId) {
         Identifier machineId = controller == null || controller.getFoundMachine() == null
                 ? null : controller.getFoundMachine().registryName();
         if (machineId == null || availableParallelism <= 0) return false;
         RecipeSearchResult result = new RecipeSearchTask(controller, machineId, structureVersion,
-                availableParallelism, candidates, contextPool).compute();
+                availableParallelism, candidates, contextPool, null, lockedRecipeId).compute();
         if (!result.success()) {
             lastFailureUnloc = result.levelFailure() == null
                     ? result.failureUnloc()

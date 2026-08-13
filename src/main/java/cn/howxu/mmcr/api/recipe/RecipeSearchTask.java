@@ -33,6 +33,7 @@ public final class RecipeSearchTask {
     private final List<MachineRecipe> candidates;
     private final RecipeCraftingContextPool contextPool;
     private final @Nullable RecipeCandidateIndex candidateIndex;
+    private final @Nullable Identifier lockedRecipeId;
 
     public RecipeSearchTask(MachineControllerBlockEntity controller,
                             Identifier machineId,
@@ -40,13 +41,25 @@ public final class RecipeSearchTask {
                             int maxParallelism,
                             List<MachineRecipe> candidates,
                             RecipeCraftingContextPool contextPool) {
+        this(controller, machineId, structureVersion, maxParallelism, candidates, contextPool, null, null);
+    }
+
+    public RecipeSearchTask(MachineControllerBlockEntity controller,
+                            Identifier machineId,
+                            long structureVersion,
+                            int maxParallelism,
+                            List<MachineRecipe> candidates,
+                            RecipeCraftingContextPool contextPool,
+                            @Nullable RecipeCandidateIndex candidateIndex,
+                            @Nullable Identifier lockedRecipeId) {
         this.controller = controller;
         this.machineId = machineId;
         this.structureVersion = structureVersion;
         this.maxParallelism = Math.max(1, maxParallelism);
         this.candidates = List.copyOf(candidates);
         this.contextPool = contextPool;
-        this.candidateIndex = null;
+        this.candidateIndex = candidateIndex;
+        this.lockedRecipeId = lockedRecipeId;
     }
 
     public RecipeSearchTask(MachineControllerBlockEntity controller,
@@ -56,13 +69,7 @@ public final class RecipeSearchTask {
                             List<MachineRecipe> candidates,
                             RecipeCraftingContextPool contextPool,
                             RecipeCandidateIndex candidateIndex) {
-        this.controller = controller;
-        this.machineId = machineId;
-        this.structureVersion = structureVersion;
-        this.maxParallelism = Math.max(1, maxParallelism);
-        this.candidates = List.copyOf(candidates);
-        this.contextPool = contextPool;
-        this.candidateIndex = candidateIndex;
+        this(controller, machineId, structureVersion, maxParallelism, candidates, contextPool, candidateIndex, null);
     }
 
     public RecipeSearchResult compute() {
@@ -88,7 +95,8 @@ public final class RecipeSearchTask {
                 }
             }
             if (activeRecipe.canStartCrafting(context)) {
-                boolean conflictProne = hasMoreSpecificPendingInputCandidate(recipe, recipeIndex, ordered, itemMatchCache);
+                boolean conflictProne = lockedRecipeId == null
+                        && hasMoreSpecificPendingInputCandidate(recipe, recipeIndex, ordered, itemMatchCache);
                 context.clearItemMatchCache();
                 return RecipeSearchResult.success(activeRecipe, context, machineId, structureVersion, conflictProne);
             }
@@ -127,6 +135,13 @@ public final class RecipeSearchTask {
     }
 
     private List<MachineRecipe> searchCandidates() {
+        if (lockedRecipeId != null) {
+            return candidates.stream()
+                    .filter(recipe -> lockedRecipeId.equals(recipe.id()))
+                    .findFirst()
+                    .map(List::of)
+                    .orElseGet(List::of);
+        }
         if (candidateIndex == null) return candidates;
         LinkedHashSet<Item> inputItems = new LinkedHashSet<>();
         for (ProcessingComponent component : controller.getComponents()) {
