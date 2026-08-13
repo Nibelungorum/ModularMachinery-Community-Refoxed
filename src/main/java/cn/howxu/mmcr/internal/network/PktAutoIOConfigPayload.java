@@ -45,6 +45,7 @@ public record PktAutoIOConfigPayload(BlockPos pos, AutoIOAction action, @Nullabl
             if (!(player.level().getBlockEntity(pos) instanceof IOPortBlockEntity port)) return;
             if (action == AutoIOAction.SET_ENABLED) port.setAutoIOEnabled(enabled);
             else if (action == AutoIOAction.SET_SIDE) port.setAutoIOSide(side, enabled);
+            else if (action == AutoIOAction.SET_ALL_SIDES) port.setAllAutoIOSides(enabled);
         });
     }
 

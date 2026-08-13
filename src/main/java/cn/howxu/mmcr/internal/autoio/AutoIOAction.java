@@ -7,5 +7,6 @@ package cn.howxu.mmcr.internal.autoio;
  */
 public enum AutoIOAction {
     SET_ENABLED,
-    SET_SIDE
+    SET_SIDE,
+    SET_ALL_SIDES
 }

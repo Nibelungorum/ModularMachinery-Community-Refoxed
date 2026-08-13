@@ -16,6 +16,7 @@ import net.neoforged.neoforge.items.ItemStackHandler;
 public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
 
     private final ItemStackHandler handler;
+    private Boolean inventoryEmpty;
 
     protected ItemBusBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state, IOPortKind kind) {
         super(type, pos, state);
@@ -25,6 +26,7 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
         this.handler = new ItemStackHandler(slots) {
             @Override
             protected void onContentsChanged(int slot) {
+                inventoryEmpty = null;
                 markAutoIOCacheDirty();
                 setChanged();
                 notifyControllerOfInputChange();
@@ -35,6 +37,29 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
     public IItemHandler getItemHandler(Direction side) { return handler; }
 
     public ItemStackHandler getItemStackHandler(Direction side) { return handler; }
+
+    public boolean isInventoryEmpty() {
+        if (inventoryEmpty == null) {
+            inventoryEmpty = true;
+            for (int slot = 0; slot < handler.getSlots(); slot++) {
+                if (!handler.getStackInSlot(slot).isEmpty()) {
+                    inventoryEmpty = false;
+                    break;
+                }
+            }
+        }
+        return inventoryEmpty;
+    }
+
+    @Override
+    protected boolean hasAutoIOTransferWork() {
+        if (ioType() == IOType.OUTPUT) return !isInventoryEmpty();
+        for (int slot = 0; slot < handler.getSlots(); slot++) {
+            ItemStack stack = handler.getStackInSlot(slot);
+            if (stack.isEmpty() || stack.getCount() < Math.min(handler.getSlotLimit(slot), stack.getMaxStackSize())) return true;
+        }
+        return false;
+    }
 
     private void notifyControllerOfInputChange() {
         if (ioType() != IOType.INPUT || level == null || level.isClientSide() || linkedControllerPos() == null) return;

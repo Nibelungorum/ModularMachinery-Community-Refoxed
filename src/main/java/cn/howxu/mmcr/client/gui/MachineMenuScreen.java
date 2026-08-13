@@ -14,6 +14,7 @@ import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.util.IOType;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -35,6 +36,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.material.Fluid;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.fluid.FluidTintSource;
@@ -48,6 +50,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 
 /** 一个屏幕入口,按具体菜单类型分派纹理 / 尺寸 / 自定义渲染。 */
 public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainerMenu> implements MenuAccess<AbstractContainerMenu> {
@@ -90,13 +93,20 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     static final int ENERGY_Y = 10;
     private static final int ENERGY_W = 20;
     private static final int ENERGY_H = 61;
-    private static final int AUTO_IO_SIDE_ROW_Y = 28;
-    private static final int AUTO_IO_SIDE_ROW_H = 18;
-    private static final int AUTO_IO_SIDE_TEXT_X = 54;
+    private static final int AUTO_IO_SIDE_GRID_X = 12;
+    private static final int AUTO_IO_SIDE_GRID_Y = 6;
+    private static final int AUTO_IO_SIDE_GRID_STEP = 24;
+    private static final int AUTO_IO_SIDE_BUTTON_SIZE = 20;
+    private static final int AUTO_IO_TOGGLE_BUTTON_WIDTH = 69;
+    private static final int AUTO_IO_TOGGLE_BUTTON_HEIGHT = 20;
+    private static final float AUTO_IO_TOGGLE_TEXT_SCALE = 0.85F;
+    private static final int HIDDEN_SLOT_X = -1000;
+    private static final int HIDDEN_SLOT_Y = -1000;
     private boolean autoIOPage;
     private Button autoIOPageButton;
     private Button autoIOToggleButton;
     private final EnumMap<Direction, Button> autoIOSideButtons = new EnumMap<>(Direction.class);
+    private final List<HiddenSlotPosition> hiddenSlotPositions = new ArrayList<>();
 
     public MachineMenuScreen(AbstractContainerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title,
@@ -164,7 +174,11 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     }
 
     static boolean showsPortTitle(boolean fluidMenu, boolean energyMenu, boolean itemBusMenu) {
-        return !(fluidMenu || energyMenu || itemBusMenu);
+        return !itemBusMenu;
+    }
+
+    static boolean shouldRenderTitle(boolean fluidMenu, boolean energyMenu, boolean itemBusMenu, boolean autoIOPage) {
+        return !autoIOPage && showsPortTitle(fluidMenu, energyMenu, itemBusMenu);
     }
 
     static Direction autoIODirectionAt(int x, int y) {
@@ -177,12 +191,56 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         return null;
     }
 
+    static boolean isAutoIOShiftAllSidesCell(int x, int y) {
+        return x == 1 && y == 1;
+    }
+
     static boolean isPortSlotIndex(int slotIndex, int portSlotCount) {
         return slotIndex >= 0 && slotIndex < portSlotCount;
     }
 
+    static int autoIOPageButtonSize() {
+        return 12;
+    }
+
+    static int autoIOPageButtonX(int leftPos, int imageWidth) {
+        return leftPos + imageWidth - 4 - autoIOPageButtonSize();
+    }
+
     static boolean hidesSlotOnAutoIOPage(AbstractContainerMenu menu, boolean autoIOPage, Slot slot, int slotIdx, int portSlotCount) {
         return autoIOPage && menu instanceof ItemBusMenu && slot != null && isPortSlotIndex(slotIdx, portSlotCount);
+    }
+
+    static int autoIOSideButtonX(int gridX) {
+        return AUTO_IO_SIDE_GRID_X + gridX * AUTO_IO_SIDE_GRID_STEP;
+    }
+
+    static int autoIOSideButtonY(int gridY) {
+        return AUTO_IO_SIDE_GRID_Y + gridY * AUTO_IO_SIDE_GRID_STEP;
+    }
+
+    static int autoIOSideButtonSize() {
+        return AUTO_IO_SIDE_BUTTON_SIZE;
+    }
+
+    static int autoIOToggleButtonX() {
+        return autoIOSideButtonX(2) + autoIOSideButtonSize() + 6;
+    }
+
+    static int autoIOToggleButtonY() {
+        return autoIOSideButtonY(2);
+    }
+
+    static int autoIOToggleButtonWidth() {
+        return AUTO_IO_TOGGLE_BUTTON_WIDTH;
+    }
+
+    static int autoIOToggleButtonHeight() {
+        return AUTO_IO_TOGGLE_BUTTON_HEIGHT;
+    }
+
+    static float autoIOToggleTextScale() {
+        return AUTO_IO_TOGGLE_TEXT_SCALE;
     }
 
     static int titleColor(boolean controllerMenu) {
@@ -211,6 +269,11 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
 
     static int storageTextY(int titleY) {
         return titleY + STORAGE_TEXT_OFFSET_Y;
+    }
+
+    static int storageTextY(int titleY, boolean tankMenu) {
+        int visibleTitleY = tankMenu && titleY == hiddenInventoryLabelY() ? titleY(6, true) : titleY;
+        return storageTextY(visibleTitleY);
     }
 
     static int fluidBarOverlaySourceX() {
@@ -243,7 +306,9 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
 
     @Override
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
-        graphics.text(font, title, titleLabelX, titleLabelY, titleColor(menu instanceof MachineControllerMenu), false);
+        if (shouldRenderTitle(menu instanceof FluidHatchMenu, menu instanceof EnergyHatchMenu, menu instanceof ItemBusMenu, autoIOPage)) {
+            graphics.text(font, title, titleLabelX, titleLabelY, titleColor(menu instanceof MachineControllerMenu), false);
+        }
         if (menu instanceof MachineControllerMenu mc) renderControllerStatus(graphics, mc, 0, 0);
     }
 
@@ -251,7 +316,6 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
         extractBackground(graphics, mouseX, mouseY, partialTicks);
         super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
-        if (autoIOPage && isPortMenu()) renderAutoIOSideRows(graphics, (width - imageWidth) / 2, (height - imageHeight) / 2);
         extractTooltip(graphics, mouseX, mouseY);
     }
 
@@ -266,7 +330,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         super.extractBackground(graphics, mouseX, mouseY, partialTicks);
         int x = (width - imageWidth) / 2;
         int y = (height - imageHeight) / 2;
-        if (autoIOPage && menu instanceof ItemBusMenu) {
+        if (autoIOPage && isPortMenu()) {
             BackgroundBlit blit = backgroundBlit(0, 0, imageWidth, Math.min(imageHeight, BASE_BUS_BACKGROUND_HEIGHT));
             graphics.blit(RenderPipelines.GUI_TEXTURED, textureFor(menu, true),
                     x, y, 0, 0, blit.width(), blit.height(),
@@ -316,26 +380,30 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         autoIOPageButton = addRenderableWidget(Button.builder(Component.literal("⇄"), button -> {
             autoIOPage = !autoIOPage;
             updateAutoIOWidgets();
-        }).bounds(leftPos + 4, topPos + 4, 20, 20).tooltip(Tooltip.create(Component.translatable("mmcr.auto_io.control"))).build());
+        }).bounds(autoIOPageButtonX(leftPos, imageWidth), topPos + 4, autoIOPageButtonSize(), autoIOPageButtonSize()).tooltip(Tooltip.create(Component.translatable("mmcr.auto_io.control"))).build());
 
-        autoIOToggleButton = addRenderableWidget(Button.builder(autoIOToggleLabel(), button -> {
+        autoIOToggleButton = addRenderableWidget(new AutoIOToggleButton(leftPos + autoIOToggleButtonX(), topPos + autoIOToggleButtonY(), autoIOToggleLabel(), button -> {
             IOPortBlockEntity port = portEntity();
             boolean enabled = port == null || !port.autoIOConfig().enabled();
             ClientPacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), AutoIOAction.SET_ENABLED, null, enabled));
-        })
-                .bounds(leftPos + 53, topPos + imageHeight - 72, 70, 20).build());
+        }));
 
         for (int y = 0; y < 3; y++) {
             for (int x = 0; x < 3; x++) {
                 Direction side = autoIODirectionAt(x, y);
                 if (side == null) continue;
-                Button button = addRenderableWidget(new AutoIOSideButton(leftPos + 8, topPos + AUTO_IO_SIDE_ROW_Y + side.ordinal() * AUTO_IO_SIDE_ROW_H,
+                boolean shiftAllSidesCell = isAutoIOShiftAllSidesCell(x, y);
+                Button button = addRenderableWidget(new AutoIOSideButton(leftPos + autoIOSideButtonX(x), topPos + autoIOSideButtonY(y), side,
                         clicked -> {
                             IOPortBlockEntity port = portEntity();
+                            if (shiftAllSidesCell && Minecraft.getInstance().hasShiftDown()) {
+                                ClientPacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), AutoIOAction.SET_ALL_SIDES, null, false));
+                                return;
+                            }
                             boolean enabled = port == null || !port.autoIOConfig().isSideEnabled(side);
                             ClientPacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), AutoIOAction.SET_SIDE, side, enabled));
                         },
-                        () -> portEntity() != null && portEntity().autoIOConfig().isSideEnabled(side)));
+                        () -> portEntity() != null && portEntity().autoIOConfig().isSideEnabled(side), this::portEntity));
                 autoIOSideButtons.put(side, button);
             }
         }
@@ -343,12 +411,15 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     }
 
     private void updateAutoIOWidgets() {
+        updateAutoIOSlotVisibility();
         if (autoIOPageButton != null) autoIOPageButton.setMessage(Component.literal(autoIOPage ? "←" : "⇄"));
         if (autoIOToggleButton != null) {
             autoIOToggleButton.visible = autoIOPage;
             autoIOToggleButton.active = autoIOPage;
             autoIOToggleButton.setMessage(autoIOToggleLabel());
-            autoIOToggleButton.setTooltip(Tooltip.create(autoIOToggleTooltip()));
+            if (autoIOToggleButton instanceof AutoIOToggleButton toggleButton) {
+                toggleButton.setLines(autoIOToggleTypeLabel(isOutputPort()), autoIOToggleStateLabel(isAutoIOEnabled()));
+            }
         }
         for (var entry : autoIOSideButtons.entrySet()) {
             Button button = entry.getValue();
@@ -358,8 +429,47 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         }
     }
 
+    private void updateAutoIOSlotVisibility() {
+        if (!(menu instanceof ItemBusMenu itemBus)) return;
+        if (autoIOPage) {
+            if (!hiddenSlotPositions.isEmpty()) return;
+            for (int slotIdx = 0; slotIdx < itemBus.busSlotCount(); slotIdx++) {
+                Slot slot = menu.getSlot(slotIdx);
+                Slot hiddenSlot = new Slot(slot.container, slot.getContainerSlot(), HIDDEN_SLOT_X, HIDDEN_SLOT_Y);
+                hiddenSlot.index = slot.index;
+                hiddenSlotPositions.add(new HiddenSlotPosition(slotIdx, slot));
+                menu.slots.set(slotIdx, hiddenSlot);
+            }
+            return;
+        }
+        for (HiddenSlotPosition position : hiddenSlotPositions) {
+            menu.slots.set(position.index(), position.slot());
+        }
+        hiddenSlotPositions.clear();
+    }
+
+    static Component autoIOToggleLabel(boolean enabled, boolean outputPort) {
+        return autoIOToggleTypeLabel(outputPort).copy()
+                .append(Component.literal(": "))
+                .append(autoIOToggleStateLabel(enabled));
+    }
+
+    static Component autoIOToggleTypeLabel(boolean outputPort) {
+        return Component.translatable(outputPort ? "mmcr.auto_io.auto_output" : "mmcr.auto_io.auto_input");
+    }
+
+    static Component autoIOToggleStateLabel(boolean enabled) {
+        return Component.translatable(enabled ? "mmcr.auto_io.state.enabled" : "mmcr.auto_io.state.disabled")
+                .withStyle(enabled ? ChatFormatting.GREEN : ChatFormatting.RED);
+    }
+
     private Component autoIOToggleLabel() {
-        return Component.translatable(isOutputPort() ? "mmcr.auto_io.auto_output" : "mmcr.auto_io.auto_input");
+        return autoIOToggleLabel(isAutoIOEnabled(), isOutputPort());
+    }
+
+    private boolean isAutoIOEnabled() {
+        IOPortBlockEntity port = portEntity();
+        return port != null && port.autoIOConfig().enabled();
     }
 
     private boolean isOutputPort() {
@@ -378,15 +488,13 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         return null;
     }
 
-    private Component autoIOToggleTooltip() {
-        IOPortBlockEntity port = portEntity();
-        boolean enabled = port != null && port.autoIOConfig().enabled();
-        return Component.translatable(enabled ? "mmcr.auto_io.enabled" : "mmcr.auto_io.disabled");
-    }
-
     private Component autoIOSideTooltip(Direction side) {
         IOPortBlockEntity port = portEntity();
         boolean enabled = port != null && port.autoIOConfig().isSideEnabled(side);
+        return autoIOSideTooltip(side, enabled);
+    }
+
+    static Component autoIOSideTooltip(Direction side, boolean enabled) {
         return Component.translatable("mmcr.auto_io.side", Component.translatable("mmcr.direction." + side.name().toLowerCase(Locale.ROOT)),
                 Component.translatable(enabled ? "mmcr.auto_io.enabled" : "mmcr.auto_io.disabled"));
     }
@@ -396,16 +504,8 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
                 Component.translatable("mmcr.direction." + side.name().toLowerCase(Locale.ROOT)), blockName);
     }
 
-    private void renderAutoIOSideRows(GuiGraphicsExtractor g, int x, int y) {
-        IOPortBlockEntity port = portEntity();
-        int row = 0;
-        for (Direction side : Direction.values()) {
-            IOPortBlockEntity.AdjacentSide adjacent = port == null ? null : port.adjacentSide(side);
-            Component blockName = adjacent == null ? Component.translatable("block.minecraft.air") : adjacent.name();
-            int rowY = y + AUTO_IO_SIDE_ROW_Y + row * AUTO_IO_SIDE_ROW_H;
-            g.text(font, autoIOSideLine(side, blockName), x + AUTO_IO_SIDE_TEXT_X, rowY, TITLE_COLOR, false);
-            row++;
-        }
+    static ItemStack autoIOSideIcon(IOPortBlockEntity port, Direction side) {
+        return port == null ? ItemStack.EMPTY : port.adjacentSide(side).icon();
     }
 
     /**
@@ -450,7 +550,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     }
 
     static Identifier textureFor(AbstractContainerMenu menu, boolean autoIOPage) {
-        if (autoIOPage && menu instanceof ItemBusMenu) return SMART_INTERFACE_TEXTURE;
+        if (autoIOPage && (menu instanceof ItemBusMenu || menu instanceof FluidHatchMenu || menu instanceof EnergyHatchMenu)) return SMART_INTERFACE_TEXTURE;
         if (menu instanceof ItemBusMenu itemBus)     return MMCR.id(itemBus.texturePath());
         if (menu instanceof FluidHatchMenu)         return TANK_TEXTURE;
         if (menu instanceof EnergyHatchMenu)        return TANK_TEXTURE;
@@ -492,7 +592,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     }
 
     private void renderAmountText(GuiGraphicsExtractor g, int x, int y, String text) {
-        g.text(font, Component.literal(text), x + storageTextX(titleLabelX), y + storageTextY(titleLabelY), TITLE_COLOR, false);
+        g.text(font, Component.literal(text), x + storageTextX(titleLabelX), y + storageTextY(titleLabelY, true), TITLE_COLOR, false);
     }
 
     private static String amountText(int amount, int capacity, String unit) {
@@ -680,6 +780,9 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         return active ? FORMED_STATUS_COLOR : IDLE_STATUS_COLOR;
     }
 
+    private record HiddenSlotPosition(int index, Slot slot) {
+    }
+
     /** 把同一个 {@link MachineMenuScreen} 注册到所有 MMCR 菜单类型(根据具体菜单类型分派渲染)。 */
     public static void registerScreens(RegisterMenuScreensEvent event) {
         event.register(ModUIs.ITEM_BUS.get(),          MachineMenuScreen::new);
@@ -689,14 +792,56 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         event.register(ModUIs.FACTORY_SCHEDULER.get(),  MachineMenuScreen::new);
     }
 
+    private static class AutoIOToggleButton extends Button {
+        private Component typeLine;
+        private Component stateLine;
+
+        AutoIOToggleButton(int x, int y, Component message, OnPress onPress) {
+            super(x, y, autoIOToggleButtonWidth(), autoIOToggleButtonHeight(), message, onPress, Button.DEFAULT_NARRATION);
+            this.typeLine = message;
+            this.stateLine = Component.empty();
+        }
+
+        void setLines(Component typeLine, Component stateLine) {
+            this.typeLine = typeLine;
+            this.stateLine = stateLine;
+        }
+
+        @Override
+        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            int baseColor = active ? 0xFF6B6B6B : 0xFF3F3F3F;
+            int hoverColor = isHoveredOrFocused() ? 0xFFFFFFFF : 0xFFAAAAAA;
+            graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), hoverColor);
+            graphics.fill(getX() + 1, getY() + 1, getX() + getWidth() - 1, getY() + getHeight() - 1, baseColor);
+
+            var font = Minecraft.getInstance().font;
+            float scale = autoIOToggleTextScale();
+            graphics.pose().pushMatrix();
+            graphics.pose().scale(scale, scale);
+            renderCenteredLine(graphics, font, typeLine, getY() + 2, scale);
+            renderCenteredLine(graphics, font, stateLine, getY() + 11, scale);
+            graphics.pose().popMatrix();
+        }
+
+        private void renderCenteredLine(GuiGraphicsExtractor graphics, net.minecraft.client.gui.Font font, Component text, int y, float scale) {
+            int textWidth = font.width(text);
+            int textX = (int) ((getX() + (getWidth() - textWidth * scale) / 2.0F) / scale);
+            graphics.text(font, text, textX, (int) (y / scale), 0xFFFFFFFF, false);
+        }
+    }
+
     private static class AutoIOSideButton extends Button {
         private static final int SELECTED_COLOR = 0xFF2E7D32;
         private static final int SELECTED_BORDER_COLOR = 0xFF66BB6A;
+        private final Direction side;
         private final BooleanSupplier selected;
+        private final Supplier<IOPortBlockEntity> portSupplier;
 
-        AutoIOSideButton(int x, int y, OnPress onPress, BooleanSupplier selected) {
-            super(x, y, 20, 20, Component.empty(), onPress, Button.DEFAULT_NARRATION);
+        AutoIOSideButton(int x, int y, Direction side, OnPress onPress, BooleanSupplier selected, Supplier<IOPortBlockEntity> portSupplier) {
+            super(x, y, autoIOSideButtonSize(), autoIOSideButtonSize(), Component.empty(), onPress, Button.DEFAULT_NARRATION);
+            this.side = side;
             this.selected = selected;
+            this.portSupplier = portSupplier;
         }
 
         @Override
@@ -711,6 +856,10 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
                 graphics.fill(getX() + 2, getY() + getHeight() - 3, getX() + getWidth() - 2, getY() + getHeight() - 2, SELECTED_BORDER_COLOR);
                 graphics.fill(getX() + 2, getY() + 2, getX() + 3, getY() + getHeight() - 2, SELECTED_BORDER_COLOR);
                 graphics.fill(getX() + getWidth() - 3, getY() + 2, getX() + getWidth() - 2, getY() + getHeight() - 2, SELECTED_BORDER_COLOR);
+            }
+            ItemStack icon = autoIOSideIcon(portSupplier.get(), side);
+            if (!icon.isEmpty()) {
+                graphics.item(icon, getX() + 2, getY() + 2, 0);
             }
         }
     }

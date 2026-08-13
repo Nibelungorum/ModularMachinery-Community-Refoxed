@@ -17,7 +17,7 @@ public final class AutoIOConfig {
     private static final String SIDES_KEY = "sides";
 
     private boolean enabled;
-    private final EnumSet<Direction> enabledSides = EnumSet.noneOf(Direction.class);
+    private final EnumSet<Direction> enabledSides = EnumSet.allOf(Direction.class);
 
     public boolean enabled() {
         return enabled;
@@ -45,6 +45,11 @@ public final class AutoIOConfig {
         else enabledSides.remove(side);
     }
 
+    public void setAllSides(boolean enabled) {
+        enabledSides.clear();
+        if (enabled) enabledSides.addAll(EnumSet.allOf(Direction.class));
+    }
+
     public void save(ValueOutput output) {
         output.putBoolean(ENABLED_KEY, enabled);
         output.putInt(SIDES_KEY, toMask(enabledSides));
@@ -53,7 +58,7 @@ public final class AutoIOConfig {
     public void loadInto(ValueInput input) {
         enabled = input.getBooleanOr(ENABLED_KEY, false);
         enabledSides.clear();
-        enabledSides.addAll(fromMask(input.getIntOr(SIDES_KEY, 0)));
+        enabledSides.addAll(fromMask(input.getIntOr(SIDES_KEY, toMask(EnumSet.allOf(Direction.class)))));
     }
 
     public static AutoIOConfig load(ValueInput input) {

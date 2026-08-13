@@ -31,7 +31,6 @@ import java.util.Optional;
  * @author howxu <dev@howxu.cn>
  */
 public final class AutoIOTransferHandlers {
-    private static final int ITEM_TRANSFER_LIMIT = 64;
     private static final List<AutoIOTransferHandler> HANDLERS = List.of(new ItemHandler(), new FluidHandler(), new EnergyHandler());
 
     private AutoIOTransferHandlers() {}
@@ -50,9 +49,9 @@ public final class AutoIOTransferHandlers {
             if (adjacent == null) return false;
             IItemHandler internal = itemBus.getItemStackHandler(side);
             if (port.ioType() == IOType.INPUT) {
-                return ResourceHandlerUtil.move(adjacent, new ItemHandlerAdapter(internal), resource -> true, ITEM_TRANSFER_LIMIT, null) > 0;
+                return ResourceHandlerUtil.move(adjacent, new ItemHandlerAdapter(internal), resource -> true, port.autoIoTransferLimit(), null) > 0;
             }
-            return ResourceHandlerUtil.move(new ItemHandlerAdapter(internal), adjacent, resource -> true, ITEM_TRANSFER_LIMIT, null) > 0;
+            return ResourceHandlerUtil.move(new ItemHandlerAdapter(internal), adjacent, resource -> true, port.autoIoTransferLimit(), null) > 0;
         }
     }
 
@@ -65,11 +64,10 @@ public final class AutoIOTransferHandlers {
             ResourceHandler<FluidResource> adjacent = adjacentFluidHandler(port, side);
             if (adjacent == null) return false;
             ResourceHandler<FluidResource> internal = new FluidHandlerAdapter(fluidHatch.getFluidTank(side));
-            int max = fluidHatch.getFluidTank(side).getCapacity();
             if (port.ioType() == IOType.INPUT) {
-                return ResourceHandlerUtil.move(adjacent, internal, resource -> true, max, null) > 0;
+                return ResourceHandlerUtil.move(adjacent, internal, resource -> true, port.autoIoTransferLimit(), null) > 0;
             }
-            return ResourceHandlerUtil.move(internal, adjacent, resource -> true, max, null) > 0;
+            return ResourceHandlerUtil.move(internal, adjacent, resource -> true, port.autoIoTransferLimit(), null) > 0;
         }
     }
 
@@ -82,11 +80,10 @@ public final class AutoIOTransferHandlers {
             net.neoforged.neoforge.transfer.energy.EnergyHandler adjacent = adjacentEnergyHandler(port, side);
             if (adjacent == null) return false;
             net.neoforged.neoforge.transfer.energy.EnergyHandler internal = new EnergyStorageAdapter(energyHatch.getMutableEnergyStorage(side));
-            int max = energyHatch.getMutableEnergyStorage(side).getMaxEnergyStored();
             if (port.ioType() == IOType.INPUT) {
-                return EnergyHandlerUtil.move(adjacent, internal, max, null) > 0;
+                return EnergyHandlerUtil.move(adjacent, internal, port.autoIoTransferLimit(), null) > 0;
             }
-            return EnergyHandlerUtil.move(internal, adjacent, max, null) > 0;
+            return EnergyHandlerUtil.move(internal, adjacent, port.autoIoTransferLimit(), null) > 0;
         }
     }
 

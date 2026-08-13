@@ -62,6 +62,17 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
     public EnergyStorage getMutableEnergyStorage(Direction side) { return storage; }
 
     @Override
+    public int autoIoTransferLimit() {
+        return kind().energyHatchSize().orElseThrow().transfer();
+    }
+
+    @Override
+    protected boolean hasAutoIOTransferWork() {
+        if (ioType() == IOType.OUTPUT) return storage.getEnergyStored() > 0;
+        return storage.getEnergyStored() < storage.getMaxEnergyStored();
+    }
+
+    @Override
     public void setChanged() {
         super.setChanged();
         if (level != null && !level.isClientSide()) {

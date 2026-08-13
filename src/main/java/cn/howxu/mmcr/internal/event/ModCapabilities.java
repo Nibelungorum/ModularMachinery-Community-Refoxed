@@ -78,19 +78,25 @@ public final class ModCapabilities {
             event.registerBlockEntity(
                     ITEM_BLOCK,
                     ModBlockEntities.BES.get(kind.id()).get(),
-                    (be, side) -> be instanceof ItemBusBlockEntity ib ? new LegacyItemHandlerAdapter(ib.getItemStackHandler(side), canInsert, true) : null);
+                    (be, side) -> be instanceof ItemBusBlockEntity ib && ib.isAutoIOSideExposed(side)
+                            ? new LegacyItemHandlerAdapter(ib.getItemStackHandler(side), canInsert, true)
+                            : null);
         } else if (kind.fluidHatchSize().isPresent()) {
             boolean canInsert = kind.ioType() == IOType.INPUT;
             event.registerBlockEntity(
                     FLUID_BLOCK,
                     ModBlockEntities.BES.get(kind.id()).get(),
-                    (be, side) -> be instanceof FluidHatchBlockEntity fh ? new LegacyFluidHandlerAdapter(fh.getFluidTank(side), canInsert, true) : null);
+                    (be, side) -> be instanceof FluidHatchBlockEntity fh && fh.isAutoIOSideExposed(side)
+                            ? new LegacyFluidHandlerAdapter(fh.getFluidTank(side), canInsert, true)
+                            : null);
         } else if (kind.energyHatchSize().isPresent()) {
             boolean canInsert = kind.ioType() == IOType.INPUT;
             event.registerBlockEntity(
                     ENERGY_BLOCK,
                     ModBlockEntities.BES.get(kind.id()).get(),
-                    (be, side) -> be instanceof EnergyHatchBlockEntity eh ? new LegacyEnergyHandlerAdapter(eh, canInsert, !canInsert) : null);
+                    (be, side) -> be instanceof EnergyHatchBlockEntity eh && eh.isAutoIOSideExposed(side)
+                            ? new LegacyEnergyHandlerAdapter(eh, canInsert, !canInsert)
+                            : null);
         }
     }
 

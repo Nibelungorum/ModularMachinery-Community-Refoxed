@@ -16,6 +16,7 @@ import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
 public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
 
     private final FluidTank tank;
+    private Boolean tankEmpty;
 
     protected FluidHatchBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state, IOPortKind kind) {
         super(type, pos, state);
@@ -34,6 +35,7 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
 
             @Override
             protected void onContentsChanged() {
+                tankEmpty = null;
                 markAutoIOCacheDirty();
                 setChanged();
             }
@@ -43,6 +45,22 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
     public IFluidHandler getFluidHandler(Direction side) { return tank; }
 
     public FluidTank getFluidTank(Direction side) { return tank; }
+
+    public boolean isTankEmpty() {
+        if (tankEmpty == null) tankEmpty = tank.getFluid().isEmpty();
+        return tankEmpty;
+    }
+
+    @Override
+    public int autoIoTransferLimit() {
+        return Math.min(1000, tank.getCapacity());
+    }
+
+    @Override
+    protected boolean hasAutoIOTransferWork() {
+        if (ioType() == IOType.OUTPUT) return !isTankEmpty();
+        return tank.getFluidAmount() < tank.getCapacity();
+    }
 
     @Override
     public void setChanged() {

@@ -32,13 +32,35 @@ public class AutoIOGameTest {
         chest.setItem(0, new ItemStack(Items.IRON_INGOT, 3));
 
         inputBus.toggleAutoIOEnabled();
-        inputBus.toggleAutoIOSide(Direction.EAST);
+        inputBus.setAllAutoIOSides(false);
+        inputBus.setAutoIOSide(Direction.EAST, true);
         helper.runAtTickTime(60, inputBus::serverTick);
         helper.runAtTickTime(80, () -> {
             ItemStack imported = inputBus.getItemStackHandler(Direction.EAST).getStackInSlot(0);
             helper.assertTrue(imported.is(Items.IRON_INGOT), "Input bus imports iron ingots from east chest");
             helper.assertTrue(imported.getCount() > 0, "Input bus receives items from east chest");
             helper.assertTrue(chest.getItem(0).getCount() < 3, "Source chest loses items to auto input");
+            helper.succeed();
+        });
+    }
+
+    public void itemInputAutoImportsAfterLateNeighborPlacement(GameTestHelper helper) {
+        BlockPos inputPos = new BlockPos(0, 1, 0);
+        BlockPos chestPos = inputPos.relative(Direction.EAST);
+        helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+
+        ItemBusBlockEntity inputBus = helper.getBlockEntity(inputPos, ItemBusBlockEntity.class);
+        inputBus.toggleAutoIOEnabled();
+        helper.runAtTickTime(60, inputBus::serverTick);
+        helper.runAtTickTime(65, () -> {
+            helper.setBlock(chestPos, Blocks.CHEST.defaultBlockState());
+            ChestBlockEntity chest = helper.getBlockEntity(chestPos, ChestBlockEntity.class);
+            chest.setItem(0, new ItemStack(Items.IRON_INGOT, 3));
+        });
+        helper.runAtTickTime(120, inputBus::serverTick);
+        helper.runAtTickTime(130, () -> {
+            ItemStack imported = inputBus.getItemStackHandler(Direction.EAST).getStackInSlot(0);
+            helper.assertTrue(imported.is(Items.IRON_INGOT), "Input bus imports after late east chest placement");
             helper.succeed();
         });
     }
@@ -54,7 +76,8 @@ public class AutoIOGameTest {
         outputHatch.getFluidHandler(Direction.EAST).fill(new FluidStack(Fluids.WATER, 1000), IFluidHandler.FluidAction.EXECUTE);
 
         outputHatch.toggleAutoIOEnabled();
-        outputHatch.toggleAutoIOSide(Direction.EAST);
+        outputHatch.setAllAutoIOSides(false);
+        outputHatch.setAutoIOSide(Direction.EAST, true);
         helper.runAtTickTime(60, outputHatch::serverTick);
         helper.runAtTickTime(80, () -> {
             FluidStack exported = receiver.getFluidHandler(Direction.WEST).getFluidInTank(0);
@@ -77,7 +100,8 @@ public class AutoIOGameTest {
         outputStorage.receiveEnergy(700, false);
 
         outputHatch.toggleAutoIOEnabled();
-        outputHatch.toggleAutoIOSide(Direction.EAST);
+        outputHatch.setAllAutoIOSides(false);
+        outputHatch.setAutoIOSide(Direction.EAST, true);
         helper.runAtTickTime(60, outputHatch::serverTick);
         helper.runAtTickTime(80, () -> {
             helper.assertTrue(receiver.getEnergyStorage(Direction.WEST).getEnergyStored() > 0, "Energy output hatch exports FE east");

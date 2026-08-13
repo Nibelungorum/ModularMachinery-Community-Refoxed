@@ -41,11 +41,12 @@ class AutoIOTransferHandlersTest {
     }
 
     @Test
-    void empty_candidate_cache_rechecks_after_adaptive_delay() throws Exception {
+    void empty_candidate_cache_waits_for_dirty_signal_before_rechecking() {
         ProbeHandler handler = new ProbeHandler();
         ProbePort port = new ProbePort(BlockPos.ZERO, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState(), handler);
         port.toggleAutoIOEnabled();
-        port.toggleAutoIOSide(Direction.EAST);
+        port.setAllAutoIOSides(false);
+        port.setAutoIOSide(Direction.EAST, true);
 
         port.runAutoIOCycleAt(1L);
         assertThat(handler.hasAdjacentTargetCalls).isEqualTo(1);
@@ -55,8 +56,29 @@ class AutoIOTransferHandlersTest {
         assertThat(handler.hasAdjacentTargetCalls).isEqualTo(1);
 
         port.runAutoIOCycleAt(60L);
+        assertThat(handler.hasAdjacentTargetCalls).isEqualTo(1);
+        assertThat(handler.transferCalls).isZero();
+
+        port.markAutoIOCacheDirty();
+        port.runAutoIOCycleAt(120L);
         assertThat(handler.hasAdjacentTargetCalls).isEqualTo(2);
         assertThat(handler.transferCalls).isEqualTo(1);
+    }
+
+    @Test
+    void output_port_with_no_transferable_contents_skips_transfer_attempts() {
+        ProbeHandler handler = new ProbeHandler();
+        ProbePort port = new ProbePort(BlockPos.ZERO, ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState(), handler, IOType.OUTPUT, PortKinds.ITEM_OUTPUT);
+        port.hasTransferWork = false;
+        port.toggleAutoIOEnabled();
+        port.setAllAutoIOSides(false);
+        port.setAutoIOSide(Direction.EAST, true);
+        handler.adjacentTarget = true;
+
+        port.runAutoIOCycleAt(60L);
+
+        assertThat(handler.hasAdjacentTargetCalls).isEqualTo(1);
+        assertThat(handler.transferCalls).isZero();
     }
 
     private static IOPortBlockEntity port(String id) {
@@ -70,10 +92,19 @@ class AutoIOTransferHandlersTest {
 
     private static final class ProbePort extends IOPortBlockEntity {
         private final ProbeHandler handler;
+        private final IOType ioType;
+        private final IOPortKind kind;
+        private boolean hasTransferWork = true;
 
         private ProbePort(BlockPos pos, BlockState state, ProbeHandler handler) {
-            super(ModBlockEntities.BES.get("item_input_bus").get(), pos, state);
+            this(pos, state, handler, IOType.INPUT, PortKinds.ITEM_INPUT);
+        }
+
+        private ProbePort(BlockPos pos, BlockState state, ProbeHandler handler, IOType ioType, IOPortKind kind) {
+            super(ModBlockEntities.BES.get(kind.id()).get(), pos, state);
             this.handler = handler;
+            this.ioType = ioType;
+            this.kind = kind;
         }
 
         private void runAutoIOCycleAt(long gameTime) {
@@ -83,10 +114,11 @@ class AutoIOTransferHandlersTest {
             runAutoIOCycle();
         }
 
-        @Override public IOType ioType() { return IOType.INPUT; }
-        @Override public IOPortKind kind() { return PortKinds.ITEM_INPUT; }
+        @Override public IOType ioType() { return ioType; }
+        @Override public IOPortKind kind() { return kind; }
         @Override public AutoIOCapabilityType autoIOCapabilityType() { return AutoIOCapabilityType.ITEM; }
         @Override protected AutoIOTransferHandler autoIOTransferHandler() { return handler; }
+        @Override protected boolean hasAutoIOTransferWork() { return hasTransferWork; }
     }
 
     private static final class ProbeHandler implements AutoIOTransferHandler {

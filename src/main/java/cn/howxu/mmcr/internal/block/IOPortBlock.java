@@ -22,7 +22,9 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.redstone.Orientation;
 import net.minecraft.world.phys.BlockHitResult;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.function.Supplier;
 
@@ -63,6 +65,14 @@ public class IOPortBlock extends Block implements EntityBlock {
             if (provider != null) player.openMenu(provider, pos);
         }
         return InteractionResult.SUCCESS;
+    }
+
+    @Override
+    protected void neighborChanged(BlockState state, Level level, BlockPos pos, Block neighborBlock,
+                                   @Nullable Orientation orientation, boolean movedByPiston) {
+        if (!level.isClientSide() && level.getBlockEntity(pos) instanceof cn.howxu.mmcr.internal.tile.IOPortBlockEntity port) {
+            port.markAutoIOCacheDirty();
+        }
     }
 
     @Override

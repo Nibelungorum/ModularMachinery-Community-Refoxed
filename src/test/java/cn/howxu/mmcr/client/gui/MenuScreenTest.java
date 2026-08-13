@@ -6,7 +6,9 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
 import cn.howxu.mmcr.internal.menu.FactorySchedulerMenu;
+import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -15,6 +17,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.level.block.Blocks;
@@ -27,6 +30,8 @@ import org.junit.jupiter.api.BeforeAll;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.EnumMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -57,8 +62,8 @@ class MenuScreenTest {
         assertThat(MachineMenuScreen.titleX(8, false, true, false)).isEqualTo(40);
         assertThat(MachineMenuScreen.titleX(8, false, false, true)).isEqualTo(4);
         assertThat(MachineMenuScreen.titleY(6, false, true)).isEqualTo(4);
-        assertThat(MachineMenuScreen.showsPortTitle(true, false, false)).isFalse();
-        assertThat(MachineMenuScreen.showsPortTitle(false, true, false)).isFalse();
+        assertThat(MachineMenuScreen.showsPortTitle(true, false, false)).isTrue();
+        assertThat(MachineMenuScreen.showsPortTitle(false, true, false)).isTrue();
         assertThat(MachineMenuScreen.showsPortTitle(false, false, true)).isFalse();
         assertThat(MachineMenuScreen.hiddenInventoryLabelY()).isEqualTo(-1000);
         assertThat(MachineMenuScreen.TITLE_COLOR).isEqualTo(-12566464);
@@ -67,6 +72,15 @@ class MenuScreenTest {
         assertThat(MachineMenuScreen.titleColor(true)).isEqualTo(MachineMenuScreen.CONTROLLER_TITLE_COLOR);
         assertThat(MachineMenuScreen.controllerStatusX(10)).isEqualTo(10);
         assertThat(MachineMenuScreen.controllerStatusY(10)).isEqualTo(22);
+    }
+
+    @Test
+    void auto_io_page_hides_port_titles_even_when_normal_ui_shows_them() {
+        assertThat(MachineMenuScreen.shouldRenderTitle(true, false, false, false)).isTrue();
+        assertThat(MachineMenuScreen.shouldRenderTitle(false, true, false, false)).isTrue();
+        assertThat(MachineMenuScreen.shouldRenderTitle(true, false, false, true)).isFalse();
+        assertThat(MachineMenuScreen.shouldRenderTitle(false, true, false, true)).isFalse();
+        assertThat(MachineMenuScreen.shouldRenderTitle(false, false, true, true)).isFalse();
     }
 
     @Test
@@ -81,6 +95,12 @@ class MenuScreenTest {
     }
 
     @Test
+    void auto_io_center_grid_cell_has_shift_all_sides_action() {
+        assertThat(MachineMenuScreen.isAutoIOShiftAllSidesCell(1, 1)).isTrue();
+        assertThat(MachineMenuScreen.isAutoIOShiftAllSidesCell(0, 1)).isFalse();
+    }
+
+    @Test
     void auto_io_label_uses_resolved_port_io_type_before_owner_fallback() {
         assertThat(MachineMenuScreen.isOutputPort(IOType.OUTPUT, null)).isTrue();
         assertThat(MachineMenuScreen.isOutputPort(IOType.OUTPUT, IOType.INPUT)).isTrue();
@@ -90,10 +110,51 @@ class MenuScreenTest {
     }
 
     @Test
+    void auto_io_toggle_label_includes_colored_state() {
+        assertThat(MachineMenuScreen.autoIOToggleLabel(true, false).getString()).isEqualTo("mmcr.auto_io.auto_input: mmcr.auto_io.state.enabled");
+        assertThat(MachineMenuScreen.autoIOToggleLabel(false, true).getString()).isEqualTo("mmcr.auto_io.auto_output: mmcr.auto_io.state.disabled");
+        assertThat(MachineMenuScreen.autoIOToggleTypeLabel(false).getString()).isEqualTo("mmcr.auto_io.auto_input");
+        assertThat(MachineMenuScreen.autoIOToggleStateLabel(true).getString()).isEqualTo("mmcr.auto_io.state.enabled");
+    }
+
+    @Test
+    void auto_io_side_tooltip_uses_face_state_only() {
+        TranslatableContents enabled = (TranslatableContents) MachineMenuScreen.autoIOSideTooltip(Direction.EAST, true).getContents();
+        TranslatableContents disabled = (TranslatableContents) MachineMenuScreen.autoIOSideTooltip(Direction.DOWN, false).getContents();
+
+        assertThat(enabled.getKey()).isEqualTo("mmcr.auto_io.side");
+        assertThat(((TranslatableContents) ((Component) enabled.getArgs()[0]).getContents()).getKey()).isEqualTo("mmcr.direction.east");
+        assertThat(((TranslatableContents) ((Component) enabled.getArgs()[1]).getContents()).getKey()).isEqualTo("mmcr.auto_io.enabled");
+        assertThat(disabled.getKey()).isEqualTo("mmcr.auto_io.side");
+        assertThat(((TranslatableContents) ((Component) disabled.getArgs()[0]).getContents()).getKey()).isEqualTo("mmcr.direction.down");
+        assertThat(((TranslatableContents) ((Component) disabled.getArgs()[1]).getContents()).getKey()).isEqualTo("mmcr.auto_io.disabled");
+    }
+
+    @Test
+    void auto_io_side_icon_is_empty_without_a_loaded_port() {
+        assertThat(MachineMenuScreen.autoIOSideIcon(null, Direction.NORTH).isEmpty()).isTrue();
+    }
+
+    @Test
     void auto_io_page_hides_only_port_slots() {
         assertThat(MachineMenuScreen.isPortSlotIndex(0, 6)).isTrue();
         assertThat(MachineMenuScreen.isPortSlotIndex(5, 6)).isTrue();
         assertThat(MachineMenuScreen.isPortSlotIndex(6, 6)).isFalse();
+    }
+
+    @Test
+    void auto_io_page_button_sits_at_top_right() {
+        assertThat(MachineMenuScreen.autoIOPageButtonSize()).isEqualTo(12);
+        assertThat(MachineMenuScreen.autoIOPageButtonX(10, 176)).isEqualTo(170);
+    }
+
+    @Test
+    void auto_io_toggle_button_aligns_right_of_side_grid_third_row() {
+        assertThat(MachineMenuScreen.autoIOToggleButtonX()).isEqualTo(86);
+        assertThat(MachineMenuScreen.autoIOToggleButtonY()).isEqualTo(54);
+        assertThat(MachineMenuScreen.autoIOToggleButtonWidth()).isEqualTo(69);
+        assertThat(MachineMenuScreen.autoIOToggleButtonHeight()).isEqualTo(20);
+        assertThat(MachineMenuScreen.autoIOToggleTextScale()).isEqualTo(0.85F);
     }
 
     @Test
@@ -118,6 +179,11 @@ class MenuScreenTest {
     @Test
     void storage_text_y_aligns_below_title_y() {
         assertThat(MachineMenuScreen.storageTextY(9)).isEqualTo(21);
+    }
+
+    @Test
+    void tank_storage_text_uses_visible_y_when_title_is_hidden() {
+        assertThat(MachineMenuScreen.storageTextY(MachineMenuScreen.hiddenInventoryLabelY(), true)).isEqualTo(21);
     }
 
     @Test
@@ -226,6 +292,16 @@ class MenuScreenTest {
     }
 
     @Test
+    void auto_io_page_uses_smart_interface_texture_for_all_port_menus() {
+        assertThat(screenTextureFor(new ItemBusMenu(1, new Inventory(null, null)), true))
+                .isEqualTo(MMCR.id("textures/gui/guismartinterface.png"));
+        assertThat(screenTextureFor(menuWithoutConstructor(FluidHatchMenu.class), true))
+                .isEqualTo(MMCR.id("textures/gui/guismartinterface.png"));
+        assertThat(screenTextureFor(menuWithoutConstructor(EnergyHatchMenu.class), true))
+                .isEqualTo(MMCR.id("textures/gui/guismartinterface.png"));
+    }
+
+    @Test
     void auto_io_page_hides_item_bus_port_slots() {
         ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null));
         Slot portSlot = menu.getSlot(0);
@@ -245,10 +321,48 @@ class MenuScreenTest {
     }
 
     @Test
+    void auto_io_page_moves_item_bus_port_slots_offscreen_and_restores_them() throws Exception {
+        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null));
+        MachineMenuScreen screen = screenForMenu(menu);
+        Slot portSlot = menu.getSlot(0);
+        Slot playerSlot = menu.getSlot(menu.playerInventorySlotStart());
+        int portX = portSlot.x;
+        int portY = portSlot.y;
+        int playerX = playerSlot.x;
+        int playerY = playerSlot.y;
+
+        setAutoIOPage(screen, true);
+        invokeUpdateAutoIOWidgets(screen);
+
+        assertThat(menu.getSlot(0).x).isLessThan(-900);
+        assertThat(menu.getSlot(0).y).isLessThan(-900);
+        assertThat(playerSlot.x).isEqualTo(playerX);
+        assertThat(playerSlot.y).isEqualTo(playerY);
+
+        setAutoIOPage(screen, false);
+        invokeUpdateAutoIOWidgets(screen);
+
+        assertThat(menu.getSlot(0)).isSameAs(portSlot);
+        assertThat(menu.getSlot(0).x).isEqualTo(portX);
+        assertThat(menu.getSlot(0).y).isEqualTo(portY);
+    }
+
+    @Test
     void auto_io_side_line_uses_direction_and_block_name() {
         Component line = MachineMenuScreen.autoIOSideLine(Direction.EAST, Blocks.CHEST.getName());
 
         assertThat(line.getString()).isEqualTo("mmcr.auto_io.side_block");
+    }
+
+    @Test
+    void auto_io_side_buttons_keep_unfolded_grid_positions() {
+        assertThat(MachineMenuScreen.autoIOSideButtonSize()).isEqualTo(20);
+        assertThat(MachineMenuScreen.autoIOSideButtonX(0)).isEqualTo(12);
+        assertThat(MachineMenuScreen.autoIOSideButtonY(0)).isEqualTo(6);
+        assertThat(MachineMenuScreen.autoIOSideButtonX(1)).isEqualTo(36);
+        assertThat(MachineMenuScreen.autoIOSideButtonY(1)).isEqualTo(30);
+        assertThat(MachineMenuScreen.autoIOSideButtonX(2)).isEqualTo(60);
+        assertThat(MachineMenuScreen.autoIOSideButtonY(2)).isEqualTo(54);
     }
 
     @Test
@@ -280,10 +394,24 @@ class MenuScreenTest {
             sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
             MachineMenuScreen screen = (MachineMenuScreen) unsafe.allocateInstance(MachineMenuScreen.class);
             setField(net.minecraft.client.gui.screens.inventory.AbstractContainerScreen.class, screen, "menu", menu);
+            setField(MachineMenuScreen.class, screen, "autoIOSideButtons", new EnumMap<>(Direction.class));
+            setField(MachineMenuScreen.class, screen, "hiddenSlotPositions", new ArrayList<>());
             return screen;
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate menu screen", e);
         }
+    }
+
+    private static void setAutoIOPage(MachineMenuScreen screen, boolean value) throws ReflectiveOperationException {
+        Field autoIOPage = MachineMenuScreen.class.getDeclaredField("autoIOPage");
+        autoIOPage.setAccessible(true);
+        autoIOPage.setBoolean(screen, value);
+    }
+
+    private static void invokeUpdateAutoIOWidgets(MachineMenuScreen screen) throws ReflectiveOperationException {
+        Method method = MachineMenuScreen.class.getDeclaredMethod("updateAutoIOWidgets");
+        method.setAccessible(true);
+        method.invoke(screen);
     }
 
     private static void setField(Class<?> owner, Object target, String name, Object value) throws ReflectiveOperationException {
@@ -293,13 +421,17 @@ class MenuScreenTest {
     }
 
     private static FactorySchedulerMenu factoryMenuWithoutConstructor() {
+        return menuWithoutConstructor(FactorySchedulerMenu.class);
+    }
+
+    private static <T extends AbstractContainerMenu> T menuWithoutConstructor(Class<T> menuClass) {
         try {
             Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
             unsafeField.setAccessible(true);
             sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
-            return (FactorySchedulerMenu) unsafe.allocateInstance(FactorySchedulerMenu.class);
+            return menuClass.cast(unsafe.allocateInstance(menuClass));
         } catch (ReflectiveOperationException e) {
-            throw new AssertionError("Unable to allocate factory menu", e);
+            throw new AssertionError("Unable to allocate menu", e);
         }
     }
 

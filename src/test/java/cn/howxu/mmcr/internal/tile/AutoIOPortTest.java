@@ -39,7 +39,8 @@ class AutoIOPortTest {
         port.toggleAutoIOSide(Direction.EAST);
 
         assertThat(port.autoIOConfig().enabled()).isTrue();
-        assertThat(port.autoIOConfig().enabledSides()).containsExactly(Direction.EAST);
+        assertThat(port.autoIOConfig().enabledSides()).containsExactlyInAnyOrder(
+                Direction.DOWN, Direction.UP, Direction.NORTH, Direction.SOUTH, Direction.WEST);
     }
 
     @Test
@@ -56,7 +57,8 @@ class AutoIOPortTest {
                 HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
 
         assertThat(restored.autoIOConfig().enabled()).isTrue();
-        assertThat(restored.autoIOConfig().enabledSides()).containsExactly(Direction.NORTH);
+        assertThat(restored.autoIOConfig().enabledSides()).containsExactlyInAnyOrder(
+                Direction.DOWN, Direction.UP, Direction.SOUTH, Direction.WEST, Direction.EAST);
     }
 
     @Test
@@ -64,6 +66,17 @@ class AutoIOPortTest {
         assertThat(port("item_input_bus_normal").autoIOCapabilityType()).isEqualTo(AutoIOCapabilityType.ITEM);
         assertThat(port("fluid_input_hatch_tiny").autoIOCapabilityType()).isEqualTo(AutoIOCapabilityType.FLUID);
         assertThat(port("energy_input_hatch_tiny").autoIOCapabilityType()).isEqualTo(AutoIOCapabilityType.ENERGY);
+    }
+
+    @Test
+    void disabled_auto_io_side_is_not_exposed_to_capabilities() {
+        IOPortBlockEntity port = port("item_input_bus_normal");
+
+        port.toggleAutoIOEnabled();
+        port.toggleAutoIOSide(Direction.EAST);
+
+        assertThat(port.isAutoIOSideExposed(Direction.EAST)).isFalse();
+        assertThat(port.isAutoIOSideExposed(Direction.NORTH)).isTrue();
     }
 
     @Test

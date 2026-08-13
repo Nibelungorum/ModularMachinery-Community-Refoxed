@@ -10,6 +10,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.neoforged.neoforge.capabilities.BlockCapabilityCache;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -66,6 +67,24 @@ public class ItemBusCapabilityGameTest {
             helper.assertTrue(extracted == 4, "Output capability extracts");
             tx.commit();
         }
+
+        helper.succeed();
+    }
+
+    public static void itemBusCapabilityCacheFollowsAutoIOSideConfig(GameTestHelper helper) {
+        BlockPos inputPos = new BlockPos(0, 1, 0);
+        helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+
+        BlockPos inputWorldPos = helper.absolutePos(inputPos);
+        ItemBusBlockEntity inputBus = helper.getBlockEntity(inputPos, ItemBusBlockEntity.class);
+        BlockCapabilityCache<ResourceHandler<ItemResource>, Direction> cache = BlockCapabilityCache.create(
+                ModCapabilities.ITEM_BLOCK, helper.getLevel(), inputWorldPos, Direction.UP);
+
+        helper.assertTrue(cache.getCapability() != null, "Enabled side has cached item capability by default");
+        inputBus.setAutoIOSide(Direction.UP, false);
+        helper.assertTrue(cache.getCapability() == null, "Disabling side invalidates cache and removes item capability");
+        inputBus.setAutoIOSide(Direction.UP, true);
+        helper.assertTrue(cache.getCapability() != null, "Re-enabling side invalidates cache and exposes item capability");
 
         helper.succeed();
     }
