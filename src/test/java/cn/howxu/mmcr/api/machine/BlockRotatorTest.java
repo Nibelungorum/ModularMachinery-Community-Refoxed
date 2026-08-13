@@ -77,34 +77,34 @@ class BlockRotatorTest {
     }
 
     @Test
-    void rotateSouthTo_keeps_vertical_templates_vertical_for_up_and_down_controller() {
+    void rotateSouthTo_uses_front_and_roll_basis_for_up_and_down_controller() {
         assertThat(BlockRotator.rotateSouthTo(new BlockPos(0, 0, 1), Direction.UP))
-                .isEqualTo(new BlockPos(0, 0, 1));
-        assertThat(BlockRotator.rotateSouthTo(new BlockPos(0, 1, 0), Direction.UP))
                 .isEqualTo(new BlockPos(0, 1, 0));
+        assertThat(BlockRotator.rotateSouthTo(new BlockPos(0, 1, 0), Direction.UP))
+                .isEqualTo(new BlockPos(0, 0, 1));
         assertThat(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.UP))
-                .isEqualTo(new BlockPos(1, 0, 0));
+                .isEqualTo(new BlockPos(-1, 0, 0));
         assertThat(BlockRotator.rotateSouthTo(new BlockPos(0, -1, 1), Direction.UP))
-                .isEqualTo(new BlockPos(0, -1, 1));
+                .isEqualTo(new BlockPos(0, 1, -1));
 
         assertThat(BlockRotator.rotateSouthTo(new BlockPos(0, 0, 1), Direction.DOWN))
-                .isEqualTo(new BlockPos(0, 0, -1));
+                .isEqualTo(new BlockPos(0, -1, 0));
         assertThat(BlockRotator.rotateSouthTo(new BlockPos(0, 1, 0), Direction.DOWN))
-                .isEqualTo(new BlockPos(0, 1, 0));
+                .isEqualTo(new BlockPos(0, 0, 1));
         assertThat(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.DOWN))
-                .isEqualTo(new BlockPos(-1, 0, 0));
+                .isEqualTo(new BlockPos(1, 0, 0));
     }
 
     @Test
     void rotateSouthTo_uses_roll_facing_for_up_controller() {
         assertThat(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.UP, Direction.SOUTH))
-                .isEqualTo(new BlockPos(1, 0, 0));
-        assertThat(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.UP, Direction.EAST))
-                .isEqualTo(new BlockPos(0, 0, -1));
-        assertThat(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.UP, Direction.NORTH))
                 .isEqualTo(new BlockPos(-1, 0, 0));
-        assertThat(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.UP, Direction.WEST))
+        assertThat(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.UP, Direction.EAST))
                 .isEqualTo(new BlockPos(0, 0, 1));
+        assertThat(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.UP, Direction.NORTH))
+                .isEqualTo(new BlockPos(1, 0, 0));
+        assertThat(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.UP, Direction.WEST))
+                .isEqualTo(new BlockPos(0, 0, -1));
     }
 
     @Test
@@ -123,6 +123,46 @@ class BlockRotatorTest {
                 assertThat(BlockRotator.normalizeFromFace(rotated, facing))
                         .as("face=%s sample=%s", facing, sample)
                         .isEqualTo(sample);
+            }
+        }
+    }
+
+    @Test
+    void rotateSouthTo_uses_front_and_roll_basis_for_vertical_controllers() {
+        assertThat(BlockRotator.rotateSouthTo(new BlockPos(0, 0, 1), Direction.UP, Direction.SOUTH))
+                .isEqualTo(new BlockPos(0, 1, 0));
+        assertThat(BlockRotator.rotateSouthTo(new BlockPos(0, 1, 0), Direction.UP, Direction.SOUTH))
+                .isEqualTo(new BlockPos(0, 0, 1));
+        assertThat(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.UP, Direction.SOUTH))
+                .isEqualTo(new BlockPos(-1, 0, 0));
+
+        assertThat(BlockRotator.rotateSouthTo(new BlockPos(0, 0, 1), Direction.DOWN, Direction.SOUTH))
+                .isEqualTo(new BlockPos(0, -1, 0));
+        assertThat(BlockRotator.rotateSouthTo(new BlockPos(0, 1, 0), Direction.DOWN, Direction.SOUTH))
+                .isEqualTo(new BlockPos(0, 0, 1));
+        assertThat(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.DOWN, Direction.SOUTH))
+                .isEqualTo(new BlockPos(1, 0, 0));
+    }
+
+    @Test
+    void normalizeFromFaceWithRoll_reverses_roll_aware_rotation_for_all_faces() {
+        BlockPos[] samples = {
+                new BlockPos(0, 0, 0),
+                new BlockPos(1, 0, 0),
+                new BlockPos(0, 1, 0),
+                new BlockPos(0, 0, 1),
+                new BlockPos(-2, 3, 4)
+        };
+
+        for (Direction facing : Direction.values()) {
+            for (Direction roll : Direction.Plane.HORIZONTAL) {
+                for (BlockPos sample : samples) {
+                    Direction normalizedRoll = BlockRotator.normalizedRoll(facing, roll);
+                    BlockPos rotated = BlockRotator.rotateSouthTo(sample, facing, normalizedRoll);
+                    assertThat(BlockRotator.normalizeFromFace(rotated, facing, normalizedRoll))
+                            .as("face=%s roll=%s sample=%s", facing, normalizedRoll, sample)
+                            .isEqualTo(sample);
+                }
             }
         }
     }
