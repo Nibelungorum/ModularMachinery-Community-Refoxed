@@ -38,6 +38,7 @@ import cn.howxu.mmcr.internal.multiblock.SmartInterfaceBindingCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload;
+import cn.howxu.mmcr.internal.network.PktMultiblockPreviewPayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
@@ -648,6 +649,13 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             if (!snapshot.isEmpty()) return Optional.of(snapshot);
         }
         return Optional.empty();
+    }
+
+    public boolean sendStructurePreview(ServerPlayer player) {
+        Optional<MultiblockPreviewSnapshot> snapshot = createStructurePreviewSnapshot(PktMultiblockPreviewPayload.MAX_ENTRIES);
+        if (snapshot.isEmpty()) return false;
+        PacketDistributor.sendToPlayer(player, new PktMultiblockPreviewPayload(snapshot.get()));
+        return true;
     }
 
     private void sendStructureMismatchDiagnostic(ServerPlayer player, StructureMatcher.Mismatch mismatch) {
