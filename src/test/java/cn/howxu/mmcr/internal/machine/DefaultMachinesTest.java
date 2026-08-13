@@ -14,6 +14,7 @@ import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import org.nibelungorum.DefaultMachines;
 import org.nibelungorum.DefaultMachineLevels;
@@ -191,6 +192,8 @@ class DefaultMachinesTest {
             assertThat(type.defaultValue()).isEqualTo(0.5F);
             assertThat(type.valueType()).isEqualTo(cn.howxu.mmcr.api.machine.SmartInterfaceType.ValueType.FLOAT);
         });
+        assertThat(registration.runningSoundId()).isEqualTo(Identifier.withDefaultNamespace("block.furnace.fire_crackle"));
+        assertThat(registration.finishSoundId()).isEqualTo(Identifier.withDefaultNamespace("entity.ender_dragon.growl"));
         assertThat(requirementIds(machine)).contains("energy_input_hatch>=tiny", "item_input_bus>=tiny", "item_output_bus>=tiny");
     }
 

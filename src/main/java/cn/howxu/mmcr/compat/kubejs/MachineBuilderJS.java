@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
 import net.minecraft.resources.Identifier;
 
@@ -29,6 +30,8 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient Identifier machineBasicBlock;
     public transient Identifier controllerBaseTexture;
     public transient Identifier formedPortBaseTexture;
+    public transient Identifier runningSoundId;
+    public transient Identifier finishSoundId;
     private final List<SmartInterfaceType> smartInterfaceTypes = new ArrayList<>();
     private boolean shareSmartInterfaces;
     private final List<SmartInterfaceModifier> smartInterfaceModifiers = new ArrayList<>();
@@ -62,6 +65,8 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .allowMultithreading(allowMultithreading)
                 .allowParallelism(allowParallelism)
                 .maxParallelAmount(maxParallelAmount)
+                .runningSound(runningSoundId)
+                .finishSound(finishSoundId)
                 .shareSmartInterfaces(shareSmartInterfaces);
         smartInterfaceTypes.forEach(registration::smartInterfaceType);
         smartInterfaceModifiers.forEach(registration::smartInterfaceModifier);

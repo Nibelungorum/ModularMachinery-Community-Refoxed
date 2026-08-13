@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.machine;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -78,6 +79,20 @@ class MachineRegistrationTest {
 
         assertThat(zero.maxParallelAmount()).isEqualTo(1);
         assertThat(negative.maxParallelAmount()).isEqualTo(1);
+    }
+
+    @Test
+    void builder_preserves_machine_sound_ids() {
+        Identifier runningSound = Identifier.parse("minecraft:block.furnace.fire_crackle");
+        Identifier finishSound = Identifier.parse("minecraft:entity.ender_dragon.growl");
+
+        MachineRegistration registration = MachineRegistration.builder(MMCR.id("sound_machine"))
+                .runningSound(runningSound)
+                .finishSound(finishSound)
+                .build();
+
+        assertThat(registration.runningSoundId()).isEqualTo(runningSound);
+        assertThat(registration.finishSoundId()).isEqualTo(finishSound);
     }
 
     @Test

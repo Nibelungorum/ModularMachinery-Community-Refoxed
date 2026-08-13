@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.machine;
 
+import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundEvent;
@@ -30,7 +32,9 @@ public record MachineRegistration(
         int maxParallelAmount,
         Map<String, SmartInterfaceType> smartInterfaceTypes,
         boolean shareSmartInterfaces,
-        List<SmartInterfaceModifier> smartInterfaceModifiers
+        List<SmartInterfaceModifier> smartInterfaceModifiers,
+        @Nullable Identifier runningSoundId,
+        @Nullable Identifier finishSoundId
 ) {
     public MachineRegistration {
         if (id == null) throw new IllegalArgumentException("id null");
@@ -79,6 +83,8 @@ public record MachineRegistration(
         private final Map<String, SmartInterfaceType> smartInterfaceTypes = new LinkedHashMap<>();
         private boolean shareSmartInterfaces;
         private final List<SmartInterfaceModifier> smartInterfaceModifiers = new ArrayList<>();
+        private @Nullable Identifier runningSoundId;
+        private @Nullable Identifier finishSoundId;
 
         private Builder(Identifier id) {
             this.id = id;
@@ -146,10 +152,44 @@ public record MachineRegistration(
             return this;
         }
 
+        public Builder runningSound(Identifier id) {
+            this.runningSoundId = id;
+            return this;
+        }
+
+        public Builder runningSound(SoundEvent sound) {
+            return runningSound(soundId(sound));
+        }
+
+        public Builder finishSound(Identifier id) {
+            this.finishSoundId = id;
+            return this;
+        }
+
+        public Builder finishSound(SoundEvent sound) {
+            return finishSound(soundId(sound));
+        }
+
+        public Builder registerRunningSound(Identifier id) {
+            MachineSoundRegistry.requestRegistration(id);
+            return runningSound(id);
+        }
+
+        public Builder registerFinishSound(Identifier id) {
+            MachineSoundRegistry.requestRegistration(id);
+            return finishSound(id);
+        }
+
         public MachineRegistration build() {
             return new MachineRegistration(id, displayNameKey, controllerSpec, appearance, recipeFamilyId, allowModifiers,
                     allowMultithreading, allowParallelism, maxParallelAmount, smartInterfaceTypes, shareSmartInterfaces,
-                    smartInterfaceModifiers);
+                    smartInterfaceModifiers, runningSoundId, finishSoundId);
+        }
+
+        private static Identifier soundId(SoundEvent sound) {
+            Identifier id = BuiltInRegistries.SOUND_EVENT.getKey(sound);
+            if (id == null) throw new IllegalArgumentException("Unregistered sound event " + sound);
+            return id;
         }
     }
 }

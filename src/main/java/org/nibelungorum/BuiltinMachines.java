@@ -125,6 +125,8 @@ public final class BuiltinMachines {
                 .allowMultithreading(true)
                 .allowParallelism(true)
                 .maxParallelAmount(4)
+                .runningSound(Identifier.withDefaultNamespace("block.furnace.fire_crackle"))
+                .finishSound(Identifier.withDefaultNamespace("entity.ender_dragon.growl"))
                 .smartInterfaceType(new SmartInterfaceType("Mode", 1F, 3F, 0, SmartInterfaceType.ValueType.INTEGER))
                 .smartInterfaceType(new SmartInterfaceType("Temperature", 400F, 6800F, 1, SmartInterfaceType.ValueType.INTEGER))
                 .smartInterfaceType(new SmartInterfaceType("ConversionRate", 0.5F, 0.0F, 1.0F, 2, SmartInterfaceType.ValueType.FLOAT))
