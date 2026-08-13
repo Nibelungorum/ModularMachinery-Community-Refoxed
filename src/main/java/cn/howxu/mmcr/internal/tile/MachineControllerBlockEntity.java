@@ -39,6 +39,8 @@ import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
+import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
 import cn.howxu.mmcr.internal.recipe.RecipeStartDelay;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import net.minecraft.ChatFormatting;
@@ -77,6 +79,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -632,6 +635,19 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             return true;
         }
         return false;
+    }
+
+    public Optional<MultiblockPreviewSnapshot> createStructurePreviewSnapshot(int maxEntries) {
+        if (level == null || level.isClientSide() || isFormed()) return Optional.empty();
+        if (machine == null) bindDefaultMachine();
+        if (machine == null) return Optional.empty();
+
+        Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
+        for (BlockArray rotatedPattern : candidatePatterns(machine, facing)) {
+            MultiblockPreviewSnapshot snapshot = MultiblockPreviewBuilder.build(level, getBlockPos(), rotatedPattern, maxEntries);
+            if (!snapshot.isEmpty()) return Optional.of(snapshot);
+        }
+        return Optional.empty();
     }
 
     private void sendStructureMismatchDiagnostic(ServerPlayer player, StructureMatcher.Mismatch mismatch) {
