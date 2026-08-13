@@ -377,7 +377,7 @@ public final class FactoryRecipeScheduler {
         public ThreadSnapshot {
             recipeId = recipeId == null ? "" : recipeId;
             lastFailureUnloc = lastFailureUnloc == null ? "" : lastFailureUnloc;
-            lockedRecipeId = lockedRecipeId == null ? "" : lockedRecipeId;
+            lockedRecipeId = locked ? lockedRecipeId == null ? "" : lockedRecipeId : "";
         }
 
         public ThreadSnapshot(int index, boolean baseThread, boolean coreThread, boolean active,

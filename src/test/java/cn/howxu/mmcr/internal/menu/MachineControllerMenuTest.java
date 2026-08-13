@@ -173,6 +173,17 @@ class MachineControllerMenuTest {
     }
 
     @Test
+    void client_menu_uses_synced_recipe_lock_when_client_controller_is_available() throws Exception {
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory(), controller.getBlockPos());
+        setField(MachineControllerMenu.class, menu, "level", LevelStub.createWithBlockEntities(List.of(controller)));
+
+        menu.setData(12, 1);
+
+        assertThat(menu.recipeLocked()).isTrue();
+    }
+
+    @Test
     void client_menu_uses_synced_parallel_data_when_the_client_controller_is_available() throws Exception {
         MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
         MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory());

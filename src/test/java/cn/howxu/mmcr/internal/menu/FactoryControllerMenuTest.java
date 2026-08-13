@@ -114,6 +114,14 @@ class FactoryControllerMenuTest {
     }
 
     @Test
+    void unlocked_thread_snapshot_discards_recipe_id() {
+        FactoryRecipeScheduler.ThreadSnapshot snapshot = new FactoryRecipeScheduler.ThreadSnapshot(
+                0, true, false, false, "", 0, 0, 1, "", false, "mmcr:stale_lock");
+
+        assertThat(snapshot.lockedRecipeId()).isEmpty();
+    }
+
+    @Test
     void snapshot_exposes_the_last_failure_key() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
         menu.applySnapshot(new FactoryControllerSnapshot(BlockPos.ZERO, true, true, 1, 1, 1, 1,

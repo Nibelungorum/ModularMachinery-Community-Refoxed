@@ -259,8 +259,8 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     }
 
     public boolean recipeLocked() {
+        if (owner == null) return recipeLocked.get() != 0;
         MachineControllerBlockEntity controller = resolvedOwner();
-        if (controller == null) return recipeLocked.get() != 0;
         var factory = controller.getFactoryController();
         return factory != null && factory.threadSnapshots(controller).stream().findFirst()
                 .map(FactoryRecipeScheduler.ThreadSnapshot::locked).orElse(false);
