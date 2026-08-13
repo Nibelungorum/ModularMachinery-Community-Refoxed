@@ -20,9 +20,9 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.MenuAccess;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.block.FluidModel;
 import net.minecraft.client.renderer.block.FluidStateModelSet;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.ModelManager;
@@ -33,6 +33,8 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.level.material.Fluid;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.fluid.FluidTintSource;
@@ -45,6 +47,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 
 /** 一个屏幕入口,按具体菜单类型分派纹理 / 尺寸 / 自定义渲染。 */
 public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainerMenu> implements MenuAccess<AbstractContainerMenu> {
@@ -170,6 +173,10 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         return null;
     }
 
+    static boolean isPortSlotIndex(int slotIndex, int portSlotCount) {
+        return slotIndex >= 0 && slotIndex < portSlotCount;
+    }
+
     static int titleColor(boolean controllerMenu) {
         return controllerMenu ? CONTROLLER_TITLE_COLOR : TITLE_COLOR;
     }
@@ -240,6 +247,12 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     }
 
     @Override
+    protected void slotClicked(Slot slot, int slotIdx, int mouseButton, ContainerInput clickType) {
+        if (isAutoIOPortSlot(slot)) return;
+        super.slotClicked(slot, slotIdx, mouseButton, clickType);
+    }
+
+    @Override
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
         super.extractBackground(graphics, mouseX, mouseY, partialTicks);
         int x = (width - imageWidth) / 2;
@@ -277,6 +290,14 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         return Minecraft.getInstance().level.getBlockEntity(portPos()) instanceof IOPortBlockEntity port ? port : null;
     }
 
+    private int portSlotCount() {
+        return menu instanceof ItemBusMenu itemBus ? itemBus.busSlotCount() : 0;
+    }
+
+    private boolean isAutoIOPortSlot(Slot slot) {
+        return autoIOPage && menu instanceof ItemBusMenu && slot != null && isPortSlotIndex(slot.index, portSlotCount());
+    }
+
     private void initAutoIOButtons() {
         autoIOPageButton = addRenderableWidget(Button.builder(Component.literal("⇄"), button -> {
             autoIOPage = !autoIOPage;
@@ -291,9 +312,9 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
             for (int x = 0; x < 3; x++) {
                 Direction side = autoIODirectionAt(x, y);
                 if (side == null) continue;
-                Button button = addRenderableWidget(Button.builder(Component.empty(), clicked ->
-                        ClientPacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), AutoIOAction.TOGGLE_SIDE, side)))
-                        .bounds(leftPos + 56 + x * 24, topPos + 28 + y * 24, 20, 20).build());
+                Button button = addRenderableWidget(new AutoIOSideButton(leftPos + 56 + x * 24, topPos + 28 + y * 24,
+                        clicked -> ClientPacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), AutoIOAction.TOGGLE_SIDE, side)),
+                        () -> portEntity() != null && portEntity().autoIOConfig().isSideEnabled(side)));
                 autoIOSideButtons.put(side, button);
             }
         }
@@ -623,5 +644,31 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         event.register(ModUIs.ENERGY_HATCH.get(),      MachineMenuScreen::new);
         event.register(ModUIs.MACHINE_CONTROLLER.get(), MachineMenuScreen::new);
         event.register(ModUIs.FACTORY_SCHEDULER.get(),  MachineMenuScreen::new);
+    }
+
+    private static class AutoIOSideButton extends Button {
+        private static final int SELECTED_COLOR = 0xFF2E7D32;
+        private static final int SELECTED_BORDER_COLOR = 0xFF66BB6A;
+        private final BooleanSupplier selected;
+
+        AutoIOSideButton(int x, int y, OnPress onPress, BooleanSupplier selected) {
+            super(x, y, 20, 20, Component.empty(), onPress, Button.DEFAULT_NARRATION);
+            this.selected = selected;
+        }
+
+        @Override
+        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            int baseColor = active ? 0xFF6B6B6B : 0xFF3F3F3F;
+            int hoverColor = isHoveredOrFocused() ? 0xFFFFFFFF : 0xFFAAAAAA;
+            graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), hoverColor);
+            graphics.fill(getX() + 1, getY() + 1, getX() + getWidth() - 1, getY() + getHeight() - 1, baseColor);
+            if (selected.getAsBoolean()) {
+                graphics.fill(getX() + 3, getY() + 3, getX() + getWidth() - 3, getY() + getHeight() - 3, SELECTED_COLOR);
+                graphics.fill(getX() + 2, getY() + 2, getX() + getWidth() - 2, getY() + 3, SELECTED_BORDER_COLOR);
+                graphics.fill(getX() + 2, getY() + getHeight() - 3, getX() + getWidth() - 2, getY() + getHeight() - 2, SELECTED_BORDER_COLOR);
+                graphics.fill(getX() + 2, getY() + 2, getX() + 3, getY() + getHeight() - 2, SELECTED_BORDER_COLOR);
+                graphics.fill(getX() + getWidth() - 3, getY() + 2, getX() + getWidth() - 2, getY() + getHeight() - 2, SELECTED_BORDER_COLOR);
+            }
+        }
     }
 }

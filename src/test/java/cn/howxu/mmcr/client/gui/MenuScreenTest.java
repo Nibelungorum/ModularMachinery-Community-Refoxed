@@ -83,6 +83,13 @@ class MenuScreenTest {
     }
 
     @Test
+    void auto_io_page_hides_only_port_slots() {
+        assertThat(MachineMenuScreen.isPortSlotIndex(0, 6)).isTrue();
+        assertThat(MachineMenuScreen.isPortSlotIndex(5, 6)).isTrue();
+        assertThat(MachineMenuScreen.isPortSlotIndex(6, 6)).isFalse();
+    }
+
+    @Test
     void storage_text_x_aligns_with_title_x() {
         assertThat(MachineMenuScreen.storageTextX(40)).isEqualTo(40);
     }
