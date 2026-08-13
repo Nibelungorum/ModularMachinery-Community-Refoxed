@@ -5,6 +5,8 @@ import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType;
 import cn.howxu.mmcr.internal.autoio.AutoIOConfig;
+import cn.howxu.mmcr.internal.autoio.AutoIOTransferHandler;
+import cn.howxu.mmcr.internal.autoio.AutoIOTransferHandlers;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -19,11 +21,17 @@ import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 
 import java.util.TreeMap;
+import java.util.EnumSet;
 
 public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity implements MachineComponentTile {
     private static final String AUTO_IO_KEY = "auto_io";
+    private static final int AUTO_IO_MIN_DELAY = 5;
+    private static final int AUTO_IO_MAX_DELAY = 60;
     private final AutoIOConfig autoIOConfig = new AutoIOConfig();
     private boolean autoIOCacheDirty = true;
+    private int autoIOSuccessCounter;
+    private int autoIODelay = AUTO_IO_MAX_DELAY;
+    private EnumSet<Direction> autoIOCandidateSides = EnumSet.noneOf(Direction.class);
 
     protected IOPortBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
         super(type, pos, state);
@@ -97,6 +105,41 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     public void serverTick() {
         tick();
         maintainControllerLink();
+        runAutoIOCycle();
+    }
+
+    protected void runAutoIOCycle() {
+        if (autoIOConfig == null || level == null || level.isClientSide() || !autoIOConfig.enabled() || autoIOConfig.enabledSides().isEmpty()) return;
+        AutoIOTransferHandler handler = AutoIOTransferHandlers.handlerFor(this).orElse(null);
+        if (handler == null) return;
+        if (consumeAutoIOCacheDirty()) rebuildAutoIOCandidates(handler);
+        if (autoIOCandidateSides.isEmpty()) return;
+        if ((getLevel().getGameTime() % autoIODelay) != 0) return;
+
+        boolean moved = false;
+        for (Direction side : autoIOCandidateSides) {
+            moved |= handler.transfer(this, side);
+        }
+        if (moved) incrementAutoIOSuccess();
+        else decrementAutoIOSuccess();
+    }
+
+    private void rebuildAutoIOCandidates(AutoIOTransferHandler handler) {
+        autoIOCandidateSides.clear();
+        for (Direction side : autoIOConfig.enabledSides()) {
+            if (handler.hasAdjacentTarget(this, side)) autoIOCandidateSides.add(side);
+        }
+    }
+
+    private void incrementAutoIOSuccess() {
+        int max = (AUTO_IO_MAX_DELAY - AUTO_IO_MIN_DELAY) / 5;
+        if (autoIOSuccessCounter < max) autoIOSuccessCounter++;
+        autoIODelay = Math.max(AUTO_IO_MIN_DELAY, AUTO_IO_MAX_DELAY - autoIOSuccessCounter * 5);
+    }
+
+    private void decrementAutoIOSuccess() {
+        if (autoIOSuccessCounter > 0) autoIOSuccessCounter--;
+        autoIODelay = Math.max(AUTO_IO_MIN_DELAY, AUTO_IO_MAX_DELAY - autoIOSuccessCounter * 5);
     }
 
     protected void tick() {

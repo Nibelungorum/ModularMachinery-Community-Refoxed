@@ -30,7 +30,10 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
             @Override
             public int receiveEnergy(int maxReceive, boolean simulate) {
                 int received = super.receiveEnergy(maxReceive, simulate);
-                if (!simulate && received > 0) setChanged();
+                if (!simulate && received > 0) {
+                    markAutoIOCacheDirty();
+                    setChanged();
+                }
                 return received;
             }
 
@@ -45,7 +48,10 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
                 } else {
                     extracted = super.extractEnergy(maxExtract, simulate);
                 }
-                if (!simulate && extracted > 0) setChanged();
+                if (!simulate && extracted > 0) {
+                    markAutoIOCacheDirty();
+                    setChanged();
+                }
                 return extracted;
             }
         };

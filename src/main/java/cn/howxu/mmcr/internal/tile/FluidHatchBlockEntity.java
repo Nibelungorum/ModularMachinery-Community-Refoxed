@@ -49,6 +49,7 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
 
             @Override
             protected void onContentsChanged() {
+                markAutoIOCacheDirty();
                 setChanged();
             }
         };

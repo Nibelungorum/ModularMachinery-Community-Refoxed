@@ -25,6 +25,7 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
         this.handler = new ItemStackHandler(slots) {
             @Override
             protected void onContentsChanged(int slot) {
+                markAutoIOCacheDirty();
                 setChanged();
                 notifyControllerOfInputChange();
             }
