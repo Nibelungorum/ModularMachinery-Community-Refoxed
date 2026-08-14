@@ -32,6 +32,8 @@ class MachineControllerSpecTest {
                 MMCR.id("blast_furnace"), "高炉", new BlockArray(Map.of()));
 
         assertThat(machine.controller()).isEqualTo(MachineControllerSpec.defaultsFor(MMCR.id("blast_furnace")));
+        assertThat(machine.role()).isEqualTo(MachineRole.NORMAL);
+        assertThat(machine.acceptedModuleIds()).isEmpty();
     }
 
     @Test

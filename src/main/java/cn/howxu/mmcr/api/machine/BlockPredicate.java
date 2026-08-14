@@ -8,7 +8,17 @@ import java.util.List;
 
 public sealed interface BlockPredicate {
 
+    static MachineCoupler machineCoupler() {
+        return MachineCoupler.INSTANCE;
+    }
+
     boolean matches(BlockState state);
+
+    enum MachineCoupler implements BlockPredicate {
+        INSTANCE;
+
+        @Override public boolean matches(BlockState state) { return true; }
+    }
 
     record Air() implements BlockPredicate {
         @Override public boolean matches(BlockState state) { return state.isAir(); }

@@ -32,6 +32,8 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient Identifier formedPortBaseTexture;
     public transient Identifier runningSoundId;
     public transient Identifier finishSoundId;
+    private final List<Identifier> acceptedModuleIds = new ArrayList<>();
+    private boolean module;
     private final List<String> controllerTooltip = new ArrayList<>();
     private final List<SmartInterfaceType> smartInterfaceTypes = new ArrayList<>();
     private boolean shareSmartInterfaces;
@@ -69,6 +71,8 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .runningSound(runningSoundId)
                 .finishSound(finishSoundId)
                 .shareSmartInterfaces(shareSmartInterfaces);
+        acceptedModuleIds.forEach(registration::host);
+        if (module) registration.module();
         smartInterfaceTypes.forEach(registration::smartInterfaceType);
         smartInterfaceModifiers.forEach(registration::smartInterfaceModifier);
         return registration.build();
@@ -89,6 +93,20 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
 
     public MachineBuilderJS finishSound(Identifier soundId) {
         this.finishSoundId = soundId;
+        return this;
+    }
+
+    public MachineBuilderJS host(String acceptedModuleId) {
+        return host(Identifier.parse(acceptedModuleId));
+    }
+
+    public MachineBuilderJS host(Identifier acceptedModuleId) {
+        acceptedModuleIds.add(acceptedModuleId);
+        return this;
+    }
+
+    public MachineBuilderJS module() {
+        this.module = true;
         return this;
     }
 

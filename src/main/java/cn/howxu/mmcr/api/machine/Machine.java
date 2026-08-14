@@ -4,6 +4,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
 import java.util.List;
+import java.util.Set;
 
 public interface Machine {
     Identifier registryName();
@@ -63,5 +64,21 @@ public interface Machine {
 
     default List<FactoryThreadSpec> factoryThreads() {
         return List.of();
+    }
+
+    default MachineRole role() {
+        return MachineRole.NORMAL;
+    }
+
+    default Set<Identifier> acceptedModuleIds() {
+        return Set.of();
+    }
+
+    default boolean isHost() {
+        return role() == MachineRole.HOST;
+    }
+
+    default boolean isModule() {
+        return role() == MachineRole.MODULE;
     }
 }

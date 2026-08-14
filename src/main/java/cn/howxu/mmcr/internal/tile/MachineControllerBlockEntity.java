@@ -843,6 +843,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                     .orElseGet(() -> rawExpectedDescription(anyOf.children().getFirst()));
             case BlockPredicate.Air ignored -> Component.translatable("block.minecraft.air");
             case BlockPredicate.Any ignored -> Component.literal("any block");
+            case BlockPredicate.MachineCoupler ignored -> Component.literal("machine coupler");
         };
     }
 

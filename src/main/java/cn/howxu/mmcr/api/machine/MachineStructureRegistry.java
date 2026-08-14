@@ -29,6 +29,7 @@ public final class MachineStructureRegistry {
             }
             replacement.put(id, structure);
         }
+        validateDynamicRoles(replacement);
         Map<Identifier, MachineStructureDefinition> snapshot = Map.copyOf(replacement);
         MachineRegistry.installStructures(snapshot);
         DYNAMIC_STRUCTURES = snapshot;
@@ -52,7 +53,19 @@ public final class MachineStructureRegistry {
                 registration.maxParallelAmount(),
                 registration.allowParallelism(),
                 registration.allowMultithreading(),
-                1);
+                1,
+                java.util.List.of(),
+                registration.role(),
+                registration.acceptedModuleIds());
+    }
+
+    public static void validateDynamicRoles(Map<Identifier, MachineStructureDefinition> structures) {
+        Map<Identifier, Machine> machines = new LinkedHashMap<>();
+        for (Map.Entry<Identifier, MachineStructureDefinition> entry : structures.entrySet()) {
+            MachineRegistration registration = MachineDefinitions.getRegistration(entry.getKey());
+            machines.put(entry.getKey(), toRuntimeMachine(registration, entry.getValue()));
+        }
+        MachineRoleValidator.validateMachines(machines.values(), MachineRegistry::getMachine);
     }
 
     public static void clearForTesting() {
