@@ -58,6 +58,25 @@ public final class MachineRecipeSchema {
 
     public static final RecipeSchema SCHEMA = new RecipeSchema(MACHINE, TICK_TIME, INPUTS, ENERGY_PER_TICK, OUTPUTS, MODIFIERS, MAX_THREADS, PARALLELIZED, CANCEL_IF_PER_TICK_FAILS)
             .factory(MachineRecipeFactory.INSTANCE)
+            .function(new RecipeFunctionInstance("requiresHost", List.of(StringComponent.ID),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() {
+                            return List.of(StringComponent.ID);
+                        }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            var hostId = (String) args.get(0);
+                            var hosts = cx.recipe().json.getAsJsonArray("required_host_ids");
+                            if (hosts == null) {
+                                hosts = new com.google.gson.JsonArray();
+                                cx.recipe().json.add("required_host_ids", hosts);
+                            }
+                            hosts.add(hostId);
+                            cx.recipe().save();
+                        }
+                    }))
             .function(new RecipeFunctionInstance("requiresLevel", List.of(StringComponent.ID, StringComponent.ID),
                     new ResolvedRecipeSchemaFunction() {
                         @Override

@@ -34,6 +34,7 @@ import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionCoordinator;
+import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.SmartInterfaceBindingCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
@@ -233,6 +234,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             return StructureClaimRegistry.get(serverLevel).domainFor(getBlockPos());
         }
         return resourceDomain;
+    }
+
+    public ModuleConnectionStatus moduleConnectionStatus() {
+        return ModuleConnectionCoordinator.connectionStatus(this);
     }
 
     public void onStructureBlockChanged(BlockPos changedPos) {
@@ -1665,6 +1670,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 context.setStructureModifiers(foundModifierList());
             }
         }
+        if (!active.canRunOnConnectedHost(context)) {
+            failActiveRecipeForInvalidModuleConnection();
+            return;
+        }
         if (usesSharedIoCoordinator()) {
             tickSharedRecipe();
             return;
@@ -1727,6 +1736,20 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         } else {
             lastFailureUnloc = null;
             recipeFailure = null;
+        }
+        setChanged();
+    }
+
+    private void failActiveRecipeForInvalidModuleConnection() {
+        if (active == null || context == null) return;
+        active.doFailureAction(foundMachine == null ? null : foundMachine.failureAction());
+        lastFailureUnloc = RecipeCraftingContext.FAILURE_MODULE_CONNECTION;
+        if (active.getRecipe().doesCancelRecipeOnPerTickFailure()) {
+            returnContext(context);
+            active = null;
+            context = null;
+            setActiveState(false);
+            syncRuntimeStateIfChanged();
         }
         setChanged();
     }

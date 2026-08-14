@@ -49,6 +49,7 @@ public final class RecipeCraftingContext {
     public static final String FAILURE_MISSING_OUTPUT = "gui.mmcr.controller.failure.missing_output";
     public static final String FAILURE_MISSING_ENERGY = "gui.mmcr.controller.failure.missing_energy";
     public static final String FAILURE_SEARCH_EXCEPTION = "gui.mmcr.controller.failure.recipe_search_exception";
+    public static final String FAILURE_MODULE_CONNECTION = "gui.mmcr.controller.failure.module_connection";
 
     private MachineControllerBlockEntity controller;
     private long structureVersion;
@@ -1099,11 +1100,20 @@ public final class RecipeCraftingContext {
 
     public boolean canStartCrafting(ActiveMachineRecipe activeRecipe) {
         if (activeRecipe == null || activeRecipe.getRecipe() == null) return false;
+        if (!canRunRecipeOnConnectedHost(activeRecipe.getRecipe())) {
+            lastFailureUnloc = FAILURE_MODULE_CONNECTION;
+            lastRequirementFailure = null;
+            return false;
+        }
         int parallelism = ParallelRecipeCalculator.maxStartableParallelism(
                 this, activeRecipe.getRecipe(), activeRecipe.getMaxParallelism());
         if (parallelism <= 0) return false;
         activeRecipe.setParallelism(parallelism);
         return true;
+    }
+
+    public boolean canRunRecipeOnConnectedHost(MachineRecipe recipe) {
+        return recipe != null && controller.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds());
     }
 
     public boolean canRestartCrafting(ActiveMachineRecipe activeRecipe) {

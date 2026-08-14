@@ -233,6 +233,9 @@ public final class ActiveMachineRecipe {
         if (recipe == null) {
             return false;
         }
+        if (!canRunOnConnectedHost(context)) {
+            return false;
+        }
         if (inputConsumptionPlan == null) {
             inputConsumptionPlan = context.createInputConsumptionPlan(recipe, parallelism);
         }
@@ -244,6 +247,7 @@ public final class ActiveMachineRecipe {
     }
 
     public boolean start(RecipeCraftingContext context, int parallelism) {
+        if (!canRunOnConnectedHost(context)) return false;
         setParallelism(parallelism);
         inputConsumptionPlan = context.createInputConsumptionPlan(recipe, this.parallelism);
         boolean started = context.startCrafting(recipe, this.parallelism, inputConsumptionPlan);
@@ -267,6 +271,10 @@ public final class ActiveMachineRecipe {
     public boolean canRestartCrafting(RecipeCraftingContext context) {
         refreshTotalTick(context);
         return context.canRestartCrafting(this);
+    }
+
+    public boolean canRunOnConnectedHost(RecipeCraftingContext context) {
+        return recipe != null && context != null && context.canRunRecipeOnConnectedHost(recipe);
     }
 
     private int highestStartableParallelism(RecipeCraftingContext context) {

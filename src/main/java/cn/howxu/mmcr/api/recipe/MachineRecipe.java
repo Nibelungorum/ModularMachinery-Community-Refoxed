@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.HashSet;
+import java.util.Set;
 import java.util.Objects;
 
 public final class MachineRecipe implements Recipe<RecipeInput> {
@@ -42,7 +43,9 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
             Codec.BOOL.optionalFieldOf("cancelIfPerTickFails", false).forGetter(MachineRecipe::doesCancelRecipeOnPerTickFailure),
             MachineRequirement.CODEC.listOf().optionalFieldOf("requirements", Collections.emptyList()).forGetter(MachineRecipe::requirements),
             Codec.BOOL.optionalFieldOf("parallelized", false).forGetter(MachineRecipe::isParallelized),
-            LevelRequirement.CODEC.listOf().optionalFieldOf("level_requirements", Collections.emptyList()).forGetter(MachineRecipe::levelRequirements)
+            LevelRequirement.CODEC.listOf().optionalFieldOf("level_requirements", Collections.emptyList()).forGetter(MachineRecipe::levelRequirements),
+            Identifier.CODEC.listOf().xmap(MachineRecipe::copyHostIds, List::copyOf)
+                    .optionalFieldOf("required_host_ids", Set.of()).forGetter(MachineRecipe::requiredHostIds)
     ).apply(instance, MachineRecipe::create));
 
     private final Identifier id;
@@ -55,6 +58,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     private final boolean cancelRecipeOnPerTickFailure;
     private final boolean parallelized;
     private final List<LevelRequirement> levelRequirements;
+    private final Set<Identifier> requiredHostIds;
 
     public MachineRecipe(Identifier id,
                          Identifier machineId,
@@ -127,7 +131,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                          List<MachineRequirement> requirements,
                          boolean parallelized) {
         this(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure,
-                fluidOutputs, requirements, parallelized, Collections.emptyList());
+                fluidOutputs, requirements, parallelized, Collections.emptyList(), Set.of());
     }
 
     public MachineRecipe(Identifier id,
@@ -143,6 +147,24 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                          List<MachineRequirement> requirements,
                          boolean parallelized,
                          List<LevelRequirement> levelRequirements) {
+        this(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure,
+                fluidOutputs, requirements, parallelized, levelRequirements, Set.of());
+    }
+
+    public MachineRecipe(Identifier id,
+                         Identifier machineId,
+                         int tickTime,
+                         List<MachineIngredient> inputs,
+                         List<ItemStack> outputs,
+                         List<RecipeModifier> modifiers,
+                         int priority,
+                         int maxThreads,
+                         boolean cancelRecipeOnPerTickFailure,
+                         List<FluidStack> fluidOutputs,
+                         List<MachineRequirement> requirements,
+                         boolean parallelized,
+                         List<LevelRequirement> levelRequirements,
+                         Set<Identifier> requiredHostIds) {
         if (id == null) {
             throw new IllegalArgumentException("Recipe id must not be null");
         }
@@ -161,22 +183,38 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         this.cancelRecipeOnPerTickFailure = cancelRecipeOnPerTickFailure;
         this.parallelized = parallelized;
         this.levelRequirements = validateLevelRequirements(levelRequirements);
+        this.requiredHostIds = copyHostIds(requiredHostIds);
     }
 
     private static MachineRecipe create(Identifier id,
                                         Identifier machineId,
                                         int tickTime,
-                                        List<MachineIngredient> inputs,
-                                        List<ItemStack> outputs,
+                                         List<MachineIngredient> inputs,
+                                         List<ItemStack> outputs,
                                          List<FluidStack> fluidOutputs,
                                          List<RecipeModifier> modifiers,
                                          int priority,
                                          int maxThreads,
-                                          boolean cancelRecipeOnPerTickFailure,
-                                          List<MachineRequirement> requirements,
-                                          boolean parallelized,
-                                          List<LevelRequirement> levelRequirements) {
-        return new MachineRecipe(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure, fluidOutputs, requirements, parallelized, levelRequirements);
+                                         boolean cancelRecipeOnPerTickFailure,
+                                         List<MachineRequirement> requirements,
+                                         boolean parallelized,
+                                         List<LevelRequirement> levelRequirements,
+                                         Set<Identifier> requiredHostIds) {
+        return new MachineRecipe(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure, fluidOutputs, requirements, parallelized, levelRequirements, requiredHostIds);
+    }
+
+    private static Set<Identifier> copyHostIds(List<Identifier> ids) {
+        return copyHostIds(ids == null ? Set.of() : new java.util.LinkedHashSet<>(ids));
+    }
+
+    private static Set<Identifier> copyHostIds(Set<Identifier> ids) {
+        if (ids == null || ids.isEmpty()) return Set.of();
+        java.util.LinkedHashSet<Identifier> copy = new java.util.LinkedHashSet<>();
+        for (Identifier id : ids) {
+            if (id == null) throw new IllegalArgumentException("Required host id must not be null");
+            copy.add(id);
+        }
+        return Collections.unmodifiableSet(copy);
     }
 
     private static List<MachineRequirement> deriveRequirements(List<MachineIngredient> inputs, List<ItemStack> outputs, List<FluidStack> fluidOutputs) {
@@ -394,6 +432,14 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         return levelRequirements;
     }
 
+    public Set<Identifier> requiredHostIds() {
+        return requiredHostIds;
+    }
+
+    public boolean canRunOnConnectedHost(Identifier hostId) {
+        return hostId != null && (requiredHostIds.isEmpty() || requiredHostIds.contains(hostId));
+    }
+
     public int inputRequirementCount() {
         int count = 0;
         for (MachineRequirement requirement : requirements) {
@@ -512,6 +558,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                 && machineId.equals(that.machineId)
                 && requirements.equals(that.requirements)
                 && levelRequirements.equals(that.levelRequirements)
+                && requiredHostIds.equals(that.requiredHostIds)
                 && modifiers.equals(that.modifiers)
                 && cancelRecipeOnPerTickFailure == that.cancelRecipeOnPerTickFailure
                 && parallelized == that.parallelized;
@@ -519,6 +566,6 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, machineId, tickTime, requirements, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure, parallelized, levelRequirements);
+        return Objects.hash(id, machineId, tickTime, requirements, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure, parallelized, levelRequirements, requiredHostIds);
     }
 }

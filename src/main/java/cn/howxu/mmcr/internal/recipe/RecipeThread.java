@@ -159,6 +159,10 @@ requested -> {
             }
         }
         if (activeRecipe == null || context == null) return;
+        if (!activeRecipe.canRunOnConnectedHost(context)) {
+            failActiveRecipeForInvalidModuleConnection();
+            return;
+        }
         if (tickPending && !isCurrentDomain(pendingTickDomain)) {
             tickPending = false;
             pendingTickDomain = null;
@@ -176,6 +180,21 @@ requested -> {
         boolean outputsCommitted = resourcesGranted && activeRecipe.needsFinishCommit()
                 && context.commitSynchronousOutputs(activeRecipe.getRecipe(), activeRecipe.getParallelism());
         applyTick(activeRecipe, context, resourcesGranted, outputsCommitted, 0);
+    }
+
+    private void failActiveRecipeForInvalidModuleConnection() {
+        if (activeRecipe == null || context == null) return;
+        activeRecipe.doFailureAction(controller == null || controller.getFoundMachine() == null
+                ? null : controller.getFoundMachine().failureAction());
+        lastFailureUnloc = RecipeCraftingContext.FAILURE_MODULE_CONNECTION;
+        if (activeRecipe.getRecipe().doesCancelRecipeOnPerTickFailure()) {
+            contextPool.returnContext(context);
+            activeRecipe = null;
+            context = null;
+            status = Status.FAILED;
+        } else {
+            status = Status.WAITING;
+        }
     }
 
     private void requestTick(ServerLevel level, cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.ResourceDomain domain,

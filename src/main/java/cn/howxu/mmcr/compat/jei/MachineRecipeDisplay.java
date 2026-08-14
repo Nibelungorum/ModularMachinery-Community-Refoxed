@@ -26,6 +26,7 @@ import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -48,7 +49,8 @@ public record MachineRecipeDisplay(
         List<MachineOutput> outputs,
         List<SmartInterfaceDisplay> smartInterfaceInputs,
         List<SmartInterfaceDisplay> smartInterfaceOutputs,
-        List<SmartInterfaceModifierDisplay> smartInterfaceModifiers
+        List<SmartInterfaceModifierDisplay> smartInterfaceModifiers,
+        Set<Identifier> requiredHostIds
 ) {
 
     public static MachineRecipeDisplay from(MachineRecipe recipe) {
@@ -124,7 +126,8 @@ public record MachineRecipeDisplay(
                 List.copyOf(outputs),
                 List.copyOf(smartInterfaceInputs),
                 List.copyOf(smartInterfaceOutputs),
-                List.copyOf(smartInterfaceModifiers)
+                List.copyOf(smartInterfaceModifiers),
+                recipe.requiredHostIds()
         );
     }
 

@@ -102,8 +102,30 @@ public final class ModuleConnectionCoordinator {
         }
     }
 
+    public static ModuleConnectionStatus connectionStatus(MachineControllerBlockEntity controller) {
+        if (controller == null) return ModuleConnectionStatus.notRequired();
+        Machine moduleMachine = controller.getFoundMachine();
+        if (moduleMachine == null || !moduleMachine.isModule()) return ModuleConnectionStatus.notRequired();
+        if (!(controller.getLevel() instanceof ServerLevel level)) return ModuleConnectionStatus.disconnected();
+        GlobalPos expectedModule = GlobalPos.of(level.dimension(), controller.getBlockPos());
+        for (BlockPos couplerPos : couplerWorldPositions(controller)) {
+            if (!(level.getBlockEntity(couplerPos) instanceof ModuleCouplerBlockEntity coupler)) continue;
+            Optional<GlobalPos> hostPos = coupler.connectedHost();
+            Optional<GlobalPos> modulePos = coupler.connectedModule();
+            if (hostPos.isEmpty() || modulePos.isEmpty() || !expectedModule.equals(modulePos.get())) continue;
+            if (!level.dimension().equals(hostPos.get().dimension())) continue;
+            BlockEntity hostEntity = level.getBlockEntity(hostPos.get().pos());
+            if (!(hostEntity instanceof MachineControllerBlockEntity host)) continue;
+            Machine hostMachine = host.getFoundMachine();
+            if (hostMachine != null && canConnect(level, couplerPos, host, controller)) {
+                return ModuleConnectionStatus.connected(hostMachine.registryName());
+            }
+        }
+        return ModuleConnectionStatus.disconnected();
+    }
+
     private static boolean canConnect(ServerLevel level, BlockPos couplerPos,
-                                      MachineControllerBlockEntity host, MachineControllerBlockEntity module) {
+                                       MachineControllerBlockEntity host, MachineControllerBlockEntity module) {
         if (!isFormedHost(host) || !isFormedModule(module)) return false;
         Machine hostMachine = host.getFoundMachine();
         Machine moduleMachine = module.getFoundMachine();
