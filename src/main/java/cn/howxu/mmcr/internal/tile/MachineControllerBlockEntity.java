@@ -541,7 +541,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 return;
             }
             Machine validationMachine = foundCompiledPattern == null ? foundMachine : foundCompiledPattern.machine();
-            var replacements = replacementsFor(foundMachine, foundCompiledPattern, facing, foundPattern, matchedRollFacing);
+            var replacements = replacementsFor(validationMachine, foundCompiledPattern, facing, foundPattern, matchedRollFacing);
             boolean stillMatches = !hasCompiledFacing(foundCompiledPattern, facing) || !replacements.isEmpty()
                     ? StructureMatcher.matchesRotated(foundPattern, level, getBlockPos(), replacements)
                     : StructureMatcher.matchesCompiled(foundCompiledPattern, facing, matchedRollFacing, level, getBlockPos());
@@ -653,7 +653,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 .filter(pattern -> pattern.stageNumber() == 1).toList()) {
             BlockArray rotatedPattern = candidatePattern.pattern();
             CompiledMachinePattern compiled = compiledFor(machine, rotatedPattern, facing);
-            Map<BlockPos, List<SingleBlockModifierReplacement>> replacements = replacementsFor(machine, compiled, facing, rotatedPattern, candidatePattern.rollFacing());
+            Machine validationMachine = compiled == null ? machine : compiled.machine();
+            Map<BlockPos, List<SingleBlockModifierReplacement>> replacements = replacementsFor(validationMachine, compiled, facing, rotatedPattern, candidatePattern.rollFacing());
             var mismatch = StructureMatcher.firstMismatch(rotatedPattern, level, getBlockPos(), replacements);
             if (mismatch.isPresent()) {
                 sendStructureMismatchDiagnostic(player, mismatch.get());
@@ -877,7 +878,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         BlockArray rotatedPattern = candidatePattern.pattern();
         CompiledMachinePattern stageCompiled = candidatePattern.compiled();
         Machine validationMachine = stageCompiled == null ? candidate : stageCompiled.machine();
-        var replacements = replacementsFor(candidate, stageCompiled, facing, rotatedPattern, candidatePattern.rollFacing());
+        var replacements = replacementsFor(validationMachine, stageCompiled, facing, rotatedPattern, candidatePattern.rollFacing());
         boolean matches = stageCompiled == null || facing.getAxis().isVertical()
                 ? StructureMatcher.matchesRotated(rotatedPattern, level, getBlockPos(), replacements)
                 : StructureMatcher.matchesCompiled(stageCompiled, facing, candidatePattern.rollFacing(), level, getBlockPos());
@@ -933,7 +934,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (compiled != null && compiled.stageNumber() == 1 && candidate instanceof DynamicMachine dynamic) {
             return dynamic.rotatedModifierReplacements(facing, rollFacing);
         }
-        if (compiled != null && compiled.rotatedPattern(facing) == rotatedPattern) {
+        if (compiled != null) {
             return compiled.modifierReplacements(facing, rollFacing);
         }
         if (candidate instanceof DynamicMachine dynamic) {

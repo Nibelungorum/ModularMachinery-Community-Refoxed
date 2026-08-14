@@ -2060,6 +2060,39 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void vertical_stage_match_uses_selected_stage_modifier_replacements() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockPos rawPos = new BlockPos(1, 0, 0);
+        Direction rollFacing = Direction.WEST;
+        BlockPos expected = BlockRotator.rotateSouthTo(rawPos, Direction.UP, rollFacing);
+        Identifier machineId = MMCR.id("vertical_staged_modifier_machine");
+        var defaults = MachineControllerSpec.defaultsFor(machineId);
+        var spec = new MachineControllerSpec(defaults.id(), defaults.frontTexture(), defaults.sideTexture(),
+                defaults.topTexture(), defaults.bottomTexture(), true, false);
+        DynamicMachine machine = stagedMachineWithController(machineId, spec, List.of(
+                stageWithReplacement(1, Blocks.IRON_BLOCK, Blocks.GOLD_BLOCK, "stage_1_modifier", 1F),
+                stageWithReplacement(2, Blocks.GOLD_BLOCK, Blocks.EMERALD_BLOCK, "stage_2_modifier", 2F),
+                stageWithReplacement(3, Blocks.GOLD_BLOCK, Blocks.DIAMOND_BLOCK, "stage_3_modifier", 3F)));
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFormation(
+                machine,
+                controllerPos,
+                Direction.UP,
+                rollFacing,
+                itemInputBus(controllerPos.offset(expected)));
+        levelOf(controller).setBlock(controllerPos.offset(expected), Blocks.DIAMOND_BLOCK.defaultBlockState(), 3);
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.UP);
+
+        assertThat(formed).isTrue();
+        assertThat(controller.getMatchedStructureStage()).isEqualTo(3);
+        assertThat(controller.getFoundModifiers()).containsOnlyKeys("stage_3_modifier");
+        assertThat(controller.getFoundModifiers().get("stage_3_modifier"))
+                .extracting(RecipeModifier::getModifier)
+                .containsExactly(3F);
+    }
+
+    @Test
     void require_vertical_machine_rejects_matching_horizontal_structure() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
@@ -2741,9 +2774,32 @@ class MachineControllerBlockEntityTest {
             structureStages.add(new cn.howxu.mmcr.api.machine.MachineStructureStage(
                     i + 1, stages[i], PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of()));
         }
-        return new DynamicMachine(id, "Staged Machine", stages[0], controllerSpec,
+        return stagedMachineWithController(id, controllerSpec, structureStages);
+    }
+
+    private static DynamicMachine stagedMachineWithController(
+            Identifier id, MachineControllerSpec controllerSpec,
+            List<cn.howxu.mmcr.api.machine.MachineStructureStage> structureStages) {
+        return new DynamicMachine(id, "Staged Machine", structureStages.getFirst().pattern(), controllerSpec,
                 MachineAppearanceSpec.defaults(), PortRequirementSpec.none(), PortTierRequirementSpec.none(),
                 List.of(), Map.of(), 1, false, false, 1, List.of(), structureStages);
+    }
+
+    private static cn.howxu.mmcr.api.machine.MachineStructureStage stageWithReplacement(
+            int number, Block patternBlock, Block replacementBlock, String modifierName, float value) {
+        BlockPos rawPos = new BlockPos(1, 0, 0);
+        var replacement = new SingleBlockModifierReplacement(
+                modifierName, rawPos, new BlockPredicate.OfBlock(replacementBlock),
+                List.of(new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.INPUT,
+                        value, RecipeModifier.Operation.ADD, false)), "", ItemStack.EMPTY);
+        return new cn.howxu.mmcr.api.machine.MachineStructureStage(
+                number,
+                new BlockArray(Map.of(rawPos, new BlockPredicate.OfBlock(patternBlock))),
+                PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(),
+                List.of(),
+                Map.of(rawPos, List.of(replacement)),
+                Map.of());
     }
 
     private static BlockArray anyItemOrEnergyInputPattern() {
