@@ -31,28 +31,46 @@ public final class ModuleConnectionCoordinator {
     public static void refresh(ServerLevel level, BlockPos couplerPos) {
         if (level == null || couplerPos == null || !level.hasChunk(couplerPos.getX() >> 4, couplerPos.getZ() >> 4)) return;
         if (!(level.getBlockEntity(couplerPos) instanceof ModuleCouplerBlockEntity coupler)) return;
-        clearHostConnectionsWithSharedInterfaces(level);
-        if (coupler.connectedHost().isPresent() || coupler.connectedModule().isPresent()) return;
+        Optional<MachineConnection> existing = existingConnection(level, coupler);
 
         List<MachineControllerBlockEntity> hosts = controllersFor(level, couplerPos, true);
         List<MachineControllerBlockEntity> modules = controllersFor(level, couplerPos, false);
         coupler.clearConnection();
+        if (existing.isPresent()) {
+            MachineConnection connection = existing.get();
+            if (interfacesOverlap(connection.host(), connection.module())) {
+                invalidateHost(level, connection.host());
+                return;
+            }
+            if (canConnect(level, couplerPos, connection.host(), connection.module())) {
+                restoreConnection(level, coupler, connection);
+                return;
+            }
+        }
         if (hosts.size() != 1 || modules.size() != 1) return;
 
         MachineControllerBlockEntity host = hosts.getFirst();
         MachineControllerBlockEntity module = modules.getFirst();
+        if (interfacesOverlap(host, module)) {
+            invalidateHost(level, host);
+            return;
+        }
         if (!canConnect(level, couplerPos, host, module)) return;
-        coupler.setConnection(GlobalPos.of(level.dimension(), host.getBlockPos()), GlobalPos.of(level.dimension(), module.getBlockPos()));
+        restoreConnection(level, coupler, new MachineConnection(host, module));
     }
 
     public static boolean validate(ModuleCouplerBlockEntity coupler) {
         if (coupler == null || !(coupler.getLevel() instanceof ServerLevel level)) return false;
+        if (!level.hasChunk(coupler.getBlockPos().getX() >> 4, coupler.getBlockPos().getZ() >> 4)) return false;
         Optional<GlobalPos> hostPos = coupler.connectedHost();
         Optional<GlobalPos> modulePos = coupler.connectedModule();
         if (hostPos.isPresent() || modulePos.isPresent()) return false;
         List<MachineControllerBlockEntity> hosts = controllersFor(level, coupler.getBlockPos(), true);
         List<MachineControllerBlockEntity> modules = controllersFor(level, coupler.getBlockPos(), false);
-        return hosts.size() == 1 && modules.size() == 1 && canConnect(level, coupler.getBlockPos(), hosts.getFirst(), modules.getFirst());
+        if (hosts.size() != 1 || modules.size() != 1) return false;
+        MachineControllerBlockEntity host = hosts.getFirst();
+        MachineControllerBlockEntity module = modules.getFirst();
+        return !interfacesOverlap(host, module) && canConnect(level, coupler.getBlockPos(), host, module);
     }
 
     public static void tick(ServerLevel level) {
@@ -92,7 +110,6 @@ public final class ModuleConnectionCoordinator {
         if (!hostMachine.acceptedModuleIds().contains(moduleMachine.registryName())) return false;
         if (!couplerWorldPositions(host).contains(couplerPos) || !couplerWorldPositions(module).contains(couplerPos)) return false;
         if (!structureMatches(level, host) || !structureMatches(level, module)) return false;
-        if (interfacesOverlap(host, module)) return false;
         return true;
     }
 
@@ -116,23 +133,30 @@ public final class ModuleConnectionCoordinator {
         return couplers;
     }
 
-    private static void clearHostConnectionsWithSharedInterfaces(ServerLevel level) {
-        List<MachineControllerBlockEntity> controllers = StructureClaimRegistry.get(level).claimedControllers().stream()
-                .map(level::getBlockEntity)
-                .filter(MachineControllerBlockEntity.class::isInstance)
-                .map(MachineControllerBlockEntity.class::cast)
-                .toList();
-        for (MachineControllerBlockEntity host : controllers) {
-            if (!isFormedHost(host)) continue;
-            for (MachineControllerBlockEntity module : controllers) {
-                if (!isFormedModule(module)) continue;
-                if (!interfacesOverlap(host, module)) continue;
-                clearConnectionsFor(level, host);
-                host.releaseStructureClaims();
-                host.setFormed(false);
-                break;
-            }
+    private static Optional<MachineConnection> existingConnection(ServerLevel level, ModuleCouplerBlockEntity coupler) {
+        Optional<GlobalPos> hostPos = coupler.connectedHost();
+        Optional<GlobalPos> modulePos = coupler.connectedModule();
+        if (hostPos.isEmpty() || modulePos.isEmpty()) return Optional.empty();
+        if (!level.dimension().equals(hostPos.get().dimension()) || !level.dimension().equals(modulePos.get().dimension())) {
+            return Optional.empty();
         }
+        BlockEntity host = level.getBlockEntity(hostPos.get().pos());
+        BlockEntity module = level.getBlockEntity(modulePos.get().pos());
+        if (host instanceof MachineControllerBlockEntity hostController
+                && module instanceof MachineControllerBlockEntity moduleController) {
+            return Optional.of(new MachineConnection(hostController, moduleController));
+        }
+        return Optional.empty();
+    }
+
+    private static void restoreConnection(ServerLevel level, ModuleCouplerBlockEntity coupler, MachineConnection connection) {
+        coupler.setConnection(GlobalPos.of(level.dimension(), connection.host().getBlockPos()),
+                GlobalPos.of(level.dimension(), connection.module().getBlockPos()));
+    }
+
+    private static void invalidateHost(ServerLevel level, MachineControllerBlockEntity host) {
+        clearConnectionsFor(level, host);
+        host.invalidateFormedStructure();
     }
 
     private static boolean isFormedHost(MachineControllerBlockEntity controller) {
@@ -186,4 +210,6 @@ public final class ModuleConnectionCoordinator {
     private static Direction facing(MachineControllerBlockEntity controller) {
         return controller.getControllerFacing();
     }
+
+    private record MachineConnection(MachineControllerBlockEntity host, MachineControllerBlockEntity module) { }
 }

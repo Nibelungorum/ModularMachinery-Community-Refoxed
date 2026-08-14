@@ -195,6 +195,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         return lastStructureError;
     }
 
+    public void invalidateFormedStructure() {
+        resetMachine();
+    }
+
     public List<RecipeModifier> foundModifierList() {
         if (foundModifiers == null) return List.of();
         return foundModifiers.values().stream().flatMap(List::stream).toList();

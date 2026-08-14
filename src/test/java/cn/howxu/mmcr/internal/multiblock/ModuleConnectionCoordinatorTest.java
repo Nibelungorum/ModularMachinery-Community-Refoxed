@@ -88,19 +88,89 @@ class ModuleConnectionCoordinatorTest {
         assertThat(fixture.coupler().connectedHost()).isEmpty();
         assertThat(fixture.coupler().connectedModule()).isEmpty();
         assertThat(fixture.host().isFormed()).isFalse();
+        assertThat(fixture.host().getFoundMachine()).isNull();
+        assertThat(fixture.host().getFoundCompiledPattern()).isNull();
+        assertThat(fixture.host().getComponents()).isEmpty();
         assertThat(fixture.module().isFormed()).isTrue();
     }
 
     @Test
-    void one_coupler_cannot_establish_a_second_connection() throws Exception {
+    void refresh_clears_stale_existing_connection_before_revalidating_candidates() throws Exception {
+        FormationFixture fixture = formedFixture(HOST_ID, MODULE_ID, true, true, false, null);
+        fixture.coupler().setConnection(GlobalPos.of(Level.OVERWORLD, fixture.hostPos()),
+                GlobalPos.of(Level.OVERWORLD, fixture.modulePos()));
+        fixture.level().blocks.put(new BlockPos(12, 64, 10), Blocks.AIR.defaultBlockState());
+
+        ModuleConnectionCoordinator.refresh(fixture.level(), fixture.couplerPos());
+
+        assertThat(fixture.coupler().connectedHost()).isEmpty();
+        assertThat(fixture.coupler().connectedModule()).isEmpty();
+    }
+
+    @Test
+    void refresh_keeps_valid_existing_connection_from_being_stolen_by_extra_candidates() throws Exception {
+        FormationFixture fixture = formedFixture(HOST_ID, MODULE_ID, true, true, false, null);
+        BlockPos extraHostPos = fixture.hostPos().west(8);
+        Machine extraHostMachine = machine(Identifier.fromNamespaceAndPath("mmcr_test", "extra_host"),
+                MachineRole.HOST, Set.of(MODULE_ID), extraHostPos, fixture.couplerPos(), fixture.couplerPos().east(),
+                fixture.couplerPos().east(2));
+        MachineControllerBlockEntity extraHost = controller(extraHostPos, extraHostMachine, true);
+        setField(BlockEntity.class, extraHost, "level", fixture.level());
+        fixture.level().blocks.put(extraHostPos, controllerBlock(extraHostMachine.registryName()).defaultBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH)
+                .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH)
+                .setValue(MachineControllerBlock.FORMED, true)
+                .setValue(MachineControllerBlock.ACTIVE, false));
+        fixture.level().blockEntities.put(extraHostPos, extraHost);
+        StructureClaimRegistry.get(fixture.level()).claim(extraHostPos, List.of());
+        fixture.coupler().setConnection(GlobalPos.of(Level.OVERWORLD, fixture.hostPos()),
+                GlobalPos.of(Level.OVERWORLD, fixture.modulePos()));
+
+        ModuleConnectionCoordinator.refresh(fixture.level(), fixture.couplerPos());
+
+        assertThat(fixture.coupler().connectedHost()).contains(GlobalPos.of(Level.OVERWORLD, fixture.hostPos()));
+        assertThat(fixture.coupler().connectedModule()).contains(GlobalPos.of(Level.OVERWORLD, fixture.modulePos()));
+    }
+
+    @Test
+    void interface_overlap_without_common_coupler_does_not_invalidate_unrelated_host() throws Exception {
+        FormationFixture fixture = formedFixture(HOST_ID, MODULE_ID, true, true, false, null);
+        BlockPos unrelatedHostPos = new BlockPos(40, 64, 8);
+        BlockPos unrelatedCoupler = new BlockPos(40, 64, 10);
+        BlockPos unrelatedNormal = new BlockPos(41, 64, 10);
+        BlockPos sharedModuleInterface = new BlockPos(12, 64, 10);
+        Machine unrelatedHostMachine = machine(Identifier.fromNamespaceAndPath("mmcr_test", "unrelated_host"),
+                MachineRole.HOST, Set.of(MODULE_ID), unrelatedHostPos, unrelatedCoupler, unrelatedNormal, sharedModuleInterface);
+        MachineControllerBlockEntity unrelatedHost = controller(unrelatedHostPos, unrelatedHostMachine, true);
+        setField(BlockEntity.class, unrelatedHost, "level", fixture.level());
+        fixture.level().blocks.put(unrelatedHostPos, controllerBlock(unrelatedHostMachine.registryName()).defaultBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH)
+                .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH)
+                .setValue(MachineControllerBlock.FORMED, true)
+                .setValue(MachineControllerBlock.ACTIVE, false));
+        fixture.level().blocks.put(unrelatedCoupler, ModBlocks.MODULE_BRIDGE.get().defaultBlockState());
+        fixture.level().blocks.put(unrelatedNormal, Blocks.STONE.defaultBlockState());
+        fixture.level().blockEntities.put(unrelatedHostPos, unrelatedHost);
+        StructureClaimRegistry.get(fixture.level()).claim(unrelatedHostPos, List.of());
+
+        ModuleConnectionCoordinator.refresh(fixture.level(), fixture.couplerPos());
+
+        assertThat(unrelatedHost.isFormed()).isTrue();
+        assertThat(unrelatedHost.getFoundMachine()).isSameAs(unrelatedHostMachine);
+        assertThat(fixture.coupler().connectedHost()).contains(GlobalPos.of(Level.OVERWORLD, fixture.hostPos()));
+        assertThat(fixture.coupler().connectedModule()).contains(GlobalPos.of(Level.OVERWORLD, fixture.modulePos()));
+    }
+
+    @Test
+    void stale_occupied_coupler_does_not_block_valid_local_connection() throws Exception {
         FormationFixture fixture = formedFixture(HOST_ID, MODULE_ID, true, true, false, null);
         fixture.coupler().setConnection(GlobalPos.of(Level.OVERWORLD, fixture.hostPos().west()),
                 GlobalPos.of(Level.OVERWORLD, fixture.modulePos().east()));
 
         ModuleConnectionCoordinator.refresh(fixture.level(), fixture.couplerPos());
 
-        assertThat(fixture.coupler().connectedHost()).contains(GlobalPos.of(Level.OVERWORLD, fixture.hostPos().west()));
-        assertThat(fixture.coupler().connectedModule()).contains(GlobalPos.of(Level.OVERWORLD, fixture.modulePos().east()));
+        assertThat(fixture.coupler().connectedHost()).contains(GlobalPos.of(Level.OVERWORLD, fixture.hostPos()));
+        assertThat(fixture.coupler().connectedModule()).contains(GlobalPos.of(Level.OVERWORLD, fixture.modulePos()));
     }
 
     @Test
