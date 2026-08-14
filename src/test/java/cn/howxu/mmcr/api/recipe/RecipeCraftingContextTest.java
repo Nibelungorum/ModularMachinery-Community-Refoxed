@@ -38,6 +38,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.RegistryOps;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -601,11 +602,31 @@ class RecipeCraftingContextTest {
         MachineRecipe recipe = partialRequirementRecipe("partial_chance_miss", List.of(
                 new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_INGOT.getDefaultInstance(), 0.1F, List.of())
         ));
-        RecipeCraftingContext context = new RecipeCraftingContext(controllerWithComponents(output));
+        RecipeCraftingContext context = new RecipeCraftingContext(
+                controllerWithComponents(List.of(output), RandomSource.create(0L)));
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
         assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(total(output, Items.IRON_INGOT)).isZero();
+    }
+
+    @Test
+    void publicCommitOutputsRoutesMarkedRecipesThroughPartialPlanner() {
+        bindItemComponents(Items.COBBLESTONE);
+        bindItemComponents(Items.IRON_INGOT);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        output.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(44));
+        for (int slot = 1; slot < output.getItemStackHandler(null).getSlots(); slot++) {
+            output.getItemStackHandler(null).setStackInSlot(slot, Items.COBBLESTONE.getDefaultInstance().copyWithCount(64));
+        }
+        MachineRecipe recipe = partialRequirementRecipe("public_commit_partial_item", List.of(
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                        Items.IRON_INGOT.getDefaultInstance().copyWithCount(64))
+        ));
+        RecipeCraftingContext context = new RecipeCraftingContext(controllerWithComponents(output));
+
+        assertThat(context.commitOutputs(recipe)).isTrue();
+        assertThat(total(output, Items.IRON_INGOT)).isEqualTo(64);
     }
 
     @Test
@@ -1534,12 +1555,17 @@ class RecipeCraftingContextTest {
     }
 
     private static MachineControllerBlockEntity controllerWithComponents(net.minecraft.world.level.block.entity.BlockEntity... ports) {
+        return controllerWithComponents(List.of(ports), null);
+    }
+
+    private static MachineControllerBlockEntity controllerWithComponents(List<net.minecraft.world.level.block.entity.BlockEntity> ports,
+                                                                        RandomSource random) {
         try {
             Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
             unsafeField.setAccessible(true);
             sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
             MachineControllerBlockEntity controller = (MachineControllerBlockEntity) unsafe.allocateInstance(MachineControllerBlockEntity.class);
-            var level = LevelStub.createWithBlockEntities(List.of(ports));
+            var level = random == null ? LevelStub.createWithBlockEntities(ports) : LevelStub.createWithBlockEntities(ports, random);
             setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
             setBlockEntityLevel(controller, level);
             for (net.minecraft.world.level.block.entity.BlockEntity port : ports) {

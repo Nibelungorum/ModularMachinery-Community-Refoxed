@@ -1264,7 +1264,9 @@ public final class RecipeCraftingContext {
     }
 
     public boolean commitOutputs(MachineRecipe recipe) {
-        return commitOutputs(runtimeRequirements(recipe));
+        List<MachineRequirement> requirements = runtimeRequirements(recipe);
+        if (!recipe.allowPartialOutputs()) return commitOutputs(requirements);
+        return simulatePartialOutputs(requirements) && commitPartialOutputs(requirements);
     }
 
     private boolean commitOutputs(List<MachineRequirement> requirements) {

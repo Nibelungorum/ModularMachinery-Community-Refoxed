@@ -83,6 +83,12 @@ public final class LevelStub {
         return level;
     }
 
+    public static Level createWithBlockEntities(List<BlockEntity> blockEntities, RandomSource random) {
+        Level level = createWithBlockEntities(blockEntities);
+        ((TestLevel) level).random = random;
+        return level;
+    }
+
     public static Level create(Map<BlockPos, Block> blocks, List<BlockEntity> blockEntities) {
         Level level = create(blocks);
         ((TestLevel) level).blockEntities = blockEntities.stream()
@@ -143,6 +149,7 @@ public final class LevelStub {
         private Set<Long> loadedChunks;
         private long gameTime;
         private int sentBlockUpdates;
+        private RandomSource random = RandomSource.create(0L);
 
         private TestLevel() {
             super(null, Level.OVERWORLD, null, null, false, false, 0L, 0);
@@ -209,7 +216,7 @@ public final class LevelStub {
             return loadedChunks == null || loadedChunks.contains(chunkKey(chunkX, chunkZ));
         }
         @Override public long getGameTime() { return gameTime; }
-        @Override public RandomSource getRandom() { return RandomSource.create(0L); }
+        @Override public RandomSource getRandom() { return random; }
         @Override public int getSeaLevel() { return 0; }
         @Override public FeatureFlagSet enabledFeatures() { return FeatureFlagSet.of(); }
         @Override public Holder<net.minecraft.world.level.biome.Biome> getUncachedNoiseBiome(int x, int y, int z) { return null; }
