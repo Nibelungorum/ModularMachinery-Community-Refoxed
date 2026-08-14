@@ -140,7 +140,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private @Nullable MachineRecipe lastRecipe;
     private long lastRecipeStructureVersion = Long.MIN_VALUE;
     private long lastRecipeModifierSnapshotVersion = Long.MIN_VALUE;
-    private @Nullable Identifier lockedRecipeId;
     private boolean recipeDirty = true;
     private @Nullable StructureClaimRegistry.ResourceDomain resourceDomain;
     private boolean sharedStartPending;
