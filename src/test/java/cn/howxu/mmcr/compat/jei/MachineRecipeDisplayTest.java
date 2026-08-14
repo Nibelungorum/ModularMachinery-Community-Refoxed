@@ -44,6 +44,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -174,6 +175,27 @@ class MachineRecipeDisplayTest {
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
 
         assertThat(display.requiredHostIds()).containsExactly(MMCR.id("alpha_host"), MMCR.id("middle_host"), MMCR.id("zeta_host"));
+    }
+
+    @Test
+    void publicConstructorNormalizesMutableUnorderedRequiredHostIds() {
+        MachineRecipeDisplay template = MachineRecipeDisplay.from(new MachineRecipe(
+                MMCR.id("direct_constructor_host_recipe"), MMCR.id("hosted_module"), 20, List.of(), List.of()));
+        Set<Identifier> requiredHostIds = new LinkedHashSet<>(List.of(
+                MMCR.id("zeta_host"), MMCR.id("alpha_host"), MMCR.id("middle_host")));
+
+        MachineRecipeDisplay display = new MachineRecipeDisplay(
+                template.recipe(), template.recipeId(), template.machineId(), template.durationTicks(),
+                template.itemInputs(), template.itemOutputs(), template.fluidInputs(), template.fluidInputAmounts(),
+                template.fluidOutputs(), template.energyInputs(), template.energyOutputs(), template.outputs(),
+                template.smartInterfaceInputs(), template.smartInterfaceOutputs(), template.smartInterfaceModifiers(),
+                requiredHostIds);
+        requiredHostIds.add(MMCR.id("mutated_source_host"));
+
+        assertThat(display.requiredHostIds())
+                .containsExactly(MMCR.id("alpha_host"), MMCR.id("middle_host"), MMCR.id("zeta_host"));
+        assertThatThrownBy(() -> display.requiredHostIds().add(MMCR.id("mutated_display_host")))
+                .isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test

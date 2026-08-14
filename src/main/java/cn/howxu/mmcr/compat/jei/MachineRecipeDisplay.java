@@ -56,6 +56,10 @@ public record MachineRecipeDisplay(
         Set<Identifier> requiredHostIds
 ) {
 
+    public MachineRecipeDisplay {
+        requiredHostIds = sortedHostIds(requiredHostIds);
+    }
+
     public static MachineRecipeDisplay from(MachineRecipe recipe) {
         return from(recipe, null);
     }
@@ -130,7 +134,7 @@ public record MachineRecipeDisplay(
                 List.copyOf(smartInterfaceInputs),
                 List.copyOf(smartInterfaceOutputs),
                 List.copyOf(smartInterfaceModifiers),
-                sortedHostIds(recipe.requiredHostIds())
+                recipe.requiredHostIds()
         );
     }
 
