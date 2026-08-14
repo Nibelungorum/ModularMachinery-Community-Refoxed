@@ -66,12 +66,12 @@ class TranslationsTest {
     void factory_controller_and_thread_disperser_have_display_names() {
         assertEquals("Factory Controller", Translations.ALL.get("en_us").get("block.mmcr.factory_controller"));
         assertEquals("Factory Controller", Translations.ALL.get("en_us").get("item.mmcr.factory_controller"));
-        assertEquals("Thread Disperser", Translations.ALL.get("en_us").get("item.mmcr.thread_disperser"));
+        assertEquals("Thread Ripper", Translations.ALL.get("en_us").get("item.mmcr.thread_disperser"));
         assertEquals("Enables multithreaded recipes", Translations.ALL.get("en_us").get("tooltip.mmcr.thread_disperser.multithreading"));
         assertEquals("Factory Controller", Translations.ALL.get("en_us").get("container.mmcr.factory_controller"));
         assertEquals("工厂控制器", Translations.ALL.get("zh_cn").get("block.mmcr.factory_controller"));
         assertEquals("工厂控制器", Translations.ALL.get("zh_cn").get("item.mmcr.factory_controller"));
-        assertEquals("线程分散器", Translations.ALL.get("zh_cn").get("item.mmcr.thread_disperser"));
+        assertEquals("线程撕裂者", Translations.ALL.get("zh_cn").get("item.mmcr.thread_disperser"));
         assertEquals("提供多线程能力", Translations.ALL.get("zh_cn").get("tooltip.mmcr.thread_disperser.multithreading"));
         assertEquals("工厂控制器", Translations.ALL.get("zh_cn").get("container.mmcr.factory_controller"));
     }

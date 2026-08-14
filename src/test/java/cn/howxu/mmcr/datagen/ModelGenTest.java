@@ -45,6 +45,7 @@ class ModelGenTest {
     @Test
     void factory_controller_uses_dynamic_resources_and_thread_disperser_resources_exist() throws Exception {
         Path root = Path.of("src/main/resources/assets/mmcr");
+        Path generatedRoot = Path.of("src/generated/resources/assets/mmcr");
 
         assertThat(ModelGen.collectKnownBlockNames()).doesNotContain("factory_controller");
         assertThat(ModelGen.collectKnownItemNames()).doesNotContain("factory_controller");
@@ -56,10 +57,15 @@ class ModelGenTest {
         assertThat(Files.exists(root.resolve("blockstates/factory_scheduler.json"))).isFalse();
         assertThat(Files.exists(root.resolve("models/block/factory_scheduler.json"))).isFalse();
         assertThat(Files.exists(root.resolve("models/item/factory_scheduler.json"))).isFalse();
-        assertThat(ModelGen.collectKnownItemNames()).contains("terminal");
-        assertThat(Files.readString(root.resolve("models/item/terminal.json")))
-                .contains("mmcr:item/multiblock_detector");
-        assertThat(Files.exists(root.resolve("models/item/thread_disperser.json"))).isTrue();
+        assertThat(ModelGen.collectKnownItemNames()).contains("terminal", "thread_disperser");
+        assertThat(ModelGen.collectRegisteredModels()).filteredOn(model -> model.kind() == ModelGen.GeneratedModel.Kind.ITEM)
+                .extracting(ModelGen.GeneratedModel::name)
+                .contains("thread_disperser");
+        assertThat(Files.readString(generatedRoot.resolve("models/item/terminal.json")))
+                .contains("mmcr:item/terminal");
+        assertThat(Files.exists(generatedRoot.resolve("models/item/thread_disperser.json"))).isTrue();
+        assertThat(Files.readString(generatedRoot.resolve("models/item/thread_disperser.json")))
+                .contains("mmcr:item/thread_disperser");
         assertThat(Files.exists(root.resolve("textures/block/overlay_factory_controller.png"))).isTrue();
         assertThat(Files.exists(root.resolve("textures/item/thread_disperser.png"))).isTrue();
         assertThat(Files.exists(root.resolve("textures/gui/inventory_tiny.png"))).isTrue();

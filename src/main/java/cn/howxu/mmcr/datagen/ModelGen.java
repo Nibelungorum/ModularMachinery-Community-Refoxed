@@ -55,6 +55,7 @@ public final class ModelGen extends ModelProvider {
     static List<String> collectKnownItemNames() {
         List<String> names = new ArrayList<>(collectKnownBlockNames());
         names.add("multiblock_detector");
+        names.add("thread_disperser");
         names.add("terminal");
         return List.copyOf(names);
     }
@@ -67,6 +68,7 @@ public final class ModelGen extends ModelProvider {
             }
         });
         itemRegistration.register(ModItems.MULTIBLOCK_DETECTOR::get, "multiblock_detector");
+        itemRegistration.register(ModItems.THREAD_DISPERSER::get, "thread_disperser");
         itemRegistration.register(ModItems.TERMINAL::get, "terminal");
     }
 

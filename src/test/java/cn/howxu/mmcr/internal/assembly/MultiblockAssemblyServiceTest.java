@@ -1,9 +1,16 @@
 package cn.howxu.mmcr.internal.assembly;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
@@ -64,5 +71,26 @@ class MultiblockAssemblyServiceTest {
         assertTrue(placement.matches(Blocks.COPPER_BLOCK.defaultBlockState()));
         assertTrue(placement.matches(Blocks.IRON_BLOCK.defaultBlockState()));
         assertFalse(placement.matches(Blocks.GOLD_BLOCK.defaultBlockState()));
+    }
+
+    @Test
+    void levelCandidatesAreOrderedByPriorityDescending() {
+        MachineLevelRegistry.beginRegistration();
+        MachineLevelRegistry.registerType(new LevelType(MMCR.id("coil"), Component.literal("Coil")));
+        MachineLevelRegistry.registerLevel(new MachineLevel(MMCR.id("basic"), MMCR.id("coil"), 1,
+                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
+        MachineLevelRegistry.registerLevel(new MachineLevel(MMCR.id("advanced"), MMCR.id("coil"), 2,
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
+        MachineLevelRegistry.freezeRegistration();
+        BlockPredicate predicate = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState())
+        ));
+
+        var placements = MultiblockAssemblyService.createTemplatePlacements(BlockPos.ZERO,
+                new BlockArray(Map.of(BlockPos.ZERO.east(), predicate)));
+
+        assertEquals(1, placements.size());
+        assertEquals(Blocks.IRON_BLOCK, placements.getFirst().state().getBlock());
     }
 }

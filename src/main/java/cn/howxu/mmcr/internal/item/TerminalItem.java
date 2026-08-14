@@ -51,15 +51,17 @@ public class TerminalItem extends Item {
     @Override
     public InteractionResult useOn(UseOnContext context) {
         Player player = context.getPlayer();
-        if (!(player instanceof ServerPlayer serverPlayer) || !player.isShiftKeyDown()) return InteractionResult.PASS;
+        if (player == null || !player.isShiftKeyDown()) return InteractionResult.PASS;
+        if (context.getLevel().isClientSide()) return InteractionResult.SUCCESS;
+        if (!(player instanceof ServerPlayer serverPlayer)) return InteractionResult.SUCCESS;
         BlockEntity blockEntity = context.getLevel().getBlockEntity(context.getClickedPos());
-        if (!(blockEntity instanceof MachineControllerBlockEntity controller)) return InteractionResult.PASS;
+        if (!(blockEntity instanceof MachineControllerBlockEntity controller)) return InteractionResult.SUCCESS;
 
         TerminalMode mode = mode(context.getItemInHand());
         MultiblockAssemblyService.Result result = mode == TerminalMode.BUILD
                 ? MultiblockAssemblyService.build(serverPlayer, controller, serverPlayer.isCreative())
                 : MultiblockAssemblyService.demolish(serverPlayer, controller, Config.TERMINAL_MAX_DEMOLISH_BLOCKS.get(),
-                        new PlayerInventoryStructureItemSink(serverPlayer));
+                        serverPlayer.isCreative() ? stack -> {} : new PlayerInventoryStructureItemSink(serverPlayer));
         serverPlayer.sendSystemMessage(Component.translatable(result.message().key(), result.message().args()));
         return result.interactionResult();
     }
