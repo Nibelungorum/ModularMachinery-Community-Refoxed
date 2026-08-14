@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -37,9 +38,11 @@ public final class ModBlockEntities {
         for (ParallelTier tier : ParallelTier.values()) registerParallelController(tier);
         registerFactoryController();
         registerSmartInterface();
+        registerModuleCoupler();
     }
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<?>> SMART_INTERFACE = BES.get("smart_interface");
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<?>> MODULE_BRIDGE = BES.get("module_bridge");
 
     private static void registerMachineController(Identifier machineId) {
         String name = MachineControllerSpec.defaultsFor(machineId).id().getPath();
@@ -64,6 +67,11 @@ public final class ModBlockEntities {
     private static void registerSmartInterface() {
         BES.put("smart_interface", register("smart_interface", () -> new BlockEntityType<>(
                 SmartInterfaceBlockEntity::new, ModBlocks.SMART_INTERFACE.get())));
+    }
+
+    private static void registerModuleCoupler() {
+        BES.put("module_bridge", register("module_bridge", () -> new BlockEntityType<>(
+                ModuleCouplerBlockEntity::new, ModBlocks.MODULE_BRIDGE.get())));
     }
 
     public static DeferredHolder<BlockEntityType<?>, BlockEntityType<?>> controllerFor(Identifier machineId) {
