@@ -19,6 +19,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
+import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -148,6 +149,23 @@ class MachineBuilderJSTest {
                 .createObject();
 
         assertThat(registration.pattern()).isSameAs(pattern);
+    }
+
+    @Test
+    void builder_declares_module_and_host_roles_with_stable_deduplicated_modules() {
+        var module = new MachineBuilderJS("mmcr:module")
+                .module(false)
+                .module()
+                .createObject();
+        var host = new MachineBuilderJS("mmcr:host")
+                .host("mmcr:first", "mmcr:second", "mmcr:first")
+                .host(List.of("mmcr:second", "mmcr:third"))
+                .createObject();
+
+        assertThat(module.isModule()).isTrue();
+        assertThat(host.isHost()).isTrue();
+        assertThat(host.acceptedModuleIds())
+                .containsExactly(Identifier.parse("mmcr:first"), Identifier.parse("mmcr:second"), Identifier.parse("mmcr:third"));
     }
 
     @Test

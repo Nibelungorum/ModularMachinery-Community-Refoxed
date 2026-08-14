@@ -58,7 +58,7 @@ public final class MachineRecipeSchema {
 
     public static final RecipeSchema SCHEMA = new RecipeSchema(MACHINE, TICK_TIME, INPUTS, ENERGY_PER_TICK, OUTPUTS, MODIFIERS, MAX_THREADS, PARALLELIZED, CANCEL_IF_PER_TICK_FAILS)
             .factory(MachineRecipeFactory.INSTANCE)
-            .function(new RecipeFunctionInstance("requiresHost", List.of(StringComponent.ID),
+            .function(new RecipeFunctionInstance("requiredHost", List.of(StringComponent.ID),
                     new ResolvedRecipeSchemaFunction() {
                         @Override
                         public List<RecipeComponent<?>> arguments() {

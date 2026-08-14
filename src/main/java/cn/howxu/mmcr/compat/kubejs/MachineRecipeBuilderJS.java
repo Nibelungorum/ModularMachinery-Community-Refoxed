@@ -152,8 +152,16 @@ public class MachineRecipeBuilderJS {
         return this;
     }
 
-    public MachineRecipeBuilderJS requiresHost(String hostId) {
+    public MachineRecipeBuilderJS requiredHost(String hostId) {
         requiredHostIds.add(Identifier.parse(hostId));
+        return this;
+    }
+
+    public MachineRecipeBuilderJS requiredHosts(String... hostIds) {
+        if (hostIds == null) return this;
+        for (String hostId : hostIds) {
+            if (hostId != null) requiredHost(hostId);
+        }
         return this;
     }
 

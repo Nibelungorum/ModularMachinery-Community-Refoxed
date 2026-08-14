@@ -13,7 +13,10 @@ import dev.latvian.mods.kubejs.registry.BuilderBase;
 import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient String displayNameKey;
@@ -34,7 +37,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient Identifier runningSoundId;
     public transient Identifier finishSoundId;
     public transient BlockArray pattern;
-    private final List<Identifier> acceptedModuleIds = new ArrayList<>();
+    private final Set<Identifier> acceptedModuleIds = new LinkedHashSet<>();
     private boolean module;
     private final List<String> controllerTooltip = new ArrayList<>();
     private final List<SmartInterfaceType> smartInterfaceTypes = new ArrayList<>();
@@ -99,17 +102,28 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return this;
     }
 
-    public MachineBuilderJS host(String acceptedModuleId) {
-        return host(Identifier.parse(acceptedModuleId));
+    public MachineBuilderJS host(String... moduleIds) {
+        if (moduleIds == null) return this;
+        for (String moduleId : moduleIds) {
+            if (moduleId != null) acceptedModuleIds.add(Identifier.parse(moduleId));
+        }
+        return this;
     }
 
-    public MachineBuilderJS host(Identifier acceptedModuleId) {
-        acceptedModuleIds.add(acceptedModuleId);
+    public MachineBuilderJS host(Collection<String> moduleIds) {
+        if (moduleIds == null) return this;
+        for (String moduleId : moduleIds) {
+            if (moduleId != null) acceptedModuleIds.add(Identifier.parse(moduleId));
+        }
         return this;
     }
 
     public MachineBuilderJS module() {
-        this.module = true;
+        return module(true);
+    }
+
+    public MachineBuilderJS module(boolean module) {
+        this.module = module;
         return this;
     }
 
