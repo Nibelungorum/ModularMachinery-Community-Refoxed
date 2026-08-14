@@ -137,7 +137,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private @Nullable MachineRecipe lastRecipe;
     private long lastRecipeStructureVersion = Long.MIN_VALUE;
     private long lastRecipeModifierSnapshotVersion = Long.MIN_VALUE;
-    private @Nullable Identifier lockedRecipeId;
     private boolean recipeDirty = true;
     private @Nullable StructureClaimRegistry.ResourceDomain resourceDomain;
     private boolean sharedStartPending;
@@ -1406,16 +1405,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (machineId == null) return false;
         if (tryRestartLastRecipe(machineId)) return true;
         List<MachineRecipe> candidates = recipesForMachine();
-        candidates = lockedRecipeCandidates(candidates);
         RecipeSearchResult result;
         try {
-            if (lockedRecipeId == null) {
-                result = new RecipeSearchTask(this, machineId, structureVersion, getMaxParallelism(), candidates,
-                        contextPool(), cachedCandidateIndex).compute();
-            } else {
-                result = new RecipeSearchTask(this, machineId, structureVersion, getMaxParallelism(), candidates,
-                        contextPool()).compute();
-            }
+            result = new RecipeSearchTask(this, machineId, structureVersion, getMaxParallelism(), candidates,
+                    contextPool(), cachedCandidateIndex).compute();
         } catch (RuntimeException e) {
             LOG.warn("[Ctrl#{}] tryStartNewRecipe: recipe search failed at pos={}; retrying later", instanceId, getBlockPos(), e);
             clearPendingConflictStart();
@@ -1435,13 +1428,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             lastFailureUnloc = "gui.mmcr.controller.failure.level_insufficient";
         }
         return false;
-    }
-
-    private List<MachineRecipe> lockedRecipeCandidates(List<MachineRecipe> candidates) {
-        if (lockedRecipeId == null || candidates == null || candidates.isEmpty()) {
-            return candidates == null ? List.of() : candidates;
-        }
-        return candidates.stream().filter(recipe -> lockedRecipeId.equals(recipe.id())).toList();
     }
 
     private boolean shouldSearchRecipe() {
@@ -1540,7 +1526,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private boolean tryRestartLastRecipe(Identifier machineId) {
         if (recipeDirty || lastRecipe == null || active != null || foundMachine == null) return false;
         if (!machineId.equals(lastRecipe.machineId())) return false;
-        if (lockedRecipeId != null && !lockedRecipeId.equals(lastRecipe.id())) return false;
         if (lastRecipeStructureVersion != structureVersion || lastRecipeModifierSnapshotVersion != modifierSnapshotVersion) return false;
         ActiveMachineRecipe next = new ActiveMachineRecipe(lastRecipe, getMaxParallelism());
         RecipeCraftingContext nextContext = contextPool().borrow(next, this);
@@ -1574,7 +1559,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     private void rememberLastRecipe(MachineRecipe recipe) {
         lastRecipe = recipe;
-        lockedRecipeId = recipe.id();
         lastRecipeStructureVersion = structureVersion;
         lastRecipeModifierSnapshotVersion = modifierSnapshotVersion;
         recipeDirty = false;
@@ -1938,9 +1922,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             pausedActive.serialize(output.child("active_recipe"));
             pausedContext.serialize(output.child("active_context"));
         }
-        if (lockedRecipeId != null) {
-            output.putString("locked_recipe", lockedRecipeId.toString());
-        }
     }
 
     @Override
@@ -1952,8 +1933,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         redstonePaused = false;
         active = null;
         context = null;
-        String lockedRecipeName = input.getStringOr("locked_recipe", "");
-        lockedRecipeId = lockedRecipeName.isEmpty() ? null : Identifier.parse(lockedRecipeName);
         Map<Identifier, MachineLevel> restoredLevels = new LinkedHashMap<>();
         input.listOrEmpty("found_levels", com.mojang.serialization.Codec.STRING).forEach(id -> {
             MachineLevel foundLevel = cn.howxu.mmcr.api.machine.level.MachineLevelRegistry.getLevel(Identifier.parse(id));
