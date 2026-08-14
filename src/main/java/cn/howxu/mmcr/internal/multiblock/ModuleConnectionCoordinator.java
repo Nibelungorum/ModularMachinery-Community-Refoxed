@@ -124,6 +124,25 @@ public final class ModuleConnectionCoordinator {
         return ModuleConnectionStatus.disconnected();
     }
 
+    public static int installedModuleCount(MachineControllerBlockEntity controller) {
+        if (controller == null || !(controller.getLevel() instanceof ServerLevel level)) return 0;
+        if (!isFormedHost(controller)) return 0;
+        int count = 0;
+        for (BlockPos couplerPos : couplerWorldPositions(controller)) {
+            if (!level.hasChunk(couplerPos.getX() >> 4, couplerPos.getZ() >> 4)) continue;
+            if (!(level.getBlockEntity(couplerPos) instanceof ModuleCouplerBlockEntity coupler)) continue;
+            Optional<GlobalPos> hostPos = coupler.connectedHost();
+            Optional<GlobalPos> modulePos = coupler.connectedModule();
+            if (hostPos.isEmpty() || modulePos.isEmpty()) continue;
+            if (!level.dimension().equals(hostPos.get().dimension()) || !level.dimension().equals(modulePos.get().dimension())) continue;
+            if (!controller.getBlockPos().equals(hostPos.get().pos())) continue;
+            BlockEntity moduleEntity = level.getBlockEntity(modulePos.get().pos());
+            if (!(moduleEntity instanceof MachineControllerBlockEntity module)) continue;
+            if (canConnect(level, couplerPos, controller, module)) count++;
+        }
+        return count;
+    }
+
     private static boolean canConnect(ServerLevel level, BlockPos couplerPos,
                                        MachineControllerBlockEntity host, MachineControllerBlockEntity module) {
         if (!isFormedHost(host) || !isFormedModule(module)) return false;

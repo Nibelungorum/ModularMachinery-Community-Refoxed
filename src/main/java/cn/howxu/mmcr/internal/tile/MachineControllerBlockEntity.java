@@ -240,6 +240,15 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         return ModuleConnectionCoordinator.connectionStatus(this);
     }
 
+    public int installedModuleCount() {
+        return ModuleConnectionCoordinator.installedModuleCount(this);
+    }
+
+    public Optional<Identifier> connectedHostId() {
+        ModuleConnectionStatus status = moduleConnectionStatus();
+        return status.connected() ? Optional.of(status.connectedHostId()) : Optional.empty();
+    }
+
     public void onStructureBlockChanged(BlockPos changedPos) {
         if (!isFormed() || foundCompiledPattern == null || controllerFacing == null) return;
         if (!isInsideCompiledBounds(changedPos)) return;

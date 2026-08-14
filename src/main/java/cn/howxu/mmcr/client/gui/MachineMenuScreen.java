@@ -2,6 +2,7 @@ package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.autoio.AutoIOAction;
@@ -696,6 +697,15 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         }
 
         if (menu.isFormed()) {
+            var displayedMachine = owner == null || owner.getFoundMachine() == null ? null : owner.getFoundMachine();
+            if (displayedMachine != null && displayedMachine.isHost()) {
+                scaledY = renderScaledWrappedLine(g, installedModuleCountLine(menu.installedModuleCount()),
+                        scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
+            }
+            if (displayedMachine != null && displayedMachine.isModule()) {
+                scaledY = renderScaledWrappedLine(g, moduleConnectionLine(menu),
+                        scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
+            }
             int parallelSlots = menu.parallelControllerCount();
             if (parallelSlots > 0) {
                 scaledY = renderScaledWrappedLine(g, parallelSlotLine(parallelSlots),
@@ -773,6 +783,19 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     static Component parallelSlotLine(int parallelSlots) {
         return Component.translatable("gui.mmcr.controller.parallel_slots",
                 Component.literal(NUMBER_FORMAT.format(parallelSlots)));
+    }
+
+    static Component installedModuleCountLine(int installedModuleCount) {
+        return Component.translatable("gui.mmcr.controller.installed_modules",
+                Component.literal(NUMBER_FORMAT.format(installedModuleCount)));
+    }
+
+    static Component moduleConnectionLine(MachineControllerMenu menu) {
+        Optional<Identifier> hostId = menu.connectedHostId();
+        if (hostId.isEmpty()) return Component.translatable("gui.mmcr.controller.module_unconnected");
+        var host = MachineRegistry.getMachine(hostId.get());
+        Component hostName = host == null ? Component.literal(hostId.get().toString()) : host.displayName();
+        return Component.translatable("gui.mmcr.controller.module_connected", hostName);
     }
 
     private void renderControllerStatusLineScaled(GuiGraphicsExtractor g, int x, int y, Component value, int valueColor) {

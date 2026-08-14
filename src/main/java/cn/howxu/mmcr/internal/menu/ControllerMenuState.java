@@ -53,6 +53,20 @@ final class ControllerMenuState {
         });
     }
 
+    static DataSlot addInstalledModuleCountSlot(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {
+        return add(menu, owner, MachineControllerBlockEntity::installedModuleCount);
+    }
+
+    static DataSlot addModuleConnectedSlot(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {
+        return add(menu, owner, controller -> controller.connectedHostId().isPresent() ? 1 : 0);
+    }
+
+    static DataSlot addConnectedHostRegistryIdSlot(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {
+        return add(menu, owner, controller -> controller.connectedHostId()
+                .map(MachineControllerMenu::registryIdSyncValue)
+                .orElse(0));
+    }
+
     static void addControllerPlayerSlots(AbstractMachineMenu menu, Inventory inventory, int x) {
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {

@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
@@ -16,6 +17,8 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.Optional;
 
 public class MachineControllerMenu extends AbstractMachineMenu {
 
@@ -36,6 +39,9 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     private final DataSlot factoryThreadCount;
     private final DataSlot factoryActiveThreadCount;
     private final DataSlot recipeLocked;
+    private final DataSlot installedModuleCount;
+    private final DataSlot moduleConnected;
+    private final DataSlot connectedHostRegistryId;
 
     public MachineControllerMenu(int containerId, Inventory playerInv, MachineControllerBlockEntity owner) {
         super(ModUIs.MACHINE_CONTROLLER.get(), containerId);
@@ -98,6 +104,9 @@ public class MachineControllerMenu extends AbstractMachineMenu {
             @Override public void set(int value) {}
         });
         this.recipeLocked = ControllerMenuState.addRecipeLockSlot(this, owner);
+        this.installedModuleCount = ControllerMenuState.addInstalledModuleCountSlot(this, owner);
+        this.moduleConnected = ControllerMenuState.addModuleConnectedSlot(this, owner);
+        this.connectedHostRegistryId = ControllerMenuState.addConnectedHostRegistryIdSlot(this, owner);
         addControllerPlayerSlots(playerInv);
     }
 
@@ -119,6 +128,9 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.factoryThreadCount = addDataSlot(DataSlot.standalone());
         this.factoryActiveThreadCount = addDataSlot(DataSlot.standalone());
         this.recipeLocked = addDataSlot(DataSlot.standalone());
+        this.installedModuleCount = addDataSlot(DataSlot.standalone());
+        this.moduleConnected = addDataSlot(DataSlot.standalone());
+        this.connectedHostRegistryId = addDataSlot(DataSlot.standalone());
         addControllerPlayerSlots(playerInv);
     }
 
@@ -269,6 +281,18 @@ public class MachineControllerMenu extends AbstractMachineMenu {
                 .map(FactoryRecipeScheduler.ThreadSnapshot::locked).orElse(false);
     }
 
+    public int installedModuleCount() {
+        if (owner == null) return installedModuleCount.get();
+        MachineControllerBlockEntity controller = resolvedOwner();
+        return controller == null ? installedModuleCount.get() : controller.installedModuleCount();
+    }
+
+    public Optional<Identifier> connectedHostId() {
+        if (owner == null) return moduleConnected.get() == 0 ? Optional.empty() : hostIdForSyncValue(connectedHostRegistryId.get());
+        MachineControllerBlockEntity controller = resolvedOwner();
+        return controller == null ? Optional.empty() : controller.connectedHostId();
+    }
+
     public @Nullable String lockedRecipeId() {
         MachineControllerBlockEntity controller = resolvedOwner();
         if (controller == null) return null;
@@ -280,6 +304,17 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     }
 
     public BlockPos controllerPos() { return pos; }
+
+    static int registryIdSyncValue(Identifier id) {
+        return id == null ? 0 : id.toString().hashCode();
+    }
+
+    static Optional<Identifier> hostIdForSyncValue(int syncValue) {
+        if (syncValue == 0) return Optional.empty();
+        return MachineRegistry.getAll().keySet().stream()
+                .filter(id -> registryIdSyncValue(id) == syncValue)
+                .findFirst();
+    }
 
     public long totalStoredEnergy() {
         MachineControllerBlockEntity controller = resolvedOwner();
