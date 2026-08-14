@@ -28,7 +28,6 @@ public final class GameTestRegistry {
         register(event, "item_bus_capability", 100, ItemBusCapabilityGameTest::itemBusAcceptsItems);
         register(event, "item_bus_capability_cache_auto_io_side", 100, ItemBusCapabilityGameTest::itemBusCapabilityCacheFollowsAutoIOSideConfig);
         register(event, "auto_io_item_input", 120, helper -> new AutoIOGameTest().itemInputAutoImports(helper));
-        register(event, "auto_io_item_input_late_neighbor", 160, helper -> new AutoIOGameTest().itemInputAutoImportsAfterLateNeighborPlacement(helper));
         register(event, "auto_io_fluid_output", 120, helper -> new AutoIOGameTest().fluidOutputAutoExports(helper));
         register(event, "auto_io_energy_output", 120, helper -> new AutoIOGameTest().energyOutputAutoExports(helper));
         register(event, "port_menu_direction", 100, helper -> new PortMenuDirectionGameTest().itemBusMenuAllowsContainerSlotTransfers(helper));

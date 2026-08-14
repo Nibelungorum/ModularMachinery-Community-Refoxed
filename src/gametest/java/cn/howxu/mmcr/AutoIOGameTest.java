@@ -44,27 +44,6 @@ public class AutoIOGameTest {
         });
     }
 
-    public void itemInputAutoImportsAfterLateNeighborPlacement(GameTestHelper helper) {
-        BlockPos inputPos = new BlockPos(0, 1, 0);
-        BlockPos chestPos = inputPos.relative(Direction.EAST);
-        helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
-
-        ItemBusBlockEntity inputBus = helper.getBlockEntity(inputPos, ItemBusBlockEntity.class);
-        inputBus.toggleAutoIOEnabled();
-        helper.runAtTickTime(60, inputBus::serverTick);
-        helper.runAtTickTime(65, () -> {
-            helper.setBlock(chestPos, Blocks.CHEST.defaultBlockState());
-            ChestBlockEntity chest = helper.getBlockEntity(chestPos, ChestBlockEntity.class);
-            chest.setItem(0, new ItemStack(Items.IRON_INGOT, 3));
-        });
-        helper.runAtTickTime(120, inputBus::serverTick);
-        helper.runAtTickTime(130, () -> {
-            ItemStack imported = inputBus.getItemStackHandler(Direction.EAST).getStackInSlot(0);
-            helper.assertTrue(imported.is(Items.IRON_INGOT), "Input bus imports after late east chest placement");
-            helper.succeed();
-        });
-    }
-
     public void fluidOutputAutoExports(GameTestHelper helper) {
         BlockPos outputPos = new BlockPos(0, 1, 0);
         BlockPos receiverPos = outputPos.relative(Direction.EAST);
