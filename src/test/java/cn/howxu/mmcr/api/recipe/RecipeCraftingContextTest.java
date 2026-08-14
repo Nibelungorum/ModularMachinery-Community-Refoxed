@@ -443,6 +443,210 @@ class RecipeCraftingContextTest {
     }
 
     @Test
+    void partialItemOutputsFillAvailableRoomAndVoidRemainderInOrder() {
+        bindItemComponents(Items.COBBLESTONE);
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.GOLD_INGOT);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        output.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(44));
+        for (int slot = 1; slot < output.getItemStackHandler(null).getSlots(); slot++) {
+            output.getItemStackHandler(null).setStackInSlot(slot, Items.COBBLESTONE.getDefaultInstance().copyWithCount(64));
+        }
+        MachineRecipe recipe = partialRequirementRecipe("partial_item_order", List.of(
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(64)),
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.GOLD_INGOT.getDefaultInstance())
+        ));
+        RecipeCraftingContext context = new RecipeCraftingContext(controllerWithComponents(output));
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
+        assertThat(total(output, Items.IRON_INGOT)).isEqualTo(64);
+        assertThat(total(output, Items.GOLD_INGOT)).isZero();
+    }
+
+    @Test
+    void partialItemOutputContinuesAfterBlockedFirstRequirement() throws Exception {
+        bindItemComponents(Items.COBBLESTONE);
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.GOLD_INGOT);
+        ItemOutputBusBlockEntity ironOnly = itemOutputBus(new BlockPos(1, 0, 0));
+        ironOnly.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(64));
+        for (int slot = 1; slot < ironOnly.getItemStackHandler(null).getSlots(); slot++) {
+            ironOnly.getItemStackHandler(null).setStackInSlot(slot, Items.COBBLESTONE.getDefaultInstance().copyWithCount(64));
+        }
+        ItemOutputBusBlockEntity goldRoom = itemOutputBus(new BlockPos(2, 0, 0));
+        MachineRecipe recipe = partialRequirementRecipe("partial_item_continue", List.of(
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_INGOT.getDefaultInstance(), 1F, List.of("iron")),
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.GOLD_INGOT.getDefaultInstance(), 1F, List.of("gold"))
+        ));
+        MachineControllerBlockEntity controller = controllerWithComponents(ironOnly, goldRoom);
+        replaceComponents(controller, List.of(
+                new ProcessingComponent(new MachineComponent(PortKinds.ITEM_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT),
+                        ironOnly, ironOnly.getBlockPos(), BlockPos.ZERO, List.of("iron")),
+                new ProcessingComponent(new MachineComponent(PortKinds.ITEM_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT),
+                        goldRoom, goldRoom.getBlockPos(), BlockPos.ZERO, List.of("gold"))
+        ));
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
+        assertThat(total(ironOnly, Items.IRON_INGOT) + total(goldRoom, Items.IRON_INGOT)).isEqualTo(64);
+        assertThat(total(ironOnly, Items.GOLD_INGOT) + total(goldRoom, Items.GOLD_INGOT)).isEqualTo(1);
+    }
+
+    @Test
+    void unmarkedItemOutputRecipeRemainsStrictAndAtomic() {
+        bindItemComponents(Items.COBBLESTONE);
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.GOLD_INGOT);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        output.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(44));
+        for (int slot = 1; slot < output.getItemStackHandler(null).getSlots(); slot++) {
+            output.getItemStackHandler(null).setStackInSlot(slot, Items.COBBLESTONE.getDefaultInstance().copyWithCount(64));
+        }
+        MachineRecipe recipe = explicitRequirementRecipe("strict_partial_item_blocked", List.of(
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(64)),
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.GOLD_INGOT.getDefaultInstance())
+        ));
+        RecipeCraftingContext context = new RecipeCraftingContext(controllerWithComponents(output));
+
+        assertThat(context.simulateOutputs(recipe)).isFalse();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isFalse();
+        assertThat(total(output, Items.IRON_INGOT)).isEqualTo(44);
+        assertThat(total(output, Items.GOLD_INGOT)).isZero();
+    }
+
+    @Test
+    void partialFluidAndItemOutputsFollowRequirementOrderAndVoidRemainders() throws Exception {
+        bindFluidComponents(Fluids.WATER);
+        bindFluidComponents(Fluids.LAVA);
+        bindItemComponents(Items.IRON_INGOT);
+        FluidOutputHatchBlockEntity water = fluidOutputHatch(new BlockPos(1, 0, 0));
+        water.getFluidTank(null).setFluid(new FluidStack(Fluids.WATER, 7400));
+        ItemOutputBusBlockEntity item = itemOutputBus(new BlockPos(2, 0, 0));
+        FluidOutputHatchBlockEntity lava = fluidOutputHatch(new BlockPos(3, 0, 0));
+        MachineRecipe recipe = partialRequirementRecipe("partial_fluid_item_fluid", List.of(
+                new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new FluidStack(Fluids.WATER, 1000), 1F, List.of("water")),
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_INGOT.getDefaultInstance()),
+                new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new FluidStack(Fluids.LAVA, 1000), 1F, List.of("lava"))
+        ));
+        MachineControllerBlockEntity controller = controllerWithComponents(water, item, lava);
+        replaceComponents(controller, List.of(
+                new ProcessingComponent(new MachineComponent(PortKinds.FLUID_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT),
+                        water, water.getBlockPos(), BlockPos.ZERO, List.of("water")),
+                new ProcessingComponent(new MachineComponent(PortKinds.ITEM_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT),
+                        item, item.getBlockPos(), BlockPos.ZERO, (String) null),
+                new ProcessingComponent(new MachineComponent(PortKinds.FLUID_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT),
+                        lava, lava.getBlockPos(), BlockPos.ZERO, List.of("lava"))
+        ));
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
+        assertThat(water.getFluidTank(null).getFluidAmount()).isEqualTo(8000);
+        assertThat(item.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+        assertThat(lava.getFluidTank(null).getFluid()).satisfies(stack -> {
+            assertThat(stack.getFluid()).isEqualTo(Fluids.LAVA);
+            assertThat(stack.getAmount()).isEqualTo(1000);
+        });
+    }
+
+    @Test
+    void partialMixedOutputsPreserveFluidCompetitionOrderAcrossSharedHatches() {
+        bindFluidComponents(Fluids.WATER);
+        bindFluidComponents(Fluids.LAVA);
+        bindItemComponents(Items.IRON_INGOT);
+        FluidOutputHatchBlockEntity first = fluidOutputHatch(new BlockPos(1, 0, 0));
+        FluidOutputHatchBlockEntity second = fluidOutputHatch(new BlockPos(2, 0, 0));
+        ItemOutputBusBlockEntity item = itemOutputBus(new BlockPos(3, 0, 0));
+        MachineRecipe recipe = partialRequirementRecipe("partial_mixed_shared_fluid_order", List.of(
+                new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new FluidStack(Fluids.WATER, 8000)),
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_INGOT.getDefaultInstance()),
+                new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new FluidStack(Fluids.LAVA, 8000))
+        ));
+        RecipeCraftingContext context = new RecipeCraftingContext(controllerWithComponents(first, second, item));
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
+        assertThat(first.getFluidTank(null).getFluid().getFluid()).isEqualTo(Fluids.WATER);
+        assertThat(second.getFluidTank(null).getFluid().getFluid()).isEqualTo(Fluids.LAVA);
+        assertThat(item.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+    }
+
+    @Test
+    void partialOutputsRequireAtLeastOnePositiveItemOrFluidCapacity() {
+        bindItemComponents(Items.COBBLESTONE);
+        bindItemComponents(Items.IRON_INGOT);
+        ItemOutputBusBlockEntity full = itemOutputBus(new BlockPos(1, 0, 0));
+        for (int slot = 0; slot < full.getItemStackHandler(null).getSlots(); slot++) {
+            full.getItemStackHandler(null).setStackInSlot(slot, Items.COBBLESTONE.getDefaultInstance().copyWithCount(64));
+        }
+        MachineRecipe recipe = partialRequirementRecipe("partial_no_positive_capacity", List.of(
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_INGOT.getDefaultInstance())
+        ));
+
+        assertThat(new RecipeCraftingContext(controllerWithComponents(full)).simulateOutputs(recipe)).isFalse();
+        assertThat(new RecipeCraftingContext(controllerWithComponents()).simulateOutputs(partialRequirementRecipe(
+                "partial_strict_only", List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 1))))).isFalse();
+    }
+
+    @Test
+    void partialOutputSimulationDoesNotRollChanceAndDeterministicMissCommitIsValid() {
+        bindItemComponents(Items.COBBLESTONE);
+        bindItemComponents(Items.IRON_INGOT);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        for (int slot = 1; slot < output.getItemStackHandler(null).getSlots(); slot++) {
+            output.getItemStackHandler(null).setStackInSlot(slot, Items.COBBLESTONE.getDefaultInstance().copyWithCount(64));
+        }
+        MachineRecipe recipe = partialRequirementRecipe("partial_chance_miss", List.of(
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_INGOT.getDefaultInstance(), 0.1F, List.of())
+        ));
+        RecipeCraftingContext context = new RecipeCraftingContext(controllerWithComponents(output));
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
+        assertThat(total(output, Items.IRON_INGOT)).isZero();
+    }
+
+    @Test
+    void partialParallelOutputsScaleBeforeCapacityTruncationWithoutLoweringParallelism() {
+        bindItemComponents(Items.COBBLESTONE);
+        bindItemComponents(Items.IRON_INGOT);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        output.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(44));
+        for (int slot = 1; slot < output.getItemStackHandler(null).getSlots(); slot++) {
+            output.getItemStackHandler(null).setStackInSlot(slot, Items.COBBLESTONE.getDefaultInstance().copyWithCount(64));
+        }
+        MachineRecipe recipe = partialRequirementRecipe("partial_parallel_item", List.of(
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(64))
+        ));
+        RecipeCraftingContext context = new RecipeCraftingContext(controllerWithComponents(output));
+
+        assertThat(context.simulateOutputs(recipe, 4)).isTrue();
+        assertThat(context.startCrafting(recipe, 4)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 4)).isTrue();
+        assertThat(total(output, Items.IRON_INGOT)).isEqualTo(64);
+    }
+
+    @Test
+    void partialItemAndFluidOutputsDoNotLeakWhenStrictOutputFails() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        SmartInterfaceBlockEntity smartInterface = smartInterface(new BlockPos(2, 0, 0));
+        setBlockEntityLevel(smartInterface, controllerWithComponents(output).getLevel());
+        MachineControllerBlockEntity controller = controllerWithComponents(output, smartInterface);
+        MachineRecipe recipe = partialRequirementRecipe("partial_strict_output_atomic", List.of(
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_INGOT.getDefaultInstance()),
+                SmartInterfaceRequirement.output("mode", 9F)
+        ));
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isFalse();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isFalse();
+        assertThat(total(output, Items.IRON_INGOT)).isZero();
+    }
+
+    @Test
     void item_input_modifier_changes_runtime_consumption_without_mutating_recipe() {
         bindItemComponents(Items.IRON_INGOT);
         ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 0, 0));
@@ -1243,6 +1447,34 @@ class RecipeCraftingContextTest {
                 List.of(),
                 requirements
         );
+    }
+
+    private static MachineRecipe partialRequirementRecipe(String path, List<cn.howxu.mmcr.api.recipe.requirement.MachineRequirement> requirements) {
+        return new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", path),
+                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                20,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                requirements,
+                false,
+                List.of(),
+                true
+        );
+    }
+
+    private static int total(ItemOutputBusBlockEntity bus, Item item) {
+        int total = 0;
+        for (int slot = 0; slot < bus.getItemStackHandler(null).getSlots(); slot++) {
+            ItemStack stack = bus.getItemStackHandler(null).getStackInSlot(slot);
+            if (stack.is(item)) total += stack.getCount();
+        }
+        return total;
     }
 
     @SuppressWarnings({"removal", "unchecked"})

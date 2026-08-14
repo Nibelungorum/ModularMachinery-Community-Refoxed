@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -137,6 +138,27 @@ class RecipeSearchTaskTest {
     }
 
     @Test
+    void computeDoesNotLowerParallelismForPartialOutputCapacity() throws Exception {
+        Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 0, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(8));
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(2, 0, 0));
+        output.getItemStackHandler(null).setStackInSlot(0, Items.GOLD_INGOT.getDefaultInstance().copyWithCount(44));
+        MachineControllerBlockEntity controller = controllerWithComponents(input, output);
+        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        MachineRecipe recipe = partialOutputRecipe("partial_output_parallel", machineId,
+                List.of(itemInput(Items.IRON_INGOT, 2)),
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                        Items.GOLD_INGOT.getDefaultInstance().copyWithCount(64))));
+
+        RecipeSearchResult result = new RecipeSearchTask(controller, machineId, 19, 16, List.of(recipe), pool).compute();
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.activeRecipe().getParallelism()).isEqualTo(4);
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(44);
+    }
+
+    @Test
     void computeKeepsExactNonTierMaxParallelismAndAppliesStartableParallelism() throws Exception {
         Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
         ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
@@ -225,6 +247,28 @@ class RecipeSearchTaskTest {
         return new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(item), count, ItemStack.EMPTY);
     }
 
+    private static MachineRecipe partialOutputRecipe(String path, Identifier machineId, List<ItemRequirement> inputs,
+                                                     List<ItemRequirement> outputs) {
+        List<cn.howxu.mmcr.api.recipe.requirement.MachineRequirement> requirements = new ArrayList<>();
+        requirements.addAll(inputs);
+        requirements.addAll(outputs);
+        return new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", path),
+                machineId,
+                20,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                requirements,
+                true,
+                List.of(),
+                true);
+    }
+
     private static MachineRecipe recipeWithLevels(String path, Identifier machineId, Item item, int priority,
                                                   List<LevelRequirement> levelRequirements) {
         return new MachineRecipe(Identifier.fromNamespaceAndPath("mmcr", path), machineId, 20,
@@ -244,6 +288,18 @@ class RecipeSearchTaskTest {
         unsafeField.setAccessible(true);
         sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
         ItemInputBusBlockEntity bus = (ItemInputBusBlockEntity) unsafe.allocateInstance(ItemInputBusBlockEntity.class);
+        setField(BlockEntity.class, bus, "type", null);
+        setField(BlockEntity.class, bus, "worldPosition", pos);
+        setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
+        setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
+        return bus;
+    }
+
+    private static ItemOutputBusBlockEntity itemOutputBus(BlockPos pos) throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+        ItemOutputBusBlockEntity bus = (ItemOutputBusBlockEntity) unsafe.allocateInstance(ItemOutputBusBlockEntity.class);
         setField(BlockEntity.class, bus, "type", null);
         setField(BlockEntity.class, bus, "worldPosition", pos);
         setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
