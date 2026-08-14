@@ -54,6 +54,7 @@ public final class DefaultRecipes {
     private static final Identifier REACTOR_ID = MMCR.id("reactor");
     private static final Identifier THERMAL_SMELTING_FURNACE_ID = MMCR.id("thermal_smelting_furnace");
     private static final Identifier PURPUR_FURNACE_ID = MMCR.id("purpur_furnace");
+    private static final Identifier DISTILLATION_TOWER_TEST_ID = MMCR.id("distillation_tower_test");
 
     private DefaultRecipes() {
     }
@@ -78,6 +79,10 @@ public final class DefaultRecipes {
             recipes.put(recipe.id(), recipe);
         }
         return Map.copyOf(recipes);
+    }
+
+    public static List<MachineRecipe> gameTestRecipes() {
+        return List.of(distillationTowerTestRecipe());
     }
 
     public static void registerStatic(List<MachineRecipe> recipes) {
@@ -323,6 +328,16 @@ public final class DefaultRecipes {
                         SmartInterfaceRequirement.input("Mode", 1F),
                         SmartInterfaceRequirement.input("Temperature", 5200F),
                         SmartInterfaceRequirement.input("ConversionRate", 1F)));
+    }
+
+    private static MachineRecipe distillationTowerTestRecipe() {
+        return new MachineRecipe(MMCR.id("distillation_tower_test_shared"), DISTILLATION_TOWER_TEST_ID, 20,
+                List.of(itemInput(Items.COAL, 1), energyInput(10)), List.of(), List.of(), 0, 1, true,
+                List.of(
+                        fluidOutput(Fluids.WATER, 1_000),
+                        fluidOutput(Fluids.LAVA, 1_000),
+                        fluidOutput(Fluids.WATER, 1_000)),
+                List.of(), true, List.of(), true);
     }
 
     private static MachineRecipe purpurFurnaceRecipe(String path, int ticks, int energyPerTick, Item output, int count,

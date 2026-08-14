@@ -80,7 +80,7 @@ public final class BlockArrayCache {
         for (var entry : key.pattern().tagsByPosition().entrySet()) {
             rotatedTags.put(BlockRotator.rotateSouthTo(entry.getKey(), key.facing(), key.rollFacing()), entry.getValue());
         }
-        return new BlockArray(Map.copyOf(rotated), Map.copyOf(rotatedTags));
+        return new BlockArray(rotated, rotatedTags);
     }
 
     private static void add(Map<Key, BlockArray> cache, BlockArray pattern, Direction facing) {

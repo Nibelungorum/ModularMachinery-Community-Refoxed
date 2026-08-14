@@ -17,7 +17,8 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
     }
 
     public BlockArray {
-        tagsByPosition = tagsByPosition == null ? Map.of() : Map.copyOf(tagsByPosition);
+        pattern = Collections.unmodifiableMap(new LinkedHashMap<>(pattern));
+        tagsByPosition = tagsByPosition == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(tagsByPosition));
     }
 
     public @Nullable BlockPredicate get(BlockPos pos) {
@@ -203,7 +204,7 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
                 entries.clear();
                 entries.putAll(normalized);
             }
-            return new BlockArray(Map.copyOf(entries));
+            return new BlockArray(entries);
         }
     }
 }

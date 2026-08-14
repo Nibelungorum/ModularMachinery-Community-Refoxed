@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Collections;
 
 /**
  * Server-reloadable structure data for an already registered startup machine.
@@ -96,10 +97,10 @@ public record MachineStructureDefinition(Identifier machineId, List<Declaration>
         public Declaration {
             Objects.requireNonNull(kind, "kind");
             Objects.requireNonNull(pattern, "pattern");
-            pattern = new BlockArray(Map.copyOf(pattern.pattern()), copyStringMap(pattern.tagsByPosition()));
+            pattern = new BlockArray(pattern.pattern(), copyStringMap(pattern.tagsByPosition()));
             dynamicPatterns = List.copyOf(dynamicPatterns == null ? List.of() : dynamicPatterns);
             modifierReplacements = copyNestedMap(modifierReplacements == null ? Map.of() : modifierReplacements);
-            levelSlots = Map.copyOf(levelSlots == null ? Map.of() : levelSlots);
+            levelSlots = copyMap(levelSlots == null ? Map.of() : levelSlots);
         }
 
         public static Declaration full(BlockArray pattern) {
@@ -115,13 +116,17 @@ public record MachineStructureDefinition(Identifier machineId, List<Declaration>
                 Map<BlockPos, List<SingleBlockModifierReplacement>> source) {
             Map<BlockPos, List<SingleBlockModifierReplacement>> copy = new LinkedHashMap<>();
             source.forEach((position, values) -> copy.put(position, List.copyOf(values)));
-            return Map.copyOf(copy);
+            return Collections.unmodifiableMap(copy);
         }
 
         private static Map<BlockPos, List<String>> copyStringMap(Map<BlockPos, List<String>> source) {
             Map<BlockPos, List<String>> copy = new LinkedHashMap<>();
             source.forEach((position, values) -> copy.put(position, List.copyOf(values)));
-            return Map.copyOf(copy);
+            return Collections.unmodifiableMap(copy);
+        }
+
+        private static <T> Map<BlockPos, T> copyMap(Map<BlockPos, T> source) {
+            return Collections.unmodifiableMap(new LinkedHashMap<>(source));
         }
 
         public enum Kind {

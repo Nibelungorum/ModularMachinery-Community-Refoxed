@@ -127,6 +127,8 @@ public final class LevelStub {
             var level = (TestLevel) unsafe().allocateInstance(TestLevel.class);
             level.blocks = new HashMap<>(blocks);
             level.directSignals = new HashMap<>();
+            level.blockEntities = Map.of();
+            level.random = RandomSource.create(0L);
             Field registryAccess = Level.class.getDeclaredField("registryAccess");
             registryAccess.setAccessible(true);
             registryAccess.set(level, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));

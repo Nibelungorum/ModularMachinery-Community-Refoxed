@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Collections;
 
 /**
  * Immutable full snapshot of one publicly visible structure stage.
@@ -28,15 +29,15 @@ public record MachineStructureStage(
         Objects.requireNonNull(pattern, "pattern");
         Objects.requireNonNull(portRequirements, "portRequirements");
         Objects.requireNonNull(portTierRequirements, "portTierRequirements");
-        pattern = new BlockArray(Map.copyOf(pattern.pattern()), copyNestedMap(pattern.tagsByPosition()));
+        pattern = new BlockArray(pattern.pattern(), copyNestedMap(pattern.tagsByPosition()));
         dynamicPatterns = List.copyOf(dynamicPatterns);
         modifierReplacements = copyNestedMap(modifierReplacements);
-        levelSlots = Map.copyOf(levelSlots);
+        levelSlots = Collections.unmodifiableMap(new LinkedHashMap<>(levelSlots));
     }
 
     private static <T> Map<BlockPos, List<T>> copyNestedMap(Map<BlockPos, List<T>> source) {
         Map<BlockPos, List<T>> copy = new LinkedHashMap<>();
         source.forEach((position, values) -> copy.put(position, List.copyOf(values)));
-        return Map.copyOf(copy);
+        return Collections.unmodifiableMap(copy);
     }
 }

@@ -157,6 +157,7 @@ public class MMCR {
             registerGameTestMachineStructuresIfPresent(candidate);
         });
         DefaultRecipes.registerStatic(DefaultRecipes.recipes().values().stream().toList());
+        registerGameTestRecipesIfPresent();
         MachineRegistry.rebuildCompiledCache();
     }
 
@@ -190,10 +191,23 @@ public class MMCR {
         registerGameTestMachineDefinitions();
     }
 
+    static void registerGameTestRecipesIfPresent() {
+        try {
+            Class.forName("cn.howxu.mmcr.GameTestRegistry");
+        } catch (ClassNotFoundException ignored) {
+            return;
+        }
+        DefaultRecipes.registerStatic(DefaultRecipes.gameTestRecipes());
+    }
+
     public static void registerGameTestMachineDefinitions() {
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("test_cube")).displayNameKey("machine.mmcr.test_cube").build());
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("controller_tick")).displayNameKey("machine.mmcr.controller_tick").build());
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("iron_compressor")).displayNameKey("machine.mmcr.iron_compressor").build());
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("distillation_tower_test"))
+                .displayNameKey("machine.mmcr.distillation_tower_test")
+                .expandableStructure()
+                .build());
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("expandable_structure_stages"))
                 .displayNameKey("machine.mmcr.expandable_structure_stages")
                 .expandableStructure()
@@ -220,6 +234,8 @@ public class MMCR {
         candidate.registerStructure(new MachineStructureDefinition(
                 id("iron_compressor"), org.nibelungorum.TestMachines.ironCompressorPattern(),
                 cn.howxu.mmcr.api.machine.PortRequirementSpec.none(), java.util.List.of(), java.util.Map.of()));
+        candidate.registerStructure(new MachineStructureDefinition(
+                id("distillation_tower_test"), org.nibelungorum.TestMachines.distillationTowerDeclarations()));
         candidate.registerStructure(new MachineStructureDefinition(
                 id("expandable_structure_stages"), org.nibelungorum.TestMachines.expandableStageDeclarations()));
         candidate.registerStructure(new MachineStructureDefinition(
