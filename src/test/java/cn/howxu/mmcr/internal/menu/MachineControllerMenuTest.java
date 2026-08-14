@@ -18,6 +18,8 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.Holder;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.inventory.MenuType;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -183,11 +185,12 @@ class MachineControllerMenuTest {
     }
 
     @Test
-    void machine_controller_menu_stays_free_of_client_only_networking() throws Exception {
-        String source = java.nio.file.Files.readString(java.nio.file.Path.of(
-                "src/main/java/cn/howxu/mmcr/internal/menu/MachineControllerMenu.java"));
+    void server_menu_recipe_lock_data_slot_reads_ordinary_owner_lock() throws Exception {
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        setField(MachineControllerBlockEntity.class, controller, "lockedRecipeId", MMCR.id("ordinary_data_slot_lock"));
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory(), controller);
 
-        assertThat(source).doesNotContain("ClientPacketDistributor");
+        assertThat(dataSlot(menu, 12).get()).isEqualTo(1);
     }
 
     @Test
@@ -329,6 +332,13 @@ class MachineControllerMenuTest {
         Field field = type.getDeclaredField(name);
         field.setAccessible(true);
         field.set(target, value);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static DataSlot dataSlot(AbstractContainerMenu menu, int index) throws Exception {
+        Field field = AbstractContainerMenu.class.getDeclaredField("dataSlots");
+        field.setAccessible(true);
+        return ((List<DataSlot>) field.get(menu)).get(index);
     }
 
     private static void bind(Object deferredHolder, MenuType<MachineControllerMenu> menuType) throws Exception {

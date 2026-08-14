@@ -44,7 +44,7 @@ final class ControllerMenuState {
         return menu.addControllerDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
             @Override public int get() {
                 var factory = owner.getFactoryController();
-                if (factory == null) return 0;
+                if (factory == null) return owner.recipeLocked() ? 1 : 0;
                 return factory.threadSnapshots(owner).stream().findFirst()
                         .map(thread -> thread.locked() ? 1 : 0).orElse(0);
             }

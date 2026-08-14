@@ -438,7 +438,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     public void sendRecipeLockState(ServerPlayer player) {
         if (player == null) return;
-        broadcastStateIfChanged(isRuntimeActive());
+        player.connection.send(new ClientboundCustomPayloadPacket(machineStatePayload(isRuntimeActive())));
     }
 
     public boolean hasFactoryController() {
@@ -1444,12 +1444,21 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         lastBroadcastLockedRecipeId = lockedRecipe;
         if (!(level instanceof ServerLevel sl)) return;
         String name = active == null ? "" : active.getRecipe().id().toString();
-        var pkt = new PktMachineStatePayload(getBlockPos(), name, formed, activeNow,
-                foundLevels.values().stream().map(foundLevel -> foundLevel.id().toString()).toList(),
-                recipeLocked, lockedRecipe);
+        var pkt = machineStatePayload(activeNow);
         for (var player : sl.getPlayers(p -> p.distanceToSqr(getBlockPos().getCenter()) < 64 * 64)) {
             ((ServerPlayer) player).connection.send(new ClientboundCustomPayloadPacket(pkt));
         }
+    }
+
+    private PktMachineStatePayload machineStatePayload(boolean activeNow) {
+        var factory = getFactoryController();
+        var thread = factory == null ? null : factory.threadSnapshots(this).getFirst();
+        boolean recipeLocked = thread == null ? lockedRecipeId != null : thread.locked();
+        String lockedRecipe = thread == null ? lockedRecipeId == null ? "" : lockedRecipeId.toString() : thread.lockedRecipeId();
+        String name = active == null ? "" : active.getRecipe().id().toString();
+        return new PktMachineStatePayload(getBlockPos(), name, isFormed(), activeNow,
+                foundLevels.values().stream().map(foundLevel -> foundLevel.id().toString()).toList(),
+                recipeLocked, lockedRecipe);
     }
 
     private boolean tryStartNewRecipe() {
