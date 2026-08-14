@@ -104,4 +104,35 @@ class MultiblockPreviewBuilderTest {
 
         assertEquals(1, snapshot.entries().size());
     }
+
+    @Test
+    void build_keeps_each_machine_own_coupler_without_rendering_the_other_structure() {
+        var level = LevelStub.create(Map.of());
+        var controller = new BlockPos(0, 64, 0);
+        var hostCoupler = new BlockPos(1, 0, 0);
+        var moduleCoupler = new BlockPos(-1, 0, 0);
+        var hostOnly = new BlockPos(2, 0, 0);
+        var moduleOnly = new BlockPos(-2, 0, 0);
+        var hostPattern = new BlockArray(Map.of(
+                hostCoupler, BlockPredicate.machineCoupler(),
+                hostOnly, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+        var modulePattern = new BlockArray(Map.of(
+                moduleCoupler, BlockPredicate.machineCoupler(),
+                moduleOnly, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK)));
+
+        var hostSnapshot = MultiblockPreviewBuilder.build(level, controller, hostPattern, 8192);
+        var moduleSnapshot = MultiblockPreviewBuilder.build(level, controller, modulePattern, 8192);
+
+        assertEquals(Map.of(
+                hostCoupler, ModBlocks.MODULE_BRIDGE.get().defaultBlockState(),
+                hostOnly, Blocks.IRON_BLOCK.defaultBlockState()), entriesByPosition(hostSnapshot));
+        assertEquals(Map.of(
+                moduleCoupler, ModBlocks.MODULE_BRIDGE.get().defaultBlockState(),
+                moduleOnly, Blocks.GOLD_BLOCK.defaultBlockState()), entriesByPosition(moduleSnapshot));
+    }
+
+    private static Map<BlockPos, net.minecraft.world.level.block.state.BlockState> entriesByPosition(MultiblockPreviewSnapshot snapshot) {
+        return snapshot.entries().stream().collect(java.util.stream.Collectors.toMap(
+                MultiblockPreviewSnapshot.Entry::relativePos, MultiblockPreviewSnapshot.Entry::state));
+    }
 }

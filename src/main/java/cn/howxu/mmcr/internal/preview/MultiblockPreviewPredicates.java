@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.preview;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
+import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -37,6 +38,10 @@ public final class MultiblockPreviewPredicates {
             case BlockPredicate.OfBlock ofBlock -> Optional.of(ofBlock.block().defaultBlockState());
             default -> Optional.empty();
         };
+    }
+
+    public static Optional<BlockState> machineCouplerState() {
+        return Optional.of(ModBlocks.MODULE_BRIDGE.get().defaultBlockState());
     }
 
     private static boolean hasRepresentableBlock(BlockPredicate predicate) {

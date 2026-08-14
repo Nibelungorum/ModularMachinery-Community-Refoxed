@@ -185,6 +185,18 @@ class ModuleConnectionCoordinatorTest {
         assertThat(fixture.coupler().connectedModule()).contains(GlobalPos.of(Level.OVERWORLD, fixture.modulePos()));
     }
 
+    @Test
+    void installed_module_count_drops_when_the_module_chunk_is_unloaded() throws Exception {
+        FormationFixture fixture = formedFixture(HOST_ID, MODULE_ID, true, true, false, null);
+
+        ModuleConnectionCoordinator.refresh(fixture.level(), fixture.couplerPos());
+        assertThat(ModuleConnectionCoordinator.installedModuleCount(fixture.host())).isEqualTo(1);
+
+        fixture.level().chunksLoaded = false;
+
+        assertThat(ModuleConnectionCoordinator.installedModuleCount(fixture.host())).isZero();
+    }
+
     private static FormationFixture formedFixture(Identifier hostId, Identifier moduleId, boolean hostFormed,
                                                   boolean moduleFormed, boolean sharedInterface,
                                                   BlockPos moduleCouplerOverride) throws Exception {
