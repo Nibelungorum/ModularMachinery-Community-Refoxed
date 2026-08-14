@@ -694,6 +694,74 @@ class RecipeCraftingContextTest {
     }
 
     @Test
+    void partialRecipeDefersSmartInterfaceOutputUntilCompletion() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        SmartInterfaceBlockEntity smart = smartInterface(new BlockPos(2, 0, 0));
+        smart.claimController(BlockPos.ZERO, MMCR.id("test_machine"), Map.of(
+                "mode", new SmartInterfaceType("mode", 1F, 0)), true);
+        MachineControllerBlockEntity controller = controllerWithComponents(output, smart);
+        MachineRecipe recipe = partialRequirementRecipe("partial_defers_smart_output_until_finish", List.of(
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_INGOT.getDefaultInstance()),
+                SmartInterfaceRequirement.output("mode", 9F)
+        ));
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.startCrafting(recipe)).isTrue();
+        assertThat(smart.value("mode")).contains(1F);
+        assertThat(total(output, Items.IRON_INGOT)).isZero();
+
+        assertThat(context.finishCrafting(recipe)).isTrue();
+        assertThat(smart.value("mode")).contains(9F);
+        assertThat(total(output, Items.IRON_INGOT)).isEqualTo(1);
+    }
+
+    @Test
+    void partialRecipeDoesNotLeakSmartInterfaceOutputWhenCompletionFails() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        SmartInterfaceBlockEntity smart = failingSmartInterface(new BlockPos(2, 0, 0), "mode");
+        smart.claimController(BlockPos.ZERO, MMCR.id("test_machine"), Map.of(
+                "mode", new SmartInterfaceType("mode", 1F, 0)), true);
+        MachineControllerBlockEntity controller = controllerWithComponents(output, smart);
+        MachineRecipe recipe = partialRequirementRecipe("partial_completion_failure_keeps_smart_output", List.of(
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_INGOT.getDefaultInstance()),
+                SmartInterfaceRequirement.output("mode", 9F)
+        ));
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.startCrafting(recipe)).isTrue();
+        assertThat(smart.value("mode")).contains(1F);
+
+        assertThat(context.finishCrafting(recipe)).isFalse();
+        assertThat(smart.value("mode")).contains(1F);
+        assertThat(total(output, Items.IRON_INGOT)).isZero();
+    }
+
+    @Test
+    void strictRecipeAlsoDefersSmartInterfaceOutputUntilCompletion() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        SmartInterfaceBlockEntity smart = smartInterface(new BlockPos(2, 0, 0));
+        smart.claimController(BlockPos.ZERO, MMCR.id("test_machine"), Map.of(
+                "mode", new SmartInterfaceType("mode", 1F, 0)), true);
+        MachineControllerBlockEntity controller = controllerWithComponents(output, smart);
+        MachineRecipe recipe = explicitRequirementRecipe("strict_defers_smart_output_until_finish", List.of(
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_INGOT.getDefaultInstance()),
+                SmartInterfaceRequirement.output("mode", 9F)
+        ));
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.startCrafting(recipe)).isTrue();
+        assertThat(smart.value("mode")).contains(1F);
+        assertThat(total(output, Items.IRON_INGOT)).isZero();
+
+        assertThat(context.finishCrafting(recipe)).isTrue();
+        assertThat(smart.value("mode")).contains(9F);
+        assertThat(total(output, Items.IRON_INGOT)).isEqualTo(1);
+    }
+
+    @Test
     void item_input_modifier_changes_runtime_consumption_without_mutating_recipe() {
         bindItemComponents(Items.IRON_INGOT);
         ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 0, 0));

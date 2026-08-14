@@ -1084,12 +1084,6 @@ public final class RecipeCraftingContext {
         List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism, plan);
         if (!simulateStartRequirements(recipe, requirements, plan)) return false;
         if (!commitInputs(requirements)) return false;
-        for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
-            MachineRequirement requirement = requirements.get(requirementIndex);
-            if (requirement instanceof SmartInterfaceRequirement smartInterface
-                    && smartInterface.io() == RecipeModifier.IOType.OUTPUT
-                    && !smartInterface.commit(this, requirementIndex)) return false;
-        }
         return true;
     }
 

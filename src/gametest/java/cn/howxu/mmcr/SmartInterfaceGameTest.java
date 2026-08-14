@@ -60,8 +60,11 @@ public class SmartInterfaceGameTest {
                 SmartInterfaceRequirement.input(type, 10F, 20F), SmartInterfaceRequirement.output(type, 42F))));
         controller.serverTick();
 
+        helper.assertTrue(smartInterface.bindingFor(controllerWorldPos).map(binding -> binding.value() == 15F).orElse(false),
+                "Recipe output does not write the smart interface value when it starts");
+        for (int tick = 0; tick < 25; tick++) controller.serverTick();
         helper.assertTrue(smartInterface.bindingFor(controllerWorldPos).map(binding -> binding.value() == 42F).orElse(false),
-                "Recipe output writes the smart interface value when it starts");
+                "Recipe output writes the smart interface value when it finishes");
         helper.succeed();
     }
 }
