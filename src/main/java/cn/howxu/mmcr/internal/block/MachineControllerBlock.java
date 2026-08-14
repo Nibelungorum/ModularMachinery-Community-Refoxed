@@ -138,6 +138,7 @@ public class MachineControllerBlock extends Block implements EntityBlock {
             return new FactoryControllerMenu(containerId, playerInventory, controller,
                     player instanceof ServerPlayer serverPlayer ? serverPlayer : null);
         }
+        if (controller != null && player instanceof ServerPlayer serverPlayer) controller.sendRecipeLockState(serverPlayer);
         return new MachineControllerMenu(containerId, playerInventory, controller);
     }
 

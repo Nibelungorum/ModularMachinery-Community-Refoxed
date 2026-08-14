@@ -113,6 +113,11 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
                         ? FactoryRecipeScheduler.ThreadSnapshot.idleBase() : snapshot.threads().getFirst());
     }
 
+    public boolean selectedRecipeLocked() { return selectedThread().locked(); }
+    public String selectedLockedRecipeId() { return selectedThread().lockedRecipeId(); }
+
+    public int selectedThreadIndex() { return selectedThread().index(); }
+
     public void selectThread(int index) {
         if (snapshot.threads().stream().anyMatch(thread -> thread.index() == index)) selectedThreadIndex = index;
     }

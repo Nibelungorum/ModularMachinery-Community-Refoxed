@@ -114,6 +114,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private boolean clientActive;
     private Boolean lastBroadcastFormed;
     private boolean lastBroadcastActive;
+    private boolean lastBroadcastRecipeLocked;
+    private String lastBroadcastLockedRecipeId = "";
+    private @Nullable Identifier lockedRecipeId;
     private @Nullable String lastFailureUnloc;
     private @Nullable LevelInsufficientFailure recipeFailure;
     private @Nullable PortRequirementSpec.Failure lastFormationFailure;
@@ -259,7 +262,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     public boolean isRedstonePaused() { return redstonePaused; }
 
-    public void applyClientState(String recipeName, boolean formed, boolean active, List<String> foundLevelIds) {
+    public void applyClientState(String recipeName, boolean formed, boolean active, List<String> foundLevelIds,
+                                 boolean recipeLocked, String lockedRecipeId) {
         if (level == null || !level.isClientSide()) return;
         if (isFormed() != formed) {
             level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.FORMED, formed), 3);
@@ -274,9 +278,24 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             if (foundLevel != null) levels.put(foundLevel.typeId(), foundLevel);
         }
         this.foundLevels = Map.copyOf(levels);
+        this.clientRecipeLocked = recipeLocked;
+        this.clientLockedRecipeId = recipeLocked && lockedRecipeId != null ? lockedRecipeId : "";
+    }
+
+    public void applyClientState(String recipeName, boolean formed, boolean active, List<String> foundLevelIds) {
+        applyClientState(recipeName, formed, active, foundLevelIds, false, "");
     }
 
     public boolean hasClientActiveRecipe() { return clientActive; }
+
+    private boolean clientRecipeLocked;
+    private String clientLockedRecipeId = "";
+
+    public boolean hasClientRecipeLock() { return clientRecipeLocked; }
+    public String clientLockedRecipeId() { return clientLockedRecipeId; }
+
+    public boolean recipeLocked() { return lockedRecipeId != null; }
+    public @Nullable Identifier lockedRecipeId() { return lockedRecipeId; }
 
     public boolean isRuntimeActive() {
         if (level != null && level.isClientSide()) return clientActive || getBlockState().getValue(MachineControllerBlock.ACTIVE);
@@ -394,6 +413,32 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             }
         }
         return null;
+    }
+
+    public boolean toggleFactoryRecipeLock(int threadIndex) {
+        FactorySchedulerBlockEntity factory = getFactoryController();
+        if (factory != null) {
+            boolean toggled = factory.toggleRecipeLock(this, threadIndex);
+            if (toggled) setChanged();
+            return toggled;
+        }
+        if (threadIndex != 0) return false;
+        if (lockedRecipeId != null) {
+            lockedRecipeId = null;
+            setChanged();
+            return true;
+        }
+        ActiveMachineRecipe recipe = active == null ? pausedActive : active;
+        RecipeCraftingContext recipeContext = active == null ? pausedContext : context;
+        if (recipe == null || recipeContext == null || recipe.getRecipe() == null) return false;
+        lockedRecipeId = recipe.getRecipe().id();
+        setChanged();
+        return true;
+    }
+
+    public void sendRecipeLockState(ServerPlayer player) {
+        if (player == null) return;
+        player.connection.send(new ClientboundCustomPayloadPacket(machineStatePayload(isRuntimeActive())));
     }
 
     public boolean hasFactoryController() {
@@ -1384,18 +1429,36 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private void broadcastStateIfChanged(boolean activeBeforeTick) {
         boolean formed = isFormed();
         boolean activeNow = isRuntimeActive();
-        if (lastBroadcastFormed != null && lastBroadcastFormed == formed && lastBroadcastActive == activeNow && activeBeforeTick == activeNow) {
+        var factory = getFactoryController();
+        var thread = factory == null ? null : factory.threadSnapshots(this).getFirst();
+        boolean recipeLocked = thread == null ? lockedRecipeId != null : thread.locked();
+        String lockedRecipe = thread == null ? lockedRecipeId == null ? "" : lockedRecipeId.toString() : thread.lockedRecipeId();
+        if (lastBroadcastFormed != null && !PktMachineStatePayload.stateChanged(formed, activeNow, recipeLocked, lockedRecipe,
+                lastBroadcastFormed, lastBroadcastActive, lastBroadcastRecipeLocked, lastBroadcastLockedRecipeId)
+                && activeBeforeTick == activeNow) {
             return;
         }
         lastBroadcastFormed = formed;
         lastBroadcastActive = activeNow;
+        lastBroadcastRecipeLocked = recipeLocked;
+        lastBroadcastLockedRecipeId = lockedRecipe;
         if (!(level instanceof ServerLevel sl)) return;
         String name = active == null ? "" : active.getRecipe().id().toString();
-        var pkt = new PktMachineStatePayload(getBlockPos(), name, formed, activeNow,
-                foundLevels.values().stream().map(foundLevel -> foundLevel.id().toString()).toList());
+        var pkt = machineStatePayload(activeNow);
         for (var player : sl.getPlayers(p -> p.distanceToSqr(getBlockPos().getCenter()) < 64 * 64)) {
             ((ServerPlayer) player).connection.send(new ClientboundCustomPayloadPacket(pkt));
         }
+    }
+
+    private PktMachineStatePayload machineStatePayload(boolean activeNow) {
+        var factory = getFactoryController();
+        var thread = factory == null ? null : factory.threadSnapshots(this).getFirst();
+        boolean recipeLocked = thread == null ? lockedRecipeId != null : thread.locked();
+        String lockedRecipe = thread == null ? lockedRecipeId == null ? "" : lockedRecipeId.toString() : thread.lockedRecipeId();
+        String name = active == null ? "" : active.getRecipe().id().toString();
+        return new PktMachineStatePayload(getBlockPos(), name, isFormed(), activeNow,
+                foundLevels.values().stream().map(foundLevel -> foundLevel.id().toString()).toList(),
+                recipeLocked, lockedRecipe);
     }
 
     private boolean tryStartNewRecipe() {
@@ -1408,7 +1471,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         RecipeSearchResult result;
         try {
             result = new RecipeSearchTask(this, machineId, structureVersion, getMaxParallelism(), candidates,
-                    contextPool(), cachedCandidateIndex).compute();
+                    contextPool(), cachedCandidateIndex, lockedRecipeId).compute();
         } catch (RuntimeException e) {
             LOG.warn("[Ctrl#{}] tryStartNewRecipe: recipe search failed at pos={}; retrying later", instanceId, getBlockPos(), e);
             clearPendingConflictStart();
@@ -1526,6 +1589,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private boolean tryRestartLastRecipe(Identifier machineId) {
         if (recipeDirty || lastRecipe == null || active != null || foundMachine == null) return false;
         if (!machineId.equals(lastRecipe.machineId())) return false;
+        if (lockedRecipeId != null && !lockedRecipeId.equals(lastRecipe.id())) return false;
         if (lastRecipeStructureVersion != structureVersion || lastRecipeModifierSnapshotVersion != modifierSnapshotVersion) return false;
         ActiveMachineRecipe next = new ActiveMachineRecipe(lastRecipe, getMaxParallelism());
         RecipeCraftingContext nextContext = contextPool().borrow(next, this);
@@ -1922,6 +1986,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             pausedActive.serialize(output.child("active_recipe"));
             pausedContext.serialize(output.child("active_context"));
         }
+        if (lockedRecipeId != null) output.putString("locked_recipe", lockedRecipeId.toString());
     }
 
     @Override
@@ -1931,6 +1996,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         pausedContext = null;
         restoredRecipeContext = false;
         redstonePaused = false;
+        lockedRecipeId = null;
         active = null;
         context = null;
         Map<Identifier, MachineLevel> restoredLevels = new LinkedHashMap<>();
@@ -1940,6 +2006,11 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         });
         foundLevels = Map.copyOf(restoredLevels);
         lastFailureUnloc = null;
+        String lockedRecipeName = input.getStringOr("locked_recipe", "");
+        if (!lockedRecipeName.isEmpty()) {
+            Identifier restoredLock = Identifier.parse(lockedRecipeName);
+            if (RecipeRegistry.getRecipe(restoredLock) != null) lockedRecipeId = restoredLock;
+        }
         String recipeState = input.getStringOr("recipe_state", input.getBooleanOr("has_active", false) ? "active" : "");
         if (recipeState.isEmpty()) return;
         if (!input.getBooleanOr("has_recipe_context", false)) {

@@ -163,6 +163,13 @@ public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
         scheduler.ensureBaseThread(controller, null);
     }
 
+    public boolean toggleRecipeLock(MachineControllerBlockEntity controller, int threadIndex) {
+        ensureBaseThreadFor(controller);
+        boolean toggled = scheduler.toggleRecipeLock(threadIndex);
+        if (toggled) setChanged();
+        return toggled;
+    }
+
     public void syncCoreThreads(MachineControllerBlockEntity controller, Machine machine,
                                 List<MachineRecipe> candidates, RecipeCraftingContextPool contextPool) {
         boolean wasActive = scheduler.activeThreadCount() > 0;

@@ -18,6 +18,8 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.Holder;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.inventory.MenuType;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -163,6 +165,46 @@ class MachineControllerMenuTest {
     }
 
     @Test
+    void client_menu_updates_base_recipe_lock_from_synced_data_slot() {
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory());
+
+        assertThat(menu.recipeLocked()).isFalse();
+        menu.setData(12, 1);
+        assertThat(menu.recipeLocked()).isTrue();
+        assertThat(menu.lockedRecipeId()).isNull();
+    }
+
+    @Test
+    void server_menu_exposes_ordinary_controller_recipe_lock_and_full_id() throws Exception {
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        setField(MachineControllerBlockEntity.class, controller, "lockedRecipeId", MMCR.id("ordinary_menu_locked_recipe"));
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory(), controller);
+
+        assertThat(menu.recipeLocked()).isTrue();
+        assertThat(menu.lockedRecipeId()).isEqualTo("mmcr:ordinary_menu_locked_recipe");
+    }
+
+    @Test
+    void server_menu_recipe_lock_data_slot_reads_ordinary_owner_lock() throws Exception {
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        setField(MachineControllerBlockEntity.class, controller, "lockedRecipeId", MMCR.id("ordinary_data_slot_lock"));
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory(), controller);
+
+        assertThat(dataSlot(menu, 12).get()).isEqualTo(1);
+    }
+
+    @Test
+    void client_menu_uses_synced_recipe_lock_when_client_controller_is_available() throws Exception {
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory(), controller.getBlockPos());
+        setField(MachineControllerMenu.class, menu, "level", LevelStub.createWithBlockEntities(List.of(controller)));
+
+        menu.setData(12, 1);
+
+        assertThat(menu.recipeLocked()).isTrue();
+    }
+
+    @Test
     void client_menu_uses_synced_parallel_data_when_the_client_controller_is_available() throws Exception {
         MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
         MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory());
@@ -290,6 +332,13 @@ class MachineControllerMenuTest {
         Field field = type.getDeclaredField(name);
         field.setAccessible(true);
         field.set(target, value);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static DataSlot dataSlot(AbstractContainerMenu menu, int index) throws Exception {
+        Field field = AbstractContainerMenu.class.getDeclaredField("dataSlots");
+        field.setAccessible(true);
+        return ((List<DataSlot>) field.get(menu)).get(index);
     }
 
     private static void bind(Object deferredHolder, MenuType<MachineControllerMenu> menuType) throws Exception {

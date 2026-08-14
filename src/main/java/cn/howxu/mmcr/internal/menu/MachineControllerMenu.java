@@ -35,6 +35,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     private final DataSlot factoryControllerPresent;
     private final DataSlot factoryThreadCount;
     private final DataSlot factoryActiveThreadCount;
+    private final DataSlot recipeLocked;
 
     public MachineControllerMenu(int containerId, Inventory playerInv, MachineControllerBlockEntity owner) {
         super(ModUIs.MACHINE_CONTROLLER.get(), containerId);
@@ -96,6 +97,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
             }
             @Override public void set(int value) {}
         });
+        this.recipeLocked = ControllerMenuState.addRecipeLockSlot(this, owner);
         addControllerPlayerSlots(playerInv);
     }
 
@@ -116,6 +118,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.factoryControllerPresent = addDataSlot(DataSlot.standalone());
         this.factoryThreadCount = addDataSlot(DataSlot.standalone());
         this.factoryActiveThreadCount = addDataSlot(DataSlot.standalone());
+        this.recipeLocked = addDataSlot(DataSlot.standalone());
         addControllerPlayerSlots(playerInv);
     }
 
@@ -254,6 +257,29 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         var factory = owner.getFactoryController();
         return factory == null ? 0 : factory.activeThreadCount();
     }
+
+    public boolean recipeLocked() {
+        if (owner == null && level != null && level.getBlockEntity(pos) instanceof MachineControllerBlockEntity controller
+                && controller.hasClientRecipeLock()) return true;
+        if (owner == null) return recipeLocked.get() != 0;
+        MachineControllerBlockEntity controller = resolvedOwner();
+        var factory = controller.getFactoryController();
+        if (factory == null) return controller.recipeLocked();
+        return factory.threadSnapshots(controller).stream().findFirst()
+                .map(FactoryRecipeScheduler.ThreadSnapshot::locked).orElse(false);
+    }
+
+    public @Nullable String lockedRecipeId() {
+        MachineControllerBlockEntity controller = resolvedOwner();
+        if (controller == null) return null;
+        if (owner == null && controller.hasClientRecipeLock()) return controller.clientLockedRecipeId();
+        var factory = controller.getFactoryController();
+        if (factory == null) return controller.lockedRecipeId() == null ? null : controller.lockedRecipeId().toString();
+        return factory.threadSnapshots(controller).stream().findFirst()
+                .map(FactoryRecipeScheduler.ThreadSnapshot::lockedRecipeId).filter(id -> !id.isEmpty()).orElse(null);
+    }
+
+    public BlockPos controllerPos() { return pos; }
 
     public long totalStoredEnergy() {
         MachineControllerBlockEntity controller = resolvedOwner();

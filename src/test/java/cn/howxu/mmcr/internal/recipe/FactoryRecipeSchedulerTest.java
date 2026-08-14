@@ -302,6 +302,65 @@ class FactoryRecipeSchedulerTest {
     }
 
     @Test
+    void lockedThreadCannotStartAnUnlockedRecipe() throws Exception {
+        MachineControllerBlockEntity controller = controller(MMCR.id("factory_locked_candidate_machine"));
+        MachineRecipe locked = recipe("factory_locked_z", 0);
+        MachineRecipe unlocked = recipe("factory_locked_a", 0);
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+        thread.setLockedRecipeId(locked.id());
+
+        assertThat(thread.searchAndStartRecipe(List.of(locked, unlocked), 1, controller.getStructureVersion())).isTrue();
+
+        assertThat(thread.getActiveRecipe().getRecipe()).isSameAs(locked);
+    }
+
+    @Test
+    void missingInputKeepsLockAndReturnsFailure() throws Exception {
+        MachineControllerBlockEntity controller = controller(MMCR.id("factory_locked_missing_input_machine"));
+        MachineRecipe locked = new MachineRecipe(MMCR.id("factory_locked_missing_input_z"), MMCR.id("factory_machine"),
+                20, List.of(), List.of(), List.of(), 0, 0, false, List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)), true);
+        MachineRecipe unlocked = recipe("factory_locked_missing_input_a", 0);
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+        thread.setLockedRecipeId(locked.id());
+
+        assertThat(thread.searchAndStartRecipe(List.of(locked, unlocked), 1, controller.getStructureVersion())).isFalse();
+
+        assertThat(thread.lockedRecipeId()).isEqualTo(locked.id());
+        assertThat(thread.getActiveRecipe()).isNull();
+    }
+
+    @Test
+    void activeLockDisablesCachedRecipeRestart() throws Exception {
+        MachineControllerBlockEntity controller = controller(MMCR.id("factory_locked_cache_machine"));
+        MachineRecipe locked = recipe("factory_locked_cache_target", 0);
+        MachineRecipe cached = recipe("factory_locked_cache_other", 0);
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+        thread.rememberLastRecipe(cached, controller.getStructureVersion(), controller.getModifierSnapshotVersion());
+        thread.setLockedRecipeId(locked.id());
+
+        assertThat(thread.tryRestartLastRecipe(List.of(cached, locked), 1,
+                controller.getStructureVersion(), controller.getModifierSnapshotVersion())).isFalse();
+    }
+
+    @Test
+    void threadSnapshotsExposeLockStateAndKeepIdlePlaceholdersUnlocked() {
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2, new RecipeCraftingContextPool());
+        FactoryRecipeThread baseThread = scheduler.allThreads().getFirst();
+        baseThread.setLockedRecipeId(MMCR.id("snapshot_locked_recipe"));
+
+        assertThat(scheduler.threadSnapshots()).satisfiesExactly(
+                snapshot -> {
+                    assertThat(snapshot.locked()).isTrue();
+                    assertThat(snapshot.lockedRecipeId()).isEqualTo("mmcr:snapshot_locked_recipe");
+                },
+                snapshot -> {
+                    assertThat(snapshot.locked()).isFalse();
+                    assertThat(snapshot.lockedRecipeId()).isEmpty();
+                });
+    }
+
+    @Test
     void failed_shared_restart_forgets_cached_recipe_and_allows_fallback_search() throws Exception {
         Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         Items.IRON_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.builder()

@@ -40,6 +40,19 @@ final class ControllerMenuState {
         addControllerPlayerSlots(menu, inventory, 8);
     }
 
+    static DataSlot addRecipeLockSlot(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {
+        return menu.addControllerDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
+            @Override public int get() {
+                var factory = owner.getFactoryController();
+                if (factory == null) return owner.recipeLocked() ? 1 : 0;
+                return factory.threadSnapshots(owner).stream().findFirst()
+                        .map(thread -> thread.locked() ? 1 : 0).orElse(0);
+            }
+
+            @Override public void set(int value) { }
+        });
+    }
+
     static void addControllerPlayerSlots(AbstractMachineMenu menu, Inventory inventory, int x) {
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {

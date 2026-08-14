@@ -46,6 +46,8 @@ public record PktFactoryControllerStatePayload(FactoryControllerSnapshot snapsho
             buf.writeVarInt(thread.totalTick());
             buf.writeVarInt(thread.parallelism());
             buf.writeUtf(thread.lastFailureUnloc());
+            buf.writeBoolean(thread.locked());
+            buf.writeUtf(thread.lockedRecipeId());
         }
     }
 
@@ -67,7 +69,8 @@ public record PktFactoryControllerStatePayload(FactoryControllerSnapshot snapsho
         List<FactoryRecipeScheduler.ThreadSnapshot> threads = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
             threads.add(new FactoryRecipeScheduler.ThreadSnapshot(buf.readVarInt(), buf.readBoolean(), buf.readBoolean(),
-                    buf.readBoolean(), buf.readUtf(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readUtf()));
+                    buf.readBoolean(), buf.readUtf(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readUtf(),
+                    buf.readBoolean(), buf.readUtf()));
         }
         return new PktFactoryControllerStatePayload(new FactoryControllerSnapshot(pos, formed, paused, active, count,
                 currentParallelism, maxParallelism, machineName, parallelSlots, lastFailure, threads));

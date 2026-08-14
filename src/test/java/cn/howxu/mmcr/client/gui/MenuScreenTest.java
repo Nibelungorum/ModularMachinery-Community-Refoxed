@@ -10,6 +10,7 @@ import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
 import cn.howxu.mmcr.internal.menu.FactorySchedulerMenu;
 import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
+import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
@@ -41,6 +42,7 @@ class MenuScreenTest {
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
         bind(ModUIs.ITEM_BUS, new MenuType<>((containerId, playerInventory) -> new ItemBusMenu(containerId, playerInventory), FeatureFlags.VANILLA_SET));
+        bind(ModUIs.MACHINE_CONTROLLER, new MenuType<>(MachineControllerMenu::clientOpen, FeatureFlags.VANILLA_SET));
     }
 
     @Test
@@ -373,6 +375,38 @@ class MenuScreenTest {
         assertThat(MachineMenuScreen.titleY(6, false, false, true)).isEqualTo(4);
     }
 
+    @Test
+    void controller_recipe_lock_button_stays_outside_inventory_and_hotbar_bounds() {
+        MachineMenuScreen.Rect button = MachineMenuScreen.recipeLockButtonRect(0, 0, 176, 213);
+        MachineMenuScreen.Rect playerInventory = new MachineMenuScreen.Rect(8, 131, 162, 54);
+        MachineMenuScreen.Rect hotbar = new MachineMenuScreen.Rect(8, 189, 162, 18);
+
+        assertThat(button.width()).isEqualTo(button.height());
+        assertThat(button.overlaps(playerInventory)).isFalse();
+        assertThat(button.overlaps(hotbar)).isFalse();
+    }
+
+    @Test
+    void controller_recipe_lock_tooltip_uses_translation_keys_and_full_recipe_id() {
+        assertThat(MachineMenuScreen.recipeLockTooltip(true, "mmcr:full_recipe_id"))
+                .extracting(component -> ((TranslatableContents) component.getContents()).getKey())
+                .containsExactly("gui.mmcr.controller.recipe_lock.enabled", "gui.mmcr.controller.recipe_lock.recipe");
+        assertThat(MachineMenuScreen.recipeLockTooltip(false, "mmcr:full_recipe_id"))
+                .extracting(component -> ((TranslatableContents) component.getContents()).getKey())
+                .containsExactly("gui.mmcr.controller.recipe_lock.disabled");
+        assertThat(((TranslatableContents) MachineMenuScreen.recipeLockTooltip(true, "mmcr:full_recipe_id").get(1).getContents()).getArgs()[0].toString())
+                .isEqualTo("literal{mmcr:full_recipe_id}");
+    }
+
+    @Test
+    void controller_recipe_lock_state_uses_full_locked_recipe_id_from_menu() {
+        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
+        menu.setData(12, 1);
+
+        assertThat(MachineMenuScreen.recipeLockTooltip(menu.recipeLocked(), "mmcr:full_recipe_id"))
+                .hasSize(2);
+    }
+
     private static Identifier screenTextureFor(AbstractContainerMenu menu, boolean autoIOPage) {
         try {
             Method method = MachineMenuScreen.class.getDeclaredMethod("textureFor", AbstractContainerMenu.class, boolean.class);
@@ -435,7 +469,7 @@ class MenuScreenTest {
         }
     }
 
-    private static void bind(Object deferredHolder, MenuType<ItemBusMenu> menuType) throws Exception {
+    private static void bind(Object deferredHolder, MenuType<?> menuType) throws Exception {
         Class<?> type = deferredHolder.getClass();
         Field holder = null;
         while (type != null && holder == null) {

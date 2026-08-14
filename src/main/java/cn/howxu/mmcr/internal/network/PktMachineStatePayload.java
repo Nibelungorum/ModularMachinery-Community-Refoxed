@@ -13,7 +13,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean formed, boolean active,
-                                     List<String> foundLevelIds) implements CustomPacketPayload {
+                                     List<String> foundLevelIds, boolean recipeLocked, String lockedRecipeId) implements CustomPacketPayload {
+
+    public static boolean stateChanged(boolean formed, boolean active, boolean recipeLocked, String lockedRecipeId,
+                                       boolean lastFormed, boolean lastActive, boolean lastRecipeLocked,
+                                       String lastLockedRecipeId) {
+        return formed != lastFormed || active != lastActive || recipeLocked != lastRecipeLocked
+                || !lockedRecipeId.equals(lastLockedRecipeId);
+    }
+
+    public PktMachineStatePayload(BlockPos pos, String recipeName, boolean formed, boolean active,
+                                  List<String> foundLevelIds) {
+        this(pos, recipeName, formed, active, foundLevelIds, false, "");
+    }
 
     public static final Type<PktMachineStatePayload> TYPE = new Type<>(MMCR.id("machine_state"));
 
@@ -22,9 +34,11 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                     BlockPos.STREAM_CODEC, PktMachineStatePayload::pos,
                     ByteBufCodecs.STRING_UTF8, PktMachineStatePayload::recipeName,
                     ByteBufCodecs.BOOL, PktMachineStatePayload::formed,
-                    ByteBufCodecs.BOOL, PktMachineStatePayload::active,
-                    ByteBufCodecs.collection(ArrayList::new, ByteBufCodecs.STRING_UTF8), PktMachineStatePayload::foundLevelIds,
-                    PktMachineStatePayload::new);
+                     ByteBufCodecs.BOOL, PktMachineStatePayload::active,
+                     ByteBufCodecs.collection(ArrayList::new, ByteBufCodecs.STRING_UTF8), PktMachineStatePayload::foundLevelIds,
+                     ByteBufCodecs.BOOL, PktMachineStatePayload::recipeLocked,
+                     ByteBufCodecs.STRING_UTF8, PktMachineStatePayload::lockedRecipeId,
+                     PktMachineStatePayload::new);
 
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
 
@@ -33,7 +47,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
             var player = ctx.player();
             if (player == null) return;
             if (player.level().getBlockEntity(pos) instanceof MachineControllerBlockEntity controller) {
-                controller.applyClientState(recipeName, formed, active, foundLevelIds);
+                 controller.applyClientState(recipeName, formed, active, foundLevelIds, recipeLocked, lockedRecipeId);
             }
         });
     }

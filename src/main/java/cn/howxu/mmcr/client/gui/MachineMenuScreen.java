@@ -11,6 +11,7 @@ import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
+import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.util.IOType;
@@ -37,6 +38,7 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluid;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.fluid.FluidTintSource;
@@ -100,11 +102,14 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     private static final int AUTO_IO_TOGGLE_BUTTON_WIDTH = 69;
     private static final int AUTO_IO_TOGGLE_BUTTON_HEIGHT = 20;
     private static final float AUTO_IO_TOGGLE_TEXT_SCALE = 0.85F;
+    private static final int RECIPE_LOCK_BUTTON_SIZE = 20;
+    private static final int PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR = 82;
     private static final int HIDDEN_SLOT_X = -1000;
     private static final int HIDDEN_SLOT_Y = -1000;
     private boolean autoIOPage;
     private Button autoIOPageButton;
     private Button autoIOToggleButton;
+    private Button recipeLockButton;
     private final EnumMap<Direction, Button> autoIOSideButtons = new EnumMap<>(Direction.class);
     private final List<HiddenSlotPosition> hiddenSlotPositions = new ArrayList<>();
 
@@ -292,10 +297,34 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         return ENERGY_H - filled;
     }
 
+    static Rect recipeLockButtonRect(int left, int top, int width, int height) {
+        return new Rect(left + width - RECIPE_LOCK_BUTTON_SIZE,
+                top + height - PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR - RECIPE_LOCK_BUTTON_SIZE,
+                RECIPE_LOCK_BUTTON_SIZE, RECIPE_LOCK_BUTTON_SIZE);
+    }
+
+    static List<Component> recipeLockTooltip(boolean locked, String recipeId) {
+        List<Component> lines = new ArrayList<>();
+        lines.add(Component.translatable(locked
+                ? "gui.mmcr.controller.recipe_lock.enabled"
+                : "gui.mmcr.controller.recipe_lock.disabled"));
+        if (locked && !recipeId.isEmpty()) {
+            lines.add(Component.translatable("gui.mmcr.controller.recipe_lock.recipe", Component.literal(recipeId)));
+        }
+        return lines;
+    }
+
     @Override
     protected void init() {
         super.init();
         if (isPortMenu()) initAutoIOButtons();
+        if (menu instanceof MachineControllerMenu controller) {
+            Rect rect = recipeLockButtonRect(leftPos, topPos, imageWidth, imageHeight);
+            recipeLockButton = addRenderableWidget(Button.builder(Component.empty(),
+                    button -> ClientPacketDistributor.sendToServer(new PktRecipeLockPayload(
+                            controller.controllerPos(), 0))).bounds(rect.left(), rect.top(), rect.width(), rect.height()).build());
+            updateRecipeLockTooltip(controller);
+        }
     }
 
     @Override
@@ -316,6 +345,10 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
         extractBackground(graphics, mouseX, mouseY, partialTicks);
         super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
+        if (menu instanceof MachineControllerMenu controller) {
+            updateRecipeLockTooltip(controller);
+            renderRecipeLockButtonIcon(graphics);
+        }
         extractTooltip(graphics, mouseX, mouseY);
     }
 
@@ -778,6 +811,39 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     static int controllerStatusColor(boolean formed, boolean active) {
         if (!formed) return UNFORMED_STATUS_COLOR;
         return active ? FORMED_STATUS_COLOR : IDLE_STATUS_COLOR;
+    }
+
+    private void updateRecipeLockTooltip(MachineControllerMenu controller) {
+        if (recipeLockButton == null) return;
+        String lockedRecipeId = controller.lockedRecipeId();
+        recipeLockButton.setTooltip(Tooltip.create(tooltipComponent(recipeLockTooltip(controller.recipeLocked(), lockedRecipeId == null ? "" : lockedRecipeId))));
+    }
+
+    private void renderRecipeLockButtonIcon(GuiGraphicsExtractor graphics) {
+        if (recipeLockButton == null || !recipeLockButton.visible) return;
+        graphics.item(recipeLockIcon(), recipeLockButton.getX() + (recipeLockButton.getWidth() - 16) / 2,
+                recipeLockButton.getY() + (recipeLockButton.getHeight() - 16) / 2, 0);
+    }
+
+    private static ItemStack recipeLockIcon() {
+        return new ItemStack(Items.KNOWLEDGE_BOOK);
+    }
+
+    private static Component tooltipComponent(List<Component> lines) {
+        Component component = Component.empty();
+        for (int i = 0; i < lines.size(); i++) {
+            if (i > 0) component = component.copy().append("\n");
+            component = component.copy().append(lines.get(i));
+        }
+        return component;
+    }
+
+    public record Rect(int left, int top, int width, int height) {
+        int right() { return left + width; }
+        int bottom() { return top + height; }
+        boolean overlaps(Rect other) {
+            return left < other.right() && right() > other.left && top < other.bottom() && bottom() > other.top;
+        }
     }
 
     private record HiddenSlotPosition(int index, Slot slot) {
