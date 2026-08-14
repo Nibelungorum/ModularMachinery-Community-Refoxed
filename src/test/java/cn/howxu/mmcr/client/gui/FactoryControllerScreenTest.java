@@ -6,9 +6,11 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.datagen.Translations;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.network.FactoryControllerSnapshot;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
@@ -179,6 +181,40 @@ class FactoryControllerScreenTest {
 
         assertThat(FactoryControllerScreen.selectedFailureUnloc(menu))
                 .isEqualTo("gui.mmcr.controller.failure.missing_output");
+    }
+
+    @Test
+    void recipe_lock_button_is_square_and_anchored_to_bottom_right() {
+        FactoryControllerScreen.Rect button = FactoryControllerScreen.recipeLockButtonRect(0, 0, 280, 213);
+
+        assertThat(button.width()).isEqualTo(button.height());
+        assertThat(button.right()).isEqualTo(280);
+        assertThat(button.bottom()).isEqualTo(213);
+    }
+
+    @Test
+    void enabled_tooltip_contains_recipe_id_on_second_line() {
+        assertThat(FactoryControllerScreen.recipeLockTooltip(true, "mod:recipe"))
+                .extracting(component -> ((TranslatableContents) component.getContents()).getKey())
+                .containsExactly("gui.mmcr.controller.recipe_lock.enabled", "gui.mmcr.controller.recipe_lock.recipe");
+        assertThat(((TranslatableContents) FactoryControllerScreen.recipeLockTooltip(true, "mod:recipe").get(1).getContents()).getArgs()[0].toString())
+                .isEqualTo("literal{mod:recipe}");
+    }
+
+    @Test
+    void disabled_tooltip_contains_disabled_line_only() {
+        assertThat(FactoryControllerScreen.recipeLockTooltip(false, "mod:recipe"))
+                .singleElement()
+                .satisfies(component -> assertThat(((TranslatableContents) component.getContents()).getKey())
+                        .isEqualTo("gui.mmcr.controller.recipe_lock.disabled"));
+    }
+
+    @Test
+    void recipe_lock_translation_keys_use_requested_chinese_tooltip_text() {
+        assertThat(Translations.ALL.get("zh_cn"))
+                .containsEntry("gui.mmcr.controller.recipe_lock.enabled", "配方锁定: 启用")
+                .containsEntry("gui.mmcr.controller.recipe_lock.disabled", "配方锁定: 禁用")
+                .containsEntry("gui.mmcr.controller.recipe_lock.recipe", "%s");
     }
 
     private static FactoryRecipeScheduler.ThreadSnapshot thread(int index) {
