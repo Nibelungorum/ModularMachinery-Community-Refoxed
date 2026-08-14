@@ -1276,12 +1276,7 @@ public final class RecipeCraftingContext {
             setFailure(FAILURE_MISSING_OUTPUT, fluidFailure);
             return false;
         }
-        for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
-            MachineRequirement requirement = requirements.get(requirementIndex);
-            if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT && item.chance() <= 0F) continue;
-            if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT && fluid.chance() <= 0F) continue;
-            if (requirement.io() == RecipeModifier.IOType.OUTPUT && !requirement.commit(this, requirementIndex)) return false;
-        }
+        if (!commitStrictOutputs(requirements)) return false;
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
@@ -1323,10 +1318,21 @@ public final class RecipeCraftingContext {
     }
 
     private boolean commitStrictPartialOutputs(List<MachineRequirement> requirements) {
+        return commitStrictOutputs(requirements, true);
+    }
+
+    private boolean commitStrictOutputs(List<MachineRequirement> requirements) {
+        return commitStrictOutputs(requirements, false);
+    }
+
+    private boolean commitStrictOutputs(List<MachineRequirement> requirements, boolean skipPartialOutputs) {
         List<SmartInterfaceCommit> smartCommits = new ArrayList<>();
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
-            if (isPartialOutputRequirement(requirement) || requirement.io() != RecipeModifier.IOType.OUTPUT) continue;
+            if ((skipPartialOutputs && isPartialOutputRequirement(requirement))
+                    || requirement.io() != RecipeModifier.IOType.OUTPUT) continue;
+            if (requirement instanceof ItemRequirement item && item.chance() <= 0F) continue;
+            if (requirement instanceof FluidRequirement fluid && fluid.chance() <= 0F) continue;
             if (requirement instanceof SmartInterfaceRequirement smartInterface) {
                 Optional<SmartInterfaceBinding> binding = smartInterface(smartInterface.interfaceType());
                 if (binding.isEmpty()) return false;

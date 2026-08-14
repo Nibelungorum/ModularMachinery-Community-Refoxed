@@ -694,6 +694,31 @@ class RecipeCraftingContextTest {
     }
 
     @Test
+    void strictOutputsDoNotLeakEarlierSmartInterfaceMutationWhenLaterOutputFails() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        SmartInterfaceBlockEntity first = smartInterface(new BlockPos(2, 0, 0));
+        SmartInterfaceBlockEntity second = failingSmartInterface(new BlockPos(3, 0, 0), "second");
+        first.claimController(BlockPos.ZERO, MMCR.id("test_machine"), Map.of(
+                "first", new SmartInterfaceType("first", 1F, 0)), true);
+        second.claimController(BlockPos.ZERO, MMCR.id("test_machine"), Map.of(
+                "second", new SmartInterfaceType("second", 2F, 0)), true);
+        MachineControllerBlockEntity controller = controllerWithComponents(output, first, second);
+        MachineRecipe recipe = explicitRequirementRecipe("strict_outputs_atomic_order", List.of(
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_INGOT.getDefaultInstance()),
+                SmartInterfaceRequirement.output("first", 9F),
+                SmartInterfaceRequirement.output("second", 7F)
+        ));
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isFalse();
+        assertThat(first.value("first")).contains(1F);
+        assertThat(second.value("second")).contains(2F);
+        assertThat(total(output, Items.IRON_INGOT)).isZero();
+    }
+
+    @Test
     void partialRecipeDefersSmartInterfaceOutputUntilCompletion() throws Exception {
         bindItemComponents(Items.IRON_INGOT);
         ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
