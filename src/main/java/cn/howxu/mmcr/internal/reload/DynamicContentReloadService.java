@@ -52,6 +52,11 @@ public final class DynamicContentReloadService {
             registrations.put(id, registration.withPattern(entry.getValue().pattern()));
         }
         MachineRoleValidator.validate(registrations.values(), null);
+        for (MachineRecipe recipe : candidate.recipes.values()) {
+            if (!candidate.structures.containsKey(recipe.machineId()) && !MachineRegistry.containsStatic(recipe.machineId())) {
+                throw new IllegalStateException("Machine not found for dynamic recipe: " + recipe.machineId());
+            }
+        }
     }
 
     public static final class Candidate {
@@ -77,9 +82,6 @@ public final class DynamicContentReloadService {
             }
             if (RecipeRegistry.containsStatic(id)) {
                 throw new IllegalStateException("Dynamic recipe conflicts with static recipe: " + id);
-            }
-            if (!structures.containsKey(recipe.machineId()) && MachineRegistry.getMachine(recipe.machineId()) == null) {
-                throw new IllegalStateException("Machine not found for dynamic recipe: " + recipe.machineId());
             }
             recipes.put(id, recipe);
         }

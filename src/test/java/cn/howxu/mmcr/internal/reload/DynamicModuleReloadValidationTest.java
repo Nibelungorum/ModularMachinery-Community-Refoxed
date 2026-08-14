@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
@@ -76,11 +77,39 @@ class DynamicModuleReloadValidationTest {
         assertThat(MachineRegistry.getMachine(oldId)).isNotNull();
     }
 
+    @Test
+    void candidate_recipe_cannot_target_machine_removed_from_candidate_structures() {
+        Identifier oldMachineId = MMCR.id("old_machine");
+        Identifier replacementMachineId = MMCR.id("replacement_machine");
+        Identifier oldRecipeId = MMCR.id("old_recipe");
+        MachineDefinitions.register(MachineRegistration.builder(oldMachineId).build());
+        MachineDefinitions.register(MachineRegistration.builder(replacementMachineId).build());
+        MachineRecipe oldRecipe = recipe(oldRecipeId, oldMachineId);
+        DynamicContentReloadService.reload(candidate -> {
+            candidate.registerStructure(structure(oldMachineId, 0));
+            candidate.registerRecipe(oldRecipe);
+        });
+
+        assertThatThrownBy(() -> DynamicContentReloadService.reload(candidate -> {
+            candidate.registerStructure(structure(replacementMachineId, 0));
+            candidate.registerRecipe(recipe(MMCR.id("replacement_recipe"), oldMachineId));
+        })).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(oldMachineId.toString());
+        assertThat(MachineStructureRegistry.dynamicSnapshot())
+                .containsOnlyKeys(oldMachineId);
+        assertThat(RecipeRegistry.dynamicSnapshot())
+                .containsEntry(oldRecipeId, oldRecipe);
+    }
+
     private static MachineStructureDefinition structure(Identifier id, int couplers) {
         Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
         for (int index = 0; index < couplers; index++) {
             pattern.put(new BlockPos(index, 0, 0), BlockPredicate.machineCoupler());
         }
         return new MachineStructureDefinition(id, new BlockArray(pattern), PortRequirementSpec.none(), List.of(), Map.of());
+    }
+
+    private static MachineRecipe recipe(Identifier id, Identifier machineId) {
+        return new MachineRecipe(id, machineId, 1, List.of(), List.of());
     }
 }
