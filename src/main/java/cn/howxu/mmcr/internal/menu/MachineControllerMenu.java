@@ -2,7 +2,6 @@ package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.api.machine.Machine;
-import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
@@ -371,14 +370,6 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     public static int controllerRoleSyncValue(MachineControllerBlockEntity controller) {
         Machine machine = controller == null ? null : controller.getMachine();
         if (machine == null && controller != null) machine = controller.getFoundMachine();
-        if (machine == null) return 0;
-        if (machine.isHost()) return 1;
-        if (machine.isModule()) return 2;
-        return 0;
-    }
-
-    static int controllerRoleSyncValue(@Nullable Identifier id) {
-        Machine machine = id == null ? null : MachineRegistry.getMachine(id);
         if (machine == null) return 0;
         if (machine.isHost()) return 1;
         if (machine.isModule()) return 2;

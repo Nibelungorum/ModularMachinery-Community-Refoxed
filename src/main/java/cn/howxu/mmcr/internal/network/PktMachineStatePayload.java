@@ -24,6 +24,22 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                 || !lockedRecipeId.equals(lastLockedRecipeId);
     }
 
+    public static boolean stateChanged(boolean formed, boolean active, boolean recipeLocked, String lockedRecipeId,
+                                       String machineId, int controllerRole, int installedModuleCount,
+                                       boolean moduleConnected, String connectedHostId,
+                                       boolean lastFormed, boolean lastActive, boolean lastRecipeLocked,
+                                       String lastLockedRecipeId, String lastMachineId, int lastControllerRole,
+                                       int lastInstalledModuleCount, boolean lastModuleConnected,
+                                       String lastConnectedHostId) {
+        return stateChanged(formed, active, recipeLocked, lockedRecipeId,
+                lastFormed, lastActive, lastRecipeLocked, lastLockedRecipeId)
+                || !machineId.equals(lastMachineId)
+                || controllerRole != lastControllerRole
+                || installedModuleCount != lastInstalledModuleCount
+                || moduleConnected != lastModuleConnected
+                || !connectedHostId.equals(lastConnectedHostId);
+    }
+
     public PktMachineStatePayload(BlockPos pos, String recipeName, boolean formed, boolean active,
                                    List<String> foundLevelIds) {
         this(pos, recipeName, formed, active, foundLevelIds, false, "", "", 0, 0, false, "");

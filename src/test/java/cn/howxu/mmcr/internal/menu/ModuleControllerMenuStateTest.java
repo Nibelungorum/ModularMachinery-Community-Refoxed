@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.machine.MachinePatternCompiler;
 import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionCoordinator;
+import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -147,6 +148,20 @@ class ModuleControllerMenuStateTest {
         clientMenu.applyModuleStatus(0, true, collidingOther);
 
         assertThat(clientMenu.connectedHostId()).contains(collidingOther);
+    }
+
+    @Test
+    void machine_state_payload_change_detection_includes_module_controller_fields() {
+        assertThat(PktMachineStatePayload.stateChanged(false, false, false, "", "mmcr_test:module", 2, 0, false, "",
+                false, false, false, "", "mmcr_test:host", 2, 0, false, "")).isTrue();
+        assertThat(PktMachineStatePayload.stateChanged(false, false, false, "", "mmcr_test:module", 1, 1, false, "",
+                false, false, false, "", "mmcr_test:module", 1, 0, false, "")).isTrue();
+        assertThat(PktMachineStatePayload.stateChanged(false, false, false, "", "mmcr_test:module", 2, 0, true, "mmcr_test:host",
+                false, false, false, "", "mmcr_test:module", 2, 0, false, "")).isTrue();
+        assertThat(PktMachineStatePayload.stateChanged(false, false, false, "", "mmcr_test:module", 2, 0, true, "mmcr_test:host_b",
+                false, false, false, "", "mmcr_test:module", 2, 0, true, "mmcr_test:host_a")).isTrue();
+        assertThat(PktMachineStatePayload.stateChanged(false, false, false, "", "mmcr_test:module", 2, 3, true, "mmcr_test:host",
+                false, false, false, "", "mmcr_test:module", 2, 3, true, "mmcr_test:host")).isFalse();
     }
 
     private static Inventory emptyInventory() {

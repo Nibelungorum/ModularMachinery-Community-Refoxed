@@ -118,6 +118,11 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private boolean lastBroadcastActive;
     private boolean lastBroadcastRecipeLocked;
     private String lastBroadcastLockedRecipeId = "";
+    private String lastBroadcastMachineId = "";
+    private int lastBroadcastControllerRole;
+    private int lastBroadcastInstalledModuleCount;
+    private boolean lastBroadcastModuleConnected;
+    private String lastBroadcastConnectedHostId = "";
     private @Nullable Identifier lockedRecipeId;
     private @Nullable String lastFailureUnloc;
     private @Nullable LevelInsufficientFailure recipeFailure;
@@ -1469,8 +1474,18 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         var thread = factory == null ? null : factory.threadSnapshots(this).getFirst();
         boolean recipeLocked = thread == null ? lockedRecipeId != null : thread.locked();
         String lockedRecipe = thread == null ? lockedRecipeId == null ? "" : lockedRecipeId.toString() : thread.lockedRecipeId();
+        Identifier machineId = machineId();
+        String machineIdValue = machineId == null ? "" : machineId.toString();
+        int controllerRole = cn.howxu.mmcr.internal.menu.MachineControllerMenu.controllerRoleSyncValue(this);
+        int installedModuleCount = installedModuleCount();
+        Optional<Identifier> connectedHostId = connectedHostId();
+        boolean moduleConnected = connectedHostId.isPresent();
+        String connectedHostIdValue = connectedHostId.map(Identifier::toString).orElse("");
         if (lastBroadcastFormed != null && !PktMachineStatePayload.stateChanged(formed, activeNow, recipeLocked, lockedRecipe,
-                lastBroadcastFormed, lastBroadcastActive, lastBroadcastRecipeLocked, lastBroadcastLockedRecipeId)
+                machineIdValue, controllerRole, installedModuleCount, moduleConnected, connectedHostIdValue,
+                lastBroadcastFormed, lastBroadcastActive, lastBroadcastRecipeLocked, lastBroadcastLockedRecipeId,
+                lastBroadcastMachineId, lastBroadcastControllerRole, lastBroadcastInstalledModuleCount,
+                lastBroadcastModuleConnected, lastBroadcastConnectedHostId)
                 && activeBeforeTick == activeNow) {
             return;
         }
@@ -1478,9 +1493,14 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         lastBroadcastActive = activeNow;
         lastBroadcastRecipeLocked = recipeLocked;
         lastBroadcastLockedRecipeId = lockedRecipe;
+        lastBroadcastMachineId = machineIdValue;
+        lastBroadcastControllerRole = controllerRole;
+        lastBroadcastInstalledModuleCount = installedModuleCount;
+        lastBroadcastModuleConnected = moduleConnected;
+        lastBroadcastConnectedHostId = connectedHostIdValue;
         if (!(level instanceof ServerLevel sl)) return;
-        String name = active == null ? "" : active.getRecipe().id().toString();
-        var pkt = machineStatePayload(activeNow);
+        var pkt = machineStatePayload(activeNow, formed, recipeLocked, lockedRecipe, machineIdValue, controllerRole,
+                installedModuleCount, moduleConnected, connectedHostIdValue);
         for (var player : sl.getPlayers(p -> p.distanceToSqr(getBlockPos().getCenter()) < 64 * 64)) {
             ((ServerPlayer) player).connection.send(new ClientboundCustomPayloadPacket(pkt));
         }
@@ -1491,14 +1511,25 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         var thread = factory == null ? null : factory.threadSnapshots(this).getFirst();
         boolean recipeLocked = thread == null ? lockedRecipeId != null : thread.locked();
         String lockedRecipe = thread == null ? lockedRecipeId == null ? "" : lockedRecipeId.toString() : thread.lockedRecipeId();
+        Identifier machineId = machineId();
+        String machineIdValue = machineId == null ? "" : machineId.toString();
+        int controllerRole = cn.howxu.mmcr.internal.menu.MachineControllerMenu.controllerRoleSyncValue(this);
+        int installedModuleCount = installedModuleCount();
+        Optional<Identifier> connectedHostId = connectedHostId();
+        boolean moduleConnected = connectedHostId.isPresent();
+        String connectedHostIdValue = connectedHostId.map(Identifier::toString).orElse("");
+        return machineStatePayload(activeNow, isFormed(), recipeLocked, lockedRecipe, machineIdValue, controllerRole,
+                installedModuleCount, moduleConnected, connectedHostIdValue);
+    }
+
+    private PktMachineStatePayload machineStatePayload(boolean activeNow, boolean formed, boolean recipeLocked, String lockedRecipe,
+                                                       String machineId, int controllerRole, int installedModuleCount,
+                                                       boolean moduleConnected, String connectedHostId) {
         String name = active == null ? "" : active.getRecipe().id().toString();
-        return new PktMachineStatePayload(getBlockPos(), name, isFormed(), activeNow,
+        return new PktMachineStatePayload(getBlockPos(), name, formed, activeNow,
                 foundLevels.values().stream().map(foundLevel -> foundLevel.id().toString()).toList(),
                 recipeLocked, lockedRecipe,
-                machineId() == null ? "" : machineId().toString(),
-                cn.howxu.mmcr.internal.menu.MachineControllerMenu.controllerRoleSyncValue(this),
-                installedModuleCount(), connectedHostId().isPresent(),
-                connectedHostId().map(Identifier::toString).orElse(""));
+                machineId, controllerRole, installedModuleCount, moduleConnected, connectedHostId);
     }
 
     private boolean tryStartNewRecipe() {
