@@ -140,6 +140,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private @Nullable MachineRecipe lastRecipe;
     private long lastRecipeStructureVersion = Long.MIN_VALUE;
     private long lastRecipeModifierSnapshotVersion = Long.MIN_VALUE;
+    private @Nullable Identifier lockedRecipeId;
     private boolean recipeDirty = true;
     private @Nullable StructureClaimRegistry.ResourceDomain resourceDomain;
     private boolean sharedStartPending;
@@ -1459,7 +1460,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         RecipeSearchResult result;
         try {
             result = new RecipeSearchTask(this, machineId, structureVersion, getMaxParallelism(), candidates,
-                    contextPool(), cachedCandidateIndex, null).compute();
+                    contextPool(), cachedCandidateIndex, lockedRecipeId).compute();
         } catch (RuntimeException e) {
             LOG.warn("[Ctrl#{}] tryStartNewRecipe: recipe search failed at pos={}; retrying later", instanceId, getBlockPos(), e);
             clearPendingConflictStart();
@@ -1577,6 +1578,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private boolean tryRestartLastRecipe(Identifier machineId) {
         if (recipeDirty || lastRecipe == null || active != null || foundMachine == null) return false;
         if (!machineId.equals(lastRecipe.machineId())) return false;
+        if (lockedRecipeId != null && !lockedRecipeId.equals(lastRecipe.id())) return false;
         if (lastRecipeStructureVersion != structureVersion || lastRecipeModifierSnapshotVersion != modifierSnapshotVersion) return false;
         ActiveMachineRecipe next = new ActiveMachineRecipe(lastRecipe, getMaxParallelism());
         RecipeCraftingContext nextContext = contextPool().borrow(next, this);

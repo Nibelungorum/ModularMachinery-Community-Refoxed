@@ -773,6 +773,97 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void ordinary_locked_recipe_search_does_not_start_other_recipe() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.GOLD_INGOT);
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        ItemInputBusBlockEntity input = itemInputBus(controllerPos.offset(1, 0, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.GOLD_INGOT, 1));
+        DynamicMachine machine = new DynamicMachine(MMCR.id("ordinary_locked_search_machine"), "Ordinary Locked Search",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()));
+        MachineRegistry.register(machine);
+        MachineRecipe locked = itemInputRecipe("ordinary_locked_recipe", machine.registryName(), Items.IRON_INGOT);
+        MachineRecipe fallback = itemInputRecipe("ordinary_fallback_recipe", machine.registryName(), Items.GOLD_INGOT);
+        RecipeRegistry.register(locked);
+        RecipeRegistry.register(fallback);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, input);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        addItemInputComponent(controller, input);
+        setField(MachineControllerBlockEntity.class, controller, "lockedRecipeId", locked.id());
+
+        controller.serverTick();
+
+        assertThat(controller.getActive()).isNull();
+        assertThat(controller.getLastFailureUnloc()).isEqualTo(RecipeCraftingContext.FAILURE_MISSING_INPUT);
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "lockedRecipeId")).isEqualTo(locked.id());
+        assertThat(countItem(input, Items.GOLD_INGOT)).isEqualTo(1);
+    }
+
+    @Test
+    void ordinary_locked_recipe_restart_does_not_bypass_with_mismatched_last_recipe() throws Exception {
+        bindItemComponents(Items.GOLD_INGOT);
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        ItemInputBusBlockEntity input = itemInputBus(controllerPos.offset(1, 0, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.GOLD_INGOT, 1));
+        DynamicMachine machine = new DynamicMachine(MMCR.id("ordinary_locked_restart_machine"), "Ordinary Locked Restart",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()));
+        MachineRegistry.register(machine);
+        MachineRecipe locked = itemInputRecipe("ordinary_restart_locked_recipe", machine.registryName(), Items.IRON_INGOT);
+        MachineRecipe cached = itemInputRecipe("ordinary_restart_cached_recipe", machine.registryName(), Items.GOLD_INGOT);
+        RecipeRegistry.register(locked);
+        RecipeRegistry.register(cached);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, input);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        addItemInputComponent(controller, input);
+        setField(MachineControllerBlockEntity.class, controller, "lockedRecipeId", locked.id());
+        setField(MachineControllerBlockEntity.class, controller, "lastRecipe", cached);
+        setField(MachineControllerBlockEntity.class, controller, "lastRecipeStructureVersion", controller.getStructureVersion());
+        setField(MachineControllerBlockEntity.class, controller, "lastRecipeModifierSnapshotVersion", controller.getModifierSnapshotVersion());
+        setField(MachineControllerBlockEntity.class, controller, "recipeDirty", false);
+
+        controller.serverTick();
+
+        assertThat(controller.getActive()).isNull();
+        assertThat(controller.getLastFailureUnloc()).isEqualTo(RecipeCraftingContext.FAILURE_MISSING_INPUT);
+        assertThat(countItem(input, Items.GOLD_INGOT)).isEqualTo(1);
+    }
+
+    @Test
+    void ordinary_locked_recipe_survives_save_load_and_limits_search() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.GOLD_INGOT);
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        ItemInputBusBlockEntity input = itemInputBus(controllerPos.offset(1, 0, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.GOLD_INGOT, 1));
+        DynamicMachine machine = new DynamicMachine(MMCR.id("ordinary_locked_persist_machine"), "Ordinary Locked Persist",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()));
+        MachineRegistry.register(machine);
+        MachineRecipe locked = itemInputRecipe("ordinary_persist_locked_recipe", machine.registryName(), Items.IRON_INGOT);
+        MachineRecipe fallback = itemInputRecipe("ordinary_persist_fallback_recipe", machine.registryName(), Items.GOLD_INGOT);
+        RecipeRegistry.register(locked);
+        RecipeRegistry.register(fallback);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, input);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        setField(MachineControllerBlockEntity.class, controller, "lockedRecipeId", locked.id());
+        TagValueOutput saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        invokeSaveAdditional(controller, saved);
+
+        MachineControllerBlockEntity loaded = controllerForFormation(machine, controllerPos, input);
+        assertThat(invokeTryFormMachine(loaded, machine, Direction.SOUTH)).isTrue();
+        addItemInputComponent(loaded, input);
+        invokeLoadAdditional(loaded, TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()), saved.buildResult()));
+
+        loaded.serverTick();
+
+        assertThat(loaded.getActive()).isNull();
+        assertThat(loaded.getLastFailureUnloc()).isEqualTo(RecipeCraftingContext.FAILURE_MISSING_INPUT);
+        assertThat(fieldValue(MachineControllerBlockEntity.class, loaded, "lockedRecipeId")).isEqualTo(locked.id());
+        assertThat(countItem(input, Items.GOLD_INGOT)).isEqualTo(1);
+    }
+
+    @Test
     void redstone_paused_single_recipe_round_trips_and_resumes_from_its_saved_tick() throws Exception {
         bindItemComponents(Items.IRON_INGOT);
         BlockPos controllerPos = new BlockPos(10, 4, 10);
@@ -2698,6 +2789,21 @@ class MachineControllerBlockEntityTest {
                 false,
                 List.of(),
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY))));
+    }
+
+    private static MachineRecipe itemInputRecipe(String path, Identifier machineId, Item item) {
+        return new MachineRecipe(
+                MMCR.id(path),
+                machineId,
+                20,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(item), 1, ItemStack.EMPTY)));
     }
 
     private static int countItem(ItemBusBlockEntity input, Item item) {
