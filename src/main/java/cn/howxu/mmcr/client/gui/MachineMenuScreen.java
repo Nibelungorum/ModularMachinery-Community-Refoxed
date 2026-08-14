@@ -697,12 +697,11 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         }
 
         if (menu.isFormed()) {
-            var displayedMachine = owner == null || owner.getFoundMachine() == null ? null : owner.getFoundMachine();
-            if (displayedMachine != null && displayedMachine.isHost()) {
+            if (menu.isHostController()) {
                 scaledY = renderScaledWrappedLine(g, installedModuleCountLine(menu.installedModuleCount()),
                         scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
             }
-            if (displayedMachine != null && displayedMachine.isModule()) {
+            if (menu.isModuleController()) {
                 scaledY = renderScaledWrappedLine(g, moduleConnectionLine(menu),
                         scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
             }

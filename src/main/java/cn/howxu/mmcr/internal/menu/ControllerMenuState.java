@@ -61,10 +61,8 @@ final class ControllerMenuState {
         return add(menu, owner, controller -> controller.connectedHostId().isPresent() ? 1 : 0);
     }
 
-    static DataSlot addConnectedHostRegistryIdSlot(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {
-        return add(menu, owner, controller -> controller.connectedHostId()
-                .map(MachineControllerMenu::registryIdSyncValue)
-                .orElse(0));
+    static DataSlot addControllerRoleSlot(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {
+        return add(menu, owner, MachineControllerMenu::controllerRoleSyncValue);
     }
 
     static void addControllerPlayerSlots(AbstractMachineMenu menu, Inventory inventory, int x) {

@@ -164,6 +164,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     public Machine getMachine() { return machine; }
+
+    public @Nullable Identifier machineId() {
+        Machine currentMachine = machine == null ? foundMachine : machine;
+        return currentMachine == null ? null : currentMachine.registryName();
+    }
+
     public void setMachine(Machine m) {
         Identifier before = this.machine == null ? null : this.machine.registryName();
         stopFactoryController();
@@ -1488,7 +1494,11 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         String name = active == null ? "" : active.getRecipe().id().toString();
         return new PktMachineStatePayload(getBlockPos(), name, isFormed(), activeNow,
                 foundLevels.values().stream().map(foundLevel -> foundLevel.id().toString()).toList(),
-                recipeLocked, lockedRecipe);
+                recipeLocked, lockedRecipe,
+                machineId() == null ? "" : machineId().toString(),
+                cn.howxu.mmcr.internal.menu.MachineControllerMenu.controllerRoleSyncValue(this),
+                installedModuleCount(), connectedHostId().isPresent(),
+                connectedHostId().map(Identifier::toString).orElse(""));
     }
 
     private boolean tryStartNewRecipe() {

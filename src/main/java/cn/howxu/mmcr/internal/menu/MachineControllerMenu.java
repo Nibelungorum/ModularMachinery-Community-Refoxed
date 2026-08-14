@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
@@ -41,7 +42,10 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     private final DataSlot recipeLocked;
     private final DataSlot installedModuleCount;
     private final DataSlot moduleConnected;
-    private final DataSlot connectedHostRegistryId;
+    private final DataSlot controllerRole;
+    private int clientControllerRole;
+    private @Nullable Identifier clientMachineId;
+    private @Nullable Identifier clientConnectedHostId;
 
     public MachineControllerMenu(int containerId, Inventory playerInv, MachineControllerBlockEntity owner) {
         super(ModUIs.MACHINE_CONTROLLER.get(), containerId);
@@ -106,11 +110,15 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.recipeLocked = ControllerMenuState.addRecipeLockSlot(this, owner);
         this.installedModuleCount = ControllerMenuState.addInstalledModuleCountSlot(this, owner);
         this.moduleConnected = ControllerMenuState.addModuleConnectedSlot(this, owner);
-        this.connectedHostRegistryId = ControllerMenuState.addConnectedHostRegistryIdSlot(this, owner);
+        this.controllerRole = ControllerMenuState.addControllerRoleSlot(this, owner);
+        this.clientControllerRole = controllerRoleSyncValue(owner);
+        this.clientMachineId = machineIdFor(owner);
+        this.clientConnectedHostId = owner == null ? null : owner.connectedHostId().orElse(null);
         addControllerPlayerSlots(playerInv);
     }
 
-    public MachineControllerMenu(int containerId, Inventory playerInv, BlockPos pos) {
+    public MachineControllerMenu(int containerId, Inventory playerInv, BlockPos pos, @Nullable Identifier machineId,
+                                 @Nullable Identifier connectedHostId, int controllerRole, boolean formed, int installedModuleCount) {
         super(ModUIs.MACHINE_CONTROLLER.get(), containerId);
         this.owner = null;
         this.level = playerInv.player == null ? null : playerInv.player.level();
@@ -130,8 +138,19 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.recipeLocked = addDataSlot(DataSlot.standalone());
         this.installedModuleCount = addDataSlot(DataSlot.standalone());
         this.moduleConnected = addDataSlot(DataSlot.standalone());
-        this.connectedHostRegistryId = addDataSlot(DataSlot.standalone());
+        this.controllerRole = addDataSlot(DataSlot.standalone());
+        this.clientControllerRole = controllerRole;
+        this.clientMachineId = machineId;
+        this.clientConnectedHostId = connectedHostId;
+        this.formed.set(formed ? 1 : 0);
+        this.installedModuleCount.set(Math.max(0, installedModuleCount));
+        this.moduleConnected.set(connectedHostId == null ? 0 : 1);
+        this.controllerRole.set(controllerRole);
         addControllerPlayerSlots(playerInv);
+    }
+
+    public MachineControllerMenu(int containerId, Inventory playerInv, BlockPos pos) {
+        this(containerId, playerInv, pos, null, null, 0, false, 0);
     }
 
     private void addControllerPlayerSlots(Inventory playerInv) {
@@ -154,7 +173,24 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     }
 
     public static MachineControllerMenu clientOpen(int containerId, Inventory playerInv, FriendlyByteBuf buf) {
-        return new MachineControllerMenu(containerId, playerInv, buf.readBlockPos());
+        BlockPos pos = buf.readBlockPos();
+        Identifier machineId = readOptionalIdentifier(buf);
+        Identifier connectedHostId = readOptionalIdentifier(buf);
+        int controllerRole = buf.readVarInt();
+        boolean formed = buf.readBoolean();
+        int installedModuleCount = buf.readVarInt();
+        return new MachineControllerMenu(containerId, playerInv, pos, machineId, connectedHostId, controllerRole, formed, installedModuleCount);
+    }
+
+    public static void writeClientOpenData(RegistryFriendlyByteBuf buf, BlockPos pos, @Nullable Identifier machineId,
+                                           @Nullable Identifier connectedHostId, int controllerRole, boolean formed,
+                                           int installedModuleCount) {
+        buf.writeBlockPos(pos);
+        writeOptionalIdentifier(buf, machineId);
+        writeOptionalIdentifier(buf, connectedHostId);
+        buf.writeVarInt(controllerRole);
+        buf.writeBoolean(formed);
+        buf.writeVarInt(Math.max(0, installedModuleCount));
     }
 
     public MachineControllerBlockEntity owner() {
@@ -171,7 +207,8 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     public @Nullable Identifier machineId() {
         MachineControllerBlockEntity controller = resolvedOwner();
         Machine machine = controller == null ? null : controller.getMachine();
-        return machine == null ? null : machine.registryName();
+        Identifier id = machine == null ? null : machine.registryName();
+        return id == null ? clientMachineId : id;
     }
 
     public boolean isFormed() {
@@ -288,9 +325,35 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     }
 
     public Optional<Identifier> connectedHostId() {
-        if (owner == null) return moduleConnected.get() == 0 ? Optional.empty() : hostIdForSyncValue(connectedHostRegistryId.get());
+        if (owner == null) return moduleConnected.get() == 0 ? Optional.empty() : Optional.ofNullable(clientConnectedHostId);
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? Optional.empty() : controller.connectedHostId();
+        return controller == null ? Optional.ofNullable(clientConnectedHostId) : controller.connectedHostId();
+    }
+
+    public boolean isHostController() {
+        MachineControllerBlockEntity controller = resolvedOwner();
+        if (controller != null) return controllerRoleSyncValue(controller) == 1;
+        return controllerRole.get() == 1 || clientControllerRole == 1;
+    }
+
+    public boolean isModuleController() {
+        MachineControllerBlockEntity controller = resolvedOwner();
+        if (controller != null) return controllerRoleSyncValue(controller) == 2;
+        return controllerRole.get() == 2 || clientControllerRole == 2;
+    }
+
+    public void applyModuleStatus(int installedModuleCount, boolean moduleConnected, @Nullable Identifier connectedHostId) {
+        this.installedModuleCount.set(Math.max(0, installedModuleCount));
+        this.moduleConnected.set(moduleConnected && connectedHostId != null ? 1 : 0);
+        this.clientConnectedHostId = moduleConnected ? connectedHostId : null;
+    }
+
+    public void applyClientControllerState(@Nullable Identifier machineId, int controllerRole, int installedModuleCount,
+                                           boolean moduleConnected, @Nullable Identifier connectedHostId) {
+        this.clientMachineId = machineId;
+        this.clientControllerRole = controllerRole;
+        this.controllerRole.set(controllerRole);
+        applyModuleStatus(installedModuleCount, moduleConnected, connectedHostId);
     }
 
     public @Nullable String lockedRecipeId() {
@@ -305,15 +368,35 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     public BlockPos controllerPos() { return pos; }
 
-    static int registryIdSyncValue(Identifier id) {
-        return id == null ? 0 : id.toString().hashCode();
+    public static int controllerRoleSyncValue(MachineControllerBlockEntity controller) {
+        Machine machine = controller == null ? null : controller.getMachine();
+        if (machine == null && controller != null) machine = controller.getFoundMachine();
+        if (machine == null) return 0;
+        if (machine.isHost()) return 1;
+        if (machine.isModule()) return 2;
+        return 0;
     }
 
-    static Optional<Identifier> hostIdForSyncValue(int syncValue) {
-        if (syncValue == 0) return Optional.empty();
-        return MachineRegistry.getAll().keySet().stream()
-                .filter(id -> registryIdSyncValue(id) == syncValue)
-                .findFirst();
+    static int controllerRoleSyncValue(@Nullable Identifier id) {
+        Machine machine = id == null ? null : MachineRegistry.getMachine(id);
+        if (machine == null) return 0;
+        if (machine.isHost()) return 1;
+        if (machine.isModule()) return 2;
+        return 0;
+    }
+
+    private static @Nullable Identifier machineIdFor(@Nullable MachineControllerBlockEntity controller) {
+        Machine machine = controller == null ? null : controller.getMachine();
+        return machine == null ? null : machine.registryName();
+    }
+
+    private static void writeOptionalIdentifier(RegistryFriendlyByteBuf buf, @Nullable Identifier id) {
+        buf.writeBoolean(id != null);
+        if (id != null) Identifier.STREAM_CODEC.encode(buf, id);
+    }
+
+    private static @Nullable Identifier readOptionalIdentifier(FriendlyByteBuf buf) {
+        return buf.readBoolean() ? Identifier.STREAM_CODEC.decode(buf) : null;
     }
 
     public long totalStoredEnergy() {

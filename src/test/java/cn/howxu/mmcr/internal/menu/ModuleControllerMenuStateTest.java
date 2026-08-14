@@ -17,6 +17,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.Holder;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Inventory;
@@ -32,6 +33,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import io.netty.buffer.Unpooled;
 import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -97,30 +99,65 @@ class ModuleControllerMenuStateTest {
 
         int hostCountBefore = dataSlot(hostMenu, 13).get();
         int moduleConnectedBefore = dataSlot(moduleMenu, 14).get();
-        int moduleHostBefore = dataSlot(moduleMenu, 15).get();
+        int moduleRoleBefore = dataSlot(moduleMenu, 15).get();
         assertThat(hostCountBefore).isZero();
         assertThat(moduleConnectedBefore).isZero();
-        assertThat(moduleHostBefore).isZero();
+        assertThat(moduleRoleBefore).isEqualTo(2);
 
         ModuleConnectionCoordinator.refresh(fixture.level(), fixture.couplerPos());
 
         assertThat(dataSlot(hostMenu, 13).get()).isEqualTo(1);
         assertThat(dataSlot(moduleMenu, 14).get()).isEqualTo(1);
-        assertThat(dataSlot(moduleMenu, 15).get()).isNotZero();
-        assertThat(dataSlot(moduleMenu, 15).get()).isEqualTo(dataSlot(moduleMenu, 15).get());
+        assertThat(dataSlot(moduleMenu, 15).get()).isEqualTo(2);
 
         int hostCountConnected = dataSlot(hostMenu, 13).get();
         int moduleConnected = dataSlot(moduleMenu, 14).get();
-        int moduleHost = dataSlot(moduleMenu, 15).get();
+        int moduleRole = dataSlot(moduleMenu, 15).get();
         ModuleConnectionCoordinator.refresh(fixture.level(), fixture.couplerPos());
 
         assertThat(dataSlot(hostMenu, 13).get()).isEqualTo(hostCountConnected);
         assertThat(dataSlot(moduleMenu, 14).get()).isEqualTo(moduleConnected);
-        assertThat(dataSlot(moduleMenu, 15).get()).isEqualTo(moduleHost);
+        assertThat(dataSlot(moduleMenu, 15).get()).isEqualTo(moduleRole);
+    }
+
+    @Test
+    void client_open_reconstructs_exact_machine_role_and_connected_host_id_from_buffer() throws Exception {
+        Identifier collidingHost = Identifier.fromNamespaceAndPath("mmcr_test", "an");
+        Identifier collidingOther = Identifier.fromNamespaceAndPath("mmcr_test", "c0");
+        assertThat(collidingHost.toString().hashCode()).isEqualTo(collidingOther.toString().hashCode());
+
+        MachineControllerMenu clientMenu = MachineControllerMenu.clientOpen(3, emptyInventory(), menuBuffer(
+                new BlockPos(1, 2, 3), MODULE_ID, collidingOther, 2, true, 0));
+
+        assertThat(clientMenu.machineId()).isEqualTo(MODULE_ID);
+        assertThat(clientMenu.connectedHostId()).contains(collidingOther);
+        assertThat(clientMenu.isModuleController()).isTrue();
+        assertThat(clientMenu.isHostController()).isFalse();
+    }
+
+    @Test
+    void client_menu_payload_updates_exact_connected_host_id_without_hash_lookup() throws Exception {
+        Identifier collidingHost = Identifier.fromNamespaceAndPath("mmcr_test", "an");
+        Identifier collidingOther = Identifier.fromNamespaceAndPath("mmcr_test", "c0");
+        assertThat(collidingHost.toString().hashCode()).isEqualTo(collidingOther.toString().hashCode());
+
+        MachineControllerMenu clientMenu = MachineControllerMenu.clientOpen(4, emptyInventory(), menuBuffer(
+                new BlockPos(4, 5, 6), MODULE_ID, collidingHost, 2, true, 0));
+
+        clientMenu.applyModuleStatus(0, true, collidingOther);
+
+        assertThat(clientMenu.connectedHostId()).contains(collidingOther);
     }
 
     private static Inventory emptyInventory() {
         return new Inventory(null, null);
+    }
+
+    private static RegistryFriendlyByteBuf menuBuffer(BlockPos pos, Identifier machineId, Identifier connectedHostId,
+                                                      int controllerRole, boolean formed, int installedModuleCount) {
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), null);
+        MachineControllerMenu.writeClientOpenData(buf, pos, machineId, connectedHostId, controllerRole, formed, installedModuleCount);
+        return buf;
     }
 
     private static FormationFixture formedFixture(Identifier hostId, Identifier moduleId, boolean hostFormed,

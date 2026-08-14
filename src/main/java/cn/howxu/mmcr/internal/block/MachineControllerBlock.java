@@ -166,7 +166,14 @@ public class MachineControllerBlock extends Block implements EntityBlock {
 
         if (!level.isClientSide()) {
             MenuProvider provider = state.getMenuProvider(level, pos);
-            if (provider != null) player.openMenu(provider, pos);
+            if (provider != null) player.openMenu(provider, buffer -> {
+                MachineControllerBlockEntity controller = level.getBlockEntity(pos) instanceof MachineControllerBlockEntity mc ? mc : null;
+                MachineControllerMenu.writeClientOpenData(buffer, pos, controller == null ? machineId : controller.machineId(),
+                        controller == null ? null : controller.connectedHostId().orElse(null),
+                        MachineControllerMenu.controllerRoleSyncValue(controller),
+                        controller != null && controller.isFormed(),
+                        controller == null ? 0 : controller.installedModuleCount());
+            });
         }
         return InteractionResult.SUCCESS;
     }
