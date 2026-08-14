@@ -169,6 +169,33 @@ class SharedIoCoordinatorTest {
         assertThat(committed).isFalse();
     }
 
+    @Test
+    void validatorInvalidatedByEarlierCommitPreventsLaterTransaction() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = new StructureClaimRegistry.ResourceDomain(11L, 1L, Set.of(A, B));
+        AtomicBoolean connectionValid = new AtomicBoolean(true);
+        AtomicBoolean staleTransactionInvoked = new AtomicBoolean();
+        List<String> committed = new ArrayList<>();
+
+        coordinator.enqueue(new SharedIoCoordinator.TickRequest(domain, new SharedIoCoordinator.LaneKey(A, "base"), 1L,
+                () -> {
+                    committed.add("A");
+                    connectionValid.set(false);
+                    return true;
+                }, connectionValid::get, () -> 1L));
+        coordinator.enqueue(new SharedIoCoordinator.TickRequest(domain, new SharedIoCoordinator.LaneKey(B, "base"), 1L,
+                () -> {
+                    staleTransactionInvoked.set(true);
+                    committed.add("B");
+                    return true;
+                }, connectionValid::get, () -> 1L));
+
+        coordinator.resolve(domain);
+
+        assertThat(committed).containsExactly("A");
+        assertThat(staleTransactionInvoked).isFalse();
+    }
+
     private static void enqueueAllRequestTypes(SharedIoCoordinator coordinator, StructureClaimRegistry.ResourceDomain domain,
                                                 List<String> committed) {
         for (BlockPos pos : List.of(A, B, C)) {

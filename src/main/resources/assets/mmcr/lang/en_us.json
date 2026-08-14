@@ -1,3 +1,4 @@
 {
-  "block.mmcr.module_bridge": "Module Bridge"
+  "block.mmcr.module_bridge": "Module Bridge",
+  "gui.mmcr.controller.failure.module_connection": "Module is not connected to a valid host"
 }

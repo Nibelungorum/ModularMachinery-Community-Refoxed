@@ -56,6 +56,10 @@ public final class FactoryRecipeLane implements FactoryRecipeScheduler.Lane {
     public void start() {
         if (started) return;
         started = true;
+        if (!recipe.canRunOnConnectedHost(context)) {
+            failForInvalidModuleConnection();
+            return;
+        }
         int granted = context.commitStart(recipe, recipe.getMaxParallelism());
         if (granted <= 0) {
             lastFailureUnloc = context.getLastFailureUnloc();
@@ -74,6 +78,10 @@ public final class FactoryRecipeLane implements FactoryRecipeScheduler.Lane {
     public boolean tick(long gameTime) {
         if (closed) return true;
         int tickTime = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, gameTime));
+        if (!recipe.canRunOnConnectedHost(context)) {
+            failForInvalidModuleConnection();
+            return recipe.getRecipe().doesCancelRecipeOnPerTickFailure();
+        }
         if (recipe.isFinishPending()) {
             if (!recipe.shouldRetryFinish(tickTime)) return false;
             ActiveMachineRecipe.TickStatus status = recipe.applyTickGrant(true,
@@ -127,5 +135,12 @@ public final class FactoryRecipeLane implements FactoryRecipeScheduler.Lane {
         if (closed) return;
         closed = true;
         contextReturner.accept(context);
+    }
+
+    private void failForInvalidModuleConnection() {
+        recipe.doFailureAction(null);
+        context.setModuleConnectionFailure();
+        lastFailureUnloc = RecipeCraftingContext.FAILURE_MODULE_CONNECTION;
+        if (recipe.getRecipe().doesCancelRecipeOnPerTickFailure()) close();
     }
 }

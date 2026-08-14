@@ -552,6 +552,10 @@ public final class RecipeCraftingContext {
         setFailure(key, failure);
     }
 
+    public void setModuleConnectionFailure() {
+        setFailure(FAILURE_MODULE_CONNECTION);
+    }
+
     private static String componentTrace(BlockEntity entity) {
         return entity.getClass().getSimpleName() + "@" + entity.getBlockPos().toShortString();
     }
@@ -1020,6 +1024,10 @@ public final class RecipeCraftingContext {
     }
 
     public boolean startCrafting(MachineRecipe recipe, int parallelism, ActiveMachineRecipe.InputConsumptionPlan plan) {
+        if (!canRunRecipeOnConnectedHost(recipe)) {
+            setModuleConnectionFailure();
+            return false;
+        }
         List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism, plan);
         if (!simulateStartRequirements(requirements, plan)) return false;
         if (!commitInputs(requirements)) return false;

@@ -1836,6 +1836,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 domain, new SharedIoCoordinator.LaneKey(getBlockPos(), "base"), structureVersion,
                 () -> {
                     if (!isActiveSharedRecipe(recipe, recipeContext, domain)) return false;
+                    if (!recipe.canRunOnConnectedHost(recipeContext)) {
+                        sharedTickPending = false;
+                        pendingSharedTickDomain = null;
+                        failActiveRecipeForInvalidModuleConnection();
+                        return false;
+                    }
                     if (recipe.needsFinishCommit() && !recipeContext.simulateOutputs(recipe.getRecipe(), recipe.getParallelism())) {
                         applySharedTick(recipe, recipeContext, false, false, gameTime);
                         return false;
@@ -1862,6 +1868,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 domain, new SharedIoCoordinator.LaneKey(getBlockPos(), "base"), structureVersion,
                 () -> {
                     if (!isActiveSharedRecipe(recipe, recipeContext, domain)) return false;
+                    if (!recipe.canRunOnConnectedHost(recipeContext)) {
+                        sharedTickPending = false;
+                        pendingSharedTickDomain = null;
+                        failActiveRecipeForInvalidModuleConnection();
+                        return false;
+                    }
                     applySharedTick(recipe, recipeContext, true,
                             recipeContext.coordinatorOutputs(recipe.getRecipe(), recipe.getParallelism()).getAsBoolean(), gameTime);
                     return true;

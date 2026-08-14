@@ -110,6 +110,10 @@ public final class SharedIoCoordinator {
         }
         for (int offset = 0; offset < requests.size(); offset++) {
             T request = requests.get((start + offset) % requests.size());
+            if (!request.isStillValid()) {
+                successful.add(request);
+                continue;
+            }
             if (request.tryCommit()) {
                 cursors.put(domainId, request.laneKey());
                 successful.add(request);

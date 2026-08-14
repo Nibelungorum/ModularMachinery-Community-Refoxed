@@ -1,15 +1,31 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRole;
+import cn.howxu.mmcr.api.recipe.MachineComponent;
+import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
+import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.util.IOType;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.neoforged.neoforge.items.ItemStackHandler;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -59,6 +75,22 @@ class ModuleRecipeHostRequirementTest {
     }
 
     @Test
+    void connectedModuleStatusAcceptsEmptyAndMatchingHostRequirements() {
+        ModuleConnectionStatus connected = ModuleConnectionStatus.connected(HOST_A);
+
+        assertThat(connected.canRunRecipe(Set.of())).isTrue();
+        assertThat(connected.canRunRecipe(Set.of(HOST_A))).isTrue();
+        assertThat(connected.canRunRecipe(Set.of(HOST_A, HOST_B))).isTrue();
+    }
+
+    @Test
+    void connectedModuleStatusRejectsMismatchedHostRequirements() {
+        ModuleConnectionStatus connected = ModuleConnectionStatus.connected(HOST_A);
+
+        assertThat(connected.canRunRecipe(Set.of(HOST_B))).isFalse();
+    }
+
+    @Test
     void requiredHostIdsRoundTripThroughCodec() {
         MachineRecipe recipe = recipe("codec_required_hosts", Set.of(HOST_A, HOST_B));
 
@@ -76,6 +108,28 @@ class ModuleRecipeHostRequirementTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(new ActiveMachineRecipe(recipe).canStartCrafting(context)).isFalse();
+    }
+
+    @Test
+    void publicStartCraftingRejectsUnconnectedModuleWithoutConsumingInputs() throws Exception {
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 0, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance());
+        MachineControllerBlockEntity controller = moduleController();
+        setField(MachineControllerBlockEntity.class, controller, "components", List.of(
+                new ProcessingComponent(
+                        new MachineComponent(PortKinds.ITEM_INPUT, IOType.INPUT),
+                        input, input.getBlockPos(), BlockPos.ZERO, (String) null)
+        ));
+        var level = LevelStub.createWithBlockEntities(List.of(input));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, input, "level", level);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("public_start_unconnected_module"), MODULE_ID, 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)),
+                false, List.of(), Set.of());
+
+        assertThat(new RecipeCraftingContext(controller).startCrafting(recipe)).isFalse();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
     }
 
     private static MachineRecipe recipe(String path, Set<Identifier> requiredHostIds) {
@@ -97,6 +151,22 @@ class ModuleRecipeHostRequirementTest {
         setField(MachineControllerBlockEntity.class, controller, "foundLevels", Map.of());
         setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
         return controller;
+    }
+
+    @SuppressWarnings("removal")
+    private static ItemInputBusBlockEntity itemInputBus(BlockPos pos) throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+        ItemInputBusBlockEntity bus = (ItemInputBusBlockEntity) unsafe.allocateInstance(ItemInputBusBlockEntity.class);
+        setField(BlockEntity.class, bus, "type", null);
+        setField(BlockEntity.class, bus, "worldPosition", pos);
+        setField(BlockEntity.class, bus, "blockState", Blocks.CHEST.defaultBlockState());
+        setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(1));
+        setField(LinkedAppearanceBlockEntity.class, bus, "appearanceBaseTexture", MMCR.id("block/basic_casing"));
+        setField(LinkedAppearanceBlockEntity.class, bus, "linkedControllers", new java.util.TreeMap<>(BlockPos::compareTo));
+        setField(LinkedAppearanceBlockEntity.class, bus, "controllerLinkCheckCounter", 0);
+        return bus;
     }
 
     private static void setField(Class<?> declaringClass, Object target, String name, Object value) throws ReflectiveOperationException {

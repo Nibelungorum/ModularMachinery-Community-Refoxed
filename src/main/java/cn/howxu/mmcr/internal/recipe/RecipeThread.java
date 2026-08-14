@@ -208,6 +208,12 @@ requested -> {
                 structureVersion,
                 () -> {
                     if (!isActive(recipe, recipeContext, domain)) return false;
+                    if (!recipe.canRunOnConnectedHost(recipeContext)) {
+                        tickPending = false;
+                        pendingTickDomain = null;
+                        failActiveRecipeForInvalidModuleConnection();
+                        return false;
+                    }
                     if (recipe.needsFinishCommit()
                             && !recipeContext.simulateOutputs(recipe.getRecipe(), recipe.getParallelism())) {
                         applyTick(recipe, recipeContext, false, false, gameTime);
@@ -240,6 +246,12 @@ requested -> {
                 structureVersion,
                 () -> {
                     if (!isActive(recipe, recipeContext, domain)) return false;
+                    if (!recipe.canRunOnConnectedHost(recipeContext)) {
+                        tickPending = false;
+                        pendingTickDomain = null;
+                        failActiveRecipeForInvalidModuleConnection();
+                        return false;
+                    }
                     applyTick(recipe, recipeContext, true,
                             recipeContext.coordinatorOutputs(recipe.getRecipe(), recipe.getParallelism()).getAsBoolean(), gameTime);
                     return true;
