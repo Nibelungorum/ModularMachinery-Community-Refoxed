@@ -77,14 +77,31 @@ public record MachineStructureFamily(List<MachineStructureStage> stages) {
     }
 
     private static void rejectMultipleControllers(Map<BlockPos, BlockPredicate> pattern, int stageNumber) {
-        if (pattern.values().stream().filter(MachineStructureFamily::isController).count() > 1) {
-            throw new IllegalArgumentException("stage " + stageNumber + " contains multiple controllers");
+        List<BlockPos> controllers = pattern.entrySet().stream()
+                .filter(entry -> isController(entry.getValue()))
+                .map(Map.Entry::getKey)
+                .toList();
+        if (controllers.size() > 1) {
+            throw new IllegalArgumentException("stage " + stageNumber + " contains multiple controllers at "
+                    + controllers.stream().map(MachineStructureFamily::format).toList());
         }
     }
 
     private static boolean isController(BlockPredicate predicate) {
-        return predicate instanceof BlockPredicate.OfBlock ofBlock
-                && ofBlock.block() instanceof MachineControllerBlock;
+        if (predicate instanceof BlockPredicate.OfBlock ofBlock) {
+            return ofBlock.block() instanceof MachineControllerBlock;
+        }
+        if (predicate instanceof BlockPredicate.OfBlockState ofBlockState) {
+            return ofBlockState.state().getBlock() instanceof MachineControllerBlock;
+        }
+        if (predicate instanceof BlockPredicate.AnyOf anyOf) {
+            return anyOf.children().stream().anyMatch(MachineStructureFamily::isController);
+        }
+        return false;
+    }
+
+    private static String format(BlockPos position) {
+        return position.getX() + ", " + position.getY() + ", " + position.getZ();
     }
 
     private static <T> Map<BlockPos, T> mergeMap(Map<BlockPos, T> previous, Map<BlockPos, T> extension,

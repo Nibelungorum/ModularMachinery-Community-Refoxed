@@ -1310,11 +1310,7 @@ public final class RecipeCraftingContext {
         List<ItemOutputTransfer> itemTransfers = new ArrayList<>();
         List<FluidOutputTransfer> fluidTransfers = new ArrayList<>();
 
-        for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
-            MachineRequirement requirement = requirements.get(requirementIndex);
-            if (isPartialOutputRequirement(requirement)) continue;
-            if (requirement.io() == RecipeModifier.IOType.OUTPUT && !requirement.commit(this, requirementIndex)) return false;
-        }
+        if (!commitStrictPartialOutputs(requirements)) return false;
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
@@ -1332,9 +1328,46 @@ public final class RecipeCraftingContext {
         return true;
     }
 
+    private boolean commitStrictPartialOutputs(List<MachineRequirement> requirements) {
+        List<SmartInterfaceCommit> smartCommits = new ArrayList<>();
+        for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
+            MachineRequirement requirement = requirements.get(requirementIndex);
+            if (isPartialOutputRequirement(requirement) || requirement.io() != RecipeModifier.IOType.OUTPUT) continue;
+            if (requirement instanceof SmartInterfaceRequirement smartInterface) {
+                Optional<SmartInterfaceBinding> binding = smartInterface(smartInterface.interfaceType());
+                if (binding.isEmpty()) return false;
+                Optional<Float> oldValue = binding.get().interfaceEntity().value(smartInterface.interfaceType());
+                if (oldValue.isEmpty()) return false;
+                smartCommits.add(new SmartInterfaceCommit(
+                        binding.get().interfaceEntity(), smartInterface.interfaceType(), oldValue.get(), smartInterface.minValue()));
+            } else if (!requirement.commit(this, requirementIndex)) {
+                return false;
+            }
+        }
+        List<SmartInterfaceCommit> applied = new ArrayList<>(smartCommits.size());
+        for (SmartInterfaceCommit commit : smartCommits) {
+            if (!commit.apply()) {
+                for (int index = applied.size() - 1; index >= 0; index--) applied.get(index).rollback();
+                return false;
+            }
+            applied.add(commit);
+        }
+        return true;
+    }
+
     private static boolean isPartialOutputRequirement(MachineRequirement requirement) {
         return (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT)
                 || (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT);
+    }
+
+    private record SmartInterfaceCommit(SmartInterfaceBlockEntity smartInterface, String type, float oldValue, float newValue) {
+        boolean apply() {
+            return smartInterface.setValue(type, newValue);
+        }
+
+        void rollback() {
+            smartInterface.setValue(type, oldValue);
+        }
     }
 
     private boolean shouldProduce(float chance) {

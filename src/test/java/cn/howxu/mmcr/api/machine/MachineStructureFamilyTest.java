@@ -175,6 +175,33 @@ class MachineStructureFamilyTest {
                 .hasMessageContaining("controller");
     }
 
+    @Test
+    void fullDeclarationRejectsOfBlockStateController() {
+        BlockArray invalid = array(Map.of(
+                BlockPos.ZERO, controller(),
+                new BlockPos(2, 0, 0), controllerState()));
+
+        assertThatThrownBy(() -> MachineStructureFamily.of(definition("of_block_state_controller",
+                Declaration.full(invalid))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("stage 1")
+                .hasMessageContaining("2, 0, 0")
+                .hasMessageContaining("controller");
+    }
+
+    @Test
+    void extensionRejectsAnyOfController() {
+        BlockArray base = array(Map.of(BlockPos.ZERO, controller(), new BlockPos(1, 0, 0), casing()));
+
+        assertThatThrownBy(() -> MachineStructureFamily.of(definition("any_of_controller",
+                Declaration.full(base),
+                Declaration.extension(array(Map.of(new BlockPos(3, 0, 0), anyOfController()))))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("stage 2")
+                .hasMessageContaining("3, 0, 0")
+                .hasMessageContaining("controller");
+    }
+
     private static MachineStructureDefinition definition(String name, Declaration... declarations) {
         return new MachineStructureDefinition(MMCR.id(name), List.of(declarations));
     }
@@ -185,6 +212,14 @@ class MachineStructureFamilyTest {
 
     private static BlockPredicate controller() {
         return new BlockPredicate.OfBlock(ModBlocks.CONTROLLER.get());
+    }
+
+    private static BlockPredicate controllerState() {
+        return new BlockPredicate.OfBlockState(ModBlocks.CONTROLLER.get().defaultBlockState());
+    }
+
+    private static BlockPredicate anyOfController() {
+        return new BlockPredicate.AnyOf(List.of(casing(), controllerState()));
     }
 
     private static BlockPredicate casing() {

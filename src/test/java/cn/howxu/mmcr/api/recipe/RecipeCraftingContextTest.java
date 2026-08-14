@@ -57,6 +57,7 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.TreeMap;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.util.ProblemReporter;
@@ -664,6 +665,31 @@ class RecipeCraftingContextTest {
 
         assertThat(context.simulateOutputs(recipe)).isFalse();
         assertThat(context.commitSynchronousOutputs(recipe, 1)).isFalse();
+        assertThat(total(output, Items.IRON_INGOT)).isZero();
+    }
+
+    @Test
+    void partialStrictOutputsDoNotLeakEarlierStrictMutationsWhenLaterStrictOutputFails() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        SmartInterfaceBlockEntity first = smartInterface(new BlockPos(2, 0, 0));
+        SmartInterfaceBlockEntity second = failingSmartInterface(new BlockPos(3, 0, 0), "second");
+        first.claimController(BlockPos.ZERO, MMCR.id("test_machine"), Map.of(
+                "first", new SmartInterfaceType("first", 1F, 0)), true);
+        second.claimController(BlockPos.ZERO, MMCR.id("test_machine"), Map.of(
+                "second", new SmartInterfaceType("second", 2F, 0)), true);
+        MachineControllerBlockEntity controller = controllerWithComponents(output, first, second);
+        MachineRecipe recipe = partialRequirementRecipe("partial_strict_outputs_atomic_order", List.of(
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, Items.IRON_INGOT.getDefaultInstance()),
+                SmartInterfaceRequirement.output("first", 9F),
+                SmartInterfaceRequirement.output("second", 7F)
+        ));
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isFalse();
+        assertThat(first.value("first")).contains(1F);
+        assertThat(second.value("second")).contains(2F);
         assertThat(total(output, Items.IRON_INGOT)).isZero();
     }
 
@@ -1440,6 +1466,16 @@ class RecipeCraftingContextTest {
     private static SmartInterfaceBlockEntity smartInterface(BlockPos pos) {
         return (SmartInterfaceBlockEntity) ModBlockEntities.SMART_INTERFACE.get().create(
                 pos, ModBlocks.SMART_INTERFACE.get().defaultBlockState());
+    }
+
+    private static SmartInterfaceBlockEntity failingSmartInterface(BlockPos pos, String rejectedType) {
+        return new SmartInterfaceBlockEntity(pos, ModBlocks.SMART_INTERFACE.get().defaultBlockState()) {
+            @Override
+            public boolean setValue(String type, float value) {
+                if (rejectedType.equals(type)) return false;
+                return super.setValue(type, value);
+            }
+        };
     }
 
     private static void registerMachineWithSmartModifier(Identifier machineId, List<SmartInterfaceModifier> modifiers) {
