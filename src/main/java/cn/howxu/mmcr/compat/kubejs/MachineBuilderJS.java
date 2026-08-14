@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
+import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
@@ -32,6 +33,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient Identifier formedPortBaseTexture;
     public transient Identifier runningSoundId;
     public transient Identifier finishSoundId;
+    public transient BlockArray pattern;
     private final List<Identifier> acceptedModuleIds = new ArrayList<>();
     private boolean module;
     private final List<String> controllerTooltip = new ArrayList<>();
@@ -70,6 +72,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .maxParallelAmount(maxParallelAmount)
                 .runningSound(runningSoundId)
                 .finishSound(finishSoundId)
+                .pattern(pattern)
                 .shareSmartInterfaces(shareSmartInterfaces);
         acceptedModuleIds.forEach(registration::host);
         if (module) registration.module();
@@ -107,6 +110,11 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
 
     public MachineBuilderJS module() {
         this.module = true;
+        return this;
+    }
+
+    public MachineBuilderJS pattern(BlockArray pattern) {
+        this.pattern = pattern;
         return this;
     }
 

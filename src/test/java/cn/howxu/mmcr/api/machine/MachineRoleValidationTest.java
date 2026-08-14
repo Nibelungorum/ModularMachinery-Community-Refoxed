@@ -3,9 +3,13 @@ package cn.howxu.mmcr.api.machine;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
+import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -15,6 +19,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MachineRoleValidationTest {
+
+    @BeforeAll
+    static void bootstrapMinecraft() throws Exception {
+        TestBootstrap.bootstrap();
+    }
+
+    @BeforeEach
+    void reset() {
+        cleanup();
+    }
 
     @AfterEach
     void cleanup() {
@@ -136,6 +150,59 @@ class MachineRoleValidationTest {
 
         assertThat(MachineRegistry.getMachine(oldId)).isNotNull();
         assertThat(MachineRegistry.getMachine(badHostId)).isNull();
+    }
+
+    @Test
+    void dynamicReloadValidatesHostsAgainstCandidateModulesOnly() {
+        Identifier hostId = MMCR.id("host_machine");
+        Identifier moduleId = MMCR.id("module_machine");
+        MachineDefinitions.register(MachineRegistration.builder(hostId).host(moduleId).build());
+        MachineDefinitions.register(MachineRegistration.builder(moduleId).module().build());
+        DynamicContentReloadService.reload(candidate -> {
+            candidate.registerStructure(structure(hostId, patternWithCouplers(1)));
+            candidate.registerStructure(structure(moduleId, patternWithCouplers(1)));
+        });
+
+        assertThatThrownBy(() -> DynamicContentReloadService.reload(candidate ->
+                candidate.registerStructure(structure(hostId, patternWithCouplers(1)))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unknown module reference");
+
+        assertThat(MachineRegistry.getMachine(hostId)).isNotNull();
+        assertThat(MachineRegistry.getMachine(moduleId)).isNotNull();
+    }
+
+    @Test
+    void dynamicReloadKeepsExplicitMissingRegistrationError() {
+        Identifier unknownId = MMCR.id("unknown_machine");
+
+        assertThatThrownBy(() -> DynamicContentReloadService.reload(candidate ->
+                candidate.registerStructure(structure(unknownId, patternWithCouplers(0)))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("No startup machine registration for structure");
+    }
+
+    @Test
+    void freezeRegistryValidationUsesStaticRegistrationPattern() {
+        Identifier hostId = MMCR.id("static_host");
+        Identifier moduleId = MMCR.id("static_module");
+        MachineDefinitions.register(MachineRegistration.builder(hostId)
+                .host(moduleId)
+                .pattern(patternWithCouplers(1))
+                .build());
+        MachineDefinitions.register(MachineRegistration.builder(moduleId)
+                .module()
+                .pattern(patternWithCouplers(1))
+                .build());
+
+        MachineDefinitions.freezeRegistryPhase();
+
+        assertThat(MachineDefinitions.isRegistryPhaseOpen()).isFalse();
+    }
+
+    @Test
+    void machineCouplerOnlyMatchesDeclaredCouplerBlock() {
+        assertThat(BlockPredicate.machineCoupler().matches(Blocks.IRON_BLOCK.defaultBlockState())).isFalse();
     }
 
     private static MachineStructureDefinition structure(Identifier id, BlockArray pattern) {

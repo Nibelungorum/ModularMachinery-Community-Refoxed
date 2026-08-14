@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
@@ -9,6 +11,7 @@ import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -133,6 +136,18 @@ class MachineBuilderJSTest {
 
         assertThat(registration.controllerSpec().tooltip())
                 .containsExactly("tooltip.mmcr.arc_furnace.0", "tooltip.mmcr.arc_furnace.1");
+    }
+
+    @Test
+    void startup_builder_preserves_static_pattern_for_role_validation() {
+        BlockArray pattern = new BlockArray(java.util.Map.of(BlockPos.ZERO, BlockPredicate.machineCoupler()));
+
+        var registration = new MachineBuilderJS(MMCR.id("static_module"))
+                .module()
+                .pattern(pattern)
+                .createObject();
+
+        assertThat(registration.pattern()).isSameAs(pattern);
     }
 
     @Test

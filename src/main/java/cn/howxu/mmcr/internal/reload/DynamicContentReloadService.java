@@ -32,7 +32,6 @@ public final class DynamicContentReloadService {
         producer.accept(candidate);
         Map<Identifier, MachineStructureDefinition> oldStructures = MachineStructureRegistry.dynamicSnapshot();
         Map<Identifier, MachineRecipe> oldRecipes = RecipeRegistry.dynamicSnapshot();
-        MachineStructureRegistry.validateDynamicRoles(candidate.structures);
         MachineStructureRegistry.replaceDynamic(candidate.structures);
         RecipeRegistry.replaceDynamic(candidate.recipes);
         RecipeCraftingContextPool.onGlobalReload();

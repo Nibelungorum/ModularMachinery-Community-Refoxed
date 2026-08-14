@@ -30,18 +30,6 @@ public final class MachineRoleValidator {
         }
     }
 
-    public static void validateMachines(Collection<Machine> machines, Function<Identifier, Machine> resolver) {
-        Map<Identifier, Machine> byId = new LinkedHashMap<>();
-        for (Machine machine : machines) {
-            byId.put(machine.registryName(), machine);
-        }
-
-        for (Machine machine : machines) {
-            validateCouplerCount(machine.registryName(), machine.role(), countCouplers(machine.pattern()));
-            if (machine.isHost()) validateAcceptedModules(machine, byId, resolver);
-        }
-    }
-
     private static void validateCouplerCount(MachineRegistration registration, int couplers) {
         validateCouplerCount(registration.id(), registration.role(), couplers);
     }
@@ -72,22 +60,6 @@ public final class MachineRoleValidator {
             if (module == null) throw new IllegalArgumentException("Unknown module reference: " + host.id() + " -> " + moduleId);
             if (!module.isModule()) {
                 throw new IllegalArgumentException("Host " + host.id() + " references " + moduleId
-                        + " but it does not reference a MODULE machine");
-            }
-        }
-    }
-
-    private static void validateAcceptedModules(Machine host, Map<Identifier, Machine> byId,
-                                                Function<Identifier, Machine> resolver) {
-        if (host.acceptedModuleIds().isEmpty()) {
-            throw new IllegalArgumentException("HOST machine must accept at least 1 module: " + host.registryName());
-        }
-        for (Identifier moduleId : host.acceptedModuleIds()) {
-            Machine module = byId.get(moduleId);
-            if (module == null && resolver != null) module = resolver.apply(moduleId);
-            if (module == null) throw new IllegalArgumentException("Unknown module reference: " + host.registryName() + " -> " + moduleId);
-            if (!module.isModule()) {
-                throw new IllegalArgumentException("Host " + host.registryName() + " references " + moduleId
                         + " but it does not reference a MODULE machine");
             }
         }

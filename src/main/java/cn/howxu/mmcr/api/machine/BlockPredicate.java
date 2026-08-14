@@ -17,7 +17,7 @@ public sealed interface BlockPredicate {
     enum MachineCoupler implements BlockPredicate {
         INSTANCE;
 
-        @Override public boolean matches(BlockState state) { return true; }
+        @Override public boolean matches(BlockState state) { return false; }
     }
 
     record Air() implements BlockPredicate {
