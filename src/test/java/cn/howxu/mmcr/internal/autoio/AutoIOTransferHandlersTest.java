@@ -41,7 +41,7 @@ class AutoIOTransferHandlersTest {
     }
 
     @Test
-    void empty_candidate_cache_waits_for_dirty_signal_before_rechecking() {
+    void empty_candidate_cache_rechecks_after_retry_delay() {
         ProbeHandler handler = new ProbeHandler();
         ProbePort port = new ProbePort(BlockPos.ZERO, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState(), handler);
         port.toggleAutoIOEnabled();
@@ -55,12 +55,13 @@ class AutoIOTransferHandlersTest {
         port.runAutoIOCycleAt(2L);
         assertThat(handler.hasAdjacentTargetCalls).isEqualTo(1);
 
-        port.runAutoIOCycleAt(60L);
-        assertThat(handler.hasAdjacentTargetCalls).isEqualTo(1);
-        assertThat(handler.transferCalls).isZero();
+        for (long gameTime = 3L; gameTime <= 6L; gameTime++) {
+            port.runAutoIOCycleAt(gameTime);
+        }
+        assertThat(handler.hasAdjacentTargetCalls).isEqualTo(2);
+        assertThat(handler.transferCalls).isEqualTo(1);
 
-        port.markAutoIOCacheDirty();
-        port.runAutoIOCycleAt(120L);
+        port.runAutoIOCycleAt(7L);
         assertThat(handler.hasAdjacentTargetCalls).isEqualTo(2);
         assertThat(handler.transferCalls).isEqualTo(1);
     }

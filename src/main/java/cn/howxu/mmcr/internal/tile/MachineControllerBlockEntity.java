@@ -1357,6 +1357,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private void resetMachine(boolean clearFormationFailure) {
+        resetMachine(clearFormationFailure, true);
+    }
+
+    private void resetMachine(boolean clearFormationFailure, boolean updateBlockState) {
         boolean wasFormed = isFormed();
         Identifier dropped = foundMachine == null ? null : foundMachine.registryName();
         boolean hadActive = active != null;
@@ -1398,7 +1402,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (dropped != null || wasFormed || hadActive) structureVersion++;
         markRecipeDirty();
         clearCandidateCache();
-        if (wasFormed) setFormed(false);
+        if (wasFormed && updateBlockState) setFormed(false);
         setChanged();
         syncRuntimeStateIfChanged();
     }
@@ -1886,7 +1890,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     @Override
     public void setRemoved() {
-        if (level != null && !level.isClientSide()) resetMachine();
+        if (level != null && !level.isClientSide()) resetMachine(true, false);
         super.setRemoved();
     }
 

@@ -21,6 +21,12 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Run Data Permission
+        run: chmod u+x run_data.sh
+
+      - name: Run Data
+        run: ./run_data.sh
+
       - name: Compile Test
         run: ./gradlew compileJava --no-daemon
       

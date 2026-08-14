@@ -1093,6 +1093,23 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void set_removed_does_not_rewrite_formed_controller_state() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        ItemInputBusBlockEntity port = itemInputBus(controllerPos.offset(1, 0, 0));
+        DynamicMachine machine = new DynamicMachine(
+                MMCR.id("removed_formed_controller_machine"),
+                "Removed Formed Controller",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()));
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, port);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        BlockState formedState = controller.getBlockState();
+
+        controller.setRemoved();
+
+        assertThat(levelOf(controller).getBlockState(controllerPos)).isSameAs(formedState);
+    }
+
+    @Test
     void chunk_unload_stops_real_factory_lanes_and_returns_contexts_once() throws Exception {
         bindItemComponents(Items.IRON_INGOT);
         bindItemComponents(Items.IRON_NUGGET);

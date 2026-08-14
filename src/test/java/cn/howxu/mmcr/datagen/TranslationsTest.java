@@ -101,6 +101,20 @@ class TranslationsTest {
     }
 
     @Test
+    void port_tier_requirement_labels_use_standard_chinese_tier_names() {
+        assertThat(Translations.ALL.get("zh_cn"))
+                .containsEntry("message.mmcr.port_tier.tiny", "微型")
+                .containsEntry("message.mmcr.port_tier.small", "小型")
+                .containsEntry("message.mmcr.port_tier.normal", "普通")
+                .containsEntry("message.mmcr.port_tier.reinforced", "强化")
+                .containsEntry("message.mmcr.port_tier.big", "大型")
+                .containsEntry("message.mmcr.port_tier.huge", "巨型")
+                .containsEntry("message.mmcr.port_tier.ludicrous", "荒诞")
+                .containsEntry("message.mmcr.port_tier.vacuum", "终极")
+                .containsEntry("message.mmcr.port_tier.ultimate", "究极");
+    }
+
+    @Test
     void jei_recipe_labels_are_generated_for_both_locales() {
         assertEquals("Machine Recipe", Translations.ALL.get("en_us").get("jei.mmcr.machine_recipe"));
         assertEquals("Duration: %s t %s s", Translations.ALL.get("en_us").get("jei.mmcr.machine_recipe.duration"));

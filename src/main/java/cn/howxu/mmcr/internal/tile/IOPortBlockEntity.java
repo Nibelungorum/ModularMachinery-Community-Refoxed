@@ -178,8 +178,20 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         if (autoIOConfig == null || level == null || level.isClientSide() || !autoIOConfig.enabled() || autoIOConfig.enabledSides().isEmpty()) return;
         AutoIOTransferHandler handler = autoIOTransferHandler();
         if (handler == null) return;
-        if (consumeAutoIOCacheDirty()) rebuildAutoIOCandidates(handler);
-        if (autoIOCandidateSides.isEmpty()) return;
+        boolean rebuiltCandidates = consumeAutoIOCacheDirty();
+        if (rebuiltCandidates) rebuildAutoIOCandidates(handler);
+        if (autoIOCandidateSides.isEmpty()) {
+            if (rebuiltCandidates) {
+                autoIOTicksUntilTransfer = AUTO_IO_MIN_DELAY - 1;
+                return;
+            }
+            if (autoIOTicksUntilTransfer > 0) {
+                autoIOTicksUntilTransfer--;
+                return;
+            }
+            rebuildAutoIOCandidates(handler);
+            if (autoIOCandidateSides.isEmpty()) return;
+        }
         if (!hasAutoIOTransferWork()) return;
         if (autoIOTicksUntilTransfer > 0) {
             autoIOTicksUntilTransfer--;

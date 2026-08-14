@@ -35,6 +35,10 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation 'org.assertj:assertj-core:3.25.0'
+
+    // implement ae2 api
+    runtimeOnly "org.appliedenergistics:appliedenergistics2:26.1.11-SNAPSHOT"
+    implementation "org.appliedenergistics:appliedenergistics2:26.1.11-SNAPSHOT:api"
 }
 
 dependencies {

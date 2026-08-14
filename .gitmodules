@@ -24,3 +24,10 @@
 	path = reference/gtceu
 	url = https://github.com/GregTechCEu/GregTech
 	branch = master
+[submodule "reference/mek"]
+	path = reference/mek
+	url = https://github.com/mekanism/Mekanism
+	branch = 26.1
+[submodule "reference/ae2"]
+	path = reference/ae2
+	url = https://github.com/AppliedEnergistics/Applied-Energistics-2
