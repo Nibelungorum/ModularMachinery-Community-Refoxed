@@ -102,6 +102,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     private static final int AUTO_IO_TOGGLE_BUTTON_HEIGHT = 20;
     private static final float AUTO_IO_TOGGLE_TEXT_SCALE = 0.85F;
     private static final int RECIPE_LOCK_BUTTON_SIZE = 20;
+    private static final int PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR = 82;
     private static final int HIDDEN_SLOT_X = -1000;
     private static final int HIDDEN_SLOT_Y = -1000;
     private boolean autoIOPage;
@@ -296,7 +297,8 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     }
 
     static Rect recipeLockButtonRect(int left, int top, int width, int height) {
-        return new Rect(left + width - RECIPE_LOCK_BUTTON_SIZE, top + height - RECIPE_LOCK_BUTTON_SIZE,
+        return new Rect(left + width - RECIPE_LOCK_BUTTON_SIZE,
+                top + height - PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR - RECIPE_LOCK_BUTTON_SIZE,
                 RECIPE_LOCK_BUTTON_SIZE, RECIPE_LOCK_BUTTON_SIZE);
     }
 
@@ -837,6 +839,9 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     public record Rect(int left, int top, int width, int height) {
         int right() { return left + width; }
         int bottom() { return top + height; }
+        boolean overlaps(Rect other) {
+            return left < other.right() && right() > other.left && top < other.bottom() && bottom() > other.top;
+        }
     }
 
     private record HiddenSlotPosition(int index, Slot slot) {

@@ -45,6 +45,7 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     private static final int SELECTED_THREAD_OVERLAY = 0x66A8D8FF;
     private static final int DETAIL_LINE_SPACING = 14;
     private static final int RECIPE_LOCK_BUTTON_SIZE = 20;
+    private static final int PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR = 82;
     private static final Identifier BACKGROUND = MMCR.id("textures/gui/guifactory.png");
     private static final Identifier ELEMENTS = MMCR.id("textures/gui/guifactoryelements.png");
     private static final Identifier SCROLLER = MMCR.id("textures/gui/scroller.png");
@@ -104,7 +105,8 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     }
 
     static Rect recipeLockButtonRect(int left, int top, int width, int height) {
-        return new Rect(left + width - RECIPE_LOCK_BUTTON_SIZE, top + height - RECIPE_LOCK_BUTTON_SIZE,
+        return new Rect(left + width - RECIPE_LOCK_BUTTON_SIZE,
+                top + height - PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR - RECIPE_LOCK_BUTTON_SIZE,
                 RECIPE_LOCK_BUTTON_SIZE, RECIPE_LOCK_BUTTON_SIZE);
     }
 
@@ -324,5 +326,8 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     public record Rect(int left, int top, int width, int height) {
         int right() { return left + width; }
         int bottom() { return top + height; }
+        boolean overlaps(Rect other) {
+            return left < other.right() && right() > other.left && top < other.bottom() && bottom() > other.top;
+        }
     }
 }

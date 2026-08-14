@@ -184,12 +184,14 @@ class FactoryControllerScreenTest {
     }
 
     @Test
-    void recipe_lock_button_is_square_and_anchored_to_bottom_right() {
+    void recipe_lock_button_stays_outside_factory_inventory_and_hotbar_bounds() {
         FactoryControllerScreen.Rect button = FactoryControllerScreen.recipeLockButtonRect(0, 0, 280, 213);
+        FactoryControllerScreen.Rect playerInventory = new FactoryControllerScreen.Rect(113, 131, 162, 54);
+        FactoryControllerScreen.Rect hotbar = new FactoryControllerScreen.Rect(113, 189, 162, 18);
 
         assertThat(button.width()).isEqualTo(button.height());
-        assertThat(button.right()).isEqualTo(280);
-        assertThat(button.bottom()).isEqualTo(213);
+        assertThat(button.overlaps(playerInventory)).isFalse();
+        assertThat(button.overlaps(hotbar)).isFalse();
     }
 
     @Test

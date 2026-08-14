@@ -376,12 +376,14 @@ class MenuScreenTest {
     }
 
     @Test
-    void controller_recipe_lock_button_is_square_and_bottom_right_without_overlapping_inventory() {
+    void controller_recipe_lock_button_stays_outside_inventory_and_hotbar_bounds() {
         MachineMenuScreen.Rect button = MachineMenuScreen.recipeLockButtonRect(0, 0, 176, 213);
+        MachineMenuScreen.Rect playerInventory = new MachineMenuScreen.Rect(8, 131, 162, 54);
+        MachineMenuScreen.Rect hotbar = new MachineMenuScreen.Rect(8, 189, 162, 18);
 
         assertThat(button.width()).isEqualTo(button.height());
-        assertThat(button.right()).isEqualTo(176);
-        assertThat(button.bottom()).isEqualTo(213);
+        assertThat(button.overlaps(playerInventory)).isFalse();
+        assertThat(button.overlaps(hotbar)).isFalse();
     }
 
     @Test
