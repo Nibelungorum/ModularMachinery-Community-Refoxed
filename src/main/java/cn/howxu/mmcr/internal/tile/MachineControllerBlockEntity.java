@@ -33,6 +33,7 @@ import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
+import cn.howxu.mmcr.internal.multiblock.ModuleConnectionCoordinator;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.SmartInterfaceBindingCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
@@ -174,6 +175,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     public Machine getFoundMachine() { return foundMachine; }
     public BlockArray getFoundPattern() { return foundPattern; }
+    public @Nullable CompiledMachinePattern getFoundCompiledPattern() { return foundCompiledPattern; }
+    public @Nullable Direction getControllerFacing() { return controllerFacing; }
 
     public Map<String, List<RecipeModifier>> getFoundModifiers() {
         if (foundModifiers == null) return Map.of();
@@ -232,6 +235,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (!isFormed() || foundCompiledPattern == null || controllerFacing == null) return;
         if (!isInsideCompiledBounds(changedPos)) return;
         structureDirty = true;
+        if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
         markRecipeDirty();
         setChanged();
     }
@@ -1037,6 +1041,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         foundLevels = levels;
         collectFoundModifiers(replacements);
         FORMED_CONTROLLERS.add(this);
+        if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
         structureVersion++;
         structureDirty = false;
         structureCheckCounter = 0;
@@ -1270,6 +1275,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (!isFormed() || foundCompiledPattern == null || controllerFacing == null) return;
         if (!compiledBoundsTouchesChunk(chunkPos)) return;
         structureDirty = true;
+        if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
         pauseActiveForUnloadedStructure();
         setChanged();
         syncLevelState();
@@ -1363,6 +1369,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     private void resetMachine(boolean clearFormationFailure, boolean updateBlockState) {
         boolean wasFormed = isFormed();
+        if (wasFormed && level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.clearConnectionsFor(serverLevel, this);
         Identifier dropped = foundMachine == null ? null : foundMachine.registryName();
         boolean hadActive = active != null;
         Identifier activeRecipe = hadActive ? active.getRecipe().id() : null;

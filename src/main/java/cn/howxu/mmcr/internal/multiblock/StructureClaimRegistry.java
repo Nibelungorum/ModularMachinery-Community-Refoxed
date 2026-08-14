@@ -92,6 +92,10 @@ public final class StructureClaimRegistry {
         return domain == null ? 0 : domain.generation();
     }
 
+    public Set<BlockPos> claimedControllers() {
+        return Set.copyOf(claimsByController.keySet());
+    }
+
     private void rebuildDomains() {
         domainsByController.clear();
         Map<BlockPos, Set<BlockPos>> sharedControllersByComponent = new HashMap<>();

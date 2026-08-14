@@ -82,6 +82,7 @@ public class MMCR {
         NeoForge.EVENT_BUS.addListener(StructureDirtyEvents::onFluidPlaced);
         NeoForge.EVENT_BUS.addListener(StructureDirtyEvents::onBlockBroken);
         NeoForge.EVENT_BUS.addListener(StructureDirtyEvents::onChunkUnloaded);
+        NeoForge.EVENT_BUS.addListener(StructureDirtyEvents::onChunkLoaded);
         NeoForge.EVENT_BUS.addListener(SharedIoEvents::onLevelTick);
         NeoForge.EVENT_BUS.addListener(SharedIoEvents::onLevelUnload);
         NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedInEvent event) -> {

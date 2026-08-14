@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.machine;
 
+import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
+
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -17,7 +19,7 @@ public sealed interface BlockPredicate {
     enum MachineCoupler implements BlockPredicate {
         INSTANCE;
 
-        @Override public boolean matches(BlockState state) { return false; }
+        @Override public boolean matches(BlockState state) { return state.getBlock() instanceof ModuleCouplerBlock; }
     }
 
     record Air() implements BlockPredicate {
