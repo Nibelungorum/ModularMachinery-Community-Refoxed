@@ -689,11 +689,17 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     public BlockArray assemblyPattern(Machine candidate) {
         if (foundPattern != null) return foundPattern;
+        return assemblyPattern(candidate, isFormed() && matchedStructureStage > 0 ? matchedStructureStage : 1);
+    }
+
+    public BlockArray assemblyPattern(Machine candidate, int stageNumber) {
+        if (stageNumber < 1) throw new IllegalArgumentException("stageNumber must be >= 1");
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
         return candidatePatterns(candidate, facing).stream()
-                .filter(pattern -> pattern.stageNumber() == 1)
+                .filter(pattern -> pattern.stageNumber() == stageNumber)
                 .findFirst()
-                .orElseGet(() -> candidatePatterns(candidate, facing).getFirst())
+                .orElseThrow(() -> new IllegalArgumentException("Unknown structure stage " + stageNumber
+                        + " for machine " + candidate.registryName()))
                 .pattern();
     }
 

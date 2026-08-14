@@ -13,7 +13,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Shared synchronous executor for multiblock build and demolish operations.
@@ -45,12 +47,7 @@ public final class MultiblockAssemblyService {
         for (var entry : rotatedPattern.pattern().entrySet()) {
             if (entry.getKey().equals(BlockPos.ZERO)) continue;
             BlockPredicate predicate = entry.getValue();
-            MultiblockPreviewBuilder.previewState(predicate).ifPresent(state -> {
-                ItemStack requirement = requirementFor(state);
-                if (!requirement.isEmpty()) {
-                    placements.add(new Placement(controllerPos.offset(entry.getKey()), state, requirement, predicate));
-                }
-            });
+            preferredState(predicate).ifPresent(state -> addPlacement(placements, controllerPos.offset(entry.getKey()), state, predicate));
         }
         return placements;
     }
@@ -77,8 +74,8 @@ public final class MultiblockAssemblyService {
         }
         if (!creative) {
             StructureItemSource source = new PlayerInventoryStructureItemSource(player);
-            List<ItemStack> requirements = aggregateRequirements(placements);
-            if (!source.extractAll(requirements)) {
+            placements = extractAvailablePlacements(placements, source);
+            if (placements.isEmpty()) {
                 return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.missing"));
             }
         }
@@ -126,6 +123,56 @@ public final class MultiblockAssemblyService {
         } catch (NullPointerException ignored) {
             return new ItemStack(Holder.direct(state.getBlock().asItem(), DataComponentMap.EMPTY));
         }
+    }
+
+    private static Optional<BlockState> preferredState(BlockPredicate predicate) {
+        List<BlockState> candidates = candidateStates(predicate).stream()
+                .sorted(Comparator.comparingInt(MultiblockAssemblyService::levelPriority).reversed())
+                .toList();
+        if (!candidates.isEmpty()) return Optional.of(candidates.getFirst());
+        return MultiblockPreviewBuilder.previewState(predicate);
+    }
+
+    private static List<BlockState> candidateStates(BlockPredicate predicate) {
+        List<BlockState> states = new ArrayList<>();
+        collectCandidateStates(predicate, states);
+        return states;
+    }
+
+    private static void collectCandidateStates(BlockPredicate predicate, List<BlockState> states) {
+        switch (predicate) {
+            case BlockPredicate.OfBlockState ofState -> states.add(ofState.state());
+            case BlockPredicate.OfBlock ofBlock -> states.add(ofBlock.block().defaultBlockState());
+            case BlockPredicate.AnyOf anyOf -> anyOf.children().forEach(child -> collectCandidateStates(child, states));
+            default -> {}
+        }
+    }
+
+    private static int levelPriority(BlockState state) {
+        return cn.howxu.mmcr.api.machine.level.MachineLevelRegistry.findLevel(state)
+                .map(level -> level.priority())
+                .orElse(Integer.MIN_VALUE);
+    }
+
+    private static void addPlacement(List<Placement> placements, BlockPos pos, BlockState state, BlockPredicate predicate) {
+        ItemStack requirement = requirementFor(state);
+        if (!requirement.isEmpty()) {
+            placements.add(new Placement(pos, state, requirement, predicate));
+        }
+    }
+
+    private static List<Placement> extractAvailablePlacements(List<Placement> placements, StructureItemSource source) {
+        List<Placement> selected = new ArrayList<>();
+        for (Placement placement : placements) {
+            Optional<Placement> available = candidateStates(placement.predicate()).stream()
+                    .sorted(Comparator.comparingInt(MultiblockAssemblyService::levelPriority).reversed())
+                    .map(state -> new Placement(placement.pos(), state, requirementFor(state), placement.predicate()))
+                    .filter(candidate -> !candidate.requirement().isEmpty())
+                    .filter(candidate -> source.extractAll(List.of(candidate.requirement())))
+                    .findFirst();
+            available.ifPresent(selected::add);
+        }
+        return selected;
     }
 
     private static void merge(List<ItemStack> requirements, ItemStack stack) {

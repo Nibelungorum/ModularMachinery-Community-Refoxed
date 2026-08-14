@@ -16,12 +16,18 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntity;
+
+import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 验证 MultiblockAssemblyService 与 StructureMatcher.matches 在同一 ctrlFacing 下
@@ -102,6 +108,35 @@ class BuildPlacementConsistencyTest {
         assertThat(placements).noneMatch(placement -> placement.state().is(Blocks.STONE));
     }
 
+    @Test
+    void assembly_pattern_selects_explicit_stage_and_uses_active_stage_when_formed() throws Exception {
+        Identifier id = MACHINE_ID;
+        BlockArray stage1 = new BlockArray(Map.of(
+                BlockPos.ZERO, new BlockPredicate.OfBlock(ModBlocks.controllerFor(id).get()),
+                new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+        BlockArray stage2 = new BlockArray(Map.of(
+                BlockPos.ZERO, new BlockPredicate.OfBlock(ModBlocks.controllerFor(id).get()),
+                new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
+                new BlockPos(2, 0, 0), new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK)));
+        Machine machine = stagedFixture(id, stage1, stage2);
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerFor(machine);
+
+        assertThat(controller.assemblyPattern(machine).pattern().keySet())
+                .containsExactlyInAnyOrderElementsOf(stage1.pattern().keySet());
+        assertThat(controller.assemblyPattern(machine, 2).pattern().keySet())
+                .containsExactlyInAnyOrderElementsOf(stage2.pattern().keySet());
+        assertThatThrownBy(() -> controller.assemblyPattern(machine, 0))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        setField(MachineControllerBlockEntity.class, controller, "foundPattern", controller.assemblyPattern(machine, 2));
+        setField(MachineControllerBlockEntity.class, controller, "matchedStructureStage", 2);
+        setField(BlockEntity.class, controller, "blockState", controller.getBlockState().setValue(MachineControllerBlock.FORMED, true));
+
+        assertThat(controller.assemblyPattern(machine).pattern().keySet())
+                .containsExactlyInAnyOrderElementsOf(stage2.pattern().keySet());
+    }
+
     /**
      * 模拟 assembly service 写盘:先放 controller,再按已旋转 pattern 生成待放置方块。
      */
@@ -149,5 +184,48 @@ class BuildPlacementConsistencyTest {
                 PortTierRequirementSpec.none(),
                 List.of(),
                 Map.of());
+    }
+
+    private static Machine stagedFixture(Identifier id, BlockArray... stages) {
+        List<MachineStructureStage> structureStages = java.util.stream.IntStream.range(0, stages.length)
+                .mapToObj(index -> new MachineStructureStage(index + 1, stages[index], PortRequirementSpec.none(),
+                        PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of()))
+                .toList();
+        return new DynamicMachine(
+                id,
+                "machine.mmcr.assembly_stage_selection",
+                stages[0],
+                MachineControllerSpec.defaultsFor(id),
+                MachineAppearanceSpec.defaults(),
+                PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(),
+                List.of(),
+                Map.of(),
+                1,
+                false,
+                false,
+                1,
+                List.of(),
+                structureStages);
+    }
+
+    private static MachineControllerBlockEntity controllerFor(Machine machine) throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+        var controller = (MachineControllerBlockEntity) unsafe.allocateInstance(MachineControllerBlockEntity.class);
+        BlockState state = ModBlocks.controllerFor(machine.registryName()).get().defaultBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH)
+                .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH);
+        setField(BlockEntity.class, controller, "worldPosition", controllerPos);
+        setField(BlockEntity.class, controller, "blockState", state);
+        return controller;
+    }
+
+    private static void setField(Class<?> declaringClass, Object target, String name, Object value) throws ReflectiveOperationException {
+        Field field = declaringClass.getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(target, value);
     }
 }
