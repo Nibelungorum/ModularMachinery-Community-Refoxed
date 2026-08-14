@@ -294,6 +294,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     public boolean hasClientRecipeLock() { return clientRecipeLocked; }
     public String clientLockedRecipeId() { return clientLockedRecipeId; }
 
+    public boolean recipeLocked() { return lockedRecipeId != null; }
+    public @Nullable Identifier lockedRecipeId() { return lockedRecipeId; }
+
     public boolean isRuntimeActive() {
         if (level != null && level.isClientSide()) return clientActive || getBlockState().getValue(MachineControllerBlock.ACTIVE);
         if (!isFormed() || redstonePaused || !isStructureAreaLoaded()) return false;

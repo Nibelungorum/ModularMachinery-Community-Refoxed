@@ -173,6 +173,24 @@ class MachineControllerMenuTest {
     }
 
     @Test
+    void server_menu_exposes_ordinary_controller_recipe_lock_and_full_id() throws Exception {
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        setField(MachineControllerBlockEntity.class, controller, "lockedRecipeId", MMCR.id("ordinary_menu_locked_recipe"));
+        MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory(), controller);
+
+        assertThat(menu.recipeLocked()).isTrue();
+        assertThat(menu.lockedRecipeId()).isEqualTo("mmcr:ordinary_menu_locked_recipe");
+    }
+
+    @Test
+    void machine_controller_menu_stays_free_of_client_only_networking() throws Exception {
+        String source = java.nio.file.Files.readString(java.nio.file.Path.of(
+                "src/main/java/cn/howxu/mmcr/internal/menu/MachineControllerMenu.java"));
+
+        assertThat(source).doesNotContain("ClientPacketDistributor");
+    }
+
+    @Test
     void client_menu_uses_synced_recipe_lock_when_client_controller_is_available() throws Exception {
         MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
         MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory(), controller.getBlockPos());

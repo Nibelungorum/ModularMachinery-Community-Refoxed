@@ -11,6 +11,7 @@ import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
+import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.util.IOType;
@@ -320,7 +321,8 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         if (menu instanceof MachineControllerMenu controller) {
             Rect rect = recipeLockButtonRect(leftPos, topPos, imageWidth, imageHeight);
             recipeLockButton = addRenderableWidget(Button.builder(Component.empty(),
-                    button -> controller.requestRecipeLock()).bounds(rect.left(), rect.top(), rect.width(), rect.height()).build());
+                    button -> ClientPacketDistributor.sendToServer(new PktRecipeLockPayload(
+                            controller.controllerPos(), 0))).bounds(rect.left(), rect.top(), rect.width(), rect.height()).build());
             updateRecipeLockTooltip(controller);
         }
     }

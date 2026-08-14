@@ -3,6 +3,7 @@ package cn.howxu.mmcr.client.gui;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
+import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Tooltip;
@@ -15,6 +16,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -67,7 +69,8 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
         super.init();
         Rect rect = recipeLockButtonRect(leftPos, topPos, imageWidth, imageHeight);
         recipeLockButton = addRenderableWidget(Button.builder(Component.empty(),
-                button -> menu.requestRecipeLock()).bounds(rect.left(), rect.top(), rect.width(), rect.height()).build());
+                button -> ClientPacketDistributor.sendToServer(new PktRecipeLockPayload(
+                        menu.controllerPos(), menu.selectedThreadIndex()))).bounds(rect.left(), rect.top(), rect.width(), rect.height()).build());
         updateRecipeLockTooltip();
     }
 

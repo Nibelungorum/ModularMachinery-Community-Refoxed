@@ -158,6 +158,14 @@ class FactoryControllerMenuTest {
         assertThat(menu.slots.get(27).y).isEqualTo(189);
     }
 
+    @Test
+    void factory_controller_menu_stays_free_of_client_only_networking() throws Exception {
+        String source = java.nio.file.Files.readString(java.nio.file.Path.of(
+                "src/main/java/cn/howxu/mmcr/internal/menu/FactoryControllerMenu.java"));
+
+        assertThat(source).doesNotContain("ClientPacketDistributor");
+    }
+
     private static FactoryControllerSnapshot snapshot(int... indexes) {
         return new FactoryControllerSnapshot(BlockPos.ZERO, true, false, 0, indexes.length, 0, 1,
                 java.util.Arrays.stream(indexes).mapToObj(index -> new FactoryRecipeScheduler.ThreadSnapshot(
