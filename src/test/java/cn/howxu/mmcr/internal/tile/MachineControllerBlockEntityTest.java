@@ -570,6 +570,90 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void redstone_paused_single_recipe_lock_uses_paused_recipe_without_resuming() throws Exception {
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.IRON_NUGGET);
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        ItemInputBusBlockEntity input = itemInputBus(controllerPos.offset(1, 0, 0));
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT));
+        ItemOutputBusBlockEntity output = itemOutputBus(controllerPos.offset(2, 0, 0));
+        setField(ItemBusBlockEntity.class, output, "handler", new ItemStackHandler(6));
+        FactorySchedulerBlockEntity factory = factoryController(controllerPos.offset(3, 0, 0));
+        DynamicMachine machine = new DynamicMachine(MMCR.id("redstone_paused_lock_machine"), "Redstone Paused Lock",
+                factoryItemPattern(), MachineControllerSpec.defaultsFor(MMCR.id("redstone_paused_lock_machine")),
+                PortRequirementSpec.none(), List.of(), Map.of(), 1, false, true, 1);
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFactoryRuntimeFormation(machine, controllerPos, input, output, factory);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        addItemInputComponent(controller, input);
+        addItemOutputComponent(controller, output);
+        MachineRecipe recipe = registerItemRecipe("redstone_paused_lock_recipe", machine.registryName(), 20);
+        controller.serverTick();
+        assertThat(factory.threadSnapshots(controller).getFirst().recipeId()).isEqualTo(recipe.id().toString());
+
+        LevelStub.setDirectSignal(levelOf(controller), controllerPos, 15);
+        controller.serverTick();
+        assertThat(controller.isRedstonePaused()).isTrue();
+        assertThat(controller.isRuntimeActive()).isFalse();
+
+        assertThat(controller.toggleFactoryRecipeLock(0)).isTrue();
+
+        assertThat(controller.isRedstonePaused()).isTrue();
+        assertThat(controller.getActive()).isNull();
+        assertThat(controller.isRuntimeActive()).isFalse();
+        assertThat(factory.threadSnapshots(controller).getFirst().lockedRecipeId()).isEqualTo(recipe.id().toString());
+    }
+
+    @Test
+    void redstone_paused_ordinary_recipe_can_be_locked_without_resuming_controller() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("paused_ordinary_lock_recipe"), MMCR.id("paused_ordinary_lock_machine"),
+                20, List.of(), List.of());
+        RecipeRegistry.register(recipe);
+        setField(MachineControllerBlockEntity.class, controller, "redstonePaused", true);
+        setField(MachineControllerBlockEntity.class, controller, "pausedActive", new ActiveMachineRecipe(recipe));
+        setField(MachineControllerBlockEntity.class, controller, "pausedContext", new RecipeCraftingContext(controller));
+
+        assertThat(controller.toggleFactoryRecipeLock(0)).isTrue();
+
+        assertThat(controller.isRedstonePaused()).isTrue();
+        assertThat(controller.getActive()).isNull();
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        invokeSaveAdditional(controller, output);
+        assertThat(output.buildResult().toString()).contains("locked_recipe");
+        assertThat(output.buildResult().toString()).contains(recipe.id().toString());
+
+        MachineControllerBlockEntity loaded = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(loaded);
+        invokeLoadAdditional(loaded, TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()), output.buildResult()));
+        TagValueOutput loadedOutput = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        invokeSaveAdditional(loaded, loadedOutput);
+
+        assertThat(loadedOutput.buildResult().toString()).contains(recipe.id().toString());
+    }
+
+    @Test
+    void ordinary_locked_recipe_is_cleared_when_missing_on_load() throws Exception {
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        output.putString("locked_recipe", "mmcr:removed_ordinary_lock_recipe");
+        MachineControllerBlockEntity loaded = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(loaded);
+
+        invokeLoadAdditional(loaded, TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()), output.buildResult()));
+
+        TagValueOutput loadedOutput = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        invokeSaveAdditional(loaded, loadedOutput);
+        assertThat(loadedOutput.buildResult().toString()).doesNotContain("locked_recipe");
+    }
+
+    @Test
     void runtime_activity_is_false_after_structure_chunk_unload_pauses_recipe() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         DynamicMachine machine = new DynamicMachine(MMCR.id("runtime_chunk_pause_machine"), "Runtime Chunk Pause",

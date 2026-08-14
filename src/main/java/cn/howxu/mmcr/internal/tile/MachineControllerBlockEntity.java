@@ -116,6 +116,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private boolean lastBroadcastActive;
     private boolean lastBroadcastRecipeLocked;
     private String lastBroadcastLockedRecipeId = "";
+    private @Nullable Identifier lockedRecipeId;
     private @Nullable String lastFailureUnloc;
     private @Nullable LevelInsufficientFailure recipeFailure;
     private @Nullable PortRequirementSpec.Failure lastFormationFailure;
@@ -413,7 +414,23 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     public boolean toggleFactoryRecipeLock(int threadIndex) {
         FactorySchedulerBlockEntity factory = getFactoryController();
-        return factory != null && factory.toggleRecipeLock(this, threadIndex);
+        if (factory != null) {
+            boolean toggled = factory.toggleRecipeLock(this, threadIndex);
+            if (toggled) setChanged();
+            return toggled;
+        }
+        if (threadIndex != 0) return false;
+        if (lockedRecipeId != null) {
+            lockedRecipeId = null;
+            setChanged();
+            return true;
+        }
+        ActiveMachineRecipe recipe = active == null ? pausedActive : active;
+        RecipeCraftingContext recipeContext = active == null ? pausedContext : context;
+        if (recipe == null || recipeContext == null || recipe.getRecipe() == null) return false;
+        lockedRecipeId = recipe.getRecipe().id();
+        setChanged();
+        return true;
     }
 
     public void sendRecipeLockState(ServerPlayer player) {
@@ -1411,9 +1428,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         boolean activeNow = isRuntimeActive();
         var factory = getFactoryController();
         var thread = factory == null ? null : factory.threadSnapshots(this).getFirst();
-        boolean recipeLocked = thread != null && thread.locked();
-        String lockedRecipeId = thread == null ? "" : thread.lockedRecipeId();
-        if (lastBroadcastFormed != null && !PktMachineStatePayload.stateChanged(formed, activeNow, recipeLocked, lockedRecipeId,
+        boolean recipeLocked = thread == null ? lockedRecipeId != null : thread.locked();
+        String lockedRecipe = thread == null ? lockedRecipeId == null ? "" : lockedRecipeId.toString() : thread.lockedRecipeId();
+        if (lastBroadcastFormed != null && !PktMachineStatePayload.stateChanged(formed, activeNow, recipeLocked, lockedRecipe,
                 lastBroadcastFormed, lastBroadcastActive, lastBroadcastRecipeLocked, lastBroadcastLockedRecipeId)
                 && activeBeforeTick == activeNow) {
             return;
@@ -1421,12 +1438,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         lastBroadcastFormed = formed;
         lastBroadcastActive = activeNow;
         lastBroadcastRecipeLocked = recipeLocked;
-        lastBroadcastLockedRecipeId = lockedRecipeId;
+        lastBroadcastLockedRecipeId = lockedRecipe;
         if (!(level instanceof ServerLevel sl)) return;
         String name = active == null ? "" : active.getRecipe().id().toString();
         var pkt = new PktMachineStatePayload(getBlockPos(), name, formed, activeNow,
                 foundLevels.values().stream().map(foundLevel -> foundLevel.id().toString()).toList(),
-                recipeLocked, lockedRecipeId);
+                recipeLocked, lockedRecipe);
         for (var player : sl.getPlayers(p -> p.distanceToSqr(getBlockPos().getCenter()) < 64 * 64)) {
             ((ServerPlayer) player).connection.send(new ClientboundCustomPayloadPacket(pkt));
         }
@@ -1956,6 +1973,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             pausedActive.serialize(output.child("active_recipe"));
             pausedContext.serialize(output.child("active_context"));
         }
+        if (lockedRecipeId != null) output.putString("locked_recipe", lockedRecipeId.toString());
     }
 
     @Override
@@ -1965,6 +1983,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         pausedContext = null;
         restoredRecipeContext = false;
         redstonePaused = false;
+        lockedRecipeId = null;
         active = null;
         context = null;
         Map<Identifier, MachineLevel> restoredLevels = new LinkedHashMap<>();
@@ -1974,6 +1993,11 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         });
         foundLevels = Map.copyOf(restoredLevels);
         lastFailureUnloc = null;
+        String lockedRecipeName = input.getStringOr("locked_recipe", "");
+        if (!lockedRecipeName.isEmpty()) {
+            Identifier restoredLock = Identifier.parse(lockedRecipeName);
+            if (RecipeRegistry.getRecipe(restoredLock) != null) lockedRecipeId = restoredLock;
+        }
         String recipeState = input.getStringOr("recipe_state", input.getBooleanOr("has_active", false) ? "active" : "");
         if (recipeState.isEmpty()) return;
         if (!input.getBooleanOr("has_recipe_context", false)) {
