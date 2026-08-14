@@ -36,6 +36,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     private boolean autoIOCacheDirty = true;
     private int autoIOSuccessCounter;
     private int autoIODelay = AUTO_IO_MAX_DELAY;
+    private int autoIOTicksUntilTransfer;
     private EnumSet<Direction> autoIOCandidateSides = EnumSet.noneOf(Direction.class);
 
     protected IOPortBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
@@ -179,8 +180,11 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         if (handler == null) return;
         if (consumeAutoIOCacheDirty()) rebuildAutoIOCandidates(handler);
         if (autoIOCandidateSides.isEmpty()) return;
-        if ((getLevel().getGameTime() % autoIODelay) != 0) return;
         if (!hasAutoIOTransferWork()) return;
+        if (autoIOTicksUntilTransfer > 0) {
+            autoIOTicksUntilTransfer--;
+            return;
+        }
 
         boolean moved = false;
         for (Direction side : autoIOCandidateSides) {
@@ -188,6 +192,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         }
         if (moved) incrementAutoIOSuccess();
         else decrementAutoIOSuccess();
+        autoIOTicksUntilTransfer = autoIODelay - 1;
     }
 
     private void rebuildAutoIOCandidates(AutoIOTransferHandler handler) {
