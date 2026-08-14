@@ -25,6 +25,8 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -127,8 +129,15 @@ public record MachineRecipeDisplay(
                 List.copyOf(smartInterfaceInputs),
                 List.copyOf(smartInterfaceOutputs),
                 List.copyOf(smartInterfaceModifiers),
-                recipe.requiredHostIds()
+                sortedHostIds(recipe.requiredHostIds())
         );
+    }
+
+    private static Set<Identifier> sortedHostIds(Set<Identifier> ids) {
+        if (ids == null || ids.isEmpty()) return Set.of();
+        return ids.stream()
+                .sorted(Comparator.comparing(Identifier::toString))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     private static java.util.stream.Stream<Holder<Item>> safeItems(Ingredient ingredient) {

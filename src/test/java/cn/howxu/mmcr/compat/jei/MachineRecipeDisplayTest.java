@@ -45,6 +45,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -160,6 +161,57 @@ class MachineRecipeDisplayTest {
         assertThat(MachineRecipeCategory.ITEM_OVERLAY_SCALE).isEqualTo(0.6F);
         assertThat(MachineRecipeCategory.ITEM_OVERLAY_X).isEqualTo(0);
         assertThat(MachineRecipeCategory.ITEM_OVERLAY_Y).isEqualTo(0);
+    }
+
+    @Test
+    void displaySortsRequiredHostIdsForStableJeiCycling() {
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("jei_required_hosts"), MMCR.id("hosted_module"), 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false, List.of(), Set.of(
+                MMCR.id("zeta_host"), MMCR.id("alpha_host"), MMCR.id("middle_host")
+        ));
+
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+
+        assertThat(display.requiredHostIds()).containsExactly(MMCR.id("alpha_host"), MMCR.id("middle_host"), MMCR.id("zeta_host"));
+    }
+
+    @Test
+    void hostRequirementIsEmptyWhenRecipeHasNoRequiredHost() {
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(new MachineRecipe(
+                MMCR.id("jei_no_required_host"), MMCR.id("module_without_host"), 20, List.of(), List.of()));
+
+        assertThat(MachineRecipeCategory.hostRequirementComponent(display, 0)).satisfies(component -> {
+            assertThat(component.getString()).isEmpty();
+            assertThat(component.getContents()).isSameAs(Component.empty().getContents());
+        });
+    }
+
+    @Test
+    void hostRequirementShowsSingleHostDisplayName() {
+        MachineDefinitions.register(MachineRegistration.builder(MMCR.id("single_host"))
+                .displayNameKey("machine.mmcr.single_host").host(MMCR.id("hosted_module")).build());
+        MachineRecipeDisplay display = hostDisplay(Set.of(MMCR.id("single_host")));
+
+        Component component = MachineRecipeCategory.hostRequirementComponent(display, 0);
+
+        assertThat(((net.minecraft.network.chat.contents.TranslatableContents) component.getContents()).getKey())
+                .isEqualTo("jei.mmcr.machine_recipe.required_host");
+        assertThat(component.getString()).isEqualTo("jei.mmcr.machine_recipe.required_host");
+        assertThat(((Component) ((net.minecraft.network.chat.contents.TranslatableContents) component.getContents()).getArgs()[0]).getString())
+                .isEqualTo("machine.mmcr.single_host");
+    }
+
+    @Test
+    void hostRequirementCyclesMultipleHostsByStableSortedGameTime() {
+        registerHost("beta_host");
+        registerHost("alpha_host");
+        registerHost("gamma_host");
+        MachineRecipeDisplay display = hostDisplay(Set.of(MMCR.id("gamma_host"), MMCR.id("alpha_host"), MMCR.id("beta_host")));
+
+        assertThat(hostRequirementArg(display, 0).getString()).isEqualTo("machine.mmcr.alpha_host");
+        assertThat(hostRequirementArg(display, 20).getString()).isEqualTo("machine.mmcr.beta_host");
+        assertThat(hostRequirementArg(display, 40).getString()).isEqualTo("machine.mmcr.gamma_host");
+        assertThat(hostRequirementArg(display, 60).getString()).isEqualTo("machine.mmcr.alpha_host");
     }
 
     @BeforeAll
@@ -425,11 +477,12 @@ class MachineRecipeDisplayTest {
     void translationsIncludeOverflowTooltips() {
         assertThat(Translations.ALL.get("en_us"))
                 .containsKeys("jei.mmcr.machine_recipe.input_overflow", "jei.mmcr.machine_recipe.output_overflow",
-                        "jei.mmcr.machine_recipe.overflow_entry", "jei.mmcr.machine_recipe.component_constraints");
+                        "jei.mmcr.machine_recipe.overflow_entry", "jei.mmcr.machine_recipe.component_constraints",
+                        "jei.mmcr.machine_recipe.required_host");
         assertThat(Translations.ALL.get("zh_cn"))
                 .containsEntry("jei.mmcr.machine_recipe.output_overflow", "其余产物: ")
                 .containsKeys("jei.mmcr.machine_recipe.input_overflow", "jei.mmcr.machine_recipe.overflow_entry",
-                        "jei.mmcr.machine_recipe.component_constraints");
+                        "jei.mmcr.machine_recipe.component_constraints", "jei.mmcr.machine_recipe.required_host");
     }
 
     @Test
@@ -479,6 +532,21 @@ class MachineRecipeDisplayTest {
                 priority,
                 1
         );
+    }
+
+    private static MachineRecipeDisplay hostDisplay(Set<Identifier> requiredHostIds) {
+        return MachineRecipeDisplay.from(new MachineRecipe(MMCR.id("jei_required_host_recipe"), MMCR.id("hosted_module"), 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false, List.of(), requiredHostIds));
+    }
+
+    private static Component hostRequirementArg(MachineRecipeDisplay display, long gameTime) {
+        var contents = (net.minecraft.network.chat.contents.TranslatableContents)
+                MachineRecipeCategory.hostRequirementComponent(display, gameTime).getContents();
+        return (Component) contents.getArgs()[0];
+    }
+
+    private static void registerHost(String path) {
+        MachineDefinitions.register(MachineRegistration.builder(MMCR.id(path)).host(MMCR.id("hosted_module")).build());
     }
 
     private static MachineRecipeDisplay displayFor(SmartInterfaceRequirement requirement, Identifier machineId) {

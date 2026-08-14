@@ -3,5 +3,6 @@
   "gui.mmcr.controller.failure.module_connection": "Module is not connected to a valid host",
   "gui.mmcr.controller.installed_modules": "Installed modules: %s",
   "gui.mmcr.controller.module_unconnected": "Not connected",
-  "gui.mmcr.controller.module_connected": "Installed to: %s"
+  "gui.mmcr.controller.module_connected": "Installed to: %s",
+  "jei.mmcr.machine_recipe.required_host": "Install on: %s"
 }

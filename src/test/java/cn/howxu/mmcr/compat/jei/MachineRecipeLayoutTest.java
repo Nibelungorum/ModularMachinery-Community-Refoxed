@@ -197,4 +197,21 @@ class MachineRecipeLayoutTest {
                 .isEqualTo(layout.durationTextY() + 20);
     }
 
+    @Test
+    void metadataRowsReserveHostRequirementBeforeDurationAndStayInsideRecipeHeight() {
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("jei_host_layout"), MMCR.id("hosted_module"), 100,
+                java.util.stream.IntStream.range(0, 22)
+                        .<MachineIngredient>mapToObj(index -> new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1))
+                        .toList(),
+                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)),
+                List.of(), 0, 1, false, List.of(), List.of(), false, List.of(), java.util.Set.of(MMCR.id("host_a")));
+
+        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(MachineRecipeDisplay.from(recipe));
+
+        assertThat(layout.hostRequirementTextY()).isEqualTo(120);
+        assertThat(layout.durationTextY()).isEqualTo(130);
+        assertThat(layout.lastMetadataTextY(MachineRecipeDisplay.from(recipe))).isLessThan(layout.height());
+    }
+
 }
