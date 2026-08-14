@@ -213,6 +213,52 @@ class FactoryRecipeSchedulerTest {
     }
 
     @Test
+    void locked_dynamic_threads_are_not_removed_by_idle_timeout() {
+        MachineRecipe firstRecipe = recipe("factory_locked_idle_first", 0);
+        MachineRecipe secondRecipe = recipe("factory_locked_idle_second", 0);
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(4);
+        FactoryRecipeThread first = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool(), "factory-1");
+        FactoryRecipeThread second = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool(), "factory-2");
+        first.setLockedRecipeId(firstRecipe.id());
+        second.setLockedRecipeId(secondRecipe.id());
+        scheduler.addThreadForTesting(first);
+        scheduler.addThreadForTesting(second);
+
+        for (int i = 0; i < FactoryRecipeThread.IDLE_TIMEOUT_TICKS; i++) {
+            scheduler.tickThreads(null, List.of(), 1L, 4, new RecipeCraftingContextPool());
+        }
+
+        assertThat(scheduler.threadSnapshots())
+                .extracting(FactoryRecipeScheduler.ThreadSnapshot::lockedRecipeId)
+                .contains("mmcr:factory_locked_idle_first", "mmcr:factory_locked_idle_second");
+    }
+
+    @Test
+    void unlocked_dynamic_threads_keep_their_thread_slots_after_idle_timeout() {
+        MachineRecipe firstRecipe = recipe("factory_unlocked_idle_first", 0);
+        MachineRecipe secondRecipe = recipe("factory_unlocked_idle_second", 0);
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(4);
+        FactoryRecipeThread first = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool(), "factory-1");
+        FactoryRecipeThread second = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool(), "factory-2");
+        first.setLockedRecipeId(firstRecipe.id());
+        second.setLockedRecipeId(secondRecipe.id());
+        scheduler.addThreadForTesting(first);
+        scheduler.addThreadForTesting(second);
+
+        assertThat(scheduler.toggleRecipeLock(1)).isTrue();
+        for (int i = 0; i < FactoryRecipeThread.IDLE_TIMEOUT_TICKS; i++) {
+            scheduler.tickThreads(null, List.of(), 1L, 4, new RecipeCraftingContextPool());
+        }
+
+        assertThat(scheduler.allThreads())
+                .extracting(FactoryRecipeThread::threadName)
+                .containsExactly("", "factory-1", "factory-2");
+        assertThat(scheduler.threadSnapshots())
+                .extracting(FactoryRecipeScheduler.ThreadSnapshot::index)
+                .containsExactly(0, 1, 2, 3);
+    }
+
+    @Test
     void scheduler_always_exposes_non_expiring_base_thread_at_index_zero() {
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1);
 

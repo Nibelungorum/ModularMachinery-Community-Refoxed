@@ -108,6 +108,21 @@ class FactoryControllerScreenTest {
     }
 
     @Test
+    void locked_selected_and_progress_overlays_draw_in_priority_order() {
+        FactoryRecipeScheduler.ThreadSnapshot thread = new FactoryRecipeScheduler.ThreadSnapshot(
+                1, false, false, true, "mmcr:active", 5, 10, 1, "", true, "mmcr:active");
+
+        assertThat(FactoryControllerScreen.threadOverlayColors(thread, 1))
+                .containsExactly(FactoryControllerScreen.PROGRESS_THREAD_OVERLAY,
+                        FactoryControllerScreen.SELECTED_THREAD_OVERLAY,
+                        FactoryControllerScreen.LOCKED_THREAD_OVERLAY);
+        assertThat(FactoryControllerScreen.lockedOverlayX(20)).isEqualTo(FactoryControllerScreen.selectedOverlayX(20));
+        assertThat(FactoryControllerScreen.lockedOverlayY(20)).isEqualTo(FactoryControllerScreen.selectedOverlayY(20));
+        assertThat(FactoryControllerScreen.lockedOverlayRight(20)).isEqualTo(FactoryControllerScreen.selectedOverlayRight(20));
+        assertThat(FactoryControllerScreen.lockedOverlayBottom(20)).isEqualTo(FactoryControllerScreen.selectedOverlayBottom(20));
+    }
+
+    @Test
     void progress_overlay_aligns_with_the_thread_element_without_extra_bottom_pixel() {
         assertThat(FactoryControllerScreen.progressOverlayX(20)).isEqualTo(20);
         assertThat(FactoryControllerScreen.progressOverlayY(20)).isEqualTo(20);

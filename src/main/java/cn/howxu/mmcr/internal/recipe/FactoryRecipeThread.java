@@ -31,6 +31,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     private int idleTicks;
     private @Nullable MachineRecipe lastRecipe;
     private @Nullable Identifier lockedRecipeId;
+    private boolean hadRecipeLock;
     private long lastRecipeStructureVersion = Long.MIN_VALUE;
     private long lastRecipeModifierSnapshotVersion = Long.MIN_VALUE;
 
@@ -82,7 +83,10 @@ public final class FactoryRecipeThread extends RecipeThread {
     public String threadName() { return threadName; }
     public @Nullable Identifier lockedRecipeId() { return lockedRecipeId; }
     public boolean isRecipeLocked() { return lockedRecipeId != null; }
-    public void setLockedRecipeId(@Nullable Identifier lockedRecipeId) { this.lockedRecipeId = lockedRecipeId; }
+    public void setLockedRecipeId(@Nullable Identifier lockedRecipeId) {
+        this.lockedRecipeId = lockedRecipeId;
+        if (lockedRecipeId != null) hadRecipeLock = true;
+    }
     public boolean toggleRecipeLock() {
         if (lockedRecipeId != null) {
             lockedRecipeId = null;
@@ -90,10 +94,11 @@ public final class FactoryRecipeThread extends RecipeThread {
         }
         if (activeRecipe == null || activeRecipe.getRecipe() == null) return false;
         lockedRecipeId = activeRecipe.getRecipe().id();
+        hadRecipeLock = true;
         return true;
     }
     @Override public String laneId() { return laneId; }
-    public boolean isTimedOut() { return !baseThread && !coreThread && isIdle() && idleTicks >= IDLE_TIMEOUT_TICKS; }
+    public boolean isTimedOut() { return !baseThread && !coreThread && !hadRecipeLock && isIdle() && idleTicks >= IDLE_TIMEOUT_TICKS; }
     public void tickIdle() { idleTicks = isIdle() ? idleTicks + 1 : 0; }
 
     @Override protected void onStarted() {
@@ -141,6 +146,7 @@ public final class FactoryRecipeThread extends RecipeThread {
         output.putBoolean("base", baseThread);
         output.putString("name", threadName);
         output.putInt("idle_ticks", idleTicks);
+        output.putBoolean("had_recipe_lock", hadRecipeLock);
         if (lockedRecipeId != null) {
             output.putString("locked_recipe", lockedRecipeId.toString());
         }
@@ -164,11 +170,13 @@ public final class FactoryRecipeThread extends RecipeThread {
         FactoryRecipeThread thread = new FactoryRecipeThread(controller, contextPool,
                 input.getBooleanOr("core", false), input.getBooleanOr("base", false), input.getStringOr("name", ""));
         thread.idleTicks = input.getIntOr("idle_ticks", 0);
+        thread.hadRecipeLock = input.getBooleanOr("had_recipe_lock", false);
         String lockedRecipeName = input.getStringOr("locked_recipe", "");
         if (!lockedRecipeName.isEmpty()) {
             Identifier lockedRecipeId = Identifier.parse(lockedRecipeName);
             if (RecipeRegistry.getRecipe(lockedRecipeId) != null) {
                 thread.lockedRecipeId = lockedRecipeId;
+                thread.hadRecipeLock = true;
             }
         }
         if (input.getBooleanOr("has_last", false)) {

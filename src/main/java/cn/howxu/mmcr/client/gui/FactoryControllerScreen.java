@@ -44,10 +44,13 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     private static final int ELEMENT_TEXTURE_WIDTH = 256;
     private static final int ELEMENT_TEXTURE_HEIGHT = 256;
     private static final int THREAD_ELEMENT_Y_OFFSET = 0;
-    private static final int SELECTED_THREAD_OVERLAY = 0x66A8D8FF;
+    static final int PROGRESS_THREAD_OVERLAY = 0x6600AA55;
+    static final int SELECTED_THREAD_OVERLAY = 0x66A8D8FF;
+    static final int LOCKED_THREAD_OVERLAY = 0x66FFD966;
     private static final int DETAIL_LINE_SPACING = 14;
     private static final int RECIPE_LOCK_BUTTON_SIZE = 20;
     private static final int PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR = 82;
+    private static final int RECIPE_LOCK_ENABLED_BG_COLOR = 0xFF66BB6A;
     private static final Identifier BACKGROUND = MMCR.id("textures/gui/guifactory.png");
     private static final Identifier ELEMENTS = MMCR.id("textures/gui/guifactoryelements.png");
     private static final Identifier SCROLLER = MMCR.id("textures/gui/scroller.png");
@@ -108,8 +111,8 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     }
 
     static Rect recipeLockButtonRect(int left, int top, int width, int height) {
-        return new Rect(left + width - RECIPE_LOCK_BUTTON_SIZE,
-                top + height - PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR - RECIPE_LOCK_BUTTON_SIZE,
+        return new Rect(left + width - RECIPE_LOCK_BUTTON_SIZE - 12,
+                top + height - PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR - RECIPE_LOCK_BUTTON_SIZE - 12,
                 RECIPE_LOCK_BUTTON_SIZE, RECIPE_LOCK_BUTTON_SIZE);
     }
 
@@ -133,11 +136,22 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     static int selectedOverlayHeight() { return THREAD_ROW_HEIGHT; }
     static int selectedOverlayRight(int x) { return selectedOverlayX(x) + selectedOverlayWidth() - 1; }
     static int selectedOverlayBottom(int y) { return selectedOverlayY(y) + selectedOverlayHeight() - 1; }
+    static int lockedOverlayX(int x) { return selectedOverlayX(x); }
+    static int lockedOverlayY(int y) { return selectedOverlayY(y); }
+    static int lockedOverlayRight(int x) { return selectedOverlayRight(x); }
+    static int lockedOverlayBottom(int y) { return selectedOverlayBottom(y); }
     static int progressOverlayX(int x) { return x; }
     static int progressOverlayY(int y) { return threadElementY(y); }
     static int progressOverlayHeight() { return THREAD_ROW_HEIGHT - 1; }
     static int progressOverlayRight(int x, int progress) { return progressOverlayX(x) + progress; }
     static int progressOverlayBottom(int y) { return progressOverlayY(y) + progressOverlayHeight(); }
+    static List<Integer> threadOverlayColors(FactoryRecipeScheduler.ThreadSnapshot thread, int selectedThreadIndex) {
+        List<Integer> colors = new ArrayList<>();
+        if (progressWidth(thread.tick(), thread.totalTick()) > 0) colors.add(PROGRESS_THREAD_OVERLAY);
+        if (thread.index() == selectedThreadIndex) colors.add(SELECTED_THREAD_OVERLAY);
+        if (thread.locked()) colors.add(LOCKED_THREAD_OVERLAY);
+        return colors;
+    }
     static int detailTitleY(int y) { return y; }
     static int nextDetailY(int y) { return y + DETAIL_LINE_SPACING; }
     static boolean shouldRenderProgress(boolean active, int totalTick) { return active && totalTick > 0; }
@@ -187,13 +201,17 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
             int progressOverlayY = progressOverlayY(y);
             graphics.blit(RenderPipelines.GUI_TEXTURED, ELEMENTS, leftPos + THREAD_ROW_X, threadElementY(y), 0, 0,
                     THREAD_ROW_WIDTH, THREAD_ROW_HEIGHT, ELEMENT_TEXTURE_WIDTH, ELEMENT_TEXTURE_HEIGHT);
+            int progress = progressWidth(thread.tick(), thread.totalTick());
+            if (progress > 0) graphics.fill(progressOverlayX, progressOverlayY,
+                    progressOverlayRight(elementX, progress), progressOverlayBottom(y), PROGRESS_THREAD_OVERLAY);
             if (thread.index() == menu.selectedThread().index()) {
                 graphics.fill(selectedOverlayX, selectedOverlayY,
                         selectedOverlayRight(elementX), selectedOverlayBottom(y), SELECTED_THREAD_OVERLAY);
             }
-            int progress = progressWidth(thread.tick(), thread.totalTick());
-            if (progress > 0) graphics.fill(progressOverlayX, progressOverlayY,
-                    progressOverlayRight(elementX, progress), progressOverlayBottom(y), 0x6600AA55);
+            if (thread.locked()) {
+                graphics.fill(lockedOverlayX(elementX), lockedOverlayY(y),
+                        lockedOverlayRight(elementX), lockedOverlayBottom(y), LOCKED_THREAD_OVERLAY);
+            }
             graphics.text(font, Component.translatable("gui.mmcr.factory.thread", thread.index()), leftPos + THREAD_ROW_X + 3, y + 3, 0xFF222222, false);
             graphics.text(font, Component.translatable(thread.active() ? "gui.mmcr.controller.running" : "gui.mmcr.controller.idle"), leftPos + THREAD_ROW_X + 3, y + 15, 0xFF222222, false);
         }
@@ -309,8 +327,15 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
 
     private void renderRecipeLockButtonIcon(GuiGraphicsExtractor graphics) {
         if (recipeLockButton == null || !recipeLockButton.visible) return;
-        graphics.item(recipeLockIcon(), recipeLockButton.getX() + (recipeLockButton.getWidth() - 16) / 2,
-                recipeLockButton.getY() + (recipeLockButton.getHeight() - 16) / 2, 0);
+        int x = recipeLockButton.getX();
+        int y = recipeLockButton.getY();
+        int width = recipeLockButton.getWidth();
+        int height = recipeLockButton.getHeight();
+        if (menu.selectedRecipeLocked()) {
+            graphics.fill(x, y, x + width, y + height, RECIPE_LOCK_ENABLED_BG_COLOR);
+        }
+        graphics.item(recipeLockIcon(), x + (width - 16) / 2,
+                y + (height - 16) / 2, 0);
     }
 
     private static ItemStack recipeLockIcon() {

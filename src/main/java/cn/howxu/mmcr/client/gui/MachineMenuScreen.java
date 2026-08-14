@@ -104,6 +104,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     private static final float AUTO_IO_TOGGLE_TEXT_SCALE = 0.85F;
     private static final int RECIPE_LOCK_BUTTON_SIZE = 20;
     private static final int PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR = 82;
+    private static final int RECIPE_LOCK_ENABLED_BG_COLOR = 0xFF66BB6A;
     private static final int HIDDEN_SLOT_X = -1000;
     private static final int HIDDEN_SLOT_Y = -1000;
     private boolean autoIOPage;
@@ -298,8 +299,8 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     }
 
     static Rect recipeLockButtonRect(int left, int top, int width, int height) {
-        return new Rect(left + width - RECIPE_LOCK_BUTTON_SIZE,
-                top + height - PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR - RECIPE_LOCK_BUTTON_SIZE,
+        return new Rect(left + width - RECIPE_LOCK_BUTTON_SIZE - 12,
+                top + height - PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR - RECIPE_LOCK_BUTTON_SIZE - 12,
                 RECIPE_LOCK_BUTTON_SIZE, RECIPE_LOCK_BUTTON_SIZE);
     }
 
@@ -821,8 +822,15 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
 
     private void renderRecipeLockButtonIcon(GuiGraphicsExtractor graphics) {
         if (recipeLockButton == null || !recipeLockButton.visible) return;
-        graphics.item(recipeLockIcon(), recipeLockButton.getX() + (recipeLockButton.getWidth() - 16) / 2,
-                recipeLockButton.getY() + (recipeLockButton.getHeight() - 16) / 2, 0);
+        int x = recipeLockButton.getX();
+        int y = recipeLockButton.getY();
+        int width = recipeLockButton.getWidth();
+        int height = recipeLockButton.getHeight();
+        if (menu instanceof MachineControllerMenu controller && controller.recipeLocked()) {
+            graphics.fill(x, y, x + width, y + height, RECIPE_LOCK_ENABLED_BG_COLOR);
+        }
+        graphics.item(recipeLockIcon(), x + (width - 16) / 2,
+                y + (height - 16) / 2, 0);
     }
 
     private static ItemStack recipeLockIcon() {
