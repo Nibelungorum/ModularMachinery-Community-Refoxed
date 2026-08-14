@@ -142,6 +142,26 @@ public class TerminalAssemblyGameTest {
         helper.succeed();
     }
 
+    public void survivalBuildFailsAtomicallyWhenStageOneMaterialsAreMissing(GameTestHelper helper) {
+        BlockPos controllerPos = new BlockPos(4, 1, 4);
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        List<MultiblockAssemblyService.Placement> template = template(controller);
+        ServerPlayer player = servicePlayer(helper);
+        player.getInventory().add(new ItemStack(ModBlocks.CASING.get(), template.size() - 1));
+
+        MultiblockAssemblyService.Result result = MultiblockAssemblyService.build(player, controller, false);
+
+        helper.assertTrue(result.interactionResult() == InteractionResult.FAIL, "Build fails when any stage-1 block is missing");
+        helper.assertTrue(result.changedBlocks() == 0, "No partial placement is reported");
+        for (MultiblockAssemblyService.Placement placement : template) {
+            helper.assertTrue(helper.getLevel().getBlockState(placement.pos()).isAir(), "No structure blocks are placed");
+        }
+        helper.assertTrue(new PlayerInventoryStructureItemSource(player).canExtractAll(List.of(new ItemStack(ModBlocks.CASING.get(), template.size() - 1))),
+                "Dry-run failure preserves all available materials");
+        helper.succeed();
+    }
+
     private static List<MultiblockAssemblyService.Placement> template(MachineControllerBlockEntity controller) {
         var machine = controller.boundMachine().orElseThrow();
         return MultiblockAssemblyService.createTemplatePlacements(controller.getBlockPos(),
