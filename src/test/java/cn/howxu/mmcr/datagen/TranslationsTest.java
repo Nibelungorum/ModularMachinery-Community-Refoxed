@@ -58,7 +58,7 @@ class TranslationsTest {
             case ELITE -> "精英并行器";
             case FANTASY -> "幻想并行器";
             case MAX -> "极限并行器";
-            case ULTIMATE -> "终极并行器";
+            case ULTIMATE -> "究极并行器";
         };
     }
 
