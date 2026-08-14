@@ -534,14 +534,15 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                             && tryFormMachine(foundMachine, facing, candidatePattern)) return;
                 }
             }
-            if (foundCompiledPattern != null && !StructureMatcher.isAreaLoaded(foundCompiledPattern, facing, level, getBlockPos())) {
+            if (hasCompiledFacing(foundCompiledPattern, facing)
+                    && !StructureMatcher.isAreaLoaded(foundCompiledPattern, facing, level, getBlockPos())) {
                 pauseActiveForUnloadedStructure();
                 structureDirty = true;
                 return;
             }
             Machine validationMachine = foundCompiledPattern == null ? foundMachine : foundCompiledPattern.machine();
             var replacements = replacementsFor(foundMachine, foundCompiledPattern, facing, foundPattern, matchedRollFacing);
-            boolean stillMatches = foundCompiledPattern == null || !replacements.isEmpty()
+            boolean stillMatches = !hasCompiledFacing(foundCompiledPattern, facing) || !replacements.isEmpty()
                     ? StructureMatcher.matchesRotated(foundPattern, level, getBlockPos(), replacements)
                     : StructureMatcher.matchesCompiled(foundCompiledPattern, facing, matchedRollFacing, level, getBlockPos());
             if (stillMatches) {
@@ -578,6 +579,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 foundLevels = levels.foundLevels();
                 updateComponents();
                 resumePausedRecipeAfterStructureCheck();
+                lastFormationFailure = null;
+                lastStructureMismatchDiagnostic = null;
+                lastStructureError = null;
                 return;
             }
             resetMachine();
@@ -608,6 +612,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     private boolean isStructureAreaLoaded() {
         if (foundCompiledPattern == null || controllerFacing == null || level == null) return true;
+        if (!hasCompiledFacing(foundCompiledPattern, controllerFacing)) return true;
         return StructureMatcher.isAreaLoaded(foundCompiledPattern, controllerFacing, level, getBlockPos());
     }
 
@@ -871,12 +876,11 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private boolean tryFormMachine(Machine candidate, Direction facing, CandidatePattern candidatePattern) {
         BlockArray rotatedPattern = candidatePattern.pattern();
         CompiledMachinePattern stageCompiled = candidatePattern.compiled();
-        var compiled = facing.getAxis().isVertical() ? null : stageCompiled;
         Machine validationMachine = stageCompiled == null ? candidate : stageCompiled.machine();
-        var replacements = replacementsFor(candidate, compiled, facing, rotatedPattern, candidatePattern.rollFacing());
-        boolean matches = compiled == null
+        var replacements = replacementsFor(candidate, stageCompiled, facing, rotatedPattern, candidatePattern.rollFacing());
+        boolean matches = stageCompiled == null || facing.getAxis().isVertical()
                 ? StructureMatcher.matchesRotated(rotatedPattern, level, getBlockPos(), replacements)
-                : StructureMatcher.matchesCompiled(compiled, facing, candidatePattern.rollFacing(), level, getBlockPos());
+                : StructureMatcher.matchesCompiled(stageCompiled, facing, candidatePattern.rollFacing(), level, getBlockPos());
         if (!matches) {
             recordStructureMismatch(candidate, facing, rotatedPattern, replacements);
             return false;
@@ -888,19 +892,19 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             return false;
         }
 
-        var failure = validationMachine.portRequirements().validate(countPorts(rotatedPattern, compiled, facing));
+        var failure = validationMachine.portRequirements().validate(countPorts(rotatedPattern, stageCompiled, facing));
         if (failure.isPresent()) {
             recordFormationFailure(candidate, failure.get());
             return false;
         }
 
-        failure = validatePortTiers(validationMachine, rotatedPattern, compiled, facing);
+        failure = validatePortTiers(validationMachine, rotatedPattern, stageCompiled, facing);
         if (failure.isPresent()) {
             recordFormationFailure(candidate, failure.get());
             return false;
         }
 
-        failure = validateFactoryControllerCount(validationMachine, rotatedPattern, compiled, facing);
+        failure = validateFactoryControllerCount(validationMachine, rotatedPattern, stageCompiled, facing);
         if (failure.isPresent()) {
             recordFormationFailure(candidate, failure.get());
             return false;
@@ -908,7 +912,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
         if (level instanceof ServerLevel serverLevel) {
             StructureClaimRegistry.ClaimResult result = StructureClaimRegistry.get(serverLevel)
-                    .claim(getBlockPos(), componentClaims(rotatedPattern, compiled, facing));
+                    .claim(getBlockPos(), componentClaims(rotatedPattern, stageCompiled, facing));
             if (!result.accepted()) {
                 StructureClaimRegistry.Conflict conflict = result.conflict();
                 lastFormationFailure = new PortRequirementSpec.Failure(
@@ -920,7 +924,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
         lastFormationFailure = null;
         lastStructureMismatchDiagnostic = null;
-        onStructureFormed(candidate, rotatedPattern, compiled, facing, candidatePattern.rollFacing(), replacements, levels.foundLevels());
+        onStructureFormed(candidate, rotatedPattern, stageCompiled, facing, candidatePattern.rollFacing(), replacements, levels.foundLevels());
         return true;
     }
 
@@ -1187,21 +1191,23 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private List<BlockPos> componentPositions() {
-        if (foundCompiledPattern != null && controllerFacing != null) {
+        if (hasCompiledFacing(foundCompiledPattern, controllerFacing)) {
             return foundCompiledPattern.componentPositions(controllerFacing);
         }
         return new ArrayList<>(foundPattern.pattern().keySet());
     }
 
     private static List<BlockPos> componentPositions(BlockArray pattern, @Nullable CompiledMachinePattern compiled, Direction facing) {
-        return compiled == null ? new ArrayList<>(pattern.pattern().keySet()) : compiled.componentPositions(facing);
+        return hasCompiledFacing(compiled, facing) ? compiled.componentPositions(facing) : new ArrayList<>(pattern.pattern().keySet());
     }
 
     private PortRequirementSpec.PortCounts countPorts(BlockArray rotatedPattern, @Nullable CompiledMachinePattern compiledPattern, Direction facing) {
         Map<String, Integer> counts = new LinkedHashMap<>();
         if (level == null || rotatedPattern == null) return PortRequirementSpec.PortCounts.empty();
 
-        List<BlockPos> positions = compiledPattern == null ? new ArrayList<>(rotatedPattern.pattern().keySet()) : compiledPattern.portPositions(facing);
+        List<BlockPos> positions = hasCompiledFacing(compiledPattern, facing)
+                ? compiledPattern.portPositions(facing)
+                : new ArrayList<>(rotatedPattern.pattern().keySet());
         for (BlockPos relativePos : positions) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
             if (!(level.getBlockEntity(worldPos) instanceof IOPortBlockEntity port)) continue;
@@ -1213,7 +1219,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private List<IOPortKind> portKinds(BlockArray rotatedPattern, @Nullable CompiledMachinePattern compiledPattern, Direction facing) {
         if (level == null || rotatedPattern == null) return List.of();
 
-        List<BlockPos> positions = compiledPattern == null ? new ArrayList<>(rotatedPattern.pattern().keySet()) : compiledPattern.portPositions(facing);
+        List<BlockPos> positions = hasCompiledFacing(compiledPattern, facing)
+                ? compiledPattern.portPositions(facing)
+                : new ArrayList<>(rotatedPattern.pattern().keySet());
         List<IOPortKind> kinds = new ArrayList<>();
         for (BlockPos relativePos : positions) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
@@ -1251,7 +1259,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private int countFactoryControllers(BlockArray rotatedPattern, @Nullable CompiledMachinePattern compiledPattern, Direction facing) {
         if (level == null || rotatedPattern == null) return 0;
 
-        List<BlockPos> positions = compiledPattern == null ? new ArrayList<>(rotatedPattern.pattern().keySet()) : compiledPattern.componentPositions(facing);
+        List<BlockPos> positions = componentPositions(rotatedPattern, compiledPattern, facing);
         int count = 0;
         for (BlockPos relativePos : positions) {
             if (level.getBlockEntity(getBlockPos().offset(relativePos)) instanceof FactorySchedulerBlockEntity && ++count > 1) {
@@ -1262,9 +1270,21 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private boolean isInsideCompiledBounds(BlockPos worldPos) {
-        if (foundCompiledPattern == null || controllerFacing == null) return false;
-        BoundingBox box = foundCompiledPattern.boundingBox(controllerFacing);
+        if (controllerFacing == null) return false;
+        Machine candidate = foundMachine == null ? machine : foundMachine;
         BlockPos relative = worldPos.subtract(getBlockPos());
+        if (candidate != null) {
+            for (CandidatePattern pattern : candidatePatterns(candidate, controllerFacing)) {
+                if (contains(boundingBox(pattern.pattern()), relative)) return true;
+            }
+        }
+        BoundingBox box = hasCompiledFacing(foundCompiledPattern, controllerFacing)
+                ? foundCompiledPattern.boundingBox(controllerFacing)
+                : boundingBox(foundPattern);
+        return contains(box, relative);
+    }
+
+    private static boolean contains(BoundingBox box, BlockPos relative) {
         return relative.getX() >= box.minX()
                 && relative.getX() <= box.maxX()
                 && relative.getY() >= box.minY()
@@ -1274,7 +1294,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private void onStructureChunkUnloaded(ChunkPos chunkPos) {
-        if (!isFormed() || foundCompiledPattern == null || controllerFacing == null) return;
+        if (!isFormed() || foundPattern == null || controllerFacing == null) return;
         if (!compiledBoundsTouchesChunk(chunkPos)) return;
         structureDirty = true;
         pauseActiveForUnloadedStructure();
@@ -1300,12 +1320,37 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private boolean compiledBoundsTouchesChunk(ChunkPos chunkPos) {
-        BoundingBox box = foundCompiledPattern.boundingBox(controllerFacing);
+        BoundingBox box = hasCompiledFacing(foundCompiledPattern, controllerFacing)
+                ? foundCompiledPattern.boundingBox(controllerFacing)
+                : boundingBox(foundPattern);
         int minChunkX = (getBlockPos().getX() + box.minX()) >> 4;
         int maxChunkX = (getBlockPos().getX() + box.maxX()) >> 4;
         int minChunkZ = (getBlockPos().getZ() + box.minZ()) >> 4;
         int maxChunkZ = (getBlockPos().getZ() + box.maxZ()) >> 4;
         return chunkPos.x() >= minChunkX && chunkPos.x() <= maxChunkX && chunkPos.z() >= minChunkZ && chunkPos.z() <= maxChunkZ;
+    }
+
+    private static boolean hasCompiledFacing(@Nullable CompiledMachinePattern compiled, @Nullable Direction facing) {
+        return compiled != null && facing != null && compiled.rotatedPattern(facing) != null && compiled.boundingBox(facing) != null;
+    }
+
+    private static BoundingBox boundingBox(BlockArray pattern) {
+        if (pattern == null || pattern.isEmpty()) return new BoundingBox(0, 0, 0, 0, 0, 0);
+        int minX = Integer.MAX_VALUE;
+        int minY = Integer.MAX_VALUE;
+        int minZ = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int maxY = Integer.MIN_VALUE;
+        int maxZ = Integer.MIN_VALUE;
+        for (BlockPos pos : pattern.pattern().keySet()) {
+            minX = Math.min(minX, pos.getX());
+            minY = Math.min(minY, pos.getY());
+            minZ = Math.min(minZ, pos.getZ());
+            maxX = Math.max(maxX, pos.getX());
+            maxY = Math.max(maxY, pos.getY());
+            maxZ = Math.max(maxZ, pos.getZ());
+        }
+        return new BoundingBox(minX, minY, minZ, maxX, maxY, maxZ);
     }
 
     private void pauseActiveForUnloadedStructure() {

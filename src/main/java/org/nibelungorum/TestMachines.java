@@ -2,9 +2,11 @@ package org.nibelungorum;
 
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -39,5 +41,15 @@ public final class TestMachines {
                 .set('O', new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_output_bus").get()))
                 .set('E', new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("energy_input_hatch").get()))
                 .build();
+    }
+
+    public static List<MachineStructureDefinition.Declaration> expandableStageDeclarations() {
+        return List.of(
+                MachineStructureDefinition.Declaration.full(new BlockArray(Map.of(
+                        new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(ModBlocks.CASING.get())))),
+                MachineStructureDefinition.Declaration.extension(new BlockArray(Map.of(
+                        new BlockPos(1, 1, 0), new BlockPredicate.OfBlock(ModBlocks.CASING.get())))),
+                MachineStructureDefinition.Declaration.extension(new BlockArray(Map.of(
+                        new BlockPos(2, 0, 0), new BlockPredicate.OfBlock(ModBlocks.CASING.get())))));
     }
 }

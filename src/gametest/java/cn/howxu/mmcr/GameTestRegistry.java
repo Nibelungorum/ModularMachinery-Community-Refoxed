@@ -22,6 +22,8 @@ public final class GameTestRegistry {
         register(event, "block_array_match", 100, helper -> new BlockArrayMatchGameTest().structureForms3x3Casing(helper));
         register(event, "controller_tick", 100, helper -> new ControllerTickGameTest().structureForms3x3Casing(helper));
         register(event, "controller_tick_scan_registry", 100, helper -> new ControllerTickGameTest().scansRegisteredMachineWhenDefaultBindingIsEmpty(helper));
+        register(event, "expandable_structure_stages", 120, helper -> new ExpandableStructureGameTest().upgradesAndDowngradesHighestAvailableStage(helper));
+        register(event, "expandable_structure_vertical_roll", 120, helper -> new ExpandableStructureGameTest().verticalNonDefaultRollUsesStageSelection(helper));
         register(event, "e2e_recipe_run", 200, helper -> new E2ERecipeRunGameTest().ironCompressorRuns(helper));
         register(event, "energy_hatch_capability", 100, helper -> new EnergyHatchCapabilityGameTest().energyHatchStoresFE(helper));
         register(event, "fluid_hatch_capability", 100, helper -> new FluidHatchCapabilityGameTest().fluidHatchStoresWater(helper));

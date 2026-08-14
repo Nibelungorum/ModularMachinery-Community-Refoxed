@@ -126,6 +126,11 @@ class MachineControllerBlockEntityTest {
         assertThat(compiledPattern(controller).stageNumber()).isEqualTo(2);
         assertThat(controller.assemblyPattern(machine)).isSameAs(controller.getFoundPattern());
 
+        setField(MachineControllerBlockEntity.class, controller, "structureDirty", true);
+        invokeCheckStructure(controller);
+        assertThat(controller.getMatchedStructureStage()).isEqualTo(2);
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "lastStructureMismatchDiagnostic")).isNull();
+
         invokeResetMachine(controller);
 
         assertThat(controller.getMatchedStructureStage()).isZero();
@@ -2023,6 +2028,38 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void vertical_stage_match_keeps_selected_compiled_pattern_with_non_default_roll() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockPos rawPos = new BlockPos(1, 0, 0);
+        Direction rollFacing = Direction.WEST;
+        BlockPos expected = BlockRotator.rotateSouthTo(rawPos, Direction.UP, rollFacing);
+        Identifier machineId = MMCR.id("vertical_staged_roll_machine");
+        var defaults = MachineControllerSpec.defaultsFor(machineId);
+        var spec = new MachineControllerSpec(defaults.id(), defaults.frontTexture(), defaults.sideTexture(),
+                defaults.topTexture(), defaults.bottomTexture(), true, false);
+        DynamicMachine machine = stagedMachineWithController(machineId, spec,
+                onePortPattern(Blocks.IRON_BLOCK),
+                new BlockArray(Map.of(rawPos, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK))),
+                new BlockArray(Map.of(rawPos, new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK))));
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFormation(
+                machine,
+                controllerPos,
+                Direction.UP,
+                rollFacing,
+                itemInputBus(controllerPos.offset(expected)));
+        levelOf(controller).setBlock(controllerPos.offset(expected), Blocks.DIAMOND_BLOCK.defaultBlockState(), 3);
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.UP);
+
+        assertThat(formed).isTrue();
+        assertThat(controller.getMatchedStructureStage()).isEqualTo(3);
+        assertThat(compiledPattern(controller)).isSameAs(MachineRegistry.getCompiledStages(machine.registryName()).get(2));
+        assertThat(compiledPattern(controller).stageNumber()).isEqualTo(3);
+        assertThat(controller.getFoundPattern().pattern()).containsKey(expected);
+    }
+
+    @Test
     void require_vertical_machine_rejects_matching_horizontal_structure() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
@@ -2695,12 +2732,16 @@ class MachineControllerBlockEntityTest {
     }
 
     private static DynamicMachine stagedMachine(Identifier id, BlockArray... stages) {
+        return stagedMachineWithController(id, MachineControllerSpec.defaultsFor(id), stages);
+    }
+
+    private static DynamicMachine stagedMachineWithController(Identifier id, MachineControllerSpec controllerSpec, BlockArray... stages) {
         List<cn.howxu.mmcr.api.machine.MachineStructureStage> structureStages = new ArrayList<>();
         for (int i = 0; i < stages.length; i++) {
             structureStages.add(new cn.howxu.mmcr.api.machine.MachineStructureStage(
                     i + 1, stages[i], PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of()));
         }
-        return new DynamicMachine(id, "Staged Machine", stages[0], MachineControllerSpec.defaultsFor(id),
+        return new DynamicMachine(id, "Staged Machine", stages[0], controllerSpec,
                 MachineAppearanceSpec.defaults(), PortRequirementSpec.none(), PortTierRequirementSpec.none(),
                 List.of(), Map.of(), 1, false, false, 1, List.of(), structureStages);
     }

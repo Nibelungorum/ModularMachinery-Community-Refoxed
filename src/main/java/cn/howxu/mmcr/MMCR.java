@@ -1,6 +1,7 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
@@ -193,6 +194,20 @@ public class MMCR {
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("test_cube")).displayNameKey("machine.mmcr.test_cube").build());
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("controller_tick")).displayNameKey("machine.mmcr.controller_tick").build());
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("iron_compressor")).displayNameKey("machine.mmcr.iron_compressor").build());
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("expandable_structure_stages"))
+                .displayNameKey("machine.mmcr.expandable_structure_stages")
+                .expandableStructure()
+                .build());
+        MachineDefinitions.addBuiltinSupplier(() -> {
+            Identifier machineId = id("expandable_structure_vertical_roll");
+            MachineControllerSpec defaults = MachineControllerSpec.defaultsFor(machineId);
+            return MachineRegistration.builder(machineId)
+                    .displayNameKey("machine.mmcr.expandable_structure_vertical_roll")
+                    .controllerSpec(new MachineControllerSpec(defaults.id(), defaults.frontTexture(), defaults.sideTexture(),
+                            defaults.topTexture(), defaults.bottomTexture(), true, false))
+                    .expandableStructure()
+                    .build();
+        });
     }
 
     public static void registerGameTestMachineStructures(DynamicContentReloadService.Candidate candidate) {
@@ -205,6 +220,10 @@ public class MMCR {
         candidate.registerStructure(new MachineStructureDefinition(
                 id("iron_compressor"), org.nibelungorum.TestMachines.ironCompressorPattern(),
                 cn.howxu.mmcr.api.machine.PortRequirementSpec.none(), java.util.List.of(), java.util.Map.of()));
+        candidate.registerStructure(new MachineStructureDefinition(
+                id("expandable_structure_stages"), org.nibelungorum.TestMachines.expandableStageDeclarations()));
+        candidate.registerStructure(new MachineStructureDefinition(
+                id("expandable_structure_vertical_roll"), org.nibelungorum.TestMachines.expandableStageDeclarations()));
     }
 
     private static void registerGameTests(RegisterGameTestsEvent event) {
