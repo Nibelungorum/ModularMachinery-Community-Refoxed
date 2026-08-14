@@ -34,6 +34,7 @@ public class MachineRecipeBuilderJS {
     public boolean cancelIfPerTickFails = false;
     public final List<LevelRequirement> levelRequirements = new ArrayList<>();
     final List<MachineRequirement> requirements = new ArrayList<>();
+    private boolean allowPartialOutputs = false;
 
     private Identifier id;
     private final List<ComponentOutput> componentOutputs = new ArrayList<>();
@@ -121,6 +122,11 @@ public class MachineRecipeBuilderJS {
         return this;
     }
 
+    public MachineRecipeBuilderJS allowPartialOutputs() {
+        this.allowPartialOutputs = true;
+        return this;
+    }
+
     public MachineRecipeBuilderJS smartInterfaceInput(String type, float value) {
         requirements.add(SmartInterfaceRequirement.input(type, value));
         return this;
@@ -193,7 +199,7 @@ public class MachineRecipeBuilderJS {
         requirements.addAll(this.requirements);
 
         RecipeRegistry.register(new MachineRecipe(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(recipeOutputs), List.of(), 0, 1,
-                cancelIfPerTickFails, List.of(), List.copyOf(requirements), false, List.copyOf(levelRequirements)));
+                cancelIfPerTickFails, List.of(), List.copyOf(requirements), false, List.copyOf(levelRequirements), allowPartialOutputs));
     }
 
     private record ComponentOutput(int index, JsonObject stack) {

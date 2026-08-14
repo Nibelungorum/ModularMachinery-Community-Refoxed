@@ -42,7 +42,8 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
             Codec.BOOL.optionalFieldOf("cancelIfPerTickFails", false).forGetter(MachineRecipe::doesCancelRecipeOnPerTickFailure),
             MachineRequirement.CODEC.listOf().optionalFieldOf("requirements", Collections.emptyList()).forGetter(MachineRecipe::requirements),
             Codec.BOOL.optionalFieldOf("parallelized", false).forGetter(MachineRecipe::isParallelized),
-            LevelRequirement.CODEC.listOf().optionalFieldOf("level_requirements", Collections.emptyList()).forGetter(MachineRecipe::levelRequirements)
+            LevelRequirement.CODEC.listOf().optionalFieldOf("level_requirements", Collections.emptyList()).forGetter(MachineRecipe::levelRequirements),
+            Codec.BOOL.optionalFieldOf("allow_partial_outputs", false).forGetter(MachineRecipe::allowPartialOutputs)
     ).apply(instance, MachineRecipe::create));
 
     private final Identifier id;
@@ -55,6 +56,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     private final boolean cancelRecipeOnPerTickFailure;
     private final boolean parallelized;
     private final List<LevelRequirement> levelRequirements;
+    private final boolean allowPartialOutputs;
 
     public MachineRecipe(Identifier id,
                          Identifier machineId,
@@ -137,12 +139,30 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                          List<ItemStack> outputs,
                          List<RecipeModifier> modifiers,
                          int priority,
+                          int maxThreads,
+                          boolean cancelRecipeOnPerTickFailure,
+                          List<FluidStack> fluidOutputs,
+                          List<MachineRequirement> requirements,
+                          boolean parallelized,
+                          List<LevelRequirement> levelRequirements) {
+        this(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure,
+                fluidOutputs, requirements, parallelized, levelRequirements, false);
+    }
+
+    public MachineRecipe(Identifier id,
+                         Identifier machineId,
+                         int tickTime,
+                         List<MachineIngredient> inputs,
+                         List<ItemStack> outputs,
+                         List<RecipeModifier> modifiers,
+                         int priority,
                          int maxThreads,
                          boolean cancelRecipeOnPerTickFailure,
                          List<FluidStack> fluidOutputs,
                          List<MachineRequirement> requirements,
                          boolean parallelized,
-                         List<LevelRequirement> levelRequirements) {
+                         List<LevelRequirement> levelRequirements,
+                         boolean allowPartialOutputs) {
         if (id == null) {
             throw new IllegalArgumentException("Recipe id must not be null");
         }
@@ -161,22 +181,24 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         this.cancelRecipeOnPerTickFailure = cancelRecipeOnPerTickFailure;
         this.parallelized = parallelized;
         this.levelRequirements = validateLevelRequirements(levelRequirements);
+        this.allowPartialOutputs = allowPartialOutputs;
     }
 
     private static MachineRecipe create(Identifier id,
                                         Identifier machineId,
-                                        int tickTime,
-                                        List<MachineIngredient> inputs,
-                                        List<ItemStack> outputs,
+                                         int tickTime,
+                                         List<MachineIngredient> inputs,
+                                         List<ItemStack> outputs,
                                          List<FluidStack> fluidOutputs,
                                          List<RecipeModifier> modifiers,
                                          int priority,
                                          int maxThreads,
-                                          boolean cancelRecipeOnPerTickFailure,
-                                          List<MachineRequirement> requirements,
-                                          boolean parallelized,
-                                          List<LevelRequirement> levelRequirements) {
-        return new MachineRecipe(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure, fluidOutputs, requirements, parallelized, levelRequirements);
+                                         boolean cancelRecipeOnPerTickFailure,
+                                         List<MachineRequirement> requirements,
+                                         boolean parallelized,
+                                         List<LevelRequirement> levelRequirements,
+                                         boolean allowPartialOutputs) {
+        return new MachineRecipe(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure, fluidOutputs, requirements, parallelized, levelRequirements, allowPartialOutputs);
     }
 
     private static List<MachineRequirement> deriveRequirements(List<MachineIngredient> inputs, List<ItemStack> outputs, List<FluidStack> fluidOutputs) {
@@ -444,6 +466,10 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         return parallelized;
     }
 
+    public boolean allowPartialOutputs() {
+        return allowPartialOutputs;
+    }
+
     public Identifier getRegistryName() {
         return id;
     }
@@ -514,11 +540,12 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                 && levelRequirements.equals(that.levelRequirements)
                 && modifiers.equals(that.modifiers)
                 && cancelRecipeOnPerTickFailure == that.cancelRecipeOnPerTickFailure
-                && parallelized == that.parallelized;
+                && parallelized == that.parallelized
+                && allowPartialOutputs == that.allowPartialOutputs;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, machineId, tickTime, requirements, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure, parallelized, levelRequirements);
+        return Objects.hash(id, machineId, tickTime, requirements, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure, parallelized, levelRequirements, allowPartialOutputs);
     }
 }
