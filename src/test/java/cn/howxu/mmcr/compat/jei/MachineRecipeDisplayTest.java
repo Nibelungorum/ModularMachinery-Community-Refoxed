@@ -48,6 +48,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MachineRecipeDisplayTest {
 
@@ -173,6 +174,14 @@ class MachineRecipeDisplayTest {
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
 
         assertThat(display.requiredHostIds()).containsExactly(MMCR.id("alpha_host"), MMCR.id("middle_host"), MMCR.id("zeta_host"));
+    }
+
+    @Test
+    void displayExposesImmutableRequiredHostIds() {
+        MachineRecipeDisplay display = hostDisplay(Set.of(MMCR.id("immutable_host")));
+
+        assertThatThrownBy(() -> display.requiredHostIds().add(MMCR.id("mutated_host")))
+                .isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test

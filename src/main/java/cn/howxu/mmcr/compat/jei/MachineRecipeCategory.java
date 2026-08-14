@@ -219,9 +219,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     static Component hostRequirementComponent(MachineRecipeDisplay recipe, long gameTime) {
         if (recipe.requiredHostIds().isEmpty()) return Component.empty();
-        List<Identifier> hostIds = recipe.requiredHostIds().stream()
-                .sorted(Comparator.comparing(Identifier::toString))
-                .toList();
+        List<Identifier> hostIds = List.copyOf(recipe.requiredHostIds());
         int index = (int) ((gameTime / 20) % hostIds.size());
         Identifier hostId = hostIds.get(index);
         var registration = MachineDefinitions.getRegistration(hostId);
