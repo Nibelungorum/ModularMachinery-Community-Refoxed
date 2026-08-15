@@ -87,6 +87,7 @@ public final class FactoryRecipeScheduler {
 
     public void pause() {
         paused = true;
+        clearFinishedThreadContinuations();
     }
 
     public void resume() {
@@ -251,7 +252,9 @@ public final class FactoryRecipeScheduler {
     public void tickThreads(MachineControllerBlockEntity controller, List<MachineRecipe> candidates,
                             long structureVersion, int parallelLimit, RecipeCraftingContextPool contextPool,
                             Runnable onFinished) {
-        if (paused) return;
+        if (paused) {
+            return;
+        }
         Runnable finishCallback = onFinished == null ? () -> { } : onFinished;
         ensureBaseThread(controller, contextPool);
         this.perThreadParallelLimit = Math.max(1, parallelLimit);
@@ -284,7 +287,7 @@ public final class FactoryRecipeScheduler {
             thread.searchAndStartRecipe(availableCandidates, availableParallelism, structureVersion);
         }
         while (threads.size() < threadLimit && availableParallelism() > 0) {
-            List<MachineRecipe> availableCandidates = availableCandidates(candidates);
+            List<MachineRecipe> availableCandidates = availableCandidates(candidateSnapshot);
             if (availableCandidates.isEmpty()) break;
             FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, contextPool == null ? this.contextPool : contextPool,
                     "factory-" + nextFactoryLaneId++);
@@ -298,7 +301,7 @@ public final class FactoryRecipeScheduler {
 
     private void continueFinishedThread(FactoryRecipeThread thread, List<MachineRecipe> candidates,
                                         long structureVersion, long modifierSnapshotVersion) {
-        if (thread.getStatus() != RecipeThread.Status.IDLE || !thread.isIdle()) return;
+        if (paused || thread.getStatus() != RecipeThread.Status.IDLE || !thread.isIdle()) return;
         List<MachineRecipe> available = availableCandidates(candidates);
         if (available.isEmpty()) return;
         int parallelism = availableParallelism();

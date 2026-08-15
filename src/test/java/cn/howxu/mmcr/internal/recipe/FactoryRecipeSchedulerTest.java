@@ -477,6 +477,35 @@ class FactoryRecipeSchedulerTest {
     }
 
     @Test
+    void synchronous_completion_restarts_only_the_locked_single_worker_recipe() throws Exception {
+        MachineControllerBlockEntity controller = controller(MMCR.id("factory_sync_continuation_machine"));
+        MachineRecipe lockedRecipe = new MachineRecipe(MMCR.id("factory_sync_continuation_locked"),
+                MMCR.id("factory_sync_continuation_machine"), 2, List.of(), List.of(), List.of(), 0, 1);
+        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2, pool);
+        AtomicInteger finished = new AtomicInteger();
+
+        scheduler.tickThreads(controller, List.of(lockedRecipe), controller.getStructureVersion(), 1, pool,
+                finished::incrementAndGet);
+        FactoryRecipeThread thread = scheduler.allThreads().getFirst();
+        thread.setLockedRecipeId(lockedRecipe.id());
+        thread.getActiveRecipe().setTotalTick(1);
+        scheduler.tickThreads(controller, List.of(lockedRecipe), controller.getStructureVersion(), 1, pool,
+                finished::incrementAndGet);
+
+        assertThat(finished).hasValue(1);
+        assertThat(thread.getActiveRecipe()).isNotNull();
+        assertThat(thread.getActiveRecipe().getRecipe()).isSameAs(lockedRecipe);
+        assertThat(thread.getActiveRecipe().getTick()).isZero();
+        assertThat(scheduler.allThreads()).hasSize(1);
+
+        scheduler.tickThreads(controller, List.of(lockedRecipe), controller.getStructureVersion(), 1, pool,
+                finished::incrementAndGet);
+
+        assertThat(thread.getActiveRecipe().getTick()).isEqualTo(1);
+    }
+
+    @Test
     void shared_factory_threads_restart_when_their_recipe_finishes() throws Exception {
         BlockPos controllerPos = new BlockPos(0, 64, 0);
         ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
@@ -1191,6 +1220,37 @@ class FactoryRecipeSchedulerTest {
         loaded.resume();
         loaded.tickThreads(controller, List.of(), controller.getStructureVersion(), 1, pool);
         assertThat(restored).extracting(thread -> thread.getActiveRecipe().getTick()).containsExactly(4, 8);
+    }
+
+    @Test
+    void paused_scheduler_does_not_restart_after_a_queued_shared_finish_resolves() throws Exception {
+        BlockPos controllerPos = new BlockPos(0, 64, 0);
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
+        MachineControllerBlockEntity controller = controllerWithInput(MMCR.id("factory_paused_shared_finish"), controllerPos, input);
+        ServerLevel level = serverLevel(List.of(controller, input));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, input, "level", level);
+        StructureClaimRegistry registry = StructureClaimRegistry.get(level);
+        registry.claim(controllerPos, List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
+                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)));
+        StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_paused_shared_finish_recipe"),
+                MMCR.id("factory_paused_shared_finish"), 1, List.of(), List.of(), List.of(), 0, 1);
+        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1, pool);
+
+        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 1, pool);
+        SharedIoCoordinator.get(level).resolve(domain);
+        FactoryRecipeThread thread = scheduler.allThreads().getFirst();
+        thread.getActiveRecipe().beginFinishCommit();
+        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 1, pool);
+        scheduler.pause();
+        SharedIoCoordinator.get(level).resolve(domain);
+
+        assertThat(thread.getActiveRecipe()).isNull();
+        assertThat(thread.isStartPending()).isFalse();
+        SharedIoCoordinator.discard(level);
+        StructureClaimRegistry.discard(level);
     }
 
     @Test
