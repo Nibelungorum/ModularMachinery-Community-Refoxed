@@ -55,6 +55,8 @@ public final class DefaultRecipes {
     private static final Identifier THERMAL_SMELTING_FURNACE_ID = MMCR.id("thermal_smelting_furnace");
     private static final Identifier PURPUR_FURNACE_ID = MMCR.id("purpur_furnace");
     private static final Identifier DISTILLATION_TOWER_TEST_ID = MMCR.id("distillation_tower_test");
+    private static final Identifier DISTILLATION_TOWER_ID = MMCR.id("distillation_tower");
+    private static final Identifier ECO_MATRIX_ID = MMCR.id("eco_matrix");
 
     private DefaultRecipes() {
     }
@@ -78,6 +80,11 @@ public final class DefaultRecipes {
         for (MachineRecipe recipe : purpurFurnaceRecipes()) {
             recipes.put(recipe.id(), recipe);
         }
+        for (MachineRecipe recipe : distillationTowerRecipes()) {
+            recipes.put(recipe.id(), recipe);
+        }
+        MachineRecipe ecoMatrixRecipe = ecoMatrixRecipe();
+        recipes.put(ecoMatrixRecipe.id(), ecoMatrixRecipe);
         return Map.copyOf(recipes);
     }
 
@@ -107,6 +114,26 @@ public final class DefaultRecipes {
                 standardDefinitions(REACTOR_ID, "reactor", new Definition(MMCR.id("reactor_diamond_water"), REACTOR_ID, 200, List.of(itemInput(Items.DIAMOND, 1), fluidInput(Fluids.WATER, 500), energyOutput(100)), List.of(item(Items.COAL, 1)), List.of(fluidOutput(Fluids.LAVA, 500)))),
                 thermalSmeltingFurnaceDefinitions()
         ).stream().flatMap(List::stream).toList();
+    }
+
+    private static List<MachineRecipe> distillationTowerRecipes() {
+        return List.of(
+                discardableRecipe("distillation_tower_coal", Items.COAL, Items.COAL, Items.CHARCOAL, Items.GUNPOWDER),
+                discardableRecipe("distillation_tower_oak_log", Items.OAK_LOG, Items.CHARCOAL, Items.STICK, Items.COAL),
+                discardableRecipe("distillation_tower_dried_kelp", Items.DRIED_KELP, Items.KELP, Items.COAL, Items.BONE_MEAL));
+    }
+
+    private static MachineRecipe discardableRecipe(String id, Item input, Item first, Item second, Item third) {
+        return new MachineRecipe(MMCR.id(id), DISTILLATION_TOWER_ID, 200,
+                List.of(itemInput(input, 1), energyInput(40)),
+                List.of(item(first, 1), item(second, 1), item(third, 1)),
+                List.of(), 0, 4, true, List.of(), List.of(), true, List.of(), true);
+    }
+
+    private static MachineRecipe ecoMatrixRecipe() {
+        return new MachineRecipe(MMCR.id("eco_matrix_energy_drain"), ECO_MATRIX_ID, 200,
+                List.of(energyInput(100)), List.of(), List.of(), 0, 1, true,
+                List.of(), List.of(), false, List.of());
     }
 
     private static List<MachineRecipe> componentExampleRecipes() {

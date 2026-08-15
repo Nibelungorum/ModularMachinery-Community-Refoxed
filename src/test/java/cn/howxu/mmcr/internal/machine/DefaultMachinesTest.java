@@ -198,6 +198,28 @@ class DefaultMachinesTest {
     }
 
     @Test
+    void structures_install_expandable_distillation_tower_and_eco_matrix() {
+        installDefaultStructures();
+
+        var distillationTower = MachineRegistry.getMachine(MMCR.id("distillation_tower"));
+        var ecoMatrix = MachineRegistry.getMachine(MMCR.id("eco_matrix"));
+
+        assertThat(distillationTower).isNotNull();
+        assertThat(distillationTower.parallelizable()).isTrue();
+        assertThat(distillationTower.maxParallelism()).isEqualTo(4);
+        assertThat(MachineDefinitions.getRegistration(MMCR.id("distillation_tower")).allowMultithreading()).isTrue();
+        assertThat(requirementIds(distillationTower))
+                .contains("energy_input_hatch>=tiny", "item_input_bus>=tiny", "item_output_bus>=tiny");
+        assertThat(MachineStructureRegistry.dynamicSnapshot().get(MMCR.id("distillation_tower")).declarations())
+                .hasSize(3);
+
+        assertThat(ecoMatrix).isNotNull();
+        assertThat(requirementIds(ecoMatrix)).containsExactly("energy_input_hatch>=tiny");
+        assertThat(MachineStructureRegistry.dynamicSnapshot().get(MMCR.id("eco_matrix")).declarations())
+                .hasSize(3);
+    }
+
+    @Test
     void structures_install_default_cracker_once() {
         installDefaultStructures();
         installDefaultStructures();

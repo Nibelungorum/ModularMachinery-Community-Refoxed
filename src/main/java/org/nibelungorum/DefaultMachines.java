@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
@@ -53,6 +54,8 @@ public final class DefaultMachines {
     private static final Identifier REACTOR_ID = MMCR.id("reactor");
     private static final Identifier THERMAL_SMELTING_FURNACE_ID = MMCR.id("thermal_smelting_furnace");
     private static final Identifier PURPUR_FURNACE_ID = MMCR.id("purpur_furnace");
+    private static final Identifier DISTILLATION_TOWER_ID = MMCR.id("distillation_tower");
+    private static final Identifier ECO_MATRIX_ID = MMCR.id("eco_matrix");
 
     private DefaultMachines() {
     }
@@ -77,6 +80,8 @@ public final class DefaultMachines {
         structures.put(REACTOR_ID, structureOf(reactor(itemInput, itemOutput, fluidInput, fluidOutput, energyOutput)));
         structures.put(THERMAL_SMELTING_FURNACE_ID, thermalSmeltingFurnaceStructure());
         structures.put(PURPUR_FURNACE_ID, structureOf(purpurFurnace()));
+        structures.put(DISTILLATION_TOWER_ID, distillationTowerStructure());
+        structures.put(ECO_MATRIX_ID, ecoMatrixStructure());
         return Map.copyOf(structures);
     }
 
@@ -439,6 +444,83 @@ public final class DefaultMachines {
                         .anyEnergyInput()
                         .build(),
                 List.of(), Map.of(), 4, true, true, 1, List.of());
+    }
+
+    private static MachineStructureDefinition distillationTowerStructure() {
+        Block controller = ModBlocks.controllerFor(DISTILLATION_TOWER_ID).get();
+        BlockPredicate port = new BlockPredicate.AnyOf(PortKinds.all().stream()
+                .filter(kind -> !(kind.ioType() == IOType.OUTPUT && kind.itemBusSize().orElse(null) == ItemBusSize.TINY))
+                .<BlockPredicate>map(kind -> new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get(kind.id()).get()))
+                .toList());
+        BlockPredicate a = new BlockPredicate.AnyOf(List.of(new BlockPredicate.OfBlock(Blocks.DEEPSLATE_BRICKS), port));
+        BlockPredicate c = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(Blocks.DEEPSLATE_BRICKS),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_output_bus_tiny").get())));
+        PortTierRequirementSpec requirements = PortTierRequirementSpec.builder()
+                .anyItemInput().anyItemOutput().anyEnergyInput().build();
+        return new MachineStructureDefinition(DISTILLATION_TOWER_ID, List.of(
+                declaration(distillationTowerPattern(4, a, c, controller), requirements),
+                declaration(distillationTowerPattern(5, a, c, controller), requirements),
+                declaration(distillationTowerPattern(6, a, c, controller), requirements)));
+    }
+
+    private static BlockArray distillationTowerPattern(int height, BlockPredicate a, BlockPredicate c, Block controller) {
+        String[] first = {"  XXX  ", "  AAA  ", "       ", "       ", "       ", "       "};
+        String[] second = {" XXXXX ", " B   B ", "  ACA  ", "  ACA  ", "  ACA  ", "       "};
+        String[] middle = {"XXXXXXX", "A     A", " B   B ", " B   B ", " B   B ", "  DDD  "};
+        String[] sixth = {" XXXXX ", " B   B ", "  BBB  ", "  BBB  ", "  BBB  ", "       "};
+        String[] last = {"  XXX  ", "  BEB  ", "       ", "       ", "       ", "       "};
+        return BlockArray.builder()
+                .pattern(java.util.Arrays.copyOf(first, height))
+                .pattern(java.util.Arrays.copyOf(second, height))
+                .pattern(java.util.Arrays.copyOf(middle, height))
+                .pattern(java.util.Arrays.copyOf(middle, height))
+                .pattern(java.util.Arrays.copyOf(middle, height))
+                .pattern(java.util.Arrays.copyOf(sixth, height))
+                .pattern(java.util.Arrays.copyOf(last, height))
+                .set('X', new BlockPredicate.OfBlock(Blocks.POLISHED_BLACKSTONE))
+                .set('A', a)
+                .set('B', new BlockPredicate.OfBlock(Blocks.POLISHED_BLACKSTONE_BRICKS))
+                .set('C', c)
+                .set('D', new BlockPredicate.OfBlock(Blocks.GILDED_BLACKSTONE))
+                .set('E', new BlockPredicate.OfBlock(controller))
+                .controller('E')
+                .build();
+    }
+
+    private static MachineStructureDefinition ecoMatrixStructure() {
+        Block controller = ModBlocks.controllerFor(ECO_MATRIX_ID).get();
+        BlockPredicate a = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(Blocks.RESIN_BRICKS),
+                new BlockPredicate.AnyOf(PortKinds.all().stream()
+                        .<BlockPredicate>map(kind -> new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get(kind.id()).get()))
+                        .toList())));
+        PortTierRequirementSpec requirements = PortTierRequirementSpec.builder().anyEnergyInput().build();
+        return new MachineStructureDefinition(ECO_MATRIX_ID, List.of(
+                declaration(ecoMatrixPattern(3, a, controller), requirements),
+                declaration(ecoMatrixPattern(4, a, controller), requirements),
+                declaration(ecoMatrixPattern(5, a, controller), requirements)));
+    }
+
+    private static BlockArray ecoMatrixPattern(int width, BlockPredicate a, Block controller) {
+        String x = "X".repeat(width);
+        String aRow = "A".repeat(width);
+        String middle = "A" + " ".repeat(width - 2) + "A";
+        String controllerRow = "A" + "B" + "A".repeat(width - 2);
+        return BlockArray.builder()
+                .pattern(x, aRow, x)
+                .pattern(x, middle, x)
+                .pattern(x, controllerRow, x)
+                .set('X', new BlockPredicate.OfBlock(Blocks.SEA_LANTERN))
+                .set('A', a)
+                .set('B', new BlockPredicate.OfBlock(controller))
+                .controller('B')
+                .build();
+    }
+
+    private static Declaration declaration(BlockArray pattern, PortTierRequirementSpec requirements) {
+        return new Declaration(Declaration.Kind.FULL, pattern, PortRequirementSpec.none(), requirements,
+                List.of(), Map.of(), Map.of());
     }
 
     private static BlockPredicate portFamily(IOType ioType, PortTierRequirementSpec.PortCategory category) {

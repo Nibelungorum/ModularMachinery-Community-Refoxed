@@ -79,6 +79,25 @@ class DefaultRecipesTest {
     }
 
     @Test
+    void default_recipes_include_discardable_distillation_and_energy_only_eco_matrix_recipes() {
+        installDefaultRuntimeContent();
+        DefaultRecipes.ensureRegistered();
+
+        var distillationRecipe = RecipeRegistry.getRecipe(MMCR.id("distillation_tower_coal"));
+        var ecoRecipe = RecipeRegistry.getRecipe(MMCR.id("eco_matrix_energy_drain"));
+
+        assertThat(distillationRecipe.machineId()).isEqualTo(MMCR.id("distillation_tower"));
+        assertThat(distillationRecipe.allowPartialOutputs()).isTrue();
+        assertThat(distillationRecipe.inputs()).hasSize(2);
+        assertThat(distillationRecipe.outputs()).hasSizeGreaterThanOrEqualTo(3);
+
+        assertThat(ecoRecipe.machineId()).isEqualTo(MMCR.id("eco_matrix"));
+        assertThat(ecoRecipe.inputs()).singleElement().isInstanceOf(MachineIngredient.EnergyIngredient.class);
+        assertThat(ecoRecipe.outputs()).isEmpty();
+        assertThat(ecoRecipe.fluidOutputs()).isEmpty();
+    }
+
+    @Test
     void component_recipe_includes_chanced_item_and_fluid_outputs() {
         installDefaultRuntimeContent();
         DefaultRecipes.ensureRegistered();
@@ -324,7 +343,9 @@ class DefaultRecipesTest {
         assertThat(RecipeRegistry.byMachineId(MMCR.id("reactor"))).hasSize(21);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("thermal_smelting_furnace"))).hasSize(16);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("purpur_furnace"))).hasSize(14);
-        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(119);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("distillation_tower"))).hasSize(3);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("eco_matrix"))).hasSize(1);
+        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(123);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker")))
                 .anySatisfy(recipe -> assertThat(recipe.fluidOutputs()).isNotEmpty());
         assertThat(RecipeRegistry.recipes())

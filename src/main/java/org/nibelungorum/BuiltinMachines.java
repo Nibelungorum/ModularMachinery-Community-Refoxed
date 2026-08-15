@@ -20,6 +20,8 @@ public final class BuiltinMachines {
     private static final Identifier REACTOR_ID = MMCR.id("reactor");
     private static final Identifier THERMAL_SMELTING_FURNACE_ID = MMCR.id("thermal_smelting_furnace");
     private static final Identifier PURPUR_FURNACE_ID = MMCR.id("purpur_furnace");
+    private static final Identifier DISTILLATION_TOWER_ID = MMCR.id("distillation_tower");
+    private static final Identifier ECO_MATRIX_ID = MMCR.id("eco_matrix");
 
     private BuiltinMachines() {
     }
@@ -130,6 +132,23 @@ public final class BuiltinMachines {
                 .smartInterfaceType(new SmartInterfaceType("Mode", 1F, 3F, 0, SmartInterfaceType.ValueType.INTEGER))
                 .smartInterfaceType(new SmartInterfaceType("Temperature", 400F, 6800F, 1, SmartInterfaceType.ValueType.INTEGER))
                 .smartInterfaceType(new SmartInterfaceType("ConversionRate", 0.5F, 0.0F, 1.0F, 2, SmartInterfaceType.ValueType.FLOAT))
+                .build());
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(DISTILLATION_TOWER_ID)
+                .displayNameKey("machine.mmcr.distillation_tower")
+                .appearance(MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("polished_blackstone")))
+                .recipeFamilyId(DISTILLATION_TOWER_ID)
+                .allowModifiers(false)
+                .allowMultithreading(true)
+                .allowParallelism(true)
+                .maxParallelAmount(4)
+                .expandableStructure()
+                .build());
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(ECO_MATRIX_ID)
+                .displayNameKey("machine.mmcr.eco_matrix")
+                .appearance(MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("sea_lantern")))
+                .recipeFamilyId(ECO_MATRIX_ID)
+                .allowModifiers(false)
+                .expandableStructure()
                 .build());
     }
 }

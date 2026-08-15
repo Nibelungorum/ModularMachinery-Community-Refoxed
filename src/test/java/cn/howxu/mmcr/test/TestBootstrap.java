@@ -85,6 +85,8 @@ public final class TestBootstrap {
         bindController(id("reactor"));
         bindController(id("thermal_smelting_furnace"));
         bindController(id("purpur_furnace"));
+        bindController(id("distillation_tower"));
+        bindController(id("eco_matrix"));
         bindController(id("test_cube"));
         bindController(id("controller_tick"));
         bindController(id("iron_compressor"));
