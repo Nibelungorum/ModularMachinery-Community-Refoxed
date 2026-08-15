@@ -64,6 +64,15 @@ class MachineDefinitionBootstrapTest {
     }
 
     @Test
+    void space_elevator_uses_its_own_controller_overlay() {
+        BuiltinMachines.register();
+        MachineDefinitions.bootstrapBuiltins();
+
+        assertThat(MachineDefinitions.getRegistration(MMCR.id("space_elevator")).controllerSpec().frontTexture())
+                .isEqualTo(MMCR.id("block/space_elevator_controller"));
+    }
+
+    @Test
     void startupRegistrationsRejectDuplicateIds() {
         var staticId = Identifier.parse("mmcr:static_machine");
         MachineDefinitions.register(MachineRegistration.builder(staticId).localizedName("Static").build());

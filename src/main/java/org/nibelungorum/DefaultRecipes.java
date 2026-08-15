@@ -140,7 +140,7 @@ public final class DefaultRecipes {
                 spaceReassemblerRecipe("space_reassembler_water_to_healing", 400,
                         waterBottleInput(), potion(Potions.HEALING), 8_000),
                 spaceReassemblerRecipe("space_reassembler_water_to_swiftness", 400,
-                        waterBottleInput(), potion(Potions.SWIFTNESS), 8_000));
+                        awkwardPotionInput(), potion(Potions.SWIFTNESS), 8_000));
     }
 
     private static MachineRecipe spaceReassemblerRecipe(String id, int ticks, MachineIngredient input, ItemStack output, int fePerTick) {
@@ -156,6 +156,12 @@ public final class DefaultRecipes {
     private static MachineIngredient.ItemIngredient waterBottleInput() {
         return itemInputFromData("""
                 {"id":"minecraft:potion","components":{"minecraft:potion_contents":{"potion":"minecraft:water"}}}
+                """, 1F);
+    }
+
+    private static MachineIngredient.ItemIngredient awkwardPotionInput() {
+        return itemInputFromData("""
+                {"id":"minecraft:potion","components":{"minecraft:potion_contents":{"potion":"minecraft:awkward"}}}
                 """, 1F);
     }
 

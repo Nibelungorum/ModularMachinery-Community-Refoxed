@@ -125,6 +125,8 @@ class DefaultRecipesTest {
         assertThat(swiftnessRecipe.tickTime()).isEqualTo(400);
         assertThat(((MachineIngredient.ItemIngredient) healingRecipe.inputs().get(0)).components().isEmpty()).isFalse();
         assertThat(((MachineIngredient.ItemIngredient) swiftnessRecipe.inputs().get(0)).components().isEmpty()).isFalse();
+        assertThat(((MachineIngredient.ItemIngredient) healingRecipe.inputs().get(0)).components())
+                .isNotEqualTo(((MachineIngredient.ItemIngredient) swiftnessRecipe.inputs().get(0)).components());
         assertThat(((MachineIngredient.EnergyIngredient) healingRecipe.inputs().get(1)).fePerTick()).isEqualTo(8_000);
         assertThat(((MachineIngredient.EnergyIngredient) swiftnessRecipe.inputs().get(1)).fePerTick()).isEqualTo(8_000);
         assertThat(healingRecipe.requiredHostIds()).containsExactly(MMCR.id("space_elevator"));

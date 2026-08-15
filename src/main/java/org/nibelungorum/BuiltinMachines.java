@@ -160,6 +160,7 @@ public final class BuiltinMachines {
                 .build());
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(SPACE_ELEVATOR_ID)
                 .displayNameKey("machine.mmcr.space_elevator")
+                .controllerSpec(controllerSpec(SPACE_ELEVATOR_ID, MMCR.id("block/space_elevator_controller")))
                 .appearance(MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("smooth_quartz")))
                 .recipeFamilyId(SPACE_ELEVATOR_ID)
                 .allowModifiers(false)
@@ -180,5 +181,11 @@ public final class BuiltinMachines {
         Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
         for (int x = 0; x < count; x++) pattern.put(new BlockPos(x, 0, 0), BlockPredicate.machineCoupler());
         return new BlockArray(pattern);
+    }
+
+    private static MachineControllerSpec controllerSpec(Identifier machineId, Identifier frontTexture) {
+        MachineControllerSpec defaults = MachineControllerSpec.defaultsFor(machineId);
+        return new MachineControllerSpec(defaults.id(), frontTexture, defaults.sideTexture(), defaults.topTexture(),
+                defaults.bottomTexture(), false, false, false);
     }
 }
