@@ -163,6 +163,53 @@ class MachineControllerBlockEntityRecipeDelayTest {
     }
 
     @Test
+    void completedRecipeRestartsImmediatelyWithoutTickingReplacementUntilNextTick() throws Exception {
+        Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
+        MachineControllerBlockEntity controller = formedController(machineId);
+        MachineRecipe recipe = inputRecipe("continuous_gold", machineId, List.of());
+        setField(MachineControllerBlockEntity.class, controller, "lastRecipe", recipe);
+        setField(MachineControllerBlockEntity.class, controller, "lastRecipeStructureVersion", 31L);
+        setField(MachineControllerBlockEntity.class, controller, "lastRecipeModifierSnapshotVersion", 0L);
+        setField(MachineControllerBlockEntity.class, controller, "recipeDirty", false);
+        assertThat(invokeTryRestartLastRecipe(controller, machineId)).isTrue();
+        ((RecipeCraftingContext) fieldValue(MachineControllerBlockEntity.class, controller, "context")).refreshStructureVersion();
+        setField(ActiveMachineRecipe.class, controller.getActive(), "totalTick", 1);
+        setField(MachineControllerBlockEntity.class, controller, "recipeDirty", false);
+        setField(MachineControllerBlockEntity.class, controller, "recipeSearchRetryCounter", 0);
+
+        invokeTickSingleActiveRecipe(controller);
+
+        assertThat(controller.getActive()).isNotNull();
+        assertThat(controller.getActive().getRecipe()).isSameAs(recipe);
+        assertThat(controller.getActive().getTick()).isZero();
+
+        invokeTickSingleActiveRecipe(controller);
+
+        assertThat(controller.getActive().getTick()).isEqualTo(1);
+    }
+
+    @Test
+    void completedRecipeDoesNotReplaceActiveRecipeWhenRestartInputIsUnavailable() throws Exception {
+        Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
+        ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
+        bus.getItemStackHandler(null).setStackInSlot(0, Items.GOLD_INGOT.getDefaultInstance());
+        MachineControllerBlockEntity controller = formedController(machineId, bus);
+        MachineRecipe recipe = inputRecipe("continuous_gold", machineId, Items.GOLD_INGOT, 1);
+        setField(MachineControllerBlockEntity.class, controller, "lastRecipe", recipe);
+        setField(MachineControllerBlockEntity.class, controller, "lastRecipeStructureVersion", 31L);
+        setField(MachineControllerBlockEntity.class, controller, "lastRecipeModifierSnapshotVersion", 0L);
+        setField(MachineControllerBlockEntity.class, controller, "recipeDirty", false);
+        assertThat(invokeTryRestartLastRecipe(controller, machineId)).isTrue();
+        ((RecipeCraftingContext) fieldValue(MachineControllerBlockEntity.class, controller, "context")).refreshStructureVersion();
+        setField(ActiveMachineRecipe.class, controller.getActive(), "totalTick", 1);
+        setField(MachineControllerBlockEntity.class, controller, "recipeDirty", false);
+
+        invokeTickSingleActiveRecipe(controller);
+
+        assertThat(controller.getActive()).isNull();
+    }
+
+    @Test
     void enchantedInputRecipeRejectsWrongRuntimeEnchantments() throws Exception {
         Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
         ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
@@ -220,6 +267,12 @@ class MachineControllerBlockEntityRecipeDelayTest {
         var method = MachineControllerBlockEntity.class.getDeclaredMethod("tryRestartLastRecipe", Identifier.class);
         method.setAccessible(true);
         return (boolean) method.invoke(controller, machineId);
+    }
+
+    private static void invokeTickSingleActiveRecipe(MachineControllerBlockEntity controller) throws Exception {
+        var method = MachineControllerBlockEntity.class.getDeclaredMethod("tickSingleActiveRecipe");
+        method.setAccessible(true);
+        method.invoke(controller);
     }
 
     private static RecipeSearchResult startableConflictResult(Identifier machineId, MachineRecipe recipe, long structureVersion) throws Exception {

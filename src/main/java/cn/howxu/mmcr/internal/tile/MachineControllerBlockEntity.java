@@ -541,7 +541,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (active == null && !sharedStartPending) {
             startedThisTick = tryStartNewRecipe();
         }
-        if (active != null && !startedThisTick) tickActiveRecipe();
+        if (active != null && !startedThisTick && tickActiveRecipe()) tryStartNewRecipe();
     }
 
     private void tickFactoryRecipes(FactorySchedulerBlockEntity factory) {
@@ -1747,8 +1747,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 && structureVersion == result.structureVersion();
     }
 
-    private void tickActiveRecipe() {
-        if (active == null || context == null) return;
+    private boolean tickActiveRecipe() {
+        if (active == null || context == null) return false;
         if (!context.isStructureVersionCurrent()) {
             if (restoredRecipeContext) {
                 context.refreshStructureVersion();
@@ -1763,11 +1763,11 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         }
         if (usesSharedIoCoordinator()) {
             tickSharedRecipe();
-            return;
+            return false;
         }
         int gameTime = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, currentGameTime()));
         if (active.isFinishPending()) {
-            if (!active.shouldRetryFinish(gameTime)) return;
+            if (!active.shouldRetryFinish(gameTime)) return false;
             ActiveMachineRecipe.TickStatus status = active.applyTickGrant(true,
                     context.commitSynchronousOutputs(active.getRecipe(), active.getParallelism()), gameTime);
             if (status == ActiveMachineRecipe.TickStatus.FINISHED) {
@@ -1778,18 +1778,20 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 context = null;
                 setActiveState(false);
                 syncRuntimeStateIfChanged();
+                setChanged();
+                return true;
             } else {
                 lastFailureUnloc = context.getLastFailureUnloc();
             }
             setChanged();
-            return;
+            return false;
         }
         boolean finalTick = active.needsFinishCommit();
         if (finalTick && !context.simulateOutputs(active.getRecipe(), active.getParallelism())) {
             active.applyTickGrant(true, false, gameTime);
             lastFailureUnloc = context.getLastFailureUnloc();
             setChanged();
-            return;
+            return false;
         }
         boolean resourcesGranted = context.commitSynchronousIoTick(active.getRecipe(), active.getParallelism(), active.inputConsumptionPlan());
         boolean outputsCommitted = resourcesGranted && finalTick
@@ -1825,6 +1827,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             recipeFailure = null;
         }
         setChanged();
+        return status == ActiveMachineRecipe.TickStatus.FINISHED;
     }
 
     private boolean usesSharedIoCoordinator() {
@@ -1910,11 +1913,11 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 () -> {
                     if (!isActiveSharedRecipe(recipe, recipeContext, domain)) return false;
                     if (recipe.needsFinishCommit() && !recipeContext.simulateOutputs(recipe.getRecipe(), recipe.getParallelism())) {
-                        applySharedTick(recipe, recipeContext, false, false, gameTime);
+                    applySharedTick(recipe, recipeContext, false, false, gameTime);
                         return false;
                     }
                     if (!recipeContext.coordinatorIoTick(recipe.getRecipe(), recipe.getParallelism(), recipe.inputConsumptionPlan()).getAsBoolean()) {
-                        applySharedTick(recipe, recipeContext, false, false, gameTime);
+                    applySharedTick(recipe, recipeContext, false, false, gameTime);
                         return false;
                     }
                     if (recipe.needsFinishCommit()) {
@@ -1935,8 +1938,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 domain, new SharedIoCoordinator.LaneKey(getBlockPos(), "base"), structureVersion,
                 () -> {
                     if (!isActiveSharedRecipe(recipe, recipeContext, domain)) return false;
-                    applySharedTick(recipe, recipeContext, true,
-                            recipeContext.coordinatorOutputs(recipe.getRecipe(), recipe.getParallelism()).getAsBoolean(), gameTime);
+                    if (applySharedTick(recipe, recipeContext, true,
+                            recipeContext.coordinatorOutputs(recipe.getRecipe(), recipe.getParallelism()).getAsBoolean(), gameTime)) {
+                        tryStartNewRecipe();
+                    }
                     return true;
                 },
                 () -> isActiveSharedRecipe(recipe, recipeContext, domain), this::getStructureVersion
@@ -1948,8 +1953,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         return active == recipe && context == recipeContext && isCurrentSharedDomain(domain);
     }
 
-    private void applySharedTick(ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext,
-                                 boolean resourcesGranted, boolean outputsCommitted, int gameTime) {
+    private boolean applySharedTick(ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext,
+                                    boolean resourcesGranted, boolean outputsCommitted, int gameTime) {
         sharedTickPending = false;
         pendingSharedTickDomain = null;
         ActiveMachineRecipe.TickStatus status = recipe.applyTickGrant(resourcesGranted, outputsCommitted, gameTime);
@@ -1961,6 +1966,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             context = null;
             setActiveState(false);
             syncRuntimeStateIfChanged();
+            setChanged();
+            return true;
         } else if (status == ActiveMachineRecipe.TickStatus.WAITING) {
             lastFailureUnloc = recipeContext.getLastFailureUnloc();
             if (recipe.getRecipe().doesCancelRecipeOnPerTickFailure()) {
@@ -1974,6 +1981,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             lastFailureUnloc = null;
         }
         setChanged();
+        return false;
     }
 
     void playFinishSound() {
