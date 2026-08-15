@@ -181,6 +181,24 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                          int maxThreads,
                          boolean cancelRecipeOnPerTickFailure,
                          List<FluidStack> fluidOutputs,
+                         List<MachineRequirement> requirements,
+                         boolean parallelized,
+                         List<LevelRequirement> levelRequirements,
+                         Set<Identifier> requiredHostIds) {
+        this(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure,
+                fluidOutputs, requirements, parallelized, levelRequirements, false, requiredHostIds);
+    }
+
+    public MachineRecipe(Identifier id,
+                         Identifier machineId,
+                         int tickTime,
+                         List<MachineIngredient> inputs,
+                         List<ItemStack> outputs,
+                         List<RecipeModifier> modifiers,
+                         int priority,
+                         int maxThreads,
+                         boolean cancelRecipeOnPerTickFailure,
+                         List<FluidStack> fluidOutputs,
                           List<MachineRequirement> requirements,
                           boolean parallelized,
                           List<LevelRequirement> levelRequirements,

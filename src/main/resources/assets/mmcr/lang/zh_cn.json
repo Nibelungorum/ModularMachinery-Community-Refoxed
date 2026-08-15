@@ -1,6 +1,0 @@
-{
-  "gui.mmcr.controller.installed_modules": "安装的模块数量：%s",
-  "gui.mmcr.controller.module_unconnected": "未连接",
-  "gui.mmcr.controller.module_connected": "已安装到：%s",
-  "jei.mmcr.machine_recipe.required_host": "需安装在 %s 上"
-}
