@@ -45,8 +45,12 @@ public final class DynamicOverlayBakedModel {
     }
 
     public static TextureSet controllerTextures(Identifier machineId) {
-        MachineAppearanceSpec appearance = MachineAppearanceCache.specFor(machineId);
-        MachineControllerSpec controller = ControllerSpecCache.specFor(machineId);
+        MachineAppearanceSpec appearance = machineId == null
+                ? MachineAppearanceSpec.defaults()
+                : MachineAppearanceCache.specFor(machineId);
+        MachineControllerSpec controller = machineId == null
+                ? MachineControllerSpec.defaultsFor(MMCR.id("unknown"))
+                : ControllerSpecCache.specFor(machineId);
         return new TextureSet(appearance.controllerBaseTexture(), controller.frontTexture());
     }
 

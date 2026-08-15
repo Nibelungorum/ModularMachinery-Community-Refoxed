@@ -41,6 +41,14 @@ class DynamicOverlayModelTest {
     }
 
     @Test
+    void controller_resolver_uses_defaults_when_machine_id_is_absent() {
+        DynamicOverlayBakedModel.TextureSet textures = DynamicOverlayBakedModel.controllerTextures(null);
+
+        assertThat(textures.base()).isEqualTo(MachineAppearanceSpec.defaults().controllerBaseTexture());
+        assertThat(textures.overlay()).isEqualTo(MachineControllerSpec.defaultsFor(MMCR.id("unknown")).frontTexture());
+    }
+
+    @Test
     void port_resolver_prefers_explicit_base_texture_over_machine_appearance() {
         Identifier machineId = MMCR.id("press");
         MachineAppearanceCache.replaceSnapshot(Map.of(
