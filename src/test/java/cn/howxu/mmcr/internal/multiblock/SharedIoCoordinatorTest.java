@@ -141,6 +141,27 @@ class SharedIoCoordinatorTest {
     }
 
     @Test
+    void finishCommitStartsReplacementWithoutRunningItsTickRequest() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = new StructureClaimRegistry.ResourceDomain(11L, 1L, Set.of(A));
+        SharedIoCoordinator.LaneKey lane = new SharedIoCoordinator.LaneKey(A, "base");
+        AtomicInteger starts = new AtomicInteger();
+        AtomicInteger ticks = new AtomicInteger();
+        coordinator.enqueue(new SharedIoCoordinator.FinishRequest(domain, lane, 1L, () -> {
+            coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, lane, 1L, 1,
+                    ignored -> 1, ignored -> starts.incrementAndGet(), () -> true, () -> 1L));
+            coordinator.enqueue(new SharedIoCoordinator.TickRequest(domain, lane, 1L,
+                    () -> { ticks.incrementAndGet(); return true; }, () -> true, () -> 1L));
+            return true;
+        }, () -> true, () -> 1L));
+
+        coordinator.resolve(domain);
+
+        assertThat(starts).hasValue(1);
+        assertThat(ticks).hasValue(0);
+    }
+
+    @Test
     void staleGenerationNeverCallsTheCommitter() {
         SharedIoCoordinator coordinator = new SharedIoCoordinator();
         AtomicBoolean committed = new AtomicBoolean();

@@ -82,9 +82,14 @@ public final class SharedIoCoordinator {
                 .filter(FinishRequest.class::isInstance).map(FinishRequest.class::cast).toList());
         finishRequests.addAll(takePendingFinishRequests(domain));
         resolveRoundRobin(finishRequests, finishCursors, domain.id(), successful);
+        List<StartRequest> finishSpawnedStarts = takePendingStartRequests(domain);
+        resolveRoundRobin(finishSpawnedStarts, startCursors, domain.id(), successful);
         List<Request> unresolved = new ArrayList<>(current.stream().filter(request -> !successful.contains(request)).toList());
         for (FinishRequest request : finishRequests) {
             if (!current.contains(request) && !successful.contains(request)) unresolved.add(request);
+        }
+        for (StartRequest request : finishSpawnedStarts) {
+            if (!successful.contains(request)) unresolved.add(request);
         }
         return unresolved;
     }
@@ -94,6 +99,18 @@ public final class SharedIoCoordinator {
                 .filter(FinishRequest.class::isInstance)
                 .map(FinishRequest.class::cast)
                 .filter(request -> request.domainId() == domain.id() && request.domainGeneration() == domain.generation())
+                .toList();
+        pending.removeAll(result);
+        return result;
+    }
+
+    private List<StartRequest> takePendingStartRequests(StructureClaimRegistry.ResourceDomain domain) {
+        List<StartRequest> result = pending.stream()
+                .filter(StartRequest.class::isInstance)
+                .map(StartRequest.class::cast)
+                .filter(request -> request.domainId() == domain.id() && request.domainGeneration() == domain.generation())
+                .filter(Request::isStillValid)
+                .sorted(Comparator.comparing(Request::laneKey))
                 .toList();
         pending.removeAll(result);
         return result;
