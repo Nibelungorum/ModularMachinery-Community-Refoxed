@@ -9,6 +9,8 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -92,5 +94,38 @@ class MultiblockAssemblyServiceTest {
 
         assertEquals(1, placements.size());
         assertEquals(Blocks.IRON_BLOCK, placements.getFirst().state().getBlock());
+    }
+
+    @Test
+    void selectsAllAffordablePlacementsAndSkipsMissingMaterials() {
+        StructureItemSource source = PlayerInventoryStructureItemSource.forStacks(List.of(
+                itemStack(Items.STONE, 2), itemStack(Items.DIRT, 1)));
+        List<MultiblockAssemblyService.Placement> placements = List.of(
+                new MultiblockAssemblyService.Placement(BlockPos.ZERO, Blocks.STONE.defaultBlockState(), itemStack(Items.STONE, 1)),
+                new MultiblockAssemblyService.Placement(BlockPos.ZERO.above(), Blocks.DIRT.defaultBlockState(), itemStack(Items.DIRT, 1)),
+                new MultiblockAssemblyService.Placement(BlockPos.ZERO.above(2), Blocks.STONE.defaultBlockState(), itemStack(Items.STONE, 1)),
+                new MultiblockAssemblyService.Placement(BlockPos.ZERO.above(3), Blocks.STONE.defaultBlockState(), itemStack(Items.STONE, 1)));
+
+        assertEquals(List.of(BlockPos.ZERO, BlockPos.ZERO.above(), BlockPos.ZERO.above(2)),
+                MultiblockAssemblyService.extractAvailablePlacements(placements, source).stream()
+                        .map(MultiblockAssemblyService.Placement::pos)
+                        .toList());
+    }
+
+    @Test
+    void choosesAvailableLowerPriorityCandidateWhenPreferredCandidateIsUnavailable() {
+        BlockPredicate predicate = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK),
+                new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+        StructureItemSource source = PlayerInventoryStructureItemSource.forStacks(List.of(new ItemStack(Items.IRON_BLOCK)));
+        MultiblockAssemblyService.Placement template = new MultiblockAssemblyService.Placement(BlockPos.ZERO,
+                Blocks.DIAMOND_BLOCK.defaultBlockState(), new ItemStack(Items.DIAMOND_BLOCK), predicate);
+
+        assertEquals(Blocks.IRON_BLOCK.defaultBlockState(),
+                MultiblockAssemblyService.extractAvailablePlacements(List.of(template), source).getFirst().state());
+    }
+
+    private static ItemStack itemStack(net.minecraft.world.item.Item item, int count) {
+        return new ItemStack(Holder.direct(item, DataComponentMap.EMPTY), count);
     }
 }

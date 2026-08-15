@@ -75,11 +75,11 @@ public final class MultiblockAssemblyService {
         }
         if (!creative) {
             StructureItemSource source = new PlayerInventoryStructureItemSource(player);
-            List<ItemStack> requirements = aggregateRequirements(placements);
-            if (!source.canExtractAll(requirements)) {
+            placements = extractAvailablePlacements(placements, source);
+            if (placements.isEmpty()) {
                 return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.missing"));
             }
-            source.extractAll(requirements);
+            source.extractAll(aggregateRequirements(placements));
         }
         int placed = 0;
         for (Placement placement : placements) {
@@ -119,12 +119,45 @@ public final class MultiblockAssemblyService {
         return new Result(InteractionResult.SUCCESS, removed, new ComponentKey("message.mmcr.terminal.demolish.success", removed));
     }
 
+    public static List<Placement> extractAvailablePlacements(List<Placement> placements, StructureItemSource source) {
+        List<ItemStack> available = source.copyStacks();
+        List<Placement> selected = new ArrayList<>();
+        for (Placement placement : placements) {
+            candidateStates(placement.predicate()).stream()
+                    .sorted(Comparator.comparingInt(MultiblockAssemblyService::levelPriority).reversed())
+                    .map(state -> new Placement(placement.pos(), state, requirementFor(state).copyWithCount(placement.requirement().getCount()), placement.predicate()))
+                    .filter(candidate -> reserve(available, candidate.requirement()))
+                    .findFirst()
+                    .ifPresent(selected::add);
+        }
+        return selected;
+    }
+
     private static ItemStack requirementFor(BlockState state) {
         try {
             return state.getBlock().asItem().getDefaultInstance();
         } catch (NullPointerException ignored) {
             return new ItemStack(Holder.direct(state.getBlock().asItem(), DataComponentMap.EMPTY));
         }
+    }
+
+    private static boolean reserve(List<ItemStack> stacks, ItemStack requirement) {
+        int remaining = requirement.getCount();
+        for (ItemStack stack : stacks) {
+            if (!ItemStack.isSameItemSameComponents(stack, requirement)) continue;
+            remaining -= stack.getCount();
+            if (remaining <= 0) break;
+        }
+        if (remaining > 0) return false;
+        remaining = requirement.getCount();
+        for (ItemStack stack : stacks) {
+            if (!ItemStack.isSameItemSameComponents(stack, requirement)) continue;
+            int reserved = Math.min(remaining, stack.getCount());
+            stack.shrink(reserved);
+            remaining -= reserved;
+            if (remaining <= 0) return true;
+        }
+        return false;
     }
 
     private static Optional<BlockState> preferredState(BlockPredicate predicate) {

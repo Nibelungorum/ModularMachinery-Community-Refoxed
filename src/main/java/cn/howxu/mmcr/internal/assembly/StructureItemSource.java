@@ -10,6 +10,8 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public interface StructureItemSource {
+    List<ItemStack> copyStacks();
+
     boolean canExtractAll(List<ItemStack> requirements);
 
     boolean extractAll(List<ItemStack> requirements);

@@ -51,4 +51,16 @@ class PlayerInventoryStructureItemSourceTest {
         assertEquals(1, inventory.get(0).getCount());
         assertTrue(inventory.get(1).isEmpty());
     }
+
+    @Test
+    void copyStacksReturnsIndependentInventorySnapshot() {
+        List<ItemStack> inventory = new ArrayList<>();
+        inventory.add(new ItemStack(Items.IRON_BLOCK, 3));
+
+        var source = PlayerInventoryStructureItemSource.forStacks(inventory);
+        var snapshot = source.copyStacks();
+        snapshot.getFirst().shrink(1);
+
+        assertEquals(3, inventory.getFirst().getCount());
+    }
 }

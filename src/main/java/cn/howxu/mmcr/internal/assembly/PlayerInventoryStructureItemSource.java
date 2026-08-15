@@ -28,8 +28,13 @@ public final class PlayerInventoryStructureItemSource implements StructureItemSo
     }
 
     @Override
+    public List<ItemStack> copyStacks() {
+        return copyStacks(stacks);
+    }
+
+    @Override
     public boolean canExtractAll(List<ItemStack> requirements) {
-        List<ItemStack> simulated = copyStacks(stacks);
+        List<ItemStack> simulated = copyStacks();
         return extractFrom(simulated, requirements);
     }
 
