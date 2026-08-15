@@ -254,12 +254,13 @@ requested -> {
         pendingTickDomain = null;
         ActiveMachineRecipe.TickStatus tickStatus = recipe.applyTickGrant(resourcesGranted, outputsCommitted, gameTime);
         if (tickStatus == ActiveMachineRecipe.TickStatus.FINISHED) {
-            onFinished();
             contextPool.returnContext(recipeContext);
             activeRecipe = null;
             context = null;
             status = Status.IDLE;
             lastFailureUnloc = null;
+            onFinished();
+            onRecipeFinished();
         } else if (tickStatus == ActiveMachineRecipe.TickStatus.CANCELLED) {
             lastFailureUnloc = context.getLastFailureUnloc();
             contextPool.returnContext(context);
@@ -314,6 +315,7 @@ requested -> {
 
     protected abstract void onStarted();
     protected abstract void onFinished();
+    protected void onRecipeFinished() { }
     protected void onStartFailed() { }
     protected String laneId() { return "base"; }
 

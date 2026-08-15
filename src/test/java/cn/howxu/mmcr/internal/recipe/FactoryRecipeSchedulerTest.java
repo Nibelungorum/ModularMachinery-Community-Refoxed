@@ -63,6 +63,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -473,6 +474,26 @@ class FactoryRecipeSchedulerTest {
         scheduler.tickThreads(controller, List.of(), controller.getStructureVersion(), 1, pool, finished::incrementAndGet);
 
         assertThat(finished).hasValue(1);
+    }
+
+    @Test
+    void finish_continuation_runs_after_recipe_thread_state_is_cleared() throws Exception {
+        MachineControllerBlockEntity controller = controller(MMCR.id("factory_finish_continuation_machine"));
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_finish_continuation_recipe"),
+                MMCR.id("factory_finish_continuation_machine"), 1, List.of(), List.of());
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+        AtomicReference<RecipeThread.Status> statusAtCompletion = new AtomicReference<>();
+        AtomicReference<ActiveMachineRecipe> activeAtCompletion = new AtomicReference<>();
+        thread.setFinishContinuation(() -> {
+            statusAtCompletion.set(thread.getStatus());
+            activeAtCompletion.set(thread.getActiveRecipe());
+        });
+
+        thread.searchAndStartRecipe(List.of(recipe), 1, controller.getStructureVersion());
+        thread.tick();
+
+        assertThat(statusAtCompletion).hasValue(RecipeThread.Status.IDLE);
+        assertThat(activeAtCompletion).hasValue(null);
     }
 
     @Test

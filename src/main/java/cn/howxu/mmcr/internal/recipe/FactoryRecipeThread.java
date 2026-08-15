@@ -34,6 +34,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     private boolean hadRecipeLock;
     private long lastRecipeStructureVersion = Long.MIN_VALUE;
     private long lastRecipeModifierSnapshotVersion = Long.MIN_VALUE;
+    private Runnable finishContinuation = () -> { };
 
     private FactoryRecipeThread(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool,
                                   boolean coreThread, boolean baseThread, String threadName) {
@@ -108,6 +109,14 @@ public final class FactoryRecipeThread extends RecipeThread {
         }
     }
     @Override protected void onFinished() { idleTicks = 0; }
+
+    void setFinishContinuation(Runnable finishContinuation) {
+        this.finishContinuation = finishContinuation == null ? () -> { } : finishContinuation;
+    }
+
+    @Override protected void onRecipeFinished() {
+        finishContinuation.run();
+    }
 
     @Override
     public boolean searchAndStartRecipe(List<MachineRecipe> candidates, int availableParallelism, long structureVersion) {
