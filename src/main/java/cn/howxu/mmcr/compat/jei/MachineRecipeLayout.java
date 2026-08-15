@@ -43,7 +43,8 @@ public record MachineRecipeLayout(
     private static int durationTextY(MachineRecipeDisplay display) {
         int inputRows = visibleRows(display.fluidInputs().size() + display.itemInputs().size());
         int outputRows = visibleRows(display.fluidOutputs().size() + display.itemOutputs().size());
-        return SLOT_START_Y + Math.max(inputRows, outputRows) * SLOT_SIZE + TEXT_OFFSET_Y;
+        int rowCount = Math.max(1, Math.max(inputRows, outputRows));
+        return SLOT_START_Y + rowCount * SLOT_SIZE + TEXT_OFFSET_Y;
     }
 
     private static int visibleRows(int entryCount) {

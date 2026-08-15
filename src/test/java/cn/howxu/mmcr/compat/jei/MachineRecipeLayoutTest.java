@@ -186,6 +186,19 @@ class MachineRecipeLayoutTest {
     }
 
     @Test
+    void emptyInputAndOutputRegionsReserveTextSpaceWithoutSlots() {
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("jei_layout_empty"), MMCR.id("blast_furnace"), 100,
+                List.of(), List.of(), List.of(), 0, 1, true, List.of());
+
+        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(MachineRecipeDisplay.from(recipe));
+
+        assertThat(layout.inputs().slots()).isEmpty();
+        assertThat(layout.outputs().slots()).isEmpty();
+        assertThat(layout.durationTextY()).isEqualTo(30);
+    }
+
+    @Test
     void levelRequirementRowsFollowTheEnergyRows() {
         MachineRecipe recipe = new MachineRecipe(
                 MMCR.id("jei_level_layout"), MMCR.id("blast_furnace"), 100,
