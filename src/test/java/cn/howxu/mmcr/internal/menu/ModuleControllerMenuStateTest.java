@@ -137,6 +137,13 @@ class ModuleControllerMenuStateTest {
     }
 
     @Test
+    void synced_role_remains_available_when_client_controller_has_not_resolved_its_machine() {
+        assertThat(MachineControllerMenu.resolvedControllerRole(0, 1, 1)).isEqualTo(1);
+        assertThat(MachineControllerMenu.resolvedControllerRole(0, 2, 2)).isEqualTo(2);
+        assertThat(MachineControllerMenu.resolvedControllerRole(1, 2, 2)).isEqualTo(1);
+    }
+
+    @Test
     void client_menu_payload_updates_exact_connected_host_id_without_hash_lookup() throws Exception {
         Identifier collidingHost = Identifier.fromNamespaceAndPath("mmcr_test", "an");
         Identifier collidingOther = Identifier.fromNamespaceAndPath("mmcr_test", "c0");

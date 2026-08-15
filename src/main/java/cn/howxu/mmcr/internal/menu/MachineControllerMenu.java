@@ -331,14 +331,18 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     public boolean isHostController() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        if (controller != null) return controllerRoleSyncValue(controller) == 1;
-        return controllerRole.get() == 1 || clientControllerRole == 1;
+        return resolvedControllerRole(controller == null ? 0 : controllerRoleSyncValue(controller),
+                controllerRole.get(), clientControllerRole) == 1;
     }
 
     public boolean isModuleController() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        if (controller != null) return controllerRoleSyncValue(controller) == 2;
-        return controllerRole.get() == 2 || clientControllerRole == 2;
+        return resolvedControllerRole(controller == null ? 0 : controllerRoleSyncValue(controller),
+                controllerRole.get(), clientControllerRole) == 2;
+    }
+
+    static int resolvedControllerRole(int localRole, int syncedRole, int initialRole) {
+        return localRole != 0 ? localRole : syncedRole != 0 ? syncedRole : initialRole;
     }
 
     public void applyModuleStatus(int installedModuleCount, boolean moduleConnected, @Nullable Identifier connectedHostId) {
