@@ -89,6 +89,8 @@ public final class TestBootstrap {
         bindController(id("purpur_furnace"));
         bindController(id("distillation_tower"));
         bindController(id("eco_matrix"));
+        bindController(id("space_elevator"));
+        bindController(id("space_reassembler"));
         bindController(id("test_cube"));
         bindController(id("controller_tick"));
         bindController(id("iron_compressor"));

@@ -2,11 +2,17 @@ package org.nibelungorum;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import net.minecraft.resources.Identifier;
+import net.minecraft.core.BlockPos;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Built-in machine definitions registered through the {@link MachineDefinitions}
@@ -22,6 +28,8 @@ public final class BuiltinMachines {
     private static final Identifier PURPUR_FURNACE_ID = MMCR.id("purpur_furnace");
     private static final Identifier DISTILLATION_TOWER_ID = MMCR.id("distillation_tower");
     private static final Identifier ECO_MATRIX_ID = MMCR.id("eco_matrix");
+    private static final Identifier SPACE_ELEVATOR_ID = MMCR.id("space_elevator");
+    private static final Identifier SPACE_REASSEMBLER_ID = MMCR.id("space_reassembler");
 
     private BuiltinMachines() {
     }
@@ -150,5 +158,27 @@ public final class BuiltinMachines {
                 .allowModifiers(false)
                 .expandableStructure()
                 .build());
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(SPACE_ELEVATOR_ID)
+                .displayNameKey("machine.mmcr.space_elevator")
+                .appearance(MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("smooth_quartz")))
+                .recipeFamilyId(SPACE_ELEVATOR_ID)
+                .allowModifiers(false)
+                .host(SPACE_REASSEMBLER_ID)
+                .pattern(couplerPattern(3))
+                .build());
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(SPACE_REASSEMBLER_ID)
+                .displayNameKey("machine.mmcr.space_reassembler")
+                .appearance(MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("quartz_pillar")))
+                .recipeFamilyId(SPACE_REASSEMBLER_ID)
+                .allowModifiers(false)
+                .module()
+                .pattern(couplerPattern(1))
+                .build());
+    }
+
+    private static BlockArray couplerPattern(int count) {
+        Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
+        for (int x = 0; x < count; x++) pattern.put(new BlockPos(x, 0, 0), BlockPredicate.machineCoupler());
+        return new BlockArray(pattern);
     }
 }

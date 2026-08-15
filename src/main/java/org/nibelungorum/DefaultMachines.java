@@ -56,6 +56,8 @@ public final class DefaultMachines {
     private static final Identifier PURPUR_FURNACE_ID = MMCR.id("purpur_furnace");
     private static final Identifier DISTILLATION_TOWER_ID = MMCR.id("distillation_tower");
     private static final Identifier ECO_MATRIX_ID = MMCR.id("eco_matrix");
+    private static final Identifier SPACE_ELEVATOR_ID = MMCR.id("space_elevator");
+    private static final Identifier SPACE_REASSEMBLER_ID = MMCR.id("space_reassembler");
 
     private DefaultMachines() {
     }
@@ -82,6 +84,8 @@ public final class DefaultMachines {
         structures.put(PURPUR_FURNACE_ID, structureOf(purpurFurnace()));
         structures.put(DISTILLATION_TOWER_ID, distillationTowerStructure());
         structures.put(ECO_MATRIX_ID, ecoMatrixStructure());
+        structures.put(SPACE_ELEVATOR_ID, spaceElevatorStructure());
+        structures.put(SPACE_REASSEMBLER_ID, spaceReassemblerStructure());
         return Map.copyOf(structures);
     }
 
@@ -533,6 +537,64 @@ public final class DefaultMachines {
                 declaration(ecoMatrixPattern(3, a, controller), requirements),
                 declaration(ecoMatrixPattern(4, a, controller), requirements),
                 declaration(ecoMatrixPattern(5, a, controller), requirements)));
+    }
+
+    private static MachineStructureDefinition spaceElevatorStructure() {
+        Block controller = ModBlocks.controllerFor(SPACE_ELEVATOR_ID).get();
+        BlockPredicate interfaceSlot = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(Blocks.SMOOTH_QUARTZ),
+                portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.ITEM),
+                portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.ENERGY)));
+        BlockArray pattern = BlockArray.builder()
+                .pattern("        X        ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ")
+                .pattern("       XXX       ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ")
+                .pattern("      XXXXX      ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ")
+                .pattern("     XXAAAXX     ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ")
+                .pattern("    XXXAAAXXX    ", "        B        ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ")
+                .pattern("   XXXXAAAXXXX   ", "                 ", "                 ", "                 ", "                 ", "        X        ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ")
+                .pattern("  XXXXXXXXXXXXX  ", "                 ", "                 ", "                 ", "        X        ", "       XXX       ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ")
+                .pattern(" XXAAAXXXXXAAAXX ", "       XXX       ", "       DDD       ", "       XXX       ", "       XXX       ", "      XXXXX      ", "       XXX       ", "       X X       ", "                 ", "                 ", "                 ", "                 ")
+                .pattern("XXXAAAXXXXXAAAXXX", "    B  X X  B    ", "       D D       ", "       X X       ", "      XX XX      ", "     XXX XXX     ", "       XXX       ", "        X        ", "        X        ", "        X        ", "        X        ", "        X        ")
+                .pattern(" XXAAAXXXXXAAAXX ", "       XXX       ", "       DED       ", "       XXX       ", "       XXX       ", "      XXXXX      ", "       XXX       ", "       X X       ", "                 ", "                 ", "                 ", "                 ")
+                .pattern("  XXXXXXXXXXXXX  ", "                 ", "                 ", "                 ", "        X        ", "       XXX       ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ")
+                .pattern("   XXXXXXXXXXX   ", "                 ", "                 ", "                 ", "                 ", "        X        ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ")
+                .pattern("    XXXXXXXXX    ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ")
+                .pattern("     XXXXXXX     ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ")
+                .pattern("      XXXXX      ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ")
+                .pattern("       XXX       ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ")
+                .pattern("        X        ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ")
+                .set('X', new BlockPredicate.OfBlock(Blocks.SMOOTH_QUARTZ))
+                .set('A', new BlockPredicate.OfBlock(Blocks.AMETHYST_BLOCK))
+                .set('B', BlockPredicate.machineCoupler())
+                .set('D', interfaceSlot)
+                .set('E', new BlockPredicate.OfBlock(controller))
+                .controller('E')
+                .build();
+        return new MachineStructureDefinition(SPACE_ELEVATOR_ID, pattern, PortRequirementSpec.none(),
+                PortTierRequirementSpec.builder().anyItemInput().anyEnergyInput().build(), List.of(), Map.of());
+    }
+
+    private static MachineStructureDefinition spaceReassemblerStructure() {
+        Block controller = ModBlocks.controllerFor(SPACE_REASSEMBLER_ID).get();
+        BlockPredicate interfaceSlot = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
+                portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.ITEM),
+                portFamily(IOType.OUTPUT, PortTierRequirementSpec.PortCategory.ITEM),
+                portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.ENERGY)));
+        BlockArray pattern = BlockArray.builder()
+                .pattern("AAA", "XBX", "XBX", "XDX")
+                .pattern("AAA", "BEB", "B B", "DDD")
+                .pattern("AAA", "XFX", "XBX", "XDX")
+                .set('X', new BlockPredicate.OfBlock(Blocks.QUARTZ_PILLAR))
+                .set('A', new BlockPredicate.OfBlock(Blocks.AMETHYST_BLOCK))
+                .set('B', interfaceSlot)
+                .set('D', new BlockPredicate.OfBlock(Blocks.GLASS))
+                .set('E', BlockPredicate.machineCoupler())
+                .set('F', new BlockPredicate.OfBlock(controller))
+                .controller('F')
+                .build();
+        return new MachineStructureDefinition(SPACE_REASSEMBLER_ID, pattern, PortRequirementSpec.none(),
+                PortTierRequirementSpec.builder().anyItemInput().anyItemOutput().anyEnergyInput().build(), List.of(), Map.of());
     }
 
     private static BlockArray ecoMatrixPattern(int width, BlockPredicate a, Block controller) {

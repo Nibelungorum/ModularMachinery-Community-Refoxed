@@ -29,6 +29,9 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.alchemy.PotionContents;
+import net.minecraft.world.item.alchemy.Potions;
+import cn.howxu.mmcr.registry.ModItems;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -38,6 +41,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Built-in actual recipe content. Machine startup registration creates the recipe
@@ -57,6 +61,8 @@ public final class DefaultRecipes {
     private static final Identifier DISTILLATION_TOWER_TEST_ID = MMCR.id("distillation_tower_test");
     private static final Identifier DISTILLATION_TOWER_ID = MMCR.id("distillation_tower");
     private static final Identifier ECO_MATRIX_ID = MMCR.id("eco_matrix");
+    private static final Identifier SPACE_ELEVATOR_ID = MMCR.id("space_elevator");
+    private static final Identifier SPACE_REASSEMBLER_ID = MMCR.id("space_reassembler");
 
     private DefaultRecipes() {
     }
@@ -85,6 +91,7 @@ public final class DefaultRecipes {
         }
         MachineRecipe ecoMatrixRecipe = ecoMatrixRecipe();
         recipes.put(ecoMatrixRecipe.id(), ecoMatrixRecipe);
+        for (MachineRecipe recipe : spaceRecipes()) recipes.put(recipe.id(), recipe);
         return Map.copyOf(recipes);
     }
 
@@ -121,6 +128,35 @@ public final class DefaultRecipes {
                 discardableRecipe("distillation_tower_coal", Items.COAL, Items.COAL, Items.CHARCOAL, Items.GUNPOWDER),
                 discardableRecipe("distillation_tower_oak_log", Items.OAK_LOG, Items.CHARCOAL, Items.STICK, Items.COAL),
                 discardableRecipe("distillation_tower_dried_kelp", Items.DRIED_KELP, Items.KELP, Items.COAL, Items.BONE_MEAL));
+    }
+
+    private static List<MachineRecipe> spaceRecipes() {
+        return List.of(
+                new MachineRecipe(MMCR.id("space_elevator_thread_dispersal"), SPACE_ELEVATOR_ID, 1_000,
+                        List.of(itemInput(ModItems.THREAD_DISPERSER.get(), 1, 0F), energyInput(10_000)), List.of(),
+                        List.of(), 0, 1, true, List.of(), List.of(), false, List.of()),
+                spaceReassemblerRecipe("space_reassembler_steak_to_golden_carrot", 600,
+                        itemInput(Items.COOKED_BEEF, 4), item(Items.GOLDEN_CARROT, 1), 15_000),
+                spaceReassemblerRecipe("space_reassembler_water_to_healing", 400,
+                        waterBottleInput(), potion(Potions.HEALING), 8_000),
+                spaceReassemblerRecipe("space_reassembler_water_to_swiftness", 400,
+                        waterBottleInput(), potion(Potions.SWIFTNESS), 8_000));
+    }
+
+    private static MachineRecipe spaceReassemblerRecipe(String id, int ticks, MachineIngredient input, ItemStack output, int fePerTick) {
+        return new MachineRecipe(MMCR.id(id), SPACE_REASSEMBLER_ID, ticks, List.of(input, energyInput(fePerTick)), List.of(output),
+                List.of(), 0, 1, true, List.of(), List.of(), false, List.of(), Set.of(SPACE_ELEVATOR_ID));
+    }
+
+    private static ItemStack potion(net.minecraft.core.Holder<net.minecraft.world.item.alchemy.Potion> potion) {
+        bindItem(Items.POTION);
+        return PotionContents.createItemStack(Items.POTION, potion);
+    }
+
+    private static MachineIngredient.ItemIngredient waterBottleInput() {
+        return itemInputFromData("""
+                {"id":"minecraft:potion","components":{"minecraft:potion_contents":{"potion":"minecraft:water"}}}
+                """, 1F);
     }
 
     private static MachineRecipe discardableRecipe(String id, Item input, Item first, Item second, Item third) {
@@ -468,6 +504,10 @@ public final class DefaultRecipes {
 
     private static MachineIngredient itemInput(net.minecraft.world.item.Item item, int count) {
         return new MachineIngredient.ItemIngredient(Ingredient.of(item), count);
+    }
+
+    private static MachineIngredient itemInput(net.minecraft.world.item.Item item, int count, float consumeChance) {
+        return new MachineIngredient.ItemIngredient(Ingredient.of(item), count, DataComponentPredicateSet.EMPTY, consumeChance);
     }
 
     private static MachineIngredient fluidInput(Fluid fluid, int amount) {

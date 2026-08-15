@@ -16,6 +16,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import org.nibelungorum.DefaultMachines;
 import org.nibelungorum.DefaultMachineLevels;
 import org.junit.jupiter.api.AfterEach;
@@ -235,6 +236,35 @@ class DefaultMachinesTest {
         assertThat(requirementIds(ecoMatrix)).containsExactly("energy_input_hatch>=tiny");
         assertThat(MachineStructureRegistry.dynamicSnapshot().get(MMCR.id("eco_matrix")).declarations())
                 .hasSize(3);
+    }
+
+    @Test
+    void structures_install_space_elevator_host_and_space_reassembler_module() {
+        installDefaultStructures();
+
+        var elevator = MachineRegistry.getMachine(MMCR.id("space_elevator"));
+        var reassembler = MachineRegistry.getMachine(MMCR.id("space_reassembler"));
+        var elevatorRegistration = MachineDefinitions.getRegistration(MMCR.id("space_elevator"));
+        var reassemblerRegistration = MachineDefinitions.getRegistration(MMCR.id("space_reassembler"));
+
+        assertThat(elevator).isNotNull();
+        assertThat(elevator.parallelizable()).isFalse();
+        assertThat(elevator.hasFactory()).isFalse();
+        assertThat(elevatorRegistration.isHost()).isTrue();
+        assertThat(elevatorRegistration.acceptedModuleIds()).containsExactly(MMCR.id("space_reassembler"));
+        assertThat(elevator.pattern().pattern().values())
+                .anySatisfy(predicate -> assertThat(predicate.matches(ModBlocks.MODULE_BRIDGE.get().defaultBlockState())).isTrue());
+        assertThat(requirementIds(elevator)).contains("energy_input_hatch>=tiny", "item_input_bus>=tiny");
+
+        assertThat(reassembler).isNotNull();
+        assertThat(reassemblerRegistration.isModule()).isTrue();
+        assertThat(reassembler.pattern().get(BlockPos.ZERO))
+                .isEqualTo(new BlockPredicate.OfBlock(ModBlocks.controllerFor(reassembler.registryName()).get()));
+        assertThat(reassembler.pattern().pattern().values())
+                .anySatisfy(predicate -> assertThat(predicate.matches(Blocks.GOLD_BLOCK.defaultBlockState())).isTrue())
+                .anySatisfy(predicate -> assertThat(predicate.matches(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue());
+        assertThat(requirementIds(reassembler))
+                .contains("energy_input_hatch>=tiny", "item_input_bus>=tiny", "item_output_bus>=tiny");
     }
 
     @Test

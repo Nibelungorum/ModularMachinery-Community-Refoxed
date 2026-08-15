@@ -98,6 +98,40 @@ class DefaultRecipesTest {
     }
 
     @Test
+    void default_recipes_include_space_elevator_and_host_bound_space_reassembler_recipes() {
+        installDefaultRuntimeContent();
+        DefaultRecipes.ensureRegistered();
+
+        var elevatorRecipe = RecipeRegistry.getRecipe(MMCR.id("space_elevator_thread_dispersal"));
+        var foodRecipe = RecipeRegistry.getRecipe(MMCR.id("space_reassembler_steak_to_golden_carrot"));
+        var healingRecipe = RecipeRegistry.getRecipe(MMCR.id("space_reassembler_water_to_healing"));
+        var swiftnessRecipe = RecipeRegistry.getRecipe(MMCR.id("space_reassembler_water_to_swiftness"));
+
+        assertThat(elevatorRecipe.machineId()).isEqualTo(MMCR.id("space_elevator"));
+        assertThat(elevatorRecipe.tickTime()).isEqualTo(1_000);
+        assertThat(((MachineIngredient.ItemIngredient) elevatorRecipe.inputs().get(0)).consumeChance()).isZero();
+        assertThat(((MachineIngredient.EnergyIngredient) elevatorRecipe.inputs().get(1)).fePerTick()).isEqualTo(10_000);
+
+        assertThat(foodRecipe.machineId()).isEqualTo(MMCR.id("space_reassembler"));
+        assertThat(foodRecipe.tickTime()).isEqualTo(600);
+        assertThat(foodRecipe.requiredHostIds()).containsExactly(MMCR.id("space_elevator"));
+        assertThat(foodRecipe.outputs()).singleElement().satisfies(stack -> {
+            assertThat(stack.getItem()).isEqualTo(Items.GOLDEN_CARROT);
+            assertThat(stack.getCount()).isEqualTo(1);
+        });
+        assertThat(((MachineIngredient.EnergyIngredient) foodRecipe.inputs().get(1)).fePerTick()).isEqualTo(15_000);
+
+        assertThat(healingRecipe.tickTime()).isEqualTo(400);
+        assertThat(swiftnessRecipe.tickTime()).isEqualTo(400);
+        assertThat(((MachineIngredient.ItemIngredient) healingRecipe.inputs().get(0)).components().isEmpty()).isFalse();
+        assertThat(((MachineIngredient.ItemIngredient) swiftnessRecipe.inputs().get(0)).components().isEmpty()).isFalse();
+        assertThat(((MachineIngredient.EnergyIngredient) healingRecipe.inputs().get(1)).fePerTick()).isEqualTo(8_000);
+        assertThat(((MachineIngredient.EnergyIngredient) swiftnessRecipe.inputs().get(1)).fePerTick()).isEqualTo(8_000);
+        assertThat(healingRecipe.requiredHostIds()).containsExactly(MMCR.id("space_elevator"));
+        assertThat(swiftnessRecipe.requiredHostIds()).containsExactly(MMCR.id("space_elevator"));
+    }
+
+    @Test
     void component_recipe_includes_chanced_item_and_fluid_outputs() {
         installDefaultRuntimeContent();
         DefaultRecipes.ensureRegistered();
@@ -345,7 +379,9 @@ class DefaultRecipesTest {
         assertThat(RecipeRegistry.byMachineId(MMCR.id("purpur_furnace"))).hasSize(14);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("distillation_tower"))).hasSize(3);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("eco_matrix"))).hasSize(1);
-        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(123);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("space_elevator"))).hasSize(1);
+        assertThat(RecipeRegistry.byMachineId(MMCR.id("space_reassembler"))).hasSize(3);
+        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(127);
         assertThat(RecipeRegistry.byMachineId(MMCR.id("cracker")))
                 .anySatisfy(recipe -> assertThat(recipe.fluidOutputs()).isNotEmpty());
         assertThat(RecipeRegistry.recipes())
