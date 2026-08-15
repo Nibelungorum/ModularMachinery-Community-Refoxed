@@ -15,6 +15,11 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * Verifies immutable structure-preview schema snapshots.
+ *
+ * @author howxu <dev@howxu.cn>
+ */
 class StructurePreviewSchemaTest {
 
     @BeforeAll
@@ -51,6 +56,29 @@ class StructurePreviewSchemaTest {
                 Map.of(levelSlotPosition, Identifier.fromNamespaceAndPath("mmcr", "coil"))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("level slot position is not in preview schema");
+    }
+
+    @Test
+    void schema_copies_mutable_positions_and_level_slots() {
+        BlockPos.MutableBlockPos mutablePosition = new BlockPos.MutableBlockPos(2, 3, 4);
+        BlockState state = Blocks.IRON_BLOCK.defaultBlockState();
+        Identifier slot = MMCR.id("coil");
+        Map<BlockPos, BlockState> states = new LinkedHashMap<>();
+        Map<BlockPos, Identifier> levelSlots = new LinkedHashMap<>();
+        states.put(mutablePosition, state);
+        levelSlots.put(mutablePosition, slot);
+
+        StructurePreviewSchema schema = new StructurePreviewSchema(MMCR.id("mutable_preview"), states, levelSlots);
+        mutablePosition.set(10, 11, 12);
+        levelSlots.clear();
+
+        assertThat(schema.states()).containsOnlyKeys(new BlockPos(2, 3, 4));
+        assertThat(schema.stateAt(new BlockPos(2, 3, 4))).isEqualTo(state);
+        assertThat(schema.levelSlots()).containsEntry(new BlockPos(2, 3, 4), slot);
+        assertThat(schema.levelSlotAt(new BlockPos(2, 3, 4))).isEqualTo(slot);
+        assertThat(schema.min()).isEqualTo(new BlockPos(2, 3, 4));
+        assertThat(schema.max()).isEqualTo(new BlockPos(2, 3, 4));
+        assertThatThrownBy(() -> schema.levelSlots().clear()).isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test

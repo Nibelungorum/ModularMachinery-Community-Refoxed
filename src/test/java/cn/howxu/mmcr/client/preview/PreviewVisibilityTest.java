@@ -9,6 +9,11 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Verifies structure-preview visibility states.
+ *
+ * @author howxu <dev@howxu.cn>
+ */
 class PreviewVisibilityTest {
 
     @BeforeAll
