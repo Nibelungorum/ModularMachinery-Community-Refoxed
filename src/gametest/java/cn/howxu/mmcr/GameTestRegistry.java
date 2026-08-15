@@ -44,7 +44,8 @@ public final class GameTestRegistry {
         register(event, "terminal_expandable_build_stage_one", 100, helper -> new TerminalAssemblyGameTest().buildExpandableControllerPlacesOnlyStageOne(helper));
         register(event, "terminal_expandable_demolish_stage_two", 100, helper -> new TerminalAssemblyGameTest().demolishExpandableFormedStageTwoRemovesCompleteSnapshot(helper));
         register(event, "terminal_expandable_missing_materials_stage_one", 100, helper -> new TerminalAssemblyGameTest().defaultBuildMissingMaterialsExcludeStageTwo(helper));
-        register(event, "terminal_build_missing_stage_one_atomic", 100, helper -> new TerminalAssemblyGameTest().survivalBuildFailsAtomicallyWhenStageOneMaterialsAreMissing(helper));
+        register(event, "terminal_build_missing_stage_one_partial", 100, helper -> new TerminalAssemblyGameTest().survivalBuildPartiallyWhenStageOneMaterialsAreMissing(helper));
+        register(event, "terminal_build_replenished_materials", 100, helper -> new TerminalAssemblyGameTest().survivalBuildContinuesAfterInventoryIsReplenished(helper));
     }
 
     private static void register(RegisterGameTestsEvent event, String name, int maxTicks, Consumer<GameTestHelper> test) {

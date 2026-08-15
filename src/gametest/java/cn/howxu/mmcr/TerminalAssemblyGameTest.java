@@ -169,10 +169,6 @@ public class TerminalAssemblyGameTest {
         helper.succeed();
     }
 
-    void survivalBuildFailsAtomicallyWhenStageOneMaterialsAreMissing(GameTestHelper helper) {
-        survivalBuildPartiallyWhenStageOneMaterialsAreMissing(helper);
-    }
-
     public void survivalBuildContinuesAfterInventoryIsReplenished(GameTestHelper helper) {
         BlockPos controllerPos = new BlockPos(4, 1, 4);
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("iron_compressor")).get().defaultBlockState());
