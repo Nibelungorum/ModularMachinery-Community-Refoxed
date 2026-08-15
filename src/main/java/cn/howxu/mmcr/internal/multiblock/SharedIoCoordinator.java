@@ -105,15 +105,16 @@ public final class SharedIoCoordinator {
     }
 
     private List<StartRequest> takePendingStartRequests(StructureClaimRegistry.ResourceDomain domain) {
-        List<StartRequest> result = pending.stream()
+        List<StartRequest> matching = pending.stream()
                 .filter(StartRequest.class::isInstance)
                 .map(StartRequest.class::cast)
                 .filter(request -> request.domainId() == domain.id() && request.domainGeneration() == domain.generation())
+                .toList();
+        pending.removeAll(matching);
+        return matching.stream()
                 .filter(Request::isStillValid)
                 .sorted(Comparator.comparing(Request::laneKey))
                 .toList();
-        pending.removeAll(result);
-        return result;
     }
 
     private <T extends Request> void resolveRoundRobin(List<T> requests, Map<Long, LaneKey> cursors, long domainId, Set<Request> successful) {

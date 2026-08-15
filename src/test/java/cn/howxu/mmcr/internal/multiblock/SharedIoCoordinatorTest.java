@@ -162,6 +162,26 @@ class SharedIoCoordinatorTest {
     }
 
     @Test
+    void invalidStartSpawnedByFinishIsDiscardedBeforeTheNextResolve() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = new StructureClaimRegistry.ResourceDomain(12L, 1L, Set.of(A));
+        SharedIoCoordinator.LaneKey lane = new SharedIoCoordinator.LaneKey(A, "base");
+        AtomicBoolean valid = new AtomicBoolean();
+        AtomicInteger starts = new AtomicInteger();
+        coordinator.enqueue(new SharedIoCoordinator.FinishRequest(domain, lane, 1L, () -> {
+            coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, lane, 1L, 1,
+                    ignored -> 1, ignored -> starts.incrementAndGet(), valid::get, () -> 1L));
+            return true;
+        }, () -> true, () -> 1L));
+
+        coordinator.resolve(domain);
+        valid.set(true);
+        coordinator.resolve(domain);
+
+        assertThat(starts).hasValue(0);
+    }
+
+    @Test
     void staleGenerationNeverCallsTheCommitter() {
         SharedIoCoordinator coordinator = new SharedIoCoordinator();
         AtomicBoolean committed = new AtomicBoolean();
