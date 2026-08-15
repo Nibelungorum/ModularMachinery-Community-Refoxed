@@ -17,6 +17,9 @@ import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.recipe.RecipeStartDelay;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
+import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -30,6 +33,7 @@ import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -38,6 +42,7 @@ import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.JsonOps;
@@ -49,6 +54,7 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -190,6 +196,64 @@ class MachineControllerBlockEntityRecipeDelayTest {
         invokeTickSingleActiveRecipe(controller);
 
         assertThat(controller.getActive().getTick()).isEqualTo(1);
+    }
+
+    @Test
+    void sharedControllerInstallsFinishedRecipeReplacementBeforeTheNextSharedTick() throws Exception {
+        Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "shared_continuation");
+        BlockPos firstControllerPos = BlockPos.ZERO;
+        BlockPos secondControllerPos = new BlockPos(4, 0, 0);
+        ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
+        bus.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.GOLD_INGOT, 2));
+        MachineControllerBlockEntity controller = formedController(machineId, bus);
+        MachineControllerBlockEntity peer = formedController(machineId, bus);
+        setField(BlockEntity.class, peer, "worldPosition", secondControllerPos);
+        ServerLevel level = serverLevel(List.of(controller, peer, bus));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, peer, "level", level);
+        setField(BlockEntity.class, bus, "level", level);
+        StructureClaimRegistry registry = StructureClaimRegistry.get(level);
+        registry.claim(firstControllerPos, List.of(new StructureClaimRegistry.Claim(bus.getBlockPos(), ComponentClaimPolicy.SHARED_SERIALIZED)));
+        registry.claim(secondControllerPos, List.of(new StructureClaimRegistry.Claim(bus.getBlockPos(), ComponentClaimPolicy.SHARED_SERIALIZED)));
+        StructureClaimRegistry.ResourceDomain domain = registry.domainFor(firstControllerPos);
+        MachineRecipe recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "shared_continuous_gold"),
+                machineId,
+                2,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                List.of(itemInput(Items.GOLD_INGOT, 1)));
+        setField(MachineControllerBlockEntity.class, controller, "lastRecipe", recipe);
+        setField(MachineControllerBlockEntity.class, controller, "lastRecipeStructureVersion", 31L);
+        setField(MachineControllerBlockEntity.class, controller, "lastRecipeModifierSnapshotVersion", 0L);
+        setField(MachineControllerBlockEntity.class, controller, "recipeDirty", false);
+
+        invokeTickSingleActiveRecipe(controller);
+        SharedIoCoordinator.get(level).resolve(domain);
+        assertThat(controller.getActive()).isNotNull();
+        assertThat(controller.getActive().getTick()).isZero();
+        controller.getActive().setTick(1);
+
+        invokeTickSingleActiveRecipe(controller);
+        SharedIoCoordinator.get(level).resolve(domain);
+
+        assertThat(controller.getActive()).isNotNull();
+        assertThat(controller.getActive().getRecipe()).isSameAs(recipe);
+        assertThat(controller.getActive().getTick()).isZero();
+        assertThat(bus.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+
+        invokeTickSingleActiveRecipe(controller);
+        assertThat(controller.getActive().getTick()).isZero();
+        SharedIoCoordinator.get(level).resolve(domain);
+
+        assertThat(controller.getActive().getTick()).isEqualTo(1);
+        SharedIoCoordinator.discard(level);
+        StructureClaimRegistry.discard(level);
     }
 
     @Test
@@ -509,6 +573,16 @@ class MachineControllerBlockEntityRecipeDelayTest {
         return controller;
     }
 
+    private static ServerLevel serverLevel(List<BlockEntity> blockEntities) throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        TestServerLevel level = (TestServerLevel) ((sun.misc.Unsafe) unsafeField.get(null)).allocateInstance(TestServerLevel.class);
+        setField(TestServerLevel.class, level, "blocks", new HashMap<>());
+        setField(TestServerLevel.class, level, "blockEntities", blockEntities.stream()
+                .collect(java.util.stream.Collectors.toMap(BlockEntity::getBlockPos, entity -> entity)));
+        return level;
+    }
+
     private static void bindItemComponents(Item item) {
         item.builtInRegistryHolder().bindComponents(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
     }
@@ -523,5 +597,22 @@ class MachineControllerBlockEntityRecipeDelayTest {
         Field field = declaringClass.getDeclaredField(name);
         field.setAccessible(true);
         return field.get(target);
+    }
+
+    private static final class TestServerLevel extends ServerLevel {
+        private Map<BlockPos, BlockState> blocks;
+        private Map<BlockPos, BlockEntity> blockEntities;
+
+        private TestServerLevel() {
+            super(null, null, null, null, null, null, false, 0L, List.of(), false);
+        }
+
+        @Override public BlockState getBlockState(BlockPos pos) { return blocks.getOrDefault(pos, Blocks.AIR.defaultBlockState()); }
+        @Override public BlockEntity getBlockEntity(BlockPos pos) { return blockEntities.get(pos); }
+        @Override public void blockEntityChanged(BlockPos pos) { }
+        @Override public boolean setBlock(BlockPos pos, BlockState state, int flags) { blocks.put(pos, state); return true; }
+        @Override public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) { }
+        @Override public boolean hasChunk(int chunkX, int chunkZ) { return true; }
+        @Override public void invalidateCapabilities(BlockPos pos) { }
     }
 }
