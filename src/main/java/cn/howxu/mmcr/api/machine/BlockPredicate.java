@@ -2,7 +2,6 @@ package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
-import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -26,14 +25,14 @@ public sealed interface BlockPredicate {
     boolean matches(BlockState state);
 
     /**
-     * Returns the default block state to display for this predicate, when one can be represented.
+     * Returns the preferred concrete block state for this predicate, when one is directly representable.
      */
     default Optional<BlockState> preferredState() {
         List<BlockState> candidates = candidateStates(this).stream()
                 .sorted(Comparator.comparingInt(BlockPredicate::levelPriority).reversed())
                 .toList();
         if (!candidates.isEmpty()) return Optional.of(candidates.getFirst());
-        return MultiblockPreviewBuilder.previewState(this);
+        return Optional.empty();
     }
 
     private static List<BlockState> candidateStates(BlockPredicate predicate) {

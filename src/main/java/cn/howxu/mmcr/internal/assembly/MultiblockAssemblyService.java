@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.assembly;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -15,6 +16,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Shared synchronous executor for multiblock build and demolish operations.
@@ -46,7 +48,7 @@ public final class MultiblockAssemblyService {
         for (var entry : rotatedPattern.pattern().entrySet()) {
             if (entry.getKey().equals(BlockPos.ZERO)) continue;
             BlockPredicate predicate = entry.getValue();
-            predicate.preferredState().ifPresent(state -> addPlacement(placements, controllerPos.offset(entry.getKey()), state, predicate));
+            preferredState(predicate).ifPresent(state -> addPlacement(placements, controllerPos.offset(entry.getKey()), state, predicate));
         }
         return placements;
     }
@@ -156,6 +158,10 @@ public final class MultiblockAssemblyService {
             if (remaining <= 0) return true;
         }
         return false;
+    }
+
+    private static Optional<BlockState> preferredState(BlockPredicate predicate) {
+        return predicate.preferredState().or(() -> MultiblockPreviewBuilder.previewState(predicate));
     }
 
     private static List<BlockState> candidateStates(BlockPredicate predicate) {
