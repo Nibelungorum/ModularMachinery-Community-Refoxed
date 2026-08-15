@@ -252,29 +252,32 @@ public final class FactoryRecipeScheduler {
                             long structureVersion, int parallelLimit, RecipeCraftingContextPool contextPool,
                             Runnable onFinished) {
         if (paused) return;
-        if (onFinished == null) onFinished = () -> { };
+        Runnable finishCallback = onFinished == null ? () -> { } : onFinished;
         ensureBaseThread(controller, contextPool);
         this.perThreadParallelLimit = Math.max(1, parallelLimit);
+        List<MachineRecipe> candidateSnapshot = List.copyOf(candidates == null ? List.of() : candidates);
+        long modifierSnapshotVersion = controller == null ? Long.MIN_VALUE : controller.getModifierSnapshotVersion();
         for (FactoryRecipeThread thread : List.copyOf(threads)) {
             thread.bindController(controller);
-            boolean wasActive = threadWasActive.getOrDefault(thread, false) || thread.getActiveRecipe() != null;
+            thread.setFinishContinuation(() -> {
+                finishCallback.run();
+                continueFinishedThread(thread, candidateSnapshot, structureVersion, modifierSnapshotVersion);
+            });
             thread.tick();
-            if (wasActive && thread.getActiveRecipe() == null && thread.getStatus() == RecipeThread.Status.IDLE) {
-                onFinished.run();
-            }
-            threadWasActive.put(thread, thread.getActiveRecipe() != null);
             thread.tickIdle();
             if (thread.isTimedOut()) {
                 threads.remove(thread);
                 threadWasActive.remove(thread);
             }
         }
-        if (controller == null || candidates == null || candidates.isEmpty()) return;
+        if (controller == null || candidateSnapshot.isEmpty()) {
+            clearFinishedThreadContinuations();
+            return;
+        }
 
-        long modifierSnapshotVersion = controller.getModifierSnapshotVersion();
         for (FactoryRecipeThread thread : threads) {
             if (!thread.isIdle()) continue;
-            List<MachineRecipe> availableCandidates = availableCandidates(candidates);
+            List<MachineRecipe> availableCandidates = availableCandidates(candidateSnapshot);
             if (availableCandidates.isEmpty()) break;
             int availableParallelism = availableParallelism();
             if (thread.tryRestartLastRecipe(availableCandidates, availableParallelism, structureVersion, modifierSnapshotVersion)) continue;
@@ -290,6 +293,26 @@ public final class FactoryRecipeScheduler {
             if (!thread.searchAndStartRecipe(availableCandidates, availableParallelism(), structureVersion)) break;
         }
         for (FactoryRecipeThread thread : threads) threadWasActive.put(thread, thread.getActiveRecipe() != null);
+        clearFinishedThreadContinuations();
+    }
+
+    private void continueFinishedThread(FactoryRecipeThread thread, List<MachineRecipe> candidates,
+                                        long structureVersion, long modifierSnapshotVersion) {
+        if (thread.getStatus() != RecipeThread.Status.IDLE || !thread.isIdle()) return;
+        List<MachineRecipe> available = availableCandidates(candidates);
+        if (available.isEmpty()) return;
+        int parallelism = availableParallelism();
+        if (thread.tryRestartLastRecipe(available, parallelism, structureVersion, modifierSnapshotVersion)) return;
+        available = availableCandidates(candidates);
+        if (!available.isEmpty()) thread.searchAndStartRecipe(available, availableParallelism(), structureVersion);
+    }
+
+    private void clearFinishedThreadContinuations() {
+        for (FactoryRecipeThread thread : threads) {
+            if (!thread.isStartPending() && thread.getActiveRecipe() == null) {
+                thread.setFinishContinuation(null);
+            }
+        }
     }
 
     public void addThreadForTesting(FactoryRecipeThread thread) {

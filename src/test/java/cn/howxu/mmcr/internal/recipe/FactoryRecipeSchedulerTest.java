@@ -477,6 +477,44 @@ class FactoryRecipeSchedulerTest {
     }
 
     @Test
+    void shared_factory_threads_restart_when_their_recipe_finishes() throws Exception {
+        BlockPos controllerPos = new BlockPos(0, 64, 0);
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
+        MachineControllerBlockEntity controller = controllerWithInput(MMCR.id("factory_shared_continuation"), controllerPos, input);
+        ServerLevel level = serverLevel(List.of(controller, input));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, input, "level", level);
+        StructureClaimRegistry registry = StructureClaimRegistry.get(level);
+        registry.claim(controllerPos, List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
+                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)));
+        StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_shared_continuation_recipe"),
+                MMCR.id("factory_shared_continuation"), 1, List.of(), List.of(), List.of(), 0, 1);
+        MachineRecipe unlockedRecipe = new MachineRecipe(MMCR.id("factory_shared_continuation_unlocked_recipe"),
+                MMCR.id("factory_shared_continuation"), 1, List.of(), List.of());
+        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1, pool);
+        AtomicInteger finished = new AtomicInteger();
+
+        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 1, pool, finished::incrementAndGet);
+        SharedIoCoordinator.get(level).resolve(domain);
+        FactoryRecipeThread thread = scheduler.allThreads().getFirst();
+        thread.setLockedRecipeId(recipe.id());
+        scheduler.tickThreads(controller, List.of(unlockedRecipe, recipe), controller.getStructureVersion(), 1, pool,
+                finished::incrementAndGet);
+        SharedIoCoordinator.get(level).resolve(domain);
+        SharedIoCoordinator.get(level).resolve(domain);
+
+        assertThat(finished).hasValue(1);
+        assertThat(thread.getActiveRecipe()).isNotNull();
+        assertThat(thread.getActiveRecipe().getRecipe()).isSameAs(recipe);
+        assertThat(thread.getActiveRecipe().getTick()).isZero();
+        assertThat(scheduler.allThreads()).hasSize(1);
+        SharedIoCoordinator.discard(level);
+        StructureClaimRegistry.discard(level);
+    }
+
+    @Test
     void finish_continuation_runs_after_recipe_thread_state_is_cleared() throws Exception {
         MachineControllerBlockEntity controller = controller(MMCR.id("factory_finish_continuation_machine"));
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_finish_continuation_recipe"),
