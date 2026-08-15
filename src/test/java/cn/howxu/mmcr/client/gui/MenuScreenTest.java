@@ -196,6 +196,18 @@ class MenuScreenTest {
     }
 
     @Test
+    void formed_unconnected_module_prioritizes_offline_failure() {
+        assertThat(MachineMenuScreen.displayFailure("gui.mmcr.controller.failure.missing_input", true, true, false))
+                .isEqualTo("gui.mmcr.controller.failure.module_offline");
+        assertThat(MachineMenuScreen.displayFailure("gui.mmcr.controller.failure.missing_input", true, true, true))
+                .isEqualTo("gui.mmcr.controller.failure.missing_input");
+        assertThat(MachineMenuScreen.displayFailure("gui.mmcr.controller.failure.missing_input", false, true, false))
+                .isEqualTo("gui.mmcr.controller.failure.missing_input");
+        assertThat(MachineMenuScreen.displayFailure("gui.mmcr.controller.failure.missing_input", true, false, false))
+                .isEqualTo("gui.mmcr.controller.failure.missing_input");
+    }
+
+    @Test
     void progress_dots_add_one_dot_per_five_percent() {
         assertThat(MachineMenuScreen.progressPercent(35, 100)).isEqualTo(35);
         assertThat(MachineMenuScreen.progressPercent(150, 100)).isEqualTo(100);

@@ -239,7 +239,9 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
                 lineY = nextDetailY(lineY);
             }
         }
-        String failure = selectedFailureUnloc(menu);
+        String failure = MachineMenuScreen.displayFailure(selectedFailureUnloc(menu), menu.isFormed(),
+                owner != null && owner.getMachine() != null && owner.getMachine().isModule(),
+                owner != null && owner.connectedHostId().isPresent());
         if (!failure.isEmpty()) {
             graphics.text(font, Component.translatable("gui.mmcr.controller.last_failure", Component.translatable(failure)),
                     x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);

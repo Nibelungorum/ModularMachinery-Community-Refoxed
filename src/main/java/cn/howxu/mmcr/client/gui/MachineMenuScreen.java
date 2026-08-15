@@ -665,7 +665,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         int textY = y + controllerStatusY(titleLabelY);
         int textX = x + controllerStatusX(titleLabelX);
         boolean active = menu.hasActiveRecipe();
-        String failure = menu.lastFailureMessage();
+        String failure = displayFailure(menu.lastFailureMessage(), menu.isFormed(), menu.isModuleController(), menu.connectedHostId().isPresent());
         var owner = menu.resolvedOwner();
 
         final float scale = controllerDetailScale();
@@ -820,6 +820,11 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     static String controllerStatusKey(boolean formed, boolean active) {
         if (!formed) return "gui.mmcr.controller.unformed";
         return active ? "gui.mmcr.controller.running" : "gui.mmcr.controller.idle";
+    }
+
+    static String displayFailure(String failure, boolean formed, boolean moduleController, boolean connectedToHost) {
+        if (formed && moduleController && !connectedToHost) return "gui.mmcr.controller.failure.module_offline";
+        return failure;
     }
 
     static int progressPercent(int current, int total) {
