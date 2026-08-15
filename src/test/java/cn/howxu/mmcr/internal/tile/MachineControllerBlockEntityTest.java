@@ -1365,6 +1365,28 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void removing_formed_controller_stops_active_recipe_without_restoring_its_block_state() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        DynamicMachine machine = new DynamicMachine(
+                MMCR.id("controller_removal_stops_recipe_machine"),
+                "Controller Removal Stops Recipe",
+                onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()));
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos,
+                itemInputBus(controllerPos.offset(1, 0, 0)));
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("controller_removal_stops_recipe"), machine.registryName(), 100,
+                List.of(), List.of());
+        setField(MachineControllerBlockEntity.class, controller, "active", new ActiveMachineRecipe(recipe));
+        setField(MachineControllerBlockEntity.class, controller, "context", new RecipeCraftingContext(controller));
+
+        invokeBlockOnRemove(controller.getBlockState().getBlock(), controller.getBlockState(), levelOf(controller), controllerPos,
+                Blocks.AIR.defaultBlockState(), false);
+
+        assertThat(controller.getActive()).isNull();
+        assertThat(controller.getFoundMachine()).isNull();
+    }
+
+    @Test
     void replacing_controller_block_resets_linked_port_appearance_base_texture() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         ItemInputBusBlockEntity port = itemInputBus(controllerPos.offset(1, 0, 0));

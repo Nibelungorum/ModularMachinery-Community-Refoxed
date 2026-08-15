@@ -212,6 +212,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         resetMachine();
     }
 
+    public void onMachineDestroyed() {
+        resetMachine(true, false);
+    }
+
     public List<RecipeModifier> foundModifierList() {
         if (foundModifiers == null) return List.of();
         return foundModifiers.values().stream().flatMap(List::stream).toList();

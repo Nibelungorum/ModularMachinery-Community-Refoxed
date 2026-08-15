@@ -181,6 +181,7 @@ public class MachineControllerBlock extends Block implements EntityBlock {
     protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean moving) {
         if (moving || state.getBlock() == newState.getBlock()) return;
         if (!level.isClientSide() && level.getBlockEntity(pos) instanceof MachineControllerBlockEntity controller) {
+            controller.onMachineDestroyed();
             controller.resetLinkedPortAppearances();
         }
     }
