@@ -160,8 +160,9 @@ public final class BuiltinMachines {
                 .build());
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(SPACE_ELEVATOR_ID)
                 .displayNameKey("machine.mmcr.space_elevator")
-                .controllerSpec(controllerSpec(SPACE_ELEVATOR_ID, MMCR.id("block/space_elevator_controller")))
-                .appearance(MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("smooth_quartz")))
+                .appearance(new MachineAppearanceSpec(Identifier.withDefaultNamespace("smooth_quartz"),
+                        Identifier.withDefaultNamespace("block/quartz_block_bottom"),
+                        Identifier.withDefaultNamespace("block/quartz_block_bottom")))
                 .recipeFamilyId(SPACE_ELEVATOR_ID)
                 .allowModifiers(false)
                 .host(SPACE_REASSEMBLER_ID)
@@ -183,9 +184,4 @@ public final class BuiltinMachines {
         return new BlockArray(pattern);
     }
 
-    private static MachineControllerSpec controllerSpec(Identifier machineId, Identifier frontTexture) {
-        MachineControllerSpec defaults = MachineControllerSpec.defaultsFor(machineId);
-        return new MachineControllerSpec(defaults.id(), frontTexture, defaults.sideTexture(), defaults.topTexture(),
-                defaults.bottomTexture(), false, false, false);
-    }
 }

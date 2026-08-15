@@ -64,12 +64,14 @@ class MachineDefinitionBootstrapTest {
     }
 
     @Test
-    void space_elevator_uses_its_own_controller_overlay() {
+    void space_elevator_uses_quartz_base_texture_with_the_default_controller_overlay() {
         BuiltinMachines.register();
         MachineDefinitions.bootstrapBuiltins();
 
-        assertThat(MachineDefinitions.getRegistration(MMCR.id("space_elevator")).controllerSpec().frontTexture())
-                .isEqualTo(MMCR.id("block/space_elevator_controller"));
+        var registration = MachineDefinitions.getRegistration(MMCR.id("space_elevator"));
+        assertThat(registration.appearance().controllerBaseTexture())
+                .isEqualTo(Identifier.withDefaultNamespace("block/quartz_block_bottom"));
+        assertThat(registration.controllerSpec().frontTexture()).isEqualTo(MMCR.id("block/basic_controller"));
     }
 
     @Test
