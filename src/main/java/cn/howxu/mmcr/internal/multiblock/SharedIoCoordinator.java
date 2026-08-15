@@ -78,11 +78,17 @@ public final class SharedIoCoordinator {
         Set<Request> successful = Collections.newSetFromMap(new IdentityHashMap<>());
         resolveRoundRobin(current.stream().filter(StartRequest.class::isInstance).map(StartRequest.class::cast).toList(), startCursors, domain.id(), successful);
         resolveRoundRobin(current.stream().filter(TickRequest.class::isInstance).map(TickRequest.class::cast).toList(), tickCursors, domain.id(), successful);
+        Set<StartRequest> pendingStartsBeforeFinish = Collections.newSetFromMap(new IdentityHashMap<>());
+        pending.stream()
+                .filter(StartRequest.class::isInstance)
+                .map(StartRequest.class::cast)
+                .filter(request -> request.domainId() == domain.id() && request.domainGeneration() == domain.generation())
+                .forEach(pendingStartsBeforeFinish::add);
         List<FinishRequest> finishRequests = new ArrayList<>(current.stream()
                 .filter(FinishRequest.class::isInstance).map(FinishRequest.class::cast).toList());
         finishRequests.addAll(takePendingFinishRequests(domain));
         resolveRoundRobin(finishRequests, finishCursors, domain.id(), successful);
-        List<StartRequest> finishSpawnedStarts = takePendingStartRequests(domain);
+        List<StartRequest> finishSpawnedStarts = takePendingStartRequests(domain, pendingStartsBeforeFinish);
         resolveRoundRobin(finishSpawnedStarts, startCursors, domain.id(), successful);
         List<Request> unresolved = new ArrayList<>(current.stream().filter(request -> !successful.contains(request)).toList());
         for (FinishRequest request : finishRequests) {
@@ -104,11 +110,12 @@ public final class SharedIoCoordinator {
         return result;
     }
 
-    private List<StartRequest> takePendingStartRequests(StructureClaimRegistry.ResourceDomain domain) {
+    private List<StartRequest> takePendingStartRequests(StructureClaimRegistry.ResourceDomain domain, Set<StartRequest> excluded) {
         List<StartRequest> matching = pending.stream()
                 .filter(StartRequest.class::isInstance)
                 .map(StartRequest.class::cast)
                 .filter(request -> request.domainId() == domain.id() && request.domainGeneration() == domain.generation())
+                .filter(request -> !excluded.contains(request))
                 .toList();
         pending.removeAll(matching);
         return matching.stream()

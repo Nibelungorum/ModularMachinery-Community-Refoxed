@@ -162,6 +162,37 @@ class SharedIoCoordinatorTest {
     }
 
     @Test
+    void postFinishStartPhaseOnlyConsumesStartsSpawnedByFinishRequests() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = new StructureClaimRegistry.ResourceDomain(13L, 1L, Set.of(A));
+        SharedIoCoordinator.LaneKey lane = new SharedIoCoordinator.LaneKey(A, "base");
+        List<String> committed = new ArrayList<>();
+        coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, lane, 1L, 1, ignored -> {
+            coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, lane, 1L, 1,
+                    ignoredAgain -> 1, granted -> committed.add("start-spawned"), () -> true, () -> 1L));
+            return 1;
+        }, granted -> committed.add("initial-start"), () -> true, () -> 1L));
+        coordinator.enqueue(new SharedIoCoordinator.TickRequest(domain, lane, 1L, () -> {
+            coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, lane, 1L, 1,
+                    ignored -> 1, granted -> committed.add("tick-spawned"), () -> true, () -> 1L));
+            return true;
+        }, () -> true, () -> 1L));
+        coordinator.enqueue(new SharedIoCoordinator.FinishRequest(domain, lane, 1L, () -> {
+            coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, lane, 1L, 1,
+                    ignored -> 1, granted -> committed.add("finish-spawned"), () -> true, () -> 1L));
+            return true;
+        }, () -> true, () -> 1L));
+
+        coordinator.resolve(domain);
+
+        assertThat(committed).containsExactly("initial-start", "finish-spawned");
+
+        coordinator.resolve(domain);
+
+        assertThat(committed).containsExactly("initial-start", "finish-spawned", "start-spawned", "tick-spawned");
+    }
+
+    @Test
     void invalidStartSpawnedByFinishIsDiscardedBeforeTheNextResolve() {
         SharedIoCoordinator coordinator = new SharedIoCoordinator();
         StructureClaimRegistry.ResourceDomain domain = new StructureClaimRegistry.ResourceDomain(12L, 1L, Set.of(A));
