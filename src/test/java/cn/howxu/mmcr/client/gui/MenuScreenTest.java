@@ -33,6 +33,8 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -196,15 +198,26 @@ class MenuScreenTest {
     }
 
     @Test
-    void formed_unconnected_module_prioritizes_offline_failure() {
-        assertThat(MachineMenuScreen.displayFailure("gui.mmcr.controller.failure.missing_input", true, true, false))
-                .isEqualTo("gui.mmcr.controller.failure.module_offline");
-        assertThat(MachineMenuScreen.displayFailure("gui.mmcr.controller.failure.missing_input", true, true, true))
-                .isEqualTo("gui.mmcr.controller.failure.missing_input");
-        assertThat(MachineMenuScreen.displayFailure("gui.mmcr.controller.failure.missing_input", false, true, false))
-                .isEqualTo("gui.mmcr.controller.failure.missing_input");
-        assertThat(MachineMenuScreen.displayFailure("gui.mmcr.controller.failure.missing_input", true, false, false))
-                .isEqualTo("gui.mmcr.controller.failure.missing_input");
+    void module_status_lines_remain_visible_before_formation_and_mark_offline_modules_red() {
+        List<MachineMenuScreen.ControllerStatusLine> hostLines = MachineMenuScreen.moduleStatusLines(
+                true, false, 1, Optional.empty());
+        List<MachineMenuScreen.ControllerStatusLine> offlineModuleLines = MachineMenuScreen.moduleStatusLines(
+                false, true, 0, Optional.empty());
+        List<MachineMenuScreen.ControllerStatusLine> connectedModuleLines = MachineMenuScreen.moduleStatusLines(
+                false, true, 0, Optional.of(MMCR.id("test_host")));
+
+        assertThat(hostLines).singleElement().satisfies(line -> {
+            assertThat(line.text().getString()).isEqualTo("gui.mmcr.controller.installed_modules");
+            assertThat(line.color()).isEqualTo(MachineMenuScreen.STATUS_LABEL_COLOR);
+        });
+        assertThat(offlineModuleLines).singleElement().satisfies(line -> {
+            assertThat(line.text().getString()).isEqualTo("gui.mmcr.controller.module_unconnected");
+            assertThat(line.color()).isEqualTo(MachineMenuScreen.UNFORMED_STATUS_COLOR);
+        });
+        assertThat(connectedModuleLines).singleElement().satisfies(line -> {
+            assertThat(line.text().getString()).isEqualTo("gui.mmcr.controller.module_connected");
+            assertThat(line.color()).isEqualTo(MachineMenuScreen.STATUS_LABEL_COLOR);
+        });
     }
 
     @Test

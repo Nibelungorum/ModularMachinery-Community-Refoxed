@@ -665,7 +665,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         int textY = y + controllerStatusY(titleLabelY);
         int textX = x + controllerStatusX(titleLabelX);
         boolean active = menu.hasActiveRecipe();
-        String failure = displayFailure(menu.lastFailureMessage(), menu.isFormed(), menu.isModuleController(), menu.connectedHostId().isPresent());
+        String failure = menu.lastFailureMessage();
         var owner = menu.resolvedOwner();
 
         final float scale = controllerDetailScale();
@@ -696,15 +696,12 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
                     scaledX, scaledY, scaledWidth, PROGRESS_STATUS_COLOR);
         }
 
+        for (ControllerStatusLine line : moduleStatusLines(menu.isHostController(), menu.isModuleController(),
+                menu.installedModuleCount(), menu.connectedHostId())) {
+            scaledY = renderScaledWrappedLine(g, line.text(), scaledX, scaledY, scaledWidth, line.color());
+        }
+
         if (menu.isFormed()) {
-            if (menu.isHostController()) {
-                scaledY = renderScaledWrappedLine(g, installedModuleCountLine(menu.installedModuleCount()),
-                        scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
-            }
-            if (menu.isModuleController()) {
-                scaledY = renderScaledWrappedLine(g, moduleConnectionLine(menu),
-                        scaledX, scaledY, scaledWidth, STATUS_LABEL_COLOR);
-            }
             int parallelSlots = menu.parallelControllerCount();
             if (parallelSlots > 0) {
                 scaledY = renderScaledWrappedLine(g, parallelSlotLine(parallelSlots),
@@ -789,8 +786,15 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
                 Component.literal(NUMBER_FORMAT.format(installedModuleCount)));
     }
 
-    static Component moduleConnectionLine(MachineControllerMenu menu) {
-        Optional<Identifier> hostId = menu.connectedHostId();
+    static List<ControllerStatusLine> moduleStatusLines(boolean hostController, boolean moduleController,
+                                                        int installedModuleCount, Optional<Identifier> connectedHostId) {
+        if (hostController) return List.of(new ControllerStatusLine(installedModuleCountLine(installedModuleCount), STATUS_LABEL_COLOR));
+        if (!moduleController) return List.of();
+        return List.of(new ControllerStatusLine(moduleConnectionLine(connectedHostId),
+                connectedHostId.isPresent() ? STATUS_LABEL_COLOR : UNFORMED_STATUS_COLOR));
+    }
+
+    static Component moduleConnectionLine(Optional<Identifier> hostId) {
         if (hostId.isEmpty()) return Component.translatable("gui.mmcr.controller.module_unconnected");
         var host = MachineRegistry.getMachine(hostId.get());
         Component hostName = host == null ? Component.literal(hostId.get().toString()) : host.displayName();
@@ -820,11 +824,6 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     static String controllerStatusKey(boolean formed, boolean active) {
         if (!formed) return "gui.mmcr.controller.unformed";
         return active ? "gui.mmcr.controller.running" : "gui.mmcr.controller.idle";
-    }
-
-    static String displayFailure(String failure, boolean formed, boolean moduleController, boolean connectedToHost) {
-        if (formed && moduleController && !connectedToHost) return "gui.mmcr.controller.failure.module_offline";
-        return failure;
     }
 
     static int progressPercent(int current, int total) {
@@ -879,6 +878,9 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         boolean overlaps(Rect other) {
             return left < other.right() && right() > other.left && top < other.bottom() && bottom() > other.top;
         }
+    }
+
+    record ControllerStatusLine(Component text, int color) {
     }
 
     private record HiddenSlotPosition(int index, Slot slot) {
