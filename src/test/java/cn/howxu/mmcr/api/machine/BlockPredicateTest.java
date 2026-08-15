@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.machine;
 
 import net.minecraft.server.Bootstrap;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
@@ -65,5 +66,36 @@ class BlockPredicateTest {
                 new BlockPredicate.OfBlock(Blocks.DIRT)));
         assertThat(p.matches(Blocks.STONE.defaultBlockState())).isTrue();
         assertThat(p.matches(Blocks.AIR.defaultBlockState())).isFalse();
+    }
+
+    @Test void preferredState_returns_the_exact_state_predicate_state() {
+        var state = Blocks.OAK_STAIRS.defaultBlockState();
+
+        assertThat(new BlockPredicate.OfBlockState(state).preferredState()).containsSame(state);
+    }
+
+    @Test void preferredState_returns_the_block_default_state() {
+        assertThat(new BlockPredicate.OfBlock(Blocks.OAK_STAIRS).preferredState())
+                .containsSame(Blocks.OAK_STAIRS.defaultBlockState());
+    }
+
+    @Test void preferredState_prefers_the_highest_registered_machine_level_in_anyOf() {
+        var predicate = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState())));
+
+        assertThat(predicate.preferredState()).containsSame(Blocks.IRON_BLOCK.defaultBlockState());
+    }
+
+    @Test void preferredState_uses_preview_fallback_when_no_candidate_state_exists() {
+        var predicate = BlockPredicate.machineCoupler();
+
+        assertThat(predicate.preferredState()).isEqualTo(MultiblockPreviewBuilder.previewState(predicate));
+    }
+
+    @Test void preferredState_is_empty_when_no_candidate_or_preview_fallback_exists() {
+        assertThat(new BlockPredicate.Any().preferredState()).isEmpty();
+        assertThat(new BlockPredicate.Air().preferredState()).isEmpty();
+        assertThat(new BlockPredicate.OfTag(BlockTags.DIRT).preferredState()).isEmpty();
     }
 }
