@@ -162,6 +162,47 @@ public class TerminalAssemblyGameTest {
         helper.succeed();
     }
 
+    public void survivalBuildContinuesAfterInventoryIsReplenished(GameTestHelper helper) {
+        BlockPos controllerPos = new BlockPos(4, 1, 4);
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("iron_compressor")).get().defaultBlockState());
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        List<MultiblockAssemblyService.Placement> template = template(controller);
+        MultiblockAssemblyService.Placement missingPlacement = template.stream()
+                .filter(placement -> placement.state().is(ModBlocks.BLOCKS.get("item_input_bus").get()))
+                .findFirst()
+                .orElseThrow();
+        List<MultiblockAssemblyService.Placement> casingPlacements = template.stream()
+                .filter(placement -> placement.state().is(ModBlocks.CASING.get()))
+                .limit(2)
+                .toList();
+        BlockPos firstPosition = casingPlacements.getFirst().pos();
+        BlockPos missingPosition = missingPlacement.pos();
+        BlockPos laterAffordablePosition = casingPlacements.getLast().pos();
+        for (MultiblockAssemblyService.Placement placement : template) {
+            if (!placement.pos().equals(firstPosition) && !placement.pos().equals(missingPosition)
+                    && !placement.pos().equals(laterAffordablePosition)) {
+                helper.getLevel().setBlock(placement.pos(), placement.state(), 3);
+            }
+        }
+
+        ServerPlayer player = servicePlayer(helper);
+        player.getInventory().add(new ItemStack(ModBlocks.CASING.get(), 2));
+
+        MultiblockAssemblyService.Result first = MultiblockAssemblyService.build(player, controller, false);
+
+        helper.assertTrue(first.changedBlocks() == 2, "First build places both affordable casing positions");
+        helper.assertTrue(helper.getLevel().getBlockState(firstPosition).is(ModBlocks.CASING.get()), "First casing is built");
+        helper.assertTrue(helper.getLevel().getBlockState(missingPosition).isAir(), "Missing input bus remains air");
+        helper.assertTrue(helper.getLevel().getBlockState(laterAffordablePosition).is(ModBlocks.CASING.get()), "Later casing is built");
+
+        player.getInventory().add(new ItemStack(ModBlocks.BLOCKS.get("item_input_bus").get()));
+        MultiblockAssemblyService.Result second = MultiblockAssemblyService.build(player, controller, false);
+
+        helper.assertTrue(second.changedBlocks() == 1, "Second build places only the replenished input bus");
+        helper.assertTrue(helper.getLevel().getBlockState(missingPosition).is(ModBlocks.BLOCKS.get("item_input_bus").get()), "Missing input bus is built");
+        helper.succeed();
+    }
+
     private static List<MultiblockAssemblyService.Placement> template(MachineControllerBlockEntity controller) {
         var machine = controller.boundMachine().orElseThrow();
         return MultiblockAssemblyService.createTemplatePlacements(controller.getBlockPos(),
