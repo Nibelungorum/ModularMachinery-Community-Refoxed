@@ -84,4 +84,16 @@ class ModelGenTest {
         assertThat(Files.readString(root.resolve("textures/block/overlay_smartinterface_number.png.mcmeta")))
                 .contains("\"frametime\": 2");
     }
+
+    @Test
+    void module_bridge_uses_dynamic_resources_and_bridge_overlay_texture() {
+        Path generatedRoot = Path.of("src/generated/resources/assets/mmcr");
+
+        assertThat(ModelGen.collectKnownBlockNames()).doesNotContain("module_bridge");
+        assertThat(ModelGen.collectKnownItemNames()).doesNotContain("module_bridge");
+        assertThat(Files.exists(generatedRoot.resolve("blockstates/module_bridge.json"))).isFalse();
+        assertThat(Files.exists(generatedRoot.resolve("models/block/module_bridge.json"))).isFalse();
+        assertThat(Files.exists(generatedRoot.resolve("items/module_bridge.json"))).isFalse();
+        assertThat(Files.exists(Path.of("src/main/resources/assets/mmcr/textures/block/overlay_module_bridge.png"))).isTrue();
+    }
 }
