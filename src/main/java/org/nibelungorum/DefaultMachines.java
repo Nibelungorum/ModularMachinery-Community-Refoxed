@@ -459,26 +459,20 @@ public final class DefaultMachines {
         PortTierRequirementSpec requirements = PortTierRequirementSpec.builder()
                 .anyItemInput().anyItemOutput().anyEnergyInput().build();
         return new MachineStructureDefinition(DISTILLATION_TOWER_ID, List.of(
-                declaration(distillationTowerPattern(4, a, c, controller), requirements),
-                declaration(distillationTowerPattern(5, a, c, controller), requirements),
-                declaration(distillationTowerPattern(6, a, c, controller), requirements)));
+                declaration(distillationTowerLevelOne(a, c, controller), requirements),
+                declaration(distillationTowerLevelTwo(a, c, controller), requirements),
+                declaration(distillationTowerLevelThree(a, c, controller), requirements)));
     }
 
-    private static BlockArray distillationTowerPattern(int height, BlockPredicate a, BlockPredicate c, Block controller) {
-        String[] first = rows(height, "  XXX  ", "  AAA  ");
-        String[] second = rows(height, " XXXXX ", " B   B ", "  ACA  ");
-        String[] middle = rows(height, "XXXXXXX", "A     A", " B   B ");
-        middle[height - 1] = "  DDD  ";
-        String[] sixth = rows(height, " XXXXX ", " B   B ", "  BBB  ");
-        String[] last = rows(height, "  XXX  ", "  BEB  ");
+    private static BlockArray distillationTowerLevelOne(BlockPredicate a, BlockPredicate c, Block controller) {
         return BlockArray.builder()
-                .pattern(java.util.Arrays.copyOf(first, height))
-                .pattern(java.util.Arrays.copyOf(second, height))
-                .pattern(java.util.Arrays.copyOf(middle, height))
-                .pattern(java.util.Arrays.copyOf(middle, height))
-                .pattern(java.util.Arrays.copyOf(middle, height))
-                .pattern(java.util.Arrays.copyOf(sixth, height))
-                .pattern(java.util.Arrays.copyOf(last, height))
+                .pattern("  XXX  ", "  AAA  ", "       ", "       ")
+                .pattern(" XXXXX ", " B   B ", "  ACA  ", "       ")
+                .pattern("XXXXXXX", "A     A", " B   B ", "  DDD  ")
+                .pattern("XXXXXXX", "A     A", " B   B ", "  DDD  ")
+                .pattern("XXXXXXX", "A     A", " B   B ", "  DDD  ")
+                .pattern(" XXXXX ", " B   B ", "  BBB  ", "       ")
+                .pattern("  XXX  ", "  BEB  ", "       ", "       ")
                 .set('X', new BlockPredicate.OfBlock(Blocks.POLISHED_BLACKSTONE))
                 .set('A', a)
                 .set('B', new BlockPredicate.OfBlock(Blocks.POLISHED_BLACKSTONE_BRICKS))
@@ -489,11 +483,42 @@ public final class DefaultMachines {
                 .build();
     }
 
-    private static String[] rows(int height, String... rows) {
-        String[] result = new String[height];
-        java.util.Arrays.fill(result, "       ");
-        System.arraycopy(rows, 0, result, 0, rows.length);
-        return result;
+    private static BlockArray distillationTowerLevelTwo(BlockPredicate a, BlockPredicate c, Block controller) {
+        return BlockArray.builder()
+                .pattern("  XXX  ", "  AAA  ", "       ", "       ", "       ")
+                .pattern(" XXXXX ", " B   B ", "  ACA  ", "  ACA  ", "       ")
+                .pattern("XXXXXXX", "A     A", " B   B ", " B   B ", "  DDD  ")
+                .pattern("XXXXXXX", "A     A", " B   B ", " B   B ", "  DDD  ")
+                .pattern("XXXXXXX", "A     A", " B   B ", " B   B ", "  DDD  ")
+                .pattern(" XXXXX ", " B   B ", "  BBB  ", "  BBB  ", "       ")
+                .pattern("  XXX  ", "  BEB  ", "       ", "       ", "       ")
+                .set('X', new BlockPredicate.OfBlock(Blocks.POLISHED_BLACKSTONE))
+                .set('A', a)
+                .set('B', new BlockPredicate.OfBlock(Blocks.POLISHED_BLACKSTONE_BRICKS))
+                .set('C', c)
+                .set('D', new BlockPredicate.OfBlock(Blocks.GILDED_BLACKSTONE))
+                .set('E', new BlockPredicate.OfBlock(controller))
+                .controller('E')
+                .build();
+    }
+
+    private static BlockArray distillationTowerLevelThree(BlockPredicate a, BlockPredicate c, Block controller) {
+        return BlockArray.builder()
+                .pattern("  XXX  ", "  AAA  ", "       ", "       ", "       ", "       ")
+                .pattern(" XXXXX ", " B   B ", "  ACA  ", "  ACA  ", "  ACA  ", "       ")
+                .pattern("XXXXXXX", "A     A", " B   B ", " B   B ", " B   B ", "  DDD  ")
+                .pattern("XXXXXXX", "A     A", " B   B ", " B   B ", " B   B ", "  DDD  ")
+                .pattern("XXXXXXX", "A     A", " B   B ", " B   B ", " B   B ", "  DDD  ")
+                .pattern(" XXXXX ", " B   B ", "  BBB  ", "  BBB  ", "  BBB  ", "       ")
+                .pattern("  XXX  ", "  BEB  ", "       ", "       ", "       ", "       ")
+                .set('X', new BlockPredicate.OfBlock(Blocks.POLISHED_BLACKSTONE))
+                .set('A', a)
+                .set('B', new BlockPredicate.OfBlock(Blocks.POLISHED_BLACKSTONE_BRICKS))
+                .set('C', c)
+                .set('D', new BlockPredicate.OfBlock(Blocks.GILDED_BLACKSTONE))
+                .set('E', new BlockPredicate.OfBlock(controller))
+                .controller('E')
+                .build();
     }
 
     private static MachineStructureDefinition ecoMatrixStructure() {

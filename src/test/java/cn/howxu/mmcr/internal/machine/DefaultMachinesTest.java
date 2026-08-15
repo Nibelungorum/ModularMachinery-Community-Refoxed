@@ -223,6 +223,13 @@ class DefaultMachinesTest {
                         .distinct()
                         .toList())
                 .containsExactly(List.of(2), List.of(3), List.of(4));
+        assertThat(MachineStructureRegistry.dynamicSnapshot().get(MMCR.id("distillation_tower")).declarations())
+                .extracting(declaration -> declaration.pattern().get(new BlockPos(0, 1, -5)))
+                .allSatisfy(predicate -> assertThat(predicate.matches(
+                        ModBlocks.BLOCKS.get("item_output_bus_tiny").get().defaultBlockState())).isTrue());
+        assertThat(MachineStructureRegistry.dynamicSnapshot().get(MMCR.id("distillation_tower")).declarations().get(2)
+                .pattern().get(new BlockPos(0, 3, -5))
+                .matches(ModBlocks.BLOCKS.get("item_output_bus_tiny").get().defaultBlockState())).isTrue();
 
         assertThat(ecoMatrix).isNotNull();
         assertThat(requirementIds(ecoMatrix)).containsExactly("energy_input_hatch>=tiny");
