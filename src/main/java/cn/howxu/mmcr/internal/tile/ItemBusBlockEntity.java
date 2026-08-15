@@ -6,6 +6,7 @@ import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -37,6 +38,28 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
     public IItemHandler getItemHandler(Direction side) { return handler; }
 
     public ItemStackHandler getItemStackHandler(Direction side) { return handler; }
+
+    public void dropContents() {
+        if (level == null || level.isClientSide()) return;
+        for (int slot = 0; slot < handler.getSlots(); slot++) {
+            ItemStack stack = handler.getStackInSlot(slot);
+            if (stack.isEmpty()) continue;
+            Block.popResource(level, worldPosition, stack);
+            handler.setStackInSlot(slot, ItemStack.EMPTY);
+        }
+    }
+
+    public void clearContents() {
+        for (int slot = 0; slot < handler.getSlots(); slot++) {
+            handler.setStackInSlot(slot, ItemStack.EMPTY);
+        }
+    }
+
+    @Override
+    public void preRemoveSideEffects(BlockPos pos, BlockState state) {
+        super.preRemoveSideEffects(pos, state);
+        dropContents();
+    }
 
     public boolean isInventoryEmpty() {
         if (inventoryEmpty == null) {

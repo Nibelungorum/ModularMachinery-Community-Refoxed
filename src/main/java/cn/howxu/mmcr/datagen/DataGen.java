@@ -14,6 +14,7 @@ public final class DataGen {
     @SubscribeEvent
     public static void onGatherData(GatherDataEvent.Client event) {
         PackOutput output = event.getGenerator().getPackOutput();
+        event.addProvider(new LootTableGen(output, event.getLookupProvider()));
         event.addProvider(new ModelGen(output));
         event.addProvider(new LangProvider(output, "en_us"));
         event.addProvider(new LangProvider(output, "zh_cn"));

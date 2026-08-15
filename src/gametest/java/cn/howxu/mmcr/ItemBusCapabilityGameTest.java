@@ -9,7 +9,9 @@ import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.phys.AABB;
 import net.neoforged.neoforge.capabilities.BlockCapabilityCache;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.item.ItemResource;
@@ -87,5 +89,42 @@ public class ItemBusCapabilityGameTest {
         helper.assertTrue(cache.getCapability() != null, "Re-enabling side invalidates cache and exposes item capability");
 
         helper.succeed();
+    }
+
+    public static void itemBusDropsStoredItemsWhenRemoved(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(0, 1, 0);
+        helper.setBlock(pos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+        ItemBusBlockEntity bus = helper.getBlockEntity(pos, ItemBusBlockEntity.class);
+        bus.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 3));
+
+        helper.destroyBlock(pos);
+        helper.runAfterDelay(1, () -> {
+            long dropped = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                            new AABB(helper.absolutePos(pos)).inflate(1))
+                    .stream()
+                    .filter(entity -> entity.getItem().is(Items.IRON_INGOT))
+                    .mapToLong(entity -> entity.getItem().getCount())
+                    .sum();
+            helper.assertTrue(dropped == 3, "Removing an item bus drops every stored item");
+            helper.succeed();
+        });
+    }
+
+    public static void dynamicControllerDropsItself(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(0, 1, 0);
+        var controller = ModBlocks.controllerFor(MMCR.id("test_cube")).get();
+        helper.setBlock(pos, controller.defaultBlockState());
+
+        helper.getLevel().destroyBlock(helper.absolutePos(pos), true);
+        helper.runAfterDelay(1, () -> {
+            long dropped = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                            new AABB(helper.absolutePos(pos)).inflate(1))
+                    .stream()
+                    .filter(entity -> entity.getItem().is(controller.asItem()))
+                    .mapToLong(entity -> entity.getItem().getCount())
+                    .sum();
+            helper.assertTrue(dropped == 1, "Removing a dynamic controller drops itself without a loot table");
+            helper.succeed();
+        });
     }
 }
