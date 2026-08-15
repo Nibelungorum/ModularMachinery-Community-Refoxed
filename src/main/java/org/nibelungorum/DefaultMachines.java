@@ -465,11 +465,11 @@ public final class DefaultMachines {
     }
 
     private static BlockArray distillationTowerPattern(int height, BlockPredicate a, BlockPredicate c, Block controller) {
-        String[] first = {"  XXX  ", "  AAA  ", "       ", "       ", "       ", "       "};
-        String[] second = {" XXXXX ", " B   B ", "  ACA  ", "  ACA  ", "  ACA  ", "       "};
-        String[] middle = {"XXXXXXX", "A     A", " B   B ", " B   B ", " B   B ", "  DDD  "};
-        String[] sixth = {" XXXXX ", " B   B ", "  BBB  ", "  BBB  ", "  BBB  ", "       "};
-        String[] last = {"  XXX  ", "  BEB  ", "       ", "       ", "       ", "       "};
+        String[] first = rows(height, "  XXX  ", "  AAA  ");
+        String[] second = rows(height, " XXXXX ", " B   B ", "  ACA  ");
+        String[] middle = rows(height, "XXXXXXX", "A     A", " B   B ", "  DDD  ");
+        String[] sixth = rows(height, " XXXXX ", " B   B ", "  BBB  ");
+        String[] last = rows(height, "  XXX  ", "  BEB  ");
         return BlockArray.builder()
                 .pattern(java.util.Arrays.copyOf(first, height))
                 .pattern(java.util.Arrays.copyOf(second, height))
@@ -486,6 +486,13 @@ public final class DefaultMachines {
                 .set('E', new BlockPredicate.OfBlock(controller))
                 .controller('E')
                 .build();
+    }
+
+    private static String[] rows(int height, String... rows) {
+        String[] result = new String[height];
+        java.util.Arrays.fill(result, "       ");
+        System.arraycopy(rows, 0, result, 0, rows.length);
+        return result;
     }
 
     private static MachineStructureDefinition ecoMatrixStructure() {
