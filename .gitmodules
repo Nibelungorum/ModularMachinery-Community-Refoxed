@@ -31,3 +31,7 @@
 [submodule "reference/ae2"]
 	path = reference/ae2
 	url = https://github.com/AppliedEnergistics/Applied-Energistics-2
+[submodule "reference/mui"]
+	path = reference/mui
+	url = https://github.com/brachy84/ModularUI-Modern
+	branch = 1.21.1
