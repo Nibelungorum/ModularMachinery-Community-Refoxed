@@ -201,7 +201,7 @@ public class TerminalAssemblyGameTest {
                 for (int missing = first + 1; missing < template.size() - 1 && firstIndex < 0; missing++) {
                     if (ItemStack.isSameItemSameComponents(template.get(first).requirement(), template.get(missing).requirement())) continue;
                     for (int later = missing + 1; later < template.size(); later++) {
-                        if (ItemStack.isSameItemSameComponents(template.get(first).requirement(), template.get(later).requirement())) {
+                        if (!ItemStack.isSameItemSameComponents(template.get(missing).requirement(), template.get(later).requirement())) {
                             firstIndex = first;
                             missingIndex = missing;
                             laterIndex = later;
