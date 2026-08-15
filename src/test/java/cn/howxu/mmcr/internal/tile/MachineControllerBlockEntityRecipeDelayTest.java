@@ -61,6 +61,7 @@ class MachineControllerBlockEntityRecipeDelayTest {
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
         bindItemComponents(Items.GOLD_INGOT);
+        bindItemComponents(Items.COBBLESTONE);
         bindItemComponents(Items.NETHERITE_SCRAP);
         bindItemComponents(Items.DIAMOND_SWORD);
     }
@@ -165,8 +166,10 @@ class MachineControllerBlockEntityRecipeDelayTest {
     @Test
     void completedRecipeRestartsImmediatelyWithoutTickingReplacementUntilNextTick() throws Exception {
         Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
-        MachineControllerBlockEntity controller = formedController(machineId);
-        MachineRecipe recipe = inputRecipe("continuous_gold", machineId, List.of());
+        ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
+        bus.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.GOLD_INGOT, 2));
+        MachineControllerBlockEntity controller = formedController(machineId, bus);
+        MachineRecipe recipe = inputRecipe("continuous_gold", machineId, Items.GOLD_INGOT, 1);
         setField(MachineControllerBlockEntity.class, controller, "lastRecipe", recipe);
         setField(MachineControllerBlockEntity.class, controller, "lastRecipeStructureVersion", 31L);
         setField(MachineControllerBlockEntity.class, controller, "lastRecipeModifierSnapshotVersion", 0L);
@@ -182,6 +185,7 @@ class MachineControllerBlockEntityRecipeDelayTest {
         assertThat(controller.getActive()).isNotNull();
         assertThat(controller.getActive().getRecipe()).isSameAs(recipe);
         assertThat(controller.getActive().getTick()).isZero();
+        assertThat(bus.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
 
         invokeTickSingleActiveRecipe(controller);
 
@@ -207,6 +211,40 @@ class MachineControllerBlockEntityRecipeDelayTest {
         invokeTickSingleActiveRecipe(controller);
 
         assertThat(controller.getActive()).isNull();
+    }
+
+    @Test
+    void blockedFinalOutputKeepsTheOldRecipeWaitingWithoutRestarting() throws Exception {
+        Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        setField(ItemBusBlockEntity.class, output, "handler", new ItemStackHandler(6));
+        for (int slot = 0; slot < output.getItemStackHandler(null).getSlots(); slot++) {
+            output.getItemStackHandler(null).setStackInSlot(slot, new ItemStack(Items.COBBLESTONE, 64));
+        }
+        MachineControllerBlockEntity controller = formedController(machineId, output);
+        MachineRecipe recipe = outputRecipe("blocked_continuous_gold", machineId, Items.GOLD_INGOT);
+        setField(MachineControllerBlockEntity.class, controller, "lastRecipe", recipe);
+        setField(MachineControllerBlockEntity.class, controller, "lastRecipeStructureVersion", 31L);
+        setField(MachineControllerBlockEntity.class, controller, "lastRecipeModifierSnapshotVersion", 0L);
+        setField(MachineControllerBlockEntity.class, controller, "recipeDirty", false);
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+        context.refreshStructureVersion();
+        setField(MachineControllerBlockEntity.class, controller, "active", active);
+        setField(MachineControllerBlockEntity.class, controller, "context", context);
+        setField(ActiveMachineRecipe.class, active, "totalTick", 1);
+
+        invokeTickSingleActiveRecipe(controller);
+
+        assertThat(controller.getActive()).isSameAs(active);
+        assertThat(active.isFinishPending()).isTrue();
+        assertThat(active.getTick()).isZero();
+
+        invokeTickSingleActiveRecipe(controller);
+
+        assertThat(controller.getActive()).isSameAs(active);
+        assertThat(active.isFinishPending()).isTrue();
+        assertThat(active.getTick()).isZero();
     }
 
     @Test
@@ -301,6 +339,21 @@ class MachineControllerBlockEntityRecipeDelayTest {
                 List.copyOf(inputs));
     }
 
+    private static MachineRecipe outputRecipe(String path, Identifier machineId, Item output) {
+        return new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", path),
+                machineId,
+                1,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, output.getDefaultInstance())));
+    }
+
     private static MachineRecipe parallelizedInputRecipe(String path, Identifier machineId, Item item, int count) {
         return new MachineRecipe(
                 Identifier.fromNamespaceAndPath("mmcr", path),
@@ -351,6 +404,19 @@ class MachineControllerBlockEntityRecipeDelayTest {
         setField(BlockEntity.class, bus, "worldPosition", pos);
         setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
         setField(ItemInputBusBlockEntity.class, bus, "kind", cn.howxu.mmcr.registry.PortKinds.ITEM_INPUT);
+        setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
+        return bus;
+    }
+
+    private static ItemOutputBusBlockEntity itemOutputBus(BlockPos pos) throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+        ItemOutputBusBlockEntity bus = (ItemOutputBusBlockEntity) unsafe.allocateInstance(ItemOutputBusBlockEntity.class);
+        setField(BlockEntity.class, bus, "type", null);
+        setField(BlockEntity.class, bus, "worldPosition", pos);
+        setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
+        setField(ItemOutputBusBlockEntity.class, bus, "kind", cn.howxu.mmcr.registry.PortKinds.ITEM_OUTPUT);
         setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
         return bus;
     }
@@ -433,7 +499,8 @@ class MachineControllerBlockEntityRecipeDelayTest {
             @SuppressWarnings("unchecked")
             List<ProcessingComponent> components = (List<ProcessingComponent>) fieldValue(MachineControllerBlockEntity.class, controller, "components");
             components.add(new ProcessingComponent(
-                    new MachineComponent(PortKinds.ITEM_INPUT, cn.howxu.mmcr.util.IOType.INPUT),
+                    new MachineComponent(port instanceof ItemOutputBusBlockEntity ? PortKinds.ITEM_OUTPUT : PortKinds.ITEM_INPUT,
+                            port instanceof ItemOutputBusBlockEntity ? cn.howxu.mmcr.util.IOType.OUTPUT : cn.howxu.mmcr.util.IOType.INPUT),
                     port,
                     port.getBlockPos(),
                     BlockPos.ZERO,

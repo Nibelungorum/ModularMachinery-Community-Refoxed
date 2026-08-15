@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -162,6 +163,38 @@ class SharedIoCoordinatorTest {
     }
 
     @Test
+    void finishedControllerCallbackInstallsItsPendingReplacementAtTickZeroBeforeTheNextResolve() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = new StructureClaimRegistry.ResourceDomain(14L, 1L, Set.of(A));
+        SharedIoCoordinator.LaneKey lane = new SharedIoCoordinator.LaneKey(A, "base");
+        AtomicReference<SharedRecipeState> active = new AtomicReference<>(new SharedRecipeState(1));
+        AtomicReference<SharedRecipeState> pending = new AtomicReference<>();
+
+        coordinator.enqueue(new SharedIoCoordinator.FinishRequest(domain, lane, 1L, () -> {
+            active.set(null);
+            pending.set(new SharedRecipeState(0));
+            coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, lane, 1L, 1,
+                    ignored -> 1,
+                    ignored -> active.set(pending.getAndSet(null)),
+                    () -> pending.get() != null && active.get() == null,
+                    () -> 1L));
+            return true;
+        }, () -> active.get() != null, () -> 1L));
+
+        coordinator.resolve(domain);
+
+        assertThat(pending.get()).isNull();
+        assertThat(active.get()).isNotNull();
+        assertThat(active.get().tick()).isZero();
+
+        coordinator.enqueue(new SharedIoCoordinator.TickRequest(domain, lane, 1L,
+                () -> { active.get().advance(); return true; }, () -> active.get() != null, () -> 1L));
+        coordinator.resolve(domain);
+
+        assertThat(active.get().tick()).isEqualTo(1);
+    }
+
+    @Test
     void postFinishStartPhaseOnlyConsumesStartsSpawnedByFinishRequests() {
         SharedIoCoordinator coordinator = new SharedIoCoordinator();
         StructureClaimRegistry.ResourceDomain domain = new StructureClaimRegistry.ResourceDomain(13L, 1L, Set.of(A));
@@ -265,5 +298,21 @@ class SharedIoCoordinatorTest {
                     advanced.add(lane);
                     return true;
                 }, () -> true, () -> 1L));
+    }
+
+    private static final class SharedRecipeState {
+        private int tick;
+
+        private SharedRecipeState(int tick) {
+            this.tick = tick;
+        }
+
+        private int tick() {
+            return tick;
+        }
+
+        private void advance() {
+            tick++;
+        }
     }
 }
