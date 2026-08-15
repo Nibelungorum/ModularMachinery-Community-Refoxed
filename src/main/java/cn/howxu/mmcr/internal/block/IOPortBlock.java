@@ -10,6 +10,7 @@ import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.player.Player;
@@ -57,6 +58,21 @@ public class IOPortBlock extends Block implements EntityBlock {
         return new SimpleMenuProvider(
                 (containerId, playerInv, player) -> openServerMenu(kind.id(), containerId, playerInv, level, pos),
                 titleFor(kind.id()));
+    }
+
+    @Override
+    protected InteractionResult useItemOn(net.minecraft.world.item.ItemStack stack, BlockState state, Level level,
+                                          BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+        if (!player.isShiftKeyDown() && level.getBlockEntity(pos) instanceof FluidHatchBlockEntity hatch) {
+            if (level.isClientSide()) return InteractionResult.TRY_WITH_EMPTY_HAND;
+            FluidHatchBucketInteraction.Result result = FluidHatchBucketInteraction.tryTransfer(
+                    hatch.getFluidTank(hit.getDirection()), hatch.ioType(), stack);
+            if (result.successful()) {
+                player.setItemInHand(hand, result.container());
+                return InteractionResult.SUCCESS;
+            }
+        }
+        return InteractionResult.TRY_WITH_EMPTY_HAND;
     }
 
     @Override
