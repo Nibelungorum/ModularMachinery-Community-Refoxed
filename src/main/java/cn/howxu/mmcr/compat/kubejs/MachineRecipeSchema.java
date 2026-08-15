@@ -56,8 +56,24 @@ public final class MachineRecipeSchema {
     public static final RecipeKey<Boolean> CANCEL_IF_PER_TICK_FAILS =
             new RecipeKey<>(BooleanComponent.BOOLEAN, "cancelIfPerTickFails", ComponentRole.OTHER).optional(false);
 
-    public static final RecipeSchema SCHEMA = new RecipeSchema(MACHINE, TICK_TIME, INPUTS, ENERGY_PER_TICK, OUTPUTS, MODIFIERS, MAX_THREADS, PARALLELIZED, CANCEL_IF_PER_TICK_FAILS)
+    public static final RecipeKey<Boolean> ALLOW_PARTIAL_OUTPUTS =
+            new RecipeKey<>(BooleanComponent.BOOLEAN, "allow_partial_outputs", ComponentRole.OTHER).optional(false);
+
+    public static final RecipeSchema SCHEMA = new RecipeSchema(MACHINE, TICK_TIME, INPUTS, ENERGY_PER_TICK, OUTPUTS, MODIFIERS, MAX_THREADS, PARALLELIZED, CANCEL_IF_PER_TICK_FAILS, ALLOW_PARTIAL_OUTPUTS)
             .factory(MachineRecipeFactory.INSTANCE)
+            .function(new RecipeFunctionInstance("allowPartialOutputs", List.of(),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() {
+                            return List.of();
+                        }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            cx.recipe().json.addProperty("allow_partial_outputs", true);
+                            cx.recipe().save();
+                        }
+                    }))
             .function(new RecipeFunctionInstance("requiresLevel", List.of(StringComponent.ID, StringComponent.ID),
                     new ResolvedRecipeSchemaFunction() {
                         @Override

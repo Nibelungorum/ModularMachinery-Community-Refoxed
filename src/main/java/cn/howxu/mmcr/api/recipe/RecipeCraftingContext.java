@@ -762,7 +762,8 @@ public final class RecipeCraftingContext {
     }
 
     public boolean simulateOutputs(MachineRecipe recipe, int parallelism) {
-        return simulateOutputs(scaledRequirements(recipe, parallelism));
+        List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism);
+        return recipe.allowPartialOutputs() ? simulatePartialOutputs(requirements) : simulateOutputs(requirements);
     }
 
     public int maxInputParallelism(MachineRecipe recipe, int limit) {
@@ -802,6 +803,38 @@ public final class RecipeCraftingContext {
                 if (requirement.io() == RecipeModifier.IOType.OUTPUT && !requirement.simulate(this, requirementIndex)) return false;
             }
             return true;
+        } finally {
+            simulatedItemOutputStates = null;
+            simulatedFluidOutputStates = null;
+        }
+    }
+
+    private boolean simulatePartialOutputs(List<MachineRequirement> requirements) {
+        lastFailureUnloc = null;
+        lastRequirementFailure = null;
+        itemOutputRoutes = emptyItemOutputRoutes(requirements.size());
+        fluidOutputRoutes = emptyFluidOutputRoutes(requirements.size());
+        simulatedItemOutputStates = allItemOutputStates();
+        simulatedFluidOutputStates = allFluidOutputStates();
+        boolean hasPositiveCapacity = false;
+
+        try {
+            for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
+                MachineRequirement requirement = requirements.get(requirementIndex);
+                if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
+                    if (item.chance() <= 0F) continue;
+                    hasPositiveCapacity |= simulatePartialItemOutput(requirementIndex, item);
+                    continue;
+                }
+                if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT) {
+                    if (fluid.chance() <= 0F) continue;
+                    hasPositiveCapacity |= simulatePartialFluidOutput(requirementIndex, fluid);
+                    continue;
+                }
+                if (requirement.io() == RecipeModifier.IOType.OUTPUT && !requirement.simulate(this, requirementIndex)) return false;
+            }
+            if (!hasPositiveCapacity) setFailure(FAILURE_MISSING_OUTPUT);
+            return hasPositiveCapacity;
         } finally {
             simulatedItemOutputStates = null;
             simulatedFluidOutputStates = null;
@@ -945,6 +978,22 @@ public final class RecipeCraftingContext {
         return true;
     }
 
+    private boolean simulatePartialItemOutput(int requirementIndex, ItemRequirement item) {
+        List<ItemOutputState> itemStates = itemOutputStates(item.tags());
+        List<ItemOutputTransfer> transfers = new ArrayList<>();
+        ItemStack remaining = normalizeRecipeOutput(item.stack(componentOps()));
+        for (ItemOutputState state : itemStates) {
+            remaining = state.insertIntoMatchingStack(remaining, transfers);
+            if (remaining.isEmpty()) break;
+        }
+        for (ItemOutputState state : itemStates) {
+            remaining = state.insert(remaining, transfers);
+            if (remaining.isEmpty()) break;
+        }
+        itemOutputRoutes.set(requirementIndex, new ItemOutputRoute(transfers));
+        return !transfers.isEmpty();
+    }
+
     public boolean simulateFluidOutput(int requirementIndex, FluidRequirement fluid) {
         List<FluidOutputState> fluidStates = fluidOutputStates(fluid.tags());
         List<FluidHatchBlockEntity> taggedOut = excludedLiveComponents(FluidHatchBlockEntity.class, IOType.OUTPUT, fluid.tags());
@@ -966,6 +1015,19 @@ public final class RecipeCraftingContext {
         }
         fluidOutputRoutes.set(requirementIndex, new FluidOutputRoute(transfers));
         return true;
+    }
+
+    private boolean simulatePartialFluidOutput(int requirementIndex, FluidRequirement fluid) {
+        List<FluidOutputState> fluidStates = fluidOutputStates(fluid.tags());
+        List<FluidOutputTransfer> transfers = new ArrayList<>();
+        FluidStack output = fluid.stack();
+        int remaining = output.getAmount();
+        for (FluidOutputState state : fluidStates) {
+            remaining = state.fill(output, remaining, transfers);
+            if (remaining <= 0) break;
+        }
+        fluidOutputRoutes.set(requirementIndex, new FluidOutputRoute(transfers));
+        return !transfers.isEmpty();
     }
 
     private RequirementFailure buildMissingInputFailure(int requirementIndex, int required, int remaining, List<? extends BlockEntity> searched, List<? extends BlockEntity> matched) {
@@ -1020,21 +1082,20 @@ public final class RecipeCraftingContext {
 
     public boolean startCrafting(MachineRecipe recipe, int parallelism, ActiveMachineRecipe.InputConsumptionPlan plan) {
         List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism, plan);
-        if (!simulateStartRequirements(requirements, plan)) return false;
+        if (!simulateStartRequirements(recipe, requirements, plan)) return false;
         if (!commitInputs(requirements)) return false;
-        for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
-            MachineRequirement requirement = requirements.get(requirementIndex);
-            if (requirement instanceof SmartInterfaceRequirement smartInterface
-                    && smartInterface.io() == RecipeModifier.IOType.OUTPUT
-                    && !smartInterface.commit(this, requirementIndex)) return false;
-        }
         return true;
     }
 
-    private boolean simulateStartRequirements(List<MachineRequirement> requirements,
+    private boolean simulateStartRequirements(MachineRecipe recipe,
+                                              List<MachineRequirement> requirements,
                                               @Nullable ActiveMachineRecipe.InputConsumptionPlan plan) {
         if (!simulateInputs(requirements, plan)) return false;
-        if (!simulateOutputs(requirements)) return false;
+        if (recipe.allowPartialOutputs()) {
+            if (!simulatePartialOutputs(requirements)) return false;
+        } else if (!simulateOutputs(requirements)) {
+            return false;
+        }
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
             if (requirement instanceof SmartInterfaceRequirement smartInterface
@@ -1192,11 +1253,14 @@ public final class RecipeCraftingContext {
 
     private boolean commitAtomicOutputs(MachineRecipe recipe, int parallelism) {
         List<MachineRequirement> requirements = scaledRequirements(recipe, parallelism);
-        return simulateOutputs(requirements) && commitOutputs(requirements);
+        if (!recipe.allowPartialOutputs()) return simulateOutputs(requirements) && commitOutputs(requirements);
+        return simulatePartialOutputs(requirements) && commitPartialOutputs(requirements);
     }
 
     public boolean commitOutputs(MachineRecipe recipe) {
-        return commitOutputs(runtimeRequirements(recipe));
+        List<MachineRequirement> requirements = runtimeRequirements(recipe);
+        if (!recipe.allowPartialOutputs()) return commitOutputs(requirements);
+        return simulatePartialOutputs(requirements) && commitPartialOutputs(requirements);
     }
 
     private boolean commitOutputs(List<MachineRequirement> requirements) {
@@ -1212,12 +1276,7 @@ public final class RecipeCraftingContext {
             setFailure(FAILURE_MISSING_OUTPUT, fluidFailure);
             return false;
         }
-        for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
-            MachineRequirement requirement = requirements.get(requirementIndex);
-            if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT && item.chance() <= 0F) continue;
-            if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT && fluid.chance() <= 0F) continue;
-            if (requirement.io() == RecipeModifier.IOType.OUTPUT && !requirement.commit(this, requirementIndex)) return false;
-        }
+        if (!commitStrictOutputs(requirements)) return false;
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
@@ -1233,6 +1292,82 @@ public final class RecipeCraftingContext {
         insert(itemTransfers);
         fill(fluidTransfers);
         return true;
+    }
+
+    private boolean commitPartialOutputs(List<MachineRequirement> requirements) {
+        if (!simulatePartialOutputs(requirements)) return false;
+        List<ItemOutputTransfer> itemTransfers = new ArrayList<>();
+        List<FluidOutputTransfer> fluidTransfers = new ArrayList<>();
+
+        if (!commitStrictPartialOutputs(requirements)) return false;
+        for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
+            MachineRequirement requirement = requirements.get(requirementIndex);
+            if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
+                if (!shouldProduce(item.chance())) continue;
+                ItemOutputRoute route = itemOutputRoutes.get(requirementIndex);
+                if (route != null) itemTransfers.addAll(route.transfers());
+            } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT) {
+                if (!shouldProduce(fluid.chance())) continue;
+                FluidOutputRoute route = fluidOutputRoutes.get(requirementIndex);
+                if (route != null) fluidTransfers.addAll(route.transfers());
+            }
+        }
+        insert(itemTransfers);
+        fill(fluidTransfers);
+        return true;
+    }
+
+    private boolean commitStrictPartialOutputs(List<MachineRequirement> requirements) {
+        return commitStrictOutputs(requirements, true);
+    }
+
+    private boolean commitStrictOutputs(List<MachineRequirement> requirements) {
+        return commitStrictOutputs(requirements, false);
+    }
+
+    private boolean commitStrictOutputs(List<MachineRequirement> requirements, boolean skipPartialOutputs) {
+        List<SmartInterfaceCommit> smartCommits = new ArrayList<>();
+        for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
+            MachineRequirement requirement = requirements.get(requirementIndex);
+            if ((skipPartialOutputs && isPartialOutputRequirement(requirement))
+                    || requirement.io() != RecipeModifier.IOType.OUTPUT) continue;
+            if (requirement instanceof ItemRequirement item && item.chance() <= 0F) continue;
+            if (requirement instanceof FluidRequirement fluid && fluid.chance() <= 0F) continue;
+            if (requirement instanceof SmartInterfaceRequirement smartInterface) {
+                Optional<SmartInterfaceBinding> binding = smartInterface(smartInterface.interfaceType());
+                if (binding.isEmpty()) return false;
+                Optional<Float> oldValue = binding.get().interfaceEntity().value(smartInterface.interfaceType());
+                if (oldValue.isEmpty()) return false;
+                smartCommits.add(new SmartInterfaceCommit(
+                        binding.get().interfaceEntity(), smartInterface.interfaceType(), oldValue.get(), smartInterface.minValue()));
+            } else if (!requirement.commit(this, requirementIndex)) {
+                return false;
+            }
+        }
+        List<SmartInterfaceCommit> applied = new ArrayList<>(smartCommits.size());
+        for (SmartInterfaceCommit commit : smartCommits) {
+            if (!commit.apply()) {
+                for (int index = applied.size() - 1; index >= 0; index--) applied.get(index).rollback();
+                return false;
+            }
+            applied.add(commit);
+        }
+        return true;
+    }
+
+    private static boolean isPartialOutputRequirement(MachineRequirement requirement) {
+        return (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT)
+                || (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT);
+    }
+
+    private record SmartInterfaceCommit(SmartInterfaceBlockEntity smartInterface, String type, float oldValue, float newValue) {
+        boolean apply() {
+            return smartInterface.setValue(type, newValue);
+        }
+
+        void rollback() {
+            smartInterface.setValue(type, oldValue);
+        }
     }
 
     private boolean shouldProduce(float chance) {

@@ -75,10 +75,11 @@ public final class MultiblockAssemblyService {
         }
         if (!creative) {
             StructureItemSource source = new PlayerInventoryStructureItemSource(player);
-            placements = extractAvailablePlacements(placements, source);
-            if (placements.isEmpty()) {
+            List<ItemStack> requirements = aggregateRequirements(placements);
+            if (!source.canExtractAll(requirements)) {
                 return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.missing"));
             }
+            source.extractAll(requirements);
         }
         int placed = 0;
         for (Placement placement : placements) {
@@ -158,20 +159,6 @@ public final class MultiblockAssemblyService {
         if (!requirement.isEmpty()) {
             placements.add(new Placement(pos, state, requirement, predicate));
         }
-    }
-
-    private static List<Placement> extractAvailablePlacements(List<Placement> placements, StructureItemSource source) {
-        List<Placement> selected = new ArrayList<>();
-        for (Placement placement : placements) {
-            Optional<Placement> available = candidateStates(placement.predicate()).stream()
-                    .sorted(Comparator.comparingInt(MultiblockAssemblyService::levelPriority).reversed())
-                    .map(state -> new Placement(placement.pos(), state, requirementFor(state), placement.predicate()))
-                    .filter(candidate -> !candidate.requirement().isEmpty())
-                    .filter(candidate -> source.extractAll(List.of(candidate.requirement())))
-                    .findFirst();
-            available.ifPresent(selected::add);
-        }
-        return selected;
     }
 
     private static void merge(List<ItemStack> requirements, ItemStack stack) {

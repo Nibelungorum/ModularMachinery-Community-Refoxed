@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -194,6 +195,27 @@ class BlockArrayTest {
 
         assertThat(east.get(new BlockPos(0, 0, -1))).isSameAs(stone);
         assertThat(eastAgain).isSameAs(east);
+    }
+
+    @Test void block_array_and_rotation_cache_preserve_declaration_order() {
+        BlockArrayCache.clearForTesting();
+        var first = new BlockPos(0, 0, 1);
+        var second = new BlockPos(-1, 0, 0);
+        var third = new BlockPos(0, 1, 0);
+        var stone = new BlockPredicate.OfBlock(Blocks.STONE);
+        Map<BlockPos, BlockPredicate> ordered = new LinkedHashMap<>();
+        ordered.put(first, stone);
+        ordered.put(second, stone);
+        ordered.put(third, stone);
+
+        BlockArray array = new BlockArray(ordered);
+        BlockArray east = BlockArrayCache.get(array, Direction.EAST);
+
+        assertThat(array.pattern().keySet()).containsExactly(first, second, third);
+        assertThat(east.pattern().keySet()).containsExactly(
+                BlockRotator.rotateSouthTo(first, Direction.EAST),
+                BlockRotator.rotateSouthTo(second, Direction.EAST),
+                BlockRotator.rotateSouthTo(third, Direction.EAST));
     }
 
     @Test void block_rotator_treats_raw_multiblock_template_as_south_facing() {

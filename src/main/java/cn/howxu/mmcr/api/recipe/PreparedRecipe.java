@@ -20,6 +20,7 @@ public final class PreparedRecipe {
     private int maxThreads;
     private boolean cancelRecipeOnPerTickFailure;
     private boolean parallelized;
+    private boolean allowPartialOutputs;
 
     public PreparedRecipe(String registryName,
                           String machineId,
@@ -76,6 +77,21 @@ public final class PreparedRecipe {
                           boolean cancelRecipeOnPerTickFailure,
                           List<FluidStack> fluidOutputs,
                           boolean parallelized) {
+        this(registryName, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure, fluidOutputs, parallelized, false);
+    }
+
+    public PreparedRecipe(String registryName,
+                          String machineId,
+                          int tickTime,
+                          List<MachineIngredient> inputs,
+                          List<ItemStack> outputs,
+                          List<RecipeModifier> modifiers,
+                          int priority,
+                          int maxThreads,
+                          boolean cancelRecipeOnPerTickFailure,
+                          List<FluidStack> fluidOutputs,
+                          boolean parallelized,
+                          boolean allowPartialOutputs) {
         this.registryName = registryName;
         this.machineId = machineId;
         this.tickTime = Math.max(1, tickTime);
@@ -87,6 +103,7 @@ public final class PreparedRecipe {
         this.maxThreads = maxThreads;
         this.cancelRecipeOnPerTickFailure = cancelRecipeOnPerTickFailure;
         this.parallelized = parallelized;
+        this.allowPartialOutputs = allowPartialOutputs;
     }
 
     public String getRegistryName() {
@@ -133,6 +150,10 @@ public final class PreparedRecipe {
         return parallelized;
     }
 
+    public boolean allowPartialOutputs() {
+        return allowPartialOutputs;
+    }
+
     public void setTickTime(int tickTime) {
         this.tickTime = Math.max(1, tickTime);
     }
@@ -153,6 +174,10 @@ public final class PreparedRecipe {
         this.parallelized = parallelized;
     }
 
+    public void setAllowPartialOutputs(boolean allowPartialOutputs) {
+        this.allowPartialOutputs = allowPartialOutputs;
+    }
+
     public MachineRecipe toMachineRecipe() {
         return new MachineRecipe(
                 net.minecraft.resources.Identifier.parse(registryName),
@@ -166,7 +191,9 @@ public final class PreparedRecipe {
                 cancelRecipeOnPerTickFailure,
                 fluidOutputs,
                 Collections.emptyList(),
-                parallelized
+                parallelized,
+                Collections.emptyList(),
+                allowPartialOutputs
         );
     }
 }

@@ -30,6 +30,7 @@ public record MachineRegistration(
         boolean allowMultithreading,
         boolean allowParallelism,
         int maxParallelAmount,
+        boolean expandableStructure,
         Map<String, SmartInterfaceType> smartInterfaceTypes,
         boolean shareSmartInterfaces,
         List<SmartInterfaceModifier> smartInterfaceModifiers,
@@ -80,6 +81,7 @@ public record MachineRegistration(
         private boolean allowMultithreading;
         private boolean allowParallelism;
         private int maxParallelAmount = 1;
+        private boolean expandableStructure;
         private final Map<String, SmartInterfaceType> smartInterfaceTypes = new LinkedHashMap<>();
         private boolean shareSmartInterfaces;
         private final List<SmartInterfaceModifier> smartInterfaceModifiers = new ArrayList<>();
@@ -135,6 +137,11 @@ public record MachineRegistration(
             return this;
         }
 
+        public Builder expandableStructure() {
+            this.expandableStructure = true;
+            return this;
+        }
+
         public Builder smartInterfaceType(SmartInterfaceType smartInterfaceType) {
             if (smartInterfaceTypes.putIfAbsent(smartInterfaceType.type(), smartInterfaceType) != null) {
                 throw new IllegalArgumentException("Duplicate smart interface type: " + smartInterfaceType.type());
@@ -182,7 +189,7 @@ public record MachineRegistration(
 
         public MachineRegistration build() {
             return new MachineRegistration(id, displayNameKey, controllerSpec, appearance, recipeFamilyId, allowModifiers,
-                    allowMultithreading, allowParallelism, maxParallelAmount, smartInterfaceTypes, shareSmartInterfaces,
+                    allowMultithreading, allowParallelism, maxParallelAmount, expandableStructure, smartInterfaceTypes, shareSmartInterfaces,
                     smartInterfaceModifiers, runningSoundId, finishSoundId);
         }
 

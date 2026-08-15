@@ -1,27 +1,38 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.latvian.mods.kubejs.recipe.KubeRecipe;
+import dev.latvian.mods.kubejs.recipe.RecipeScriptContext;
 import dev.latvian.mods.kubejs.recipe.component.ListRecipeComponent;
 import dev.latvian.mods.kubejs.recipe.component.StringComponent;
+import dev.latvian.mods.kubejs.util.ErrorStack;
+import dev.latvian.mods.rhino.Context;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.world.item.Items;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
@@ -34,6 +45,12 @@ class MachineRecipeSchemaTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @AfterEach
+    void cleanup() {
+        RecipeRegistry.clearForTesting();
+        MachineRegistry.clearForTesting();
     }
 
 
@@ -66,6 +83,48 @@ class MachineRecipeSchemaTest {
         assertThat(MachineRecipeSchema.MAX_THREADS.name).isEqualTo("max_threads");
         assertThat(MachineRecipeSchema.MAX_THREADS.optional()).isTrue();
         assertThat(MachineRecipeSchema.MAX_THREADS.optional.getInformativeValue()).isEqualTo(1);
+    }
+
+    @Test
+    void schema_exposes_partial_output_key_and_zero_arg_function() {
+        assertThat(MachineRecipeSchema.SCHEMA.keys).contains(MachineRecipeSchema.ALLOW_PARTIAL_OUTPUTS);
+        assertThat(MachineRecipeSchema.ALLOW_PARTIAL_OUTPUTS.name).isEqualTo("allow_partial_outputs");
+        assertThat(MachineRecipeSchema.ALLOW_PARTIAL_OUTPUTS.optional()).isTrue();
+        assertThat(MachineRecipeSchema.ALLOW_PARTIAL_OUTPUTS.optional.getInformativeValue()).isEqualTo(false);
+        assertThat(MachineRecipeSchema.SCHEMA.functions.get("allowPartialOutputs").arguments()).isEmpty();
+    }
+
+    @Test
+    void schema_allow_partial_outputs_function_writes_factory_readable_json() {
+        var recipe = new KubeRecipe();
+        recipe.json = new JsonObject();
+
+        MachineRecipeSchema.SCHEMA.functions.get("allowPartialOutputs").function()
+                .execute(new TestRecipeContext(recipe), List.of());
+
+        assertThat(recipe.json.get("allow_partial_outputs").getAsBoolean()).isTrue();
+        assertThat(MachineRecipeFactory.allowPartialOutputs(recipe)).isTrue();
+    }
+
+    @Test
+    void builder_sets_partial_output_flag_on_registered_recipe() {
+        var machineId = MMCR.id("partial_output_machine");
+        MachineRegistry.register(new DynamicMachine(machineId, "Partial Output Machine", new BlockArray(Map.of())));
+        var builder = new MachineRecipeBuilderJS(MMCR.id("partial_output_recipe"));
+
+        assertThat(builder.allowPartialOutputs()).isSameAs(builder);
+        builder.machine(machineId.toString()).build();
+
+        assertThat(RecipeRegistry.getRecipe(MMCR.id("partial_output_recipe")).allowPartialOutputs()).isTrue();
+    }
+
+    @Test
+    void schema_optional_partial_output_key_decodes_omitted_false() {
+        var recipe = new KubeRecipe();
+        recipe.json = new JsonObject();
+
+        assertThat(MachineRecipeSchema.ALLOW_PARTIAL_OUTPUTS.optional.getInformativeValue()).isEqualTo(false);
+        assertThat(MachineRecipeFactory.allowPartialOutputs(recipe)).isFalse();
     }
 
     @Test
@@ -145,6 +204,18 @@ class MachineRecipeSchemaTest {
 
     private static JsonElement json(String value) {
         return JsonParser.parseString(value);
+    }
+
+    private record TestRecipeContext(KubeRecipe recipe) implements RecipeScriptContext {
+        @Override
+        public ErrorStack errors() {
+            return ErrorStack.NONE;
+        }
+
+        @Override
+        public Context cx() {
+            return null;
+        }
     }
 
 }

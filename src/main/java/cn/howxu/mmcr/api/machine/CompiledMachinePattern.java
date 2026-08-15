@@ -17,6 +17,7 @@ import java.util.Map;
  */
 public record CompiledMachinePattern(
         Machine machine,
+        int stageNumber,
         Map<Direction, BlockArray> rotatedPatterns,
         Map<Direction, BoundingBox> boundingBoxes,
         Map<Direction, List<BlockPos>> componentPositions,
@@ -27,6 +28,7 @@ public record CompiledMachinePattern(
 
     public CompiledMachinePattern {
         if (machine == null) throw new IllegalArgumentException("machine null");
+        if (stageNumber < 1) throw new IllegalArgumentException("stageNumber must be positive");
         rotatedPatterns = copyEnumMap(rotatedPatterns);
         boundingBoxes = copyEnumMap(boundingBoxes);
         componentPositions = copyListEnumMap(componentPositions);
@@ -41,7 +43,7 @@ public record CompiledMachinePattern(
             Map<Direction, BoundingBox> boundingBoxes,
             Map<Direction, List<BlockPos>> componentPositions,
             Map<Direction, List<BlockPos>> portPositions) {
-        this(machine, rotatedPatterns, boundingBoxes, componentPositions, portPositions, List.of(), Map.of());
+        this(machine, 1, rotatedPatterns, boundingBoxes, componentPositions, portPositions, List.of(), Map.of());
     }
 
     public CompiledMachinePattern(
@@ -51,7 +53,7 @@ public record CompiledMachinePattern(
             Map<Direction, List<BlockPos>> componentPositions,
             Map<Direction, List<BlockPos>> portPositions,
             List<CompiledDynamicPattern> dynamicPatterns) {
-        this(machine, rotatedPatterns, boundingBoxes, componentPositions, portPositions, dynamicPatterns, Map.of());
+        this(machine, 1, rotatedPatterns, boundingBoxes, componentPositions, portPositions, dynamicPatterns, Map.of());
     }
 
     public BlockArray rotatedPattern(Direction facing) {
@@ -77,9 +79,15 @@ public record CompiledMachinePattern(
     public Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements(
         Direction facing, Direction rollFacing) {
         if (!facing.getAxis().isVertical()) return modifierReplacements(facing);
-        return machine instanceof DynamicMachine dynamic
-                ? dynamic.rotatedModifierReplacements(facing, rollFacing)
-                : Map.of();
+        Map<BlockPos, List<SingleBlockModifierReplacement>> raw = modifierReplacements(Direction.SOUTH);
+        Map<BlockPos, List<SingleBlockModifierReplacement>> rotated = new LinkedHashMap<>();
+        Direction normalizedRoll = BlockRotator.normalizedRoll(facing, rollFacing);
+        for (var entry : raw.entrySet()) {
+            BlockPos rotatedPos = BlockRotator.rotateSouthTo(entry.getKey(), facing, normalizedRoll);
+            rotated.put(rotatedPos, entry.getValue().stream()
+                    .map(replacement -> replacement.copyAt(rotatedPos)).toList());
+        }
+        return Map.copyOf(rotated);
     }
 
     private static <T> Map<Direction, T> copyEnumMap(Map<Direction, T> source) {

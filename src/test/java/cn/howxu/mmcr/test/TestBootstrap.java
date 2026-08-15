@@ -88,6 +88,9 @@ public final class TestBootstrap {
         bindController(id("test_cube"));
         bindController(id("controller_tick"));
         bindController(id("iron_compressor"));
+        bindController(id("distillation_tower_test"));
+        bindController(id("expandable_structure_stages"));
+        bindController(id("expandable_structure_vertical_roll"));
         bind(ModBlocks.CASING, Blocks.STONE);
         bindPortBlocks();
         for (ParallelTier tier : ParallelTier.values()) bindParallelController(tier);
@@ -117,6 +120,7 @@ public final class TestBootstrap {
             MMCR.registerGameTestMachineStructures(candidate);
         });
         DefaultRecipes.registerStatic(DefaultRecipes.recipes().values().stream().toList());
+        DefaultRecipes.registerStatic(DefaultRecipes.gameTestRecipes());
         MachineRegistry.rebuildCompiledCache();
     }
 
@@ -132,6 +136,24 @@ public final class TestBootstrap {
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("test_cube")).localizedName("Test").build());
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("controller_tick")).localizedName("Controller Tick").build());
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("iron_compressor")).localizedName("Iron Compressor").build());
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("distillation_tower_test"))
+                .localizedName("Distillation Tower Test")
+                .expandableStructure()
+                .build());
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("expandable_structure_stages"))
+                .localizedName("Expandable Structure Stages")
+                .expandableStructure()
+                .build());
+        MachineDefinitions.addBuiltinSupplier(() -> {
+            Identifier machineId = id("expandable_structure_vertical_roll");
+            MachineControllerSpec defaults = MachineControllerSpec.defaultsFor(machineId);
+            return MachineRegistration.builder(machineId)
+                    .localizedName("Expandable Structure Vertical Roll")
+                    .controllerSpec(new MachineControllerSpec(defaults.id(), defaults.frontTexture(), defaults.sideTexture(),
+                            defaults.topTexture(), defaults.bottomTexture(), true, false))
+                    .expandableStructure()
+                    .build();
+        });
     }
 
 

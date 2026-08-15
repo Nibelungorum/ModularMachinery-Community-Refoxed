@@ -136,6 +136,21 @@ class StructureMatcherTest {
     }
 
     @Test
+    void staged_vertical_rotation_matches_non_default_roll_without_mutating_stage_pattern() {
+        BlockPos controllerPos = new BlockPos(8, 64, 8);
+        BlockPos rawPos = new BlockPos(1, 0, 0);
+        Direction rollFacing = Direction.WEST;
+        BlockArray stage3 = new BlockArray(Map.of(rawPos, new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK)));
+        BlockPos rotatedPos = BlockRotator.rotateSouthTo(rawPos, Direction.UP, rollFacing);
+        BlockArray rotatedStage3 = BlockArrayCache.get(stage3, Direction.UP, rollFacing);
+        Level level = LevelStub.create(Map.of(controllerPos.offset(rotatedPos), Blocks.DIAMOND_BLOCK));
+
+        assertThat(StructureMatcher.matchesRotated(rotatedStage3, level, controllerPos)).isTrue();
+        assertThat(StructureMatcher.matches(stage3, level, controllerPos, Direction.UP)).isFalse();
+        assertThat(stage3.pattern().keySet()).containsExactly(rawPos);
+    }
+
+    @Test
     void replacement_at_another_position_does_not_match() {
         BlockPos expected = new BlockPos(1, 0, 0);
         BlockPos wrong = new BlockPos(2, 0, 0);

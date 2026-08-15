@@ -25,10 +25,31 @@ public final class MachinePatternCompiler {
     }
 
     public static CompiledMachinePattern compile(Machine machine) {
-        return compile(machine, null);
+        return compileStage(machine, machine.structureStages().getFirst(), null);
     }
 
     static CompiledMachinePattern compile(Machine machine, Map<BlockArrayCache.Key, BlockArray> cache) {
+        return compileStage(machine, machine.structureStages().getFirst(), cache);
+    }
+
+    public static List<CompiledMachinePattern> compileStages(Machine machine, Map<BlockArrayCache.Key, BlockArray> cache) {
+        List<CompiledMachinePattern> compiled = new ArrayList<>();
+        for (MachineStructureStage stage : machine.structureStages()) {
+            compiled.add(compileStage(stage.number() == 1 ? machine : new StageMachine(machine, stage), stage, cache));
+        }
+        return List.copyOf(compiled);
+    }
+
+    private static CompiledMachinePattern compileStage(Machine machine, int stageNumber, BlockArray pattern,
+                                                       Map<BlockArrayCache.Key, BlockArray> cache) {
+        return compileStage(machine, new MachineStructureStage(stageNumber, pattern, machine.portRequirements(),
+                machine.portTierRequirements(), machine.dynamicPatterns(), Map.of(), Map.of()), cache);
+    }
+
+    private static CompiledMachinePattern compileStage(Machine parent, MachineStructureStage stage,
+                                                       Map<BlockArrayCache.Key, BlockArray> cache) {
+        Machine machine = new StageMachine(parent, stage);
+        BlockArray pattern = stage.pattern();
         EnumMap<Direction, BlockArray> rotatedPatterns = new EnumMap<>(Direction.class);
         EnumMap<Direction, BoundingBox> boundingBoxes = new EnumMap<>(Direction.class);
         EnumMap<Direction, List<BlockPos>> componentPositions = new EnumMap<>(Direction.class);
@@ -36,20 +57,38 @@ public final class MachinePatternCompiler {
         EnumMap<Direction, Map<BlockPos, List<SingleBlockModifierReplacement>>> modifierReplacements = new EnumMap<>(Direction.class);
 
         for (Direction facing : Direction.Plane.HORIZONTAL) {
-            BlockArray rotated = cache == null ? BlockArrayCache.get(machine.pattern(), facing)
-                    : BlockArrayCache.get(cache, machine.pattern(), facing);
+            BlockArray rotated = cache == null ? BlockArrayCache.get(pattern, facing)
+                    : BlockArrayCache.get(cache, pattern, facing);
             rotatedPatterns.put(facing, rotated);
             boundingBoxes.put(facing, boundingBox(rotated));
             componentPositions.put(facing, componentPositions(rotated));
             portPositions.put(facing, portPositions(rotated));
-            modifierReplacements.put(facing,
-                    machine instanceof DynamicMachine dynamic
-                            ? dynamic.rotatedModifierReplacements(facing, Direction.SOUTH)
-                            : Map.of());
+            modifierReplacements.put(facing, rotatedModifierReplacements(stage, facing));
         }
 
-        return new CompiledMachinePattern(machine, rotatedPatterns, boundingBoxes, componentPositions, portPositions,
+        return new CompiledMachinePattern(stage.number() == 1 ? parent : machine, stage.number(), rotatedPatterns, boundingBoxes, componentPositions, portPositions,
                 dynamicPatterns(machine.dynamicPatterns(), cache), modifierReplacements);
+    }
+
+    private static Map<BlockPos, List<SingleBlockModifierReplacement>> rotatedModifierReplacements(
+            MachineStructureStage stage, Direction facing) {
+        Map<BlockPos, List<SingleBlockModifierReplacement>> replacements = new java.util.LinkedHashMap<>();
+        for (var entry : stage.modifierReplacements().entrySet()) {
+            BlockPos rotatedPos = BlockRotator.rotateSouthTo(entry.getKey(), facing, Direction.SOUTH);
+            replacements.put(rotatedPos, entry.getValue().stream().map(replacement -> replacement.copyAt(rotatedPos)).toList());
+        }
+        return Map.copyOf(replacements);
+    }
+
+    private record StageMachine(Machine parent, MachineStructureStage stage) implements Machine {
+        @Override public net.minecraft.resources.Identifier registryName() { return parent.registryName(); }
+        @Override public BlockArray pattern() { return stage.pattern(); }
+        @Override public MachineControllerSpec controller() { return parent.controller(); }
+        @Override public MachineAppearanceSpec appearance() { return parent.appearance(); }
+        @Override public PortRequirementSpec portRequirements() { return stage.portRequirements(); }
+        @Override public PortTierRequirementSpec portTierRequirements() { return stage.portTierRequirements(); }
+        @Override public List<DynamicPatternSpec> dynamicPatterns() { return stage.dynamicPatterns(); }
+        @Override public List<MachineStructureStage> structureStages() { return List.of(stage); }
     }
 
     public static Map<net.minecraft.resources.Identifier, CompiledMachinePattern> compileAll(Collection<Machine> machines) {

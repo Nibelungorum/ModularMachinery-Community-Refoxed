@@ -119,4 +119,10 @@ class MachineRegistrationTest {
                 IntegrationTypeHelper.TARGET_DURATION, RecipeModifier.IOType.INPUT, 1.25F,
                 RecipeModifier.Operation.MULTIPLY, false));
     }
+
+    @Test
+    void expandableStructuresRequireExplicitOptIn() {
+        assertThat(MachineRegistration.builder(MMCR.id("normal")).build().expandableStructure()).isFalse();
+        assertThat(MachineRegistration.builder(MMCR.id("tower")).expandableStructure().build().expandableStructure()).isTrue();
+    }
 }

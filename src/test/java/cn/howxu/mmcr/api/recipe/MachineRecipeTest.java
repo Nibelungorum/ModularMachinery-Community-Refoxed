@@ -74,6 +74,40 @@ class MachineRecipeTest {
     }
 
     @Test
+    void codec_decodes_and_roundtrips_partial_output_flag() {
+        JsonObject enabled = baseRecipeJson();
+        enabled.addProperty("allow_partial_outputs", true);
+        assertThat(MachineRecipe.CODEC.codec().parse(jsonOps(), enabled).getOrThrow().allowPartialOutputs()).isTrue();
+
+        JsonObject legacy = baseRecipeJson();
+        assertThat(MachineRecipe.CODEC.codec().parse(jsonOps(), legacy).getOrThrow().allowPartialOutputs()).isFalse();
+
+        MachineRecipe roundTrip = MachineRecipe.CODEC.codec().parse(jsonOps(),
+                MachineRecipe.CODEC.codec().encodeStart(jsonOps(), partialOutputRecipe()).getOrThrow()).getOrThrow();
+        assertThat(roundTrip.allowPartialOutputs()).isTrue();
+    }
+
+    @Test
+    void prepared_recipe_preserves_partial_output_flag() {
+        var prepared = new PreparedRecipe(
+                "mmcr:partial_outputs",
+                "mmcr:machine",
+                20,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                false,
+                true);
+
+        assertThat(prepared.allowPartialOutputs()).isTrue();
+        assertThat(prepared.toMachineRecipe().allowPartialOutputs()).isTrue();
+    }
+
+    @Test
     void outputs_roundtrip_native_component_stack() {
         bindItemComponents(Items.DIAMOND_SWORD);
         var root = new JsonObject();
@@ -526,6 +560,32 @@ class MachineRecipeTest {
         var holder = fluid.builtInRegistryHolder();
         holder.bindComponents(DataComponentMap.EMPTY);
         return holder;
+    }
+
+    private static JsonObject baseRecipeJson() {
+        var root = new JsonObject();
+        root.addProperty("id", "mmcr:partial_outputs");
+        root.addProperty("machine", "mmcr:machine");
+        root.addProperty("tick_time", 20);
+        return root;
+    }
+
+    private static MachineRecipe partialOutputRecipe() {
+        return new MachineRecipe(
+                Identifier.parse("mmcr:partial_outputs"),
+                Identifier.parse("mmcr:machine"),
+                20,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                List.of(),
+                false,
+                List.of(),
+                true);
     }
 
     private static JsonArray legacyItemInputs(String itemId, int count) {

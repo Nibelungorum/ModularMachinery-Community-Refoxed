@@ -107,6 +107,56 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void structure_candidates_are_highest_first_and_stage_state_resets() throws Exception {
+        TestBootstrap.registerRuntimeBuiltins();
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        BlockArray stage1 = onePortPattern(Blocks.IRON_BLOCK);
+        BlockArray stage2 = onePortPattern(Blocks.GOLD_BLOCK);
+        BlockArray stage3 = onePortPattern(Blocks.DIAMOND_BLOCK);
+        DynamicMachine machine = stagedMachine(MMCR.id("candidate_stage_order_machine"), stage1, stage2, stage3);
+        MachineRegistry.register(machine);
+
+        assertThat(controller.candidateStageNumbers(machine, Direction.SOUTH)).containsExactly(3, 2, 1);
+        assertThat(controller.getMatchedStructureStage()).isZero();
+
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        controller = controllerForFormation(machine, controllerPos, Blocks.GOLD_BLOCK);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        assertThat(controller.getMatchedStructureStage()).isEqualTo(2);
+        assertThat(compiledPattern(controller).stageNumber()).isEqualTo(2);
+        assertThat(controller.assemblyPattern(machine)).isSameAs(controller.getFoundPattern());
+
+        setField(MachineControllerBlockEntity.class, controller, "structureDirty", true);
+        invokeCheckStructure(controller);
+        assertThat(controller.getMatchedStructureStage()).isEqualTo(2);
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "lastStructureMismatchDiagnostic")).isNull();
+
+        invokeResetMachine(controller);
+
+        assertThat(controller.getMatchedStructureStage()).isZero();
+        assertThat(controller.assemblyPattern(machine)).isSameAs(MachineRegistry.getCompiledStages(machine.registryName()).getFirst().rotatedPattern(Direction.SOUTH));
+    }
+
+    @Test
+    void matched_stage_is_persisted_and_invalid_saved_stage_is_dirty() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        setField(MachineControllerBlockEntity.class, controller, "matchedStructureStage", 2);
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        invokeSaveAdditional(controller, output);
+        assertThat(output.buildResult().toString()).contains("matched_structure_stage");
+
+        MachineControllerBlockEntity loaded = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        TagValueOutput invalid = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        invalid.putInt("matched_structure_stage", -4);
+        invokeLoadAdditional(loaded, TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(java.util.stream.Stream.empty()), invalid.buildResult()));
+        assertThat(loaded.getMatchedStructureStage()).isZero();
+        assertThat(fieldValue(MachineControllerBlockEntity.class, loaded, "structureDirty")).isEqualTo(true);
+    }
+
+    @Test
     void noHatchesReturnsZeroEnergyAndEmptyFluid() throws Exception {
         MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
         initializeComponents(controller);
@@ -2170,6 +2220,71 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void vertical_stage_match_keeps_selected_compiled_pattern_with_non_default_roll() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockPos rawPos = new BlockPos(1, 0, 0);
+        Direction rollFacing = Direction.WEST;
+        BlockPos expected = BlockRotator.rotateSouthTo(rawPos, Direction.UP, rollFacing);
+        Identifier machineId = MMCR.id("vertical_staged_roll_machine");
+        var defaults = MachineControllerSpec.defaultsFor(machineId);
+        var spec = new MachineControllerSpec(defaults.id(), defaults.frontTexture(), defaults.sideTexture(),
+                defaults.topTexture(), defaults.bottomTexture(), true, false);
+        DynamicMachine machine = stagedMachineWithController(machineId, spec,
+                onePortPattern(Blocks.IRON_BLOCK),
+                new BlockArray(Map.of(rawPos, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK))),
+                new BlockArray(Map.of(rawPos, new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK))));
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFormation(
+                machine,
+                controllerPos,
+                Direction.UP,
+                rollFacing,
+                itemInputBus(controllerPos.offset(expected)));
+        levelOf(controller).setBlock(controllerPos.offset(expected), Blocks.DIAMOND_BLOCK.defaultBlockState(), 3);
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.UP);
+
+        assertThat(formed).isTrue();
+        assertThat(controller.getMatchedStructureStage()).isEqualTo(3);
+        assertThat(compiledPattern(controller)).isSameAs(MachineRegistry.getCompiledStages(machine.registryName()).get(2));
+        assertThat(compiledPattern(controller).stageNumber()).isEqualTo(3);
+        assertThat(controller.getFoundPattern().pattern()).containsKey(expected);
+    }
+
+    @Test
+    void vertical_stage_match_uses_selected_stage_modifier_replacements() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockPos rawPos = new BlockPos(1, 0, 0);
+        Direction rollFacing = Direction.WEST;
+        BlockPos expected = BlockRotator.rotateSouthTo(rawPos, Direction.UP, rollFacing);
+        Identifier machineId = MMCR.id("vertical_staged_modifier_machine");
+        var defaults = MachineControllerSpec.defaultsFor(machineId);
+        var spec = new MachineControllerSpec(defaults.id(), defaults.frontTexture(), defaults.sideTexture(),
+                defaults.topTexture(), defaults.bottomTexture(), true, false);
+        DynamicMachine machine = stagedMachineWithController(machineId, spec, List.of(
+                stageWithReplacement(1, Blocks.IRON_BLOCK, Blocks.GOLD_BLOCK, "stage_1_modifier", 1F),
+                stageWithReplacement(2, Blocks.GOLD_BLOCK, Blocks.EMERALD_BLOCK, "stage_2_modifier", 2F),
+                stageWithReplacement(3, Blocks.GOLD_BLOCK, Blocks.DIAMOND_BLOCK, "stage_3_modifier", 3F)));
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFormation(
+                machine,
+                controllerPos,
+                Direction.UP,
+                rollFacing,
+                itemInputBus(controllerPos.offset(expected)));
+        levelOf(controller).setBlock(controllerPos.offset(expected), Blocks.DIAMOND_BLOCK.defaultBlockState(), 3);
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.UP);
+
+        assertThat(formed).isTrue();
+        assertThat(controller.getMatchedStructureStage()).isEqualTo(3);
+        assertThat(controller.getFoundModifiers()).containsOnlyKeys("stage_3_modifier");
+        assertThat(controller.getFoundModifiers().get("stage_3_modifier"))
+                .extracting(RecipeModifier::getModifier)
+                .containsExactly(3F);
+    }
+
+    @Test
     void require_vertical_machine_rejects_matching_horizontal_structure() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
@@ -2856,6 +2971,44 @@ class MachineControllerBlockEntityTest {
         return new BlockArray(blocks);
     }
 
+    private static DynamicMachine stagedMachine(Identifier id, BlockArray... stages) {
+        return stagedMachineWithController(id, MachineControllerSpec.defaultsFor(id), stages);
+    }
+
+    private static DynamicMachine stagedMachineWithController(Identifier id, MachineControllerSpec controllerSpec, BlockArray... stages) {
+        List<cn.howxu.mmcr.api.machine.MachineStructureStage> structureStages = new ArrayList<>();
+        for (int i = 0; i < stages.length; i++) {
+            structureStages.add(new cn.howxu.mmcr.api.machine.MachineStructureStage(
+                    i + 1, stages[i], PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of()));
+        }
+        return stagedMachineWithController(id, controllerSpec, structureStages);
+    }
+
+    private static DynamicMachine stagedMachineWithController(
+            Identifier id, MachineControllerSpec controllerSpec,
+            List<cn.howxu.mmcr.api.machine.MachineStructureStage> structureStages) {
+        return new DynamicMachine(id, "Staged Machine", structureStages.getFirst().pattern(), controllerSpec,
+                MachineAppearanceSpec.defaults(), PortRequirementSpec.none(), PortTierRequirementSpec.none(),
+                List.of(), Map.of(), 1, false, false, 1, List.of(), structureStages);
+    }
+
+    private static cn.howxu.mmcr.api.machine.MachineStructureStage stageWithReplacement(
+            int number, Block patternBlock, Block replacementBlock, String modifierName, float value) {
+        BlockPos rawPos = new BlockPos(1, 0, 0);
+        var replacement = new SingleBlockModifierReplacement(
+                modifierName, rawPos, new BlockPredicate.OfBlock(replacementBlock),
+                List.of(new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.INPUT,
+                        value, RecipeModifier.Operation.ADD, false)), "", ItemStack.EMPTY);
+        return new cn.howxu.mmcr.api.machine.MachineStructureStage(
+                number,
+                new BlockArray(Map.of(rawPos, new BlockPredicate.OfBlock(patternBlock))),
+                PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(),
+                List.of(),
+                Map.of(rawPos, List.of(replacement)),
+                Map.of());
+    }
+
     private static BlockArray anyItemOrEnergyInputPattern() {
         Map<BlockPos, BlockPredicate> blocks = new HashMap<>();
         blocks.put(new BlockPos(1, 0, 0), new BlockPredicate.AnyOf(List.of(
@@ -2975,6 +3128,23 @@ class MachineControllerBlockEntityTest {
             BlockPos controllerPos,
             IOPortBlockEntity port) throws Exception {
         return controllerForFormation(machine, controllerPos, Direction.SOUTH, Direction.NORTH, port);
+    }
+
+    private static MachineControllerBlockEntity controllerForFormation(
+            DynamicMachine machine,
+            BlockPos controllerPos,
+            Block componentBlock) throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        var controllerBlock = testControllerBlock(machine);
+        var controllerState = testControllerState(controllerBlock);
+        setField(BlockEntity.class, controller, "worldPosition", controllerPos);
+        setField(BlockEntity.class, controller, "blockState", controllerState);
+        Level level = LevelStub.create(Map.of(
+                controllerPos, controllerBlock,
+                controllerPos.offset(1, 0, 0), componentBlock), List.of(controller));
+        setField(BlockEntity.class, controller, "level", level);
+        return controller;
     }
 
     private static RuntimeSyncFixture serverRuntimeFixture(Identifier machineId, int ticks, int inputCount) throws Exception {

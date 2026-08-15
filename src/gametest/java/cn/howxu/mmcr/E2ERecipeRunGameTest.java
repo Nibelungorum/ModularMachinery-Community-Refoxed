@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -20,6 +21,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.material.Fluids;
 
 import java.util.HashMap;
 import java.util.List;
@@ -116,5 +118,86 @@ public class E2ERecipeRunGameTest {
         helper.assertTrue(output.is(Items.IRON_NUGGET), "Pattern output bus received nugget outside legacy scan");
         helper.assertTrue(energy == 7192, "Pattern energy hatch consumed energy outside legacy scan");
         helper.succeed();
+    }
+
+    public void distillationTowerUnlocksPartialFluidOutputsByStage(GameTestHelper helper) {
+        Identifier machineId = MMCR.id("distillation_tower_test");
+        var machine = MachineRegistry.getMachine(machineId);
+        BlockPos controllerPos = new BlockPos(3, 2, 3);
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(machineId).get().defaultBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
+
+        BlockPos inputPos = controllerPos.offset(0, 0, -1);
+        helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+        BlockPos energyPos = controllerPos.offset(1, 0, 0);
+        helper.setBlock(energyPos, ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState());
+        var energyInput = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).getMutableEnergyStorage(null);
+        while (energyInput.receiveEnergy(10000, false) > 0) {}
+
+        BlockPos firstOutputPos = controllerPos.offset(0, 0, 1);
+        BlockPos secondOutputPos = controllerPos.offset(-1, 0, 0);
+        BlockPos thirdOutputPos = controllerPos.offset(0, 1, 0);
+        helper.setBlock(firstOutputPos, ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState());
+
+        var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(machine);
+
+        runDistillationBatch(helper, controller, inputPos);
+        assertDistillationOutputs(helper, controller, 1, firstOutputPos, secondOutputPos, thirdOutputPos,
+                1_000, 0, 0);
+
+        clearFluidOutput(helper, firstOutputPos);
+        helper.setBlock(secondOutputPos, ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState());
+        controller.onStructureBlockChanged(helper.absolutePos(secondOutputPos));
+        runDistillationBatch(helper, controller, inputPos);
+        assertDistillationOutputs(helper, controller, 2, firstOutputPos, secondOutputPos, thirdOutputPos,
+                1_000, 1_000, 0);
+
+        clearFluidOutput(helper, firstOutputPos);
+        clearFluidOutput(helper, secondOutputPos);
+        helper.setBlock(thirdOutputPos, ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState());
+        controller.onStructureBlockChanged(helper.absolutePos(thirdOutputPos));
+        runDistillationBatch(helper, controller, inputPos);
+        assertDistillationOutputs(helper, controller, 3, firstOutputPos, secondOutputPos, thirdOutputPos,
+                1_000, 1_000, 1_000);
+        helper.succeed();
+    }
+
+    private static void runDistillationBatch(GameTestHelper helper, MachineControllerBlockEntity controller, BlockPos inputPos) {
+        helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null)
+                .insertItem(0, new ItemStack(Items.COAL), false);
+        for (int tick = 0; tick < 25; tick++) controller.serverTick();
+        helper.assertTrue(controller.getActiveRecipe() == null, "Distillation recipe completed");
+        ItemStack input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
+        helper.assertTrue(input.isEmpty(), "Distillation recipe consumed input");
+    }
+
+    private static void assertDistillationOutputs(GameTestHelper helper, MachineControllerBlockEntity controller,
+                                                  int expectedStage, BlockPos firstOutputPos, BlockPos secondOutputPos,
+                                                  BlockPos thirdOutputPos, int firstAmount, int secondAmount, int thirdAmount) {
+        helper.assertTrue(controller.isFormed(), "Distillation tower formed");
+        helper.assertTrue(controller.getMatchedStructureStage() == expectedStage,
+                "Distillation tower matched stage " + expectedStage);
+        assertFluidOutput(helper, firstOutputPos, Fluids.WATER, firstAmount, "first output hatch");
+        assertFluidOutput(helper, secondOutputPos, Fluids.LAVA, secondAmount, "second output hatch");
+        assertFluidOutput(helper, thirdOutputPos, Fluids.WATER, thirdAmount, "third output hatch");
+    }
+
+    private static void assertFluidOutput(GameTestHelper helper, BlockPos pos, net.minecraft.world.level.material.Fluid fluid,
+                                          int amount, String message) {
+        if (amount == 0) {
+            if (helper.getLevel().getBlockEntity(helper.absolutePos(pos)) instanceof FluidHatchBlockEntity hatch) {
+                helper.assertTrue(hatch.getFluidTank(null).getFluidAmount() == 0, message + " should be empty");
+            }
+            return;
+        }
+        FluidHatchBlockEntity hatch = helper.getBlockEntity(pos, FluidHatchBlockEntity.class);
+        helper.assertTrue(hatch.getFluidTank(null).getFluid().getFluid() == fluid, message + " fluid");
+        helper.assertTrue(hatch.getFluidTank(null).getFluidAmount() == amount, message + " amount");
+    }
+
+    private static void clearFluidOutput(GameTestHelper helper, BlockPos pos) {
+        helper.getBlockEntity(pos, FluidHatchBlockEntity.class).getFluidTank(null)
+                .setFluid(net.neoforged.neoforge.fluids.FluidStack.EMPTY);
     }
 }

@@ -39,11 +39,13 @@ public final class BlockArrayCache {
     static Map<Key, BlockArray> buildCacheSnapshot(Collection<Machine> machines) {
         Map<Key, BlockArray> replacement = new LinkedHashMap<>();
         for (Machine machine : machines) {
-            for (Direction facing : Direction.Plane.HORIZONTAL) {
-                add(replacement, machine.pattern(), facing);
-                for (DynamicPatternSpec dynamicPattern : machine.dynamicPatterns()) {
-                    add(replacement, dynamicPattern.startPattern(), facing);
-                    if (dynamicPattern.endPattern() != null) add(replacement, dynamicPattern.endPattern(), facing);
+            for (MachineStructureStage stage : machine.structureStages()) {
+                for (Direction facing : Direction.Plane.HORIZONTAL) {
+                    add(replacement, stage.pattern(), facing);
+                    for (DynamicPatternSpec dynamicPattern : stage.dynamicPatterns()) {
+                        add(replacement, dynamicPattern.startPattern(), facing);
+                        if (dynamicPattern.endPattern() != null) add(replacement, dynamicPattern.endPattern(), facing);
+                    }
                 }
             }
         }
@@ -78,7 +80,7 @@ public final class BlockArrayCache {
         for (var entry : key.pattern().tagsByPosition().entrySet()) {
             rotatedTags.put(BlockRotator.rotateSouthTo(entry.getKey(), key.facing(), key.rollFacing()), entry.getValue());
         }
-        return new BlockArray(Map.copyOf(rotated), Map.copyOf(rotatedTags));
+        return new BlockArray(rotated, rotatedTags);
     }
 
     private static void add(Map<Key, BlockArray> cache, BlockArray pattern, Direction facing) {
