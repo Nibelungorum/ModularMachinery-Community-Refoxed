@@ -167,17 +167,51 @@ public class TerminalAssemblyGameTest {
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("iron_compressor")).get().defaultBlockState());
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         List<MultiblockAssemblyService.Placement> template = template(controller);
-        MultiblockAssemblyService.Placement missingPlacement = template.stream()
-                .filter(placement -> placement.state().is(ModBlocks.BLOCKS.get("item_input_bus").get()))
-                .findFirst()
-                .orElseThrow();
-        List<MultiblockAssemblyService.Placement> casingPlacements = template.stream()
-                .filter(placement -> placement.state().is(ModBlocks.CASING.get()))
-                .limit(2)
-                .toList();
-        BlockPos firstPosition = casingPlacements.getFirst().pos();
+        int firstIndex = -1;
+        int missingIndex = -1;
+        int laterIndex = -1;
+        for (int index = 0; index < template.size(); index++) {
+            if (!template.get(index).state().is(ModBlocks.BLOCKS.get("item_input_bus").get())) continue;
+            int firstCasing = -1;
+            for (int earlier = 0; earlier < index; earlier++) {
+                if (template.get(earlier).state().is(ModBlocks.CASING.get())) {
+                    firstCasing = earlier;
+                    break;
+                }
+            }
+            for (int later = index + 1; later < template.size(); later++) {
+                if (template.get(later).state().is(ModBlocks.CASING.get())) {
+                    firstIndex = firstCasing;
+                    missingIndex = index;
+                    laterIndex = later;
+                    break;
+                }
+            }
+            if (firstIndex >= 0) break;
+        }
+        if (firstIndex < 0) {
+            for (int first = 0; first < template.size() - 2 && firstIndex < 0; first++) {
+                for (int missing = first + 1; missing < template.size() - 1 && firstIndex < 0; missing++) {
+                    if (ItemStack.isSameItemSameComponents(template.get(first).requirement(), template.get(missing).requirement())) continue;
+                    for (int later = missing + 1; later < template.size(); later++) {
+                        if (ItemStack.isSameItemSameComponents(template.get(first).requirement(), template.get(later).requirement())) {
+                            firstIndex = first;
+                            missingIndex = missing;
+                            laterIndex = later;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        helper.assertTrue(firstIndex >= 0 && firstIndex < missingIndex && missingIndex < laterIndex,
+                "Template orders the first, missing, and later placements");
+        MultiblockAssemblyService.Placement firstPlacement = template.get(firstIndex);
+        MultiblockAssemblyService.Placement missingPlacement = template.get(missingIndex);
+        MultiblockAssemblyService.Placement laterPlacement = template.get(laterIndex);
+        BlockPos firstPosition = firstPlacement.pos();
         BlockPos missingPosition = missingPlacement.pos();
-        BlockPos laterAffordablePosition = casingPlacements.getLast().pos();
+        BlockPos laterAffordablePosition = laterPlacement.pos();
         for (MultiblockAssemblyService.Placement placement : template) {
             if (!placement.pos().equals(firstPosition) && !placement.pos().equals(missingPosition)
                     && !placement.pos().equals(laterAffordablePosition)) {
@@ -186,20 +220,21 @@ public class TerminalAssemblyGameTest {
         }
 
         ServerPlayer player = servicePlayer(helper);
-        player.getInventory().add(new ItemStack(ModBlocks.CASING.get(), 2));
+        player.getInventory().add(firstPlacement.requirement().copy());
+        player.getInventory().add(laterPlacement.requirement().copy());
 
         MultiblockAssemblyService.Result first = MultiblockAssemblyService.build(player, controller, false);
 
-        helper.assertTrue(first.changedBlocks() == 2, "First build places both affordable casing positions");
-        helper.assertTrue(helper.getLevel().getBlockState(firstPosition).is(ModBlocks.CASING.get()), "First casing is built");
+        helper.assertTrue(first.changedBlocks() == 2, "First build places both affordable positions");
+        helper.assertTrue(helper.getLevel().getBlockState(firstPosition).is(firstPlacement.state().getBlock()), "First placement is built");
         helper.assertTrue(helper.getLevel().getBlockState(missingPosition).isAir(), "Missing input bus remains air");
-        helper.assertTrue(helper.getLevel().getBlockState(laterAffordablePosition).is(ModBlocks.CASING.get()), "Later casing is built");
+        helper.assertTrue(helper.getLevel().getBlockState(laterAffordablePosition).is(laterPlacement.state().getBlock()), "Later placement is built");
 
-        player.getInventory().add(new ItemStack(ModBlocks.BLOCKS.get("item_input_bus").get()));
+        player.getInventory().add(missingPlacement.requirement().copy());
         MultiblockAssemblyService.Result second = MultiblockAssemblyService.build(player, controller, false);
 
         helper.assertTrue(second.changedBlocks() == 1, "Second build places only the replenished input bus");
-        helper.assertTrue(helper.getLevel().getBlockState(missingPosition).is(ModBlocks.BLOCKS.get("item_input_bus").get()), "Missing input bus is built");
+        helper.assertTrue(helper.getLevel().getBlockState(missingPosition).is(missingPlacement.state().getBlock()), "Missing placement is built");
         helper.succeed();
     }
 
