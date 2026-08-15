@@ -1254,6 +1254,49 @@ class FactoryRecipeSchedulerTest {
     }
 
     @Test
+    void pause_clears_pending_shared_finish_continuation_and_resume_installs_the_latest_one() throws Exception {
+        BlockPos controllerPos = new BlockPos(0, 64, 0);
+        ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
+        MachineControllerBlockEntity controller = controllerWithInput(MMCR.id("factory_paused_shared_continuation"), controllerPos, input);
+        ServerLevel level = serverLevel(List.of(controller, input));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(BlockEntity.class, input, "level", level);
+        StructureClaimRegistry registry = StructureClaimRegistry.get(level);
+        registry.claim(controllerPos, List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
+                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)));
+        StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_paused_shared_continuation_recipe"),
+                MMCR.id("factory_paused_shared_continuation"), 1, List.of(), List.of(), List.of(), 0, 1);
+        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1, pool);
+        AtomicInteger staleContinuations = new AtomicInteger();
+        AtomicInteger latestContinuations = new AtomicInteger();
+
+        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 1, pool, staleContinuations::incrementAndGet);
+        SharedIoCoordinator.get(level).resolve(domain);
+        FactoryRecipeThread thread = scheduler.allThreads().getFirst();
+        thread.getActiveRecipe().beginFinishCommit();
+        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 1, pool, staleContinuations::incrementAndGet);
+        scheduler.pause();
+        SharedIoCoordinator.get(level).resolve(domain);
+
+        assertThat(staleContinuations).hasValue(0);
+        assertThat(thread.getActiveRecipe()).isNull();
+
+        scheduler.resume();
+        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 1, pool, latestContinuations::incrementAndGet);
+        SharedIoCoordinator.get(level).resolve(domain);
+        thread.getActiveRecipe().beginFinishCommit();
+        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 1, pool, latestContinuations::incrementAndGet);
+        SharedIoCoordinator.get(level).resolve(domain);
+
+        assertThat(staleContinuations).hasValue(0);
+        assertThat(latestContinuations).hasValue(1);
+        SharedIoCoordinator.discard(level);
+        StructureClaimRegistry.discard(level);
+    }
+
+    @Test
     void thread_snapshot_exposes_waiting_failure_without_marking_thread_running() throws Exception {
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1);
         FactoryRecipeThread thread = FactoryRecipeThread.base(null, RecipeCraftingContextPool.global());

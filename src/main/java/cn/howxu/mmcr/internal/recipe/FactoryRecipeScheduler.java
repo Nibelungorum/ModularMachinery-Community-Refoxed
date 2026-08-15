@@ -87,7 +87,9 @@ public final class FactoryRecipeScheduler {
 
     public void pause() {
         paused = true;
-        clearFinishedThreadContinuations();
+        for (FactoryRecipeThread thread : threads) {
+            thread.setFinishContinuation(null);
+        }
     }
 
     public void resume() {
