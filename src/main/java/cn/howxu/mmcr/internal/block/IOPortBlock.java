@@ -7,6 +7,7 @@ import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
+import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
@@ -16,6 +17,14 @@ import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.server.level.ServerLevel;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
+import net.neoforged.neoforge.transfer.ResourceHandler;
+import net.neoforged.neoforge.transfer.TransferPreconditions;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
+import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
@@ -65,10 +74,10 @@ public class IOPortBlock extends Block implements EntityBlock {
                                           BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
         if (!player.isShiftKeyDown() && level.getBlockEntity(pos) instanceof FluidHatchBlockEntity hatch) {
             if (level.isClientSide()) return InteractionResult.TRY_WITH_EMPTY_HAND;
-            FluidHatchBucketInteraction.Result result = FluidHatchBucketInteraction.tryTransfer(
-                    hatch.getFluidTank(hit.getDirection()), hatch.ioType(), stack);
-            if (result.successful()) {
-                player.setItemInHand(hand, result.container());
+            ResourceHandler<FluidResource> handler = new PortFluidTransferHandler(
+                    hatch.getFluidTank(hit.getDirection()), hatch.ioType() == IOType.INPUT, hatch.ioType() == IOType.OUTPUT);
+            if (net.neoforged.neoforge.transfer.fluid.FluidUtil.interactWithFluidHandler(
+                    player, hand, pos, handler, null)) {
                 return InteractionResult.SUCCESS;
             }
         }
@@ -137,5 +146,63 @@ public class IOPortBlock extends Block implements EntityBlock {
 
     static Component titleFor(String kind) {
         return Component.translatable("container.mmcr." + kind);
+    }
+
+    private static final class PortFluidTransferHandler extends SnapshotJournal<FluidStack> implements ResourceHandler<FluidResource> {
+        private final FluidTank handler;
+        private final boolean canInsert;
+        private final boolean canExtract;
+
+        private PortFluidTransferHandler(FluidTank handler, boolean canInsert, boolean canExtract) {
+            this.handler = handler;
+            this.canInsert = canInsert;
+            this.canExtract = canExtract;
+        }
+
+        @Override public int size() { return handler.getTanks(); }
+        @Override public FluidResource getResource(int slot) {
+            checkSlot(slot);
+            FluidStack stack = handler.getFluidInTank(slot);
+            return stack.isEmpty() ? FluidResource.EMPTY : FluidResource.of(stack);
+        }
+        @Override public long getAmountAsLong(int slot) {
+            checkSlot(slot);
+            return handler.getFluidInTank(slot).getAmount();
+        }
+        @Override public long getCapacityAsLong(int slot, FluidResource resource) {
+            checkSlot(slot);
+            return handler.getTankCapacity(slot);
+        }
+        @Override public boolean isValid(int slot, FluidResource resource) {
+            checkSlot(slot);
+            TransferPreconditions.checkNonEmpty(resource);
+            return handler.isFluidValid(slot, resource.toStack(1));
+        }
+        @Override public int insert(int slot, FluidResource resource, int amount, TransactionContext tx) {
+            checkSlot(slot);
+            TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
+            if (!canInsert) return 0;
+            updateSnapshots(tx);
+            return handler.fill(resource.toStack(amount), IFluidHandler.FluidAction.EXECUTE);
+        }
+        @Override public int extract(int slot, FluidResource resource, int amount, TransactionContext tx) {
+            checkSlot(slot);
+            TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
+            if (!canExtract) return 0;
+            updateSnapshots(tx);
+            return handler.drain(resource.toStack(amount), IFluidHandler.FluidAction.EXECUTE).getAmount();
+        }
+
+        private void checkSlot(int slot) {
+            if (slot < 0 || slot >= handler.getTanks()) throw new IndexOutOfBoundsException(slot);
+        }
+
+        @Override protected FluidStack createSnapshot() {
+            return handler.getFluid().copy();
+        }
+
+        @Override protected void revertToSnapshot(FluidStack snapshot) {
+            handler.setFluid(snapshot == null ? FluidStack.EMPTY : snapshot);
+        }
     }
 }
