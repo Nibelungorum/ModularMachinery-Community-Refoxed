@@ -51,7 +51,7 @@ public class MachineControllerBlock extends Block implements EntityBlock {
     }
 
     public MachineControllerBlock(Identifier machineId, Properties props) {
-        super(props.sound(SoundType.METAL));
+        super(props.strength(3.5F).sound(SoundType.METAL));
         if (machineId == null) throw new IllegalArgumentException("machineId null");
         this.machineId = machineId;
         registerDefaultState(stateDefinition.any()

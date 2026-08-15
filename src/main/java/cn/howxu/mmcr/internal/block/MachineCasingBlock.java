@@ -5,6 +5,6 @@ import net.minecraft.world.level.block.SoundType;
 
 public class MachineCasingBlock extends Block {
     public MachineCasingBlock(Properties props) {
-        super(props.sound(SoundType.METAL));
+        super(props.strength(3.5F).sound(SoundType.METAL));
     }
 }

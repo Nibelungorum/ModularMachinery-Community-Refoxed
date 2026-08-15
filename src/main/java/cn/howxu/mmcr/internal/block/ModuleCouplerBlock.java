@@ -19,7 +19,7 @@ public class ModuleCouplerBlock extends Block implements EntityBlock {
     private final Supplier<? extends BlockEntityType<?>> beType;
 
     public ModuleCouplerBlock(Supplier<? extends BlockEntityType<?>> beType, Properties properties) {
-        super(properties.sound(SoundType.METAL));
+        super(properties.strength(3.5F).sound(SoundType.METAL));
         this.beType = beType;
     }
 

@@ -41,7 +41,7 @@ public class IOPortBlock extends Block implements EntityBlock {
     public IOPortBlock(IOPortKind kind,
                        Supplier<? extends BlockEntityType<?>> beType,
                        Properties props) {
-        super(props.sound(SoundType.METAL));
+        super(props.strength(3.5F).sound(SoundType.METAL));
         this.kind = kind;
         this.beType = beType;
     }

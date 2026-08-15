@@ -22,7 +22,7 @@ public class ParallelControllerBlock extends Block implements EntityBlock {
     public ParallelControllerBlock(ParallelTier tier,
                                    Supplier<? extends BlockEntityType<?>> beType,
                                    Properties properties) {
-        super(properties.sound(SoundType.METAL));
+        super(properties.strength(3.5F).sound(SoundType.METAL));
         this.tier = tier;
         this.beType = beType;
     }
