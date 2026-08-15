@@ -216,6 +216,13 @@ class DefaultMachinesTest {
                 .allSatisfy(declaration -> assertThat(declaration.pattern().pattern().values())
                         .filteredOn(predicate -> predicate.matches(net.minecraft.world.level.block.Blocks.GILDED_BLACKSTONE.defaultBlockState()))
                         .hasSize(9));
+        assertThat(MachineStructureRegistry.dynamicSnapshot().get(MMCR.id("distillation_tower")).declarations())
+                .extracting(declaration -> declaration.pattern().pattern().entrySet().stream()
+                        .filter(entry -> entry.getValue().matches(net.minecraft.world.level.block.Blocks.GILDED_BLACKSTONE.defaultBlockState()))
+                        .map(entry -> entry.getKey().getY())
+                        .distinct()
+                        .toList())
+                .containsExactly(List.of(2), List.of(3), List.of(4));
 
         assertThat(ecoMatrix).isNotNull();
         assertThat(requirementIds(ecoMatrix)).containsExactly("energy_input_hatch>=tiny");

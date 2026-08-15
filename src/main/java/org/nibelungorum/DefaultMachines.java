@@ -467,7 +467,8 @@ public final class DefaultMachines {
     private static BlockArray distillationTowerPattern(int height, BlockPredicate a, BlockPredicate c, Block controller) {
         String[] first = rows(height, "  XXX  ", "  AAA  ");
         String[] second = rows(height, " XXXXX ", " B   B ", "  ACA  ");
-        String[] middle = rows(height, "XXXXXXX", "A     A", " B   B ", "  DDD  ");
+        String[] middle = rows(height, "XXXXXXX", "A     A", " B   B ");
+        middle[height - 1] = "  DDD  ";
         String[] sixth = rows(height, " XXXXX ", " B   B ", "  BBB  ");
         String[] last = rows(height, "  XXX  ", "  BEB  ");
         return BlockArray.builder()
