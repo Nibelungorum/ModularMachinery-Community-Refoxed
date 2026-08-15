@@ -25,7 +25,11 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -48,8 +52,13 @@ public record MachineRecipeDisplay(
         List<MachineOutput> outputs,
         List<SmartInterfaceDisplay> smartInterfaceInputs,
         List<SmartInterfaceDisplay> smartInterfaceOutputs,
-        List<SmartInterfaceModifierDisplay> smartInterfaceModifiers
+        List<SmartInterfaceModifierDisplay> smartInterfaceModifiers,
+        Set<Identifier> requiredHostIds
 ) {
+
+    public MachineRecipeDisplay {
+        requiredHostIds = sortedHostIds(requiredHostIds);
+    }
 
     public static MachineRecipeDisplay from(MachineRecipe recipe) {
         return from(recipe, null);
@@ -124,8 +133,16 @@ public record MachineRecipeDisplay(
                 List.copyOf(outputs),
                 List.copyOf(smartInterfaceInputs),
                 List.copyOf(smartInterfaceOutputs),
-                List.copyOf(smartInterfaceModifiers)
+                List.copyOf(smartInterfaceModifiers),
+                recipe.requiredHostIds()
         );
+    }
+
+    private static Set<Identifier> sortedHostIds(Set<Identifier> ids) {
+        if (ids == null || ids.isEmpty()) return Set.of();
+        return ids.stream()
+                .sorted(Comparator.comparing(Identifier::toString))
+                .collect(Collectors.collectingAndThen(Collectors.toCollection(LinkedHashSet::new), Collections::unmodifiableSet));
     }
 
     private static java.util.stream.Stream<Holder<Item>> safeItems(Ingredient ingredient) {

@@ -8,6 +8,7 @@ import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineCasingBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -34,12 +35,14 @@ public final class ModBlocks {
         for (ParallelTier tier : ParallelTier.values()) registerParallelController(tier);
         registerFactoryController();
         registerSmartInterface();
+        registerModuleCoupler();
     }
 
     public static final DeferredHolder<Block, Block> BLAST_FURNACE_CONTROLLER = controllerFor(MMCR.id("blast_furnace"));
     public static final DeferredHolder<Block, Block> CONTROLLER = BLAST_FURNACE_CONTROLLER;
     public static final DeferredHolder<Block, Block> BASIC_CASING = BLOCKS.get("basic_casing");
     public static final DeferredHolder<Block, Block> SMART_INTERFACE = BLOCKS.get("smart_interface");
+    public static final DeferredHolder<Block, Block> MODULE_BRIDGE = BLOCKS.get("module_bridge");
 
     /** Compatibility alias for {@link #BASIC_CASING}; the block id was renamed from {@code casing} to {@code basic_casing}. */
     public static final DeferredHolder<Block, Block> CASING = BASIC_CASING;
@@ -101,6 +104,13 @@ public final class ModBlocks {
         Supplier<? extends BlockEntityType<?>> beTypeSupplier = () -> ModBlockEntities.SMART_INTERFACE.get();
         BLOCKS.put(name, REGISTER.registerBlock(name,
                 properties -> new SmartInterfaceBlock(beTypeSupplier, properties)));
+    }
+
+    private static void registerModuleCoupler() {
+        String name = "module_bridge";
+        Supplier<? extends BlockEntityType<?>> beTypeSupplier = () -> ModBlockEntities.MODULE_BRIDGE.get();
+        BLOCKS.put(name, REGISTER.registerBlock(name,
+                properties -> new ModuleCouplerBlock(beTypeSupplier, properties)));
     }
 
     public static void register(IEventBus bus) {

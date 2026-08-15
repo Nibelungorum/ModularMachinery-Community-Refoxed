@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -178,5 +179,20 @@ class StructureMatcherTest {
         assertThat(StructureMatcher.matchesRotated(pattern,
                 LevelStub.create(Map.of(pos, Blocks.DIAMOND_BLOCK)), BlockPos.ZERO,
                 Map.of(pos, List.of(first, second)))).isTrue();
+    }
+
+    @Test
+    void compiled_pattern_records_rotated_coupler_and_interface_positions() {
+        BlockArray pattern = new BlockArray(Map.of(
+                new BlockPos(1, 0, 0), new BlockPredicate.AnyOf(List.of(BlockPredicate.machineCoupler())),
+                new BlockPos(0, 0, 1), new BlockPredicate.OfBlock(ModBlocks.SMART_INTERFACE.get())));
+        DynamicMachine machine = new DynamicMachine(
+                net.minecraft.resources.Identifier.fromNamespaceAndPath("mmcr", "matcher_interfaces"),
+                "Matcher Interfaces", pattern);
+
+        CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
+
+        assertThat(compiled.couplerPositions(Direction.WEST)).containsExactly(new BlockPos(0, 0, 1));
+        assertThat(compiled.interfacePositions(Direction.WEST)).containsExactly(new BlockPos(-1, 0, 0));
     }
 }

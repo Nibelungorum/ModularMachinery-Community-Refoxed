@@ -10,9 +10,11 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Collections;
 import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.ArrayList;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Startup-time machine declaration. A registration must exist before controller
@@ -35,7 +37,10 @@ public record MachineRegistration(
         boolean shareSmartInterfaces,
         List<SmartInterfaceModifier> smartInterfaceModifiers,
         @Nullable Identifier runningSoundId,
-        @Nullable Identifier finishSoundId
+        @Nullable Identifier finishSoundId,
+        MachineRole role,
+        Set<Identifier> acceptedModuleIds,
+        BlockArray pattern
 ) {
     public MachineRegistration {
         if (id == null) throw new IllegalArgumentException("id null");
@@ -46,6 +51,12 @@ public record MachineRegistration(
         maxParallelAmount = Math.max(1, maxParallelAmount);
         smartInterfaceTypes = Collections.unmodifiableMap(new LinkedHashMap<>(smartInterfaceTypes));
         smartInterfaceModifiers = smartInterfaceModifiers == null ? List.of() : List.copyOf(smartInterfaceModifiers);
+        role = role == null ? MachineRole.NORMAL : role;
+        acceptedModuleIds = copyAcceptedModuleIds(acceptedModuleIds);
+        if (role != MachineRole.HOST && !acceptedModuleIds.isEmpty()) {
+            throw new IllegalArgumentException("Only HOST machines may accept modules");
+        }
+        pattern = pattern == null ? new BlockArray(Map.of()) : pattern;
     }
 
     public static Builder builder(Identifier id) {
@@ -61,6 +72,20 @@ public record MachineRegistration(
         return displayNameKey;
     }
 
+    public boolean isHost() {
+        return role == MachineRole.HOST;
+    }
+
+    public boolean isModule() {
+        return role == MachineRole.MODULE;
+    }
+
+    public MachineRegistration withPattern(BlockArray pattern) {
+        return new MachineRegistration(id, displayNameKey, controllerSpec, appearance, recipeFamilyId, allowModifiers,
+                allowMultithreading, allowParallelism, maxParallelAmount, expandableStructure, smartInterfaceTypes, shareSmartInterfaces,
+                smartInterfaceModifiers, runningSoundId, finishSoundId, role, acceptedModuleIds, pattern);
+    }
+
     public static String defaultDisplayNameKey(Identifier id) {
         return defaultDisplayNameKey(id, null);
     }
@@ -69,6 +94,16 @@ public record MachineRegistration(
         if (id == null) throw new IllegalArgumentException("id null");
         if (explicitKey != null && !explicitKey.isBlank()) return explicitKey;
         return "machine." + id.getNamespace() + "." + id.getPath();
+    }
+
+    private static Set<Identifier> copyAcceptedModuleIds(Set<Identifier> acceptedModuleIds) {
+        if (acceptedModuleIds == null || acceptedModuleIds.isEmpty()) return Set.of();
+        LinkedHashSet<Identifier> copy = new LinkedHashSet<>();
+        for (Identifier acceptedModuleId : acceptedModuleIds) {
+            if (acceptedModuleId == null) throw new IllegalArgumentException("accepted module id null");
+            copy.add(acceptedModuleId);
+        }
+        return Collections.unmodifiableSet(copy);
     }
 
     public static final class Builder {
@@ -87,6 +122,10 @@ public record MachineRegistration(
         private final List<SmartInterfaceModifier> smartInterfaceModifiers = new ArrayList<>();
         private @Nullable Identifier runningSoundId;
         private @Nullable Identifier finishSoundId;
+        private boolean host;
+        private boolean module;
+        private final Set<Identifier> acceptedModuleIds = new LinkedHashSet<>();
+        private BlockArray pattern;
 
         private Builder(Identifier id) {
             this.id = id;
@@ -177,6 +216,27 @@ public record MachineRegistration(
             return finishSound(soundId(sound));
         }
 
+        public Builder host(Identifier acceptedModuleId) {
+            this.host = true;
+            if (acceptedModuleId == null) throw new IllegalArgumentException("accepted module id null");
+            this.acceptedModuleIds.add(acceptedModuleId);
+            return this;
+        }
+
+        public Builder host(String acceptedModuleId) {
+            return host(Identifier.parse(acceptedModuleId));
+        }
+
+        public Builder module() {
+            this.module = true;
+            return this;
+        }
+
+        public Builder pattern(BlockArray pattern) {
+            this.pattern = pattern;
+            return this;
+        }
+
         public Builder registerRunningSound(Identifier id) {
             MachineSoundRegistry.requestRegistration(id);
             return runningSound(id);
@@ -188,9 +248,13 @@ public record MachineRegistration(
         }
 
         public MachineRegistration build() {
+            if (host && module) {
+                throw new IllegalArgumentException("Machine roles are mutually exclusive");
+            }
+            MachineRole role = host ? MachineRole.HOST : module ? MachineRole.MODULE : MachineRole.NORMAL;
             return new MachineRegistration(id, displayNameKey, controllerSpec, appearance, recipeFamilyId, allowModifiers,
                     allowMultithreading, allowParallelism, maxParallelAmount, expandableStructure, smartInterfaceTypes, shareSmartInterfaces,
-                    smartInterfaceModifiers, runningSoundId, finishSoundId);
+                    smartInterfaceModifiers, runningSoundId, finishSoundId, role, acceptedModuleIds, pattern);
         }
 
         private static Identifier soundId(SoundEvent sound) {

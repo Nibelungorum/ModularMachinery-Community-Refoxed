@@ -33,6 +33,8 @@ import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
+import cn.howxu.mmcr.internal.multiblock.ModuleConnectionCoordinator;
+import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.SmartInterfaceBindingCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
@@ -117,6 +119,11 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private boolean lastBroadcastActive;
     private boolean lastBroadcastRecipeLocked;
     private String lastBroadcastLockedRecipeId = "";
+    private String lastBroadcastMachineId = "";
+    private int lastBroadcastControllerRole;
+    private int lastBroadcastInstalledModuleCount;
+    private boolean lastBroadcastModuleConnected;
+    private String lastBroadcastConnectedHostId = "";
     private @Nullable Identifier lockedRecipeId;
     private @Nullable String lastFailureUnloc;
     private @Nullable LevelInsufficientFailure recipeFailure;
@@ -163,6 +170,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     public Machine getMachine() { return machine; }
+
+    public @Nullable Identifier machineId() {
+        Machine currentMachine = machine == null ? foundMachine : machine;
+        return currentMachine == null ? null : currentMachine.registryName();
+    }
+
     public void setMachine(Machine m) {
         Identifier before = this.machine == null ? null : this.machine.registryName();
         stopFactoryController();
@@ -175,6 +188,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     public Machine getFoundMachine() { return foundMachine; }
     public BlockArray getFoundPattern() { return foundPattern; }
+    public @Nullable CompiledMachinePattern getFoundCompiledPattern() { return foundCompiledPattern; }
+    public @Nullable Direction getControllerFacing() { return controllerFacing; }
 
     public Map<String, List<RecipeModifier>> getFoundModifiers() {
         if (foundModifiers == null) return Map.of();
@@ -191,6 +206,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     public @Nullable Object getLastStructureError() {
         return lastStructureError;
+    }
+
+    public void invalidateFormedStructure() {
+        resetMachine();
     }
 
     public List<RecipeModifier> foundModifierList() {
@@ -231,10 +250,24 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         return resourceDomain;
     }
 
+    public ModuleConnectionStatus moduleConnectionStatus() {
+        return ModuleConnectionCoordinator.connectionStatus(this);
+    }
+
+    public int installedModuleCount() {
+        return ModuleConnectionCoordinator.installedModuleCount(this);
+    }
+
+    public Optional<Identifier> connectedHostId() {
+        ModuleConnectionStatus status = moduleConnectionStatus();
+        return status.connected() ? Optional.of(status.connectedHostId()) : Optional.empty();
+    }
+
     public void onStructureBlockChanged(BlockPos changedPos) {
         if (!isFormed() || foundCompiledPattern == null || controllerFacing == null) return;
         if (!isInsideCompiledBounds(changedPos)) return;
         structureDirty = true;
+        if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
         markRecipeDirty();
         setChanged();
     }
@@ -876,6 +909,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                     .orElseGet(() -> rawExpectedDescription(anyOf.children().getFirst()));
             case BlockPredicate.Air ignored -> Component.translatable("block.minecraft.air");
             case BlockPredicate.Any ignored -> Component.literal("any block");
+            case BlockPredicate.MachineCoupler ignored -> Component.literal("machine coupler");
         };
     }
 
@@ -970,6 +1004,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 lastFormationFailure = new PortRequirementSpec.Failure(
                         "component_claim_conflict component=" + conflict.componentPos() + " owner=" + conflict.ownerPos(),
                         0, 1, java.util.OptionalInt.empty(), PortRequirementSpec.FailureReason.MISSING);
+                return false;
+            }
+            if (ModuleConnectionCoordinator.blocksHostFormation(serverLevel, candidate, stageCompiled, facing, getBlockPos())) {
+                StructureClaimRegistry.get(serverLevel).release(getBlockPos());
                 return false;
             }
         }
@@ -1100,6 +1138,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         foundLevels = levels;
         collectFoundModifiers(replacements);
         FORMED_CONTROLLERS.add(this);
+        if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
         if (previousStage != matchedStructureStage) structureVersion++;
         structureDirty = false;
         structureCheckCounter = 0;
@@ -1120,7 +1159,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (level == null) return claims;
         for (BlockPos relativePos : componentPositions(pattern, compiled, facing)) {
             BlockEntity entity = level.getBlockEntity(getBlockPos().offset(relativePos));
-            if (entity instanceof MachineComponentTile tile) {
+            if (entity instanceof SmartInterfaceBlockEntity) {
+                claims.add(new StructureClaimRegistry.Claim(entity.getBlockPos(), ComponentClaimPolicy.SHARED_SERIALIZED));
+            } else if (entity instanceof MachineComponentTile tile) {
                 claims.add(new StructureClaimRegistry.Claim(entity.getBlockPos(), tile.claimPolicy()));
             } else if (entity instanceof ParallelControllerBlockEntity || entity instanceof FactorySchedulerBlockEntity) {
                 claims.add(new StructureClaimRegistry.Claim(entity.getBlockPos(), ComponentClaimPolicy.EXCLUSIVE));
@@ -1349,6 +1390,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (!isFormed() || foundPattern == null || controllerFacing == null) return;
         if (!compiledBoundsTouchesChunk(chunkPos)) return;
         structureDirty = true;
+        if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
         pauseActiveForUnloadedStructure();
         setChanged();
         syncLevelState();
@@ -1469,6 +1511,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     private void resetMachine(boolean clearFormationFailure, boolean updateBlockState) {
         boolean wasFormed = isFormed();
+        if (wasFormed && level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.clearConnectionsFor(serverLevel, this);
         Identifier dropped = foundMachine == null ? null : foundMachine.registryName();
         boolean hadActive = active != null;
         Identifier activeRecipe = hadActive ? active.getRecipe().id() : null;
@@ -1545,8 +1588,18 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         var thread = factory == null ? null : factory.threadSnapshots(this).getFirst();
         boolean recipeLocked = thread == null ? lockedRecipeId != null : thread.locked();
         String lockedRecipe = thread == null ? lockedRecipeId == null ? "" : lockedRecipeId.toString() : thread.lockedRecipeId();
+        Identifier machineId = machineId();
+        String machineIdValue = machineId == null ? "" : machineId.toString();
+        int controllerRole = cn.howxu.mmcr.internal.menu.MachineControllerMenu.controllerRoleSyncValue(this);
+        int installedModuleCount = installedModuleCount();
+        Optional<Identifier> connectedHostId = connectedHostId();
+        boolean moduleConnected = connectedHostId.isPresent();
+        String connectedHostIdValue = connectedHostId.map(Identifier::toString).orElse("");
         if (lastBroadcastFormed != null && !PktMachineStatePayload.stateChanged(formed, activeNow, recipeLocked, lockedRecipe,
-                lastBroadcastFormed, lastBroadcastActive, lastBroadcastRecipeLocked, lastBroadcastLockedRecipeId)
+                machineIdValue, controllerRole, installedModuleCount, moduleConnected, connectedHostIdValue,
+                lastBroadcastFormed, lastBroadcastActive, lastBroadcastRecipeLocked, lastBroadcastLockedRecipeId,
+                lastBroadcastMachineId, lastBroadcastControllerRole, lastBroadcastInstalledModuleCount,
+                lastBroadcastModuleConnected, lastBroadcastConnectedHostId)
                 && activeBeforeTick == activeNow) {
             return;
         }
@@ -1554,9 +1607,14 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         lastBroadcastActive = activeNow;
         lastBroadcastRecipeLocked = recipeLocked;
         lastBroadcastLockedRecipeId = lockedRecipe;
+        lastBroadcastMachineId = machineIdValue;
+        lastBroadcastControllerRole = controllerRole;
+        lastBroadcastInstalledModuleCount = installedModuleCount;
+        lastBroadcastModuleConnected = moduleConnected;
+        lastBroadcastConnectedHostId = connectedHostIdValue;
         if (!(level instanceof ServerLevel sl)) return;
-        String name = active == null ? "" : active.getRecipe().id().toString();
-        var pkt = machineStatePayload(activeNow);
+        var pkt = machineStatePayload(activeNow, formed, recipeLocked, lockedRecipe, machineIdValue, controllerRole,
+                installedModuleCount, moduleConnected, connectedHostIdValue);
         for (var player : sl.getPlayers(p -> p.distanceToSqr(getBlockPos().getCenter()) < 64 * 64)) {
             ((ServerPlayer) player).connection.send(new ClientboundCustomPayloadPacket(pkt));
         }
@@ -1567,10 +1625,25 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         var thread = factory == null ? null : factory.threadSnapshots(this).getFirst();
         boolean recipeLocked = thread == null ? lockedRecipeId != null : thread.locked();
         String lockedRecipe = thread == null ? lockedRecipeId == null ? "" : lockedRecipeId.toString() : thread.lockedRecipeId();
+        Identifier machineId = machineId();
+        String machineIdValue = machineId == null ? "" : machineId.toString();
+        int controllerRole = cn.howxu.mmcr.internal.menu.MachineControllerMenu.controllerRoleSyncValue(this);
+        int installedModuleCount = installedModuleCount();
+        Optional<Identifier> connectedHostId = connectedHostId();
+        boolean moduleConnected = connectedHostId.isPresent();
+        String connectedHostIdValue = connectedHostId.map(Identifier::toString).orElse("");
+        return machineStatePayload(activeNow, isFormed(), recipeLocked, lockedRecipe, machineIdValue, controllerRole,
+                installedModuleCount, moduleConnected, connectedHostIdValue);
+    }
+
+    private PktMachineStatePayload machineStatePayload(boolean activeNow, boolean formed, boolean recipeLocked, String lockedRecipe,
+                                                       String machineId, int controllerRole, int installedModuleCount,
+                                                       boolean moduleConnected, String connectedHostId) {
         String name = active == null ? "" : active.getRecipe().id().toString();
-        return new PktMachineStatePayload(getBlockPos(), name, isFormed(), activeNow,
+        return new PktMachineStatePayload(getBlockPos(), name, formed, activeNow,
                 foundLevels.values().stream().map(foundLevel -> foundLevel.id().toString()).toList(),
-                recipeLocked, lockedRecipe);
+                recipeLocked, lockedRecipe,
+                machineId, controllerRole, installedModuleCount, moduleConnected, connectedHostId);
     }
 
     private boolean tryStartNewRecipe() {
@@ -1761,6 +1834,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 context.setStructureModifiers(foundModifierList());
             }
         }
+        if (!active.canRunOnConnectedHost(context)) {
+            failActiveRecipeForInvalidModuleConnection();
+            return false;
+        }
         if (usesSharedIoCoordinator()) {
             tickSharedRecipe();
             return false;
@@ -1828,6 +1905,20 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         }
         setChanged();
         return status == ActiveMachineRecipe.TickStatus.FINISHED;
+    }
+
+    private void failActiveRecipeForInvalidModuleConnection() {
+        if (active == null || context == null) return;
+        active.doFailureAction(foundMachine == null ? null : foundMachine.failureAction());
+        lastFailureUnloc = RecipeCraftingContext.FAILURE_MODULE_CONNECTION;
+        if (active.getRecipe().doesCancelRecipeOnPerTickFailure()) {
+            returnContext(context);
+            active = null;
+            context = null;
+            setActiveState(false);
+            syncRuntimeStateIfChanged();
+        }
+        setChanged();
     }
 
     private boolean usesSharedIoCoordinator() {
@@ -1912,6 +2003,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 domain, new SharedIoCoordinator.LaneKey(getBlockPos(), "base"), structureVersion,
                 () -> {
                     if (!isActiveSharedRecipe(recipe, recipeContext, domain)) return false;
+                    if (!recipe.canRunOnConnectedHost(recipeContext)) {
+                        sharedTickPending = false;
+                        pendingSharedTickDomain = null;
+                        failActiveRecipeForInvalidModuleConnection();
+                        return false;
+                    }
                     if (recipe.needsFinishCommit() && !recipeContext.simulateOutputs(recipe.getRecipe(), recipe.getParallelism())) {
                     applySharedTick(recipe, recipeContext, false, false, gameTime);
                         return false;
@@ -1938,6 +2035,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 domain, new SharedIoCoordinator.LaneKey(getBlockPos(), "base"), structureVersion,
                 () -> {
                     if (!isActiveSharedRecipe(recipe, recipeContext, domain)) return false;
+                    if (!recipe.canRunOnConnectedHost(recipeContext)) {
+                        sharedTickPending = false;
+                        pendingSharedTickDomain = null;
+                        failActiveRecipeForInvalidModuleConnection();
+                        return false;
+                    }
                     if (applySharedTick(recipe, recipeContext, true,
                             recipeContext.coordinatorOutputs(recipe.getRecipe(), recipe.getParallelism()).getAsBoolean(), gameTime)) {
                         tryStartNewRecipe();

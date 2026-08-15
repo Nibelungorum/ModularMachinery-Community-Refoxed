@@ -74,6 +74,25 @@ public final class MachineRecipeSchema {
                             cx.recipe().save();
                         }
                     }))
+            .function(new RecipeFunctionInstance("requiredHost", List.of(StringComponent.ID),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() {
+                            return List.of(StringComponent.ID);
+                        }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            var hostId = (String) args.get(0);
+                            var hosts = cx.recipe().json.getAsJsonArray("required_host_ids");
+                            if (hosts == null) {
+                                hosts = new com.google.gson.JsonArray();
+                                cx.recipe().json.add("required_host_ids", hosts);
+                            }
+                            hosts.add(hostId);
+                            cx.recipe().save();
+                        }
+                    }))
             .function(new RecipeFunctionInstance("requiresLevel", List.of(StringComponent.ID, StringComponent.ID),
                     new ResolvedRecipeSchemaFunction() {
                         @Override

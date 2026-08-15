@@ -2,6 +2,9 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
@@ -34,6 +37,7 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -239,6 +243,21 @@ class ActiveMachineRecipeTest {
         assertThat(active.getTotalTick()).isEqualTo(20);
         assertThat(context.runtimeRequirements(recipe)).singleElement().satisfies(requirement ->
                 assertThat(((ItemRequirement) requirement).stack().getCount()).isEqualTo(1));
+    }
+
+    @Test
+    void activeRecipeRejectsMismatchedConnectedHostRequirement() throws Exception {
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("active_mismatched_host"), MMCR.id("blast_furnace"), 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false, List.of(),
+                Set.of(MMCR.id("required_host")));
+        MachineControllerBlockEntity controller = controllerWithComponents();
+        setField(MachineControllerBlockEntity.class, controller, "foundMachine",
+                new DynamicMachine(MMCR.id("active_module"), "active_module", new BlockArray(Map.of()))
+                        .withRole(MachineRole.MODULE, Set.of()));
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(recipe.canRunOnConnectedHost(MMCR.id("other_host"))).isFalse();
+        assertThat(new ActiveMachineRecipe(recipe).canStartCrafting(context)).isFalse();
     }
 
     private static MachineRecipe inputRecipe(String path, net.minecraft.resources.Identifier machineId, Item item, int count) {

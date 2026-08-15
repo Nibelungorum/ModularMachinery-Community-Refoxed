@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
+import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
@@ -12,7 +13,10 @@ import dev.latvian.mods.kubejs.registry.BuilderBase;
 import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient String displayNameKey;
@@ -32,6 +36,9 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient Identifier formedPortBaseTexture;
     public transient Identifier runningSoundId;
     public transient Identifier finishSoundId;
+    public transient BlockArray pattern;
+    private final Set<Identifier> acceptedModuleIds = new LinkedHashSet<>();
+    private boolean module;
     private final List<String> controllerTooltip = new ArrayList<>();
     private final List<SmartInterfaceType> smartInterfaceTypes = new ArrayList<>();
     private boolean shareSmartInterfaces;
@@ -68,7 +75,10 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .maxParallelAmount(maxParallelAmount)
                 .runningSound(runningSoundId)
                 .finishSound(finishSoundId)
+                .pattern(pattern)
                 .shareSmartInterfaces(shareSmartInterfaces);
+        acceptedModuleIds.forEach(registration::host);
+        if (module) registration.module();
         smartInterfaceTypes.forEach(registration::smartInterfaceType);
         smartInterfaceModifiers.forEach(registration::smartInterfaceModifier);
         return registration.build();
@@ -89,6 +99,36 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
 
     public MachineBuilderJS finishSound(Identifier soundId) {
         this.finishSoundId = soundId;
+        return this;
+    }
+
+    public MachineBuilderJS host(String... moduleIds) {
+        if (moduleIds == null) return this;
+        for (String moduleId : moduleIds) {
+            if (moduleId != null) acceptedModuleIds.add(Identifier.parse(moduleId));
+        }
+        return this;
+    }
+
+    public MachineBuilderJS host(Collection<String> moduleIds) {
+        if (moduleIds == null) return this;
+        for (String moduleId : moduleIds) {
+            if (moduleId != null) acceptedModuleIds.add(Identifier.parse(moduleId));
+        }
+        return this;
+    }
+
+    public MachineBuilderJS module() {
+        return module(true);
+    }
+
+    public MachineBuilderJS module(boolean module) {
+        this.module = module;
+        return this;
+    }
+
+    public MachineBuilderJS pattern(BlockArray pattern) {
+        this.pattern = pattern;
         return this;
     }
 

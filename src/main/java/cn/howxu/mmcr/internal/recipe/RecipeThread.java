@@ -159,6 +159,10 @@ requested -> {
             }
         }
         if (activeRecipe == null || context == null) return;
+        if (!activeRecipe.canRunOnConnectedHost(context)) {
+            failActiveRecipeForInvalidModuleConnection();
+            return;
+        }
         if (tickPending && !isCurrentDomain(pendingTickDomain)) {
             tickPending = false;
             pendingTickDomain = null;
@@ -178,6 +182,21 @@ requested -> {
         applyTick(activeRecipe, context, resourcesGranted, outputsCommitted, 0);
     }
 
+    private void failActiveRecipeForInvalidModuleConnection() {
+        if (activeRecipe == null || context == null) return;
+        activeRecipe.doFailureAction(controller == null || controller.getFoundMachine() == null
+                ? null : controller.getFoundMachine().failureAction());
+        lastFailureUnloc = RecipeCraftingContext.FAILURE_MODULE_CONNECTION;
+        if (activeRecipe.getRecipe().doesCancelRecipeOnPerTickFailure()) {
+            contextPool.returnContext(context);
+            activeRecipe = null;
+            context = null;
+            status = Status.FAILED;
+        } else {
+            status = Status.WAITING;
+        }
+    }
+
     private void requestTick(ServerLevel level, cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.ResourceDomain domain,
                               ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext, long structureVersion) {
         int gameTime = (int) level.getGameTime();
@@ -189,6 +208,12 @@ requested -> {
                 structureVersion,
                 () -> {
                     if (!isActive(recipe, recipeContext, domain)) return false;
+                    if (!recipe.canRunOnConnectedHost(recipeContext)) {
+                        tickPending = false;
+                        pendingTickDomain = null;
+                        failActiveRecipeForInvalidModuleConnection();
+                        return false;
+                    }
                     if (recipe.needsFinishCommit()
                             && !recipeContext.simulateOutputs(recipe.getRecipe(), recipe.getParallelism())) {
                         applyTick(recipe, recipeContext, false, false, gameTime);
@@ -221,6 +246,12 @@ requested -> {
                 structureVersion,
                 () -> {
                     if (!isActive(recipe, recipeContext, domain)) return false;
+                    if (!recipe.canRunOnConnectedHost(recipeContext)) {
+                        tickPending = false;
+                        pendingTickDomain = null;
+                        failActiveRecipeForInvalidModuleConnection();
+                        return false;
+                    }
                     applyTick(recipe, recipeContext, true,
                             recipeContext.coordinatorOutputs(recipe.getRecipe(), recipe.getParallelism()).getAsBoolean(), gameTime);
                     return true;

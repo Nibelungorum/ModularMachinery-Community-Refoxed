@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.event;
 
+import cn.howxu.mmcr.internal.multiblock.ModuleConnectionCoordinator;
+import cn.howxu.mmcr.internal.multiblock.ModuleConnectionRefreshQueue;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import net.minecraft.server.level.ServerLevel;
@@ -18,6 +20,7 @@ public final class SharedIoEvents {
 
     public static void onLevelTick(LevelTickEvent.Post event) {
         if (event.getLevel() instanceof ServerLevel level) {
+            ModuleConnectionCoordinator.tick(level);
             SharedIoCoordinator.get(level).resolve(level);
         }
     }
@@ -25,6 +28,7 @@ public final class SharedIoEvents {
     public static void onLevelUnload(LevelEvent.Unload event) {
         if (event.getLevel() instanceof ServerLevel level) {
             SharedIoCoordinator.discard(level);
+            ModuleConnectionRefreshQueue.discard(level);
             StructureClaimRegistry.discard(level);
         }
     }

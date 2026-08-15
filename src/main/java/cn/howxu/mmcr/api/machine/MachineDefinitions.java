@@ -46,6 +46,7 @@ public final class MachineDefinitions {
     }
 
     public static void freezeRegistryPhase() {
+        MachineRoleValidator.validate(STATIC_REGISTRATIONS.values(), STATIC_REGISTRATIONS::get);
         registryPhaseOpen = false;
     }
 

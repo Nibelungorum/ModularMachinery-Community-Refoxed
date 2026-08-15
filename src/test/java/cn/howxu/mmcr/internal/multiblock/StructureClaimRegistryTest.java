@@ -78,4 +78,18 @@ class StructureClaimRegistryTest {
         assertThat(registry.domainFor(a)).isNotEqualTo(registry.domainFor(c));
         assertThat(registry.generationFor(a)).isGreaterThan(beforeRelease);
     }
+
+    @Test
+    void unrelatedClaimsDoNotInvalidateAnExistingResourceDomain() {
+        BlockPos first = new BlockPos(0, 64, 0);
+        BlockPos second = new BlockPos(10, 64, 0);
+        StructureClaimRegistry registry = new StructureClaimRegistry();
+
+        registry.claim(first, List.of(new StructureClaimRegistry.Claim(new BlockPos(1, 64, 0), ComponentClaimPolicy.SHARED_SERIALIZED)));
+        StructureClaimRegistry.ResourceDomain original = registry.domainFor(first);
+
+        registry.claim(second, List.of(new StructureClaimRegistry.Claim(new BlockPos(11, 64, 0), ComponentClaimPolicy.SHARED_SERIALIZED)));
+
+        assertThat(registry.domainFor(first)).isEqualTo(original);
+    }
 }

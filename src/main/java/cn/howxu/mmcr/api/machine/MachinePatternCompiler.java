@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.machine;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
+import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -54,6 +55,8 @@ public final class MachinePatternCompiler {
         EnumMap<Direction, BoundingBox> boundingBoxes = new EnumMap<>(Direction.class);
         EnumMap<Direction, List<BlockPos>> componentPositions = new EnumMap<>(Direction.class);
         EnumMap<Direction, List<BlockPos>> portPositions = new EnumMap<>(Direction.class);
+        EnumMap<Direction, List<BlockPos>> couplerPositions = new EnumMap<>(Direction.class);
+        EnumMap<Direction, List<BlockPos>> interfacePositions = new EnumMap<>(Direction.class);
         EnumMap<Direction, Map<BlockPos, List<SingleBlockModifierReplacement>>> modifierReplacements = new EnumMap<>(Direction.class);
 
         for (Direction facing : Direction.Plane.HORIZONTAL) {
@@ -64,10 +67,12 @@ public final class MachinePatternCompiler {
             componentPositions.put(facing, componentPositions(rotated));
             portPositions.put(facing, portPositions(rotated));
             modifierReplacements.put(facing, rotatedModifierReplacements(stage, facing));
+            couplerPositions.put(facing, couplerPositions(rotated));
+            interfacePositions.put(facing, interfacePositions(rotated));
         }
 
         return new CompiledMachinePattern(stage.number() == 1 ? parent : machine, stage.number(), rotatedPatterns, boundingBoxes, componentPositions, portPositions,
-                dynamicPatterns(machine.dynamicPatterns(), cache), modifierReplacements);
+                couplerPositions, interfacePositions, dynamicPatterns(machine.dynamicPatterns(), cache), modifierReplacements);
     }
 
     private static Map<BlockPos, List<SingleBlockModifierReplacement>> rotatedModifierReplacements(
@@ -89,6 +94,8 @@ public final class MachinePatternCompiler {
         @Override public PortTierRequirementSpec portTierRequirements() { return stage.portTierRequirements(); }
         @Override public List<DynamicPatternSpec> dynamicPatterns() { return stage.dynamicPatterns(); }
         @Override public List<MachineStructureStage> structureStages() { return List.of(stage); }
+        @Override public MachineRole role() { return parent.role(); }
+        @Override public java.util.Set<net.minecraft.resources.Identifier> acceptedModuleIds() { return parent.acceptedModuleIds(); }
     }
 
     public static Map<net.minecraft.resources.Identifier, CompiledMachinePattern> compileAll(Collection<Machine> machines) {
@@ -134,6 +141,22 @@ public final class MachinePatternCompiler {
         return List.copyOf(positions);
     }
 
+    private static List<BlockPos> couplerPositions(BlockArray pattern) {
+        ArrayList<BlockPos> positions = new ArrayList<>();
+        for (var entry : pattern.pattern().entrySet()) {
+            if (couldBeCoupler(entry.getValue())) positions.add(entry.getKey());
+        }
+        return List.copyOf(positions);
+    }
+
+    private static List<BlockPos> interfacePositions(BlockArray pattern) {
+        ArrayList<BlockPos> positions = new ArrayList<>();
+        for (var entry : pattern.pattern().entrySet()) {
+            if (couldBeInterface(entry.getValue())) positions.add(entry.getKey());
+        }
+        return List.copyOf(positions);
+    }
+
     private static boolean couldBeComponent(BlockPredicate predicate) {
         return switch (predicate) {
             case BlockPredicate.OfBlock of -> of.block() instanceof IOPortBlock
@@ -144,11 +167,27 @@ public final class MachinePatternCompiler {
         };
     }
 
+    private static boolean couldBeCoupler(BlockPredicate predicate) {
+        return switch (predicate) {
+            case BlockPredicate.MachineCoupler ignored -> true;
+            case BlockPredicate.AnyOf anyOf -> anyOf.children().stream().anyMatch(MachinePatternCompiler::couldBeCoupler);
+            default -> false;
+        };
+    }
+
     private static boolean couldBePort(BlockPredicate predicate) {
         return switch (predicate) {
             case BlockPredicate.OfBlock of -> of.block() instanceof IOPortBlock;
             case BlockPredicate.AnyOf ignored -> true;
             default -> true;
+        };
+    }
+
+    private static boolean couldBeInterface(BlockPredicate predicate) {
+        return switch (predicate) {
+            case BlockPredicate.OfBlock of -> of.block() instanceof SmartInterfaceBlock;
+            case BlockPredicate.AnyOf anyOf -> anyOf.children().stream().anyMatch(MachinePatternCompiler::couldBeInterface);
+            default -> false;
         };
     }
 

@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
@@ -9,6 +11,7 @@ import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +19,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
+import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -133,6 +137,35 @@ class MachineBuilderJSTest {
 
         assertThat(registration.controllerSpec().tooltip())
                 .containsExactly("tooltip.mmcr.arc_furnace.0", "tooltip.mmcr.arc_furnace.1");
+    }
+
+    @Test
+    void startup_builder_preserves_static_pattern_for_role_validation() {
+        BlockArray pattern = new BlockArray(java.util.Map.of(BlockPos.ZERO, BlockPredicate.machineCoupler()));
+
+        var registration = new MachineBuilderJS(MMCR.id("static_module"))
+                .module()
+                .pattern(pattern)
+                .createObject();
+
+        assertThat(registration.pattern()).isSameAs(pattern);
+    }
+
+    @Test
+    void builder_declares_module_and_host_roles_with_stable_deduplicated_modules() {
+        var module = new MachineBuilderJS("mmcr:module")
+                .module(false)
+                .module()
+                .createObject();
+        var host = new MachineBuilderJS("mmcr:host")
+                .host("mmcr:first", "mmcr:second", "mmcr:first")
+                .host(List.of("mmcr:second", "mmcr:third"))
+                .createObject();
+
+        assertThat(module.isModule()).isTrue();
+        assertThat(host.isHost()).isTrue();
+        assertThat(host.acceptedModuleIds())
+                .containsExactly(Identifier.parse("mmcr:first"), Identifier.parse("mmcr:second"), Identifier.parse("mmcr:third"));
     }
 
     @Test

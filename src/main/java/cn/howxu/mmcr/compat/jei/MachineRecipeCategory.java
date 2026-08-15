@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.jei;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.LevelRequirement;
@@ -102,6 +103,12 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     @Override
     public void draw(MachineRecipeDisplay recipe, IRecipeSlotsView recipeSlotsView, GuiGraphicsExtractor guiGraphics, double mouseX, double mouseY) {
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
+        long gameTime = Minecraft.getInstance().level == null ? 0L : Minecraft.getInstance().level.getGameTime();
+        Component hostRequirement = hostRequirementComponent(recipe, gameTime);
+        if (!hostRequirement.getString().isEmpty()) {
+            guiGraphics.text(Minecraft.getInstance().font, hostRequirement,
+                    layout.durationTextX(), layout.hostRequirementTextY(), 0xFF404040, false);
+        }
         guiGraphics.text(Minecraft.getInstance().font,
                 Component.translatable("jei.mmcr.machine_recipe.duration", recipe.durationTicks(), seconds(recipe.durationTicks())),
                 layout.durationTextX(), layout.durationTextY(), 0xFF404040, false);
@@ -119,7 +126,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                     layout.durationTextX(), y, 0xFF404040, false);
             y += 10;
         }
-        long gameTime = Minecraft.getInstance().level == null ? 0L : Minecraft.getInstance().level.getGameTime();
         for (LevelRequirement requirement : sortedLevelRequirements(recipe.recipe())) {
             guiGraphics.text(Minecraft.getInstance().font, levelRequirement(requirement, gameTime),
                     layout.durationTextX(), y, 0xFF404040, false);
@@ -209,6 +215,16 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 .append(Component.literal(": "))
                 .append(levelName)
                 .append(suffix);
+    }
+
+    static Component hostRequirementComponent(MachineRecipeDisplay recipe, long gameTime) {
+        if (recipe.requiredHostIds().isEmpty()) return Component.empty();
+        List<Identifier> hostIds = List.copyOf(recipe.requiredHostIds());
+        int index = (int) ((gameTime / 20) % hostIds.size());
+        Identifier hostId = hostIds.get(index);
+        var registration = MachineDefinitions.getRegistration(hostId);
+        Component hostName = registration == null ? Component.literal(hostId.toString()) : registration.displayName();
+        return Component.translatable("jei.mmcr.machine_recipe.required_host", hostName);
     }
 
     private static List<LevelRequirement> sortedLevelRequirements(MachineRecipe recipe) {

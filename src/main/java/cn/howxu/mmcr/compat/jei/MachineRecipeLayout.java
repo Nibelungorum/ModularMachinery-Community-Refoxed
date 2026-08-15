@@ -16,6 +16,7 @@ public record MachineRecipeLayout(
         RegionPlan inputs,
         RegionPlan outputs,
         int durationTextX,
+        int hostRequirementTextY,
         int durationTextY
 ) {
 
@@ -36,11 +37,20 @@ public record MachineRecipeLayout(
                 region(display.fluidInputs().size(), display.itemInputs().size(), 8),
                 region(display.fluidOutputs().size(), display.itemOutputs().size(), 91, true),
                 8,
+                hostRequirementTextY(display),
                 durationTextY(display)
         );
     }
 
+    private static int hostRequirementTextY(MachineRecipeDisplay display) {
+        return baseMetadataTextY(display);
+    }
+
     private static int durationTextY(MachineRecipeDisplay display) {
+        return baseMetadataTextY(display) + (display.requiredHostIds().isEmpty() ? 0 : 10);
+    }
+
+    private static int baseMetadataTextY(MachineRecipeDisplay display) {
         int inputRows = visibleRows(display.fluidInputs().size() + display.itemInputs().size());
         int outputRows = visibleRows(display.fluidOutputs().size() + display.itemOutputs().size());
         int rowCount = Math.max(1, Math.max(inputRows, outputRows));
@@ -103,6 +113,12 @@ public record MachineRecipeLayout(
 
     public int levelRequirementY(MachineRecipeDisplay display, int index) {
         return durationTextY + 10 * (1 + display.energyInputs().size() + display.energyOutputs().size() + index);
+    }
+
+    public int lastMetadataTextY(MachineRecipeDisplay display) {
+        return durationTextY + 10 * (display.energyInputs().size() + display.energyOutputs().size()
+                + display.recipe().levelRequirements().size() + display.smartInterfaceInputs().size()
+                + display.smartInterfaceOutputs().size() + display.smartInterfaceModifiers().size());
     }
 
     public enum Kind { ITEM, FLUID }

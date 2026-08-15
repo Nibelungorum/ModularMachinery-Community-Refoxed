@@ -30,6 +30,7 @@ public final class MachineStructureRegistry {
             }
             replacement.put(id, structure);
         }
+        validateDynamicRoles(replacement);
         Map<Identifier, MachineStructureDefinition> snapshot = Map.copyOf(replacement);
         MachineRegistry.installStructures(snapshot);
         DYNAMIC_STRUCTURES = snapshot;
@@ -59,7 +60,27 @@ public final class MachineStructureRegistry {
                 registration.allowParallelism(),
                 registration.allowMultithreading(),
                 1,
-                List.of(), stages);
+                java.util.List.of(),
+                registration.role(),
+                registration.acceptedModuleIds(),
+                stages);
+    }
+
+    public static void validateDynamicRoles(Map<Identifier, MachineStructureDefinition> structures) {
+        Map<Identifier, MachineRegistration> registrations = new LinkedHashMap<>();
+        for (Map.Entry<Identifier, MachineStructureDefinition> entry : structures.entrySet()) {
+            Identifier id = entry.getKey();
+            MachineStructureDefinition structure = entry.getValue();
+            MachineRegistration registration = MachineDefinitions.getRegistration(id);
+            if (registration == null) {
+                throw new IllegalStateException("No startup machine registration for structure: " + id);
+            }
+            if (!id.equals(structure.machineId())) {
+                throw new IllegalStateException("Structure key does not match machine id: " + id + " != " + structure.machineId());
+            }
+            registrations.put(id, registration.withPattern(structure.pattern()));
+        }
+        MachineRoleValidator.validate(registrations.values(), null);
     }
 
     public static void clearForTesting() {

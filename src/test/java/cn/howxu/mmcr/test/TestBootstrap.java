@@ -10,10 +10,12 @@ import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
+import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -98,6 +100,7 @@ public final class TestBootstrap {
         for (ParallelTier tier : ParallelTier.values()) bindParallelController(tier);
         bindFactoryController();
         bindSmartInterface();
+        bindModuleBridge();
         bind(ModItems.THREAD_DISPERSER, registerItem(ModItems.THREAD_DISPERSER));
         MachineLevelRegistry.beginRegistration();
         DefaultMachineLevels.register();
@@ -265,6 +268,26 @@ public final class TestBootstrap {
         blockEntities.freeze();
         blocks.freeze();
         bind(ModBlockEntities.SMART_INTERFACE, blockEntityType);
+    }
+
+    private static void bindModuleBridge() throws Exception {
+        MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
+        MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
+        blocks.unfreeze(true);
+        blockEntities.unfreeze(true);
+        ModuleCouplerBlock block = new ModuleCouplerBlock(
+                () -> ModBlockEntities.MODULE_BRIDGE.get(), Blocks.IRON_BLOCK.properties());
+        Registry.register(BuiltInRegistries.BLOCK, MMCR.id("module_bridge"), block);
+        bind(ModBlocks.MODULE_BRIDGE, block);
+        Item item = registerItem(ModItems.ITEMS.get("module_bridge"));
+        bind(ModItems.ITEMS.get("module_bridge"), item);
+        Item.BY_BLOCK.put(block, item);
+
+        BlockEntityType<?> blockEntityType = new BlockEntityType<>(ModuleCouplerBlockEntity::new, block);
+        Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id("module_bridge"), blockEntityType);
+        blockEntities.freeze();
+        blocks.freeze();
+        bind(ModBlockEntities.MODULE_BRIDGE, blockEntityType);
     }
 
     private static void bind(Object deferredHolder, Object value) throws Exception {

@@ -22,7 +22,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 public class MachineRecipeBuilderJS {
     public Identifier machineId;
@@ -33,6 +35,7 @@ public class MachineRecipeBuilderJS {
     public int energyPerTick = 0;
     public boolean cancelIfPerTickFails = false;
     public final List<LevelRequirement> levelRequirements = new ArrayList<>();
+    public final Set<Identifier> requiredHostIds = new LinkedHashSet<>();
     final List<MachineRequirement> requirements = new ArrayList<>();
     private boolean allowPartialOutputs = false;
 
@@ -155,6 +158,19 @@ public class MachineRecipeBuilderJS {
         return this;
     }
 
+    public MachineRecipeBuilderJS requiredHost(String hostId) {
+        requiredHostIds.add(Identifier.parse(hostId));
+        return this;
+    }
+
+    public MachineRecipeBuilderJS requiredHosts(String... hostIds) {
+        if (hostIds == null) return this;
+        for (String hostId : hostIds) {
+            if (hostId != null) requiredHost(hostId);
+        }
+        return this;
+    }
+
     private MachineRecipeBuilderJS addItemInput(Ingredient item, int count, DataComponentPredicateSet components, float consumeChance) {
         inputs.add(new MachineIngredient.ItemIngredient(item, count, components, consumeChance));
         return this;
@@ -199,7 +215,7 @@ public class MachineRecipeBuilderJS {
         requirements.addAll(this.requirements);
 
         RecipeRegistry.register(new MachineRecipe(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(recipeOutputs), List.of(), 0, 1,
-                cancelIfPerTickFails, List.of(), List.copyOf(requirements), false, List.copyOf(levelRequirements), allowPartialOutputs));
+                cancelIfPerTickFails, List.of(), List.copyOf(requirements), false, List.copyOf(levelRequirements), allowPartialOutputs, new LinkedHashSet<>(requiredHostIds)));
     }
 
     private record ComponentOutput(int index, JsonObject stack) {

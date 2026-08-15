@@ -62,6 +62,12 @@ class RuntimeMachineModelRegistryTest {
                 .isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
         assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.SMART_INTERFACE.get()).itemDescription().overlayTexture())
                 .isEqualTo(MMCR.id("block/overlay_smartinterface_number"));
+        assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.MODULE_BRIDGE.get()).modelKind())
+                .isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
+        assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.MODULE_BRIDGE.get()).blockName())
+                .isEqualTo("module_bridge");
+        assertThat(RuntimeMachineModelRegistry.definition(ModBlocks.MODULE_BRIDGE.get()).itemDescription().overlayTexture())
+                .isEqualTo(MMCR.id("block/overlay_module_bridge"));
     }
 
     @Test
@@ -131,6 +137,7 @@ class RuntimeMachineModelRegistryTest {
         var parallel = ModBlocks.BLOCKS.get(ParallelTier.PLUS.idSuffix()).get();
         var factory = ModBlocks.BLOCKS.get("factory_controller").get();
         var smartInterface = ModBlocks.SMART_INTERFACE.get();
+        var moduleBridge = ModBlocks.MODULE_BRIDGE.get();
 
         assertThat(RuntimeMachineModelRegistry.dynamicBlockState(parallel).variants()).singleElement()
                 .satisfies(variant -> assertThat(variant.modelId()).isEqualTo(DynamicOverlayModelLoader.PORT_ID));
@@ -138,15 +145,20 @@ class RuntimeMachineModelRegistryTest {
                 .satisfies(variant -> assertThat(variant.modelId()).isEqualTo(DynamicOverlayModelLoader.PORT_ID));
         assertThat(RuntimeMachineModelRegistry.dynamicBlockState(smartInterface).variants()).singleElement()
                 .satisfies(variant -> assertThat(variant.modelId()).isEqualTo(DynamicOverlayModelLoader.PORT_ID));
+        assertThat(RuntimeMachineModelRegistry.dynamicBlockState(moduleBridge).variants()).singleElement()
+                .satisfies(variant -> assertThat(variant.modelId()).isEqualTo(DynamicOverlayModelLoader.PORT_ID));
     }
 
     @Test
     void runtime_resources_include_dynamic_factory_controller() {
         assertThat(RuntimeMachineModelRegistry.dynamicBlockEntries()).containsKey("factory_controller");
+        assertThat(RuntimeMachineModelRegistry.dynamicBlockEntries()).containsKey("module_bridge");
         assertThat(RuntimeMachineModelRegistry.dynamicBlockEntries()).doesNotContainKey("factory_scheduler");
         assertThat(RuntimeMachineResourcePack.resources())
                 .containsKey(MMCR.id("blockstates/factory_controller.json"))
                 .containsKey(MMCR.id("items/factory_controller.json"))
+                .containsKey(MMCR.id("blockstates/module_bridge.json"))
+                .containsKey(MMCR.id("items/module_bridge.json"))
                 .doesNotContainKey(MMCR.id("blockstates/factory_scheduler.json"))
                 .doesNotContainKey(MMCR.id("items/factory_scheduler.json"));
     }
