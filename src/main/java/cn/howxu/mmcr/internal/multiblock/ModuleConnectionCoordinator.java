@@ -143,6 +143,26 @@ public final class ModuleConnectionCoordinator {
         return count;
     }
 
+    public static boolean blocksHostFormation(ServerLevel level, Machine hostMachine, CompiledMachinePattern hostPattern,
+                                               Direction facing, BlockPos hostPos) {
+        if (level == null || hostMachine == null || hostPattern == null || !hostMachine.isHost()) return false;
+        Set<BlockPos> hostCouplers = worldPositions(hostPattern.couplerPositions(facing), hostPos);
+        Set<BlockPos> hostInterfaces = worldPositions(hostPattern.interfacePositions(facing), hostPos);
+        if (hostCouplers.isEmpty() || hostInterfaces.isEmpty()) return false;
+        for (BlockPos controllerPos : StructureClaimRegistry.get(level).claimedControllers()) {
+            if (!(level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity module)
+                    || !isFormedModule(module)) continue;
+            Machine moduleMachine = module.getFoundMachine();
+            if (!hostMachine.acceptedModuleIds().contains(moduleMachine.registryName())) continue;
+            Set<BlockPos> moduleCouplers = couplerWorldPositions(module);
+            if (java.util.Collections.disjoint(hostCouplers, moduleCouplers)) continue;
+            for (BlockPos moduleInterface : interfaceWorldPositions(module)) {
+                if (hostInterfaces.contains(moduleInterface)) return true;
+            }
+        }
+        return false;
+    }
+
     private static boolean canConnect(ServerLevel level, BlockPos couplerPos,
                                        MachineControllerBlockEntity host, MachineControllerBlockEntity module) {
         if (!isFormedHost(host) || !isFormedModule(module)) return false;
@@ -223,6 +243,12 @@ public final class ModuleConnectionCoordinator {
         if (compiled == null || facing == null) return Set.of();
         Set<BlockPos> positions = new LinkedHashSet<>();
         for (BlockPos relative : compiled.couplerPositions(facing)) positions.add(controller.getBlockPos().offset(relative));
+        return Set.copyOf(positions);
+    }
+
+    private static Set<BlockPos> worldPositions(List<BlockPos> relativePositions, BlockPos controllerPos) {
+        Set<BlockPos> positions = new LinkedHashSet<>();
+        for (BlockPos relative : relativePositions) positions.add(controllerPos.offset(relative));
         return Set.copyOf(positions);
     }
 

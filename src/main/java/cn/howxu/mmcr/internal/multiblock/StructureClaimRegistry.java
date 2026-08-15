@@ -97,6 +97,10 @@ public final class StructureClaimRegistry {
     }
 
     private void rebuildDomains() {
+        Map<Set<BlockPos>, ResourceDomain> existingDomains = new HashMap<>();
+        for (ResourceDomain domain : domainsByController.values()) {
+            existingDomains.put(domain.controllers(), domain);
+        }
         domainsByController.clear();
         Map<BlockPos, Set<BlockPos>> sharedControllersByComponent = new HashMap<>();
         for (Map.Entry<BlockPos, Set<Claim>> entry : claimsByController.entrySet()) {
@@ -130,7 +134,9 @@ public final class StructureClaimRegistry {
                     }
                 }
             }
-            ResourceDomain domain = new ResourceDomain(++nextDomainId, ++nextGeneration, controllers);
+            Set<BlockPos> members = Set.copyOf(controllers);
+            ResourceDomain domain = existingDomains.get(members);
+            if (domain == null) domain = new ResourceDomain(++nextDomainId, ++nextGeneration, members);
             for (BlockPos member : controllers) {
                 domainsByController.put(member, domain);
             }

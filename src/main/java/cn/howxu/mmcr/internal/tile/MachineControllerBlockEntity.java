@@ -947,6 +947,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                         0, 1, java.util.OptionalInt.empty(), PortRequirementSpec.FailureReason.MISSING);
                 return false;
             }
+            if (ModuleConnectionCoordinator.blocksHostFormation(serverLevel, candidate, compiled, facing, getBlockPos())) {
+                StructureClaimRegistry.get(serverLevel).release(getBlockPos());
+                return false;
+            }
         }
 
         lastFormationFailure = null;
@@ -1091,7 +1095,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (level == null) return claims;
         for (BlockPos relativePos : componentPositions(pattern, compiled, facing)) {
             BlockEntity entity = level.getBlockEntity(getBlockPos().offset(relativePos));
-            if (entity instanceof MachineComponentTile tile) {
+            if (entity instanceof SmartInterfaceBlockEntity) {
+                claims.add(new StructureClaimRegistry.Claim(entity.getBlockPos(), ComponentClaimPolicy.SHARED_SERIALIZED));
+            } else if (entity instanceof MachineComponentTile tile) {
                 claims.add(new StructureClaimRegistry.Claim(entity.getBlockPos(), tile.claimPolicy()));
             } else if (entity instanceof ParallelControllerBlockEntity || entity instanceof FactorySchedulerBlockEntity) {
                 claims.add(new StructureClaimRegistry.Claim(entity.getBlockPos(), ComponentClaimPolicy.EXCLUSIVE));
