@@ -142,7 +142,7 @@ public class TerminalAssemblyGameTest {
         helper.succeed();
     }
 
-    public void survivalBuildFailsAtomicallyWhenStageOneMaterialsAreMissing(GameTestHelper helper) {
+    public void survivalBuildPartiallyWhenStageOneMaterialsAreMissing(GameTestHelper helper) {
         BlockPos controllerPos = new BlockPos(4, 1, 4);
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
@@ -152,14 +152,25 @@ public class TerminalAssemblyGameTest {
 
         MultiblockAssemblyService.Result result = MultiblockAssemblyService.build(player, controller, false);
 
-        helper.assertTrue(result.interactionResult() == InteractionResult.FAIL, "Build fails when any stage-1 block is missing");
-        helper.assertTrue(result.changedBlocks() == 0, "No partial placement is reported");
+        helper.assertTrue(result.interactionResult() == InteractionResult.SUCCESS, "Build succeeds with partial materials");
+        helper.assertTrue(result.changedBlocks() == template.size() - 1, "All affordable structure blocks are placed");
+        int airBlocks = 0;
         for (MultiblockAssemblyService.Placement placement : template) {
-            helper.assertTrue(helper.getLevel().getBlockState(placement.pos()).isAir(), "No structure blocks are placed");
+            if (helper.getLevel().getBlockState(placement.pos()).isAir()) {
+                airBlocks++;
+            } else {
+                helper.assertTrue(helper.getLevel().getBlockState(placement.pos()).is(ModBlocks.CASING.get()),
+                        "Placed structure blocks are casings");
+            }
         }
-        helper.assertTrue(new PlayerInventoryStructureItemSource(player).canExtractAll(List.of(new ItemStack(ModBlocks.CASING.get(), template.size() - 1))),
-                "Dry-run failure preserves all available materials");
+        helper.assertTrue(airBlocks == 1, "Exactly one structure position remains air");
+        helper.assertTrue(new PlayerInventoryStructureItemSource(player).canExtractAll(List.of(new ItemStack(ModBlocks.CASING.get()))) == false,
+                "Placed blocks consume all available materials");
         helper.succeed();
+    }
+
+    void survivalBuildFailsAtomicallyWhenStageOneMaterialsAreMissing(GameTestHelper helper) {
+        survivalBuildPartiallyWhenStageOneMaterialsAreMissing(helper);
     }
 
     public void survivalBuildContinuesAfterInventoryIsReplenished(GameTestHelper helper) {
