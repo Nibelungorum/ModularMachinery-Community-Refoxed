@@ -285,6 +285,7 @@ class MachineRecipeDisplayTest {
         assertThat(display.durationTicks()).isEqualTo(120);
         assertThat(display.itemInputs()).hasSize(1);
         assertThat(display.itemInputs()).extracting(MachineRecipeDisplay.ItemInputDisplay::count).containsExactly(8);
+        assertThat(display.itemInputs().getFirst().stacks()).extracting(ItemStack::getCount).containsExactly(8);
         assertThat(display.itemOutputs()).singleElement().satisfies(output -> {
             assertThat(output.stack().is(Items.IRON_NUGGET)).isTrue();
             assertThat(output.stack().getCount()).isEqualTo(4);
