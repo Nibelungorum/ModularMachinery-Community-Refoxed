@@ -56,12 +56,13 @@ class ModelGenTest {
         assertThat(Files.exists(root.resolve("blockstates/factory_scheduler.json"))).isFalse();
         assertThat(Files.exists(root.resolve("models/block/factory_scheduler.json"))).isFalse();
         assertThat(Files.exists(root.resolve("models/item/factory_scheduler.json"))).isFalse();
-        assertThat(ModelGen.collectKnownItemNames()).contains("terminal", "thread_disperser");
+        assertThat(ModelGen.collectKnownItemNames()).contains("terminal", "thread_disperser", "modularium");
         assertThat(ModelGen.collectRegisteredModels()).filteredOn(model -> model.kind() == ModelGen.GeneratedModel.Kind.ITEM)
                 .extracting(ModelGen.GeneratedModel::name)
-                .contains("terminal", "thread_disperser");
+                .contains("terminal", "thread_disperser", "modularium");
         assertThat(Files.exists(root.resolve("textures/block/overlay_factory_controller.png"))).isTrue();
         assertThat(Files.exists(root.resolve("textures/item/thread_disperser.png"))).isTrue();
+        assertThat(Files.exists(root.resolve("textures/item/modularium.png"))).isTrue();
         assertThat(Files.exists(root.resolve("textures/gui/inventory_tiny.png"))).isTrue();
     }
 

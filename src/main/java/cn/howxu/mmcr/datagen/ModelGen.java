@@ -57,6 +57,7 @@ public final class ModelGen extends ModelProvider {
         names.add("multiblock_detector");
         names.add("thread_disperser");
         names.add("terminal");
+        names.add("modularium");
         return List.copyOf(names);
     }
 
@@ -70,6 +71,7 @@ public final class ModelGen extends ModelProvider {
         itemRegistration.register(ModItems.MULTIBLOCK_DETECTOR::get, "multiblock_detector");
         itemRegistration.register(ModItems.THREAD_DISPERSER::get, "thread_disperser");
         itemRegistration.register(ModItems.TERMINAL::get, "terminal");
+        itemRegistration.register(ModItems.MODULARIUM::get, "modularium");
     }
 
     private static boolean isIoPort(String blockName) {
