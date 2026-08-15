@@ -5,6 +5,7 @@ import cn.howxu.mmcr.internal.item.ThreadDisperserItem;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -53,6 +54,6 @@ class FactorySchedulerRegistrationTest {
         ModItems.THREAD_DISPERSER.get().appendHoverText(
                 new ItemStack(ModItems.THREAD_DISPERSER.get()), null, null, tooltip::add, null);
 
-        assertThat(tooltip).containsExactly(Component.translatable("tooltip.mmcr.thread_disperser.multithreading"));
+        assertThat(tooltip).containsExactly(Component.translatable("tooltip.mmcr.thread_disperser.multithreading").withStyle(ChatFormatting.LIGHT_PURPLE));
     }
 }
