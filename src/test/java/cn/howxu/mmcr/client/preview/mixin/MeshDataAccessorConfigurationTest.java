@@ -26,7 +26,8 @@ class MeshDataAccessorConfigurationTest {
             assertThat(config.get("package").getAsString()).isEqualTo("cn.howxu.mmcr.client.preview.mixin");
             assertThat(config.getAsJsonArray("client").asList())
                     .extracting(element -> element.getAsString())
-                    .containsExactly("MeshDataAccessor", "GuiGraphicsExtractorAccessor", "PictureInPictureRendererAccessor");
+                    .containsExactly("MeshDataAccessor", "GuiGraphicsExtractorAccessor", "PictureInPictureRendererAccessor",
+                            "GlBufferAccessor", "GlCommandEncoderMixin");
         } catch (java.io.IOException exception) {
             throw new AssertionError(exception);
         }

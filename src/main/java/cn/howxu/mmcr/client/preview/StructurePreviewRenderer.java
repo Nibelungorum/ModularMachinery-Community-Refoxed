@@ -4,6 +4,7 @@ import cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderState;
 import cn.howxu.mmcr.client.preview.scene.PreviewScenePictureInPictureRenderer;
 import cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderer;
 import cn.howxu.mmcr.client.preview.mixin.GuiGraphicsExtractorAccessor;
+import cn.howxu.mmcr.client.preview.mixin.DepthTextureReadbackBridge;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
@@ -84,17 +85,12 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
         if (hitResult instanceof BlockHitResult blockHitResult) selectedHit = blockHitResult;
     }
 
-    /** Called by this renderer's owned PiP target after its output attachments are active. */
-    public void onPictureInPictureFrame(GpuTexture depthTexture, cn.howxu.mmcr.client.preview.scene.PreviewSceneCamera camera,
-                                          int mouseX, int mouseY, PreviewFrameViewport frame) {
+    /** Called after PiP has flushed its scene buffers into the owned depth texture. */
+    public void onPictureInPicturePrepared(GpuTexture depthTexture, cn.howxu.mmcr.client.preview.scene.PreviewSceneCamera camera,
+                                            int mouseX, int mouseY, PreviewFrameViewport frame) {
         lifecycle.drainOwnerQueue();
         if (closed) return;
         if (depthTexture == null || !frame.containsAbsoluteGui(mouseX, mouseY)) {
-            hoverHit = null;
-            return;
-        }
-        // Vanilla PiP depth targets do not advertise COPY_SRC. Do not issue an invalid public copy.
-        if ((depthTexture.usage() & GpuTexture.USAGE_COPY_SRC) == 0) {
             hoverHit = null;
             return;
         }
@@ -109,9 +105,10 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
         long token = lifecycle.nextReadback(mouseX, mouseY, now);
         GpuBuffer issuedBuffer = depthReadbackBuffer;
         depthReadbackInFlight = true;
-        RenderSystem.getDevice().createCommandEncoder().copyTextureToBuffer(depthTexture, issuedBuffer, 0L, () -> {
+        DepthTextureReadbackBridge encoder = (DepthTextureReadbackBridge) RenderSystem.getDevice().createCommandEncoder();
+        encoder.mmcr$copyDepthTextureToBuffer(depthTexture, issuedBuffer, 0L, () -> {
             lifecycle.enqueueCallback(token, () -> readDepthOnOwner(issuedBuffer, token, frame, mouseX, mouseY, camera));
-        }, 0, textureMouse.x(), textureMouse.y(), 1, 1);
+        }, textureMouse.x(), textureMouse.y());
     }
 
     public void renderScene(cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderContext context, PreviewCamera camera) {

@@ -23,6 +23,8 @@ import cn.howxu.mmcr.client.preview.mixin.PictureInPictureRendererAccessor;
  * @author howxu <dev@howxu.cn>
  */
 public final class PreviewScenePictureInPictureRenderer extends PictureInPictureRenderer<PreviewSceneRenderState> {
+    private GpuTexture preparedDepthTexture;
+    private PreviewSceneCamera preparedCamera;
     public PreviewScenePictureInPictureRenderer(MultiBufferSource.BufferSource bufferSource) {
         super(bufferSource);
     }
@@ -44,7 +46,11 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
         RenderSystem.backupProjectionMatrix();
         try {
             super.prepare(state, guiRenderState, guiScale);
+            state.owner().onPictureInPicturePrepared(preparedDepthTexture, preparedCamera,
+                    state.mouseX(), state.mouseY(), state.frame());
         } finally {
+            preparedDepthTexture = null;
+            preparedCamera = null;
             RenderSystem.outputColorTextureOverride = previousColor;
             RenderSystem.outputDepthTextureOverride = previousDepth;
             RenderSystem.restoreProjectionMatrix();
@@ -75,13 +81,8 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
             modelView.popMatrix();
             RenderSystem.restoreProjectionMatrix();
         }
-        GpuTexture depthTexture = ((PictureInPictureRendererAccessor) (Object) this).mmcr$getDepthTexture();
-        if (depthTexture == null) {
-            state.owner().onPictureInPictureFrame(null, camera, state.mouseX(), state.mouseY(), state.frame());
-            return;
-        }
-        state.owner().onPictureInPictureFrame(depthTexture, camera, state.mouseX(), state.mouseY(),
-                state.frame());
+        preparedDepthTexture = ((PictureInPictureRendererAccessor) (Object) this).mmcr$getDepthTexture();
+        preparedCamera = camera;
     }
 
 }

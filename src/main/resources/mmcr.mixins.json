@@ -6,7 +6,9 @@
   "client": [
     "MeshDataAccessor",
     "GuiGraphicsExtractorAccessor",
-    "PictureInPictureRendererAccessor"
+    "PictureInPictureRendererAccessor",
+    "GlBufferAccessor",
+    "GlCommandEncoderMixin"
   ],
   "injectors": {
     "defaultRequire": 1
