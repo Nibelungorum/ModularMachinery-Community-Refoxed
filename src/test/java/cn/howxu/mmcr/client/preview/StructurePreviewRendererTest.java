@@ -127,13 +127,13 @@ class StructurePreviewRendererTest {
     }
 
     @Test
-    void outlines_use_the_preview_model_view_matrix() throws IOException {
+    void outlines_leave_preview_model_view_transform_to_the_render_pipeline() throws IOException {
         String source = Files.readString(Path.of("src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewSceneRenderer.java"));
 
-        int modelView = source.indexOf("RenderSystem.getModelViewStack()");
         int outline = source.indexOf("private static void drawOutline");
 
-        assertThat(modelView).isGreaterThan(outline);
+        assertThat(outline).isGreaterThanOrEqualTo(0);
+        assertThat(source).doesNotContain("poseStack.last().pose().set(com.mojang.blaze3d.systems.RenderSystem.getModelViewStack())");
         assertThat(source).doesNotContain("context.poseStack().last()");
     }
 

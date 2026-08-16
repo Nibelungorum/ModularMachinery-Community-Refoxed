@@ -205,7 +205,6 @@ public final class PreviewSceneRenderer {
         cn.howxu.mmcr.MMCR.LOG.debug("MMCR preview outline submit: pos={}, color={}, modelView={}, projection={}",
                 hit.getBlockPos(), Integer.toHexString(color), RenderSystem.getModelViewStack(), PreviewSceneCameraContext.projection());
         com.mojang.blaze3d.vertex.PoseStack poseStack = new com.mojang.blaze3d.vertex.PoseStack();
-        poseStack.last().pose().set(com.mojang.blaze3d.systems.RenderSystem.getModelViewStack());
         com.mojang.blaze3d.vertex.PoseStack.Pose pose = poseStack.last();
         float width = net.minecraft.client.Minecraft.getInstance().gameRenderer.getGameRenderState().windowRenderState.appropriateLineWidth;
         double x0 = box.minX, y0 = box.minY, z0 = box.minZ, x1 = box.maxX, y1 = box.maxY, z1 = box.maxZ;
