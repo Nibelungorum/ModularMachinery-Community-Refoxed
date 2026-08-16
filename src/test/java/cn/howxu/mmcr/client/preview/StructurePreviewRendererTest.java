@@ -148,4 +148,13 @@ class StructurePreviewRendererTest {
         assertThat(scene).contains("MMCR preview outline submit");
         assertThat(scene).contains("MMCR preview outline batch flushed");
     }
+
+    @Test
+    void preview_hit_state_snapshots_mutable_block_positions() throws IOException {
+        String source = Files.readString(Path.of("src/main/java/cn/howxu/mmcr/client/preview/StructurePreviewRenderer.java"));
+
+        assertThat(source).contains("copyHit(blockHitResult)");
+        assertThat(source).contains("copyHit(scene.clip(");
+        assertThat(source).contains("hit.getBlockPos().immutable()");
+    }
 }

@@ -81,7 +81,7 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
 
     @Override
     public void selectHit(Object hitResult) {
-        if (hitResult instanceof BlockHitResult blockHitResult) selectedHit = blockHitResult;
+        if (hitResult instanceof BlockHitResult blockHitResult) selectedHit = copyHit(blockHitResult);
     }
 
     /** Called after PiP has flushed its scene buffers into the owned depth texture. */
@@ -168,11 +168,16 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
         inverse.transform(point);
         net.minecraft.world.phys.Vec3 target = new net.minecraft.world.phys.Vec3(point.x / point.w, point.y / point.w, point.z / point.w);
         BlockHitResult previousHit = hoverHit;
-        hoverHit = scene.clip(new net.minecraft.world.phys.Vec3(sample.camera().eye()), target);
+        hoverHit = copyHit(scene.clip(new net.minecraft.world.phys.Vec3(sample.camera().eye()), target));
         if (!Objects.equals(previousHit, hoverHit)) {
             cn.howxu.mmcr.MMCR.LOG.debug("MMCR preview depth hit: depth={}, mouse=({}, {}), texel={}, target={}, hit={}",
                     depth, sample.mouseX(), sample.mouseY(), sample.texel(), target, hoverHit);
         }
+    }
+
+    private static @Nullable BlockHitResult copyHit(@Nullable BlockHitResult hit) {
+        if (hit == null) return null;
+        return new BlockHitResult(hit.getLocation(), hit.getDirection(), hit.getBlockPos().immutable(), hit.isInside());
     }
 
     private void releaseResources() {
