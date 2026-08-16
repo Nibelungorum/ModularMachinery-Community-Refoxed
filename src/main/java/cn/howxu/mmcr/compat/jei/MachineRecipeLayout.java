@@ -22,8 +22,8 @@ public record MachineRecipeLayout(
         int transferButtonY
 ) {
 
-    public static final int WIDTH = 330;
-    public static final int HEIGHT = 170;
+    public static final int WIDTH = 150;
+    public static final int HEIGHT = 150;
 
     private static final int COLUMNS = 3;
     private static final int ROWS = 6;
@@ -36,12 +36,12 @@ public record MachineRecipeLayout(
         return new MachineRecipeLayout(
                 WIDTH,
                 HEIGHT,
-                region(display.fluidInputs().size(), display.itemInputs().size(), 168),
-                region(display.fluidOutputs().size(), display.itemOutputs().size(), 251, true),
-                168,
+                region(display.fluidInputs().size(), display.itemInputs().size(), 8),
+                region(display.fluidOutputs().size(), display.itemOutputs().size(), 91, true),
+                8,
                 hostRequirementTextY(display),
                 durationTextY(display),
-                300,
+                132,
                 130
         );
     }
