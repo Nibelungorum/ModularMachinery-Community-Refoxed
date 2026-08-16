@@ -8,7 +8,8 @@ displayName="${mod_name}"
 logoFile="mmcr.png"
 authors="howxu and ModularMachinery-Community-Edition developers"
 description='''
-Nothing here
+Structure previews include adapted LowDragLib2 code under LGPL-3.0-or-later.
+See NOTICE and LICENSES/LGPL-3.0.txt.
 '''
 
 [[mixins]]
