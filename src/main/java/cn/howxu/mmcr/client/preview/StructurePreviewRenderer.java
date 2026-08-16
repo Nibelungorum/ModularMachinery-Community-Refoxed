@@ -4,7 +4,6 @@ import cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderState;
 import cn.howxu.mmcr.client.preview.scene.PreviewScenePictureInPictureRenderer;
 import cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderer;
 import cn.howxu.mmcr.mixin.client.preview.GuiGraphicsExtractorAccessor;
-import cn.howxu.mmcr.mixin.client.preview.DepthTextureReadbackBridge;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;

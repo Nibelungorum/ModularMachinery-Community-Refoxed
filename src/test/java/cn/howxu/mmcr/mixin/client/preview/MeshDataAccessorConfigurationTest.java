@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.mixin.client.preview;
 
+import cn.howxu.mmcr.client.preview.DepthTextureReadbackBridge;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 
@@ -31,5 +32,11 @@ class MeshDataAccessorConfigurationTest {
         } catch (java.io.IOException exception) {
             throw new AssertionError(exception);
         }
+    }
+
+    @Test
+    void depth_readback_bridge_is_outside_the_mixin_package() {
+        assertThat(DepthTextureReadbackBridge.class.getPackageName())
+                .isNotEqualTo("cn.howxu.mmcr.mixin.client.preview");
     }
 }

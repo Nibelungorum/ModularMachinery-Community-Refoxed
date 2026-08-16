@@ -6,6 +6,7 @@
  */
 package cn.howxu.mmcr.mixin.client.preview;
 
+import cn.howxu.mmcr.client.preview.DepthTextureReadbackBridge;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.opengl.GlBuffer;
 import com.mojang.blaze3d.opengl.GlStateManager;
