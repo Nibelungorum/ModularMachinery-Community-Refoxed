@@ -3,7 +3,9 @@ package cn.howxu.mmcr.client.preview;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -43,11 +45,26 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         for (var entry : stage.pattern().pattern().entrySet()) {
             entry.getValue().preferredState().ifPresent(state -> {
                 BlockPos position = entry.getKey().immutable();
-                states.put(position, state);
+                states.put(position, orientController(position, state, stage.pattern().pattern()));
                 Identifier levelSlot = stage.levelSlots().get(entry.getKey());
                 if (levelSlot != null) levelSlots.put(position, levelSlot);
             });
         }
         return new StructurePreviewSchema(RESOLVED_STAGE_ID, states, levelSlots);
+    }
+
+    private static BlockState orientController(BlockPos position, BlockState state, Map<BlockPos, ?> pattern) {
+        if (!(state.getBlock() instanceof MachineControllerBlock) || !position.equals(BlockPos.ZERO)) return state;
+        int x = 0;
+        int z = 0;
+        for (BlockPos other : pattern.keySet()) {
+            x += other.getX();
+            z += other.getZ();
+        }
+        if (Math.abs(x) == Math.abs(z) && x == 0) return state;
+        Direction interior = Math.abs(x) > Math.abs(z)
+                ? (x < 0 ? Direction.WEST : Direction.EAST)
+                : (z < 0 ? Direction.NORTH : Direction.SOUTH);
+        return state.setValue(MachineControllerBlock.FACING, interior.getOpposite());
     }
 }

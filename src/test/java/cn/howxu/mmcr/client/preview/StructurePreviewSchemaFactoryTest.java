@@ -9,8 +9,11 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -137,6 +140,20 @@ class StructurePreviewSchemaFactoryTest {
                 StructurePreviewVariantSelection.defaults());
 
         assertThat(schema.stateAt(BlockPos.ZERO)).isEqualTo(preferredState);
+    }
+
+    @Test
+    void factory_orients_controller_face_away_from_the_structure() {
+        BlockState controller = ModBlocks.CONTROLLER.get().defaultBlockState();
+        MachineStructureStage stage = new MachineStructureStage(1, new BlockArray(Map.of(
+                BlockPos.ZERO, new BlockPredicate.OfBlock(controller.getBlock()),
+                new BlockPos(0, 0, -1), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))),
+                PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of());
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("preview_machine"),
+                StructurePreviewVariantSelection.defaults());
+
+        assertThat(schema.stateAt(BlockPos.ZERO).getValue(MachineControllerBlock.FACING)).isEqualTo(Direction.SOUTH);
     }
 
     private static Machine machineWithStages(BlockArray pattern, List<MachineStructureStage> stages) {

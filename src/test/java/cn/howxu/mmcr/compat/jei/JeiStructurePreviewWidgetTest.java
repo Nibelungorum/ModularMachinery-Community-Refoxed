@@ -180,7 +180,7 @@ class JeiStructurePreviewWidgetTest {
     }
 
     @Test
-    void tooltipUsesHoveredBlockBeforeSelectionAndIncludesFluidBucketName() {
+    void structurePreviewDoesNotExposeBlockTooltip() {
         BlockHitResult hovered = hitAt(0, 0, 0);
         BlockHitResult selected = hitAt(1, 0, 0);
         RecordingPreviewWidget preview = new RecordingPreviewWidget();
@@ -190,19 +190,18 @@ class JeiStructurePreviewWidgetTest {
         JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, schema(Blocks.IRON_BLOCK.defaultBlockState(), Blocks.GOLD_BLOCK.defaultBlockState()), 0, 0, 160, 92);
 
         widget.getTooltip(tooltip, 6, 6);
-        assertThat(tooltip.text()).contains(Blocks.IRON_BLOCK.getName());
-        assertThat(tooltip.text()).doesNotContain(Blocks.GOLD_BLOCK.getName());
+        assertThat(tooltip.text()).isEmpty();
 
         preview.hover = null;
         tooltip.clear();
         widget.getTooltip(tooltip, 6, 6);
-        assertThat(tooltip.text()).contains(Blocks.GOLD_BLOCK.getName());
+        assertThat(tooltip.text()).isEmpty();
 
         preview.selected = hitAt(0, 0, 0);
         JeiStructurePreviewWidget fluidWidget = JeiStructurePreviewWidget.forTesting(preview, schema(Blocks.WATER.defaultBlockState()), 0, 0, 160, 92);
         tooltip.clear();
         fluidWidget.getTooltip(tooltip, 6, 6);
-        assertThat(tooltip.text()).contains(Items.WATER_BUCKET.getDefaultInstance().getHoverName());
+        assertThat(tooltip.text()).isEmpty();
     }
 
     @Test

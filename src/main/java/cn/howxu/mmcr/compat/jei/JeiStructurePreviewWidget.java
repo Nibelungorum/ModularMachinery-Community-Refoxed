@@ -7,7 +7,6 @@ import cn.howxu.mmcr.client.preview.StructurePreviewSchemaFactory;
 import cn.howxu.mmcr.client.preview.StructurePreviewWidget;
 import cn.howxu.mmcr.mixin.client.preview.GuiGraphicsExtractorAccessor;
 import com.mojang.blaze3d.platform.InputConstants;
-import mezz.jei.api.gui.builder.ITooltipBuilder;
 import mezz.jei.api.gui.inputs.IJeiInputHandler;
 import mezz.jei.api.gui.inputs.IJeiUserInput;
 import mezz.jei.api.gui.widgets.IRecipeWidget;
@@ -16,7 +15,6 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.ScreenPosition;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.List;
 
@@ -120,18 +118,6 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         if (closed) return;
         closed = true;
         preview.close();
-    }
-
-    @Override
-    public void getTooltip(ITooltipBuilder tooltip, double mouseX, double mouseY) {
-        if (!insidePreview(mouseX, mouseY)) return;
-        Object hit = preview.hoverHit() != null ? preview.hoverHit() : preview.selectedHit();
-        if (hit instanceof net.minecraft.world.phys.BlockHitResult blockHit) {
-            BlockState state = schema == null ? null : schema.stateAt(blockHit.getBlockPos());
-            if (state == null) return;
-            tooltip.add(state.getBlock().getName());
-            if (!state.getFluidState().isEmpty()) tooltip.add(state.getFluidState().getType().getBucket().getDefaultInstance().getHoverName());
-        }
     }
 
     @Override

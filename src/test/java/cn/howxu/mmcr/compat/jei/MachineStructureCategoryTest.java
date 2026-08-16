@@ -21,8 +21,8 @@ class MachineStructureCategoryTest {
         assertThat(source).contains("private static final int PREVIEW_X = 4;");
         assertThat(source).contains("private static final int PREVIEW_Y = 20;");
         assertThat(source).contains("private static final int PREVIEW_WIDTH = 160;");
-        assertThat(source).contains("private static final int PREVIEW_HEIGHT = 204;");
+        assertThat(source).contains("private static final int PREVIEW_HEIGHT = 92;");
         assertThat(source).contains("@Override public int getWidth() { return 168; }");
-        assertThat(source).contains("@Override public int getHeight() { return 240; }");
+        assertThat(source).contains("@Override public int getHeight() { return 128; }");
     }
 }
