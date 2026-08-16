@@ -50,6 +50,7 @@ class JeiStructurePreviewWidgetTest {
         assertThat(preview.presses).isEqualTo(1);
         assertThat(preview.lastPressX).isEqualTo(1);
         assertThat(preview.lastPressY).isEqualTo(1);
+        assertThat(widget.handleInput(1, 1, leftPress(false))).isTrue();
         assertThat(preview.releases).isEqualTo(1);
         assertThat(widget.handleInput(161, 1, leftPress(true))).isFalse();
     }
@@ -68,14 +69,21 @@ class JeiStructurePreviewWidgetTest {
     }
 
     @Test
-    void dragIsNotConsumedWithoutAnActualPreviewDragLifecycle() {
+    void actualPreviewPressForwardsLocalDragAndReleaseEndsTheSession() {
         RecordingPreviewWidget preview = new RecordingPreviewWidget();
         JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 4, 64, 160, 92);
 
-        assertThat(widget.handleInput(161, 1, leftPress(true))).isFalse();
-        assertThat(widget.handleMouseDragged(16, 6, InputConstants.Type.MOUSE.getOrCreate(0), 1, 1)).isFalse();
-        assertThat(widget.handleMouseDragged(16, 6, InputConstants.Type.MOUSE.getOrCreate(0), 1, 1)).isFalse();
-        assertThat(preview.drags).isZero();
+        assertThat(widget.handleInput(1, 1, leftPress(false))).isTrue();
+        assertThat(widget.handleMouseDragged(16, 6, InputConstants.Type.MOUSE.getOrCreate(2), 3, 4)).isTrue();
+        assertThat(preview.drags).isEqualTo(1);
+        assertThat(preview.lastDragX).isEqualTo(16);
+        assertThat(preview.lastDragY).isEqualTo(6);
+        assertThat(preview.lastDragButton).isEqualTo(2);
+        assertThat(preview.lastDeltaX).isEqualTo(3);
+        assertThat(preview.lastDeltaY).isEqualTo(4);
+
+        assertThat(widget.handleInput(1, 1, leftPress(false))).isTrue();
+        assertThat(widget.handleMouseDragged(16, 6, InputConstants.Type.MOUSE.getOrCreate(2), 3, 4)).isFalse();
     }
 
     @Test
@@ -92,6 +100,16 @@ class JeiStructurePreviewWidgetTest {
         assertThat(widget.handleInput(161, 1, leftPress(false))).isFalse();
         assertThat(preview.presses).isZero();
         assertThat(preview.releases).isZero();
+    }
+
+    @Test
+    void outsideActualPressDoesNotArmPreviewDrag() {
+        RecordingPreviewWidget preview = new RecordingPreviewWidget();
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 4, 64, 160, 92);
+
+        assertThat(widget.handleInput(161, 1, leftPress(false))).isFalse();
+        assertThat(widget.handleMouseDragged(2, 2, InputConstants.Type.MOUSE.getOrCreate(0), 1, 1)).isFalse();
+        assertThat(preview.drags).isZero();
     }
 
     @Test
@@ -191,6 +209,11 @@ class JeiStructurePreviewWidgetTest {
         private int previous;
         private double lastPressX;
         private double lastPressY;
+        private double lastDragX;
+        private double lastDragY;
+        private int lastDragButton;
+        private double lastDeltaX;
+        private double lastDeltaY;
         private Object hover;
         private Object selected;
 
@@ -203,7 +226,15 @@ class JeiStructurePreviewWidgetTest {
         }
 
         @Override public boolean mouseReleased(double mouseX, double mouseY, int button) { releases++; return true; }
-        @Override public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) { drags++; return true; }
+        @Override public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+            drags++;
+            lastDragX = mouseX;
+            lastDragY = mouseY;
+            lastDragButton = button;
+            lastDeltaX = dragX;
+            lastDeltaY = dragY;
+            return true;
+        }
         @Override public void previous() { previous++; }
         @Override public Object hoverHit() { return hover; }
         @Override public Object selectedHit() { return selected; }

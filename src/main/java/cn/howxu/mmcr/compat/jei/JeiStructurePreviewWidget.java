@@ -32,6 +32,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private final int width;
     private final int height;
     private final StructurePreviewSchema schema;
+    private boolean previewDragActive;
 
     public JeiStructurePreviewWidget(Machine machine, int x, int y, int width, int height) {
         this(createSchema(machine), x, y, width, height);
@@ -134,15 +135,20 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         if (input.isSimulate()) {
             return insidePreview(mouseX, mouseY);
         }
-        boolean handled = insidePreview(mouseX, mouseY)
-                && preview.mouseClicked(mouseX, mouseY, button)
-                && preview.mouseReleased(mouseX, mouseY, button);
+        if (!insidePreview(mouseX, mouseY)) return false;
+        if (previewDragActive) {
+            previewDragActive = false;
+            return preview.mouseReleased(mouseX, mouseY, button);
+        }
+        boolean handled = preview.mouseClicked(mouseX, mouseY, button);
+        previewDragActive = handled;
         return handled;
     }
 
     @Override
     public boolean handleMouseDragged(double mouseX, double mouseY, InputConstants.Key mouseKey, double dragX, double dragY) {
-        return false;
+        return previewDragActive && insidePreview(mouseX, mouseY) && mouseKey.getType() == InputConstants.Type.MOUSE
+                && preview.mouseDragged(mouseX, mouseY, mouseKey.getValue(), dragX, dragY);
     }
 
     @Override
