@@ -68,16 +68,30 @@ class JeiStructurePreviewWidgetTest {
     }
 
     @Test
-    void dragIsIgnoredUnlessItsPressStartedInsideThePreview() {
+    void dragIsNotConsumedWithoutAnActualPreviewDragLifecycle() {
         RecordingPreviewWidget preview = new RecordingPreviewWidget();
         JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 4, 64, 160, 92);
 
         assertThat(widget.handleInput(161, 1, leftPress(true))).isFalse();
         assertThat(widget.handleMouseDragged(16, 6, InputConstants.Type.MOUSE.getOrCreate(0), 1, 1)).isFalse();
-        widget.handleInput(1, 1, leftPress(true));
+        assertThat(widget.handleMouseDragged(16, 6, InputConstants.Type.MOUSE.getOrCreate(0), 1, 1)).isFalse();
+        assertThat(preview.drags).isZero();
+    }
 
-        assertThat(widget.handleMouseDragged(16, 6, InputConstants.Type.MOUSE.getOrCreate(0), 1, 1)).isTrue();
-        assertThat(preview.drags).isEqualTo(1);
+    @Test
+    void simulatedPreviewProbesDoNotArmDragOrReleaseHandling() {
+        RecordingPreviewWidget preview = new RecordingPreviewWidget();
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 4, 64, 160, 92);
+
+        assertThat(widget.handleInput(1, 1, leftPress(true))).isTrue();
+        assertThat(widget.handleMouseDragged(2, 2, InputConstants.Type.MOUSE.getOrCreate(0), 1, 1)).isFalse();
+        assertThat(widget.handleInput(161, 1, leftPress(false))).isFalse();
+
+        assertThat(widget.handleInput(161, 1, leftPress(true))).isFalse();
+        assertThat(widget.handleMouseDragged(2, 2, InputConstants.Type.MOUSE.getOrCreate(0), 1, 1)).isFalse();
+        assertThat(widget.handleInput(161, 1, leftPress(false))).isFalse();
+        assertThat(preview.presses).isZero();
+        assertThat(preview.releases).isZero();
     }
 
     @Test
@@ -117,7 +131,6 @@ class JeiStructurePreviewWidgetTest {
 
         JeiStructurePreviewWidget first = JeiStructurePreviewWidget.forTesting(schema(Blocks.IRON_BLOCK.defaultBlockState()), factory, 4, 64, 160, 92);
         JeiStructurePreviewWidget second = JeiStructurePreviewWidget.forTesting(schema(Blocks.IRON_BLOCK.defaultBlockState()), factory, 4, 64, 160, 92);
-        first.handleInput(1, 1, leftPress(true));
         first.handleInput(1, 1, leftPress(false));
 
         assertThat(previews).hasSize(2);
