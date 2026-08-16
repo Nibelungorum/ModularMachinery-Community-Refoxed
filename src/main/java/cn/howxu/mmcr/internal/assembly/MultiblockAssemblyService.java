@@ -161,11 +161,7 @@ public final class MultiblockAssemblyService {
     }
 
     private static Optional<BlockState> preferredState(BlockPredicate predicate) {
-        List<BlockState> candidates = candidateStates(predicate).stream()
-                .sorted(Comparator.comparingInt(MultiblockAssemblyService::levelPriority).reversed())
-                .toList();
-        if (!candidates.isEmpty()) return Optional.of(candidates.getFirst());
-        return MultiblockPreviewBuilder.previewState(predicate);
+        return predicate.preferredState().or(() -> MultiblockPreviewBuilder.previewState(predicate));
     }
 
     private static List<BlockState> candidateStates(BlockPredicate predicate) {

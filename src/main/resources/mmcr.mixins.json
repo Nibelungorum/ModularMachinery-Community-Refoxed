@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "cn.howxu.mmcr.client.preview.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "MeshDataAccessor",
+    "GuiGraphicsExtractorAccessor",
+    "PictureInPictureRendererAccessor",
+    "GlBufferAccessor",
+    "GlCommandEncoderMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "cn.howxu.mmcr.compat.jei",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "JeiRecipeGuiLogicMixin",
+    "JeiRecipesGuiMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -9,8 +9,15 @@ logoFile="mmcr.png"
 authors="howxu, HellFirePvP, wiiv, KasumiNova, youyihj, ikexing"
 credits="Based on HellFirePvP code, wiiv most the textures :3, KasumiNova improvements, more MMCE contributors and MMCR contributors!"
 description='''
-Nothing here
+Structure previews include adapted LowDragLib2 code under LGPL-3.0-or-later.
+See NOTICE and LICENSES/LGPL-3.0.txt.
 '''
+
+[[mixins]]
+config="mmcr.mixins.json"
+
+[[mixins]]
+config="mmcr.jei.mixins.json"
 
 [[dependencies.${mod_id}]]
 modId="neoforge"

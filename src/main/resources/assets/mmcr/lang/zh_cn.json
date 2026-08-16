@@ -1,0 +1,8 @@
+{
+  "jei.mmcr.structure_preview.previous_layer": "上一层",
+  "jei.mmcr.structure_preview.next_layer": "下一层",
+  "jei.mmcr.structure_preview.all_layers": "全部",
+  "jei.mmcr.structure_preview.reset": "重置",
+  "jei.mmcr.structure_preview.layer": "Y=%s（%s/%s）",
+  "jei.mmcr.structure_preview.unavailable": "结构预览不可用"
+}

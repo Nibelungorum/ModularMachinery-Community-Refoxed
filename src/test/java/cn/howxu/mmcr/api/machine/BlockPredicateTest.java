@@ -1,14 +1,21 @@
 package cn.howxu.mmcr.api.machine;
 
-import net.minecraft.server.Bootstrap;
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
+import org.nibelungorum.DefaultMachineLevels;
+import net.minecraft.network.chat.Component;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Constructor;
-import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -26,6 +33,13 @@ class BlockPredicateTest {
                 .getDeclaredMethod("bindTags", java.util.Collection.class);
         bindTags.setAccessible(true);
         bindTags.invoke(holder, java.util.Set.of(tag));
+    }
+
+    @AfterEach
+    void clearMachineLevels() {
+        MachineLevelRegistry.beginRegistration();
+        DefaultMachineLevels.register();
+        MachineLevelRegistry.freezeRegistration();
     }
 
     @Test void air_matches_only_air() {
@@ -65,5 +79,55 @@ class BlockPredicateTest {
                 new BlockPredicate.OfBlock(Blocks.DIRT)));
         assertThat(p.matches(Blocks.STONE.defaultBlockState())).isTrue();
         assertThat(p.matches(Blocks.AIR.defaultBlockState())).isFalse();
+    }
+
+    @Test void preferredState_returns_the_exact_state_predicate_state() {
+        var state = Blocks.OAK_STAIRS.defaultBlockState();
+
+        assertThat(new BlockPredicate.OfBlockState(state).preferredState()).containsSame(state);
+    }
+
+    @Test void preferredState_returns_the_block_default_state() {
+        assertThat(new BlockPredicate.OfBlock(Blocks.OAK_STAIRS).preferredState())
+                .containsSame(Blocks.OAK_STAIRS.defaultBlockState());
+    }
+
+    @Test void preferredState_prefers_the_highest_registered_machine_level_in_anyOf() {
+        MachineLevelRegistry.beginRegistration();
+        var typeId = MMCR.id("block_predicate_test");
+        MachineLevelRegistry.registerType(new LevelType(typeId, Component.literal("Test")));
+        MachineLevelRegistry.registerLevel(new MachineLevel(MMCR.id("block_predicate_test_copper"), typeId, 1,
+                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
+        MachineLevelRegistry.registerLevel(new MachineLevel(MMCR.id("block_predicate_test_iron"), typeId, 2,
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
+        MachineLevelRegistry.freezeRegistration();
+        var predicate = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState())));
+
+        assertThat(predicate.preferredState()).containsSame(Blocks.IRON_BLOCK.defaultBlockState());
+    }
+
+    @Test void preferredState_recursively_considers_nested_anyOf_children() {
+        var predicate = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.Any(),
+                new BlockPredicate.AnyOf(List.of(
+                        new BlockPredicate.OfBlock(Blocks.STONE),
+                        new BlockPredicate.OfBlock(Blocks.DIRT)))));
+
+        assertThat(predicate.preferredState()).containsSame(Blocks.STONE.defaultBlockState());
+    }
+
+    @Test void preferredState_leaves_internal_preview_fallbacks_to_the_preview_builder() {
+        var predicate = BlockPredicate.machineCoupler();
+
+        assertThat(predicate.preferredState()).isEmpty();
+        assertThat(MultiblockPreviewBuilder.previewState(predicate)).isPresent();
+    }
+
+    @Test void preferredState_is_empty_when_no_candidate_or_preview_fallback_exists() {
+        assertThat(new BlockPredicate.Any().preferredState()).isEmpty();
+        assertThat(new BlockPredicate.Air().preferredState()).isEmpty();
+        assertThat(new BlockPredicate.OfTag(BlockTags.DIRT).preferredState()).isEmpty();
     }
 }
