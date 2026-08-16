@@ -49,6 +49,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private JeiStructurePreviewWidget(StructurePreviewSchema schema, StructurePreviewWidget widget, int x, int y, int width, int height) {
         this(new Preview() {
             @Override public boolean mouseClicked(double mouseX, double mouseY, int button) { return widget.mouseClicked(mouseX, mouseY, button); }
+            @Override public boolean mouseReleased(double mouseX, double mouseY, int button) { return widget.mouseReleased(mouseX, mouseY, button); }
             @Override public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) { return widget.mouseDragged(mouseX, mouseY, button, dragX, dragY); }
             @Override public boolean mouseScrolled(double mouseX, double mouseY, double scrollDelta) { return widget.mouseScrolled(mouseX, mouseY, scrollDelta); }
             @Override public void render(GuiGraphicsExtractor graphics, int x, int y, int width, int height) { widget.render(graphics, x, y, width, height, 0); }
@@ -88,18 +89,18 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
 
     @Override
     public void drawWidget(GuiGraphicsExtractor graphics, double mouseX, double mouseY) {
-        preview.render(graphics, x, y, width, height);
+        preview.render(graphics, 0, 0, width, height);
         String[] keys = {"previous_layer", "next_layer", "all_layers", "reset"};
         for (int index = 0; index < keys.length; index++) {
             graphics.text(Minecraft.getInstance().font, Component.translatable("jei.mmcr.structure_preview." + keys[index]),
-                    x + index * 40, y + height + 2, 0xFF404040, false);
+                    index * 40, height + 2, 0xFF404040, false);
         }
         int selectedLayer = preview.selectedLayer();
         List<Integer> layers = schema == null ? List.of() : schema.layers();
         Component layerText = selectedLayer < 0
                 ? Component.translatable("jei.mmcr.structure_preview.all_layers")
                 : Component.translatable("jei.mmcr.structure_preview.layer", selectedLayer, layers.indexOf(selectedLayer) + 1, layers.size());
-        graphics.text(Minecraft.getInstance().font, layerText, x, y + height - 10, 0xFF404040, false);
+        graphics.text(Minecraft.getInstance().font, layerText, 0, height - 10, 0xFF404040, false);
     }
 
     @Override
@@ -121,6 +122,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         if (button != 0) return false;
         int control = controlAt(mouseX, mouseY);
         if (control >= 0) {
+            if (input.isSimulate()) return true;
             switch (control) {
                 case 0 -> preview.previous();
                 case 1 -> preview.next();
@@ -130,8 +132,15 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
             }
             return true;
         }
-        previewPress = insidePreview(mouseX, mouseY);
-        return previewPress && preview.mouseClicked(mouseX, mouseY, button);
+        if (input.isSimulate()) {
+            previewPress = insidePreview(mouseX, mouseY);
+            return previewPress;
+        }
+        boolean handled = previewPress && insidePreview(mouseX, mouseY)
+                && preview.mouseClicked(mouseX, mouseY, button)
+                && preview.mouseReleased(mouseX, mouseY, button);
+        previewPress = false;
+        return handled;
     }
 
     @Override
@@ -145,15 +154,16 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         return insidePreview(mouseX, mouseY) && preview.mouseScrolled(mouseX, mouseY, scrollDeltaY);
     }
 
-    private boolean insidePreview(double mouseX, double mouseY) { return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height; }
+    private boolean insidePreview(double mouseX, double mouseY) { return mouseX >= 0 && mouseX < width && mouseY >= 0 && mouseY < height; }
     private int controlAt(double mouseX, double mouseY) {
-        if (mouseY < y + height + 2 || mouseY >= y + height + 2 + CONTROL_HEIGHT) return -1;
-        int column = (int) (mouseX - x) / 40;
-        return column >= 0 && column < 4 && mouseX < x + column * 40 + (column == 3 ? 40 : 38) ? column : -1;
+        if (mouseY < height + 2 || mouseY >= height + 2 + CONTROL_HEIGHT) return -1;
+        int column = (int) mouseX / 40;
+        return column >= 0 && column < 4 && mouseX < column * 40 + (column == 3 ? 40 : 38) ? column : -1;
     }
 
     interface Preview {
         boolean mouseClicked(double mouseX, double mouseY, int button);
+        default boolean mouseReleased(double mouseX, double mouseY, int button) { return false; }
         default boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) { return false; }
         default boolean mouseScrolled(double mouseX, double mouseY, double scrollDelta) { return false; }
         default void render(GuiGraphicsExtractor graphics, int x, int y, int width, int height) { }
