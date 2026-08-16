@@ -73,6 +73,36 @@ class StructurePreviewWidgetTest {
         assertThat(widget.camera().distance()).isEqualTo(beforeDistance * 0.9F);
     }
 
+    @Test
+    void widget_selects_a_hit_for_left_release_at_the_drag_threshold() {
+        RecordingRenderer renderer = new RecordingRenderer(schemaAtLayers(0));
+        renderer.hitResult = new Object();
+        StructurePreviewWidget widget = new StructurePreviewWidget(renderer);
+        widget.setViewport(new PreviewViewport(10, 20, 30, 40));
+
+        widget.mouseClicked(20, 30, 0);
+        widget.mouseDragged(23, 30, 0, 3, 0);
+        assertThat(widget.mouseReleased(23, 30, 0)).isTrue();
+
+        assertThat(renderer.selectedHit).isSameAs(renderer.hitResult);
+    }
+
+    @Test
+    void widget_does_not_select_a_hit_after_dragging_beyond_threshold_or_with_another_button() {
+        RecordingRenderer renderer = new RecordingRenderer(schemaAtLayers(0));
+        renderer.hitResult = new Object();
+        StructurePreviewWidget widget = new StructurePreviewWidget(renderer);
+        widget.setViewport(new PreviewViewport(10, 20, 30, 40));
+
+        widget.mouseClicked(20, 30, 0);
+        widget.mouseDragged(24, 30, 0, 4, 0);
+        widget.mouseReleased(24, 30, 0);
+        widget.mouseClicked(20, 30, 2);
+        widget.mouseReleased(20, 30, 2);
+
+        assertThat(renderer.selectedHit).isNull();
+    }
+
     private static StructurePreviewSchema schemaAtLayers(int... layers) {
         Map<BlockPos, net.minecraft.world.level.block.state.BlockState> states = new LinkedHashMap<>();
         for (int layer : layers) {
@@ -91,6 +121,8 @@ class StructurePreviewWidgetTest {
         private PreviewVisibility visibility = PreviewVisibility.ALL;
         private int resetCameraCalls;
         private int closeCalls;
+        private Object hitResult;
+        private Object selectedHit;
 
         private RecordingRenderer(StructurePreviewSchema schema) {
             this.schema = schema;
@@ -113,6 +145,16 @@ class StructurePreviewWidgetTest {
 
         @Override
         public void render(PreviewRenderContext context) {
+        }
+
+        @Override
+        public Object hitResult() {
+            return hitResult;
+        }
+
+        @Override
+        public void selectHit(Object hitResult) {
+            selectedHit = hitResult;
         }
 
         @Override

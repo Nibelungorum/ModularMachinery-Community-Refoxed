@@ -46,8 +46,16 @@ public final class StructurePreviewWidget implements AutoCloseable {
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
         if (closed || pressButton != button) return false;
         boolean handled = viewport.contains(mouseX, mouseY);
+        double movementX = mouseX - pressX;
+        double movementY = mouseY - pressY;
+        boolean click = button == 0 && handled && !dragged
+                && movementX * movementX + movementY * movementY <= DRAG_THRESHOLD_SQUARED;
         pressButton = -1;
         dragged = false;
+        if (click) {
+            Object hitResult = renderer.hitResult();
+            if (hitResult != null) renderer.selectHit(hitResult);
+        }
         return handled;
     }
 

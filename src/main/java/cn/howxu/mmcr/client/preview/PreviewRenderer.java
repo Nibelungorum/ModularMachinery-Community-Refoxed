@@ -14,5 +14,9 @@ interface PreviewRenderer {
 
     void render(PreviewRenderContext context);
 
+    Object hitResult();
+
+    void selectHit(Object hitResult);
+
     void close();
 }

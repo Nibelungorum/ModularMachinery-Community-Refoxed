@@ -24,6 +24,7 @@ public final class PreviewCamera {
     public void reset(Vector3f center, float radius) {
         lookAt.set(center);
         distance = clamp(radius, MIN_DISTANCE, MAX_DISTANCE);
+        if (yaw != INITIAL_YAW || pitch != INITIAL_PITCH) rotationVersion++;
         yaw = INITIAL_YAW;
         pitch = INITIAL_PITCH;
     }

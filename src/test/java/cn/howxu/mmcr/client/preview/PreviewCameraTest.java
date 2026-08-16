@@ -52,4 +52,20 @@ class PreviewCameraTest {
         assertThat(camera.distance()).isEqualTo(256.0F);
         assertThat(camera.rotationVersion()).isEqualTo(before);
     }
+
+    @Test
+    void reset_increments_rotation_version_only_when_it_restores_a_changed_rotation() {
+        PreviewCamera camera = new PreviewCamera();
+        camera.reset(new Vector3f(), 8.0F);
+        long before = camera.rotationVersion();
+
+        camera.reset(new Vector3f(1.0F, 2.0F, 3.0F), 4.0F);
+        assertThat(camera.rotationVersion()).isEqualTo(before);
+        camera.orbit(0.2F, 0.0F);
+        long afterOrbit = camera.rotationVersion();
+
+        camera.reset(new Vector3f(), 8.0F);
+
+        assertThat(camera.rotationVersion()).isEqualTo(afterOrbit + 1);
+    }
 }
