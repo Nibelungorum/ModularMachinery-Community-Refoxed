@@ -24,6 +24,6 @@ record PreviewDepthReadbackSample(GpuTexture depthTexture, int textureWidth, int
     }
 
     float ndcY() {
-        return 1.0F - 2.0F * (texel.y() + 0.5F) / textureHeight;
+        return 2.0F * (texel.y() + 0.5F) / textureHeight - 1.0F;
     }
 }

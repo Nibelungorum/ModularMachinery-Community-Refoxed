@@ -21,6 +21,6 @@ class PreviewDepthReadbackSampleTest {
 
         assertThat(sample.texel()).isEqualTo(new PreviewFrameViewport.Pixel(166, 53));
         assertThat(sample.ndcX()).isEqualTo(0.0F);
-        assertThat(sample.ndcY()).isEqualTo(1.0F - 2.0F * 53.5F / 111.0F);
+        assertThat(sample.ndcY()).isEqualTo(2.0F * 53.5F / 111.0F - 1.0F);
     }
 }

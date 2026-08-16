@@ -92,7 +92,9 @@ public final class PreviewSceneRenderer {
         net.minecraft.world.phys.HitResult result = level.clip(new net.minecraft.world.level.ClipContext(from, to,
                 net.minecraft.world.level.ClipContext.Block.OUTLINE, net.minecraft.world.level.ClipContext.Fluid.ANY,
                 net.minecraft.world.phys.shapes.CollisionContext.empty()));
-        return result instanceof BlockHitResult block ? block : null;
+        if (!(result instanceof BlockHitResult block)) return null;
+        net.minecraft.world.level.block.state.BlockState state = level.getBlockState(block.getBlockPos());
+        return state != null && !state.isAir() && visibility.isVisible(block.getBlockPos(), state) ? block : null;
     }
 
     public void dispose() {

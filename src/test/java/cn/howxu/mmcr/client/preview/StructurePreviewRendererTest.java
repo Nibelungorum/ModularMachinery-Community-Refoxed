@@ -161,4 +161,20 @@ class StructurePreviewRendererTest {
         assertThat(source).contains("copyHit(scene.clip(");
         assertThat(source).contains("hit.getBlockPos().immutable()");
     }
+
+    @Test
+    void depth_readback_uses_bottom_origin_texels_for_ndc_y() throws IOException {
+        String source = Files.readString(Path.of("src/main/java/cn/howxu/mmcr/client/preview/PreviewDepthReadbackSample.java"));
+
+        assertThat(source).contains("return 2.0F * (texel.y() + 0.5F) / textureHeight - 1.0F;");
+    }
+
+    @Test
+    void preview_scene_rejects_hits_outside_visible_non_air_schema_blocks() throws IOException {
+        String source = Files.readString(Path.of("src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewSceneRenderer.java"));
+
+        assertThat(source).contains("if (!(result instanceof BlockHitResult block)) return null;");
+        assertThat(source).contains("!state.isAir()");
+        assertThat(source).contains("visibility.isVisible(block.getBlockPos(), state)");
+    }
 }
