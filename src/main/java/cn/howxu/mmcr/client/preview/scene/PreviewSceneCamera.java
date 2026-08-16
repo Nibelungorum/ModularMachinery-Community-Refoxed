@@ -23,13 +23,15 @@ public final class PreviewSceneCamera {
     private final Vector3f eye;
     private final Vector3f lookAt;
     private final Vector3f up;
+    private final long rotationVersion;
     private final Matrix4f view;
     private final Matrix4f projection;
 
-    private PreviewSceneCamera(Vector3f eye, Vector3f lookAt, int width, int height) {
+    private PreviewSceneCamera(Vector3f eye, Vector3f lookAt, long rotationVersion, int width, int height) {
         this.eye = new Vector3f(eye);
         this.lookAt = new Vector3f(lookAt);
         this.up = new Vector3f(0.0F, 1.0F, 0.0F);
+        this.rotationVersion = rotationVersion;
         this.view = new Matrix4f().lookAt(this.eye, this.lookAt, up);
         this.projection = new Matrix4f().perspective(FIELD_OF_VIEW, (float) width / height, NEAR_PLANE, FAR_PLANE);
     }
@@ -38,7 +40,7 @@ public final class PreviewSceneCamera {
         if (width <= 0 || height <= 0) {
             throw new IllegalArgumentException("Scene viewport dimensions must be positive");
         }
-        return new PreviewSceneCamera(camera.position(), camera.lookAt(), width, height);
+        return new PreviewSceneCamera(camera.position(), camera.lookAt(), camera.rotationVersion(), width, height);
     }
 
     public Vector3f eye() {
@@ -51,6 +53,10 @@ public final class PreviewSceneCamera {
 
     public Vector3f up() {
         return new Vector3f(up);
+    }
+
+    public long rotationVersion() {
+        return rotationVersion;
     }
 
     public Matrix4f view() {

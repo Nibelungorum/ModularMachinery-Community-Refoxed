@@ -27,6 +27,7 @@ class PreviewSceneCameraTest {
 
         assertThat(scene.eye()).isEqualTo(preview.position());
         assertThat(scene.lookAt()).isEqualTo(preview.lookAt());
+        assertThat(scene.rotationVersion()).isEqualTo(preview.rotationVersion());
         assertThat(scene.projection()).isNotEqualTo(new Matrix4f());
         assertThat(new Matrix4f(scene.view()).invert()).isNotEqualTo(new Matrix4f());
         assertThat(new Matrix4f(scene.projection()).invert()).isNotEqualTo(new Matrix4f());
