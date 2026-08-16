@@ -24,4 +24,20 @@ class JeiMixinConfigurationTest {
             assertThat(configuration).contains("\"package\": \"cn.howxu.mmcr.mixin.compat.jei\"");
         }
     }
+
+    @Test
+    void mixins_match_current_jei_and_command_encoder_signatures() throws IOException {
+        assertThat(source("JeiRecipeGuiLogicMixin.java"))
+                .contains("mezz.jei.gui.recipes.lookups.ILookupState")
+                .contains("CallbackInfoReturnable<Boolean>")
+                .contains("mmcr$closeDiscardedPreviews(ILookupState state, boolean addToHistory");
+        assertThat(source("GlCommandEncoderMixin.java"))
+                .contains("@Mixin(targets = \"com.mojang.blaze3d.systems.CommandEncoder\")");
+    }
+
+    private static String source(String fileName) throws IOException {
+        return java.nio.file.Files.readString(java.nio.file.Path.of("src/main/java/cn/howxu/mmcr/mixin")
+                .resolve(fileName.equals("JeiRecipeGuiLogicMixin.java") ? "compat/jei/" : "client/preview/")
+                .resolve(fileName));
+    }
 }

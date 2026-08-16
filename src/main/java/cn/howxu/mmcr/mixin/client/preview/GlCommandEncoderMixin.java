@@ -25,7 +25,7 @@ import org.spongepowered.asm.mixin.Shadow;
  *
  * @author howxu <dev@howxu.cn>
  */
-@Mixin(targets = "com.mojang.blaze3d.opengl.GlCommandEncoder")
+@Mixin(targets = "com.mojang.blaze3d.systems.CommandEncoder")
 public abstract class GlCommandEncoderMixin implements DepthTextureReadbackBridge {
     @Final
     @Shadow

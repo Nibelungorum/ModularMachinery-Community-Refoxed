@@ -37,12 +37,16 @@ public final class JeiPlugin implements IModPlugin {
     @Override
     public void registerCategories(IRecipeCategoryRegistration registration) {
         var guiHelper = registration.getJeiHelpers().getGuiHelper();
+        registration.addRecipeCategories(new MachineStructureCategory(guiHelper));
         MachineRegistry.getAll().values().forEach(machine ->
                 registration.addRecipeCategories(new MachineRecipeCategory(guiHelper, machine)));
     }
 
     @Override
     public void registerRecipes(IRecipeRegistration registration) {
+        registration.addRecipes(JeiMachineRecipeTypes.STRUCTURE, MachineRegistry.getAll().values().stream()
+                .map(MachineStructureDisplay::from)
+                .toList());
         var displaysByMachine = MachineRecipeDisplays.byMachine();
         Set<Identifier> machineIds = MachineRegistry.getAll().values().stream()
                 .map(machine -> machine.registryName())
@@ -59,10 +63,11 @@ public final class JeiPlugin implements IModPlugin {
 
     @Override
     public void registerRecipeCatalysts(IRecipeCatalystRegistration registration) {
-        MachineRegistry.getAll().values().forEach(machine ->
-                registration.addCraftingStation(
-                        JeiMachineRecipeTypes.forMachine(machine.registryName()),
-                        new ItemStack(ModBlocks.controllerFor(machine.registryName()).get())));
+        MachineRegistry.getAll().values().forEach(machine -> {
+            ItemStack controller = new ItemStack(ModBlocks.controllerFor(machine.registryName()).get());
+            registration.addRecipeCatalyst(controller, JeiMachineRecipeTypes.STRUCTURE);
+            registration.addCraftingStation(JeiMachineRecipeTypes.forMachine(machine.registryName()), controller);
+        });
     }
 
     @Override
@@ -83,7 +88,7 @@ public final class JeiPlugin implements IModPlugin {
                 Identifier machineId = menu.machineId();
                 if (machineId == null) return List.of();
                 return List.of(IGuiClickableArea.createBasic(8, 24, 160, 24,
-                        JeiMachineRecipeTypes.forMachine(machineId)));
+                        JeiMachineRecipeTypes.STRUCTURE));
             }
         });
     }

@@ -34,7 +34,7 @@ class JeiPluginGuiHandlerTest {
     }
 
     @Test
-    void gui_handler_uses_the_current_controller_machine_type() {
+    void gui_handler_opens_the_shared_structure_type() {
         AtomicReference<IGuiContainerHandler<MachineMenuScreen>> handler = new AtomicReference<>();
         new JeiPlugin().registerGuiHandlers(registration(handler));
         IRecipesGui recipesGui = recipesGui();
@@ -43,7 +43,9 @@ class JeiPluginGuiHandlerTest {
                 .forEach(area -> area.onClick(null, recipesGui));
 
         assertThat((List<Object>) (List<?>) shownTypes.get())
-                .containsExactly(JeiMachineRecipeTypes.forMachine(MMCR.id("blast_furnace")));
+                .containsExactly(JeiMachineRecipeTypes.STRUCTURE);
+        assertThat(JeiMachineRecipeTypes.forMachine(MMCR.id("blast_furnace")))
+                .isNotEqualTo(JeiMachineRecipeTypes.STRUCTURE);
     }
 
     @Test

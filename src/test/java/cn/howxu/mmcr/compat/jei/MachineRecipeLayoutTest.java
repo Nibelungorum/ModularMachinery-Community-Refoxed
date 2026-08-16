@@ -186,46 +186,6 @@ class MachineRecipeLayoutTest {
     }
 
     @Test
-    void reservesTheLowerRegionForTheStructurePreviewAndItsControls() {
-        assertThat(MachineRecipeCategory.PREVIEW_X).isEqualTo(4);
-        assertThat(MachineRecipeCategory.PREVIEW_Y).isEqualTo(64);
-        assertThat(MachineRecipeCategory.PREVIEW_WIDTH).isEqualTo(160);
-        assertThat(MachineRecipeCategory.PREVIEW_HEIGHT).isEqualTo(92);
-        assertThat(MachineRecipeCategory.PREVIEW_CONTROL_Y).isEqualTo(158);
-        assertThat(MachineRecipeLayout.HEIGHT).isGreaterThan(MachineRecipeCategory.PREVIEW_CONTROL_Y + 10);
-    }
-
-    @Test
-    void keepsEverySlotMetadataAndTransferControlOutsideThePreview() {
-        MachineRecipe recipe = new MachineRecipe(
-                MMCR.id("jei_layout_preview_clearance"), MMCR.id("large_machine"), 100,
-                java.util.stream.IntStream.range(0, 25)
-                        .<MachineIngredient>mapToObj(index -> new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1))
-                        .toList(),
-                java.util.stream.IntStream.range(0, 25)
-                        .mapToObj(index -> new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1))
-                        .toList(),
-                List.of(), 0, 1, false, List.of(), List.of(), false, List.of(), java.util.Set.of(MMCR.id("host_a")));
-
-        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(MachineRecipeDisplay.from(recipe));
-
-        assertThat(layout.inputs().slots()).allSatisfy(slot -> assertThat(intersectsPreview(slot.x(), slot.y(), 18, 18)).isFalse());
-        assertThat(layout.outputs().slots()).allSatisfy(slot -> assertThat(intersectsPreview(slot.x(), slot.y(), 18, 18)).isFalse());
-        assertThat(intersectsPreview(layout.inputs().overflowSlot().x(), layout.inputs().overflowSlot().y(), 18, 18)).isFalse();
-        assertThat(intersectsPreview(layout.outputs().overflowSlot().x(), layout.outputs().overflowSlot().y(), 18, 18)).isFalse();
-        assertThat(intersectsPreview(layout.durationTextX(), layout.hostRequirementTextY(), 1, 10)).isFalse();
-        assertThat(intersectsPreview(layout.durationTextX(), layout.lastMetadataTextY(MachineRecipeDisplay.from(recipe)), 1, 10)).isFalse();
-        assertThat(intersectsPreview(layout.transferButtonX(), layout.transferButtonY(), 20, 20)).isFalse();
-    }
-
-    private static boolean intersectsPreview(int x, int y, int width, int height) {
-        return x < MachineRecipeCategory.PREVIEW_X + MachineRecipeCategory.PREVIEW_WIDTH
-                && x + width > MachineRecipeCategory.PREVIEW_X
-                && y < MachineRecipeCategory.PREVIEW_Y + MachineRecipeCategory.PREVIEW_HEIGHT
-                && y + height > MachineRecipeCategory.PREVIEW_Y;
-    }
-
-    @Test
     void emptyInputAndOutputRegionsReserveTextSpaceWithoutSlots() {
         MachineRecipe recipe = new MachineRecipe(
                 MMCR.id("jei_layout_empty"), MMCR.id("blast_furnace"), 100,
