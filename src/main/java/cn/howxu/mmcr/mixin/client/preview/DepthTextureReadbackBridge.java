@@ -1,4 +1,4 @@
-package cn.howxu.mmcr.client.preview.mixin;
+package cn.howxu.mmcr.mixin.client.preview;
 
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.textures.GpuTexture;

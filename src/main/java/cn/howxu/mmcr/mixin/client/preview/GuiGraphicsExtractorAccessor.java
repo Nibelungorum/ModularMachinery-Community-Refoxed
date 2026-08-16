@@ -4,7 +4,7 @@
  *
  * Modified for MMCR, Minecraft 26.1.2 / NeoForge 26.1.2.84
  */
-package cn.howxu.mmcr.client.preview.mixin;
+package cn.howxu.mmcr.mixin.client.preview;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.state.gui.GuiRenderState;

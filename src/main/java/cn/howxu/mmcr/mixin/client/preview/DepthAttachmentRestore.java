@@ -1,4 +1,4 @@
-package cn.howxu.mmcr.client.preview.mixin;
+package cn.howxu.mmcr.mixin.client.preview;
 
 /**
  * Captures the depth attachment state needed to restore the encoder read framebuffer.

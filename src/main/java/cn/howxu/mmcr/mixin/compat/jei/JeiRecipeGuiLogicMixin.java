@@ -1,5 +1,6 @@
-package cn.howxu.mmcr.compat.jei;
+package cn.howxu.mmcr.mixin.compat.jei;
 
+import cn.howxu.mmcr.compat.jei.JeiPreviewLifecycle;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;

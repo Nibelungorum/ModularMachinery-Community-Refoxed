@@ -15,7 +15,7 @@ import net.minecraft.client.gui.render.pip.PictureInPictureRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.state.gui.GuiRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
-import cn.howxu.mmcr.client.preview.mixin.PictureInPictureRendererAccessor;
+import cn.howxu.mmcr.mixin.client.preview.PictureInPictureRendererAccessor;
 
 /**
  * Vanilla PiP target used to render cached preview geometry off-screen.

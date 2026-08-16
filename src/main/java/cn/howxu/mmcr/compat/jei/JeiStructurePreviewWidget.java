@@ -5,7 +5,7 @@ import cn.howxu.mmcr.client.preview.StructurePreviewRenderer;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchemaFactory;
 import cn.howxu.mmcr.client.preview.StructurePreviewWidget;
-import cn.howxu.mmcr.client.preview.mixin.GuiGraphicsExtractorAccessor;
+import cn.howxu.mmcr.mixin.client.preview.GuiGraphicsExtractorAccessor;
 import com.mojang.blaze3d.platform.InputConstants;
 import mezz.jei.api.gui.builder.ITooltipBuilder;
 import mezz.jei.api.gui.inputs.IJeiInputHandler;

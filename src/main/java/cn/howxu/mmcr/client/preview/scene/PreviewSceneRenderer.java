@@ -10,7 +10,7 @@ import cn.howxu.mmcr.client.preview.PreviewCamera;
 import cn.howxu.mmcr.client.preview.PreviewLevel;
 import cn.howxu.mmcr.client.preview.PreviewVisibility;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
-import cn.howxu.mmcr.client.preview.mixin.MeshDataAccessor;
+import cn.howxu.mmcr.mixin.client.preview.MeshDataAccessor;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexSorting;
