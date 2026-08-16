@@ -1,8 +1,0 @@
-{
-  "jei.mmcr.structure_preview.previous_layer": "Previous",
-  "jei.mmcr.structure_preview.next_layer": "Next",
-  "jei.mmcr.structure_preview.all_layers": "All",
-  "jei.mmcr.structure_preview.reset": "Reset",
-  "jei.mmcr.structure_preview.layer": "Y=%s (%s/%s)",
-  "jei.mmcr.structure_preview.unavailable": "Structure preview unavailable"
-}

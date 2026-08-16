@@ -125,6 +125,24 @@ class TranslationsTest {
     }
 
     @Test
+    void jei_structure_preview_labels_are_generated_for_both_locales() {
+        assertThat(Translations.ALL.get("en_us"))
+                .containsEntry("jei.mmcr.structure_preview.previous_layer", "Previous")
+                .containsEntry("jei.mmcr.structure_preview.next_layer", "Next")
+                .containsEntry("jei.mmcr.structure_preview.all_layers", "All")
+                .containsEntry("jei.mmcr.structure_preview.reset", "Reset")
+                .containsEntry("jei.mmcr.structure_preview.layer", "Y=%s (%s/%s)")
+                .containsEntry("jei.mmcr.structure_preview.unavailable", "Structure preview unavailable");
+        assertThat(Translations.ALL.get("zh_cn"))
+                .containsEntry("jei.mmcr.structure_preview.previous_layer", "上一层")
+                .containsEntry("jei.mmcr.structure_preview.next_layer", "下一层")
+                .containsEntry("jei.mmcr.structure_preview.all_layers", "全部")
+                .containsEntry("jei.mmcr.structure_preview.reset", "重置")
+                .containsEntry("jei.mmcr.structure_preview.layer", "Y=%s（%s/%s）")
+                .containsEntry("jei.mmcr.structure_preview.unavailable", "结构预览不可用");
+    }
+
+    @Test
     void translations_include_smart_interface_messages() {
         assertThat(Translations.ALL.get("en_us")).containsKeys(
                 "block.mmcr.smart_interface",
