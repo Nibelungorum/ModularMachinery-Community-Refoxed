@@ -7,8 +7,8 @@ import net.minecraft.world.level.chunk.ChunkSource;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.lighting.LevelLightEngine;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
 
 /**
@@ -18,7 +18,7 @@ import java.util.function.BooleanSupplier;
  */
 final class PreviewChunkSource extends ChunkSource {
     private final PreviewLevel level;
-    private final Map<Long, PreviewChunk> chunks = new HashMap<>();
+    private final Map<Long, PreviewChunk> chunks = new ConcurrentHashMap<>();
     private final LevelLightEngine lightEngine;
 
     PreviewChunkSource(PreviewLevel level) {
@@ -29,7 +29,13 @@ final class PreviewChunkSource extends ChunkSource {
     @Override
     public ChunkAccess getChunk(int x, int z, ChunkStatus status, boolean load) {
         if (!level.isPreviewChunk(x, z)) return null;
-        return chunks.computeIfAbsent(ChunkPos.pack(x, z), ignored -> new PreviewChunk(level, new ChunkPos(x, z)));
+        long key = ChunkPos.pack(x, z);
+        PreviewChunk cached = chunks.get(key);
+        if (cached != null) return cached;
+        level.assertRenderThread();
+        PreviewChunk created = new PreviewChunk(level, new ChunkPos(x, z));
+        PreviewChunk existing = chunks.putIfAbsent(key, created);
+        return existing == null ? created : existing;
     }
 
     @Override

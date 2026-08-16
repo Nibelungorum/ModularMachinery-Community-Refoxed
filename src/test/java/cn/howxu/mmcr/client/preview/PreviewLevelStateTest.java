@@ -3,7 +3,10 @@ package cn.howxu.mmcr.client.preview;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
@@ -14,8 +17,13 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Verifies virtual preview-level state isolation and default block entities.
@@ -35,7 +43,7 @@ class PreviewLevelStateTest {
         StructurePreviewSchema schema = schema(Map.of(
                 BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState(),
                 fluidPos, Blocks.WATER.defaultBlockState()));
-        PreviewLevel level = PreviewLevel.createForTest(schema, PreviewVisibility.ALL);
+        PreviewLevel level = level(schema, PreviewVisibility.ALL);
 
         assertThat(level.getBlockState(BlockPos.ZERO)).isEqualTo(Blocks.IRON_BLOCK.defaultBlockState());
         assertThat(level.getFluidState(fluidPos).isEmpty()).isFalse();
@@ -47,7 +55,7 @@ class PreviewLevelStateTest {
     @Test
     void level_creates_default_block_entity_once_and_close_releases_it() {
         BlockPos pos = BlockPos.ZERO;
-        PreviewLevel level = PreviewLevel.createForTest(
+        PreviewLevel level = level(
                 schema(Map.of(pos, Blocks.CHEST.defaultBlockState())), PreviewVisibility.ALL);
 
         BlockEntity first = level.getBlockEntity(pos);
@@ -59,7 +67,7 @@ class PreviewLevelStateTest {
 
     @Test
     void clip_hits_visible_schema_block_and_ignores_hidden_layer() {
-        PreviewLevel level = PreviewLevel.createForTest(
+        PreviewLevel level = level(
                 schema(Map.of(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState())), PreviewVisibility.ALL);
         ClipContext context = new ClipContext(new Vec3(-1.0, 0.5, 0.5), new Vec3(2.0, 0.5, 0.5),
                 ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, CollisionContext.empty());
@@ -67,6 +75,73 @@ class PreviewLevelStateTest {
         assertThat(level.clip(context).getType()).isEqualTo(HitResult.Type.BLOCK);
         level.updateVisibility(PreviewVisibility.singleLayer(1));
         assertThat(level.clip(context).getType()).isNotEqualTo(HitResult.Type.BLOCK);
+    }
+
+    @Test
+    void level_uses_dynamic_visibility_supplier_and_update_visibility() {
+        AtomicReference<PreviewVisibility> supplied = new AtomicReference<>(PreviewVisibility.ALL);
+        PreviewLevel level = PreviewLevel.create(schema(Map.of(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState())), supplied::get);
+
+        supplied.set(PreviewVisibility.singleLayer(1));
+        assertThat(level.getBlockState(BlockPos.ZERO)).isEqualTo(Blocks.AIR.defaultBlockState());
+        level.updateVisibility(PreviewVisibility.ALL);
+        assertThat(level.getBlockState(BlockPos.ZERO)).isEqualTo(Blocks.IRON_BLOCK.defaultBlockState());
+    }
+
+    @Test
+    void background_thread_cannot_create_block_entity_or_preview_chunk() throws Exception {
+        PreviewLevel level = level(schema(Map.of(BlockPos.ZERO, Blocks.CHEST.defaultBlockState())), PreviewVisibility.ALL);
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            assertThatThrownBy(() -> executor.submit(() -> level.getBlockEntity(BlockPos.ZERO)).get())
+                    .isInstanceOf(ExecutionException.class)
+                    .hasCauseInstanceOf(IllegalStateException.class);
+            assertThatThrownBy(() -> executor.submit(() -> level.getChunkSource().getChunk(0, 0, true)).get())
+                    .isInstanceOf(ExecutionException.class)
+                    .hasCauseInstanceOf(IllegalStateException.class);
+        }
+    }
+
+    @Test
+    void background_thread_cannot_clear_preview_block_entity_cache() throws Exception {
+        PreviewLevel level = level(schema(Map.of(BlockPos.ZERO, Blocks.CHEST.defaultBlockState())), PreviewVisibility.ALL);
+        assertThat(level.getBlockEntity(BlockPos.ZERO)).isNotNull();
+
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            assertThatThrownBy(() -> executor.submit(level::close).get())
+                    .isInstanceOf(ExecutionException.class)
+                    .hasCauseInstanceOf(IllegalStateException.class);
+        }
+        assertThat(level.getBlockEntity(BlockPos.ZERO)).isNotNull();
+    }
+
+    @Test
+    void preview_chunks_cover_neighbor_ring_and_reject_positions_outside_their_chunk() {
+        PreviewLevel level = level(schema(Map.of(BlockPos.ZERO, Blocks.CHEST.defaultBlockState())), PreviewVisibility.ALL);
+
+        assertThat(level.getChunkSource().getChunk(1, 1, true)).isNotNull();
+        assertThat(level.getChunkSource().getChunk(2, 0, true)).isNull();
+        LevelChunk chunk = level.getChunkSource().getChunk(0, 0, true);
+        assertThat(chunk.getBlockState(new BlockPos(16, 0, 0))).isEqualTo(Blocks.AIR.defaultBlockState());
+        assertThat(chunk.getBlockEntity(new BlockPos(16, 0, 0))).isNull();
+    }
+
+    @Test
+    void level_provides_vanilla_shade_and_full_brightness() {
+        PreviewLevel level = level(schema(Map.of()), PreviewVisibility.ALL);
+
+        assertThat(level.getShade(Direction.DOWN, true)).isEqualTo(0.5F);
+        assertThat(level.getShade(Direction.NORTH, true)).isEqualTo(0.8F);
+        assertThat(level.getShade(Direction.WEST, true)).isEqualTo(0.6F);
+        assertThat(level.getShade(Direction.UP, true)).isEqualTo(1.0F);
+        assertThat(level.getShade(Direction.DOWN, false)).isEqualTo(1.0F);
+        assertThat(level.getBrightness(LightLayer.BLOCK, BlockPos.ZERO)).isEqualTo(15);
+        assertThat(level.getBrightness(LightLayer.SKY, BlockPos.ZERO)).isEqualTo(15);
+        assertThat(level.getRawBrightness(BlockPos.ZERO, 7)).isEqualTo(15);
+    }
+
+    private static PreviewLevel level(StructurePreviewSchema schema, PreviewVisibility visibility) {
+        Supplier<PreviewVisibility> supplier = () -> visibility;
+        return PreviewLevel.create(schema, supplier);
     }
 
     private static StructurePreviewSchema schema(Map<BlockPos, BlockState> states) {

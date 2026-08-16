@@ -49,6 +49,10 @@ import net.neoforged.neoforge.entity.PartEntity;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 /**
  * Render-only level that exposes an immutable structure-preview schema.
@@ -59,26 +63,29 @@ public final class PreviewLevel extends Level {
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
     private final StructurePreviewSchema schema;
     private final PreviewChunkSource chunkSource;
-    private final Map<BlockPos, BlockEntity> blockEntities = new java.util.HashMap<>();
+    private final Map<BlockPos, BlockEntity> blockEntities = new ConcurrentHashMap<>();
     private final WorldBorder worldBorder = new WorldBorder();
     private final TickRateManager tickRateManager = new TickRateManager();
     private final Scoreboard scoreboard = new Scoreboard();
-    private PreviewVisibility visibility;
-    private boolean closed;
+    private final AtomicReference<Supplier<PreviewVisibility>> visibilitySupplier;
+    private final Thread renderThread;
+    private volatile boolean closed;
 
-    private PreviewLevel(StructurePreviewSchema schema, PreviewVisibility visibility) {
+    private PreviewLevel(StructurePreviewSchema schema, Supplier<PreviewVisibility> visibilitySupplier) {
         super(new PreviewLevelData(), Level.OVERWORLD, previewRegistryAccess(), overworldType(), true, false, 0L, 0);
-        this.schema = schema;
-        this.visibility = visibility;
+        this.schema = Objects.requireNonNull(schema, "schema");
+        this.visibilitySupplier = new AtomicReference<>(Objects.requireNonNull(visibilitySupplier, "visibilitySupplier"));
+        this.renderThread = Thread.currentThread();
         this.chunkSource = new PreviewChunkSource(this);
     }
 
-    public static PreviewLevel createForTest(StructurePreviewSchema schema, PreviewVisibility visibility) {
-        return new PreviewLevel(schema, visibility);
+    public static PreviewLevel create(StructurePreviewSchema schema, Supplier<PreviewVisibility> visibilitySupplier) {
+        return new PreviewLevel(schema, visibilitySupplier);
     }
 
     public void updateVisibility(PreviewVisibility visibility) {
-        this.visibility = visibility;
+        PreviewVisibility updated = Objects.requireNonNull(visibility, "visibility");
+        visibilitySupplier.set(() -> updated);
     }
 
     boolean isPreviewChunk(int x, int z) {
@@ -92,6 +99,7 @@ public final class PreviewLevel extends Level {
     @Override
     public BlockState getBlockState(BlockPos position) {
         BlockState state = schema.stateAt(position);
+        PreviewVisibility visibility = Objects.requireNonNull(visibilitySupplier.get().get(), "visibilitySupplier result");
         return !closed && state != null && visibility.isVisible(position, state) ? state : AIR;
     }
 
@@ -124,23 +132,30 @@ public final class PreviewLevel extends Level {
     public BlockEntity getBlockEntity(BlockPos position) {
         BlockState state = getBlockState(position);
         if (closed || !state.hasBlockEntity()) return null;
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft != null && !minecraft.isSameThread()) {
-            throw new IllegalStateException("preview block entities must be created on the render thread");
-        }
         BlockPos immutablePosition = position.immutable();
-        return blockEntities.computeIfAbsent(immutablePosition, ignored -> {
-            BlockEntity blockEntity = state.getBlock() instanceof net.minecraft.world.level.block.EntityBlock entityBlock
-                    ? entityBlock.newBlockEntity(immutablePosition, state) : null;
-            if (blockEntity != null) blockEntity.setLevel(this);
-            return blockEntity;
-        });
+        BlockEntity cached = blockEntities.get(immutablePosition);
+        if (cached != null) return cached;
+        assertRenderThread();
+        BlockEntity blockEntity = state.getBlock() instanceof net.minecraft.world.level.block.EntityBlock entityBlock
+                ? entityBlock.newBlockEntity(immutablePosition, state) : null;
+        if (blockEntity == null) return null;
+        blockEntity.setLevel(this);
+        BlockEntity existing = blockEntities.putIfAbsent(immutablePosition, blockEntity);
+        return existing == null ? blockEntity : existing;
     }
 
     @Override
     public void close() {
+        assertRenderThread();
         closed = true;
         blockEntities.clear();
+    }
+
+    void assertRenderThread() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft != null ? !minecraft.isSameThread() : Thread.currentThread() != renderThread) {
+            throw new IllegalStateException("preview cache mutation must occur on the render thread");
+        }
     }
 
     @Override public ChunkSource getChunkSource() { return chunkSource; }
@@ -210,6 +225,11 @@ public final class PreviewLevel extends Level {
                 net.minecraft.world.attribute.EnvironmentAttributeMap.EMPTY, net.minecraft.core.HolderSet.empty(), java.util.Optional.empty()));
     }
 
+    /**
+     * Inert local level metadata required by the Level superclass.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
     private static final class PreviewLevelData implements WritableLevelData {
         @Override public LevelData.RespawnData getRespawnData() { return LevelData.RespawnData.DEFAULT; }
         @Override public long getGameTime() { return 0L; }
@@ -219,6 +239,11 @@ public final class PreviewLevel extends Level {
         @Override public void setSpawn(LevelData.RespawnData respawnData) { }
     }
 
+    /**
+     * Empty entity view that prevents preview queries from observing world entities.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
     private enum EmptyEntityGetter implements LevelEntityGetter<Entity> {
         INSTANCE;
         @Override public Entity get(int id) { return null; }
