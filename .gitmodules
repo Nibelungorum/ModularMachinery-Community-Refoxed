@@ -35,3 +35,7 @@
 	path = reference/mui
 	url = https://github.com/brachy84/ModularUI-Modern
 	branch = 1.21.1
+[submodule "reference/ldlib2"]
+	path = reference/ldlib2
+	url = https://github.com/Low-Drag-MC/LDLib2
+	branch = 26.1
