@@ -5,6 +5,9 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -47,6 +50,44 @@ class PreviewSceneCameraTest {
     }
 
     @Test
+    void scene_camera_context_is_not_visible_to_another_thread() throws InterruptedException {
+        Matrix4f view = new Matrix4f().rotateY(0.25F);
+        Matrix4f projection = new Matrix4f().perspective(1.0F, 1.5F, 0.1F, 100.0F);
+        CountDownLatch contextSet = new CountDownLatch(1);
+        CountDownLatch otherThreadChecked = new CountDownLatch(1);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread renderThread = new Thread(() -> {
+            try {
+                PreviewSceneCameraContext.with(view, projection, () -> {
+                    contextSet.countDown();
+                    await(otherThreadChecked);
+                });
+            } catch (Throwable throwable) {
+                failure.set(throwable);
+            }
+        });
+        Thread otherThread = new Thread(() -> {
+            try {
+                await(contextSet);
+                assertThat(PreviewSceneCameraContext.isActive()).isFalse();
+                assertThat(PreviewSceneCameraContext.viewRotation()).isNull();
+                assertThat(PreviewSceneCameraContext.projection()).isNull();
+            } catch (Throwable throwable) {
+                failure.set(throwable);
+            } finally {
+                otherThreadChecked.countDown();
+            }
+        });
+
+        renderThread.start();
+        otherThread.start();
+        renderThread.join();
+        otherThread.join();
+
+        assertThat(failure.get()).isNull();
+    }
+
+    @Test
     void render_target_scope_restores_nested_overrides() {
         Object originalColor = new Object();
         Object originalDepth = new Object();
@@ -69,5 +110,14 @@ class PreviewSceneCameraTest {
 
         assertThat(overrides.color()).isSameAs(originalColor);
         assertThat(overrides.depth()).isSameAs(originalDepth);
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            latch.await();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError(exception);
+        }
     }
 }
