@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.client.preview;
 
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import org.joml.Vector3f;
 
 import java.util.List;
@@ -22,6 +24,7 @@ public final class StructurePreviewWidget implements AutoCloseable {
     private boolean dragged;
     private boolean closed;
     private int selectedLayer = -1;
+    private Object selectedHit;
 
     public StructurePreviewWidget(PreviewRenderer renderer) {
         this.renderer = Objects.requireNonNull(renderer, "renderer");
@@ -32,6 +35,27 @@ public final class StructurePreviewWidget implements AutoCloseable {
         if (closed) return;
         viewport = context.viewport();
         renderer.render(context);
+    }
+
+    /** Renders this preview inside the supplied GUI rectangle. */
+    public void render(GuiGraphicsExtractor graphics, int x, int y, int width, int height, float partialTick) {
+        Minecraft minecraft = Minecraft.getInstance();
+        render(new PreviewRenderContext(graphics, new PreviewViewport(x, y, width, height), partialTick,
+                0, 0, minecraft.getWindow().getGuiScaledWidth(), minecraft.getWindow().getGuiScaledHeight(),
+                minecraft.getWindow().getWidth(), minecraft.getWindow().getHeight(), camera));
+    }
+
+    public Object hoverHit() {
+        return renderer.hitResult();
+    }
+
+    public Object selectedHit() {
+        return selectedHit;
+    }
+
+    public int selectedLayer() {
+        List<Integer> layers = renderer.schema().layers();
+        return selectedLayer < 0 || selectedLayer >= layers.size() ? -1 : layers.get(selectedLayer);
     }
 
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
@@ -54,7 +78,10 @@ public final class StructurePreviewWidget implements AutoCloseable {
         dragged = false;
         if (click) {
             Object hitResult = renderer.hitResult();
-            if (hitResult != null) renderer.selectHit(hitResult);
+            if (hitResult != null) {
+                selectedHit = hitResult;
+                renderer.selectHit(hitResult);
+            }
         }
         return handled;
     }

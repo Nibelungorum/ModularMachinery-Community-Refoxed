@@ -57,14 +57,14 @@ class MachineRecipeLayoutTest {
                 .extracting(slot -> slot.entry().kind(), slot -> slot.entry().index(),
                         MachineRecipeLayout.SlotPlan::x, MachineRecipeLayout.SlotPlan::y)
                 .containsExactly(
-                        tuple(MachineRecipeLayout.Kind.FLUID, 0, 8, 8), tuple(MachineRecipeLayout.Kind.FLUID, 1, 26, 8),
-                        tuple(MachineRecipeLayout.Kind.ITEM, 0, 44, 8), tuple(MachineRecipeLayout.Kind.ITEM, 1, 8, 26),
-                        tuple(MachineRecipeLayout.Kind.ITEM, 2, 26, 26));
-        assertThat(layout.width()).isEqualTo(150);
-        assertThat(layout.height()).isEqualTo(150);
-        assertThat(layout.durationTextX()).isEqualTo(8);
+                        tuple(MachineRecipeLayout.Kind.FLUID, 0, 168, 8), tuple(MachineRecipeLayout.Kind.FLUID, 1, 186, 8),
+                        tuple(MachineRecipeLayout.Kind.ITEM, 0, 204, 8), tuple(MachineRecipeLayout.Kind.ITEM, 1, 168, 26),
+                        tuple(MachineRecipeLayout.Kind.ITEM, 2, 186, 26));
+        assertThat(layout.width()).isEqualTo(330);
+        assertThat(layout.height()).isEqualTo(170);
+        assertThat(layout.durationTextX()).isEqualTo(168);
         assertThat(layout.durationTextY()).isEqualTo(48);
-        assertThat(layout.outputs().slots()).allSatisfy(slot -> assertThat(slot.x()).isGreaterThan(90));
+        assertThat(layout.outputs().slots()).allSatisfy(slot -> assertThat(slot.x()).isGreaterThan(250));
     }
 
     @Test
@@ -88,7 +88,7 @@ class MachineRecipeLayoutTest {
 
         assertThat(layout.inputs().slots()).hasSize(17);
         assertThat(layout.inputs().slots()).allSatisfy(slot -> assertThat(slot.entry()).isNotNull());
-        assertThat(layout.inputs().overflowSlot()).isEqualTo(new MachineRecipeLayout.OverflowSlotPlan(44, 98));
+        assertThat(layout.inputs().overflowSlot()).isEqualTo(new MachineRecipeLayout.OverflowSlotPlan(204, 98));
         assertThat(layout.inputs().hiddenEntries())
                 .contains(new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.ITEM, 17));
         assertThat(layout.hasInputOverflow()).isTrue();
@@ -114,7 +114,7 @@ class MachineRecipeLayoutTest {
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(MachineRecipeDisplay.from(recipe));
 
         assertThat(layout.inputs().slots()).hasSize(17);
-        assertThat(layout.inputs().overflowSlot()).isEqualTo(new MachineRecipeLayout.OverflowSlotPlan(44, 98));
+        assertThat(layout.inputs().overflowSlot()).isEqualTo(new MachineRecipeLayout.OverflowSlotPlan(204, 98));
         assertThat(layout.inputs().hiddenEntries()).hasSize(8);
     }
 
@@ -139,16 +139,16 @@ class MachineRecipeLayoutTest {
 
         assertThat(layout.inputs().slots())
                 .extracting(MachineRecipeLayout.SlotPlan::entry, MachineRecipeLayout.SlotPlan::x, MachineRecipeLayout.SlotPlan::y)
-                .containsExactly(tuple(new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.ITEM, 0), 8, 8));
+                .containsExactly(tuple(new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.ITEM, 0), 168, 8));
         assertThat(layout.hasInputOverflow()).isFalse();
         assertThat(layout.outputs().slots()).hasSize(17);
-        assertThat(layout.outputs().overflowSlot()).isEqualTo(new MachineRecipeLayout.OverflowSlotPlan(127, 98));
+        assertThat(layout.outputs().overflowSlot()).isEqualTo(new MachineRecipeLayout.OverflowSlotPlan(287, 98));
         assertThat(layout.outputs().hiddenEntries())
                 .contains(new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.FLUID, 17));
         assertThat(layout.hasOutputOverflow()).isTrue();
         assertThat(layout.outputs().slots().subList(15, 17))
                 .extracting(MachineRecipeLayout.SlotPlan::x, MachineRecipeLayout.SlotPlan::y)
-                .containsExactly(tuple(91, 98), tuple(109, 98));
+                .containsExactly(tuple(251, 98), tuple(269, 98));
         assertThat(layout.durationTextY()).isEqualTo(120);
     }
 
@@ -176,13 +176,53 @@ class MachineRecipeLayoutTest {
 
         assertThat(layout.outputs().slots())
                 .extracting(MachineRecipeLayout.SlotPlan::x, MachineRecipeLayout.SlotPlan::y)
-                .containsExactly(tuple(91, 8), tuple(109, 8), tuple(127, 8), tuple(127, 26));
+                .containsExactly(tuple(251, 8), tuple(269, 8), tuple(287, 8), tuple(287, 26));
     }
 
     @Test
     void recipeArrowStartsTwoPixelsAfterTheThirdInputSlotAndMovesWithSlots() {
         assertThat(MachineRecipeCategory.RECIPE_ARROW_X).isEqualTo(64);
         assertThat(MachineRecipeCategory.RECIPE_ARROW_Y).isEqualTo(8);
+    }
+
+    @Test
+    void reservesTheLowerRegionForTheStructurePreviewAndItsControls() {
+        assertThat(MachineRecipeCategory.PREVIEW_X).isEqualTo(4);
+        assertThat(MachineRecipeCategory.PREVIEW_Y).isEqualTo(64);
+        assertThat(MachineRecipeCategory.PREVIEW_WIDTH).isEqualTo(160);
+        assertThat(MachineRecipeCategory.PREVIEW_HEIGHT).isEqualTo(92);
+        assertThat(MachineRecipeCategory.PREVIEW_CONTROL_Y).isEqualTo(158);
+        assertThat(MachineRecipeLayout.HEIGHT).isGreaterThan(MachineRecipeCategory.PREVIEW_CONTROL_Y + 10);
+    }
+
+    @Test
+    void keepsEverySlotMetadataAndTransferControlOutsideThePreview() {
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("jei_layout_preview_clearance"), MMCR.id("large_machine"), 100,
+                java.util.stream.IntStream.range(0, 25)
+                        .<MachineIngredient>mapToObj(index -> new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1))
+                        .toList(),
+                java.util.stream.IntStream.range(0, 25)
+                        .mapToObj(index -> new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1))
+                        .toList(),
+                List.of(), 0, 1, false, List.of(), List.of(), false, List.of(), java.util.Set.of(MMCR.id("host_a")));
+
+        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(MachineRecipeDisplay.from(recipe));
+
+        assertThat(layout.inputs().slots()).allSatisfy(slot -> assertThat(intersectsPreview(slot.x(), slot.y(), 18, 18)).isFalse());
+        assertThat(layout.outputs().slots()).allSatisfy(slot -> assertThat(intersectsPreview(slot.x(), slot.y(), 18, 18)).isFalse());
+        assertThat(intersectsPreview(layout.inputs().overflowSlot().x(), layout.inputs().overflowSlot().y(), 18, 18)).isFalse();
+        assertThat(intersectsPreview(layout.outputs().overflowSlot().x(), layout.outputs().overflowSlot().y(), 18, 18)).isFalse();
+        assertThat(intersectsPreview(layout.durationTextX(), layout.hostRequirementTextY(), 1, 10)).isFalse();
+        assertThat(intersectsPreview(layout.durationTextX(), layout.lastMetadataTextY(MachineRecipeDisplay.from(recipe)), 1, 10)).isFalse();
+        assertThat(intersectsPreview(layout.transferButtonX(), layout.transferButtonY(), 20, 20)).isFalse();
+    }
+
+    private static boolean intersectsPreview(int x, int y, int width, int height) {
+        return x < MachineRecipeCategory.PREVIEW_X + MachineRecipeCategory.PREVIEW_WIDTH
+                && x + width > MachineRecipeCategory.PREVIEW_X
+                && y < MachineRecipeCategory.PREVIEW_Y + MachineRecipeCategory.PREVIEW_HEIGHT
+                && y + height > MachineRecipeCategory.PREVIEW_Y;
     }
 
     @Test

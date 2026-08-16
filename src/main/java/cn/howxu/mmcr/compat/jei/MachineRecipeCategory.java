@@ -44,6 +44,11 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private static final int OVERFLOW_TEXT_OFFSET_X = 5;
     static final int RECIPE_ARROW_X = 64;
     static final int RECIPE_ARROW_Y = 8;
+    static final int PREVIEW_X = 4;
+    static final int PREVIEW_Y = 64;
+    static final int PREVIEW_WIDTH = 160;
+    static final int PREVIEW_HEIGHT = 92;
+    static final int PREVIEW_CONTROL_Y = 158;
     static final int ITEM_OVERLAY_X = 0;
     static final int ITEM_OVERLAY_Y = 0;
     static final float ITEM_OVERLAY_SCALE = 0.6F;
@@ -92,12 +97,15 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
         addRegion(builder, recipe, layout.inputs(), true);
         addRegion(builder, recipe, layout.outputs(), false);
-        builder.moveRecipeTransferButton(132, 130);
+        builder.moveRecipeTransferButton(layout.transferButtonX(), layout.transferButtonY());
     }
 
     @Override
     public void createRecipeExtras(IRecipeExtrasBuilder builder, MachineRecipeDisplay recipe, IFocusGroup focuses) {
         builder.addAnimatedRecipeArrow(200).setPosition(RECIPE_ARROW_X, RECIPE_ARROW_Y);
+        JeiStructurePreviewWidget preview = new JeiStructurePreviewWidget(machine, PREVIEW_X, PREVIEW_Y, PREVIEW_WIDTH, PREVIEW_HEIGHT);
+        builder.addWidget(preview);
+        builder.addInputHandler(preview);
     }
 
     @Override

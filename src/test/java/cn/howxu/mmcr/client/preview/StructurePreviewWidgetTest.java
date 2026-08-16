@@ -42,6 +42,22 @@ class StructurePreviewWidgetTest {
     }
 
     @Test
+    void widget_exposes_its_selected_layer_and_current_hits_to_hosts() {
+        RecordingRenderer renderer = new RecordingRenderer(schemaAtLayers(2, 5));
+        renderer.hitResult = new Object();
+        StructurePreviewWidget widget = new StructurePreviewWidget(renderer);
+        widget.setViewport(new PreviewViewport(10, 20, 30, 40));
+
+        widget.selectNextLayer();
+        widget.mouseClicked(20, 30, 0);
+        widget.mouseReleased(20, 30, 0);
+
+        assertThat(widget.selectedLayer()).isEqualTo(2);
+        assertThat(widget.hoverHit()).isSameAs(renderer.hitResult);
+        assertThat(widget.selectedHit()).isSameAs(renderer.selectedHit);
+    }
+
+    @Test
     void widget_rejects_presses_outside_its_viewport_and_closes_renderer_once() {
         RecordingRenderer renderer = new RecordingRenderer(schemaAtLayers(0));
         StructurePreviewWidget widget = new StructurePreviewWidget(renderer);

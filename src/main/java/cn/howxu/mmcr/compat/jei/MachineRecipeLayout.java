@@ -17,11 +17,13 @@ public record MachineRecipeLayout(
         RegionPlan outputs,
         int durationTextX,
         int hostRequirementTextY,
-        int durationTextY
+        int durationTextY,
+        int transferButtonX,
+        int transferButtonY
 ) {
 
-    public static final int WIDTH = 150;
-    public static final int HEIGHT = 150;
+    public static final int WIDTH = 330;
+    public static final int HEIGHT = 170;
 
     private static final int COLUMNS = 3;
     private static final int ROWS = 6;
@@ -34,11 +36,13 @@ public record MachineRecipeLayout(
         return new MachineRecipeLayout(
                 WIDTH,
                 HEIGHT,
-                region(display.fluidInputs().size(), display.itemInputs().size(), 8),
-                region(display.fluidOutputs().size(), display.itemOutputs().size(), 91, true),
-                8,
+                region(display.fluidInputs().size(), display.itemInputs().size(), 168),
+                region(display.fluidOutputs().size(), display.itemOutputs().size(), 251, true),
+                168,
                 hostRequirementTextY(display),
-                durationTextY(display)
+                durationTextY(display),
+                300,
+                130
         );
     }
 
