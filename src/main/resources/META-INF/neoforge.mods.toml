@@ -6,7 +6,8 @@ modId="${mod_id}"
 version="${mod_version}"
 displayName="${mod_name}"
 logoFile="mmcr.png"
-authors="howxu and ModularMachinery-Community-Edition developers"
+authors="howxu, HellFirePvP, wiiv, KasumiNova, youyihj, ikexing"
+credits="Based on HellFirePvP code, wiiv most the textures :3, KasumiNova improvements, more MMCE contributors and MMCR contributors!"
 description='''
 Nothing here
 '''
