@@ -81,7 +81,11 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
 
     @Override
     public void selectHit(Object hitResult) {
-        if (hitResult instanceof BlockHitResult blockHitResult) selectedHit = copyHit(blockHitResult);
+        if (hitResult instanceof BlockHitResult blockHitResult) {
+            selectedHit = copyHit(blockHitResult);
+            cn.howxu.mmcr.MMCR.LOG.debug("MMCR preview selected block: pos={}, location={}, direction={}, inside={}",
+                    selectedHit.getBlockPos(), selectedHit.getLocation(), selectedHit.getDirection(), selectedHit.isInside());
+        }
     }
 
     /** Called after PiP has flushed its scene buffers into the owned depth texture. */

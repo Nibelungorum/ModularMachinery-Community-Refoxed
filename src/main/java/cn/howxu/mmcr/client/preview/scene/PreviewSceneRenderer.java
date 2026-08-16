@@ -202,8 +202,8 @@ public final class PreviewSceneRenderer {
     private static void drawOutline(PreviewSceneRenderContext context, BlockHitResult hit, int color) {
         AABB box = new AABB(hit.getBlockPos()).inflate(0.002D);
         VertexConsumer vertices = context.bufferSource().getBuffer(RenderTypes.lines());
-        cn.howxu.mmcr.MMCR.LOG.debug("MMCR preview outline submit: pos={}, color={}, modelView={}, projection={}",
-                hit.getBlockPos(), Integer.toHexString(color), RenderSystem.getModelViewStack(), PreviewSceneCameraContext.projection());
+        cn.howxu.mmcr.MMCR.LOG.debug("MMCR preview outline submit: pos={}, location={}, color={}, renderBox={}, modelView={}, projection={}",
+                hit.getBlockPos(), hit.getLocation(), Integer.toHexString(color), box, RenderSystem.getModelViewStack(), PreviewSceneCameraContext.projection());
         com.mojang.blaze3d.vertex.PoseStack poseStack = new com.mojang.blaze3d.vertex.PoseStack();
         com.mojang.blaze3d.vertex.PoseStack.Pose pose = poseStack.last();
         float width = net.minecraft.client.Minecraft.getInstance().gameRenderer.getGameRenderState().windowRenderState.appropriateLineWidth;
