@@ -32,7 +32,10 @@ class JeiMixinConfigurationTest {
                 .contains("CallbackInfoReturnable<Boolean>")
                 .contains("mmcr$closeDiscardedPreviews(ILookupState state, boolean addToHistory");
         assertThat(source("GlCommandEncoderMixin.java"))
-                .contains("@Mixin(targets = \"com.mojang.blaze3d.systems.CommandEncoder\")");
+                .contains("@Mixin(targets = \"com.mojang.blaze3d.opengl.GlCommandEncoder\")")
+                .contains("method = \"copyTextureToBuffer")
+                .contains("@Inject(")
+                .doesNotContain("DepthTextureReadbackBridge");
     }
 
     private static String source(String fileName) throws IOException {

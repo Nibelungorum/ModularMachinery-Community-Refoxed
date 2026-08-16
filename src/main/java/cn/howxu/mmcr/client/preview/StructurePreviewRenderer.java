@@ -105,9 +105,8 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
                 depthTexture.getHeight(0), issuedBuffer, token, frame, mouseX, mouseY, camera);
         lifecycle.beginReadback(token, issuedBuffer);
         try {
-            DepthTextureReadbackBridge encoder = (DepthTextureReadbackBridge) RenderSystem.getDevice().createCommandEncoder();
-            encoder.mmcr$copyDepthTextureToBuffer(depthTexture, issuedBuffer, 0L, () ->
-                    lifecycle.enqueueCallback(token, () -> readDepthOnOwner(sample)), sample.texel().x(), sample.texel().y());
+            RenderSystem.getDevice().createCommandEncoder().copyTextureToBuffer(depthTexture, issuedBuffer, 0L, () ->
+                    lifecycle.enqueueCallback(token, () -> readDepthOnOwner(sample)), 0, sample.texel().x(), sample.texel().y(), 1, 1);
         } catch (RuntimeException exception) {
             lifecycle.failReadback(token, issuedBuffer, depthReadbackBuffer);
             cn.howxu.mmcr.MMCR.LOG.warn("Couldn't request structure preview depth readback", exception);
