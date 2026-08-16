@@ -5,6 +5,7 @@ import cn.howxu.mmcr.client.preview.StructurePreviewRenderer;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchemaFactory;
 import cn.howxu.mmcr.client.preview.StructurePreviewWidget;
+import cn.howxu.mmcr.client.preview.mixin.GuiGraphicsExtractorAccessor;
 import com.mojang.blaze3d.platform.InputConstants;
 import mezz.jei.api.gui.builder.ITooltipBuilder;
 import mezz.jei.api.gui.inputs.IJeiInputHandler;
@@ -24,7 +25,7 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInputHandler {
+public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInputHandler, AutoCloseable {
     private static final int CONTROL_HEIGHT = 10;
     private final Preview preview;
     private final int x;
@@ -33,6 +34,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private final int height;
     private final StructurePreviewSchema schema;
     private boolean previewDragActive;
+    private boolean closed;
 
     public JeiStructurePreviewWidget(Machine machine, int x, int y, int width, int height) {
         this(createSchema(machine), x, y, width, height);
@@ -52,7 +54,9 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
             @Override public boolean mouseReleased(double mouseX, double mouseY, int button) { return widget.mouseReleased(mouseX, mouseY, button); }
             @Override public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) { return widget.mouseDragged(mouseX, mouseY, button, dragX, dragY); }
             @Override public boolean mouseScrolled(double mouseX, double mouseY, double scrollDelta) { return widget.mouseScrolled(mouseX, mouseY, scrollDelta); }
-            @Override public void render(GuiGraphicsExtractor graphics, int x, int y, int width, int height) { widget.render(graphics, x, y, width, height, 0); }
+            @Override public void render(GuiGraphicsExtractor graphics, int x, int y, int width, int height, int originX, int originY) {
+                widget.render(graphics, x, y, width, height, 0, originX, originY);
+            }
             @Override public void previous() { widget.selectPreviousLayer(); }
             @Override public void next() { widget.selectNextLayer(); }
             @Override public void all() { widget.showAllLayers(); }
@@ -89,7 +93,9 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
 
     @Override
     public void drawWidget(GuiGraphicsExtractor graphics, double mouseX, double mouseY) {
-        preview.render(graphics, 0, 0, width, height);
+        GuiGraphicsExtractorAccessor extractor = (GuiGraphicsExtractorAccessor) graphics;
+        ScreenPosition origin = absoluteGuiOrigin(extractor.mmcr$getMouseX(), extractor.mmcr$getMouseY(), mouseX, mouseY);
+        preview.render(graphics, 0, 0, width, height, origin.x(), origin.y());
         String[] keys = {"previous_layer", "next_layer", "all_layers", "reset"};
         for (int index = 0; index < keys.length; index++) {
             graphics.text(Minecraft.getInstance().font, Component.translatable("jei.mmcr.structure_preview." + keys[index]),
@@ -101,6 +107,17 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
                 ? Component.translatable("jei.mmcr.structure_preview.all_layers")
                 : Component.translatable("jei.mmcr.structure_preview.layer", selectedLayer, layers.indexOf(selectedLayer) + 1, layers.size());
         graphics.text(Minecraft.getInstance().font, layerText, 0, height - 10, 0xFF404040, false);
+    }
+
+    static ScreenPosition absoluteGuiOrigin(int absoluteMouseX, int absoluteMouseY, double localMouseX, double localMouseY) {
+        return new ScreenPosition(absoluteMouseX - (int) localMouseX, absoluteMouseY - (int) localMouseY);
+    }
+
+    @Override
+    public void close() {
+        if (closed) return;
+        closed = true;
+        preview.close();
     }
 
     @Override
@@ -168,7 +185,8 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         default boolean mouseReleased(double mouseX, double mouseY, int button) { return false; }
         default boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) { return false; }
         default boolean mouseScrolled(double mouseX, double mouseY, double scrollDelta) { return false; }
-        default void render(GuiGraphicsExtractor graphics, int x, int y, int width, int height) { }
+        default void render(GuiGraphicsExtractor graphics, int x, int y, int width, int height, int originX, int originY) { }
+        default void close() { }
         default void previous() { }
         default void next() { }
         default void all() { }

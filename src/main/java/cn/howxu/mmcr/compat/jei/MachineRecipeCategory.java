@@ -104,6 +104,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     public void createRecipeExtras(IRecipeExtrasBuilder builder, MachineRecipeDisplay recipe, IFocusGroup focuses) {
         builder.addAnimatedRecipeArrow(200).setPosition(RECIPE_ARROW_X, RECIPE_ARROW_Y);
         JeiStructurePreviewWidget preview = new JeiStructurePreviewWidget(machine, PREVIEW_X, PREVIEW_Y, PREVIEW_WIDTH, PREVIEW_HEIGHT);
+        JeiPreviewLifecycle.registerActive(preview);
         builder.addWidget(preview);
         builder.addInputHandler(preview);
     }

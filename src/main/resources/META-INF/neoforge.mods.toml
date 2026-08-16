@@ -15,6 +15,9 @@ See NOTICE and LICENSES/LGPL-3.0.txt.
 [[mixins]]
 config="mmcr.mixins.json"
 
+[[mixins]]
+config="mmcr.jei.mixins.json"
+
 [[dependencies.${mod_id}]]
 modId="neoforge"
 type="required"

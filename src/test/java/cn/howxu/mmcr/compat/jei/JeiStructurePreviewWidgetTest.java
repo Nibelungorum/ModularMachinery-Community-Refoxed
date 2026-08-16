@@ -2,6 +2,8 @@ package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
+import cn.howxu.mmcr.client.preview.PreviewFrameViewport;
+import cn.howxu.mmcr.client.preview.PreviewViewport;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.datafixers.util.Either;
@@ -189,6 +191,39 @@ class JeiStructurePreviewWidgetTest {
         assertThat(second).isNotSameAs(first);
     }
 
+    @Test
+    void renderUsesJeiLayoutOriginForTheAbsolutePreviewViewport() {
+        RecordingPreviewWidget preview = new RecordingPreviewWidget();
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 4, 64, 160, 92);
+
+        ScreenPosition origin = JeiStructurePreviewWidget.absoluteGuiOrigin(304, 238, 40, 18);
+
+        assertThat(origin).isEqualTo(new ScreenPosition(264, 220));
+    }
+
+    @Test
+    void absoluteJeiViewportKeepsExtractorMouseInsideDepthMapping() {
+        PreviewFrameViewport frame = new PreviewFrameViewport(new PreviewViewport(268, 284, 160, 92),
+                new PreviewViewport.FramebufferViewport(536, 192, 320, 184), 320, 184, 2);
+
+        assertThat(frame.containsAbsoluteGui(304, 302)).isTrue();
+        assertThat(frame.depthTexturePixel(304, 302)).isEqualTo(new PreviewFrameViewport.Pixel(72, 146));
+    }
+
+    @Test
+    void layoutDisposalClosesEachPreviewOnlyOnce() {
+        RecordingPreviewWidget preview = new RecordingPreviewWidget();
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 4, 64, 160, 92);
+        JeiPreviewLifecycle lifecycle = new JeiPreviewLifecycle();
+
+        lifecycle.register(widget);
+        lifecycle.closeAll();
+        lifecycle.closeAll();
+        widget.close();
+
+        assertThat(preview.closes).isEqualTo(1);
+    }
+
     private static StructurePreviewSchema schema(net.minecraft.world.level.block.state.BlockState... states) {
         Map<BlockPos, net.minecraft.world.level.block.state.BlockState> blocks = new LinkedHashMap<>();
         for (int index = 0; index < states.length; index++) blocks.put(new BlockPos(index, 0, 0), states[index]);
@@ -247,6 +282,7 @@ class JeiStructurePreviewWidgetTest {
         private double lastDeltaY;
         private Object hover;
         private Object selected;
+        private int closes;
 
         @Override
         public boolean mouseClicked(double mouseX, double mouseY, int button) {
@@ -269,6 +305,7 @@ class JeiStructurePreviewWidgetTest {
         @Override public void previous() { previous++; }
         @Override public Object hoverHit() { return hover; }
         @Override public Object selectedHit() { return selected; }
+        @Override public void close() { closes++; }
     }
 
     private static final class RecordingTooltip implements ITooltipBuilder {

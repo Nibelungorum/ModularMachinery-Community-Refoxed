@@ -39,9 +39,15 @@ public final class StructurePreviewWidget implements AutoCloseable {
 
     /** Renders this preview inside the supplied GUI rectangle. */
     public void render(GuiGraphicsExtractor graphics, int x, int y, int width, int height, float partialTick) {
+        render(graphics, x, y, width, height, partialTick, 0, 0);
+    }
+
+    /** Renders this preview with the GUI origin supplied by an embedding host. */
+    public void render(GuiGraphicsExtractor graphics, int x, int y, int width, int height, float partialTick,
+            int guiOriginX, int guiOriginY) {
         Minecraft minecraft = Minecraft.getInstance();
         render(new PreviewRenderContext(graphics, new PreviewViewport(x, y, width, height), partialTick,
-                0, 0, minecraft.getWindow().getGuiScaledWidth(), minecraft.getWindow().getGuiScaledHeight(),
+                guiOriginX, guiOriginY, minecraft.getWindow().getGuiScaledWidth(), minecraft.getWindow().getGuiScaledHeight(),
                 minecraft.getWindow().getWidth(), minecraft.getWindow().getHeight(), camera));
     }
 
