@@ -35,7 +35,7 @@ public final class PreviewSceneRenderer implements AutoCloseable {
     private final PreviewSceneMeshCache meshes = new PreviewSceneMeshCache(null);
     private PreviewVisibility visibility = PreviewVisibility.ALL;
     private long requestedGeneration;
-    private long lastRotationVersion = Long.MIN_VALUE;
+    private org.joml.Vector3f lastEye;
     private boolean closed;
     private BlockHitResult hitResult;
 
@@ -61,9 +61,9 @@ public final class PreviewSceneRenderer implements AutoCloseable {
         assertRenderThread();
         if (closed) return;
         PreviewSceneCamera sceneCamera = PreviewSceneCamera.from(camera, 1, 1);
-        if (sceneCamera.rotationVersion() != lastRotationVersion) {
-            lastRotationVersion = sceneCamera.rotationVersion();
-            compileState.onCameraRotation(lastRotationVersion);
+        if (lastEye == null || !lastEye.equals(sceneCamera.eye())) {
+            lastEye = sceneCamera.eye();
+            requestedGeneration = compileState.onCameraPanOrZoom();
         }
         if (compileState.pendingKind() == SceneCompileKind.FULL) {
             compileFull(sceneCamera);
@@ -116,16 +116,20 @@ public final class PreviewSceneRenderer implements AutoCloseable {
     private void compileTranslucent(PreviewSceneMeshCache.Meshes cache, PreviewSceneCamera camera) {
         MeshData.SortState sortState = cache.translucentSortState();
         if (sortState == null) {
-            compileState.markFullCachePublished();
             return;
         }
+        long generation = requestedGeneration;
         PreviewSceneMeshCache.TranslucentOrder result = null;
         try {
             VertexSorting sorting = VertexSorting.byDistance(camera.eye().x, camera.eye().y, camera.eye().z);
-            result = new PreviewSceneMeshCache.TranslucentOrder(sortState.buildSortedIndexBuffer(
-                    cache.builders().buffer(ChunkSectionLayer.TRANSLUCENT), sorting));
+            ByteBufferBuilder.Result indexBuffer = sortState.buildSortedIndexBuffer(
+                    cache.builders().buffer(ChunkSectionLayer.TRANSLUCENT), sorting);
+            if (indexBuffer == null) return;
+            result = new PreviewSceneMeshCache.TranslucentOrder(indexBuffer);
+            if (!compileState.accepts(generation, SceneCompileKind.TRANSLUCENT_ONLY)
+                    || meshes.current() != cache || closed) return;
             meshes.publishTranslucent(result);
-            compileState.markFullCachePublished();
+            compileState.markTranslucentCachePublished(generation);
             result = null;
         } finally {
             if (result != null) meshes.reject(result);
@@ -164,8 +168,8 @@ public final class PreviewSceneRenderer implements AutoCloseable {
         try (ByteBufferBuilder vertexBuilder = new ByteBufferBuilder(vertices.remaining());
              ByteBufferBuilder indexBuilder = indices == null ? null : new ByteBufferBuilder(indices.remaining())) {
             MeshData drawMesh = new MeshData(copy(vertices, vertexBuilder), cached.drawState());
-            if (sortedIndices != null) {
-                ((MeshDataAccessor) (Object) drawMesh).mmcr$setIndexBuffer(sortedIndices);
+            if (sortedIndices != null && indexBuilder != null) {
+                ((MeshDataAccessor) (Object) drawMesh).mmcr$setIndexBuffer(copyIndexForDraw(sortedIndices, indexBuilder));
             } else if (indices != null && indexBuilder != null) {
                 ((MeshDataAccessor) (Object) drawMesh).mmcr$setIndexBuffer(copy(indices, indexBuilder));
             }
@@ -183,6 +187,10 @@ public final class PreviewSceneRenderer implements AutoCloseable {
         long pointer = destination.reserve(size);
         org.lwjgl.system.MemoryUtil.memCopy(org.lwjgl.system.MemoryUtil.memAddress(duplicate), pointer, size);
         return destination.build();
+    }
+
+    static ByteBufferBuilder.Result copyIndexForDraw(ByteBufferBuilder.Result source, ByteBufferBuilder destination) {
+        return copy(source.byteBuffer(), destination);
     }
 
     private void assertRenderThread() {

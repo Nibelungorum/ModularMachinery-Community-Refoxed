@@ -2,6 +2,10 @@ package cn.howxu.mmcr.client.preview.scene;
 
 import org.junit.jupiter.api.Test;
 
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
+
+import java.nio.ByteBuffer;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -93,6 +97,34 @@ class PreviewSceneMeshLifecycleTest {
         assertThat(currentGeneration).isNotEqualTo(oldGeneration);
         assertThat(cache.current()).isSameAs(current);
         assertThat(stale.closeCalls()).isEqualTo(1);
+    }
+
+    @Test
+    void stale_translucent_result_is_rejected_without_replacing_current_order() {
+        RecordingFull current = new RecordingFull("current", "current-index");
+        RecordingTranslucent stale = new RecordingTranslucent("stale-index");
+        PreviewSceneMeshCache cache = new PreviewSceneMeshCache(current);
+
+        cache.reject(stale);
+
+        assertThat(current.translucentOrder()).isEqualTo("current-index");
+        assertThat(stale.closeCalls()).isEqualTo(1);
+    }
+
+    @Test
+    void draw_index_copy_does_not_close_published_translucent_order() {
+        try (ByteBufferBuilder publishedBuilder = new ByteBufferBuilder(4);
+             ByteBufferBuilder drawBuilder = new ByteBufferBuilder(4)) {
+            long address = publishedBuilder.reserve(4);
+            org.lwjgl.system.MemoryUtil.memPutInt(address, 0x12345678);
+            ByteBufferBuilder.Result published = publishedBuilder.build();
+
+            ByteBufferBuilder.Result draw = PreviewSceneRenderer.copyIndexForDraw(published, drawBuilder);
+            draw.close();
+
+            assertThat(published.byteBuffer().getInt(0)).isEqualTo(0x12345678);
+            published.close();
+        }
     }
 
     private static final class RecordingFull implements PreviewSceneMeshCache.FullCache {

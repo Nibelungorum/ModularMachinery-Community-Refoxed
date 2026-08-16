@@ -22,13 +22,27 @@ final class SceneCompileState {
         pendingKind = null;
     }
 
-    void onCameraRotation(long rotationVersion) {
-        if (completeCache && !closed && pendingKind != SceneCompileKind.FULL) {
-            pendingKind = SceneCompileKind.TRANSLUCENT_ONLY;
-        }
+    long onCameraRotation(long rotationVersion) {
+        return requestTranslucentResort();
     }
 
-    void onCameraPanOrZoom() {
+    long onCameraPanOrZoom() {
+        return requestTranslucentResort();
+    }
+
+    void markTranslucentCachePublished(long resultGeneration) {
+        if (!accepts(resultGeneration, SceneCompileKind.TRANSLUCENT_ONLY)) {
+            throw new IllegalStateException("cannot publish stale preview translucent cache");
+        }
+        pendingKind = null;
+    }
+
+    private long requestTranslucentResort() {
+        if (completeCache && !closed && pendingKind != SceneCompileKind.FULL) {
+            generation++;
+            pendingKind = SceneCompileKind.TRANSLUCENT_ONLY;
+        }
+        return generation;
     }
 
     void close() {

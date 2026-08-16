@@ -36,12 +36,10 @@ class SceneApiContractTest {
     }
 
     @Test
-    void rotation_requests_translucent_resort_but_pan_and_zoom_do_not() {
+    void every_eye_change_requests_translucent_resort_without_replacing_pending_full() {
         SceneCompileState state = new SceneCompileState();
         state.markFullCachePublished();
 
-        state.onCameraRotation(1L);
-        assertThat(state.pendingKind()).isEqualTo(SceneCompileKind.TRANSLUCENT_ONLY);
         state.onCameraPanOrZoom();
 
         assertThat(state.pendingKind()).isEqualTo(SceneCompileKind.TRANSLUCENT_ONLY);
@@ -56,6 +54,23 @@ class SceneApiContractTest {
         state.markFullCachePublished();
 
         assertThat(state.accepts(generation, SceneCompileKind.TRANSLUCENT_ONLY)).isTrue();
+    }
+
+    @Test
+    void translucent_publish_requires_its_own_generation_and_never_replaces_full_pending_work() {
+        SceneCompileState state = new SceneCompileState();
+        long fullGeneration = state.requestFullRebuild();
+        state.markFullCachePublished();
+        long translucentGeneration = state.onCameraPanOrZoom();
+
+        assertThat(translucentGeneration).isNotEqualTo(fullGeneration);
+        assertThat(state.accepts(translucentGeneration, SceneCompileKind.TRANSLUCENT_ONLY)).isTrue();
+        state.markTranslucentCachePublished(translucentGeneration);
+        assertThat(state.pendingKind()).isNull();
+
+        state.requestFullRebuild();
+        state.onCameraPanOrZoom();
+        assertThat(state.pendingKind()).isEqualTo(SceneCompileKind.FULL);
     }
 
     @Test
