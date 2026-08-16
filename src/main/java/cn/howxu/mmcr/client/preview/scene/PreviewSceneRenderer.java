@@ -68,10 +68,10 @@ public final class PreviewSceneRenderer implements AutoCloseable {
         if (compileState.pendingKind() == SceneCompileKind.FULL) {
             compileFull(sceneCamera);
         }
-        PreviewSceneMeshCache.CacheOwner owner = meshes.current();
+        PreviewSceneMeshCache.FullCache owner = meshes.current();
         if (owner instanceof PreviewSceneMeshCache.Meshes cache) {
             if (compileState.pendingKind() == SceneCompileKind.TRANSLUCENT_ONLY) {
-                compileState.markFullCachePublished();
+                compileTranslucent(cache, sceneCamera);
             }
             draw(cache, ChunkSectionLayer.SOLID, RenderTypes.solidMovingBlock());
             draw(cache, ChunkSectionLayer.CUTOUT, RenderTypes.cutoutMovingBlock());
@@ -113,6 +113,25 @@ public final class PreviewSceneRenderer implements AutoCloseable {
         }
     }
 
+    private void compileTranslucent(PreviewSceneMeshCache.Meshes cache, PreviewSceneCamera camera) {
+        MeshData.SortState sortState = cache.translucentSortState();
+        if (sortState == null) {
+            compileState.markFullCachePublished();
+            return;
+        }
+        PreviewSceneMeshCache.TranslucentOrder result = null;
+        try {
+            VertexSorting sorting = VertexSorting.byDistance(camera.eye().x, camera.eye().y, camera.eye().z);
+            result = new PreviewSceneMeshCache.TranslucentOrder(sortState.buildSortedIndexBuffer(
+                    cache.builders().buffer(ChunkSectionLayer.TRANSLUCENT), sorting));
+            meshes.publishTranslucent(result);
+            compileState.markFullCachePublished();
+            result = null;
+        } finally {
+            if (result != null) meshes.reject(result);
+        }
+    }
+
     private void draw(PreviewSceneMeshCache.Meshes cache, ChunkSectionLayer layer, RenderType renderType) {
         List<MeshData> layerMeshes = cache.layers().get(layer);
         if (layerMeshes == null) return;
@@ -127,8 +146,10 @@ public final class PreviewSceneRenderer implements AutoCloseable {
         if (translucent == null) return;
         VertexSorting sorting = VertexSorting.byDistance(camera.eye().x, camera.eye().y, camera.eye().z);
         for (MeshData mesh : translucent) {
-            drawCopy(RenderTypes.translucentMovingBlock(), mesh, sortState == null ? null
-                    : sortState.buildSortedIndexBuffer(cache.builders().buffer(ChunkSectionLayer.TRANSLUCENT), sorting));
+            ByteBufferBuilder.Result order = cache.translucentOrder() == null ? null : cache.translucentOrder().indexBuffer();
+            drawCopy(RenderTypes.translucentMovingBlock(), mesh, order == null && sortState == null ? null
+                    : order == null ? sortState.buildSortedIndexBuffer(cache.builders().buffer(ChunkSectionLayer.TRANSLUCENT), sorting)
+                    : order);
         }
     }
 

@@ -6,79 +6,84 @@
  */
 package cn.howxu.mmcr.client.preview.scene;
 
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
 import net.minecraft.client.renderer.SectionBufferBuilderPack;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 
 import java.util.List;
+import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * Owns the published mesh generation and releases each generation exactly once.
+ * Owns the published mesh generation and its separately replaceable translucent ordering.
  *
  * @author howxu <dev@howxu.cn>
  */
 public final class PreviewSceneMeshCache implements AutoCloseable {
-    private CacheOwner current;
+    private FullCache current;
+    private final Map<AutoCloseable, Boolean> closedResults = new IdentityHashMap<>();
 
-    PreviewSceneMeshCache(CacheOwner current) {
+    PreviewSceneMeshCache(FullCache current) {
         this.current = current;
     }
 
-    CacheOwner current() {
+    FullCache current() {
         return current;
     }
 
-    void publish(CacheOwner next) {
-        if (!next.full()) {
-            reject(next);
-            return;
-        }
-        CacheOwner previous = current;
+    void publish(FullCache next) {
+        FullCache previous = current;
         current = next;
-        if (previous != null) previous.close();
+        if (previous != null) closeOnce(previous);
     }
 
-    void reject(CacheOwner result) {
-        result.close();
+    void reject(AutoCloseable result) {
+        closeOnce(result);
     }
 
-    void publishTranslucent(CacheOwner result) {
-        if (current == null || result.full()) {
+    void publishTranslucent(TranslucentCache result) {
+        if (current == null) {
             reject(result);
             return;
         }
-        current.replaceTranslucent(result);
+        TranslucentCache previous = current.replaceTranslucent(result);
+        if (previous != null) closeOnce(previous);
     }
 
     @Override
     public void close() {
-        if (current != null) {
-            current.close();
-            current = null;
+        if (current == null) return;
+        FullCache previous = current;
+        current = null;
+        closeOnce(previous);
+    }
+
+    private void closeOnce(AutoCloseable owner) {
+        if (closedResults.put(owner, Boolean.TRUE) != null) return;
+        try {
+            owner.close();
+        } catch (Exception exception) {
+            throw new IllegalStateException("cannot close preview mesh result", exception);
         }
     }
 
-    enum Layer {
-        SOLID, CUTOUT, TRANSLUCENT
+    interface FullCache extends AutoCloseable {
+        TranslucentCache replaceTranslucent(TranslucentCache result);
+        @Override void close();
     }
 
-    interface CacheOwner extends AutoCloseable {
-        boolean full();
-
-        Object replaceTranslucent(CacheOwner replacement);
-
-        @Override
-        void close();
+    interface TranslucentCache extends AutoCloseable {
+        @Override void close();
     }
 
-    static final class Meshes implements CacheOwner {
+    static final class Meshes implements FullCache {
         private final SectionBufferBuilderPack builders;
         private final Map<ChunkSectionLayer, List<MeshData>> layers;
         private final Set<net.minecraft.core.BlockPos> blockEntities;
         private final MeshData.SortState translucentSortState;
-        private boolean closed;
+        private TranslucentOrder translucentOrder;
 
         Meshes(SectionBufferBuilderPack builders, Map<ChunkSectionLayer, List<MeshData>> layers,
                Set<net.minecraft.core.BlockPos> blockEntities, MeshData.SortState translucentSortState) {
@@ -92,19 +97,36 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
         Map<ChunkSectionLayer, List<MeshData>> layers() { return layers; }
         Set<net.minecraft.core.BlockPos> blockEntities() { return blockEntities; }
         MeshData.SortState translucentSortState() { return translucentSortState; }
+        TranslucentOrder translucentOrder() { return translucentOrder; }
 
-        @Override public boolean full() { return true; }
-
-        @Override public Object replaceTranslucent(CacheOwner replacement) {
-            throw new UnsupportedOperationException("translucent results only replace draw indices");
+        @Override
+        public TranslucentCache replaceTranslucent(TranslucentCache result) {
+            TranslucentOrder replacement = (TranslucentOrder) result;
+            TranslucentOrder previous = translucentOrder;
+            translucentOrder = replacement;
+            return previous;
         }
 
         @Override
         public void close() {
-            if (closed) return;
-            closed = true;
+            if (translucentOrder != null) translucentOrder.close();
             layers.values().forEach(meshes -> meshes.forEach(MeshData::close));
             builders.close();
+        }
+    }
+
+    static final class TranslucentOrder implements TranslucentCache {
+        private final ByteBufferBuilder.Result indexBuffer;
+
+        TranslucentOrder(ByteBufferBuilder.Result indexBuffer) {
+            this.indexBuffer = indexBuffer;
+        }
+
+        ByteBufferBuilder.Result indexBuffer() { return indexBuffer; }
+
+        @Override
+        public void close() {
+            indexBuffer.close();
         }
     }
 }

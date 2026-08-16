@@ -70,7 +70,7 @@ public final class PreviewSceneMeshCompiler {
                 BlockPos pos = entry.getKey();
                 BlockState state = level.getBlockState(pos);
                 if (!visibility.isVisible(pos, entry.getValue()) || state.isAir()) continue;
-                if (state.hasBlockEntity()) blockEntities.add(pos);
+                if (entry.getValue().hasBlockEntity()) blockEntities.add(pos);
                 if (!state.getFluidState().isEmpty()) {
                     fluidRenderer.tesselate(region, pos, offset(fluidOutput, pos), state, state.getFluidState());
                 }
