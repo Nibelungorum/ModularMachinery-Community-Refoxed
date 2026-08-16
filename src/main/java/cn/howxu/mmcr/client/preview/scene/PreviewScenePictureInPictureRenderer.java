@@ -62,8 +62,12 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
                 minecraft.gameRenderer.getFeatureRenderDispatcher().getSubmitNodeStorage(),
                 minecraft.renderBuffers().bufferSource(), cameraState, state.partialTick());
         PreviewSceneCameraContext.with(camera.viewRotation(), camera.projection(), () -> state.owner().renderScene(context, state.camera()));
-        state.owner().onPictureInPictureFrame(((PictureInPictureRendererAccessor) (Object) this).mmcr$getDepthTexture(),
-                camera, state.mouseX(), state.mouseY(), state.x1() - state.x0(), state.y1() - state.y0(),
-                state.framebufferWidth(), state.framebufferHeight());
+        GpuTexture depthTexture = ((PictureInPictureRendererAccessor) (Object) this).mmcr$getDepthTexture();
+        if (depthTexture == null) {
+            state.owner().onPictureInPictureFrame(null, camera, state.mouseX(), state.mouseY(), state.frame());
+            return;
+        }
+        state.owner().onPictureInPictureFrame(depthTexture, camera, state.mouseX(), state.mouseY(),
+                state.frame().withDepthTextureSize(depthTexture.getWidth(0), depthTexture.getHeight(0)));
     }
 }

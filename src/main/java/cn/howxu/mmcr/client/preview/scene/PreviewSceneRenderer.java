@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class PreviewSceneRenderer implements AutoCloseable {
+public final class PreviewSceneRenderer {
     private final PreviewLevel level;
     private final StructurePreviewSchema schema;
     private final SceneCompileState compileState = new SceneCompileState();
@@ -94,8 +94,7 @@ public final class PreviewSceneRenderer implements AutoCloseable {
         return result instanceof BlockHitResult block ? block : null;
     }
 
-    @Override
-    public void close() {
+    public void dispose() {
         assertRenderThread();
         if (closed) return;
         closed = true;

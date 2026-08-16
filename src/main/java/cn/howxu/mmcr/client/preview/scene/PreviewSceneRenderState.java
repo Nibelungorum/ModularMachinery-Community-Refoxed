@@ -7,6 +7,7 @@
 package cn.howxu.mmcr.client.preview.scene;
 
 import cn.howxu.mmcr.client.preview.PreviewCamera;
+import cn.howxu.mmcr.client.preview.PreviewFrameViewport;
 import cn.howxu.mmcr.client.preview.StructurePreviewRenderer;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.renderer.state.gui.pip.PictureInPictureRenderState;
@@ -17,10 +18,10 @@ import net.minecraft.client.renderer.state.gui.pip.PictureInPictureRenderState;
  * @author howxu <dev@howxu.cn>
  */
 public record PreviewSceneRenderState(PreviewSceneRenderer scene, PreviewCamera camera,
-                                      int x0, int y0, int x1, int y1, float partialTick,
-                                      ScreenRectangle scissorArea, int mouseX, int mouseY,
-                                      int framebufferWidth, int framebufferHeight,
-                                      StructurePreviewRenderer owner) implements PictureInPictureRenderState {
+                                       int x0, int y0, int x1, int y1, float partialTick,
+                                       ScreenRectangle scissorArea, int mouseX, int mouseY,
+                                       PreviewFrameViewport frame,
+                                       StructurePreviewRenderer owner) implements PictureInPictureRenderState {
     @Override
     public float scale() {
         return 1.0F;
