@@ -22,6 +22,9 @@ import net.minecraft.client.renderer.block.FluidRenderer;
 import net.minecraft.client.renderer.block.ModelBlockRenderer;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.CardinalLighting;
+import net.minecraft.world.level.ColorResolver;
+import net.minecraft.world.level.lighting.LevelLightEngine;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -32,7 +35,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.lang.reflect.Proxy;
 
 /**
  * Tesselates the immutable preview level into a private, render-thread-owned mesh generation.
@@ -103,13 +105,18 @@ public final class PreviewSceneMeshCompiler {
     }
 
     private static BlockAndTintGetter previewRegion(PreviewLevel level) {
-        return (BlockAndTintGetter) Proxy.newProxyInstance(BlockAndTintGetter.class.getClassLoader(),
-                new Class<?>[] {BlockAndTintGetter.class}, (proxy, method, arguments) -> {
-                    if (method.getDeclaringClass() == Object.class) {
-                        return method.invoke(level, arguments);
-                    }
-                    return method.invoke(level, arguments);
-                });
+        return new BlockAndTintGetter() {
+            @Override public BlockState getBlockState(BlockPos position) { return level.getBlockState(position); }
+            @Override public net.minecraft.world.level.material.FluidState getFluidState(BlockPos position) { return level.getFluidState(position); }
+            @Override public net.minecraft.world.level.block.entity.BlockEntity getBlockEntity(BlockPos position) { return null; }
+            @Override public int getHeight() { return level.getHeight(); }
+            @Override public int getMinY() { return level.getMinY(); }
+            @Override public CardinalLighting cardinalLighting() { return CardinalLighting.DEFAULT; }
+            @Override public LevelLightEngine getLightEngine() { return level.getLightEngine(); }
+            @Override public int getBlockTint(BlockPos position, ColorResolver resolver) {
+                return resolver.getColor(level.getBiome(position).value(), position.getX(), position.getZ());
+            }
+        };
     }
 
     private static FluidRenderer.Output offset(FluidRenderer.Output output, BlockPos position) {
