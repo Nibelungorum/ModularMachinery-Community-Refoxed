@@ -9,6 +9,7 @@ import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
 import net.minecraft.world.phys.BlockHitResult;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -28,7 +29,6 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
     private BlockHitResult hoverHit;
     private BlockHitResult selectedHit;
     private GpuBuffer depthReadbackBuffer;
-    private boolean depthReadbackInFlight;
     private volatile boolean closed;
 
     public StructurePreviewRenderer(StructurePreviewSchema schema) {
@@ -76,7 +76,7 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
     }
 
     @Override
-    public Object hitResult() {
+    public @Nullable BlockHitResult hitResult() {
         return hoverHit;
     }
 
@@ -95,35 +95,38 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
             return;
         }
         long now = System.currentTimeMillis();
-        if (depthReadbackInFlight || !lifecycle.shouldRead(mouseX, mouseY, now)) return;
-        PreviewFrameViewport.Pixel textureMouse = frame.depthTexturePixel(mouseX, mouseY,
-                depthTexture.getWidth(0), depthTexture.getHeight(0));
+        if (lifecycle.readbackInFlight() || !lifecycle.shouldRead(mouseX, mouseY, now)) return;
         if (depthReadbackBuffer == null) {
             depthReadbackBuffer = RenderSystem.getDevice().createBuffer(() -> "MMCR preview depth readback",
                     GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, 4L);
         }
         long token = lifecycle.nextReadback(mouseX, mouseY, now);
         GpuBuffer issuedBuffer = depthReadbackBuffer;
-        depthReadbackInFlight = true;
-        DepthTextureReadbackBridge encoder = (DepthTextureReadbackBridge) RenderSystem.getDevice().createCommandEncoder();
-        encoder.mmcr$copyDepthTextureToBuffer(depthTexture, issuedBuffer, 0L, () -> {
-            lifecycle.enqueueCallback(token, () -> readDepthOnOwner(issuedBuffer, token, frame, mouseX, mouseY, camera));
-        }, textureMouse.x(), textureMouse.y());
+        PreviewDepthReadbackSample sample = PreviewDepthReadbackSample.of(depthTexture, depthTexture.getWidth(0),
+                depthTexture.getHeight(0), issuedBuffer, token, frame, mouseX, mouseY, camera);
+        lifecycle.beginReadback(token, issuedBuffer);
+        try {
+            DepthTextureReadbackBridge encoder = (DepthTextureReadbackBridge) RenderSystem.getDevice().createCommandEncoder();
+            encoder.mmcr$copyDepthTextureToBuffer(depthTexture, issuedBuffer, 0L, () ->
+                    lifecycle.enqueueCallback(token, () -> readDepthOnOwner(sample)), sample.texel().x(), sample.texel().y());
+        } catch (RuntimeException exception) {
+            lifecycle.failReadback(token, issuedBuffer, depthReadbackBuffer);
+            cn.howxu.mmcr.MMCR.LOG.warn("Couldn't request structure preview depth readback", exception);
+        }
     }
 
     public void renderScene(cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderContext context, PreviewCamera camera) {
         scene.render(context, camera, hoverHit, selectedHit);
     }
 
-    private void readDepthOnOwner(GpuBuffer issuedBuffer, long token, PreviewFrameViewport frame, int mouseX, int mouseY,
-                                  cn.howxu.mmcr.client.preview.scene.PreviewSceneCamera camera) {
+    private void readDepthOnOwner(PreviewDepthReadbackSample sample) {
         try {
-            if (closed || !lifecycle.accepts(token) || issuedBuffer != depthReadbackBuffer) return;
-            try (GpuBuffer.MappedView mapped = RenderSystem.getDevice().createCommandEncoder().mapBuffer(issuedBuffer, true, false)) {
-                applyDepth(mapped.data().getFloat(0), frame, mouseX, mouseY, camera);
+            if (closed || !lifecycle.accepts(sample.generation()) || sample.buffer() != depthReadbackBuffer) return;
+            try (GpuBuffer.MappedView mapped = RenderSystem.getDevice().createCommandEncoder().mapBuffer(sample.buffer(), true, false)) {
+                applyDepth(mapped.data().getFloat(0), sample);
             }
         } finally {
-            depthReadbackInFlight = false;
+            lifecycle.completeReadback(sample.generation(), sample.buffer());
         }
     }
 
@@ -149,21 +152,16 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
         }
     }
 
-    private void applyDepth(float depth, PreviewFrameViewport frame, int mouseX, int mouseY,
-                            cn.howxu.mmcr.client.preview.scene.PreviewSceneCamera camera) {
+    private void applyDepth(float depth, PreviewDepthReadbackSample sample) {
         if (closed || depth >= 1.0F) {
             hoverHit = null;
             return;
         }
-        PreviewFrameViewport.Pixel depthPixel = frame.depthTexturePixel(mouseX, mouseY);
-        int depthX = depthPixel.x();
-        int depthY = depthPixel.y();
-        org.joml.Vector4f point = new org.joml.Vector4f(2.0F * (depthX + 0.5F) / frame.pipAllocationWidth() - 1.0F,
-                1.0F - 2.0F * (depthY + 0.5F) / frame.pipAllocationHeight(), depth * 2.0F - 1.0F, 1.0F);
-        org.joml.Matrix4f inverse = camera.projection().mul(camera.view(), new org.joml.Matrix4f()).invert();
+        org.joml.Vector4f point = new org.joml.Vector4f(sample.ndcX(), sample.ndcY(), depth * 2.0F - 1.0F, 1.0F);
+        org.joml.Matrix4f inverse = sample.camera().projection().mul(sample.camera().view(), new org.joml.Matrix4f()).invert();
         inverse.transform(point);
         net.minecraft.world.phys.Vec3 target = new net.minecraft.world.phys.Vec3(point.x / point.w, point.y / point.w, point.z / point.w);
-        hoverHit = scene.clip(new net.minecraft.world.phys.Vec3(camera.eye()), target);
+        hoverHit = scene.clip(new net.minecraft.world.phys.Vec3(sample.camera().eye()), target);
     }
 
     private void releaseResources() {

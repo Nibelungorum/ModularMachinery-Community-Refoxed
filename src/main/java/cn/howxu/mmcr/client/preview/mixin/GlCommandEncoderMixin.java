@@ -38,27 +38,52 @@ public abstract class GlCommandEncoderMixin implements DepthTextureReadbackBridg
         int previousPixelPackBuffer = GL11.glGetInteger(GL21.GL_PIXEL_PACK_BUFFER_BINDING);
         int textureId = ((GlTexture) depthTexture).glId();
         int bufferHandle = ((GlBufferAccessor) (Object) (GlBuffer) destination).mmcr$getHandle();
-        GlStateManager.clearGlErrors();
+        DepthAttachmentRestore.Attachment previousDepthAttachment = null;
         try {
+            GlStateManager.clearGlErrors();
             GlStateManager._glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, readFbo);
+            previousDepthAttachment = mmcr$getDepthAttachment();
             GlStateManager._glFramebufferTexture2D(GL30.GL_READ_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT,
                     GL11.GL_TEXTURE_2D, textureId, 0);
             GL11.glReadBuffer(GL11.GL_NONE);
             GlStateManager._glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, bufferHandle);
             GlStateManager._readPixels(x, y, 1, 1, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, offset);
-            RenderSystem.queueFencedTask(callback);
             int error = GlStateManager._getError();
             if (error != GL11.GL_NO_ERROR) {
                 throw new IllegalStateException("Couldn't read PiP depth texture " + depthTexture.getLabel()
                         + ": GL error " + error);
             }
+            RenderSystem.queueFencedTask(callback);
         } finally {
-            GlStateManager._glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, readFbo);
-            GlStateManager._glFramebufferTexture2D(GL30.GL_READ_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT,
-                    GL11.GL_TEXTURE_2D, 0, 0);
+            if (previousDepthAttachment != null) mmcr$restoreDepthAttachment(previousDepthAttachment);
             GL11.glReadBuffer(previousReadBuffer);
             GlStateManager._glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, previousPixelPackBuffer);
             GlStateManager._glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousFramebuffer);
+        }
+    }
+
+    private DepthAttachmentRestore.Attachment mmcr$getDepthAttachment() {
+        int type = GL30.glGetFramebufferAttachmentParameteri(GL30.GL_READ_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT,
+                GL30.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE);
+        int objectId = GL30.glGetFramebufferAttachmentParameteri(GL30.GL_READ_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT,
+                GL30.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME);
+        int level = GL30.glGetFramebufferAttachmentParameteri(GL30.GL_READ_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT,
+                GL30.GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LEVEL);
+        return switch (type) {
+            case GL11.GL_TEXTURE -> DepthAttachmentRestore.Attachment.texture(objectId, level);
+            case GL30.GL_RENDERBUFFER -> DepthAttachmentRestore.Attachment.renderbuffer(objectId);
+            default -> DepthAttachmentRestore.Attachment.none();
+        };
+    }
+
+    private void mmcr$restoreDepthAttachment(DepthAttachmentRestore.Attachment attachment) {
+        switch (attachment.kind()) {
+            case TEXTURE -> GlStateManager._glFramebufferTexture2D(GL30.GL_READ_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT,
+                    GL11.GL_TEXTURE_2D, attachment.objectId(), attachment.level());
+            case RENDERBUFFER -> GL30.glFramebufferRenderbuffer(GL30.GL_READ_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT,
+                    GL30.GL_RENDERBUFFER, attachment.objectId());
+            case NONE -> GlStateManager._glFramebufferTexture2D(GL30.GL_READ_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT,
+                    GL11.GL_TEXTURE_2D, 0, 0);
         }
     }
 }

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
+import net.minecraft.world.phys.BlockHitResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -75,6 +76,25 @@ class StructurePreviewRendererTest {
         assertThat(lifecycle.shouldRead(2, 3, 149L)).isFalse();
         assertThat(lifecycle.shouldRead(3, 3, 149L)).isTrue();
         assertThat(lifecycle.shouldRead(2, 3, 150L)).isTrue();
+    }
+
+    @Test
+    void failed_bridge_request_releases_current_readback_for_retry() {
+        PreviewOwnerLifecycle lifecycle = new PreviewOwnerLifecycle();
+        Object buffer = new Object();
+        long token = lifecycle.nextReadback(2, 3, 100L);
+
+        lifecycle.beginReadback(token, buffer);
+        lifecycle.failReadback(token, buffer, buffer);
+
+        assertThat(lifecycle.readbackInFlight()).isFalse();
+        assertThat(lifecycle.shouldRead(3, 3, 100L)).isTrue();
+    }
+
+    @Test
+    void hit_result_has_a_nullable_block_hit_result_covariant_return_type() throws NoSuchMethodException {
+        assertThat(StructurePreviewRenderer.class.getDeclaredMethod("hitResult").getReturnType())
+                .isEqualTo(BlockHitResult.class);
     }
 
     @Test

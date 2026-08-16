@@ -16,6 +16,9 @@ final class PreviewOwnerLifecycle {
     private long lastReadAt = Long.MIN_VALUE;
     private int lastMouseX = Integer.MIN_VALUE;
     private int lastMouseY = Integer.MIN_VALUE;
+    private boolean readbackInFlight;
+    private long readbackToken;
+    private Object readbackBuffer;
 
     long nextReadback(int mouseX, int mouseY, long now) {
         lastMouseX = mouseX;
@@ -30,6 +33,31 @@ final class PreviewOwnerLifecycle {
 
     boolean accepts(long token) {
         return !releaseQueued.get() && token == generation.get();
+    }
+
+    void beginReadback(long token, Object buffer) {
+        readbackInFlight = true;
+        readbackToken = token;
+        readbackBuffer = buffer;
+    }
+
+    void completeReadback(long token, Object buffer) {
+        if (accepts(token) && readbackInFlight && readbackToken == token && readbackBuffer == buffer) {
+            readbackInFlight = false;
+            readbackBuffer = null;
+        }
+    }
+
+    void failReadback(long token, Object buffer, Object currentBuffer) {
+        if (accepts(token) && currentBuffer == buffer && readbackInFlight
+                && readbackToken == token && readbackBuffer == buffer) {
+            readbackInFlight = false;
+            readbackBuffer = null;
+        }
+    }
+
+    boolean readbackInFlight() {
+        return readbackInFlight;
     }
 
     boolean queueRelease(Runnable release) {
