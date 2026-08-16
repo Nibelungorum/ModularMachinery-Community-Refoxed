@@ -4,7 +4,10 @@
   "package": "cn.howxu.mmcr.client.preview.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "MeshDataAccessor"
+    "MeshDataAccessor",
+    "GuiGraphicsExtractorAccessor",
+    "PictureInPictureRendererAccessor",
+    "PictureInPictureDepthCopyMixin"
   ],
   "injectors": {
     "defaultRequire": 1

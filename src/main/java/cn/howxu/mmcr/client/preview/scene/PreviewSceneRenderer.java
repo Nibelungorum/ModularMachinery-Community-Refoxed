@@ -16,8 +16,15 @@ import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexSorting;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
+import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
+import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.AABB;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -37,7 +44,6 @@ public final class PreviewSceneRenderer implements AutoCloseable {
     private long requestedGeneration;
     private org.joml.Vector3f lastEye;
     private boolean closed;
-    private BlockHitResult hitResult;
 
     public PreviewSceneRenderer(PreviewLevel level, StructurePreviewSchema schema) {
         this.level = level;
@@ -57,7 +63,7 @@ public final class PreviewSceneRenderer implements AutoCloseable {
         if (!closed) requestedGeneration = compileState.requestFullRebuild();
     }
 
-    public void render(PreviewSceneRenderContext context, PreviewCamera camera) {
+    public void render(PreviewSceneRenderContext context, PreviewCamera camera, BlockHitResult hoverHit, BlockHitResult selectedHit) {
         assertRenderThread();
         if (closed) return;
         PreviewSceneCamera sceneCamera = PreviewSceneCamera.from(camera, 1, 1);
@@ -76,15 +82,16 @@ public final class PreviewSceneRenderer implements AutoCloseable {
             draw(cache, ChunkSectionLayer.SOLID, RenderTypes.solidMovingBlock());
             draw(cache, ChunkSectionLayer.CUTOUT, RenderTypes.cutoutMovingBlock());
             drawTranslucent(cache, sceneCamera);
+            submitBlockEntities(cache, context, sceneCamera);
+            drawOutlines(context, hoverHit, selectedHit);
         }
     }
 
-    public BlockHitResult hitResult() {
-        return hitResult;
-    }
-
-    public void selectHit(BlockHitResult hitResult) {
-        this.hitResult = hitResult;
+    public BlockHitResult clip(net.minecraft.world.phys.Vec3 from, net.minecraft.world.phys.Vec3 to) {
+        net.minecraft.world.phys.HitResult result = level.clip(new net.minecraft.world.level.ClipContext(from, to,
+                net.minecraft.world.level.ClipContext.Block.OUTLINE, net.minecraft.world.level.ClipContext.Fluid.ANY,
+                net.minecraft.world.phys.shapes.CollisionContext.empty()));
+        return result instanceof BlockHitResult block ? block : null;
     }
 
     @Override
@@ -153,6 +160,65 @@ public final class PreviewSceneRenderer implements AutoCloseable {
                     ((MeshDataAccessor) (Object) mesh).mmcr$getIndexBuffer());
             drawCopy(RenderTypes.translucentMovingBlock(), mesh, order);
         }
+    }
+
+    private void submitBlockEntities(PreviewSceneMeshCache.Meshes cache, PreviewSceneRenderContext context,
+                                     PreviewSceneCamera sceneCamera) {
+        if (context == null) return;
+        net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
+        BlockEntityRenderDispatcher blockEntities = minecraft.getBlockEntityRenderDispatcher();
+        FeatureRenderDispatcher features = minecraft.gameRenderer.getFeatureRenderDispatcher();
+        CameraRenderState cameraState = context.cameraState();
+        blockEntities.prepare(new net.minecraft.world.phys.Vec3(sceneCamera.eye()));
+        try {
+            for (net.minecraft.core.BlockPos position : cache.blockEntities()) {
+                BlockEntity blockEntity = level.getBlockEntity(position);
+                if (blockEntity == null) continue;
+                try {
+                    BlockEntityRenderState renderState = blockEntities.tryExtractRenderState(
+                            blockEntity, context.partialTick(), null, null);
+                    if (renderState != null) {
+                        blockEntities.submit(renderState, context.poseStack(), context.submitStorage(), cameraState);
+                    }
+                } catch (RuntimeException exception) {
+                    cn.howxu.mmcr.MMCR.LOG.error("Cannot render preview block entity {} at {} with state {}",
+                            schema.machineId(), position, blockEntity.getBlockState(), exception);
+                }
+            }
+            features.renderSolidFeatures();
+            features.renderTranslucentFeatures();
+        } finally {
+            features.clearSubmitNodes();
+            context.bufferSource().endBatch();
+        }
+    }
+
+    private void drawOutlines(PreviewSceneRenderContext context, BlockHitResult hoverHit, BlockHitResult selectedHit) {
+        if (context == null) return;
+        if (hoverHit != null) drawOutline(context, hoverHit, 0xFFFFFF00);
+        if (selectedHit != null && !selectedHit.equals(hoverHit)) drawOutline(context, selectedHit, 0xFF00FFFF);
+    }
+
+    private static void drawOutline(PreviewSceneRenderContext context, BlockHitResult hit, int color) {
+        AABB box = new AABB(hit.getBlockPos()).inflate(0.002D);
+        VertexConsumer vertices = context.bufferSource().getBuffer(RenderTypes.lines());
+        com.mojang.blaze3d.vertex.PoseStack.Pose pose = context.poseStack().last();
+        float width = net.minecraft.client.Minecraft.getInstance().gameRenderer.getGameRenderState().windowRenderState.appropriateLineWidth;
+        double x0 = box.minX, y0 = box.minY, z0 = box.minZ, x1 = box.maxX, y1 = box.maxY, z1 = box.maxZ;
+        line(vertices, pose, x0, y0, z0, x1, y0, z0, color, width); line(vertices, pose, x1, y0, z0, x1, y0, z1, color, width);
+        line(vertices, pose, x1, y0, z1, x0, y0, z1, color, width); line(vertices, pose, x0, y0, z1, x0, y0, z0, color, width);
+        line(vertices, pose, x0, y1, z0, x1, y1, z0, color, width); line(vertices, pose, x1, y1, z0, x1, y1, z1, color, width);
+        line(vertices, pose, x1, y1, z1, x0, y1, z1, color, width); line(vertices, pose, x0, y1, z1, x0, y1, z0, color, width);
+        line(vertices, pose, x0, y0, z0, x0, y1, z0, color, width); line(vertices, pose, x1, y0, z0, x1, y1, z0, color, width);
+        line(vertices, pose, x1, y0, z1, x1, y1, z1, color, width); line(vertices, pose, x0, y0, z1, x0, y1, z1, color, width);
+        context.bufferSource().endLastBatch();
+    }
+
+    private static void line(VertexConsumer vertices, com.mojang.blaze3d.vertex.PoseStack.Pose pose, double x0, double y0, double z0,
+                             double x1, double y1, double z1, int color, float width) {
+        float nx = (float) (x1 - x0), ny = (float) (y1 - y0), nz = (float) (z1 - z0);
+        vertices.addVertex(pose, (float) x0, (float) y0, (float) z0).setColor(color).setNormal(pose, nx, ny, nz).setLineWidth(width);
+        vertices.addVertex(pose, (float) x1, (float) y1, (float) z1).setColor(color).setNormal(pose, -nx, -ny, -nz).setLineWidth(width);
     }
 
     private static void drawCopy(RenderType renderType, MeshData cached) {

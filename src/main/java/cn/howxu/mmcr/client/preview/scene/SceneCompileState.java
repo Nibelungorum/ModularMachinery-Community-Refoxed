@@ -63,8 +63,3 @@ final class SceneCompileState {
         return pendingKind;
     }
 }
-
-enum SceneCompileKind {
-    FULL,
-    TRANSLUCENT_ONLY
-}
