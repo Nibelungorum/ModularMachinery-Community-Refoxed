@@ -25,4 +25,11 @@ class PreviewScenePictureInPictureRendererTest {
         assertThat(source).contains("RenderSystem.outputDepthTextureOverride = depthTextureView;");
         assertThat(source).contains("state.owner().onPictureInPicturePrepared(depthTexture, camera,");
     }
+
+    @Test
+    void owns_a_renderable_and_sampleable_color_target() throws IOException {
+        String source = Files.readString(SOURCE);
+
+        assertThat(source).contains("GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_TEXTURE_BINDING, TextureFormat.RGBA8");
+    }
 }

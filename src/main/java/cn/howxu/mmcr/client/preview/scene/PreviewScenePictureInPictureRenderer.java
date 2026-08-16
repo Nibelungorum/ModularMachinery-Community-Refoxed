@@ -90,7 +90,7 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
         releaseTargets();
         var device = RenderSystem.getDevice();
         colorTexture = device.createTexture(() -> "MMCR structure preview color",
-                GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_DST, TextureFormat.RGBA8, width, height, 1, 1);
+                GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_TEXTURE_BINDING, TextureFormat.RGBA8, width, height, 1, 1);
         colorTextureView = device.createTextureView(colorTexture);
         depthTexture = device.createTexture(() -> "MMCR structure preview depth",
                 GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_COPY_SRC,
