@@ -136,4 +136,16 @@ class StructurePreviewRendererTest {
         assertThat(modelView).isGreaterThan(outline);
         assertThat(source).doesNotContain("context.poseStack().last()");
     }
+
+    @Test
+    void preview_outline_pipeline_emits_diagnostics_at_hit_selection_and_submission_boundaries() throws IOException {
+        String renderer = Files.readString(Path.of("src/main/java/cn/howxu/mmcr/client/preview/StructurePreviewRenderer.java"));
+        String widget = Files.readString(Path.of("src/main/java/cn/howxu/mmcr/client/preview/StructurePreviewWidget.java"));
+        String scene = Files.readString(Path.of("src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewSceneRenderer.java"));
+
+        assertThat(renderer).contains("MMCR preview depth hit");
+        assertThat(widget).contains("MMCR preview selected hit");
+        assertThat(scene).contains("MMCR preview outline submit");
+        assertThat(scene).contains("MMCR preview outline batch flushed");
+    }
 }

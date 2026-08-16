@@ -11,12 +11,12 @@ import com.mojang.blaze3d.textures.GpuTexture;
  */
 record PreviewDepthReadbackSample(GpuTexture depthTexture, int textureWidth, int textureHeight,
                                   GpuBuffer buffer, long generation, PreviewFrameViewport frame,
-                                  PreviewFrameViewport.Pixel texel, PreviewSceneCamera camera) {
+                                  PreviewFrameViewport.Pixel texel, int mouseX, int mouseY, PreviewSceneCamera camera) {
     static PreviewDepthReadbackSample of(GpuTexture depthTexture, int textureWidth, int textureHeight,
                                          GpuBuffer buffer, long generation, PreviewFrameViewport frame,
                                          int mouseX, int mouseY, PreviewSceneCamera camera) {
         return new PreviewDepthReadbackSample(depthTexture, textureWidth, textureHeight, buffer, generation, frame,
-                frame.depthTexturePixel(mouseX, mouseY, textureWidth, textureHeight), camera);
+                frame.depthTexturePixel(mouseX, mouseY, textureWidth, textureHeight), mouseX, mouseY, camera);
     }
 
     float ndcX() {

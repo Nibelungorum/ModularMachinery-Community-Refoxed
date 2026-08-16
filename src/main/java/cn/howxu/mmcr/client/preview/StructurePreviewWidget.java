@@ -86,6 +86,7 @@ public final class StructurePreviewWidget implements AutoCloseable {
             Object hitResult = renderer.hitResult();
             if (hitResult != null) {
                 selectedHit = hitResult;
+                cn.howxu.mmcr.MMCR.LOG.debug("MMCR preview selected hit: {}", hitResult);
                 renderer.selectHit(hitResult);
             }
         }
