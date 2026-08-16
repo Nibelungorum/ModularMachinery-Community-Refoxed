@@ -41,11 +41,13 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
     public void prepare(PreviewSceneRenderState state, GuiRenderState guiRenderState, int guiScale) {
         GpuTextureView previousColor = RenderSystem.outputColorTextureOverride;
         GpuTextureView previousDepth = RenderSystem.outputDepthTextureOverride;
+        RenderSystem.backupProjectionMatrix();
         try {
             super.prepare(state, guiRenderState, guiScale);
         } finally {
             RenderSystem.outputColorTextureOverride = previousColor;
             RenderSystem.outputDepthTextureOverride = previousDepth;
+            RenderSystem.restoreProjectionMatrix();
         }
     }
 
@@ -61,13 +63,25 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
         PreviewSceneRenderContext context = new PreviewSceneRenderContext(poseStack,
                 minecraft.gameRenderer.getFeatureRenderDispatcher().getSubmitNodeStorage(),
                 minecraft.renderBuffers().bufferSource(), cameraState, state.partialTick());
-        PreviewSceneCameraContext.with(camera.viewRotation(), camera.projection(), () -> state.owner().renderScene(context, state.camera()));
+        RenderSystem.backupProjectionMatrix();
+        var modelView = RenderSystem.getModelViewStack();
+        modelView.pushMatrix();
+        try {
+            modelView.identity();
+            modelView.mul(camera.view());
+            PreviewSceneCameraContext.with(camera.viewRotation(), camera.projection(),
+                    () -> state.owner().renderScene(context, state.camera()));
+        } finally {
+            modelView.popMatrix();
+            RenderSystem.restoreProjectionMatrix();
+        }
         GpuTexture depthTexture = ((PictureInPictureRendererAccessor) (Object) this).mmcr$getDepthTexture();
         if (depthTexture == null) {
             state.owner().onPictureInPictureFrame(null, camera, state.mouseX(), state.mouseY(), state.frame());
             return;
         }
         state.owner().onPictureInPictureFrame(depthTexture, camera, state.mouseX(), state.mouseY(),
-                state.frame().withDepthTextureSize(depthTexture.getWidth(0), depthTexture.getHeight(0)));
+                state.frame());
     }
+
 }

@@ -6,8 +6,7 @@
   "client": [
     "MeshDataAccessor",
     "GuiGraphicsExtractorAccessor",
-    "PictureInPictureRendererAccessor",
-    "PictureInPictureDepthCopyMixin"
+    "PictureInPictureRendererAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

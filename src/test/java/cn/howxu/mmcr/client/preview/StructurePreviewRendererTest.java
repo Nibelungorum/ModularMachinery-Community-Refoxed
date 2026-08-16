@@ -2,6 +2,9 @@ package cn.howxu.mmcr.client.preview;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -11,37 +14,57 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class StructurePreviewRendererTest {
     @Test
-    void frame_uses_actual_depth_size_for_a_scaled_nonzero_logical_viewport() {
-        PreviewFrameViewport frame = new PreviewFrameViewport(80, 40, 400, 200, 10, 20, 100, 50, 300, 150);
+    void frame_converts_absolute_gui_mouse_through_each_coordinate_space() {
+        PreviewFrameViewport frame = new PreviewFrameViewport(
+                new PreviewViewport(110, 70, 100, 50),
+                new PreviewViewport.FramebufferViewport(400, 300, 250, 125),
+                200, 100, 2);
 
-        assertThat(frame.containsLogical(60, 45)).isTrue();
-        assertThat(frame.depthX(60)).isEqualTo(150);
-        assertThat(frame.depthY(45)).isEqualTo(75);
-        assertThat(frame.containsLogical(9, 45)).isFalse();
+        assertThat(frame.containsAbsoluteGui(160, 95)).isTrue();
+        assertThat(frame.pipLocalLogical(160, 95)).isEqualTo(new PreviewFrameViewport.Pixel(50, 25));
+        assertThat(frame.framebufferPixel(160, 95)).isEqualTo(new PreviewFrameViewport.Pixel(525, 360));
+        assertThat(frame.depthTexturePixel(160, 95, 333, 111)).isEqualTo(new PreviewFrameViewport.Pixel(166, 53));
+        assertThat(frame.containsAbsoluteGui(109, 95)).isFalse();
     }
 
     @Test
-    void frame_retains_framebuffer_and_logical_bounds_when_depth_attachment_size_arrives() {
-        PreviewFrameViewport submitted = new PreviewFrameViewport(80, 40, 400, 200, 10, 20, 100, 50, 100, 50);
+    void frame_uses_pip_allocation_not_framebuffer_size_for_depth_texels() {
+        PreviewFrameViewport frame = new PreviewFrameViewport(
+                new PreviewViewport(17, 23, 3, 2),
+                new PreviewViewport.FramebufferViewport(91, 41, 9, 6),
+                9, 6, 3);
 
-        PreviewFrameViewport frame = submitted.withDepthTextureSize(300, 150);
-
-        assertThat(frame.framebufferX()).isEqualTo(80);
-        assertThat(frame.framebufferY()).isEqualTo(40);
-        assertThat(frame.logicalX()).isEqualTo(10);
-        assertThat(frame.logicalY()).isEqualTo(20);
-        assertThat(frame.depthX(60)).isEqualTo(150);
-        assertThat(frame.depthY(45)).isEqualTo(75);
+        assertThat(frame.pipAllocationWidth()).isEqualTo(9);
+        assertThat(frame.pipAllocationHeight()).isEqualTo(6);
+        assertThat(frame.depthTexturePixel(19, 24)).isEqualTo(new PreviewFrameViewport.Pixel(6, 0));
     }
 
     @Test
     void owner_rejects_late_callback_after_close_and_queues_one_release() {
         PreviewOwnerLifecycle lifecycle = new PreviewOwnerLifecycle();
+        AtomicInteger callbackCalls = new AtomicInteger();
+        AtomicInteger releaseCalls = new AtomicInteger();
+        CountDownLatch callbackQueued = new CountDownLatch(1);
         long token = lifecycle.nextReadback(2, 3, 100L);
 
-        assertThat(lifecycle.queueRelease()).isTrue();
-        assertThat(lifecycle.queueRelease()).isFalse();
-        assertThat(lifecycle.accepts(token)).isFalse();
+        Thread lateCallback = new Thread(() -> {
+            lifecycle.enqueueCallback(token, callbackCalls::incrementAndGet);
+            callbackQueued.countDown();
+        });
+        lateCallback.start();
+        try {
+            callbackQueued.await();
+            lateCallback.join();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError(exception);
+        }
+        assertThat(lifecycle.queueRelease(releaseCalls::incrementAndGet)).isTrue();
+        assertThat(lifecycle.queueRelease(releaseCalls::incrementAndGet)).isFalse();
+        lifecycle.drainOwnerQueue();
+
+        assertThat(callbackCalls.get()).isZero();
+        assertThat(releaseCalls.get()).isEqualTo(1);
     }
 
     @Test
@@ -52,5 +75,22 @@ class StructurePreviewRendererTest {
         assertThat(lifecycle.shouldRead(2, 3, 149L)).isFalse();
         assertThat(lifecycle.shouldRead(3, 3, 149L)).isTrue();
         assertThat(lifecycle.shouldRead(2, 3, 150L)).isTrue();
+    }
+
+    @Test
+    void render_scope_restores_every_state_when_scene_throws() {
+        PreviewRenderStateScope.TestState state = new PreviewRenderStateScope.TestState("old-color", "old-depth", "old-projection", 4);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                PreviewRenderStateScope.run(state, "pip-color", "pip-depth", "pip-projection", () -> {
+                    state.modelViewDepth++;
+                    throw new IllegalStateException("scene failure");
+                }))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(state.color).isEqualTo("old-color");
+        assertThat(state.depth).isEqualTo("old-depth");
+        assertThat(state.projection).isEqualTo("old-projection");
+        assertThat(state.modelViewDepth).isEqualTo(4);
     }
 }

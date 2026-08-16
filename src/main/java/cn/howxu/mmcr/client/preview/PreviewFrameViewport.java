@@ -1,28 +1,52 @@
 package cn.howxu.mmcr.client.preview;
 
+import java.util.Objects;
+
 /**
- * Maps logical preview coordinates to the PiP target created for one frame.
+ * Immutable coordinate conversion for one PiP frame.
  *
  * @author howxu <dev@howxu.cn>
  */
-public record PreviewFrameViewport(int framebufferX, int framebufferY, int framebufferWidth, int framebufferHeight,
-                                   int logicalX, int logicalY, int logicalWidth, int logicalHeight,
-                                   int depthTextureWidth, int depthTextureHeight) {
-    public boolean containsLogical(int mouseX, int mouseY) {
-        return mouseX >= logicalX && mouseX < logicalX + logicalWidth
-                && mouseY >= logicalY && mouseY < logicalY + logicalHeight;
+public record PreviewFrameViewport(PreviewViewport absoluteGuiBounds,
+                                   PreviewViewport.FramebufferViewport framebufferViewport,
+                                   int pipAllocationWidth, int pipAllocationHeight, int guiScale) {
+    public PreviewFrameViewport {
+        Objects.requireNonNull(absoluteGuiBounds, "absoluteGuiBounds");
+        Objects.requireNonNull(framebufferViewport, "framebufferViewport");
+        if (absoluteGuiBounds.width() <= 0 || absoluteGuiBounds.height() <= 0
+                || pipAllocationWidth <= 0 || pipAllocationHeight <= 0 || guiScale <= 0) {
+            throw new IllegalArgumentException("preview dimensions and guiScale must be positive");
+        }
+        if (pipAllocationWidth != absoluteGuiBounds.width() * guiScale
+                || pipAllocationHeight != absoluteGuiBounds.height() * guiScale) {
+            throw new IllegalArgumentException("PiP allocation must be logical bounds scaled by guiScale");
+        }
     }
 
-    public int depthX(int mouseX) {
-        return (mouseX - logicalX) * depthTextureWidth / logicalWidth;
+    public boolean containsAbsoluteGui(int mouseX, int mouseY) {
+        return absoluteGuiBounds.contains(mouseX, mouseY);
     }
 
-    public int depthY(int mouseY) {
-        return (mouseY - logicalY) * depthTextureHeight / logicalHeight;
+    public Pixel pipLocalLogical(int absoluteMouseX, int absoluteMouseY) {
+        return new Pixel(absoluteMouseX - absoluteGuiBounds.x(), absoluteMouseY - absoluteGuiBounds.y());
     }
 
-    public PreviewFrameViewport withDepthTextureSize(int width, int height) {
-        return new PreviewFrameViewport(framebufferX, framebufferY, framebufferWidth, framebufferHeight,
-                logicalX, logicalY, logicalWidth, logicalHeight, width, height);
+    public Pixel framebufferPixel(int absoluteMouseX, int absoluteMouseY) {
+        Pixel local = pipLocalLogical(absoluteMouseX, absoluteMouseY);
+        return new Pixel(framebufferViewport.x() + local.x() * framebufferViewport.width() / absoluteGuiBounds.width(),
+                framebufferViewport.y() + (absoluteGuiBounds.height() - 1 - local.y()) * framebufferViewport.height() / absoluteGuiBounds.height());
+    }
+
+    public Pixel depthTexturePixel(int absoluteMouseX, int absoluteMouseY, int depthTextureWidth, int depthTextureHeight) {
+        Pixel local = pipLocalLogical(absoluteMouseX, absoluteMouseY);
+        return new Pixel(local.x() * depthTextureWidth / absoluteGuiBounds.width(),
+                (absoluteGuiBounds.height() - 1 - local.y()) * depthTextureHeight / absoluteGuiBounds.height());
+    }
+
+    public Pixel depthTexturePixel(int absoluteMouseX, int absoluteMouseY) {
+        return depthTexturePixel(absoluteMouseX, absoluteMouseY, pipAllocationWidth, pipAllocationHeight);
+    }
+
+    public record Pixel(int x, int y) {
     }
 }

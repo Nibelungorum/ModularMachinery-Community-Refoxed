@@ -11,6 +11,10 @@ record PreviewRenderContext(GuiGraphicsExtractor graphics, PreviewViewport viewp
                             int guiOriginX, int guiOriginY, int guiWidth, int guiHeight,
                             int framebufferWidth, int framebufferHeight, PreviewCamera camera) {
     PreviewViewport.FramebufferViewport framebufferViewport() {
-        return viewport.framebufferViewport(guiWidth, guiHeight, framebufferWidth, framebufferHeight);
+        return absoluteViewport().framebufferViewport(guiWidth, guiHeight, framebufferWidth, framebufferHeight);
+    }
+
+    PreviewViewport absoluteViewport() {
+        return new PreviewViewport(guiOriginX + viewport.x(), guiOriginY + viewport.y(), viewport.width(), viewport.height());
     }
 }
