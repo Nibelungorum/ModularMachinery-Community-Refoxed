@@ -127,6 +127,11 @@ class PreviewSceneMeshLifecycleTest {
         }
     }
 
+    @Test
+    void first_translucent_draw_uses_cached_mesh_index_without_creating_a_sort_result() {
+        assertThat(PreviewSceneRenderer.translucentDrawIndex(null, null)).isNull();
+    }
+
     private static final class RecordingFull implements PreviewSceneMeshCache.FullCache {
         private final String label;
         private final Object solid;

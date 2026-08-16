@@ -145,15 +145,13 @@ public final class PreviewSceneRenderer implements AutoCloseable {
     }
 
     private static void drawTranslucent(PreviewSceneMeshCache.Meshes cache, PreviewSceneCamera camera) {
-        MeshData.SortState sortState = cache.translucentSortState();
         List<MeshData> translucent = cache.layers().get(ChunkSectionLayer.TRANSLUCENT);
         if (translucent == null) return;
-        VertexSorting sorting = VertexSorting.byDistance(camera.eye().x, camera.eye().y, camera.eye().z);
         for (MeshData mesh : translucent) {
-            ByteBufferBuilder.Result order = cache.translucentOrder() == null ? null : cache.translucentOrder().indexBuffer();
-            drawCopy(RenderTypes.translucentMovingBlock(), mesh, order == null && sortState == null ? null
-                    : order == null ? sortState.buildSortedIndexBuffer(cache.builders().buffer(ChunkSectionLayer.TRANSLUCENT), sorting)
-                    : order);
+            ByteBufferBuilder.Result order = translucentDrawIndex(
+                    cache.translucentOrder() == null ? null : cache.translucentOrder().indexBuffer(),
+                    ((MeshDataAccessor) (Object) mesh).mmcr$getIndexBuffer());
+            drawCopy(RenderTypes.translucentMovingBlock(), mesh, order);
         }
     }
 
@@ -191,6 +189,11 @@ public final class PreviewSceneRenderer implements AutoCloseable {
 
     static ByteBufferBuilder.Result copyIndexForDraw(ByteBufferBuilder.Result source, ByteBufferBuilder destination) {
         return copy(source.byteBuffer(), destination);
+    }
+
+    static ByteBufferBuilder.Result translucentDrawIndex(ByteBufferBuilder.Result publishedOrder,
+                                                         ByteBufferBuilder.Result cachedMeshIndex) {
+        return publishedOrder != null ? publishedOrder : cachedMeshIndex;
     }
 
     private void assertRenderThread() {
