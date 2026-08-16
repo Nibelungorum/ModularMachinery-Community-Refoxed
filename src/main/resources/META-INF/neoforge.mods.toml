@@ -11,6 +11,9 @@ description='''
 Nothing here
 '''
 
+[[mixins]]
+config="mmcr.mixins.json"
+
 [[dependencies.${mod_id}]]
 modId="neoforge"
 type="required"
