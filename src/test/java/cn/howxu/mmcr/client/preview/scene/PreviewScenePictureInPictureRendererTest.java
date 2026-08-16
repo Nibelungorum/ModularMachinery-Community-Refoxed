@@ -9,19 +9,20 @@ import java.nio.file.Path;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Verifies the PiP depth-readback handoff occurs after vanilla flushes its buffers.
+ * Verifies the PiP renderer owns the depth attachment used for hover readback.
  *
  * @author howxu <dev@howxu.cn>
  */
 class PreviewScenePictureInPictureRendererTest {
+    private static final Path SOURCE = Path.of("src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewScenePictureInPictureRenderer.java");
+
     @Test
-    void requests_depth_readback_only_after_super_prepare() throws IOException {
-        String source = Files.readString(Path.of("src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewScenePictureInPictureRenderer.java"));
+    void owns_a_copy_source_depth_target_for_hover_readback() throws IOException {
+        String source = Files.readString(SOURCE);
 
-        int superPrepare = source.indexOf("super.prepare(state, guiRenderState, guiScale);");
-        int request = source.indexOf("state.owner().onPictureInPicturePrepared(");
-
-        assertThat(superPrepare).isGreaterThanOrEqualTo(0);
-        assertThat(request).isGreaterThan(superPrepare);
+        assertThat(source).contains("GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_COPY_SRC");
+        assertThat(source).contains("RenderSystem.outputColorTextureOverride = colorTextureView;");
+        assertThat(source).contains("RenderSystem.outputDepthTextureOverride = depthTextureView;");
+        assertThat(source).contains("state.owner().onPictureInPicturePrepared(depthTexture, camera,");
     }
 }
