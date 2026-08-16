@@ -93,6 +93,10 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
             hoverHit = null;
             return;
         }
+        if ((depthTexture.usage() & GpuTexture.USAGE_COPY_SRC) == 0) {
+            hoverHit = null;
+            return;
+        }
         long now = System.currentTimeMillis();
         if (lifecycle.readbackInFlight() || !lifecycle.shouldRead(mouseX, mouseY, now)) return;
         if (depthReadbackBuffer == null) {

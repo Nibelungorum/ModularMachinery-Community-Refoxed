@@ -2,6 +2,9 @@ package cn.howxu.mmcr.client.preview;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.world.phys.BlockHitResult;
@@ -14,6 +17,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class StructurePreviewRendererTest {
+    @Test
+    void depth_readback_requires_copy_source_usage() throws IOException {
+        String source = Files.readString(Path.of("src/main/java/cn/howxu/mmcr/client/preview/StructurePreviewRenderer.java"));
+
+        assertThat(source.indexOf("(depthTexture.usage() & GpuTexture.USAGE_COPY_SRC) == 0"))
+                .isGreaterThanOrEqualTo(0)
+                .isLessThan(source.indexOf("copyTextureToBuffer(depthTexture"));
+    }
+
     @Test
     void frame_converts_absolute_gui_mouse_through_each_coordinate_space() {
         PreviewFrameViewport frame = new PreviewFrameViewport(
