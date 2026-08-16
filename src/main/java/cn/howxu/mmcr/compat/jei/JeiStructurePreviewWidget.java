@@ -141,9 +141,9 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         if (button != 0) return false;
         if (!input.isSimulate() && previewDragActive) {
             previewDragActive = false;
-            boolean inside = insideCameraArea(mouseX, mouseY);
+            boolean inside = insidePreview(mouseX, mouseY);
             if (insidePreview(mouseX, mouseY)) preview.mouseReleased(mouseX - x, mouseY - y, button);
-            return inside && controlAt(mouseX, mouseY) < 0;
+            return inside;
         }
         int control = controlAt(mouseX, mouseY);
         if (control >= 0) {
@@ -158,9 +158,9 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
             return true;
         }
         if (input.isSimulate()) {
-            return insideCameraArea(mouseX, mouseY);
+            return insidePreview(mouseX, mouseY);
         }
-        if (!insideCameraArea(mouseX, mouseY)) return false;
+        if (!insidePreview(mouseX, mouseY)) return false;
         boolean handled = preview.mouseClicked(previewMouseX(mouseX), previewMouseY(mouseY), button);
         previewDragActive = handled;
         return handled;
@@ -168,24 +168,21 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
 
     @Override
     public boolean handleMouseDragged(double mouseX, double mouseY, InputConstants.Key mouseKey, double dragX, double dragY) {
-        return previewDragActive && mouseKey.getType() == InputConstants.Type.MOUSE
+        return previewDragActive && insidePreview(mouseX, mouseY) && mouseKey.getType() == InputConstants.Type.MOUSE
                 && preview.mouseDragged(previewMouseX(mouseX), previewMouseY(mouseY), mouseKey.getValue(), dragX, dragY);
     }
 
     @Override
     public boolean handleMouseScrolled(double mouseX, double mouseY, double scrollDeltaX, double scrollDeltaY) {
-        return insideCameraArea(mouseX, mouseY)
+        return insidePreview(mouseX, mouseY)
                 && preview.mouseScrolled(previewMouseX(mouseX), previewMouseY(mouseY), scrollDeltaY);
     }
 
     private boolean insidePreview(double mouseX, double mouseY) {
         return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
     }
-    private boolean insideCameraArea(double mouseX, double mouseY) {
-        return mouseX >= 0 && mouseX < LAYOUT_WIDTH && mouseY >= 0 && mouseY < LAYOUT_HEIGHT;
-    }
-    private double previewMouseX(double mouseX) { return Math.clamp(mouseX - x, 0, width - 1); }
-    private double previewMouseY(double mouseY) { return Math.clamp(mouseY - y, 0, height - 1); }
+    private double previewMouseX(double mouseX) { return mouseX - x; }
+    private double previewMouseY(double mouseY) { return mouseY - y; }
     private int controlAt(double mouseX, double mouseY) {
         if (mouseX < x || mouseY < y + height + 2 || mouseY >= y + height + 2 + CONTROL_HEIGHT) return -1;
         int column = (int) (mouseX - x) / 40;

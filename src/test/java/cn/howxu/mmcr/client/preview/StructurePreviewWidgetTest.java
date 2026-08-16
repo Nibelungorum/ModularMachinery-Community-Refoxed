@@ -90,7 +90,7 @@ class StructurePreviewWidgetTest {
     }
 
     @Test
-    void widget_orbits_opposite_to_left_drag_delta() {
+    void widget_orbits_horizontally_opposite_and_vertically_with_left_drag_delta() {
         RecordingRenderer renderer = new RecordingRenderer(schemaAtLayers(0));
         StructurePreviewWidget widget = new StructurePreviewWidget(renderer);
         widget.setViewport(new PreviewViewport(10, 20, 30, 40));
@@ -101,7 +101,7 @@ class StructurePreviewWidgetTest {
         widget.mouseDragged(24, 35, 0, 4, 5);
 
         assertThat(widget.camera().yaw()).isEqualTo(beforeYaw - 0.04F);
-        assertThat(widget.camera().pitch()).isEqualTo(beforePitch - 0.05F);
+        assertThat(widget.camera().pitch()).isEqualTo(beforePitch + 0.05F);
     }
 
     @Test

@@ -115,15 +115,21 @@ class JeiStructurePreviewWidgetTest {
     }
 
     @Test
-    void non_control_content_area_forwards_camera_input_and_keeps_dragging_outside_preview() {
+    void camera_input_is_limited_to_the_rendered_preview_rectangle() {
         RecordingPreviewWidget preview = new RecordingPreviewWidget();
-        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 0, 0, 160, 204);
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 4, 20, 160, 204);
 
-        assertThat(widget.handleInput(1, 1, leftPress(false))).isTrue();
-        assertThat(widget.handleMouseDragged(167, 239, InputConstants.Type.MOUSE.getOrCreate(0), 3, 4)).isTrue();
-        assertThat(widget.handleMouseScrolled(1, 1, 0, 1)).isTrue();
-        assertThat(widget.handleInput(167, 239, leftPress(false))).isTrue();
-        assertThat(widget.handleMouseDragged(161, 214, InputConstants.Type.MOUSE.getOrCreate(0), 3, 4)).isFalse();
+        assertThat(widget.handleInput(3, 20, leftPress(false))).isFalse();
+        assertThat(widget.handleInput(4, 20, leftPress(false))).isTrue();
+        assertThat(preview.lastPressX).isZero();
+        assertThat(preview.lastPressY).isZero();
+        assertThat(widget.handleMouseDragged(163, 223, InputConstants.Type.MOUSE.getOrCreate(0), 3, 4)).isTrue();
+        assertThat(preview.lastDragX).isEqualTo(159);
+        assertThat(preview.lastDragY).isEqualTo(203);
+        assertThat(widget.handleMouseScrolled(3, 20, 0, 1)).isFalse();
+        assertThat(widget.handleMouseScrolled(4, 20, 0, 1)).isTrue();
+        assertThat(widget.handleMouseDragged(167, 239, InputConstants.Type.MOUSE.getOrCreate(0), 3, 4)).isFalse();
+        assertThat(widget.handleInput(167, 239, leftPress(false))).isFalse();
 
         assertThat(preview.presses).isEqualTo(1);
         assertThat(preview.drags).isEqualTo(1);
@@ -210,7 +216,7 @@ class JeiStructurePreviewWidgetTest {
 
         JeiStructurePreviewWidget first = JeiStructurePreviewWidget.forTesting(schema(Blocks.IRON_BLOCK.defaultBlockState()), factory, 4, 64, 160, 92);
         JeiStructurePreviewWidget second = JeiStructurePreviewWidget.forTesting(schema(Blocks.IRON_BLOCK.defaultBlockState()), factory, 4, 64, 160, 92);
-        first.handleInput(1, 1, leftPress(false));
+        first.handleInput(4, 64, leftPress(false));
 
         assertThat(previews).hasSize(2);
         assertThat(previews.get(0)).isNotSameAs(previews.get(1));
