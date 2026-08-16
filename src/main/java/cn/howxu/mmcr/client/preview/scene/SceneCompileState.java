@@ -23,7 +23,7 @@ final class SceneCompileState {
     }
 
     void onCameraRotation(long rotationVersion) {
-        if (completeCache && !closed) {
+        if (completeCache && !closed && pendingKind != SceneCompileKind.FULL) {
             pendingKind = SceneCompileKind.TRANSLUCENT_ONLY;
         }
     }

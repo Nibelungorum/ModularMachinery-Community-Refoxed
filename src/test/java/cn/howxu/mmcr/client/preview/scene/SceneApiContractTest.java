@@ -15,11 +15,24 @@ class SceneApiContractTest {
     void full_generation_rejects_stale_publication_and_keeps_last_complete_cache() {
         SceneCompileState state = new SceneCompileState();
         long oldGeneration = state.requestFullRebuild();
+        state.markFullCachePublished();
         long currentGeneration = state.requestFullRebuild();
 
         assertThat(state.accepts(oldGeneration, SceneCompileKind.FULL)).isFalse();
         assertThat(state.accepts(currentGeneration, SceneCompileKind.FULL)).isTrue();
-        assertThat(state.hasCompleteCache()).isFalse();
+        assertThat(state.hasCompleteCache()).isTrue();
+    }
+
+    @Test
+    void rotation_does_not_replace_pending_full_rebuild() {
+        SceneCompileState state = new SceneCompileState();
+        state.requestFullRebuild();
+        state.markFullCachePublished();
+        state.requestFullRebuild();
+
+        state.onCameraRotation(1L);
+
+        assertThat(state.pendingKind()).isEqualTo(SceneCompileKind.FULL);
     }
 
     @Test
