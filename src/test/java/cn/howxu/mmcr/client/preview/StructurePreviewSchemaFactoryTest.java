@@ -11,7 +11,9 @@ import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -97,5 +99,67 @@ class StructurePreviewSchemaFactoryTest {
                 StructurePreviewVariantSelection.defaults());
 
         assertThat(schema.levelSlots()).containsOnly(Map.entry(resolved, MMCR.id("coil")));
+    }
+
+    @Test
+    void factory_uses_only_the_complete_first_stage_of_a_multi_stage_machine() {
+        BlockPos firstStageOnly = new BlockPos(1, 0, 0);
+        MachineStructureStage firstStage = new MachineStructureStage(1, new BlockArray(Map.of(
+                BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
+                firstStageOnly, new BlockPredicate.OfBlock(Blocks.COPPER_BLOCK))), PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of(firstStageOnly, MMCR.id("first_slot")));
+        BlockPos finalStageOnly = new BlockPos(2, 0, 0);
+        MachineStructureStage finalStage = new MachineStructureStage(2, new BlockArray(Map.of(
+                BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
+                finalStageOnly, new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK))), PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of(finalStageOnly, MMCR.id("final_slot")));
+        Machine machine = machineWithStages(new BlockArray(Map.of(
+                BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.EMERALD_BLOCK))), List.of(firstStage, finalStage));
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(machine);
+
+        assertThat(schema.states()).containsOnly(
+                Map.entry(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState()),
+                Map.entry(firstStageOnly, Blocks.COPPER_BLOCK.defaultBlockState()));
+        assertThat(schema.stateAt(finalStageOnly)).isNull();
+        assertThat(schema.levelSlots()).containsOnly(Map.entry(firstStageOnly, MMCR.id("first_slot")));
+    }
+
+    @Test
+    void factory_stage_overload_keeps_the_preferred_state_for_default_selection() {
+        BlockPredicate predicate = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+        BlockState preferredState = predicate.preferredState().orElseThrow();
+        MachineStructureStage stage = new MachineStructureStage(1, new BlockArray(Map.of(BlockPos.ZERO, predicate)),
+                PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of());
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("default_variant"),
+                StructurePreviewVariantSelection.defaults());
+
+        assertThat(schema.stateAt(BlockPos.ZERO)).isEqualTo(preferredState);
+    }
+
+    private static Machine machineWithStages(BlockArray pattern, List<MachineStructureStage> stages) {
+        return new Machine() {
+            @Override
+            public Identifier registryName() {
+                return MMCR.id("multi_stage");
+            }
+
+            @Override
+            public BlockArray pattern() {
+                return pattern;
+            }
+
+            @Override
+            public MachineControllerSpec controller() {
+                return MachineControllerSpec.defaultsFor(registryName());
+            }
+
+            @Override
+            public List<MachineStructureStage> structureStages() {
+                return stages;
+            }
+        };
     }
 }
