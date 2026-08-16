@@ -146,6 +146,8 @@ class StructurePreviewRendererTest {
         assertThat(renderer).contains("MMCR preview depth hit");
         assertThat(widget).contains("MMCR preview selected hit");
         assertThat(renderer).contains("MMCR preview selected block");
+        assertThat(widget).contains("MMCR preview click release");
+        assertThat(widget).contains("MMCR preview click had no hit");
         assertThat(scene).contains("MMCR preview outline submit");
         assertThat(scene).contains("renderBox=");
         assertThat(scene).contains("MMCR preview outline batch flushed");

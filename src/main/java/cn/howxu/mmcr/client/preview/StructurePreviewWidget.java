@@ -80,6 +80,8 @@ public final class StructurePreviewWidget implements AutoCloseable {
         double movementY = mouseY - pressY;
         boolean click = button == 0 && handled && !dragged
                 && movementX * movementX + movementY * movementY <= DRAG_THRESHOLD_SQUARED;
+        cn.howxu.mmcr.MMCR.LOG.debug("MMCR preview click release: button={}, press=({}, {}), release=({}, {}), handled={}, dragged={}, click={}",
+                button, pressX, pressY, mouseX, mouseY, handled, dragged, click);
         pressButton = -1;
         dragged = false;
         if (click) {
@@ -88,6 +90,8 @@ public final class StructurePreviewWidget implements AutoCloseable {
                 selectedHit = hitResult;
                 cn.howxu.mmcr.MMCR.LOG.debug("MMCR preview selected hit: {}", hitResult);
                 renderer.selectHit(hitResult);
+            } else {
+                cn.howxu.mmcr.MMCR.LOG.debug("MMCR preview click had no hit");
             }
         }
         return handled;
