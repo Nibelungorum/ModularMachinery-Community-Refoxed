@@ -113,6 +113,37 @@ class JeiStructurePreviewWidgetTest {
     }
 
     @Test
+    void previewReleaseOverControlsClearsSessionWithoutRunningTheControl() {
+        RecordingPreviewWidget preview = new RecordingPreviewWidget();
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 4, 64, 160, 92);
+
+        assertThat(widget.handleInput(1, 1, leftPress(false))).isTrue();
+        assertThat(widget.handleInput(1, 94, leftPress(false))).isFalse();
+        assertThat(preview.previous).isZero();
+        assertThat(widget.handleMouseDragged(2, 2, InputConstants.Type.MOUSE.getOrCreate(0), 1, 1)).isFalse();
+
+        assertThat(widget.handleInput(1, 1, leftPress(false))).isTrue();
+        assertThat(widget.handleInput(1, 1, leftPress(false))).isTrue();
+        assertThat(preview.presses).isEqualTo(2);
+        assertThat(preview.releases).isEqualTo(1);
+    }
+
+    @Test
+    void previewReleaseOutsideClearsSessionBeforeTheNextPreviewClick() {
+        RecordingPreviewWidget preview = new RecordingPreviewWidget();
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 4, 64, 160, 92);
+
+        assertThat(widget.handleInput(1, 1, leftPress(false))).isTrue();
+        assertThat(widget.handleInput(161, 1, leftPress(false))).isFalse();
+        assertThat(widget.handleMouseDragged(2, 2, InputConstants.Type.MOUSE.getOrCreate(0), 1, 1)).isFalse();
+        assertThat(widget.handleInput(1, 1, leftPress(false))).isTrue();
+        assertThat(widget.handleInput(1, 1, leftPress(false))).isTrue();
+
+        assertThat(preview.presses).isEqualTo(2);
+        assertThat(preview.releases).isEqualTo(1);
+    }
+
+    @Test
     void tooltipUsesHoveredBlockBeforeSelectionAndIncludesFluidBucketName() {
         BlockHitResult hovered = hitAt(0, 0, 0);
         BlockHitResult selected = hitAt(1, 0, 0);
