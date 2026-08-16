@@ -27,6 +27,8 @@ import java.util.List;
  */
 public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInputHandler, AutoCloseable {
     private static final int CONTROL_HEIGHT = 10;
+    private static final int LAYOUT_WIDTH = 168;
+    private static final int LAYOUT_HEIGHT = 240;
     private final Preview preview;
     private final int x;
     private final int y;
@@ -88,25 +90,25 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         return new JeiStructurePreviewWidget(factory.create(schema), schema, x, y, width, height);
     }
 
-    @Override public ScreenPosition getPosition() { return new ScreenPosition(x, y); }
-    @Override public ScreenRectangle getArea() { return new ScreenRectangle(x, y, width, height + CONTROL_HEIGHT + 2); }
+    @Override public ScreenPosition getPosition() { return new ScreenPosition(0, 0); }
+    @Override public ScreenRectangle getArea() { return new ScreenRectangle(0, 0, LAYOUT_WIDTH, LAYOUT_HEIGHT); }
 
     @Override
     public void drawWidget(GuiGraphicsExtractor graphics, double mouseX, double mouseY) {
         GuiGraphicsExtractorAccessor extractor = (GuiGraphicsExtractorAccessor) graphics;
         ScreenPosition origin = absoluteGuiOrigin(extractor.mmcr$getMouseX(), extractor.mmcr$getMouseY(), mouseX, mouseY);
-        preview.render(graphics, 0, 0, width, height, origin.x(), origin.y());
+        preview.render(graphics, x, y, width, height, origin.x(), origin.y());
         String[] keys = {"previous_layer", "next_layer", "all_layers", "reset"};
         for (int index = 0; index < keys.length; index++) {
             graphics.text(Minecraft.getInstance().font, Component.translatable("jei.mmcr.structure_preview." + keys[index]),
-                    index * 40, height + 2, 0xFF404040, false);
+                    x + index * 40, y + height + 2, 0xFF404040, false);
         }
         int selectedLayer = preview.selectedLayer();
         List<Integer> layers = schema == null ? List.of() : schema.layers();
         Component layerText = selectedLayer < 0
                 ? Component.translatable("jei.mmcr.structure_preview.all_layers")
                 : Component.translatable("jei.mmcr.structure_preview.layer", selectedLayer, layers.indexOf(selectedLayer) + 1, layers.size());
-        graphics.text(Minecraft.getInstance().font, layerText, 0, height - 10, 0xFF404040, false);
+        graphics.text(Minecraft.getInstance().font, layerText, x, y + height - 10, 0xFF404040, false);
     }
 
     static ScreenPosition absoluteGuiOrigin(int absoluteMouseX, int absoluteMouseY, double localMouseX, double localMouseY) {
@@ -139,7 +141,9 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         if (button != 0) return false;
         if (!input.isSimulate() && previewDragActive) {
             previewDragActive = false;
-            return insidePreview(mouseX, mouseY) && preview.mouseReleased(mouseX, mouseY, button);
+            boolean inside = insideCameraArea(mouseX, mouseY);
+            if (insidePreview(mouseX, mouseY)) preview.mouseReleased(mouseX - x, mouseY - y, button);
+            return inside && controlAt(mouseX, mouseY) < 0;
         }
         int control = controlAt(mouseX, mouseY);
         if (control >= 0) {
@@ -154,30 +158,38 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
             return true;
         }
         if (input.isSimulate()) {
-            return insidePreview(mouseX, mouseY);
+            return insideCameraArea(mouseX, mouseY);
         }
-        if (!insidePreview(mouseX, mouseY)) return false;
-        boolean handled = preview.mouseClicked(mouseX, mouseY, button);
+        if (!insideCameraArea(mouseX, mouseY)) return false;
+        boolean handled = preview.mouseClicked(previewMouseX(mouseX), previewMouseY(mouseY), button);
         previewDragActive = handled;
         return handled;
     }
 
     @Override
     public boolean handleMouseDragged(double mouseX, double mouseY, InputConstants.Key mouseKey, double dragX, double dragY) {
-        return previewDragActive && insidePreview(mouseX, mouseY) && mouseKey.getType() == InputConstants.Type.MOUSE
-                && preview.mouseDragged(mouseX, mouseY, mouseKey.getValue(), dragX, dragY);
+        return previewDragActive && mouseKey.getType() == InputConstants.Type.MOUSE
+                && preview.mouseDragged(previewMouseX(mouseX), previewMouseY(mouseY), mouseKey.getValue(), dragX, dragY);
     }
 
     @Override
     public boolean handleMouseScrolled(double mouseX, double mouseY, double scrollDeltaX, double scrollDeltaY) {
-        return insidePreview(mouseX, mouseY) && preview.mouseScrolled(mouseX, mouseY, scrollDeltaY);
+        return insideCameraArea(mouseX, mouseY)
+                && preview.mouseScrolled(previewMouseX(mouseX), previewMouseY(mouseY), scrollDeltaY);
     }
 
-    private boolean insidePreview(double mouseX, double mouseY) { return mouseX >= 0 && mouseX < width && mouseY >= 0 && mouseY < height; }
+    private boolean insidePreview(double mouseX, double mouseY) {
+        return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
+    }
+    private boolean insideCameraArea(double mouseX, double mouseY) {
+        return mouseX >= 0 && mouseX < LAYOUT_WIDTH && mouseY >= 0 && mouseY < LAYOUT_HEIGHT;
+    }
+    private double previewMouseX(double mouseX) { return Math.clamp(mouseX - x, 0, width - 1); }
+    private double previewMouseY(double mouseY) { return Math.clamp(mouseY - y, 0, height - 1); }
     private int controlAt(double mouseX, double mouseY) {
-        if (mouseY < height + 2 || mouseY >= height + 2 + CONTROL_HEIGHT) return -1;
-        int column = (int) mouseX / 40;
-        return column >= 0 && column < 4 && mouseX < column * 40 + (column == 3 ? 40 : 38) ? column : -1;
+        if (mouseX < x || mouseY < y + height + 2 || mouseY >= y + height + 2 + CONTROL_HEIGHT) return -1;
+        int column = (int) (mouseX - x) / 40;
+        return column >= 0 && column < 4 && mouseX < x + column * 40 + (column == 3 ? 40 : 38) ? column : -1;
     }
 
     interface Preview {

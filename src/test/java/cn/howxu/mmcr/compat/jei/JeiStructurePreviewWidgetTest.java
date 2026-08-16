@@ -43,9 +43,9 @@ class JeiStructurePreviewWidgetTest {
     @Test
     void widgetTranslatesLocalPreviewInputAndForwardsReleaseOnlyAfterAnInsidePress() {
         RecordingPreviewWidget preview = new RecordingPreviewWidget();
-        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 4, 64, 160, 92);
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 0, 0, 160, 92);
 
-        assertThat(widget.getPosition()).isEqualTo(new ScreenPosition(4, 64));
+        assertThat(widget.getPosition()).isEqualTo(new ScreenPosition(0, 0));
         assertThat(widget.handleInput(1, 1, leftPress(true))).isTrue();
         assertThat(preview.presses).isZero();
         assertThat(widget.handleInput(1, 1, leftPress(false))).isTrue();
@@ -54,13 +54,13 @@ class JeiStructurePreviewWidgetTest {
         assertThat(preview.lastPressY).isEqualTo(1);
         assertThat(widget.handleInput(1, 1, leftPress(false))).isTrue();
         assertThat(preview.releases).isEqualTo(1);
-        assertThat(widget.handleInput(161, 1, leftPress(true))).isFalse();
+        assertThat(widget.handleInput(169, 1, leftPress(true))).isFalse();
     }
 
     @Test
     void controlsConsumeClicksBeforeForwardingThemToTheCamera() {
         RecordingPreviewWidget preview = new RecordingPreviewWidget();
-        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 4, 64, 160, 92);
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 0, 0, 160, 92);
 
         assertThat(widget.handleInput(1, 94, leftPress(true))).isTrue();
         assertThat(preview.previous).isZero();
@@ -73,7 +73,7 @@ class JeiStructurePreviewWidgetTest {
     @Test
     void actualPreviewPressForwardsLocalDragAndReleaseEndsTheSession() {
         RecordingPreviewWidget preview = new RecordingPreviewWidget();
-        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 4, 64, 160, 92);
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 0, 0, 160, 92);
 
         assertThat(widget.handleInput(1, 1, leftPress(false))).isTrue();
         assertThat(widget.handleMouseDragged(16, 6, InputConstants.Type.MOUSE.getOrCreate(2), 3, 4)).isTrue();
@@ -91,15 +91,15 @@ class JeiStructurePreviewWidgetTest {
     @Test
     void simulatedPreviewProbesDoNotArmDragOrReleaseHandling() {
         RecordingPreviewWidget preview = new RecordingPreviewWidget();
-        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 4, 64, 160, 92);
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 0, 0, 160, 92);
 
         assertThat(widget.handleInput(1, 1, leftPress(true))).isTrue();
         assertThat(widget.handleMouseDragged(2, 2, InputConstants.Type.MOUSE.getOrCreate(0), 1, 1)).isFalse();
-        assertThat(widget.handleInput(161, 1, leftPress(false))).isFalse();
+        assertThat(widget.handleInput(169, 1, leftPress(false))).isFalse();
 
-        assertThat(widget.handleInput(161, 1, leftPress(true))).isFalse();
+        assertThat(widget.handleInput(169, 1, leftPress(true))).isFalse();
         assertThat(widget.handleMouseDragged(2, 2, InputConstants.Type.MOUSE.getOrCreate(0), 1, 1)).isFalse();
-        assertThat(widget.handleInput(161, 1, leftPress(false))).isFalse();
+        assertThat(widget.handleInput(169, 1, leftPress(false))).isFalse();
         assertThat(preview.presses).isZero();
         assertThat(preview.releases).isZero();
     }
@@ -107,17 +107,45 @@ class JeiStructurePreviewWidgetTest {
     @Test
     void outsideActualPressDoesNotArmPreviewDrag() {
         RecordingPreviewWidget preview = new RecordingPreviewWidget();
-        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 4, 64, 160, 92);
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 0, 0, 160, 92);
 
-        assertThat(widget.handleInput(161, 1, leftPress(false))).isFalse();
+        assertThat(widget.handleInput(169, 1, leftPress(false))).isFalse();
         assertThat(widget.handleMouseDragged(2, 2, InputConstants.Type.MOUSE.getOrCreate(0), 1, 1)).isFalse();
         assertThat(preview.drags).isZero();
     }
 
     @Test
+    void non_control_content_area_forwards_camera_input_and_keeps_dragging_outside_preview() {
+        RecordingPreviewWidget preview = new RecordingPreviewWidget();
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 0, 0, 160, 204);
+
+        assertThat(widget.handleInput(1, 1, leftPress(false))).isTrue();
+        assertThat(widget.handleMouseDragged(167, 239, InputConstants.Type.MOUSE.getOrCreate(0), 3, 4)).isTrue();
+        assertThat(widget.handleMouseScrolled(1, 1, 0, 1)).isTrue();
+        assertThat(widget.handleInput(167, 239, leftPress(false))).isTrue();
+        assertThat(widget.handleMouseDragged(161, 214, InputConstants.Type.MOUSE.getOrCreate(0), 3, 4)).isFalse();
+
+        assertThat(preview.presses).isEqualTo(1);
+        assertThat(preview.drags).isEqualTo(1);
+        assertThat(preview.releases).isZero();
+        assertThat(preview.scrolls).isEqualTo(1);
+    }
+
+    @Test
+    void controls_take_priority_over_expanded_camera_input_area() {
+        RecordingPreviewWidget preview = new RecordingPreviewWidget();
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 0, 0, 160, 204);
+
+        assertThat(widget.handleInput(1, 206, leftPress(false))).isTrue();
+
+        assertThat(preview.previous).isEqualTo(1);
+        assertThat(preview.presses).isZero();
+    }
+
+    @Test
     void previewReleaseOverControlsClearsSessionWithoutRunningTheControl() {
         RecordingPreviewWidget preview = new RecordingPreviewWidget();
-        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 4, 64, 160, 92);
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 0, 0, 160, 92);
 
         assertThat(widget.handleInput(1, 1, leftPress(false))).isTrue();
         assertThat(widget.handleInput(1, 94, leftPress(false))).isFalse();
@@ -133,10 +161,10 @@ class JeiStructurePreviewWidgetTest {
     @Test
     void previewReleaseOutsideClearsSessionBeforeTheNextPreviewClick() {
         RecordingPreviewWidget preview = new RecordingPreviewWidget();
-        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 4, 64, 160, 92);
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 0, 0, 160, 92);
 
         assertThat(widget.handleInput(1, 1, leftPress(false))).isTrue();
-        assertThat(widget.handleInput(161, 1, leftPress(false))).isFalse();
+        assertThat(widget.handleInput(169, 1, leftPress(false))).isFalse();
         assertThat(widget.handleMouseDragged(2, 2, InputConstants.Type.MOUSE.getOrCreate(0), 1, 1)).isFalse();
         assertThat(widget.handleInput(1, 1, leftPress(false))).isTrue();
         assertThat(widget.handleInput(1, 1, leftPress(false))).isTrue();
@@ -153,7 +181,7 @@ class JeiStructurePreviewWidgetTest {
         preview.hover = hovered;
         preview.selected = selected;
         RecordingTooltip tooltip = new RecordingTooltip();
-        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, schema(Blocks.IRON_BLOCK.defaultBlockState(), Blocks.GOLD_BLOCK.defaultBlockState()), 4, 64, 160, 92);
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, schema(Blocks.IRON_BLOCK.defaultBlockState(), Blocks.GOLD_BLOCK.defaultBlockState()), 0, 0, 160, 92);
 
         widget.getTooltip(tooltip, 6, 6);
         assertThat(tooltip.text()).contains(Blocks.IRON_BLOCK.getName());
@@ -165,7 +193,7 @@ class JeiStructurePreviewWidgetTest {
         assertThat(tooltip.text()).contains(Blocks.GOLD_BLOCK.getName());
 
         preview.selected = hitAt(0, 0, 0);
-        JeiStructurePreviewWidget fluidWidget = JeiStructurePreviewWidget.forTesting(preview, schema(Blocks.WATER.defaultBlockState()), 4, 64, 160, 92);
+        JeiStructurePreviewWidget fluidWidget = JeiStructurePreviewWidget.forTesting(preview, schema(Blocks.WATER.defaultBlockState()), 0, 0, 160, 92);
         tooltip.clear();
         fluidWidget.getTooltip(tooltip, 6, 6);
         assertThat(tooltip.text()).contains(Items.WATER_BUCKET.getDefaultInstance().getHoverName());
@@ -283,6 +311,7 @@ class JeiStructurePreviewWidgetTest {
         private Object hover;
         private Object selected;
         private int closes;
+        private int scrolls;
 
         @Override
         public boolean mouseClicked(double mouseX, double mouseY, int button) {
@@ -302,6 +331,7 @@ class JeiStructurePreviewWidgetTest {
             lastDeltaY = dragY;
             return true;
         }
+        @Override public boolean mouseScrolled(double mouseX, double mouseY, double scrollDelta) { scrolls++; return true; }
         @Override public void previous() { previous++; }
         @Override public Object hoverHit() { return hover; }
         @Override public Object selectedHit() { return selected; }

@@ -32,4 +32,17 @@ class PreviewScenePictureInPictureRendererTest {
 
         assertThat(source).contains("GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_TEXTURE_BINDING, TextureFormat.RGBA8");
     }
+
+    @Test
+    void renders_scene_with_the_preview_camera_projection() throws IOException {
+        String source = Files.readString(SOURCE);
+
+        int camera = source.indexOf("PreviewSceneCamera camera = PreviewSceneCamera.from(");
+        int projection = source.indexOf("projectionMatrixBuffer.getBuffer(camera.projection())");
+        int render = source.indexOf("state.owner().renderScene(context, state.camera())");
+
+        assertThat(camera).isGreaterThanOrEqualTo(0);
+        assertThat(projection).isGreaterThan(camera);
+        assertThat(render).isGreaterThan(projection);
+    }
 }

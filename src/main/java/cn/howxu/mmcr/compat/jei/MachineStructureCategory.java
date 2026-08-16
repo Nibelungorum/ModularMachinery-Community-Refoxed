@@ -19,7 +19,7 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
     private static final int PREVIEW_X = 4;
     private static final int PREVIEW_Y = 20;
     private static final int PREVIEW_WIDTH = 160;
-    private static final int PREVIEW_HEIGHT = 92;
+    private static final int PREVIEW_HEIGHT = 204;
 
     private final IDrawable icon;
 
@@ -30,7 +30,7 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
     @Override public IRecipeType<MachineStructureDisplay> getRecipeType() { return JeiMachineRecipeTypes.STRUCTURE; }
     @Override public Component getTitle() { return Component.translatable("jei.mmcr.multiblock_structure"); }
     @Override public int getWidth() { return 168; }
-    @Override public int getHeight() { return 128; }
+    @Override public int getHeight() { return 240; }
     @Override public IDrawable getIcon() { return icon; }
 
     @Override

@@ -201,7 +201,9 @@ public final class PreviewSceneRenderer {
     private static void drawOutline(PreviewSceneRenderContext context, BlockHitResult hit, int color) {
         AABB box = new AABB(hit.getBlockPos()).inflate(0.002D);
         VertexConsumer vertices = context.bufferSource().getBuffer(RenderTypes.lines());
-        com.mojang.blaze3d.vertex.PoseStack.Pose pose = context.poseStack().last();
+        com.mojang.blaze3d.vertex.PoseStack poseStack = new com.mojang.blaze3d.vertex.PoseStack();
+        poseStack.last().pose().set(com.mojang.blaze3d.systems.RenderSystem.getModelViewStack());
+        com.mojang.blaze3d.vertex.PoseStack.Pose pose = poseStack.last();
         float width = net.minecraft.client.Minecraft.getInstance().gameRenderer.getGameRenderState().windowRenderState.appropriateLineWidth;
         double x0 = box.minX, y0 = box.minY, z0 = box.minZ, x1 = box.maxX, y1 = box.maxY, z1 = box.maxZ;
         line(vertices, pose, x0, y0, z0, x1, y0, z0, color, width); line(vertices, pose, x1, y0, z0, x1, y0, z1, color, width);

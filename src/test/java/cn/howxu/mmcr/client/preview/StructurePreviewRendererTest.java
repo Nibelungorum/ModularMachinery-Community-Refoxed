@@ -125,4 +125,15 @@ class StructurePreviewRendererTest {
         assertThat(state.projection).isEqualTo("old-projection");
         assertThat(state.modelViewDepth).isEqualTo(4);
     }
+
+    @Test
+    void outlines_use_the_preview_model_view_matrix() throws IOException {
+        String source = Files.readString(Path.of("src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewSceneRenderer.java"));
+
+        int modelView = source.indexOf("RenderSystem.getModelViewStack()");
+        int outline = source.indexOf("private static void drawOutline");
+
+        assertThat(modelView).isGreaterThan(outline);
+        assertThat(source).doesNotContain("context.poseStack().last()");
+    }
 }

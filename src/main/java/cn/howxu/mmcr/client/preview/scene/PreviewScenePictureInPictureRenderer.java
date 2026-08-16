@@ -140,6 +140,7 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
         var modelView = RenderSystem.getModelViewStack();
         modelView.pushMatrix();
         try {
+            RenderSystem.setProjectionMatrix(projectionMatrixBuffer.getBuffer(camera.projection()), ProjectionType.PERSPECTIVE);
             modelView.identity();
             modelView.mul(camera.view());
             PreviewSceneCameraContext.with(camera.viewRotation(), camera.projection(),

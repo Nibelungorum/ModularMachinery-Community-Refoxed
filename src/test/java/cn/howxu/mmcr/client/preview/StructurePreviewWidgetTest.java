@@ -90,6 +90,21 @@ class StructurePreviewWidgetTest {
     }
 
     @Test
+    void widget_orbits_opposite_to_left_drag_delta() {
+        RecordingRenderer renderer = new RecordingRenderer(schemaAtLayers(0));
+        StructurePreviewWidget widget = new StructurePreviewWidget(renderer);
+        widget.setViewport(new PreviewViewport(10, 20, 30, 40));
+        float beforeYaw = widget.camera().yaw();
+        float beforePitch = widget.camera().pitch();
+
+        widget.mouseClicked(20, 30, 0);
+        widget.mouseDragged(24, 35, 0, 4, 5);
+
+        assertThat(widget.camera().yaw()).isEqualTo(beforeYaw - 0.04F);
+        assertThat(widget.camera().pitch()).isEqualTo(beforePitch - 0.05F);
+    }
+
+    @Test
     void widget_selects_a_hit_for_left_release_at_the_drag_threshold() {
         RecordingRenderer renderer = new RecordingRenderer(schemaAtLayers(0));
         renderer.hitResult = new Object();
