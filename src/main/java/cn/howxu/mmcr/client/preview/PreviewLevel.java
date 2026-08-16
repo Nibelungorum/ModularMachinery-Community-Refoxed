@@ -1,0 +1,231 @@
+package cn.howxu.mmcr.client.preview;
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.random.WeightedList;
+import net.minecraft.world.TickRateManager;
+import net.minecraft.world.attribute.EnvironmentAttributeSystem;
+import net.minecraft.world.clock.ClockManager;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.flag.FeatureFlags;
+import net.minecraft.world.flag.FeatureFlagSet;
+import net.minecraft.world.item.alchemy.PotionBrewing;
+import net.minecraft.world.item.crafting.RecipeAccess;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.ExplosionDamageCalculator;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.FuelValues;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.border.WorldBorder;
+import net.minecraft.world.level.chunk.ChunkSource;
+import net.minecraft.world.level.dimension.DimensionType;
+import net.minecraft.world.level.entity.LevelEntityGetter;
+import net.minecraft.world.level.gameevent.GameEvent;
+import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.material.Fluid;
+import net.minecraft.world.level.material.FluidState;
+import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.saveddata.maps.MapId;
+import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
+import net.minecraft.world.level.storage.LevelData;
+import net.minecraft.world.level.storage.WritableLevelData;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.scores.Scoreboard;
+import net.neoforged.neoforge.entity.PartEntity;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Render-only level that exposes an immutable structure-preview schema.
+ *
+ * @author howxu <dev@howxu.cn>
+ */
+public final class PreviewLevel extends Level {
+    private static final BlockState AIR = Blocks.AIR.defaultBlockState();
+    private final StructurePreviewSchema schema;
+    private final PreviewChunkSource chunkSource;
+    private final Map<BlockPos, BlockEntity> blockEntities = new java.util.HashMap<>();
+    private final WorldBorder worldBorder = new WorldBorder();
+    private final TickRateManager tickRateManager = new TickRateManager();
+    private final Scoreboard scoreboard = new Scoreboard();
+    private PreviewVisibility visibility;
+    private boolean closed;
+
+    private PreviewLevel(StructurePreviewSchema schema, PreviewVisibility visibility) {
+        super(new PreviewLevelData(), Level.OVERWORLD, previewRegistryAccess(), overworldType(), true, false, 0L, 0);
+        this.schema = schema;
+        this.visibility = visibility;
+        this.chunkSource = new PreviewChunkSource(this);
+    }
+
+    public static PreviewLevel createForTest(StructurePreviewSchema schema, PreviewVisibility visibility) {
+        return new PreviewLevel(schema, visibility);
+    }
+
+    public void updateVisibility(PreviewVisibility visibility) {
+        this.visibility = visibility;
+    }
+
+    boolean isPreviewChunk(int x, int z) {
+        int minX = ChunkPos.containing(schema.min()).x() - 1;
+        int maxX = ChunkPos.containing(schema.max()).x() + 1;
+        int minZ = ChunkPos.containing(schema.min()).z() - 1;
+        int maxZ = ChunkPos.containing(schema.max()).z() + 1;
+        return x >= minX && x <= maxX && z >= minZ && z <= maxZ;
+    }
+
+    @Override
+    public BlockState getBlockState(BlockPos position) {
+        BlockState state = schema.stateAt(position);
+        return !closed && state != null && visibility.isVisible(position, state) ? state : AIR;
+    }
+
+    @Override
+    public FluidState getFluidState(BlockPos position) {
+        return getBlockState(position).getFluidState();
+    }
+
+    public float getShade(net.minecraft.core.Direction direction, boolean shade) {
+        if (!shade) return 1.0F;
+        return switch (direction) {
+            case DOWN -> 0.5F;
+            case NORTH, SOUTH -> 0.8F;
+            case WEST, EAST -> 0.6F;
+            case UP -> 1.0F;
+        };
+    }
+
+    @Override
+    public int getBrightness(LightLayer lightLayer, BlockPos position) {
+        return 15;
+    }
+
+    @Override
+    public int getRawBrightness(BlockPos position, int amount) {
+        return 15;
+    }
+
+    @Override
+    public BlockEntity getBlockEntity(BlockPos position) {
+        BlockState state = getBlockState(position);
+        if (closed || !state.hasBlockEntity()) return null;
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft != null && !minecraft.isSameThread()) {
+            throw new IllegalStateException("preview block entities must be created on the render thread");
+        }
+        BlockPos immutablePosition = position.immutable();
+        return blockEntities.computeIfAbsent(immutablePosition, ignored -> {
+            BlockEntity blockEntity = state.getBlock() instanceof net.minecraft.world.level.block.EntityBlock entityBlock
+                    ? entityBlock.newBlockEntity(immutablePosition, state) : null;
+            if (blockEntity != null) blockEntity.setLevel(this);
+            return blockEntity;
+        });
+    }
+
+    @Override
+    public void close() {
+        closed = true;
+        blockEntities.clear();
+    }
+
+    @Override public ChunkSource getChunkSource() { return chunkSource; }
+    @Override public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) { }
+    @Override public void playSeededSound(Entity source, double x, double y, double z, Holder<SoundEvent> sound, SoundSource category, float volume, float pitch, long seed) { }
+    @Override public void playSeededSound(Entity source, Entity entity, Holder<SoundEvent> sound, SoundSource category, float volume, float pitch, long seed) { }
+    @Override public void explode(Entity entity, DamageSource damageSource, ExplosionDamageCalculator calculator, double x, double y, double z, float radius, boolean fire, ExplosionInteraction interaction, net.minecraft.core.particles.ParticleOptions smallParticle, net.minecraft.core.particles.ParticleOptions largeParticle, WeightedList<net.minecraft.core.particles.ExplosionParticleInfo> particles, Holder<SoundEvent> soundEvent) { }
+    @Override public String gatherChunkSourceStats() { return chunkSource.gatherStats(); }
+    @Override public void setRespawnData(LevelData.RespawnData respawnData) { }
+    @Override public LevelData.RespawnData getRespawnData() { return LevelData.RespawnData.DEFAULT; }
+    @Override public Entity getEntity(int id) { return null; }
+    @Override public Collection<? extends PartEntity<?>> dragonParts() { return List.of(); }
+    @Override public TickRateManager tickRateManager() { return tickRateManager; }
+    @Override public MapItemSavedData getMapData(MapId id) { return null; }
+    @Override public void destroyBlockProgress(int id, BlockPos pos, int progress) { }
+    @Override public Scoreboard getScoreboard() { return scoreboard; }
+    @Override public RecipeAccess recipeAccess() { return null; }
+    @Override protected LevelEntityGetter<Entity> getEntities() { return EmptyEntityGetter.INSTANCE; }
+    @Override public ClockManager clockManager() { return clock -> 0L; }
+    @Override public EnvironmentAttributeSystem environmentAttributes() { return null; }
+    @Override public PotionBrewing potionBrewing() { return PotionBrewing.EMPTY; }
+    @Override public FuelValues fuelValues() { return FuelValues.vanillaBurnTimes(registryAccess(), FeatureFlags.DEFAULT_FLAGS); }
+    @Override public void levelEvent(Entity entity, int type, BlockPos pos, int data) { }
+    @Override public void gameEvent(Holder<GameEvent> event, Vec3 position, GameEvent.Context context) { }
+    @Override public Holder<Biome> getUncachedNoiseBiome(int x, int y, int z) { return registryAccess().lookupOrThrow(Registries.BIOME).getOrThrow(Biomes.PLAINS); }
+    @Override public int getSeaLevel() { return 63; }
+    @Override public FeatureFlagSet enabledFeatures() { return FeatureFlags.DEFAULT_FLAGS; }
+    @Override public WorldBorder getWorldBorder() { return worldBorder; }
+    @Override public List<? extends Player> players() { return List.of(); }
+    @Override public net.minecraft.world.ticks.LevelTickAccess<Block> getBlockTicks() { return net.minecraft.world.ticks.BlackholeTickAccess.emptyLevelList(); }
+    @Override public net.minecraft.world.ticks.LevelTickAccess<Fluid> getFluidTicks() { return net.minecraft.world.ticks.BlackholeTickAccess.emptyLevelList(); }
+    @Override public int getHeight(Heightmap.Types type, int x, int z) { return schema.max().getY() + 1; }
+    @Override public int getSkyDarken() { return 0; }
+
+    private static RegistryAccess previewRegistryAccess() {
+        net.minecraft.core.MappedRegistry<Biome> biomes = new net.minecraft.core.MappedRegistry<>(Registries.BIOME,
+                com.mojang.serialization.Lifecycle.stable());
+        Biome biome = new Biome.BiomeBuilder().hasPrecipitation(false).temperature(0.8F).downfall(0.0F)
+                .specialEffects(new net.minecraft.world.level.biome.BiomeSpecialEffects.Builder().waterColor(0x3F76E4).build())
+                .mobSpawnSettings(new net.minecraft.world.level.biome.MobSpawnSettings.Builder().build())
+                .generationSettings(new net.minecraft.world.level.biome.BiomeGenerationSettings.PlainBuilder().build())
+                .build();
+        biomes.register(Biomes.PLAINS, biome, net.minecraft.core.RegistrationInfo.BUILT_IN);
+        net.minecraft.core.MappedRegistry<net.minecraft.world.damagesource.DamageType> damageTypes =
+                new net.minecraft.core.MappedRegistry<>(Registries.DAMAGE_TYPE, com.mojang.serialization.Lifecycle.stable());
+        for (java.lang.reflect.Field field : net.minecraft.world.damagesource.DamageTypes.class.getFields()) {
+            if (field.getType() != ResourceKey.class) continue;
+            try {
+                @SuppressWarnings("unchecked")
+                ResourceKey<net.minecraft.world.damagesource.DamageType> key =
+                        (ResourceKey<net.minecraft.world.damagesource.DamageType>) field.get(null);
+                damageTypes.register(key, new net.minecraft.world.damagesource.DamageType(key.identifier().getPath(), 0.0F),
+                        net.minecraft.core.RegistrationInfo.BUILT_IN);
+            } catch (IllegalAccessException exception) {
+                throw new IllegalStateException("cannot initialize preview damage registry", exception);
+            }
+        }
+        return new RegistryAccess.ImmutableRegistryAccess(Map.of(
+                Registries.BIOME, biomes.freeze(), Registries.DAMAGE_TYPE, damageTypes.freeze()));
+    }
+
+    private static Holder<DimensionType> overworldType() {
+        return Holder.direct(new DimensionType(true, false, false, false, 1.0D, false ? 0 : 256,
+                256, 256, net.minecraft.tags.BlockTags.INFINIBURN_OVERWORLD, 0.0F,
+                new DimensionType.MonsterSettings(net.minecraft.util.valueproviders.ConstantInt.of(0), 0),
+                DimensionType.Skybox.OVERWORLD, net.minecraft.world.level.CardinalLighting.Type.DEFAULT,
+                net.minecraft.world.attribute.EnvironmentAttributeMap.EMPTY, net.minecraft.core.HolderSet.empty(), java.util.Optional.empty()));
+    }
+
+    private static final class PreviewLevelData implements WritableLevelData {
+        @Override public LevelData.RespawnData getRespawnData() { return LevelData.RespawnData.DEFAULT; }
+        @Override public long getGameTime() { return 0L; }
+        @Override public boolean isHardcore() { return false; }
+        @Override public net.minecraft.world.Difficulty getDifficulty() { return net.minecraft.world.Difficulty.PEACEFUL; }
+        @Override public boolean isDifficultyLocked() { return true; }
+        @Override public void setSpawn(LevelData.RespawnData respawnData) { }
+    }
+
+    private enum EmptyEntityGetter implements LevelEntityGetter<Entity> {
+        INSTANCE;
+        @Override public Entity get(int id) { return null; }
+        @Override public Entity get(java.util.UUID id) { return null; }
+        @Override public Iterable<Entity> getAll() { return List.of(); }
+        @Override public <U extends Entity> void get(net.minecraft.world.level.entity.EntityTypeTest<Entity, U> type, net.minecraft.util.AbortableIterationConsumer<U> consumer) { }
+        @Override public void get(net.minecraft.world.phys.AABB bounds, java.util.function.Consumer<Entity> consumer) { }
+        @Override public <U extends Entity> void get(net.minecraft.world.level.entity.EntityTypeTest<Entity, U> type, net.minecraft.world.phys.AABB bounds, net.minecraft.util.AbortableIterationConsumer<U> consumer) { }
+    }
+}
