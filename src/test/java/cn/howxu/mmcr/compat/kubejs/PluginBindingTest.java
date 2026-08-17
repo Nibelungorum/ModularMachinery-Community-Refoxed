@@ -85,6 +85,54 @@ class PluginBindingTest {
     }
 
     @Test
+    void server_script_error_discards_collected_content_and_preserves_previous_snapshot() {
+        var machineId = MMCR.id("alloy_furnace");
+        var previousRecipeId = MMCR.id("kubejs_transaction_error_previous_recipe");
+        var previous = new KubeJSContentReloadTransaction();
+        previous.registerStructure(structure(machineId));
+        previous.registerRecipe(new MachineRecipe(previousRecipeId, machineId, 1, List.of(), List.of()));
+        previous.commit();
+        var previousStructures = MachineStructureRegistry.dynamicSnapshot();
+        var previousRecipes = RecipeRegistry.dynamicSnapshot();
+
+        var reload = new Object();
+        Plugin.beginServerReload(reload, 0);
+        KubeJSContentReloadTransaction.active().registerStructure(structure(machineId));
+        KubeJSContentReloadTransaction.active().registerRecipe(new MachineRecipe(
+                MMCR.id("kubejs_transaction_error_recipe"), machineId, 1, List.of(), List.of()));
+        Plugin.completeServerReload(reload, 1);
+
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousStructures);
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousRecipes);
+    }
+
+    @Test
+    void interrupted_server_reload_is_cleaned_before_after_hook_can_commit_it() {
+        var machineId = MMCR.id("alloy_furnace");
+        var previousRecipeId = MMCR.id("kubejs_transaction_interrupted_previous_recipe");
+        var previous = new KubeJSContentReloadTransaction();
+        previous.registerStructure(structure(machineId));
+        previous.registerRecipe(new MachineRecipe(previousRecipeId, machineId, 1, List.of(), List.of()));
+        previous.commit();
+        var previousStructures = MachineStructureRegistry.dynamicSnapshot();
+        var previousRecipes = RecipeRegistry.dynamicSnapshot();
+
+        var reload = new Object();
+        Plugin.beginServerReload(reload, 0);
+        KubeJSContentReloadTransaction.active().registerStructure(structure(machineId));
+        KubeJSContentReloadTransaction.active().registerRecipe(new MachineRecipe(
+                MMCR.id("kubejs_transaction_interrupted_recipe"), machineId, 1, List.of(), List.of()));
+
+        Plugin.abortServerReload(reload);
+        Plugin.completeServerReload(reload, 0);
+
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousStructures);
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousRecipes);
+        new MachineRecipeBuilderJS("mmcr:kubejs_transaction_direct_recipe").machine("mmcr:alloy_furnace").build();
+        assertThat(RecipeRegistry.containsStatic(MMCR.id("kubejs_transaction_direct_recipe"))).isTrue();
+    }
+
+    @Test
     void recipe_builder_has_a_stable_public_kubejs_binding() {
         assertThat(Plugin.RECIPE_BUILDER_BINDING).isEqualTo("MMCR_RECIPE_BUILDER");
         assertThat(Plugin.RECIPE_BUILDER_CLASS).isEqualTo(MachineRecipeBuilderJS.class);

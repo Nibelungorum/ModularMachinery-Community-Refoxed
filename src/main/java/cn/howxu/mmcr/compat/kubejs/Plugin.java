@@ -33,14 +33,12 @@ import java.util.Map;
 public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     static final String RECIPE_BUILDER_BINDING = "MMCR_RECIPE_BUILDER";
     static final Class<MachineRecipeBuilderJS> RECIPE_BUILDER_CLASS = MachineRecipeBuilderJS.class;
-    private final Map<ScriptManager, ServerReload> serverReloads = new IdentityHashMap<>();
+    private static final Map<Object, ServerReload> SERVER_RELOADS = new IdentityHashMap<>();
 
     @Override
     public void beforeScriptsLoaded(ScriptManager manager) {
         if (manager.scriptType == ScriptType.SERVER) {
-            var transaction = new KubeJSContentReloadTransaction();
-            serverReloads.put(manager, new ServerReload(transaction, manager.scriptType.console.errors.size()));
-            KubeJSContentReloadTransaction.activate(transaction);
+            beginServerReload(manager, manager.scriptType.console.errors.size());
         }
         if (manager.scriptType == ScriptType.STARTUP) {
             MachineLevelRegistry.beginRegistration();
@@ -51,14 +49,7 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     @Override
     public void afterScriptsLoaded(ScriptManager manager) {
         if (manager.scriptType == ScriptType.SERVER) {
-            ServerReload reload = serverReloads.remove(manager);
-            try {
-                if (reload != null && manager.scriptType.console.errors.size() == reload.errorCount()) {
-                    reload.transaction().commit();
-                }
-            } finally {
-                KubeJSContentReloadTransaction.deactivate();
-            }
+            completeServerReload(manager, manager.scriptType.console.errors.size());
         }
         if (manager.scriptType == ScriptType.STARTUP) {
             MachineLevelRegistry.freezeRegistration();
@@ -66,6 +57,28 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     }
 
     private record ServerReload(KubeJSContentReloadTransaction transaction, int errorCount) {
+    }
+
+    static void beginServerReload(Object manager, int errorCount) {
+        var transaction = new KubeJSContentReloadTransaction();
+        SERVER_RELOADS.put(manager, new ServerReload(transaction, errorCount));
+        KubeJSContentReloadTransaction.activate(transaction);
+    }
+
+    static void completeServerReload(Object manager, int errorCount) {
+        ServerReload reload = SERVER_RELOADS.remove(manager);
+        try {
+            if (reload != null && errorCount == reload.errorCount()) {
+                reload.transaction().commit();
+            }
+        } finally {
+            KubeJSContentReloadTransaction.deactivate();
+        }
+    }
+
+    static void abortServerReload(Object manager) {
+        SERVER_RELOADS.remove(manager);
+        KubeJSContentReloadTransaction.deactivate();
     }
 
     @Override

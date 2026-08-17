@@ -19,6 +19,10 @@ config="mmcr.mixins.json"
 config="mmcr.jei.mixins.json"
 requiredMods=["jei"]
 
+[[mixins]]
+config="mmcr.kubejs.mixins.json"
+requiredMods=["kubejs"]
+
 [[dependencies.${mod_id}]]
 modId="neoforge"
 type="required"
