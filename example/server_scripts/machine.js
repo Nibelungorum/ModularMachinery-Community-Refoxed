@@ -124,11 +124,12 @@ ServerEvents.recipes(event => {
       .inputs(inputs).maxThreads(options.maxThreads ?? 1).priority(options.priority ?? 0)
       .cancelIfPerTickFails(options.cancel ?? true).allowPartialOutputs(options.partial ?? false)
     if (options.energy) builder.energyPerTick(options.energy)
-    if (options.fluids) builder.fluidOutputs(options.fluids.map(([id, amount]) => Fluid.of(id, amount)))
+    if (options.fluids) builder.fluidOutputs(options.fluids.map(([id, amount]) => MMCR_API.fluidStack(id, amount)))
     if (options.level) builder.requiresLevel(...options.level)
     if (options.hosts) builder.requiredHosts(...options.hosts.map(cloneId))
     if (options.smart) for (const [type, value] of options.smart) builder.smartInterfaceInput(type, value)
-    if (options.componentInputs) for (const [id, count, components] of options.componentInputs) builder.itemInputWithComponents(id, count, JsonIO.of(components))
+    if (options.componentInputs) for (const [id, count, components, consumeChance = 1] of options.componentInputs) builder.itemInputWithComponents(id, count, JsonIO.of(components), consumeChance)
+    if (options.requirements) for (const requirement of options.requirements) builder.addRequirement(requirement)
     for (const output of outputs) {
       if (output.components) builder.itemOutputWithComponents(output.id, output.count, JsonIO.of(output.components))
       else if (output.chance !== undefined) builder.chancedItemOutput(output.id, output.count, output.chance)
@@ -162,17 +163,21 @@ ServerEvents.recipes(event => {
   for (const [name, level, ticks, input, output, energy] of [['copper','thermal_smelting_coil_copper',120,'raw_copper','copper_ingot',400],['iron','thermal_smelting_coil_iron',160,'iron_ingot','gold_ingot',800],['gold','thermal_smelting_coil_gold',200,'gold_ingot','diamond',1200],['diamond','thermal_smelting_coil_diamond',240,'diamond','netherite_ingot',2000]]) recipe(`thermal_smelting_furnace_${name}`, 'thermal_smelting_furnace', ticks, [item('minecraft:coal'), item(`minecraft:${input}`)], [{ id: `minecraft:${output}`, count: 1 }], { energy, maxThreads: 4, level: ['mmcr:thermal_smelting_coil', `mmcr:${level}`] })
   for (const machine of ['blast_furnace','alloy_furnace','cracker','reactor','thermal_smelting_furnace']) {
     const prefix = `${machine}_component_`
-    recipe(`${prefix}chanced_input`, machine, 20, [chance('minecraft:diamond', 1, 0.5)], [{ id: 'minecraft:emerald', count: 1 }])
-    recipe(`${prefix}non_consumable_input`, machine, 20, [chance('minecraft:diamond', 1, 0)], [{ id: 'minecraft:emerald', count: 1 }])
-    // BLOCKED: component predicates on item inputs and output-only MachineRequirements have no public builder equivalent.
-    // Identifiers blocked: <machine>_component_non_consumable_sharpness_input, _enchanted_output, _input_to_plain_output.
+    recipe(`${prefix}chanced_input`, machine, 20, [], [{ id: 'minecraft:emerald', count: 1 }], { componentInputs: [['minecraft:diamond', 1, { 'minecraft:custom_name': { text: 'Chance' } }, 0.5]] })
+    recipe(`${prefix}non_consumable_input`, machine, 20, [], [{ id: 'minecraft:emerald', count: 1 }], { componentInputs: [['minecraft:diamond', 1, { 'minecraft:custom_name': { text: 'Keep' } }, 0]] })
+    recipe(`${prefix}non_consumable_sharpness_input`, machine, 100, [], [], { componentInputs: [['minecraft:diamond_sword', 1, { 'minecraft:enchantments': { 'minecraft:sharpness': 2 } }, 0]] })
+    recipe(`${prefix}enchanted_output`, machine, 100, [item('minecraft:iron_sword')], [], { requirements: [MMCR_API.itemOutputRequirementWithComponents('minecraft:iron_sword', 1, JsonIO.of({ 'minecraft:enchantments': { 'minecraft:sharpness': 2 }, 'minecraft:repair_cost': 1 }), 1)] })
+    recipe(`${prefix}input_to_plain_output`, machine, 20, [], [{ id: 'minecraft:emerald', count: 1 }], { componentInputs: [['minecraft:diamond', 1, { 'minecraft:custom_name': { text: 'Input Only' } }]] })
     recipe(`${prefix}plain_input_to_output`, machine, 20, [item('minecraft:iron_ingot')], [{ id: 'minecraft:gold_ingot', count: 1, components: { 'minecraft:custom_name': { text: 'Output Only' } } }])
-    // BLOCKED: <machine>_component_input_to_output and _mixed_inputs require a component predicate on an input.
+    recipe(`${prefix}input_to_output`, machine, 20, [], [{ id: 'minecraft:gold_ingot', count: 1, components: { 'minecraft:custom_name': { text: 'Output' } } }], { componentInputs: [['minecraft:diamond', 1, { 'minecraft:custom_name': { text: 'Input' } }]] })
+    recipe(`${prefix}mixed_inputs`, machine, 20, [item('minecraft:iron_ingot')], [{ id: 'minecraft:emerald', count: 1 }], { componentInputs: [['minecraft:diamond', 1, { 'minecraft:custom_name': { text: 'Named' } }]] })
     recipe(`${prefix}mixed_outputs`, machine, 20, [item('minecraft:iron_ingot')], [{ id: 'minecraft:gold_ingot', count: 1, components: { 'minecraft:custom_name': { text: 'Named Output' } } }, { id: 'minecraft:emerald', count: 1 }])
-    // BLOCKED: <machine>_component_chanced_outputs and _complex require explicit MachineRequirement declarations.
+    recipe(`${prefix}chanced_outputs`, machine, 20, [item('minecraft:iron_ingot')], [], { requirements: [MMCR_API.itemInputRequirement('minecraft:apple', 1), MMCR_API.itemOutputRequirement('minecraft:emerald', 1, 1), MMCR_API.itemOutputRequirement('minecraft:diamond', 1, 0.5), MMCR_API.fluidOutputRequirement('minecraft:lava', 250, 0.25)] })
+    recipe(`${prefix}complex`, machine, 20, [item('minecraft:stick'), chance('minecraft:iron_nugget', 1, 0.5), chance('minecraft:gold_nugget', 1, 0.25)], [{ id: 'minecraft:emerald', count: 1 }, { id: 'minecraft:diamond', count: 1, chance: 0.5 }, { id: 'minecraft:redstone', count: 1, chance: 0.25 }])
   }
   recipe('blast_furnace_component_tag_input', 'blast_furnace', 20, [MMCR_API.tagInput('minecraft:logs', 1, 1)], [{ id: 'minecraft:charcoal', count: 1 }])
-  // BLOCKED: blast_furnace_component_tag_named_input and blast_furnace_component_tag_enchanted_input need tag component predicates.
+  new MMCR_RECIPE_BUILDER(cloneId('blast_furnace_component_tag_named_input')).machine(cloneId('blast_furnace')).tickTime(20).tagInputWithComponents('minecraft:planks', 1, JsonIO.of({ 'minecraft:custom_name': { text: 'Validated' } }), 1).itemOutput('minecraft:emerald', 1).build()
+  new MMCR_RECIPE_BUILDER(cloneId('blast_furnace_component_tag_enchanted_input')).machine(cloneId('blast_furnace')).tickTime(20).tagInputWithComponents('minecraft:swords', 1, JsonIO.of({ 'minecraft:enchantments': { 'minecraft:sharpness': 2 } }), 1).itemOutput('minecraft:diamond', 1).build()
   for (const [name, ticks, energy, output, count, smart] of [['mode_1',200,5,'diamond',2,[['Mode',1]]],['mode_2',200,5,'gold_ingot',4,[['Mode',2]]],['mode_3',200,5,'iron_ingot',8,[['Mode',3]]],['temperature_400',320,3,'apple',8,[['Temperature',400]]],['temperature_1600',240,6,'baked_potato',6,[['Temperature',1600]]],['temperature_3200',160,9,'brick',4,[['Temperature',3200]]],['temperature_6800',60,14,'charcoal',2,[['Temperature',6800]]],['conversion_0',200,2,'stick',1,[['ConversionRate',0]]],['conversion_50',200,6,'bone_meal',4,[['ConversionRate',0.5]]],['conversion_100',200,12,'glowstone_dust',8,[['ConversionRate',1]]],['mode_temperature',120,10,'popped_chorus_fruit',3,[['Mode',2],['Temperature',3200]]],['mode_conversion',200,9,'string',6,[['Mode',3],['ConversionRate',0.75]]],['temperature_conversion',90,15,'clay_ball',5,[['Temperature',5200],['ConversionRate',0.8]]],['mode_temperature_conversion',80,18,'ender_pearl',4,[['Mode',1],['Temperature',5200],['ConversionRate',1]]]]) recipe(`purpur_furnace_${name}`, 'purpur_furnace', ticks, [item('minecraft:coal')], [{ id: `minecraft:${output}`, count }], { energy, smart })
   for (const [name, input, first, second, third] of [['coal','coal','coal','charcoal','gunpowder'],['oak_log','oak_log','charcoal','stick','coal'],['dried_kelp','dried_kelp','kelp','coal','bone_meal']]) recipe(`distillation_tower_${name}`, 'distillation_tower', 200, [item(`minecraft:${input}`)], [{ id: `minecraft:${first}`, count: 1 }, { id: `minecraft:${second}`, count: 1 }, { id: `minecraft:${third}`, count: 1 }], { energy: 40, maxThreads: 4, partial: true })
   recipe('eco_matrix_energy_drain', 'eco_matrix', 200, [], [], { energy: 100, cancel: true })

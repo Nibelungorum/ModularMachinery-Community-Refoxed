@@ -1,5 +1,6 @@
-package cn.howxu.mmcr.compat.kubejs;
+package cn.howxu.mmcr.mixin.compat.kubejs;
 
+import cn.howxu.mmcr.compat.kubejs.KubeJSReloadHooks;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import dev.latvian.mods.kubejs.script.ScriptManager;
@@ -17,7 +18,7 @@ public abstract class ScriptManagerMixin {
         try {
             original.call();
         } finally {
-            Plugin.abortServerReload(this);
+            KubeJSReloadHooks.abortServerReload(this);
         }
     }
 }

@@ -11,6 +11,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.material.Fluids;
 import dev.latvian.mods.rhino.ScriptableObject;
 import dev.latvian.mods.rhino.ContextFactory;
 import org.junit.jupiter.api.AfterEach;
@@ -115,5 +116,13 @@ class KubeJSApiTest {
                 api.portRequirements({item_input_bus: [1, 2]});
                 api.portTierRequirements(['item_input_bus>=small']);
                 """, "api-test", 1, null);
+    }
+
+    @Test
+    void fluid_stack_creates_a_bound_neoforge_fluid_stack() {
+        var stack = api.fluidStack("minecraft:water", 250);
+
+        assertThat(stack.getFluid()).isSameAs(Fluids.WATER);
+        assertThat(stack.getAmount()).isEqualTo(250);
     }
 }

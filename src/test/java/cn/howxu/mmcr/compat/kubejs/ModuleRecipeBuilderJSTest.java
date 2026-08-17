@@ -7,6 +7,8 @@ import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.component.DataComponentMap;
@@ -14,6 +16,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import com.google.gson.JsonParser;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
@@ -137,6 +140,39 @@ class ModuleRecipeBuilderJSTest {
                 .fluidOutputs(java.util.List.of(fluidOutput))
                 .createObject()
                 .fluidOutputs()).singleElement().satisfies(FluidStack::isEmpty);
+    }
+
+    @Test
+    void builder_preserves_component_tag_inputs_and_explicit_requirements() {
+        Identifier machineId = MMCR.id("module_machine");
+        MachineDefinitions.register(MachineRegistration.builder(machineId).build());
+        Items.EMERALD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+        Fluids.LAVA.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+
+        var recipe = new MachineRecipeBuilderJS("mmcr:component_tag_recipe")
+                .machine(machineId.toString())
+                .tagInputWithComponents("minecraft:planks", 2, JsonParser.parseString("""
+                        {"minecraft:custom_name":{"text":"Validated"}}
+                        """), 0.5F)
+                .addRequirement(new KubeJSApi().itemOutputRequirement("minecraft:emerald", 1, 0.25F))
+                .addRequirement(new KubeJSApi().fluidOutputRequirement("minecraft:lava", 250, 0.5F))
+                .createObject();
+
+        var input = (MachineIngredient.ItemIngredient) recipe.inputs().getFirst();
+        assertThat(input.count()).isEqualTo(2);
+        assertThat(input.consumeChance()).isEqualTo(0.5F);
+        assertThat(input.components().isEmpty()).isFalse();
+        assertThat(recipe.requirements()).hasSize(3);
+        assertThat(recipe.requirements().stream().filter(ItemRequirement.class::isInstance).map(ItemRequirement.class::cast)
+                .filter(requirement -> requirement.io() == cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.OUTPUT).toList()).singleElement().satisfies(requirement -> {
+            assertThat(requirement.stack().getItem()).isSameAs(Items.EMERALD);
+            assertThat(requirement.chance()).isEqualTo(0.25F);
+        });
+        assertThat(recipe.requirements().stream().filter(FluidRequirement.class::isInstance).map(FluidRequirement.class::cast).toList()).singleElement().satisfies(requirement -> {
+            assertThat(requirement.stack().getFluid()).isSameAs(Fluids.LAVA);
+            assertThat(requirement.stack().getAmount()).isEqualTo(250);
+            assertThat(requirement.chance()).isEqualTo(0.5F);
+        });
     }
 
 }

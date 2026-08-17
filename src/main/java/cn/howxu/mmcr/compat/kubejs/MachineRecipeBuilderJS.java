@@ -141,13 +141,20 @@ public class MachineRecipeBuilderJS {
     }
 
     public MachineRecipeBuilderJS tagInput(String tagId, int count) {
-        return addItemInput(Ingredient.of(BuiltInRegistries.ITEM.getOrThrow(TagKey.create(Registries.ITEM, Identifier.parse(tagId)))), count,
+        return addItemInput(Ingredient.of(tagItems(tagId)), count,
                 DataComponentPredicateSet.EMPTY, 1F);
     }
 
     public MachineRecipeBuilderJS itemInputWithComponents(String itemId, int count, JsonElement components) {
-        return addItemInput(Ingredient.of(item(itemId)), count,
-                DataComponentPredicateSet.CODEC.parse(JsonOps.INSTANCE, components).getOrThrow(), 1F);
+        return itemInputWithComponents(itemId, count, components, 1F);
+    }
+
+    public MachineRecipeBuilderJS itemInputWithComponents(String itemId, int count, JsonElement components, float consumeChance) {
+        return addItemInput(Ingredient.of(item(itemId)), count, componentPredicates(components), consumeChance);
+    }
+
+    public MachineRecipeBuilderJS tagInputWithComponents(String tagId, int count, JsonElement components, float consumeChance) {
+        return addItemInput(Ingredient.of(tagItems(tagId)), count, componentPredicates(components), consumeChance);
     }
 
     public MachineRecipeBuilderJS notConsumableItemInput(String itemId, int count) {
@@ -250,6 +257,15 @@ public class MachineRecipeBuilderJS {
 
     private net.minecraft.world.item.Item item(String itemId) {
         return BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId));
+    }
+
+    private DataComponentPredicateSet componentPredicates(JsonElement components) {
+        return DataComponentPredicateSet.CODEC.parse(JsonOps.INSTANCE, components).getOrThrow();
+    }
+
+    private net.minecraft.core.HolderSet.Named<net.minecraft.world.item.Item> tagItems(String tagId) {
+        var tag = TagKey.create(Registries.ITEM, Identifier.parse(tagId));
+        return BuiltInRegistries.ITEM.get(tag).orElseGet(() -> net.minecraft.core.HolderSet.emptyNamed(BuiltInRegistries.ITEM, tag));
     }
 
     public MachineRecipe createObject() {

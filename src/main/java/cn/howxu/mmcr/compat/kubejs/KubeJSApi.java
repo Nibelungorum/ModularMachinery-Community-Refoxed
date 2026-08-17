@@ -7,7 +7,9 @@ import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import net.minecraft.core.BlockPos;
@@ -22,6 +24,9 @@ import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
+import net.neoforged.neoforge.fluids.FluidStack;
+import com.google.gson.JsonElement;
+import com.mojang.serialization.JsonOps;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -117,6 +122,12 @@ public final class KubeJSApi {
         return new MachineIngredient.FluidIngredient(FluidIngredient.of(BuiltInRegistries.FLUID.getValue(identifier)), amount);
     }
 
+    public FluidStack fluidStack(String fluidId, int amount) {
+        Identifier identifier = Identifier.parse(fluidId);
+        if (!BuiltInRegistries.FLUID.containsKey(identifier)) throw new IllegalArgumentException("Unknown fluid: " + fluidId);
+        return new FluidStack(BuiltInRegistries.FLUID.getValue(identifier), amount);
+    }
+
     public MachineIngredient energyInput(int fePerTick) { return new MachineIngredient.EnergyIngredient(fePerTick); }
     public MachineIngredient energyOutput(int fePerTick) {
         return new MachineIngredient.EnergyIngredient(RecipeModifier.IOType.OUTPUT, fePerTick);
@@ -147,6 +158,24 @@ public final class KubeJSApi {
 
     public SmartInterfaceRequirement smartInterfaceOutput(String type, float value) {
         return SmartInterfaceRequirement.output(type, value);
+    }
+
+    public MachineRequirement itemOutputRequirement(String itemId, int count, float chance) {
+        return MachineRequirement.itemOutput(new ItemStack(requireItem(itemId), count), chance);
+    }
+
+    public MachineRequirement itemOutputRequirementWithComponents(String itemId, int count, JsonElement components, float chance) {
+        return new cn.howxu.mmcr.api.recipe.requirement.ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                new ItemStack(requireItem(itemId), count), chance, List.of(),
+                DataComponentPredicateSet.CODEC.parse(JsonOps.INSTANCE, components).getOrThrow(), 1F);
+    }
+
+    public MachineRequirement itemInputRequirement(String itemId, int count) {
+        return MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(requireItem(itemId)), count));
+    }
+
+    public MachineRequirement fluidOutputRequirement(String fluidId, int amount, float chance) {
+        return MachineRequirement.fluidOutput(fluidStack(fluidId, amount), chance);
     }
 
     private static net.minecraft.world.level.block.Block requireBlock(String id) {
