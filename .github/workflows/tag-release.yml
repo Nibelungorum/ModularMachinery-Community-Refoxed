@@ -25,7 +25,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: "25"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -58,7 +58,7 @@ jobs:
 
       - name: Compile Test
         run: ./gradlew compileJava --no-daemon
-      
+
       - name: Unit Test and GameTest
         run: ./gradlew test --no-daemon
 
@@ -110,10 +110,21 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+      - name: Publish release artifacts
+        uses: Kira-NT/mc-publish@v3
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-tag: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.version }}
-          body: ${{ steps.notes.outputs.body }}
-          files: build/libs/*
+          version: ${{ steps.version.outputs.version }}
+          changelog: ${{ steps.notes.outputs.body }}
+          files: build/libs/!(*-@(dev|sources|javadoc)).jar
+          loaders: neoforge
+          environment: client | server
+          game-versions: 26.1.2
+          java: 25
+          # Configure these after creating the distribution projects.
+          # modrinth-id: <project-id>
+          # modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          # curseforge-id: <project-id>
+          # curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}

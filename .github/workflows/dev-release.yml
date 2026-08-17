@@ -20,7 +20,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: "25"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -47,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           perl -0pi -e 's/^mod_version=.*/mod_version=${{ steps.version.outputs.version }}/m' gradle.properties
-        
+
       - name: Run Data Permission
         run: chmod u+x run_data.sh
 
@@ -56,7 +56,7 @@ jobs:
 
       - name: Compile Test
         run: ./gradlew compileJava --no-daemon
-      
+
       - name: Unit Test and GameTest
         run: ./gradlew test --no-daemon
 
@@ -102,12 +102,22 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+      - name: Publish release artifacts
+        uses: Kira-NT/mc-publish@v3
         with:
-          tag_name: ${{ steps.version.outputs.version }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-tag: ${{ steps.version.outputs.version }}
           name: ${{ steps.version.outputs.version }}
-          body: ${{ steps.notes.outputs.body }}
-          files: build/libs/*
-          prerelease: true
-          make_latest: false
+          version: ${{ steps.version.outputs.version }}
+          version-type: beta
+          changelog: ${{ steps.notes.outputs.body }}
+          files: build/libs/!(*-@(dev|sources|javadoc)).jar
+          loaders: neoforge
+          environment: client | server
+          game-versions: 26.1.2
+          java: 25
+          # Configure these after creating the distribution projects.
+          # modrinth-id: <project-id>
+          # modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          # curseforge-id: <project-id>
+          # curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
