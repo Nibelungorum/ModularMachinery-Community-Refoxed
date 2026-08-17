@@ -1,0 +1,8 @@
+{
+  "machine.mmcr_test.test_cube": "测试方块",
+  "machine.mmcr_test.controller_tick": "控制器 Tick",
+  "machine.mmcr_test.iron_compressor": "铁压缩机",
+  "machine.mmcr_test.distillation_tower_test": "蒸馏塔测试",
+  "machine.mmcr_test.expandable_structure_stages": "可扩展结构阶段",
+  "machine.mmcr_test.expandable_structure_vertical_roll": "可扩展结构垂直滚动"
+}

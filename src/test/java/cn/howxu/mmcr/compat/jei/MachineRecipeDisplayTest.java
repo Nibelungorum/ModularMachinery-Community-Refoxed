@@ -21,7 +21,6 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
-import cn.howxu.mmcr.datagen.Translations;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
@@ -506,18 +505,6 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
-    void translationsIncludeOverflowTooltips() {
-        assertThat(Translations.ALL.get("en_us"))
-                .containsKeys("jei.mmcr.machine_recipe.input_overflow", "jei.mmcr.machine_recipe.output_overflow",
-                        "jei.mmcr.machine_recipe.overflow_entry", "jei.mmcr.machine_recipe.component_constraints",
-                        "jei.mmcr.machine_recipe.required_host");
-        assertThat(Translations.ALL.get("zh_cn"))
-                .containsEntry("jei.mmcr.machine_recipe.output_overflow", "其余产物: ")
-                .containsKeys("jei.mmcr.machine_recipe.input_overflow", "jei.mmcr.machine_recipe.overflow_entry",
-                        "jei.mmcr.machine_recipe.component_constraints", "jei.mmcr.machine_recipe.required_host");
-    }
-
-    @Test
     void outputOverflowNameFallsBackToItemDescriptionWhenHoverNameIsEmpty() {
         ItemStack stack = new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 3);
 
@@ -547,10 +534,6 @@ class MachineRecipeDisplayTest {
         assertThat(MachineRecipeCategory.levelRequirement(requirement, 60).getString()).isEqualTo("Coils: Block of Gold");
         assertThat(MachineRecipeCategory.levelRequirement(requirement, 80).getString())
                 .isEqualTo("Coils: Block of Ironjei.mmcr.machine_recipe.minimum_level");
-        assertThat(Translations.ALL.get("en_us").get("jei.mmcr.machine_recipe.minimum_level"))
-                .isEqualTo("(minimum level)");
-        assertThat(Translations.ALL.get("zh_cn").get("jei.mmcr.machine_recipe.minimum_level"))
-                .isEqualTo("(最低等级)");
     }
 
     private static MachineRecipe recipe(String id, String machine, int priority) {

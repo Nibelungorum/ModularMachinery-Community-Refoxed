@@ -17,7 +17,5 @@ public final class DataGen {
         event.addProvider(new ModBlockTags(output, event.getLookupProvider()));
         event.addProvider(new LootTableGen(output, event.getLookupProvider()));
         event.addProvider(new ModelGen(output));
-        event.addProvider(new LangProvider(output, "en_us"));
-        event.addProvider(new LangProvider(output, "zh_cn"));
     }
 }

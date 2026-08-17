@@ -1,0 +1,8 @@
+{
+  "machine.mmcr_test.test_cube": "Test Cube",
+  "machine.mmcr_test.controller_tick": "Controller Tick",
+  "machine.mmcr_test.iron_compressor": "Iron Compressor",
+  "machine.mmcr_test.distillation_tower_test": "Distillation Tower Test",
+  "machine.mmcr_test.expandable_structure_stages": "Expandable Structure Stages",
+  "machine.mmcr_test.expandable_structure_vertical_roll": "Expandable Structure Vertical Roll"
+}
