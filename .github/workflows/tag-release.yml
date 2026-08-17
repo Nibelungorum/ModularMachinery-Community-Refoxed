@@ -1,6 +1,7 @@
 name: Tag Release
 
 on:
+  workflow_dispatch:
 
 permissions:
   contents: write
