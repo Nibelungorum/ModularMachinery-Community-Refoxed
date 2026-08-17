@@ -143,13 +143,21 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
 
     private void renderCandidates(GuiGraphicsExtractor graphics) {
         if (schema == null || !(preview.selectedHit() instanceof BlockHitResult hit)) return;
-        List<ItemStack> candidates = schema.candidatesAt(hit.getBlockPos());
+        List<ItemStack> candidates = displayedStacks(hit.getBlockPos());
         if (candidates.isEmpty()) return;
         int offset = (int) Math.floorDiv(clock.getAsLong(), 1000) % candidates.size();
         int itemY = y + height + 38;
         for (int index = 0; index < candidates.size() && index * 18 + 16 <= width; index++) {
             graphics.item(candidates.get((index + offset) % candidates.size()), x + index * 18, itemY, 0);
         }
+    }
+
+    private List<ItemStack> displayedStacks(BlockPos position) {
+        List<ItemStack> candidates = schema.candidatesAt(position);
+        if (!candidates.isEmpty()) return candidates;
+        net.minecraft.world.level.block.state.BlockState state = schema.stateAt(position);
+        if (state == null || state.getBlock().asItem() == net.minecraft.world.item.Items.AIR) return List.of();
+        return List.of(new ItemStack(state.getBlock()));
     }
 
     private void ensurePreviewStarted() {
@@ -252,7 +260,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
             return;
         }
         if (schema == null || !(preview.selectedHit() instanceof BlockHitResult hit)) return;
-        List<ItemStack> candidates = schema.candidatesAt(hit.getBlockPos());
+        List<ItemStack> candidates = displayedStacks(hit.getBlockPos());
         int itemY = y + height + 38;
         int itemIndex = (int) ((mouseX - x) / 18);
         if (mouseY >= itemY && mouseY < itemY + 16 && itemIndex >= 0 && itemIndex < candidates.size()) {

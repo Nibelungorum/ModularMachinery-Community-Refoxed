@@ -206,6 +206,20 @@ class JeiStructurePreviewWidgetTest {
     }
 
     @Test
+    void structurePreviewShowsTheFixedBlockWhenItHasNoAlternatives() {
+        RecordingPreviewWidget preview = new RecordingPreviewWidget();
+        preview.selected = hitAt(0, 0, 0);
+        RecordingTooltip tooltip = new RecordingTooltip();
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview,
+                schema(Blocks.IRON_BLOCK.defaultBlockState()), 0, 0, 160, 92);
+
+        widget.getTooltip(tooltip, 6, 130);
+
+        assertThat(tooltip.text().getFirst().getString())
+                .isEqualTo(new net.minecraft.world.item.ItemStack(Blocks.IRON_BLOCK).getHoverName().getString());
+    }
+
+    @Test
     void factoryCreatesIndependentPreviewStateForEachRecipeWidget() {
         List<RecordingPreviewWidget> previews = new ArrayList<>();
         JeiStructurePreviewWidget.PreviewFactory factory = ignored -> {
