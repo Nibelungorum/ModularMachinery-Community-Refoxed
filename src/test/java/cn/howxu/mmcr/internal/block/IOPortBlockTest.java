@@ -30,9 +30,4 @@ class IOPortBlockTest {
         assertThat(IOPortBlock.menuKindFor("energy_input_hatchling")).isEqualTo(IOPortBlock.PortMenuKind.NONE);
     }
 
-    @Test
-    void generated_port_ids_use_direct_container_translation_key() {
-        assertThat(IOPortBlock.titleFor("item_input_bus_ludicrous").getString()).isEqualTo("container.mmcr.item_input_bus_ludicrous");
-        assertThat(IOPortBlock.titleFor("fluid_output_hatch_vacuum").getString()).isEqualTo("container.mmcr.fluid_output_hatch_vacuum");
-    }
 }

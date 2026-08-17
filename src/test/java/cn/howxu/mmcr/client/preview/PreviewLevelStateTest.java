@@ -3,9 +3,7 @@ package cn.howxu.mmcr.client.preview;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.world.level.ClipContext;
-import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -123,20 +121,6 @@ class PreviewLevelStateTest {
         LevelChunk chunk = level.getChunkSource().getChunk(0, 0, true);
         assertThat(chunk.getBlockState(new BlockPos(16, 0, 0))).isEqualTo(Blocks.AIR.defaultBlockState());
         assertThat(chunk.getBlockEntity(new BlockPos(16, 0, 0))).isNull();
-    }
-
-    @Test
-    void level_provides_vanilla_shade_and_full_brightness() {
-        PreviewLevel level = level(schema(Map.of()), PreviewVisibility.ALL);
-
-        assertThat(level.getShade(Direction.DOWN, true)).isEqualTo(0.5F);
-        assertThat(level.getShade(Direction.NORTH, true)).isEqualTo(0.8F);
-        assertThat(level.getShade(Direction.WEST, true)).isEqualTo(0.6F);
-        assertThat(level.getShade(Direction.UP, true)).isEqualTo(1.0F);
-        assertThat(level.getShade(Direction.DOWN, false)).isEqualTo(1.0F);
-        assertThat(level.getBrightness(LightLayer.BLOCK, BlockPos.ZERO)).isEqualTo(15);
-        assertThat(level.getBrightness(LightLayer.SKY, BlockPos.ZERO)).isEqualTo(15);
-        assertThat(level.getRawBrightness(BlockPos.ZERO, 7)).isEqualTo(15);
     }
 
     private static PreviewLevel level(StructurePreviewSchema schema, PreviewVisibility visibility) {

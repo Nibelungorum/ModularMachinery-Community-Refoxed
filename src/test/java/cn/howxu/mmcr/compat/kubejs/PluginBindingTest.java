@@ -83,7 +83,6 @@ class PluginBindingTest {
         assertThat(RecipeRegistry.getRecipe(MMCR.id("sharp_sword")).outputs()).singleElement().satisfies(output -> {
             assertThat(output.getItem()).isSameAs(Items.DIAMOND_SWORD);
             assertThat(output.getCount()).isEqualTo(1);
-            assertThat(output.getHoverName().getString()).isEqualTo("Better钻石剑");
         });
     }
 

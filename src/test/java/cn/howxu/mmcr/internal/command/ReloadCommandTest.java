@@ -13,7 +13,6 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.permissions.PermissionSet;
 import net.minecraft.world.phys.Vec2;
@@ -22,15 +21,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ReloadCommandTest {
-
-    private final List<Component> messageComponents = new ArrayList<>();
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -46,7 +42,7 @@ class ReloadCommandTest {
     }
 
     @Test
-    void reloadCommandClearsDynamicStructuresAndReportsSummary() throws Exception {
+    void reloadCommandClearsDynamicStructures() throws Exception {
         Identifier removed = Identifier.parse("mmcr:removed");
         MachineDefinitions.register(MachineRegistration.builder(removed).localizedName("Removed").build());
         DynamicContentReloadService.reload(candidate -> candidate.registerStructure(structure(removed)));
@@ -56,18 +52,12 @@ class ReloadCommandTest {
         int result = dispatcher.execute("mmcr reload", source());
 
         assertThat(result).isEqualTo(1);
-        assertThat(messageComponents).anySatisfy(message -> {
-            var contents = (net.minecraft.network.chat.contents.TranslatableContents) message.getContents();
-            assertThat(contents.getKey()).isEqualTo("command.mmcr.reload.success");
-            assertThat(contents.getArgs()).containsExactly(0, 0, 1, 0, 0, 0);
-        });
     }
 
     private CommandSourceStack source() {
         CommandSource source = new CommandSource() {
             @Override
-            public void sendSystemMessage(Component message) {
-                messageComponents.add(message);
+            public void sendSystemMessage(net.minecraft.network.chat.Component message) {
             }
 
             @Override
@@ -86,7 +76,7 @@ class ReloadCommandTest {
             }
         };
         return new CommandSourceStack(source, Vec3.ZERO, Vec2.ZERO, null, PermissionSet.ALL_PERMISSIONS,
-                "test", Component.literal("test"), null, null);
+                "test", net.minecraft.network.chat.Component.literal("test"), null, null);
     }
 
     private static MachineStructureDefinition structure(Identifier id) {

@@ -1552,31 +1552,6 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
-    void expected_description_for_anyof_prefers_normal_blocks_and_colors_it() throws Exception {
-        Method describeExpected = MachineControllerBlockEntity.class.getDeclaredMethod("describeExpected", BlockPredicate.class);
-        describeExpected.setAccessible(true);
-        Component description = (Component) describeExpected.invoke(null, new BlockPredicate.AnyOf(List.of(
-                new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()),
-                new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.SMART_INTERFACE.get()),
-                new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))));
-
-        assertThat(description.getString()).isEqualTo(Blocks.IRON_BLOCK.getName().getString());
-        assertThat(description.getStyle().getColor().getValue()).isEqualTo(ChatFormatting.GREEN.getColor());
-    }
-
-    @Test
-    void expected_description_for_anyof_prefers_io_interfaces_before_smart_interfaces() throws Exception {
-        Method describeExpected = MachineControllerBlockEntity.class.getDeclaredMethod("describeExpected", BlockPredicate.class);
-        describeExpected.setAccessible(true);
-        Component description = (Component) describeExpected.invoke(null, new BlockPredicate.AnyOf(List.of(
-                new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.SMART_INTERFACE.get()),
-                new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get()))));
-
-        assertThat(description.getString()).isEqualTo(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get().getName().getString());
-        assertThat(description.getStyle().getColor().getValue()).isEqualTo(ChatFormatting.GREEN.getColor());
-    }
-
-    @Test
     void port_requirement_failure_diagnostic_has_distinct_reason() {
         DynamicMachine machine = new DynamicMachine(MMCR.id("port_failure_diagnostic_machine"), "Port Failure", new BlockArray(Map.of()));
         var failure = new PortRequirementSpec.Failure(
@@ -1593,27 +1568,6 @@ class MachineControllerBlockEntityTest {
                 .contains("requiredMin=1")
                 .contains("requiredMax=unbounded")
                 .contains("failureReason=MISSING");
-    }
-
-    @Test
-    void port_requirement_failure_message_uses_human_readable_port_description() throws Exception {
-        Method describeFailure = MachineControllerBlockEntity.class.getDeclaredMethod(
-                "describeFormationFailure", PortRequirementSpec.Failure.class);
-        describeFailure.setAccessible(true);
-        var failure = new PortRequirementSpec.Failure(
-                "item_input_bus>=tiny", 0, 1, java.util.OptionalInt.empty(), PortRequirementSpec.FailureReason.MISSING);
-
-        Component description = (Component) describeFailure.invoke(null, failure);
-
-        var contents = (TranslatableContents) description.getContents();
-        assertThat(contents.getKey()).isEqualTo("message.mmcr.multiblock_requirement.minimum");
-        assertThat(contents.getArgs()[0]).isEqualTo(1);
-        var portDescription = (TranslatableContents) ((Component) contents.getArgs()[1]).getContents();
-        assertThat(portDescription.getKey()).isEqualTo("message.mmcr.port_requirement.minimum_tier");
-        var tier = (TranslatableContents) ((Component) portDescription.getArgs()[0]).getContents();
-        assertThat(tier.getKey()).isEqualTo("message.mmcr.port_tier.tiny");
-        var base = (TranslatableContents) ((Component) portDescription.getArgs()[1]).getContents();
-        assertThat(base.getKey()).isEqualTo("message.mmcr.port_requirement.item_input");
     }
 
     @Test

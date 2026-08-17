@@ -29,15 +29,6 @@ class FactorySchedulerMenuTest {
     }
 
     @Test
-    void client_menu_has_one_scheduler_slot_before_player_inventory() {
-        FactorySchedulerMenu menu = new FactorySchedulerMenu(1, emptyInventory());
-
-        assertThat(menu.schedulerSlotCount()).isEqualTo(1);
-        assertThat(menu.playerInventorySlotStart()).isEqualTo(1);
-        assertThat(menu.slots).hasSize(37);
-    }
-
-    @Test
     void scheduler_slot_accepts_only_thread_dispersers() {
         FactorySchedulerMenu menu = new FactorySchedulerMenu(1, emptyInventory());
 

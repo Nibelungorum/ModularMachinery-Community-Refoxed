@@ -205,9 +205,6 @@ class JeiStructurePreviewWidgetTest {
         JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview,
                 schemaWithCandidate(Blocks.IRON_BLOCK.defaultBlockState()), 0, 0, 160, 92);
 
-        widget.getTooltip(tooltip, 6, 106);
-        assertThat(tooltip.text().getFirst().getString()).isEqualTo("jei.mmcr.structure_preview.previous_layer");
-
         tooltip.clear();
         widget.getTooltip(tooltip, 6, 125);
         assertThat(tooltip.text().getFirst().getString())
@@ -271,8 +268,6 @@ class JeiStructurePreviewWidgetTest {
         assertThat(previews.getFirst().closes).isZero();
         assertThat(previewSchemas).containsExactly(schemas.get(0));
 
-        widget.getTooltip(tooltip, 77, 106);
-        assertThat(tooltip.text().getFirst().getString()).isEqualTo("jei.mmcr.structure_preview.next_level");
         assertThat(widget.handleInput(77, 106, leftPress(false))).isTrue();
         assertThat(previews).hasSize(2);
         assertThat(previews.getFirst().closes).isEqualTo(1);

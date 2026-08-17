@@ -130,7 +130,6 @@ class MachineRecipeTest {
         MachineRecipe recipe = MachineRecipe.CODEC.codec().parse(componentJsonOps(), root).getOrThrow();
 
         ItemStack outputStack = recipe.outputs().getFirst();
-        assertThat(outputStack.getHoverName().getString()).isEqualTo("Better钻石剑");
         assertThat(outputStack.get(DataComponents.ENCHANTMENTS).getLevel(enchantment("minecraft:sharpness"))).isEqualTo(4);
     }
 

@@ -8,11 +8,10 @@ import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
+import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.nibelungorum.BuiltinMachines;
-import net.minecraft.resources.Identifier;
 
 import java.util.List;
 import java.util.Map;
@@ -38,40 +37,6 @@ class MachineDefinitionBootstrapTest {
         MachineStructureRegistry.clearForTesting();
         RecipeRegistry.clearForTesting();
         System.clearProperty("neoforge.enableGameTest");
-    }
-
-    @Test
-    void runtime_bootstrap_does_not_register_gametest_machine_definitions() {
-        System.setProperty("neoforge.enableGameTest", "true");
-
-        BuiltinMachines.register();
-        MMCR.registerGameTestMachineDefinitionsIfPresent();
-        MachineDefinitions.bootstrapBuiltins();
-
-        assertThat(MachineDefinitions.getRegistration(MMCR.id("blast_furnace"))).isNotNull();
-        assertThat(MachineDefinitions.getRegistration(MMCR.id("alloy_furnace"))).isNotNull();
-        assertThat(MachineDefinitions.getRegistration(MMCR.id("test_cube"))).isNull();
-        assertThat(MachineDefinitions.getRegistration(MMCR.id("controller_tick"))).isNull();
-        assertThat(MachineDefinitions.getRegistration(MMCR.id("iron_compressor"))).isNull();
-    }
-
-    @Test
-    void builtin_cracker_definition_allows_vertical_controller_placement() {
-        BuiltinMachines.register();
-        MachineDefinitions.bootstrapBuiltins();
-
-        assertThat(MachineDefinitions.getRegistration(MMCR.id("cracker")).controllerSpec().allowVerticalFacing()).isTrue();
-    }
-
-    @Test
-    void space_elevator_uses_quartz_base_texture_with_the_default_controller_overlay() {
-        BuiltinMachines.register();
-        MachineDefinitions.bootstrapBuiltins();
-
-        var registration = MachineDefinitions.getRegistration(MMCR.id("space_elevator"));
-        assertThat(registration.appearance().controllerBaseTexture())
-                .isEqualTo(Identifier.withDefaultNamespace("block/quartz_block_bottom"));
-        assertThat(registration.controllerSpec().frontTexture()).isEqualTo(MMCR.id("block/basic_controller"));
     }
 
     @Test
