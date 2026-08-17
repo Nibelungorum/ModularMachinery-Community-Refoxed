@@ -8,6 +8,8 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.gui.handlers.IGuiClickableArea;
 import mezz.jei.api.gui.handlers.IGuiContainerHandler;
+import mezz.jei.api.constants.VanillaTypes;
+import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.registration.IGuiHandlerRegistration;
 import mezz.jei.api.registration.IRecipeCatalystRegistration;
 import mezz.jei.api.registration.IRecipeCategoryRegistration;
@@ -37,9 +39,7 @@ public final class JeiPlugin implements IModPlugin {
     @Override
     public void registerCategories(IRecipeCategoryRegistration registration) {
         var guiHelper = registration.getJeiHelpers().getGuiHelper();
-        registration.addRecipeCategories(new MachineStructureCategory(guiHelper, JeiMachineRecipeTypes.STRUCTURE));
-        MachineRegistry.getAll().values().forEach(machine -> registration.addRecipeCategories(
-                new MachineStructureCategory(guiHelper, JeiMachineRecipeTypes.structureFor(machine.registryName()))));
+        registration.addRecipeCategories(new MachineStructureCategory(guiHelper));
         MachineRegistry.getAll().values().forEach(machine ->
                 registration.addRecipeCategories(new MachineRecipeCategory(guiHelper, machine)));
     }
@@ -49,9 +49,6 @@ public final class JeiPlugin implements IModPlugin {
         registration.addRecipes(JeiMachineRecipeTypes.STRUCTURE, MachineRegistry.getAll().values().stream()
                 .map(MachineStructureDisplay::from)
                 .toList());
-        MachineRegistry.getAll().values().forEach(machine -> registration.addRecipes(
-                JeiMachineRecipeTypes.structureFor(machine.registryName()),
-                List.of(MachineStructureDisplay.from(machine))));
         var displaysByMachine = MachineRecipeDisplays.byMachine();
         Set<Identifier> machineIds = MachineRegistry.getAll().values().stream()
                 .map(machine -> machine.registryName())
@@ -70,7 +67,7 @@ public final class JeiPlugin implements IModPlugin {
     public void registerRecipeCatalysts(IRecipeCatalystRegistration registration) {
         MachineRegistry.getAll().values().forEach(machine -> {
             ItemStack controller = new ItemStack(ModBlocks.controllerFor(machine.registryName()).get());
-            registration.addRecipeCatalyst(controller, JeiMachineRecipeTypes.structureFor(machine.registryName()));
+            registration.addRecipeCatalyst(controller, JeiMachineRecipeTypes.STRUCTURE);
             registration.addCraftingStation(JeiMachineRecipeTypes.forMachine(machine.registryName()), controller);
         });
     }
@@ -92,8 +89,17 @@ public final class JeiPlugin implements IModPlugin {
                 if (!(screen.getMenu() instanceof MachineControllerMenu menu)) return List.of();
                 Identifier machineId = menu.machineId();
                 if (machineId == null) return List.of();
-                return List.of(IGuiClickableArea.createBasic(8, 24, 160, 24,
-                        JeiMachineRecipeTypes.structureFor(machineId)));
+                ItemStack controller = new ItemStack(ModBlocks.controllerFor(machineId).get());
+                return List.of(new IGuiClickableArea() {
+                    private final net.minecraft.client.renderer.Rect2i area = new net.minecraft.client.renderer.Rect2i(8, 24, 160, 24);
+
+                    @Override public net.minecraft.client.renderer.Rect2i getArea() { return area; }
+
+                    @Override
+                    public void onClick(mezz.jei.api.recipe.IFocusFactory focusFactory, mezz.jei.api.runtime.IRecipesGui recipesGui) {
+                        recipesGui.show(focusFactory.createFocus(RecipeIngredientRole.INPUT, VanillaTypes.ITEM_STACK, controller));
+                    }
+                });
             }
         });
     }

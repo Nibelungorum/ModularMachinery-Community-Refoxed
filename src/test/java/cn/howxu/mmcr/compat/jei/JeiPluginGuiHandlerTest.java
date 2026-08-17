@@ -7,6 +7,9 @@ import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.TestBootstrap;
 import mezz.jei.api.gui.handlers.IGuiContainerHandler;
 import mezz.jei.api.registration.IGuiHandlerRegistration;
+import mezz.jei.api.recipe.IFocus;
+import mezz.jei.api.recipe.IFocusFactory;
+import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.runtime.IRecipesGui;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
@@ -34,16 +37,16 @@ class JeiPluginGuiHandlerTest {
     }
 
     @Test
-    void gui_handler_opens_its_machine_structure_type() {
+    void gui_handler_opens_only_its_machine_structure_display() {
         AtomicReference<IGuiContainerHandler<MachineMenuScreen>> handler = new AtomicReference<>();
         new JeiPlugin().registerGuiHandlers(registration(handler));
         IRecipesGui recipesGui = recipesGui();
 
         handler.get().getGuiClickableAreas(screenWith(MMCR.id("blast_furnace")), 10, 30)
-                .forEach(area -> area.onClick(null, recipesGui));
+                .forEach(area -> area.onClick(focusFactory(), recipesGui));
 
-        assertThat((List<Object>) (List<?>) shownTypes.get())
-                .containsExactly(JeiMachineRecipeTypes.structureFor(MMCR.id("blast_furnace")));
+        assertThat(focuses.get()).hasSize(1);
+        assertThat(focuses.get().getFirst().getRole()).isEqualTo(RecipeIngredientRole.INPUT);
     }
 
     @Test
@@ -54,7 +57,7 @@ class JeiPluginGuiHandlerTest {
         assertThat(handler.get().getGuiClickableAreas(screenWith(null), 10, 30)).isEmpty();
     }
 
-    private final AtomicReference<List<?>> shownTypes = new AtomicReference<>();
+    private final AtomicReference<List<IFocus<?>>> focuses = new AtomicReference<>();
 
     @SuppressWarnings("unchecked")
     private static IGuiHandlerRegistration registration(AtomicReference<IGuiContainerHandler<MachineMenuScreen>> handler) {
@@ -77,13 +80,38 @@ class JeiPluginGuiHandlerTest {
         return (IRecipesGui) Proxy.newProxyInstance(
                 getClass().getClassLoader(), new Class<?>[]{IRecipesGui.class},
                 (proxy, method, args) -> {
-                    if (method.getName().equals("showTypes")) {
-                        shownTypes.set((List<?>) args[0]);
+                    if (method.getName().equals("show")) {
+                        focuses.set(args[0] instanceof List<?> values
+                                ? (List<IFocus<?>>) values
+                                : List.of((IFocus<?>) args[0]));
                         return null;
                     }
                     if (method.getName().equals("hashCode")) return System.identityHashCode(proxy);
                     if (method.getName().equals("equals")) return proxy == args[0];
                     if (method.getName().equals("toString")) return "RecipesGui";
+                    throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
+    @SuppressWarnings("unchecked")
+    private IFocusFactory focusFactory() {
+        return (IFocusFactory) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class<?>[]{IFocusFactory.class},
+                (proxy, method, args) -> {
+                    if (method.getName().equals("createFocus")) {
+                        return Proxy.newProxyInstance(getClass().getClassLoader(), new Class<?>[]{IFocus.class},
+                                (focusProxy, focusMethod, focusArgs) -> switch (focusMethod.getName()) {
+                                    case "getRole" -> args[0];
+                                    case "getTypedValue" -> null;
+                                    case "hashCode" -> System.identityHashCode(focusProxy);
+                                    case "equals" -> focusProxy == focusArgs[0];
+                                    case "toString" -> "Focus";
+                                    default -> throw new UnsupportedOperationException(focusMethod.getName());
+                                });
+                    }
+                    if (method.getName().equals("hashCode")) return System.identityHashCode(proxy);
+                    if (method.getName().equals("equals")) return proxy == args[0];
+                    if (method.getName().equals("toString")) return "FocusFactory";
                     throw new UnsupportedOperationException(method.getName());
                 });
     }

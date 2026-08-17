@@ -17,18 +17,11 @@ public final class JeiMachineRecipeTypes {
     public static final IRecipeType<MachineStructureDisplay> STRUCTURE = IRecipeType.create(
             MMCR.id("multiblock_structure"), MachineStructureDisplay.class);
     private static final Map<Identifier, IRecipeType<MachineRecipeDisplay>> TYPES = new ConcurrentHashMap<>();
-    private static final Map<Identifier, IRecipeType<MachineStructureDisplay>> STRUCTURE_TYPES = new ConcurrentHashMap<>();
 
     public static IRecipeType<MachineRecipeDisplay> forMachine(Identifier machineId) {
         return TYPES.computeIfAbsent(machineId, id -> IRecipeType.create(
                 Identifier.fromNamespaceAndPath(id.getNamespace(), "machine_recipe/" + id.getPath()),
                 MachineRecipeDisplay.class));
-    }
-
-    public static IRecipeType<MachineStructureDisplay> structureFor(Identifier machineId) {
-        return STRUCTURE_TYPES.computeIfAbsent(machineId, id -> IRecipeType.create(
-                Identifier.fromNamespaceAndPath(id.getNamespace(), "structure/" + id.getPath()),
-                MachineStructureDisplay.class));
     }
 
     private JeiMachineRecipeTypes() {

@@ -22,9 +22,14 @@ class JeiStructureRecipeTypesTest {
     }
 
     @Test
-    void structureTypeForMachineIsDistinctFromTheGlobalStructureType() {
-        assertThat(JeiMachineRecipeTypes.structureFor(MMCR.id("blast_furnace")))
-                .isNotEqualTo(JeiMachineRecipeTypes.STRUCTURE);
+    void structuresUseOnlyTheSharedCategoryType() throws Exception {
+        String types = java.nio.file.Files.readString(java.nio.file.Path.of(
+                "src/main/java/cn/howxu/mmcr/compat/jei/JeiMachineRecipeTypes.java"));
+        String plugin = java.nio.file.Files.readString(java.nio.file.Path.of(
+                "src/main/java/cn/howxu/mmcr/compat/jei/JeiPlugin.java"));
+
+        assertThat(types).doesNotContain("structureFor(");
+        assertThat(plugin).doesNotContain("structureFor(");
     }
 
     @Test
