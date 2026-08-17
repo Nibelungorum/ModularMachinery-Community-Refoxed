@@ -67,7 +67,6 @@ public final class JeiPlugin implements IModPlugin {
     public void registerRecipeCatalysts(IRecipeCatalystRegistration registration) {
         MachineRegistry.getAll().values().forEach(machine -> {
             ItemStack controller = new ItemStack(ModBlocks.controllerFor(machine.registryName()).get());
-            registration.addRecipeCatalyst(controller, JeiMachineRecipeTypes.STRUCTURE);
             registration.addCraftingStation(JeiMachineRecipeTypes.forMachine(machine.registryName()), controller);
         });
     }

@@ -34,7 +34,6 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private static final int CONTROL_SIZE = 15;
     private static final int CONTROL_STEP = CONTROL_SIZE + 4;
     private static final int LAYOUT_WIDTH = 168;
-    private static final int LAYOUT_HEIGHT = 240;
     private Preview preview;
     private final int x;
     private final int y;
@@ -113,7 +112,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     }
 
     @Override public ScreenPosition getPosition() { return new ScreenPosition(0, 0); }
-    @Override public ScreenRectangle getArea() { return new ScreenRectangle(0, 0, LAYOUT_WIDTH, LAYOUT_HEIGHT); }
+    @Override public ScreenRectangle getArea() { return new ScreenRectangle(0, 0, LAYOUT_WIDTH, y + height + 54); }
 
     @Override
     public void drawWidget(GuiGraphicsExtractor graphics, double mouseX, double mouseY) {

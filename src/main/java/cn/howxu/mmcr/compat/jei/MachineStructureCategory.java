@@ -49,6 +49,7 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
 
     @Override
     public void setRecipe(IRecipeLayoutBuilder builder, MachineStructureDisplay display, IFocusGroup focuses) {
+        display.ingredients().forEach(stack -> builder.addInputSlot(-1000, -1000).add(stack));
     }
 
     @Override

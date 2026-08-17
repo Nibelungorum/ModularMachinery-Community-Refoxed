@@ -30,6 +30,7 @@ class JeiStructureRecipeTypesTest {
 
         assertThat(types).doesNotContain("structureFor(");
         assertThat(plugin).doesNotContain("structureFor(");
+        assertThat(plugin).doesNotContain("addRecipeCatalyst(controller, JeiMachineRecipeTypes.STRUCTURE)");
     }
 
     @Test

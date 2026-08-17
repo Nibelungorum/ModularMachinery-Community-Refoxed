@@ -151,6 +151,13 @@ class JeiStructurePreviewWidgetTest {
     }
 
     @Test
+    void inputAreaIncludesControlsBelowTheTallestPreview() {
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(new RecordingPreviewWidget(), 2, 4, 164, 265);
+
+        assertThat(widget.getArea().height()).isGreaterThanOrEqualTo(323);
+    }
+
+    @Test
     void previewReleaseOverControlsClearsSessionWithoutRunningTheControl() {
         RecordingPreviewWidget preview = new RecordingPreviewWidget();
         JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 0, 0, 160, 92);
