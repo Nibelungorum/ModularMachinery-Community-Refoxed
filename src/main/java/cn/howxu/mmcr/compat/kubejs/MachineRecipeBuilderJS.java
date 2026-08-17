@@ -171,6 +171,9 @@ public class MachineRecipeBuilderJS {
     }
 
     public MachineRecipeBuilderJS itemOutputWithComponents(String itemId, int count, JsonElement components) {
+        if (count < 0) {
+            throw new IllegalArgumentException("Component item output count must not be negative: " + count);
+        }
         JsonObject stack = new JsonObject();
         stack.addProperty("id", itemId);
         stack.addProperty("count", count);

@@ -228,6 +228,15 @@ class PluginBindingTest {
     }
 
     @Test
+    void component_output_rejects_negative_count_before_codec_decoding() {
+        assertThatThrownBy(() -> new MachineRecipeBuilderJS("mmcr:negative_component_output")
+                .machine("mmcr:alloy_furnace")
+                .itemOutputWithComponents("minecraft:diamond_sword", -1, JsonParser.parseString("{}")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Component item output count must not be negative: -1");
+    }
+
+    @Test
     void component_output_added_after_outputs_list_is_merged_at_the_new_position() {
         Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         var builder = new MachineRecipeBuilderJS("mmcr:component_after_outputs")
