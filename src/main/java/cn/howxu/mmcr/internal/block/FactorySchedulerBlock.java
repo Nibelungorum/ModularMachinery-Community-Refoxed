@@ -55,4 +55,5 @@ public class FactorySchedulerBlock extends Block implements EntityBlock {
         }
         return InteractionResult.SUCCESS;
     }
+
 }

@@ -12,6 +12,7 @@ import cn.howxu.mmcr.registry.ModItems;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
@@ -228,6 +229,22 @@ public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
 
     public ItemStackHandler getItemStackHandler(Direction side) {
         return handler;
+    }
+
+    public void dropContents() {
+        if (level == null || level.isClientSide()) return;
+        for (int slot = 0; slot < handler.getSlots(); slot++) {
+            ItemStack stack = handler.getStackInSlot(slot);
+            if (stack.isEmpty()) continue;
+            Block.popResource(level, worldPosition, stack);
+            handler.setStackInSlot(slot, ItemStack.EMPTY);
+        }
+    }
+
+    @Override
+    public void preRemoveSideEffects(BlockPos pos, BlockState state) {
+        super.preRemoveSideEffects(pos, state);
+        dropContents();
     }
 
     @Override

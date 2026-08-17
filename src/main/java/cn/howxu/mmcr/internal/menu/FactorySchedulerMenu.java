@@ -66,7 +66,7 @@ public class FactorySchedulerMenu extends AbstractMachineMenu {
     }
 
     public String texturePath() {
-        return ItemBusMenu.texturePathForSize(cn.howxu.mmcr.internal.port.ItemBusSize.TINY);
+        return "textures/gui/guifactorycontroller.png";
     }
 
     private void addSchedulerSlot(FactorySchedulerBlockEntity owner) {
