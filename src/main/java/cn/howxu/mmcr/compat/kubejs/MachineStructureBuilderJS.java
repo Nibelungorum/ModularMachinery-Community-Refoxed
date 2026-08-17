@@ -149,6 +149,14 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         return new MachineStructureDefinition(id, result);
     }
 
+    public void build() {
+        var transaction = KubeJSContentReloadTransaction.active();
+        if (transaction == null) {
+            throw new IllegalStateException("Machine structures must be built during KubeJS server script loading");
+        }
+        transaction.registerStructure(createObject());
+    }
+
     private static BlockPredicate toPredicate(Object value) {
         return switch (value) {
             case String blockId -> new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId)));

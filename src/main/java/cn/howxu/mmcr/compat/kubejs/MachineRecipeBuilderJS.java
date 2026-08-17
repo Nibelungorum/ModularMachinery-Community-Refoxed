@@ -214,8 +214,14 @@ public class MachineRecipeBuilderJS {
         }
         requirements.addAll(this.requirements);
 
-        RecipeRegistry.register(new MachineRecipe(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(recipeOutputs), List.of(), 0, 1,
-                cancelIfPerTickFails, List.of(), List.copyOf(requirements), false, List.copyOf(levelRequirements), allowPartialOutputs, new LinkedHashSet<>(requiredHostIds)));
+        var recipe = new MachineRecipe(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(recipeOutputs), List.of(), 0, 1,
+                cancelIfPerTickFails, List.of(), List.copyOf(requirements), false, List.copyOf(levelRequirements), allowPartialOutputs, new LinkedHashSet<>(requiredHostIds));
+        var transaction = KubeJSContentReloadTransaction.active();
+        if (transaction != null) {
+            transaction.registerRecipe(recipe);
+        } else {
+            RecipeRegistry.register(recipe);
+        }
     }
 
     private record ComponentOutput(int index, JsonObject stack) {

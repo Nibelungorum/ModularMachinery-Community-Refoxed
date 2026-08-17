@@ -1,6 +1,11 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -24,8 +29,10 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.ScopedValue;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -39,7 +46,42 @@ class PluginBindingTest {
 
     @AfterEach
     void clearRecipes() {
+        MachineStructureRegistry.clearForTesting();
         RecipeRegistry.clearForTesting();
+    }
+
+    @Test
+    void kubejs_content_transaction_replaces_dynamic_content_only_after_validation() {
+        var machineId = MMCR.id("alloy_furnace");
+        var recipeId = MMCR.id("kubejs_transaction_success_recipe");
+
+        var transaction = new KubeJSContentReloadTransaction();
+        transaction.registerStructure(structure(machineId));
+        transaction.registerRecipe(new MachineRecipe(recipeId, machineId, 1, List.of(), List.of()));
+        transaction.commit();
+
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsKey(machineId);
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(recipeId);
+    }
+
+    @Test
+    void invalid_kubejs_content_transaction_preserves_previous_dynamic_snapshot() {
+        var machineId = MMCR.id("alloy_furnace");
+        var recipeId = MMCR.id("kubejs_transaction_previous_recipe");
+
+        var previous = new KubeJSContentReloadTransaction();
+        previous.registerStructure(structure(machineId));
+        previous.registerRecipe(new MachineRecipe(recipeId, machineId, 1, List.of(), List.of()));
+        previous.commit();
+        var previousStructures = MachineStructureRegistry.dynamicSnapshot();
+        var previousRecipes = RecipeRegistry.dynamicSnapshot();
+
+        var invalid = new KubeJSContentReloadTransaction();
+        invalid.registerRecipe(new MachineRecipe(MMCR.id("invalid_kubejs_transaction_recipe"), MMCR.id("missing_machine"), 1, List.of(), List.of()));
+
+        assertThatThrownBy(invalid::commit).isInstanceOf(IllegalStateException.class);
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousStructures);
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousRecipes);
     }
 
     @Test
@@ -141,5 +183,9 @@ class PluginBindingTest {
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError(exception);
         }
+    }
+
+    private static MachineStructureDefinition structure(net.minecraft.resources.Identifier id) {
+        return new MachineStructureDefinition(id, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(), Map.of());
     }
 }

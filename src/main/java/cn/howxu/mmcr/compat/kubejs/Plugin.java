@@ -27,14 +27,21 @@ import dev.latvian.mods.kubejs.script.ScriptManager;
 import dev.latvian.mods.kubejs.script.ScriptType;
 import net.neoforged.fml.loading.FMLLoader;
 
+import java.util.IdentityHashMap;
 import java.util.Map;
 
 public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     static final String RECIPE_BUILDER_BINDING = "MMCR_RECIPE_BUILDER";
     static final Class<MachineRecipeBuilderJS> RECIPE_BUILDER_CLASS = MachineRecipeBuilderJS.class;
+    private final Map<ScriptManager, ServerReload> serverReloads = new IdentityHashMap<>();
 
     @Override
     public void beforeScriptsLoaded(ScriptManager manager) {
+        if (manager.scriptType == ScriptType.SERVER) {
+            var transaction = new KubeJSContentReloadTransaction();
+            serverReloads.put(manager, new ServerReload(transaction, manager.scriptType.console.errors.size()));
+            KubeJSContentReloadTransaction.activate(transaction);
+        }
         if (manager.scriptType == ScriptType.STARTUP) {
             MachineLevelRegistry.beginRegistration();
             registerDevelopmentMachineLevels();
@@ -43,9 +50,22 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
 
     @Override
     public void afterScriptsLoaded(ScriptManager manager) {
+        if (manager.scriptType == ScriptType.SERVER) {
+            ServerReload reload = serverReloads.remove(manager);
+            try {
+                if (reload != null && manager.scriptType.console.errors.size() == reload.errorCount()) {
+                    reload.transaction().commit();
+                }
+            } finally {
+                KubeJSContentReloadTransaction.deactivate();
+            }
+        }
         if (manager.scriptType == ScriptType.STARTUP) {
             MachineLevelRegistry.freezeRegistration();
         }
+    }
+
+    private record ServerReload(KubeJSContentReloadTransaction transaction, int errorCount) {
     }
 
     @Override
