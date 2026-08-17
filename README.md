@@ -1,6 +1,6 @@
 # Modular Machinery Community: Refoxed
 
-Modular Machinery Community: Refoxed (MMCR) is a NeoForge port and continuation of [Modular Machinery Community Edition](https://github.com/NovaEngineering-Source/ModularMachinery-Community-Edition) for newer Minecraft versions. It provides configurable multiblock machines, recipe processing, ports, controllers, and KubeJS integration.
+Modular Machinery Community: Refoxed (MMCR) is a NeoForge port and continuation of [Modular Machinery Community Edition](https://github.com/NovaEngineering-Source/ModularMachinery-Community-Edition) for newer Minecraft versions. It provides configurable multiblock machines, recipe processing, ports, controllers, and integration of popular mods like JEI and KubeJS.
 
 ## Compatibility
 
@@ -12,7 +12,7 @@ Optional integrations are available for JEI, KubeJS, and Jade.
 
 ## Downloads
 
-Release artifacts are published on the [GitHub releases page](https://github.com/Nibelungorum/ModularMachinery-Community-Refoxed/releases). CurseForge and Modrinth publication links will be added when those projects are configured.
+Release artifacts are published on the [GitHub releases page](https://github.com/Nibelungorum/ModularMachinery-Community-Refoxed/releases). CurseForge and Modrinth.
 
 ## Installation
 
