@@ -123,6 +123,8 @@ ServerEvents.recipes(event => {
     const builder = new MMCR_RECIPE_BUILDER(cloneId(path)).machine(cloneId(machine)).tickTime(ticks)
       .inputs(inputs).maxThreads(options.maxThreads ?? 1).priority(options.priority ?? 0)
       .cancelIfPerTickFails(options.cancel ?? true).allowPartialOutputs(options.partial ?? false)
+    if (options.parallelized !== false) builder.parallelized(true)
+    if (options.deriveRequirements === false) builder.deriveRequirements(false)
     if (options.energy) builder.energyPerTick(options.energy)
     if (options.fluids) builder.fluidOutputs(options.fluids.map(([id, amount]) => MMCR_API.fluidStack(id, amount)))
     if (options.level) builder.requiresLevel(...options.level)
@@ -172,7 +174,7 @@ ServerEvents.recipes(event => {
     recipe(`${prefix}input_to_output`, machine, 20, [], [{ id: 'minecraft:gold_ingot', count: 1, components: { 'minecraft:custom_name': { text: 'Output' } } }], { componentInputs: [['minecraft:diamond', 1, { 'minecraft:custom_name': { text: 'Input' } }]] })
     recipe(`${prefix}mixed_inputs`, machine, 20, [item('minecraft:iron_ingot')], [{ id: 'minecraft:emerald', count: 1 }], { componentInputs: [['minecraft:diamond', 1, { 'minecraft:custom_name': { text: 'Named' } }]] })
     recipe(`${prefix}mixed_outputs`, machine, 20, [item('minecraft:iron_ingot')], [{ id: 'minecraft:gold_ingot', count: 1, components: { 'minecraft:custom_name': { text: 'Named Output' } } }, { id: 'minecraft:emerald', count: 1 }])
-    recipe(`${prefix}chanced_outputs`, machine, 20, [item('minecraft:iron_ingot')], [], { requirements: [MMCR_API.itemInputRequirement('minecraft:apple', 1), MMCR_API.itemOutputRequirement('minecraft:emerald', 1, 1), MMCR_API.itemOutputRequirement('minecraft:diamond', 1, 0.5), MMCR_API.fluidOutputRequirement('minecraft:lava', 250, 0.25)] })
+    recipe(`${prefix}chanced_outputs`, machine, 20, [item('minecraft:iron_ingot')], [], { requirements: [MMCR_API.itemInputRequirement('minecraft:apple', 1), MMCR_API.itemOutputRequirement('minecraft:emerald', 1, 1), MMCR_API.itemOutputRequirement('minecraft:diamond', 1, 0.5), MMCR_API.fluidOutputRequirement('minecraft:lava', 250, 0.25)], deriveRequirements: false })
     recipe(`${prefix}complex`, machine, 20, [item('minecraft:stick'), chance('minecraft:iron_nugget', 1, 0.5), chance('minecraft:gold_nugget', 1, 0.25)], [{ id: 'minecraft:emerald', count: 1 }, { id: 'minecraft:diamond', count: 1, chance: 0.5 }, { id: 'minecraft:redstone', count: 1, chance: 0.25 }])
   }
   recipe('blast_furnace_component_tag_input', 'blast_furnace', 20, [MMCR_API.tagInput('minecraft:logs', 1, 1)], [{ id: 'minecraft:charcoal', count: 1 }])
