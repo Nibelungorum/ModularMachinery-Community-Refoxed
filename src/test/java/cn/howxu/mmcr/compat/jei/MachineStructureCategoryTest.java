@@ -25,4 +25,11 @@ class MachineStructureCategoryTest {
         assertThat(source).contains("case 3 -> 220;");
         assertThat(source).contains("default -> 150;");
     }
+
+    @Test
+    void category_does_not_add_the_controller_as_a_visible_recipe_slot() throws IOException {
+        String source = Files.readString(Path.of("src/main/java/cn/howxu/mmcr/compat/jei/MachineStructureCategory.java"));
+
+        assertThat(source).doesNotContain("addInputSlot(");
+    }
 }

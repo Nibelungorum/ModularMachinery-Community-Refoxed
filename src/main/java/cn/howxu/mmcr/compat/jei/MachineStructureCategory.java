@@ -49,7 +49,6 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
 
     @Override
     public void setRecipe(IRecipeLayoutBuilder builder, MachineStructureDisplay display, IFocusGroup focuses) {
-        display.ingredients().forEach(stack -> builder.addInputSlot(-1000, -1000).add(stack));
     }
 
     @Override
@@ -73,10 +72,10 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
 
     private static int previewHeight() {
         return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
-            case 1 -> 269;
-            case 2 -> 248;
-            case 3 -> 190;
-            default -> 120;
+            case 1 -> 265;
+            case 2 -> 244;
+            case 3 -> 186;
+            default -> 116;
         };
     }
 }
