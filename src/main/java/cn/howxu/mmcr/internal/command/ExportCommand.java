@@ -31,7 +31,7 @@ import java.util.List;
  */
 public final class ExportCommand {
 
-    private static final int MAX_EXPORT_VOLUME = 32768;
+    private static final int MAX_EXPORT_VOLUME = 3_276_800;
 
     private ExportCommand() {}
 
