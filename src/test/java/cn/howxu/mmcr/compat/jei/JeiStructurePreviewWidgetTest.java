@@ -59,6 +59,14 @@ class JeiStructurePreviewWidgetTest {
     }
 
     @Test
+    void widgetDeclaresItsConfiguredJeiPositionAndInputArea() {
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(new RecordingPreviewWidget(), 4, 20, 160, 92);
+
+        assertThat(widget.getPosition()).isEqualTo(new ScreenPosition(4, 20));
+        assertThat(widget.getArea().position()).isEqualTo(new ScreenPosition(4, 20));
+    }
+
+    @Test
     void controlsConsumeClicksBeforeForwardingThemToTheCamera() {
         RecordingPreviewWidget preview = new RecordingPreviewWidget();
         JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 0, 0, 160, 92);
@@ -122,17 +130,17 @@ class JeiStructurePreviewWidgetTest {
         RecordingPreviewWidget preview = new RecordingPreviewWidget();
         JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 4, 20, 160, 204);
 
-        assertThat(widget.handleInput(3, 20, leftPress(false))).isFalse();
-        assertThat(widget.handleInput(4, 20, leftPress(false))).isTrue();
+        assertThat(widget.handleInput(-1, 0, leftPress(false))).isFalse();
+        assertThat(widget.handleInput(0, 0, leftPress(false))).isTrue();
         assertThat(preview.lastPressX).isZero();
         assertThat(preview.lastPressY).isZero();
-        assertThat(widget.handleMouseDragged(163, 223, InputConstants.Type.MOUSE.getOrCreate(0), 3, 4)).isTrue();
+        assertThat(widget.handleMouseDragged(159, 203, InputConstants.Type.MOUSE.getOrCreate(0), 3, 4)).isTrue();
         assertThat(preview.lastDragX).isEqualTo(159);
         assertThat(preview.lastDragY).isEqualTo(203);
-        assertThat(widget.handleMouseScrolled(3, 20, 0, 1)).isFalse();
-        assertThat(widget.handleMouseScrolled(4, 20, 0, 1)).isTrue();
-        assertThat(widget.handleMouseDragged(167, 239, InputConstants.Type.MOUSE.getOrCreate(0), 3, 4)).isFalse();
-        assertThat(widget.handleInput(167, 239, leftPress(false))).isFalse();
+        assertThat(widget.handleMouseScrolled(-1, 0, 0, 1)).isFalse();
+        assertThat(widget.handleMouseScrolled(0, 0, 0, 1)).isTrue();
+        assertThat(widget.handleMouseDragged(163, 219, InputConstants.Type.MOUSE.getOrCreate(0), 3, 4)).isFalse();
+        assertThat(widget.handleInput(163, 219, leftPress(false))).isFalse();
 
         assertThat(preview.presses).isEqualTo(1);
         assertThat(preview.drags).isEqualTo(1);
@@ -155,7 +163,7 @@ class JeiStructurePreviewWidgetTest {
     void inputAreaIncludesControlsBelowTheTallestPreview() {
         JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(new RecordingPreviewWidget(), 2, 4, 164, 265);
 
-        assertThat(widget.getArea().height()).isGreaterThanOrEqualTo(323);
+        assertThat(widget.getArea().height()).isGreaterThanOrEqualTo(319);
     }
 
     @Test
