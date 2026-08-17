@@ -19,6 +19,7 @@ import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
+import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
@@ -64,6 +65,10 @@ public final class DefaultMachines {
 
     public static void ensureRegistered() {
         MachineStructureRegistry.replaceDynamic(structures());
+    }
+
+    public static void registerStructures(DynamicContentReloadService.Candidate candidate) {
+        structures().values().forEach(candidate::registerStructure);
     }
 
     public static Map<Identifier, MachineStructureDefinition> structures() {

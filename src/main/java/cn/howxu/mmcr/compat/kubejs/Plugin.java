@@ -4,7 +4,6 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
-import org.nibelungorum.DefaultMachineLevels;
 import dev.latvian.mods.kubejs.recipe.component.RecipeComponentTypeRegistry;
 import dev.latvian.mods.kubejs.recipe.schema.RecipeFactoryRegistry;
 import dev.latvian.mods.kubejs.recipe.schema.RecipeSchemaRegistry;
@@ -12,6 +11,7 @@ import dev.latvian.mods.kubejs.event.EventGroupRegistry;
 import dev.latvian.mods.kubejs.script.BindingRegistry;
 import dev.latvian.mods.kubejs.script.ScriptManager;
 import dev.latvian.mods.kubejs.script.ScriptType;
+import net.neoforged.fml.loading.FMLLoader;
 
 import java.util.Map;
 
@@ -23,7 +23,7 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     public void beforeScriptsLoaded(ScriptManager manager) {
         if (manager.scriptType == ScriptType.STARTUP) {
             MachineLevelRegistry.beginRegistration();
-            DefaultMachineLevels.register();
+            registerDevelopmentMachineLevels();
         }
     }
 
@@ -53,6 +53,17 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
 
     static Map<String, String> events() {
         return Map.of(SmartInterfaceEvents.UPDATED_ID, SmartInterfaceEvents.UPDATED_ID);
+    }
+
+    private static void registerDevelopmentMachineLevels() {
+        if (FMLLoader.getCurrent().isProduction()) return;
+        try {
+            Class.forName("org.nibelungorum.DefaultMachineLevels").getMethod("register").invoke(null);
+        } catch (ClassNotFoundException ignored) {
+            // Development machine levels are absent from the production JAR.
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Unable to register default machine levels", e);
+        }
     }
 
     @Override

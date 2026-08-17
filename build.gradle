@@ -47,4 +47,6 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.named('jar', Jar) {
     exclude('assets/mmcr_test/**')
+    exclude('.cache/**')
+    exclude('org/**')
 }

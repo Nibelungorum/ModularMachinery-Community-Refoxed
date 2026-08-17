@@ -1,10 +1,7 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
-import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.api.machine.MachineRegistration;
-import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
 import cn.howxu.mmcr.config.Config;
@@ -31,10 +28,6 @@ import cn.howxu.mmcr.registry.ModDataComponents;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.registry.ModRecipeTypes;
-import org.nibelungorum.BuiltinMachines;
-import org.nibelungorum.DefaultMachines;
-import org.nibelungorum.DefaultMachineLevels;
-import org.nibelungorum.DefaultRecipes;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -44,6 +37,7 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
@@ -63,8 +57,8 @@ public class MMCR {
 
     public MMCR(IEventBus modBus, ModContainer modContainer) {
         MachineDefinitions.beginRegistryPhase();
-        BuiltinMachines.register();
-        registerGameTestMachineDefinitionsIfPresent();
+        registerDevelopmentBuiltins("org.nibelungorum.BuiltinMachines", "register");
+        registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineDefinitions");
         MachineDefinitions.bootstrapBuiltins();
         MachineDefinitions.freezeRegistryPhase();
         ModDataComponents.register(modBus);
@@ -159,19 +153,21 @@ public class MMCR {
     public static void registerRuntimeBuiltins() {
         registerDefaultMachineLevels();
         DynamicContentReloadService.reload(candidate -> {
-            DefaultMachines.structures().values().forEach(candidate::registerStructure);
-            registerGameTestMachineStructuresIfPresent(candidate);
+            registerDevelopmentBuiltins("org.nibelungorum.DefaultMachines", "registerStructures",
+                    new Class<?>[]{DynamicContentReloadService.Candidate.class}, candidate);
+            registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineStructures",
+                    new Class<?>[]{DynamicContentReloadService.Candidate.class}, candidate);
         });
-        DefaultRecipes.registerStatic(DefaultRecipes.recipes().values().stream().toList());
-        registerGameTestRecipesIfPresent();
+        registerDevelopmentBuiltins("org.nibelungorum.DefaultRecipes", "ensureRegistered");
+        registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerRecipes");
         MachineRegistry.rebuildCompiledCache();
     }
 
     private static void registerDefaultMachineLevels() {
-        if (MachineLevelRegistry.getType(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE) != null) return;
+        if (FMLLoader.getCurrent().isProduction() || MachineLevelRegistry.getType(id("thermal_smelting_coil")) != null) return;
 
         MachineLevelRegistry.beginRegistration();
-        DefaultMachineLevels.register();
+        registerDevelopmentBuiltins("org.nibelungorum.DefaultMachineLevels", "register");
         MachineLevelRegistry.freezeRegistration();
     }
 
@@ -179,73 +175,19 @@ public class MMCR {
         event.enqueueWork(MMCR::registerRuntimeBuiltins);
     }
 
-    static void registerGameTestMachineStructuresIfPresent(DynamicContentReloadService.Candidate candidate) {
+    private static void registerDevelopmentBuiltins(String className, String methodName) {
+        registerDevelopmentBuiltins(className, methodName, new Class<?>[0]);
+    }
+
+    private static void registerDevelopmentBuiltins(String className, String methodName, Class<?>[] parameterTypes, Object... arguments) {
+        if (FMLLoader.getCurrent().isProduction()) return;
         try {
-            Class.forName("cn.howxu.mmcr.GameTestRegistry");
+            Class.forName(className).getMethod(methodName, parameterTypes).invoke(null, arguments);
         } catch (ClassNotFoundException ignored) {
-            return;
+            // GameTest classes are only present on the GameTest classpath.
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Unable to register development builtins from " + className, e);
         }
-        registerGameTestMachineStructures(candidate);
-    }
-
-    static void registerGameTestMachineDefinitionsIfPresent() {
-        try {
-            Class.forName("cn.howxu.mmcr.GameTestRegistry");
-        } catch (ClassNotFoundException ignored) {
-            return;
-        }
-        registerGameTestMachineDefinitions();
-    }
-
-    static void registerGameTestRecipesIfPresent() {
-        try {
-            Class.forName("cn.howxu.mmcr.GameTestRegistry");
-        } catch (ClassNotFoundException ignored) {
-            return;
-        }
-        DefaultRecipes.registerStatic(DefaultRecipes.gameTestRecipes());
-    }
-
-    public static void registerGameTestMachineDefinitions() {
-        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("test_cube")).displayNameKey("machine.mmcr_test.test_cube").build());
-        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("controller_tick")).displayNameKey("machine.mmcr_test.controller_tick").build());
-        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("iron_compressor")).displayNameKey("machine.mmcr_test.iron_compressor").build());
-        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("distillation_tower_test"))
-                .displayNameKey("machine.mmcr_test.distillation_tower_test")
-                .expandableStructure()
-                .build());
-        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("expandable_structure_stages"))
-                .displayNameKey("machine.mmcr_test.expandable_structure_stages")
-                .expandableStructure()
-                .build());
-        MachineDefinitions.addBuiltinSupplier(() -> {
-            Identifier machineId = id("expandable_structure_vertical_roll");
-            MachineControllerSpec defaults = MachineControllerSpec.defaultsFor(machineId);
-            return MachineRegistration.builder(machineId)
-                    .displayNameKey("machine.mmcr_test.expandable_structure_vertical_roll")
-                    .controllerSpec(new MachineControllerSpec(defaults.id(), defaults.frontTexture(), defaults.sideTexture(),
-                            defaults.topTexture(), defaults.bottomTexture(), true, false))
-                    .expandableStructure()
-                    .build();
-        });
-    }
-
-    public static void registerGameTestMachineStructures(DynamicContentReloadService.Candidate candidate) {
-        candidate.registerStructure(new MachineStructureDefinition(
-                id("test_cube"), org.nibelungorum.TestMachines.casingCubePattern(),
-                cn.howxu.mmcr.api.machine.PortRequirementSpec.none(), java.util.List.of(), java.util.Map.of()));
-        candidate.registerStructure(new MachineStructureDefinition(
-                id("controller_tick"), org.nibelungorum.TestMachines.casingCubePattern(),
-                cn.howxu.mmcr.api.machine.PortRequirementSpec.none(), java.util.List.of(), java.util.Map.of()));
-        candidate.registerStructure(new MachineStructureDefinition(
-                id("iron_compressor"), org.nibelungorum.TestMachines.ironCompressorPattern(),
-                cn.howxu.mmcr.api.machine.PortRequirementSpec.none(), java.util.List.of(), java.util.Map.of()));
-        candidate.registerStructure(new MachineStructureDefinition(
-                id("distillation_tower_test"), org.nibelungorum.TestMachines.distillationTowerDeclarations()));
-        candidate.registerStructure(new MachineStructureDefinition(
-                id("expandable_structure_stages"), org.nibelungorum.TestMachines.expandableStageDeclarations()));
-        candidate.registerStructure(new MachineStructureDefinition(
-                id("expandable_structure_vertical_roll"), org.nibelungorum.TestMachines.expandableStageDeclarations()));
     }
 
     private static void registerGameTests(RegisterGameTestsEvent event) {

@@ -1,5 +1,12 @@
 package cn.howxu.mmcr;
 
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.Holder;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -11,6 +18,8 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Rotation;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
+import org.nibelungorum.DefaultRecipes;
+import org.nibelungorum.TestMachines;
 
 import java.util.function.Consumer;
 
@@ -53,6 +62,42 @@ public final class GameTestRegistry {
         register(event, "module_connection_module_disconnected", 100, helper -> new ModuleConnectionGameTest().moduleFormsIndependentlyButCannotRunWithoutHost(helper));
         register(event, "module_connection_connected", 100, helper -> new ModuleConnectionGameTest().sharedCouplerConnectsModuleAndEnablesHostGatedRecipes(helper));
         register(event, "module_connection_interface_conflict", 100, helper -> new ModuleConnectionGameTest().sharedInterfaceInvalidatesHost(helper));
+    }
+
+    public static void registerMachineDefinitions() {
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(MMCR.id("test_cube")).displayNameKey("machine.mmcr_test.test_cube").build());
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(MMCR.id("controller_tick")).displayNameKey("machine.mmcr_test.controller_tick").build());
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(MMCR.id("iron_compressor")).displayNameKey("machine.mmcr_test.iron_compressor").build());
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(MMCR.id("distillation_tower_test"))
+                .displayNameKey("machine.mmcr_test.distillation_tower_test").expandableStructure().build());
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(MMCR.id("expandable_structure_stages"))
+                .displayNameKey("machine.mmcr_test.expandable_structure_stages").expandableStructure().build());
+        MachineDefinitions.addBuiltinSupplier(() -> {
+            Identifier machineId = MMCR.id("expandable_structure_vertical_roll");
+            MachineControllerSpec defaults = MachineControllerSpec.defaultsFor(machineId);
+            return MachineRegistration.builder(machineId)
+                    .displayNameKey("machine.mmcr_test.expandable_structure_vertical_roll")
+                    .controllerSpec(new MachineControllerSpec(defaults.id(), defaults.frontTexture(), defaults.sideTexture(),
+                            defaults.topTexture(), defaults.bottomTexture(), true, false))
+                    .expandableStructure()
+                    .build();
+        });
+    }
+
+    public static void registerMachineStructures(DynamicContentReloadService.Candidate candidate) {
+        candidate.registerStructure(new MachineStructureDefinition(MMCR.id("test_cube"), TestMachines.casingCubePattern(),
+                PortRequirementSpec.none(), java.util.List.of(), java.util.Map.of()));
+        candidate.registerStructure(new MachineStructureDefinition(MMCR.id("controller_tick"), TestMachines.casingCubePattern(),
+                PortRequirementSpec.none(), java.util.List.of(), java.util.Map.of()));
+        candidate.registerStructure(new MachineStructureDefinition(MMCR.id("iron_compressor"), TestMachines.ironCompressorPattern(),
+                PortRequirementSpec.none(), java.util.List.of(), java.util.Map.of()));
+        candidate.registerStructure(new MachineStructureDefinition(MMCR.id("distillation_tower_test"), TestMachines.distillationTowerDeclarations()));
+        candidate.registerStructure(new MachineStructureDefinition(MMCR.id("expandable_structure_stages"), TestMachines.expandableStageDeclarations()));
+        candidate.registerStructure(new MachineStructureDefinition(MMCR.id("expandable_structure_vertical_roll"), TestMachines.expandableStageDeclarations()));
+    }
+
+    public static void registerRecipes() {
+        DefaultRecipes.registerStatic(DefaultRecipes.gameTestRecipes());
     }
 
     private static void register(RegisterGameTestsEvent event, String name, int maxTicks, Consumer<GameTestHelper> test) {
