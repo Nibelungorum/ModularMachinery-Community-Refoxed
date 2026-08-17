@@ -246,6 +246,7 @@
   "jade.mmcr.machine_controller.structure.unformed": "未成型",
   "jade.mmcr.machine_controller.threads": "多线程",
   "jade.mmcr.machine_controller.threads.value": "%s / %s",
+
   "jei.mmcr.machine_recipe": "机器配方",
   "jei.mmcr.machine_recipe.component_constraints": "需要特定数据组件",
   "jei.mmcr.machine_recipe.consume_chance": "消耗概率: %s",
@@ -268,6 +269,7 @@
   "jei.mmcr.structure_preview.next_layer": "下一层",
   "jei.mmcr.structure_preview.previous_layer": "上一层",
   "jei.mmcr.structure_preview.reset": "重置",
+  "jei.mmcr.structure_preview.next_level": "下一级",
   "jei.mmcr.structure_preview.unavailable": "结构预览不可用",
   "jei.mmcr.transfer.fluid_energy_not_supported": "仅支持转移物品输入；流体和能量需要通过对应端口供应。",
   "jei.mmcr.transfer.no_item_inputs": "该配方没有可转移的物品输入。",

@@ -227,7 +227,7 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
         int x = leftPos + 113;
         int y = topPos + 12;
         String machineName = menu.machineName().isEmpty() ? title.getString() : menu.machineName();
-        graphics.text(font, Component.literal(machineName + " #" + selected.index()), x, detailTitleY(y), MachineMenuScreen.CONTROLLER_TITLE_COLOR, true);
+        graphics.text(font, Component.translatable(machineName).append(" #" + selected.index()), x, detailTitleY(y), MachineMenuScreen.CONTROLLER_TITLE_COLOR, true);
         int lineY = nextDetailY(y);
         graphics.text(font, Component.translatable("gui.mmcr.controller.status_label"), x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
         graphics.text(font, Component.translatable(MachineMenuScreen.controllerStatusKey(menu.isFormed(), selected.active())),

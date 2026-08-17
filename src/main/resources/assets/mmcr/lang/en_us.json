@@ -246,6 +246,7 @@
   "jade.mmcr.machine_controller.structure.unformed": "Unformed",
   "jade.mmcr.machine_controller.threads": "Multithreading",
   "jade.mmcr.machine_controller.threads.value": "%s / %s",
+
   "jei.mmcr.machine_recipe": "Machine Recipe",
   "jei.mmcr.machine_recipe.component_constraints": "Additional component requirements apply",
   "jei.mmcr.machine_recipe.consume_chance": "Consume Chance: %s",
@@ -268,6 +269,7 @@
   "jei.mmcr.structure_preview.next_layer": "Next Layer",
   "jei.mmcr.structure_preview.previous_layer": "Previous Layer",
   "jei.mmcr.structure_preview.reset": "Reset",
+    "jei.mmcr.structure_preview.next_level": "Next Level",
   "jei.mmcr.structure_preview.unavailable": "Structure Preview Unavailable",
   "jei.mmcr.transfer.fluid_energy_not_supported": "Only item inputs can be transferred; fluids and energy must be supplied by their ports.",
   "jei.mmcr.transfer.no_item_inputs": "This recipe has no item inputs to transfer.",
