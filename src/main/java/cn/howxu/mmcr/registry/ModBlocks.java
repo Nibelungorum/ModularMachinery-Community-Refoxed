@@ -38,8 +38,6 @@ public final class ModBlocks {
         registerModuleCoupler();
     }
 
-    public static final DeferredHolder<Block, Block> BLAST_FURNACE_CONTROLLER = controllerFor(MMCR.id("blast_furnace"));
-    public static final DeferredHolder<Block, Block> CONTROLLER = BLAST_FURNACE_CONTROLLER;
     public static final DeferredHolder<Block, Block> BASIC_CASING = BLOCKS.get("basic_casing");
     public static final DeferredHolder<Block, Block> SMART_INTERFACE = BLOCKS.get("smart_interface");
     public static final DeferredHolder<Block, Block> MODULE_BRIDGE = BLOCKS.get("module_bridge");

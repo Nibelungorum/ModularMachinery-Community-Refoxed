@@ -211,11 +211,11 @@ class MachineStructureFamilyTest {
     }
 
     private static BlockPredicate controller() {
-        return new BlockPredicate.OfBlock(ModBlocks.CONTROLLER.get());
+        return new BlockPredicate.OfBlock(ModBlocks.controllerFor(MMCR.id("blast_furnace")).get());
     }
 
     private static BlockPredicate controllerState() {
-        return new BlockPredicate.OfBlockState(ModBlocks.CONTROLLER.get().defaultBlockState());
+        return new BlockPredicate.OfBlockState(ModBlocks.controllerFor(MMCR.id("blast_furnace")).get().defaultBlockState());
     }
 
     private static BlockPredicate anyOfController() {
