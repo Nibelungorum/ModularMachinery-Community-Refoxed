@@ -8,7 +8,11 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 import dev.latvian.mods.kubejs.recipe.RecipesKubeEvent;
+import dev.latvian.mods.kubejs.script.BindingRegistry;
+import dev.latvian.mods.kubejs.script.KubeJSContext;
+import dev.latvian.mods.kubejs.script.KubeJSContextFactory;
 import dev.latvian.mods.kubejs.util.RegistryOpsContainer;
+import dev.latvian.mods.rhino.NativeObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.core.component.DataComponentMap;
@@ -42,6 +46,22 @@ class PluginBindingTest {
     void recipe_builder_has_a_stable_public_kubejs_binding() {
         assertThat(Plugin.RECIPE_BUILDER_BINDING).isEqualTo("MMCR_RECIPE_BUILDER");
         assertThat(Plugin.RECIPE_BUILDER_CLASS).isEqualTo(MachineRecipeBuilderJS.class);
+    }
+
+    @Test
+    void plugin_exposes_stable_public_declaration_bindings() {
+        var factory = new KubeJSContextFactory(null);
+        var context = new KubeJSContext(factory);
+        var scope = new NativeObject(factory);
+
+        new Plugin().registerBindings(new BindingRegistry(context, scope));
+
+        assertThat(scope.getIds(context)).contains(
+                "MMCR_API", "MMCR_MACHINE_DEFINITIONS", "MMCR_MACHINE_STRUCTURES", "MMCR_RECIPE_REGISTRY",
+                "MMCR_BLOCK_ARRAY", "MMCR_BLOCK_PREDICATE", "MMCR_MACHINE_REGISTRATION",
+                "MMCR_STRUCTURE_DEFINITION", "MMCR_PORT_REQUIREMENTS", "MMCR_PORT_TIER_REQUIREMENTS",
+                "MMCR_MACHINE_INGREDIENT", "MMCR_MACHINE_RECIPE", "MMCR_RECIPE_MODIFIER",
+                "MMCR_SINGLE_BLOCK_MODIFIER", "MMCR_LEVEL_REQUIREMENT", "MMCR_SMART_INTERFACE_REQUIREMENT");
     }
 
     @Test
