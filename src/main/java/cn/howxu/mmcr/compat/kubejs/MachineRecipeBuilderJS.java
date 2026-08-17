@@ -92,6 +92,7 @@ public class MachineRecipeBuilderJS {
     public MachineRecipeBuilderJS outputs(List<ItemStack> outputs) {
         this.outputs.clear();
         outputChances.clear();
+        componentOutputs.clear();
         for (ItemStack output : outputs) addOutput(output, 1F);
         return this;
     }
@@ -261,6 +262,12 @@ public class MachineRecipeBuilderJS {
                     || (input instanceof MachineIngredient.EnergyIngredient energy && energy.fePerTick() < 0)) {
                 throw new IllegalArgumentException("Recipe counts must not be negative");
             }
+        }
+        for (ItemStack output : outputs) {
+            if (output.getCount() < 0) throw new IllegalArgumentException("Item output count must not be negative");
+        }
+        for (FluidStack output : fluidOutputs) {
+            if (output.getAmount() < 0) throw new IllegalArgumentException("Fluid output amount must not be negative");
         }
 
         var recipeInputs = new ArrayList<>(inputs);

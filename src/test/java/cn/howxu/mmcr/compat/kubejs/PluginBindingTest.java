@@ -22,6 +22,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.resources.RegistryOps;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -211,6 +212,39 @@ class PluginBindingTest {
     }
 
     @Test
+    void outputs_replaces_previously_declared_component_outputs() {
+        Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+        var builder = new MachineRecipeBuilderJS("mmcr:replaced_component_output")
+                .machine("mmcr:alloy_furnace")
+                .itemOutput("minecraft:iron_ingot", 1)
+                .itemOutputWithComponents("minecraft:diamond_sword", 1, JsonParser.parseString("""
+                        { 'minecraft:custom_name': { text: 'Discarded' } }
+                        """))
+                .outputs(List.of(new ItemStack(Items.DIAMOND)));
+
+        MachineRecipe recipe = createInRecipeEvent(builder);
+
+        assertThat(recipe.outputs()).singleElement().satisfies(output -> assertThat(output.getItem()).isSameAs(Items.DIAMOND));
+    }
+
+    @Test
+    void component_output_added_after_outputs_list_is_merged_at_the_new_position() {
+        Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+        var builder = new MachineRecipeBuilderJS("mmcr:component_after_outputs")
+                .machine("mmcr:alloy_furnace")
+                .outputs(List.of(new ItemStack(Items.DIAMOND)))
+                .itemOutputWithComponents("minecraft:diamond_sword", 1, JsonParser.parseString("""
+                        { 'minecraft:custom_name': { text: 'Kept' } }
+                        """));
+
+        MachineRecipe recipe = createInRecipeEvent(builder);
+
+        assertThat(recipe.outputs()).hasSize(2);
+        assertThat(recipe.outputs().get(0).getItem()).isSameAs(Items.DIAMOND);
+        assertThat(recipe.outputs().get(1).getItem()).isSameAs(Items.DIAMOND_SWORD);
+    }
+
+    @Test
     void public_recipe_builder_creates_chanced_item_output_requirement() {
         new MachineRecipeBuilderJS("mmcr:chanced_diamond")
                 .machine("mmcr:alloy_furnace")
@@ -235,6 +269,15 @@ class PluginBindingTest {
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError(exception);
         }
+    }
+
+    private static MachineRecipe createInRecipeEvent(MachineRecipeBuilderJS builder) {
+        var event = (RecipesKubeEvent) allocate(RecipesKubeEvent.class);
+        var ops = RegistryOps.create(JsonOps.INSTANCE, VanillaRegistries.createLookup());
+        setField(event, "ops", new RegistryOpsContainer(null, ops, null));
+        final MachineRecipe[] recipe = new MachineRecipe[1];
+        ScopedValue.where(RecipesKubeEvent.INSTANCE, event).run(() -> recipe[0] = builder.createObject());
+        return recipe[0];
     }
 
     private static void setField(Object target, String name, Object value) {

@@ -115,4 +115,28 @@ class ModuleRecipeBuilderJSTest {
                 .hasMessageContaining("must not be negative");
     }
 
+    @Test
+    void direct_output_lists_preserve_non_negative_normalized_values() {
+        Identifier machineId = MMCR.id("module_machine");
+        MachineDefinitions.register(MachineRegistration.builder(machineId).build());
+        Items.DIAMOND.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+        Fluids.WATER.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+
+        var itemOutput = new ItemStack(Items.DIAMOND, -1);
+        var fluidOutput = new FluidStack(Fluids.WATER, -1);
+
+        assertThat(itemOutput.getCount()).isZero();
+        assertThat(fluidOutput.getAmount()).isZero();
+        assertThat(new MachineRecipeBuilderJS("mmcr:negative_item_output")
+                .machine(machineId.toString())
+                .outputs(java.util.List.of(itemOutput))
+                .createObject()
+                .outputs()).singleElement().satisfies(ItemStack::isEmpty);
+        assertThat(new MachineRecipeBuilderJS("mmcr:negative_fluid_output")
+                .machine(machineId.toString())
+                .fluidOutputs(java.util.List.of(fluidOutput))
+                .createObject()
+                .fluidOutputs()).singleElement().satisfies(FluidStack::isEmpty);
+    }
+
 }
