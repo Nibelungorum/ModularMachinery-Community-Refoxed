@@ -22,6 +22,12 @@ class JeiStructureRecipeTypesTest {
     }
 
     @Test
+    void structureTypeForMachineIsDistinctFromTheGlobalStructureType() {
+        assertThat(JeiMachineRecipeTypes.structureFor(MMCR.id("blast_furnace")))
+                .isNotEqualTo(JeiMachineRecipeTypes.STRUCTURE);
+    }
+
+    @Test
     void translationsNameTheStructureCategoryInBothSupportedLanguages() {
         assertThat(Translations.ALL.get("en_us"))
                 .containsEntry("jei.mmcr.multiblock_structure", "Multiblock Structures");

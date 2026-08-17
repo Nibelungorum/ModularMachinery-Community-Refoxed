@@ -47,6 +47,9 @@ public final class JeiPlugin implements IModPlugin {
         registration.addRecipes(JeiMachineRecipeTypes.STRUCTURE, MachineRegistry.getAll().values().stream()
                 .map(MachineStructureDisplay::from)
                 .toList());
+        MachineRegistry.getAll().values().forEach(machine -> registration.addRecipes(
+                JeiMachineRecipeTypes.structureFor(machine.registryName()),
+                List.of(MachineStructureDisplay.from(machine))));
         var displaysByMachine = MachineRecipeDisplays.byMachine();
         Set<Identifier> machineIds = MachineRegistry.getAll().values().stream()
                 .map(machine -> machine.registryName())
@@ -65,7 +68,7 @@ public final class JeiPlugin implements IModPlugin {
     public void registerRecipeCatalysts(IRecipeCatalystRegistration registration) {
         MachineRegistry.getAll().values().forEach(machine -> {
             ItemStack controller = new ItemStack(ModBlocks.controllerFor(machine.registryName()).get());
-            registration.addRecipeCatalyst(controller, JeiMachineRecipeTypes.STRUCTURE);
+            registration.addRecipeCatalyst(controller, JeiMachineRecipeTypes.structureFor(machine.registryName()));
             registration.addCraftingStation(JeiMachineRecipeTypes.forMachine(machine.registryName()), controller);
         });
     }
@@ -88,7 +91,7 @@ public final class JeiPlugin implements IModPlugin {
                 Identifier machineId = menu.machineId();
                 if (machineId == null) return List.of();
                 return List.of(IGuiClickableArea.createBasic(8, 24, 160, 24,
-                        JeiMachineRecipeTypes.STRUCTURE));
+                        JeiMachineRecipeTypes.structureFor(machineId)));
             }
         });
     }
