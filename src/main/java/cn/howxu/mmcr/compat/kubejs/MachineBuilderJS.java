@@ -86,18 +86,14 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .pattern(pattern)
                 .shareSmartInterfaces(shareSmartInterfaces);
         if (expandableStructure) registration.expandableStructure();
-        if (explicitRole) {
-            if (role == MachineRole.HOST) {
-                if (acceptedModuleIds.isEmpty()) {
-                    throw new IllegalArgumentException("HOST role requires at least one accepted module ID; use host(...)");
-                }
-                acceptedModuleIds.forEach(registration::host);
-            } else if (role == MachineRole.MODULE) {
-                registration.module();
-            }
-        } else {
-            acceptedModuleIds.forEach(registration::host);
-            if (module) registration.module();
+        if (explicitRole && (role == MachineRole.NORMAL && (!acceptedModuleIds.isEmpty() || module)
+                || role == MachineRole.HOST && module)) {
+            throw new IllegalArgumentException("Machine roles are mutually exclusive");
+        }
+        acceptedModuleIds.forEach(registration::host);
+        if (module || explicitRole && role == MachineRole.MODULE) registration.module();
+        if (explicitRole && role == MachineRole.HOST && acceptedModuleIds.isEmpty()) {
+            throw new IllegalArgumentException("HOST role requires at least one accepted module ID; use host(...)");
         }
         smartInterfaceTypes.forEach(registration::smartInterfaceType);
         smartInterfaceModifiers.forEach(registration::smartInterfaceModifier);

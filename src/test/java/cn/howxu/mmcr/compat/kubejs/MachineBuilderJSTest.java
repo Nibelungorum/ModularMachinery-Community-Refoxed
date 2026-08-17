@@ -200,9 +200,11 @@ class MachineBuilderJSTest {
                 .recipeFamily("mmcr_kubejs:kubejs_family")
                 .expandableStructure(true)
                 .factoryThreads(4)
+                .controllerTextures("mmcr_kubejs:block/derived_front", "mmcr_kubejs:block/derived_side")
                 .controllerSpec(controllerSpec)
+                .machineBasicBlock("mmcr_kubejs:derived_casing")
                 .appearance(appearance)
-                .role("module")
+                .role("MoDuLe")
                 .createObject();
 
         assertThat(registration.recipeFamilyId()).isEqualTo(Identifier.parse("mmcr_kubejs:kubejs_family"));
@@ -211,6 +213,39 @@ class MachineBuilderJSTest {
         assertThat(registration.controllerSpec()).isSameAs(controllerSpec);
         assertThat(registration.appearance()).isSameAs(appearance);
         assertThat(registration.role()).isEqualTo(MachineRole.MODULE);
+    }
+
+    @Test
+    void builder_rejects_conflicting_explicit_and_legacy_roles() {
+        assertThatThrownBy(() -> new MachineBuilderJS("mmcr_kubejs:host_module")
+                .host("mmcr_kubejs:module")
+                .role("module")
+                .createObject())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("mutually exclusive");
+        assertThatThrownBy(() -> new MachineBuilderJS("mmcr_kubejs:module_host")
+                .module()
+                .role("host")
+                .createObject())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("mutually exclusive");
+        assertThatThrownBy(() -> new MachineBuilderJS("mmcr_kubejs:host_normal")
+                .host("mmcr_kubejs:module")
+                .role("normal")
+                .createObject())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("mutually exclusive");
+    }
+
+    @Test
+    void builder_preserves_host_declarations_with_host_role() {
+        var registration = new MachineBuilderJS("mmcr_kubejs:host")
+                .role("host")
+                .host("mmcr_kubejs:module")
+                .createObject();
+
+        assertThat(registration.role()).isEqualTo(MachineRole.HOST);
+        assertThat(registration.acceptedModuleIds()).containsExactly(Identifier.parse("mmcr_kubejs:module"));
     }
 
     @Test
