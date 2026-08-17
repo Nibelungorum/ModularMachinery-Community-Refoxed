@@ -2,6 +2,9 @@ package cn.howxu.mmcr.client.preview;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.BlockHitResult;
+import org.jspecify.annotations.Nullable;
 import org.joml.Vector3f;
 
 import java.util.List;
@@ -59,6 +62,10 @@ public final class StructurePreviewWidget implements AutoCloseable {
         return selectedHit;
     }
 
+    public @Nullable BlockPos selectedPosition() {
+        return selectedHit instanceof BlockHitResult hit ? hit.getBlockPos().immutable() : null;
+    }
+
     public int selectedLayer() {
         List<Integer> layers = renderer.schema().layers();
         return selectedLayer < 0 || selectedLayer >= layers.size() ? -1 : layers.get(selectedLayer);
@@ -80,18 +87,13 @@ public final class StructurePreviewWidget implements AutoCloseable {
         double movementY = mouseY - pressY;
         boolean click = button == 0 && handled && !dragged
                 && movementX * movementX + movementY * movementY <= DRAG_THRESHOLD_SQUARED;
-        cn.howxu.mmcr.MMCR.LOG.debug("MMCR preview click release: button={}, press=({}, {}), release=({}, {}), handled={}, dragged={}, click={}",
-                button, pressX, pressY, mouseX, mouseY, handled, dragged, click);
         pressButton = -1;
         dragged = false;
         if (click) {
             Object hitResult = renderer.hitResult();
             if (hitResult != null) {
                 selectedHit = hitResult;
-                cn.howxu.mmcr.MMCR.LOG.debug("MMCR preview selected hit: {}", hitResult);
                 renderer.selectHit(hitResult);
-            } else {
-                cn.howxu.mmcr.MMCR.LOG.debug("MMCR preview click had no hit");
             }
         }
         return handled;
@@ -146,6 +148,7 @@ public final class StructurePreviewWidget implements AutoCloseable {
 
     public void reset() {
         showAllLayers();
+        selectedHit = null;
         resetCamera();
         renderer.resetCamera();
     }

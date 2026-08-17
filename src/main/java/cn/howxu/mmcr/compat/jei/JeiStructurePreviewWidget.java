@@ -4,19 +4,26 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.client.preview.StructurePreviewRenderer;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchemaFactory;
+import cn.howxu.mmcr.client.preview.StructurePreviewCompilation;
+import cn.howxu.mmcr.client.preview.StructurePreviewCompilationCache;
 import cn.howxu.mmcr.client.preview.StructurePreviewWidget;
 import cn.howxu.mmcr.mixin.client.preview.GuiGraphicsExtractorAccessor;
 import com.mojang.blaze3d.platform.InputConstants;
 import mezz.jei.api.gui.inputs.IJeiInputHandler;
 import mezz.jei.api.gui.inputs.IJeiUserInput;
+import mezz.jei.api.gui.builder.ITooltipBuilder;
 import mezz.jei.api.gui.widgets.IRecipeWidget;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.ScreenPosition;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.network.chat.Component;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.BlockHitResult;
 
 import java.util.List;
+import java.util.function.LongSupplier;
 
 /**
  * JEI adapter for one independently-owned structure preview.
@@ -24,20 +31,35 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInputHandler, AutoCloseable {
-    private static final int CONTROL_HEIGHT = 10;
+    private static final int CONTROL_SIZE = 15;
+    private static final int CONTROL_STEP = CONTROL_SIZE + 4;
     private static final int LAYOUT_WIDTH = 168;
     private static final int LAYOUT_HEIGHT = 240;
-    private final Preview preview;
+    private Preview preview;
     private final int x;
     private final int y;
     private final int width;
     private final int height;
-    private final StructurePreviewSchema schema;
+    private StructurePreviewSchema schema;
+    private final Machine machine;
+    private final StructurePreviewCompilation compilation;
+    private final LongSupplier clock = System::currentTimeMillis;
     private boolean previewDragActive;
     private boolean closed;
 
     public JeiStructurePreviewWidget(Machine machine, int x, int y, int width, int height) {
-        this(createSchema(machine), x, y, width, height);
+        this(machine, StructurePreviewCompilationCache.instance().acquire(machine), x, y, width, height);
+    }
+
+    private JeiStructurePreviewWidget(Machine machine, StructurePreviewCompilation compilation, int x, int y, int width, int height) {
+        this.preview = null;
+        this.schema = null;
+        this.machine = machine;
+        this.compilation = compilation;
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.height = height;
     }
 
     private static StructurePreviewSchema createSchema(Machine machine) {
@@ -70,6 +92,8 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private JeiStructurePreviewWidget(Preview preview, StructurePreviewSchema schema, int x, int y, int width, int height) {
         this.preview = preview;
         this.schema = schema;
+        this.machine = null;
+        this.compilation = null;
         this.x = x;
         this.y = y;
         this.width = width;
@@ -93,13 +117,21 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
 
     @Override
     public void drawWidget(GuiGraphicsExtractor graphics, double mouseX, double mouseY) {
+        ensurePreviewStarted();
+        if (preview == null) {
+            graphics.text(Minecraft.getInstance().font, Component.literal("Render compile... " + compilation.progressPercent() + "%"),
+                    x, y + height / 2, 0xFF404040, false);
+            return;
+        }
         GuiGraphicsExtractorAccessor extractor = (GuiGraphicsExtractorAccessor) graphics;
         ScreenPosition origin = absoluteGuiOrigin(extractor.mmcr$getMouseX(), extractor.mmcr$getMouseY(), mouseX, mouseY);
         preview.render(graphics, x, y, width, height, origin.x(), origin.y());
-        String[] keys = {"previous_layer", "next_layer", "all_layers", "reset"};
-        for (int index = 0; index < keys.length; index++) {
-            graphics.text(Minecraft.getInstance().font, Component.translatable("jei.mmcr.structure_preview." + keys[index]),
-                    x + index * 40, y + height + 14, 0xFF404040, false);
+        String[] labels = {"+", "-", "A", "R"};
+        for (int index = 0; index < labels.length; index++) {
+            int controlX = x + index * CONTROL_STEP;
+            int controlY = y + height + 14;
+            graphics.fill(controlX, controlY, controlX + CONTROL_SIZE, controlY + CONTROL_SIZE, 0xFF808080);
+            graphics.text(Minecraft.getInstance().font, Component.literal(labels[index]), controlX + 4, controlY + 4, 0xFFFFFFFF, false);
         }
         int selectedLayer = preview.selectedLayer();
         List<Integer> layers = schema == null ? List.of() : schema.layers();
@@ -107,6 +139,42 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
                 ? Component.translatable("jei.mmcr.structure_preview.all_layers")
                 : Component.translatable("jei.mmcr.structure_preview.layer", selectedLayer, layers.indexOf(selectedLayer) + 1, layers.size());
         graphics.text(Minecraft.getInstance().font, layerText, x, y + height + 4, 0xFF404040, false);
+        renderCandidates(graphics);
+    }
+
+    private void renderCandidates(GuiGraphicsExtractor graphics) {
+        if (schema == null || !(preview.selectedHit() instanceof BlockHitResult hit)) return;
+        List<ItemStack> candidates = schema.candidatesAt(hit.getBlockPos());
+        if (candidates.isEmpty()) return;
+        int offset = (int) Math.floorDiv(clock.getAsLong(), 1000) % candidates.size();
+        int itemY = y + height + 38;
+        for (int index = 0; index < candidates.size() && index * 18 + 16 <= width; index++) {
+            graphics.item(candidates.get((index + offset) % candidates.size()), x + index * 18, itemY, 0);
+        }
+    }
+
+    private void ensurePreviewStarted() {
+        if (compilation == null) return;
+        compilation.start();
+        StructurePreviewSchema completed = compilation.schema();
+        if (completed != null && preview == null) {
+            schema = completed;
+            StructurePreviewWidget widget = new StructurePreviewWidget(new StructurePreviewRenderer(completed));
+            preview = new Preview() {
+                @Override public boolean mouseClicked(double mouseX, double mouseY, int button) { return widget.mouseClicked(mouseX, mouseY, button); }
+                @Override public boolean mouseReleased(double mouseX, double mouseY, int button) { return widget.mouseReleased(mouseX, mouseY, button); }
+                @Override public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) { return widget.mouseDragged(mouseX, mouseY, button, dragX, dragY); }
+                @Override public boolean mouseScrolled(double mouseX, double mouseY, double scrollDelta) { return widget.mouseScrolled(mouseX, mouseY, scrollDelta); }
+                @Override public void render(GuiGraphicsExtractor graphics, int x, int y, int width, int height, int originX, int originY) { widget.render(graphics, x, y, width, height, 0, originX, originY); }
+                @Override public void previous() { widget.selectPreviousLayer(); }
+                @Override public void next() { widget.selectNextLayer(); }
+                @Override public void all() { widget.showAllLayers(); }
+                @Override public void reset() { widget.reset(); }
+                @Override public int selectedLayer() { return widget.selectedLayer(); }
+                @Override public Object hoverHit() { return widget.hoverHit(); }
+                @Override public Object selectedHit() { return widget.selectedHit(); }
+            };
+        }
     }
 
     static ScreenPosition absoluteGuiOrigin(int absoluteMouseX, int absoluteMouseY, double localMouseX, double localMouseY) {
@@ -117,7 +185,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     public void close() {
         if (closed) return;
         closed = true;
-        preview.close();
+        if (preview != null) preview.close();
     }
 
     @Override
@@ -125,6 +193,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         if (input.getKey().getType() != InputConstants.Type.MOUSE) return false;
         int button = input.getKey().getValue();
         if (button != 0) return false;
+        if (preview == null) return false;
         if (!input.isSimulate() && previewDragActive) {
             previewDragActive = false;
             boolean inside = insidePreview(mouseX, mouseY);
@@ -170,9 +239,27 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private double previewMouseX(double mouseX) { return mouseX - x; }
     private double previewMouseY(double mouseY) { return mouseY - y; }
     private int controlAt(double mouseX, double mouseY) {
-        if (mouseX < x || mouseY < y + height + 2 || mouseY >= y + height + 2 + CONTROL_HEIGHT) return -1;
-        int column = (int) (mouseX - x) / 40;
-        return column >= 0 && column < 4 && mouseX < x + column * 40 + (column == 3 ? 40 : 38) ? column : -1;
+        if (mouseX < x || mouseY < y + height + 14 || mouseY >= y + height + 14 + CONTROL_SIZE) return -1;
+        int column = (int) (mouseX - x) / CONTROL_STEP;
+        return column >= 0 && column < 4 && mouseX < x + column * CONTROL_STEP + CONTROL_SIZE ? column : -1;
+    }
+
+    @Override
+    public void getTooltip(ITooltipBuilder tooltip, double mouseX, double mouseY) {
+        int control = controlAt(mouseX, mouseY);
+        if (control >= 0) {
+            String[] keys = {"previous_layer", "next_layer", "all_layers", "reset"};
+            tooltip.add(Component.translatable("jei.mmcr.structure_preview." + keys[control]));
+            return;
+        }
+        if (schema == null || !(preview.selectedHit() instanceof BlockHitResult hit)) return;
+        List<ItemStack> candidates = schema.candidatesAt(hit.getBlockPos());
+        int itemY = y + height + 38;
+        int itemIndex = (int) ((mouseX - x) / 18);
+        if (mouseY >= itemY && mouseY < itemY + 16 && itemIndex >= 0 && itemIndex < candidates.size()) {
+            int offset = (int) Math.floorDiv(clock.getAsLong(), 1000) % candidates.size();
+            tooltip.add(candidates.get((itemIndex + offset) % candidates.size()).getHoverName());
+        }
     }
 
     interface Preview {

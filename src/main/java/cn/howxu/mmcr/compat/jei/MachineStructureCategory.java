@@ -21,12 +21,14 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
     private static final int PREVIEW_Y = 4;
 
     private final IDrawable icon;
+    private final IRecipeType<MachineStructureDisplay> recipeType;
 
-    public MachineStructureCategory(IGuiHelper guiHelper) {
+    public MachineStructureCategory(IGuiHelper guiHelper, IRecipeType<MachineStructureDisplay> recipeType) {
         icon = guiHelper.createDrawableItemLike(ModBlocks.BASIC_CASING.get());
+        this.recipeType = recipeType;
     }
 
-    @Override public IRecipeType<MachineStructureDisplay> getRecipeType() { return JeiMachineRecipeTypes.STRUCTURE; }
+    @Override public IRecipeType<MachineStructureDisplay> getRecipeType() { return recipeType; }
     @Override public Component getTitle() { return Component.translatable("jei.mmcr.multiblock_structure"); }
     @Override
     public int getWidth() {
@@ -51,7 +53,9 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
 
     @Override
     public void setRecipe(IRecipeLayoutBuilder builder, MachineStructureDisplay display, IFocusGroup focuses) {
-        display.ingredients().forEach(stack -> builder.addInputSlot(-1000, -1000).add(stack));
+        if (recipeType != JeiMachineRecipeTypes.STRUCTURE) {
+            display.ingredients().forEach(stack -> builder.addInputSlot(-1000, -1000).add(stack));
+        }
     }
 
     @Override

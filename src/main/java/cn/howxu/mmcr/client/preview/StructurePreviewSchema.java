@@ -3,6 +3,7 @@ package cn.howxu.mmcr.client.preview;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -20,6 +21,7 @@ public final class StructurePreviewSchema {
     private final Identifier machineId;
     private final Map<BlockPos, BlockState> states;
     private final Map<BlockPos, Identifier> levelSlots;
+    private final Map<BlockPos, List<ItemStack>> candidates;
     private final BlockPos min;
     private final BlockPos max;
     private final List<Float> center;
@@ -27,9 +29,15 @@ public final class StructurePreviewSchema {
 
     public StructurePreviewSchema(Identifier machineId, Map<BlockPos, BlockState> states,
             Map<BlockPos, Identifier> levelSlots) {
+        this(machineId, states, levelSlots, Map.of());
+    }
+
+    public StructurePreviewSchema(Identifier machineId, Map<BlockPos, BlockState> states,
+            Map<BlockPos, Identifier> levelSlots, Map<BlockPos, List<ItemStack>> candidates) {
         this.machineId = Objects.requireNonNull(machineId, "machineId");
         this.states = copyPositions(states);
         this.levelSlots = copyPositions(levelSlots);
+        this.candidates = copyCandidates(candidates);
         if (!this.states.keySet().containsAll(this.levelSlots.keySet())) {
             throw new IllegalArgumentException("level slot position is not in preview schema");
         }
@@ -85,6 +93,10 @@ public final class StructurePreviewSchema {
         return levelSlots;
     }
 
+    public List<ItemStack> candidatesAt(BlockPos position) {
+        return candidates.getOrDefault(position, List.of()).stream().map(ItemStack::copy).toList();
+    }
+
     public BlockPos min() {
         return min;
     }
@@ -109,4 +121,12 @@ public final class StructurePreviewSchema {
                 Objects.requireNonNull(value, "value")));
         return Collections.unmodifiableMap(copy);
     }
+
+    private static Map<BlockPos, List<ItemStack>> copyCandidates(Map<BlockPos, List<ItemStack>> source) {
+        Map<BlockPos, List<ItemStack>> copy = new LinkedHashMap<>();
+        source.forEach((position, stacks) -> copy.put(position.immutable(),
+                List.copyOf(stacks.stream().map(ItemStack::copy).toList())));
+        return Collections.unmodifiableMap(copy);
+    }
+
 }

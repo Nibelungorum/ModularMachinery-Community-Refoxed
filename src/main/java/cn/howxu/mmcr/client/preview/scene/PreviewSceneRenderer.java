@@ -204,8 +204,6 @@ public final class PreviewSceneRenderer {
     private static void drawOutline(PreviewSceneRenderContext context, BlockHitResult hit, int color) {
         AABB box = new AABB(hit.getBlockPos()).inflate(0.002D);
         VertexConsumer vertices = context.bufferSource().getBuffer(RenderTypes.lines());
-        cn.howxu.mmcr.MMCR.LOG.debug("MMCR preview outline submit: pos={}, location={}, color={}, renderBox={}, modelView={}, projection={}",
-                hit.getBlockPos(), hit.getLocation(), Integer.toHexString(color), box, RenderSystem.getModelViewStack(), PreviewSceneCameraContext.projection());
         com.mojang.blaze3d.vertex.PoseStack poseStack = new com.mojang.blaze3d.vertex.PoseStack();
         com.mojang.blaze3d.vertex.PoseStack.Pose pose = poseStack.last();
         float width = net.minecraft.client.Minecraft.getInstance().gameRenderer.getGameRenderState().windowRenderState.appropriateLineWidth;
@@ -217,8 +215,6 @@ public final class PreviewSceneRenderer {
         line(vertices, pose, x0, y0, z0, x0, y1, z0, color, width); line(vertices, pose, x1, y0, z0, x1, y1, z0, color, width);
         line(vertices, pose, x1, y0, z1, x1, y1, z1, color, width); line(vertices, pose, x0, y0, z1, x0, y1, z1, color, width);
         context.bufferSource().endLastBatch();
-        cn.howxu.mmcr.MMCR.LOG.debug("MMCR preview outline batch flushed: pos={}, color={}",
-                hit.getBlockPos(), Integer.toHexString(color));
     }
 
     private static void line(VertexConsumer vertices, com.mojang.blaze3d.vertex.PoseStack.Pose pose, double x0, double y0, double z0,

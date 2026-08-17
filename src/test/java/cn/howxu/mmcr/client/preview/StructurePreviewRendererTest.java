@@ -138,19 +138,19 @@ class StructurePreviewRendererTest {
     }
 
     @Test
-    void preview_outline_pipeline_emits_diagnostics_at_hit_selection_and_submission_boundaries() throws IOException {
+    void preview_outline_pipeline_does_not_leave_diagnostics_in_production_rendering() throws IOException {
         String renderer = Files.readString(Path.of("src/main/java/cn/howxu/mmcr/client/preview/StructurePreviewRenderer.java"));
         String widget = Files.readString(Path.of("src/main/java/cn/howxu/mmcr/client/preview/StructurePreviewWidget.java"));
         String scene = Files.readString(Path.of("src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewSceneRenderer.java"));
 
-        assertThat(renderer).contains("MMCR preview depth hit");
-        assertThat(widget).contains("MMCR preview selected hit");
-        assertThat(renderer).contains("MMCR preview selected block");
-        assertThat(widget).contains("MMCR preview click release");
-        assertThat(widget).contains("MMCR preview click had no hit");
-        assertThat(scene).contains("MMCR preview outline submit");
-        assertThat(scene).contains("renderBox=");
-        assertThat(scene).contains("MMCR preview outline batch flushed");
+        assertThat(renderer).doesNotContain("MMCR preview depth hit");
+        assertThat(widget).doesNotContain("MMCR preview selected hit");
+        assertThat(renderer).doesNotContain("MMCR preview selected block");
+        assertThat(widget).doesNotContain("MMCR preview click release");
+        assertThat(widget).doesNotContain("MMCR preview click had no hit");
+        assertThat(scene).doesNotContain("MMCR preview outline submit");
+        assertThat(scene).doesNotContain("renderBox=");
+        assertThat(scene).doesNotContain("MMCR preview outline batch flushed");
     }
 
     @Test

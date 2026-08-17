@@ -37,7 +37,9 @@ public final class JeiPlugin implements IModPlugin {
     @Override
     public void registerCategories(IRecipeCategoryRegistration registration) {
         var guiHelper = registration.getJeiHelpers().getGuiHelper();
-        registration.addRecipeCategories(new MachineStructureCategory(guiHelper));
+        registration.addRecipeCategories(new MachineStructureCategory(guiHelper, JeiMachineRecipeTypes.STRUCTURE));
+        MachineRegistry.getAll().values().forEach(machine -> registration.addRecipeCategories(
+                new MachineStructureCategory(guiHelper, JeiMachineRecipeTypes.structureFor(machine.registryName()))));
         MachineRegistry.getAll().values().forEach(machine ->
                 registration.addRecipeCategories(new MachineRecipeCategory(guiHelper, machine)));
     }

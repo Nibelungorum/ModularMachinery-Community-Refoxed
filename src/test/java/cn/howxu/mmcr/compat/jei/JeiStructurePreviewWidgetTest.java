@@ -62,12 +62,14 @@ class JeiStructurePreviewWidgetTest {
         RecordingPreviewWidget preview = new RecordingPreviewWidget();
         JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 0, 0, 160, 92);
 
-        assertThat(widget.handleInput(1, 94, leftPress(true))).isTrue();
+        assertThat(widget.handleInput(1, 106, leftPress(true))).isTrue();
         assertThat(preview.previous).isZero();
-        assertThat(widget.handleInput(1, 94, leftPress(false))).isTrue();
+        assertThat(widget.handleInput(1, 106, leftPress(false))).isTrue();
 
         assertThat(preview.previous).isEqualTo(1);
         assertThat(preview.presses).isZero();
+
+        assertThat(widget.handleInput(17, 106, leftPress(false))).isFalse();
     }
 
     @Test
@@ -142,7 +144,7 @@ class JeiStructurePreviewWidgetTest {
         RecordingPreviewWidget preview = new RecordingPreviewWidget();
         JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 0, 0, 160, 204);
 
-        assertThat(widget.handleInput(1, 206, leftPress(false))).isTrue();
+        assertThat(widget.handleInput(1, 218, leftPress(false))).isTrue();
 
         assertThat(preview.previous).isEqualTo(1);
         assertThat(preview.presses).isZero();
@@ -180,28 +182,20 @@ class JeiStructurePreviewWidgetTest {
     }
 
     @Test
-    void structurePreviewDoesNotExposeBlockTooltip() {
-        BlockHitResult hovered = hitAt(0, 0, 0);
-        BlockHitResult selected = hitAt(1, 0, 0);
+    void structurePreviewExposesControlAndSelectedCandidateTooltips() {
         RecordingPreviewWidget preview = new RecordingPreviewWidget();
-        preview.hover = hovered;
-        preview.selected = selected;
-        RecordingTooltip tooltip = new RecordingTooltip();
-        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, schema(Blocks.IRON_BLOCK.defaultBlockState(), Blocks.GOLD_BLOCK.defaultBlockState()), 0, 0, 160, 92);
-
-        widget.getTooltip(tooltip, 6, 6);
-        assertThat(tooltip.text()).isEmpty();
-
-        preview.hover = null;
-        tooltip.clear();
-        widget.getTooltip(tooltip, 6, 6);
-        assertThat(tooltip.text()).isEmpty();
-
         preview.selected = hitAt(0, 0, 0);
-        JeiStructurePreviewWidget fluidWidget = JeiStructurePreviewWidget.forTesting(preview, schema(Blocks.WATER.defaultBlockState()), 0, 0, 160, 92);
+        RecordingTooltip tooltip = new RecordingTooltip();
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview,
+                schemaWithCandidate(Blocks.IRON_BLOCK.defaultBlockState()), 0, 0, 160, 92);
+
+        widget.getTooltip(tooltip, 6, 106);
+        assertThat(tooltip.text().getFirst().getString()).isEqualTo("jei.mmcr.structure_preview.previous_layer");
+
         tooltip.clear();
-        fluidWidget.getTooltip(tooltip, 6, 6);
-        assertThat(tooltip.text()).isEmpty();
+        widget.getTooltip(tooltip, 6, 130);
+        assertThat(tooltip.text().getFirst().getString())
+                .isEqualTo(new net.minecraft.world.item.ItemStack(Items.IRON_INGOT).getHoverName().getString());
     }
 
     @Test
@@ -261,6 +255,12 @@ class JeiStructurePreviewWidgetTest {
         Map<BlockPos, net.minecraft.world.level.block.state.BlockState> blocks = new LinkedHashMap<>();
         for (int index = 0; index < states.length; index++) blocks.put(new BlockPos(index, 0, 0), states[index]);
         return new StructurePreviewSchema(MMCR.id("jei_widget_test"), blocks, Map.of());
+    }
+
+    private static StructurePreviewSchema schemaWithCandidate(net.minecraft.world.level.block.state.BlockState state) {
+        BlockPos position = BlockPos.ZERO;
+        return new StructurePreviewSchema(MMCR.id("jei_widget_test"), Map.of(position, state), Map.of(),
+                Map.of(position, List.of(new net.minecraft.world.item.ItemStack(Items.IRON_INGOT))));
     }
 
     private static BlockHitResult hitAt(int x, int y, int z) {

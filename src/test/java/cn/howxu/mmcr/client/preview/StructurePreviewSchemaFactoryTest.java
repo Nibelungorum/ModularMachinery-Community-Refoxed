@@ -9,6 +9,10 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
+import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -17,7 +21,11 @@ import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.network.chat.Component;
+import org.nibelungorum.DefaultMachineLevels;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -36,6 +44,13 @@ class StructurePreviewSchemaFactoryTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @AfterEach
+    void restoreDefaultLevels() {
+        MachineLevelRegistry.beginRegistration();
+        DefaultMachineLevels.register();
+        MachineLevelRegistry.freezeRegistration();
     }
 
     @Test
@@ -90,7 +105,7 @@ class StructurePreviewSchemaFactoryTest {
     }
 
     @Test
-    void factory_keeps_level_slots_only_for_resolved_states() {
+    void factory_keeps_level_slots_with_air_for_unresolved_states() {
         BlockPos resolved = BlockPos.ZERO;
         BlockPos unresolved = new BlockPos(1, 0, 0);
         MachineStructureStage stage = new MachineStructureStage(1, new BlockArray(Map.of(
@@ -101,7 +116,9 @@ class StructurePreviewSchemaFactoryTest {
         StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("slots"),
                 StructurePreviewVariantSelection.defaults());
 
-        assertThat(schema.levelSlots()).containsOnly(Map.entry(resolved, MMCR.id("coil")));
+        assertThat(schema.levelSlots()).containsOnly(
+                Map.entry(resolved, MMCR.id("coil")), Map.entry(unresolved, MMCR.id("casing")));
+        assertThat(schema.stateAt(unresolved)).isEqualTo(Blocks.AIR.defaultBlockState());
     }
 
     @Test
@@ -123,7 +140,7 @@ class StructurePreviewSchemaFactoryTest {
 
         assertThat(schema.states()).containsOnly(
                 Map.entry(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState()),
-                Map.entry(firstStageOnly, Blocks.COPPER_BLOCK.defaultBlockState()));
+                Map.entry(firstStageOnly, Blocks.AIR.defaultBlockState()));
         assertThat(schema.stateAt(finalStageOnly)).isNull();
         assertThat(schema.levelSlots()).containsOnly(Map.entry(firstStageOnly, MMCR.id("first_slot")));
     }
@@ -154,6 +171,59 @@ class StructurePreviewSchemaFactoryTest {
                 StructurePreviewVariantSelection.defaults());
 
         assertThat(schema.stateAt(BlockPos.ZERO).getValue(MachineControllerBlock.FACING)).isEqualTo(Direction.SOUTH);
+    }
+
+    @Test
+    void factory_uses_one_shared_highest_level_for_all_slots() {
+        Identifier coil = MMCR.id("preview_coil");
+        registerLevels(Map.of(coil, List.of(Blocks.COPPER_BLOCK, Blocks.IRON_BLOCK)));
+        BlockPos first = BlockPos.ZERO;
+        BlockPos second = new BlockPos(1, 0, 0);
+        MachineStructureStage stage = stageWithSlots(Map.of(first, coil, second, coil));
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("slots"),
+                StructurePreviewVariantSelection.defaults());
+
+        assertThat(schema.stateAt(first)).isEqualTo(Blocks.IRON_BLOCK.defaultBlockState());
+        assertThat(schema.stateAt(second)).isEqualTo(Blocks.IRON_BLOCK.defaultBlockState());
+    }
+
+    @Test
+    void factory_uses_air_when_a_shared_level_is_missing_for_a_slot() {
+        Identifier coil = MMCR.id("preview_coil_missing");
+        Identifier casing = MMCR.id("preview_casing_missing");
+        registerLevels(Map.of(coil, List.of(Blocks.COPPER_BLOCK, Blocks.IRON_BLOCK), casing, List.of(Blocks.GOLD_BLOCK)));
+        BlockPos first = BlockPos.ZERO;
+        BlockPos second = new BlockPos(1, 0, 0);
+        MachineStructureStage stage = stageWithSlots(Map.of(first, coil, second, casing));
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("slots"),
+                StructurePreviewVariantSelection.defaults());
+
+        assertThat(schema.stateAt(first)).isEqualTo(Blocks.IRON_BLOCK.defaultBlockState());
+        assertThat(schema.stateAt(second)).isEqualTo(Blocks.AIR.defaultBlockState());
+    }
+
+    private static MachineStructureStage stageWithSlots(Map<BlockPos, Identifier> slots) {
+        Map<BlockPos, BlockPredicate> pattern = new java.util.LinkedHashMap<>();
+        slots.keySet().forEach(position -> pattern.put(position, new BlockPredicate.Any()));
+        return new MachineStructureStage(1, new BlockArray(pattern), PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), Map.of(), slots);
+    }
+
+    private static void registerLevels(Map<Identifier, List<net.minecraft.world.level.block.Block>> levelsByType) {
+        MachineLevelRegistry.beginRegistration();
+        for (Identifier type : levelsByType.keySet()) {
+            MachineLevelRegistry.registerType(new LevelType(type, Component.literal(type.toString())));
+        }
+        for (var entry : levelsByType.entrySet()) {
+            for (int index = 0; index < entry.getValue().size(); index++) {
+                var block = entry.getValue().get(index);
+                MachineLevelRegistry.registerLevel(new MachineLevel(MMCR.id(entry.getKey().getPath() + "_" + index), entry.getKey(), index,
+                        new BlockPredicate.OfBlockState(block.defaultBlockState()), new ItemStack(block), LevelModifier.IDENTITY));
+            }
+        }
+        MachineLevelRegistry.freezeRegistration();
     }
 
     private static Machine machineWithStages(BlockArray pattern, List<MachineStructureStage> stages) {

@@ -3,11 +3,16 @@ package cn.howxu.mmcr.client.preview;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,15 +47,39 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         Objects.requireNonNull(selection, "selection");
         Map<BlockPos, BlockState> states = new LinkedHashMap<>();
         Map<BlockPos, Identifier> levelSlots = new LinkedHashMap<>();
+        Map<BlockPos, List<ItemStack>> candidates = new LinkedHashMap<>();
+        int levelRank = highestSharedLevelRank(stage);
         for (var entry : stage.pattern().pattern().entrySet()) {
-            entry.getValue().preferredState().ifPresent(state -> {
-                BlockPos position = entry.getKey().immutable();
-                states.put(position, orientController(position, state, stage.pattern().pattern()));
-                Identifier levelSlot = stage.levelSlots().get(entry.getKey());
-                if (levelSlot != null) levelSlots.put(position, levelSlot);
-            });
+            BlockPos position = entry.getKey().immutable();
+            Identifier levelSlot = stage.levelSlots().get(entry.getKey());
+            BlockState state = levelSlot == null
+                    ? entry.getValue().preferredState().orElse(null)
+                    : levelState(levelSlot, levelRank);
+            if (state == null) continue;
+            states.put(position, orientController(position, state, stage.pattern().pattern()));
+            if (!state.isAir()) candidates.put(position, List.of(new ItemStack(state.getBlock().asItem())));
+            if (levelSlot != null) levelSlots.put(position, levelSlot);
         }
-        return new StructurePreviewSchema(RESOLVED_STAGE_ID, states, levelSlots);
+        return new StructurePreviewSchema(RESOLVED_STAGE_ID, states, levelSlots, candidates);
+    }
+
+    private static int highestSharedLevelRank(MachineStructureStage stage) {
+        return stage.levelSlots().values().stream()
+                .mapToInt(typeId -> MachineLevelRegistry.levelsForType(typeId).stream()
+                        .mapToInt(MachineLevel::priority)
+                        .max().orElse(-1))
+                .max().orElse(-1);
+    }
+
+    private static BlockState levelState(Identifier typeId, int levelRank) {
+        return MachineLevelRegistry.levelsForType(typeId).stream()
+                .filter(level -> level.priority() == levelRank)
+                .findFirst()
+                .map(MachineLevel::statePredicate)
+                .filter(BlockPredicate.OfBlockState.class::isInstance)
+                .map(BlockPredicate.OfBlockState.class::cast)
+                .map(BlockPredicate.OfBlockState::state)
+                .orElse(Blocks.AIR.defaultBlockState());
     }
 
     private static BlockState orientController(BlockPos position, BlockState state, Map<BlockPos, ?> pattern) {

@@ -28,6 +28,7 @@ public final class StructurePreviewReloadListener implements PreparableReloadLis
     public CompletableFuture<Void> reload(SharedState currentReload, Executor taskExecutor,
                                           PreparationBarrier preparationBarrier, Executor reloadExecutor) {
         return CompletableFuture.completedFuture(null).thenCompose(preparationBarrier::wait).thenRunAsync(() -> {
+            StructurePreviewCompilationCache.instance().clear();
             synchronized (StructurePreviewReloadListener.class) {
                 RENDERERS.removeIf(reference -> {
                     StructurePreviewRenderer renderer = reference.get();

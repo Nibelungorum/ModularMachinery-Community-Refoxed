@@ -83,8 +83,6 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
     public void selectHit(Object hitResult) {
         if (hitResult instanceof BlockHitResult blockHitResult) {
             selectedHit = copyHit(blockHitResult);
-            cn.howxu.mmcr.MMCR.LOG.debug("MMCR preview selected block: pos={}, location={}, direction={}, inside={}",
-                    selectedHit.getBlockPos(), selectedHit.getLocation(), selectedHit.getDirection(), selectedHit.isInside());
         }
     }
 
@@ -160,10 +158,6 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
 
     private void applyDepth(float depth, PreviewDepthReadbackSample sample) {
         if (closed || depth >= 1.0F) {
-            if (hoverHit != null) {
-                cn.howxu.mmcr.MMCR.LOG.debug("MMCR preview depth hit cleared: depth={}, mouse=({}, {}), texel={}",
-                        depth, sample.mouseX(), sample.mouseY(), sample.texel());
-            }
             hoverHit = null;
             return;
         }
@@ -171,12 +165,7 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
         org.joml.Matrix4f inverse = sample.camera().projection().mul(sample.camera().view(), new org.joml.Matrix4f()).invert();
         inverse.transform(point);
         net.minecraft.world.phys.Vec3 target = new net.minecraft.world.phys.Vec3(point.x / point.w, point.y / point.w, point.z / point.w);
-        BlockHitResult previousHit = hoverHit;
         hoverHit = copyHit(scene.clip(new net.minecraft.world.phys.Vec3(sample.camera().eye()), target));
-        if (!Objects.equals(previousHit, hoverHit)) {
-            cn.howxu.mmcr.MMCR.LOG.debug("MMCR preview depth hit: depth={}, mouse=({}, {}), texel={}, target={}, hit={}",
-                    depth, sample.mouseX(), sample.mouseY(), sample.texel(), target, hoverHit);
-        }
     }
 
     private static @Nullable BlockHitResult copyHit(@Nullable BlockHitResult hit) {

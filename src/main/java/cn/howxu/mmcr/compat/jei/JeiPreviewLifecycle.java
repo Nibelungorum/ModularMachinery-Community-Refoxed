@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.jei;
 
+import cn.howxu.mmcr.client.preview.StructurePreviewCompilationCache;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,6 +24,7 @@ public final class JeiPreviewLifecycle {
         List<JeiStructurePreviewWidget> previews = List.copyOf(ACTIVE);
         ACTIVE.clear();
         previews.forEach(JeiStructurePreviewWidget::close);
+        StructurePreviewCompilationCache.instance().clear();
     }
 
     public synchronized void closeAll() {
