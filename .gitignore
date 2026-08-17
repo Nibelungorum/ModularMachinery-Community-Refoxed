@@ -29,6 +29,9 @@ bin/
 ### VS Code ###
 .vscode/
 
+### Local worktrees ###
+.worktrees/
+
 ### Mac OS ###
 .DS_Store
 
@@ -38,3 +41,17 @@ run/
 **/src/generated/**/.cache/
 repo/
 !**/src/**/repo/
+logs/
+
+src/generated
+docs/
+.superpowers/
+AGENTS.md
+.codegraph
+TODO.md
+
+### KubeJS ingnore
+example/client_scripts/*
+example/config/*
+example/data/*
+example/README.txt

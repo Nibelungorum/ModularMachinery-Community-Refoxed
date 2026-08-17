@@ -3,7 +3,7 @@ name: CI
 on: [push, pull_request]
 
 jobs:
-  build:
+  ci:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -21,5 +21,17 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build with Gradle
+      - name: Run Data Permission
+        run: chmod u+x run_data.sh
+
+      - name: Run Data
+        run: ./run_data.sh
+
+      - name: Compile Test
         run: ./gradlew compileJava --no-daemon
+      
+      - name: Unit Test and GameTest
+        run: ./gradlew test --no-daemon
+
+      - name: Gametest Server
+        run: ./gradlew runGameTestServer --no-daemon

@@ -12,3 +12,30 @@
 	path = reference/jade
 	url = https://github.com/Snownee/Jade
 	branch = 26.1-neoforge
+[submodule "reference/pipez"]
+	path = reference/pipez
+	url = https://github.com/henkelmax/pipez
+	branch = 26.1
+[submodule "reference/neoforge"]
+	path = reference/neoforge
+	url = https://github.com/neoforged/NeoForge
+	branch = 26.1.x
+[submodule "reference/gtceu"]
+	path = reference/gtceu
+	url = https://github.com/GregTechCEu/GregTech
+	branch = master
+[submodule "reference/mek"]
+	path = reference/mek
+	url = https://github.com/mekanism/Mekanism
+	branch = 26.1
+[submodule "reference/ae2"]
+	path = reference/ae2
+	url = https://github.com/AppliedEnergistics/Applied-Energistics-2
+[submodule "reference/mui"]
+	path = reference/mui
+	url = https://github.com/brachy84/ModularUI-Modern
+	branch = 1.21.1
+[submodule "reference/ldlib2"]
+	path = reference/ldlib2
+	url = https://github.com/Low-Drag-MC/LDLib2
+	branch = 26.1

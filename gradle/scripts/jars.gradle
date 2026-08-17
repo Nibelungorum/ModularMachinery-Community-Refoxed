@@ -1,0 +1,7 @@
+tasks.named('wrapper', Wrapper).configure {
+    distributionType = Wrapper.DistributionType.BIN
+}
+
+base {
+    archivesName = mod_id + "-neoforge"
+}

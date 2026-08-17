@@ -1,0 +1,38 @@
+repositories {
+    // Mek repo
+    maven { url 'https://modmaven.dev/' }
+    maven {
+        // JEI repo
+        name = "Jared's maven"
+        url = "https://maven.blamejared.com/"
+    }
+
+    maven {
+        // Modrinth for Rhino
+        url = "https://api.modrinth.com/maven"
+    }
+
+    maven {
+        // KubeJS
+        url = "https://maven.latvian.dev/releases"
+        content {
+            includeGroup "dev.latvian.mods"
+            includeGroup "dev.latvian.apps"
+        }
+    }
+
+    maven {
+        // Curse Maven
+        url "https://cursemaven.com"
+    }
+
+    maven {
+        // JitPack
+        url = 'https://www.jitpack.io'
+    }
+
+    maven {
+        name = "HowXu.public"
+        url = uri("https://maven.howxu.cn/")
+    }
+}

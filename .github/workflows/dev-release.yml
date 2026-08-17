@@ -1,0 +1,123 @@
+name: Nightly Dev Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Resolve dev version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          hash="$(git rev-parse --short HEAD)"
+          base="$(git tag --merged HEAD --sort=-v:refname | awk '/^[0-9]+\.[0-9]+\.[0-9]+$/ { print; exit }')"
+          if [ -z "$base" ]; then
+            base="0.0.0"
+          fi
+
+          version="${base}+dev-${hash}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "base=${base}" >> "$GITHUB_OUTPUT"
+          echo "hash=${hash}" >> "$GITHUB_OUTPUT"
+
+      - name: Apply CI version
+        shell: bash
+        run: |
+          set -euo pipefail
+          perl -0pi -e 's/^mod_version=.*/mod_version=${{ steps.version.outputs.version }}/m' gradle.properties
+
+      - name: Run Data Permission
+        run: chmod u+x run_data.sh
+
+      - name: Run Data
+        run: ./run_data.sh
+
+      - name: Compile Test
+        run: ./gradlew compileJava --no-daemon
+
+      - name: Unit Test and GameTest
+        run: ./gradlew test --no-daemon
+
+      - name: Gametest Server
+        run: ./gradlew runGameTestServer --no-daemon
+
+      - name: Build
+        run: ./gradlew build --no-daemon
+
+      - name: Build release notes
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          previous_tag="$(git tag --merged HEAD --sort=-v:refname | awk '/^[0-9]+\.[0-9]+\.[0-9]+$/ { print; exit }')"
+          if [ -n "$previous_tag" ]; then
+            range="${previous_tag}..HEAD"
+          else
+            range="HEAD"
+          fi
+
+          changelog="$(git log "$range" --pretty=format:'- %s (%h)' --no-merges)"
+          if [ -z "$changelog" ]; then
+            changelog="- No changes found."
+          fi
+
+          total_lines="$(printf '%s\n' "$changelog" | wc -l | tr -d ' ')"
+          {
+            echo "body<<EOF"
+            if [ "$total_lines" -gt 20 ]; then
+              printf '%s\n' "$changelog" | sed -n '1,20p'
+              echo
+              echo "<details>"
+              echo "<summary>More changes</summary>"
+              echo
+              printf '%s\n' "$changelog" | sed -n '21,$p'
+              echo
+              echo "</details>"
+            else
+              printf '%s\n' "$changelog"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish release artifacts
+        uses: Kira-NT/mc-publish@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-tag: ${{ steps.version.outputs.version }}
+          name: ${{ steps.version.outputs.version }}
+          version: ${{ steps.version.outputs.version }}
+          version-type: beta
+          changelog: ${{ steps.notes.outputs.body }}
+          files: build/libs/!(*-@(dev|sources|javadoc)).jar
+          loaders: neoforge
+          environment: client | server
+          game-versions: 26.1.2
+          java: 25
+          # Configure these after creating the distribution projects.
+          # modrinth-id: <project-id>
+          # modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          # curseforge-id: <project-id>
+          # curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}

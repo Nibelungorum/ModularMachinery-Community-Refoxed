@@ -1,0 +1,66 @@
+package cn.howxu.mmcr;
+
+import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
+import cn.howxu.mmcr.internal.event.ModCapabilities;
+import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.util.IOType;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.neoforged.neoforge.transfer.energy.EnergyHandler;
+import net.neoforged.neoforge.transfer.energy.EnergyHandlerUtil;
+import net.neoforged.neoforge.transfer.energy.InfiniteEnergyHandler;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
+
+public class EnergyHatchCapabilityGameTest {
+
+    public void energyHatchStoresFE(GameTestHelper helper) {
+        BlockPos inputPos = new BlockPos(0, 1, 0);
+        BlockPos outputPos = new BlockPos(0, 2, 0);
+        helper.setBlock(inputPos, ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState());
+        helper.setBlock(outputPos, ModBlocks.BLOCKS.get("energy_output_hatch").get().defaultBlockState());
+
+        BlockPos inputWorldPos = helper.absolutePos(inputPos);
+        BlockPos outputWorldPos = helper.absolutePos(outputPos);
+        BlockEntity inputBe = helper.getLevel().getBlockEntity(inputWorldPos);
+        BlockEntity outputBe = helper.getLevel().getBlockEntity(outputWorldPos);
+
+        EnergyHatchBlockEntity inputHatch = helper.getBlockEntity(inputPos, EnergyHatchBlockEntity.class);
+        EnergyHatchBlockEntity outputHatch = helper.getBlockEntity(outputPos, EnergyHatchBlockEntity.class);
+
+        helper.assertTrue(inputHatch.ioType() == IOType.INPUT, "Input hatch is INPUT");
+        helper.assertTrue(outputHatch.ioType() == IOType.OUTPUT, "Output hatch is OUTPUT");
+
+        EnergyHandler input = ModCapabilities.ENERGY_BLOCK.getCapability(
+                helper.getLevel(), inputWorldPos, helper.getLevel().getBlockState(inputWorldPos), inputBe, Direction.UP);
+        EnergyHandler output = ModCapabilities.ENERGY_BLOCK.getCapability(
+                helper.getLevel(), outputWorldPos, helper.getLevel().getBlockState(outputWorldPos), outputBe, Direction.UP);
+
+        helper.assertTrue(input != null, "Input energy capability is present");
+        helper.assertTrue(output != null, "Output energy capability is present");
+
+        int movedToInput = EnergyHandlerUtil.move(InfiniteEnergyHandler.INSTANCE, input, 500, null);
+        helper.assertTrue(movedToInput == 500, "Input energy capability receives from transfer energy source");
+        helper.assertTrue(inputHatch.getEnergyStorage(null).getEnergyStored() == 500, "Input hatch stores transferred energy");
+
+        try (Transaction tx = Transaction.openRoot()) {
+            int extracted = input.extract(200, tx);
+            helper.assertTrue(extracted == 0, "Input energy capability rejects extracting");
+            tx.commit();
+        }
+
+        var outputStorage = outputHatch.getMutableEnergyStorage(null);
+        while (outputStorage.receiveEnergy(10000, false) > 0) {}
+
+        try (Transaction tx = Transaction.openRoot()) {
+            int inserted = output.insert(200, tx);
+            int extracted = output.extract(700, tx);
+            helper.assertTrue(inserted == 0, "Output energy capability rejects receiving");
+            helper.assertTrue(extracted == 512, "Output energy capability extracts up to transfer limit");
+            tx.commit();
+        }
+
+        helper.succeed();
+    }
+}

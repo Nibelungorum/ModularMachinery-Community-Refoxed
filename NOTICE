@@ -1,0 +1,45 @@
+MMCR source-derived attribution
+
+This repository is a derivative work of Modular Machinery Community Edition
+(NovaEngineering-Source and contributors):
+https://github.com/NovaEngineering-Source/ModularMachinery-Community-Edition
+
+MMCR is distributed under the GNU General Public License version 3.0. The
+MMCE-derived portions and MMCR modifications are available from:
+https://github.com/Nibelungorum/ModularMachinery-Community-Refoxed
+
+LowDragLib2-derived structure-preview code
+
+This repository contains source code derived from and adapted from LowDragLib2
+(Low-Drag-MC and contributors):
+https://github.com/Low-Drag-MC/LDLib2
+
+The following files retain their GNU Lesser General Public License version 3.0
+or later (LGPL-3.0-or-later) licensing. A copy of that license is available at
+LICENSES/LGPL-3.0.txt. MMCR modified these files for Minecraft 26.1.2 and
+NeoForge 26.1.2.84; corresponding modified source is available at the paths
+below and from the MMCR source repository.
+
+src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewRenderTargetScope.java
+src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewSceneCamera.java
+src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewSceneCameraContext.java
+src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewSceneMeshCache.java
+src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewSceneMeshCompiler.java
+src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewScenePictureInPictureRenderer.java
+src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewSceneRenderContext.java
+src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewSceneRenderer.java
+src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewSceneRenderState.java
+src/main/java/cn/howxu/mmcr/mixin/client/preview/GlBufferAccessor.java
+src/main/java/cn/howxu/mmcr/mixin/client/preview/GlCommandEncoderMixin.java
+src/main/java/cn/howxu/mmcr/mixin/client/preview/GuiGraphicsExtractorAccessor.java
+src/main/java/cn/howxu/mmcr/mixin/client/preview/MeshDataAccessor.java
+src/main/java/cn/howxu/mmcr/mixin/client/preview/PictureInPictureRendererAccessor.java
+
+Applied Energistics 2 contribution guide
+
+CONTRIBUTING.md is adapted from the Applied Energistics 2 contribution guide
+(AlgorithmX2 and contributors):
+https://github.com/AppliedEnergistics/Applied-Energistics-2/blob/master/.github/CONTRIBUTING.md
+
+Applied Energistics 2 is licensed under LGPL-3.0-or-later. MMCR's adapted guide
+is available in this repository as CONTRIBUTING.md.
