@@ -24,6 +24,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -173,6 +175,37 @@ class ModuleRecipeBuilderJSTest {
             assertThat(requirement.stack().getAmount()).isEqualTo(250);
             assertThat(requirement.chance()).isEqualTo(0.5F);
         });
+    }
+
+    @Test
+    void builder_maps_parallelized_and_keeps_false_as_the_compatible_default() {
+        Identifier machineId = MMCR.id("module_machine");
+        MachineDefinitions.register(MachineRegistration.builder(machineId).build());
+
+        assertThat(new MachineRecipeBuilderJS("mmcr:serial")
+                .machine(machineId.toString()).createObject().isParallelized()).isFalse();
+        assertThat(new MachineRecipeBuilderJS("mmcr:parallel")
+                .machine(machineId.toString()).parallelized().createObject().isParallelized()).isTrue();
+        assertThat(new MachineRecipeBuilderJS("mmcr:explicit_serial")
+                .machine(machineId.toString()).parallelized(false).createObject().isParallelized()).isFalse();
+    }
+
+    @Test
+    void explicit_requirements_can_disable_automatic_legacy_field_derivation() {
+        Identifier machineId = MMCR.id("module_machine");
+        MachineDefinitions.register(MachineRegistration.builder(machineId).build());
+        var iron = new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1);
+        var apple = new MachineIngredient.ItemIngredient(Ingredient.of(Items.APPLE), 1);
+
+        var recipe = new MachineRecipeBuilderJS("mmcr:legacy_input_explicit_requirements")
+                .machine(machineId.toString())
+                .inputs(List.of(iron))
+                .requirements(List.of(MachineRequirement.fromInput(apple)))
+                .deriveRequirements(false)
+                .createObject();
+
+        assertThat(recipe.requirements()).containsExactly(MachineRequirement.fromInput(apple));
+        assertThat(recipe.requirements()).doesNotContain(MachineRequirement.fromInput(iron));
     }
 
 }

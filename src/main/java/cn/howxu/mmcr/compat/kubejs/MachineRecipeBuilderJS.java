@@ -38,6 +38,8 @@ public class MachineRecipeBuilderJS {
     private final List<RecipeModifier> conditions = new ArrayList<>();
     private int priority = 0;
     private int maxThreads = 1;
+    private boolean parallelized = false;
+    private boolean deriveRequirements = true;
     public int energyPerTick = 0;
     public boolean cancelIfPerTickFails = false;
     public final List<LevelRequirement> levelRequirements = new ArrayList<>();
@@ -127,6 +129,20 @@ public class MachineRecipeBuilderJS {
 
     public MachineRecipeBuilderJS maxThreads(int maxThreads) {
         this.maxThreads = maxThreads;
+        return this;
+    }
+
+    public MachineRecipeBuilderJS parallelized() {
+        return parallelized(true);
+    }
+
+    public MachineRecipeBuilderJS parallelized(boolean parallelized) {
+        this.parallelized = parallelized;
+        return this;
+    }
+
+    public MachineRecipeBuilderJS deriveRequirements(boolean deriveRequirements) {
+        this.deriveRequirements = deriveRequirements;
         return this;
     }
 
@@ -312,15 +328,17 @@ public class MachineRecipeBuilderJS {
         }
 
         var recipeRequirements = new ArrayList<MachineRequirement>();
-        for (MachineIngredient input : recipeInputs) recipeRequirements.add(MachineRequirement.fromInput(input));
-        for (int index = 0; index < recipeOutputs.size(); index++) {
-            recipeRequirements.add(MachineRequirement.itemOutput(recipeOutputs.get(index), recipeOutputChances.get(index)));
+        if (deriveRequirements) {
+            for (MachineIngredient input : recipeInputs) recipeRequirements.add(MachineRequirement.fromInput(input));
+            for (int index = 0; index < recipeOutputs.size(); index++) {
+                recipeRequirements.add(MachineRequirement.itemOutput(recipeOutputs.get(index), recipeOutputChances.get(index)));
+            }
+            for (FluidStack fluidOutput : fluidOutputs) recipeRequirements.add(MachineRequirement.fluidOutput(fluidOutput));
         }
-        for (FluidStack fluidOutput : fluidOutputs) recipeRequirements.add(MachineRequirement.fluidOutput(fluidOutput));
         recipeRequirements.addAll(requirements);
 
         return new MachineRecipe(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(recipeOutputs), List.copyOf(conditions), priority, maxThreads,
-                cancelIfPerTickFails, List.copyOf(fluidOutputs), List.copyOf(recipeRequirements), false, List.copyOf(levelRequirements), allowPartialOutputs, new LinkedHashSet<>(requiredHostIds));
+                cancelIfPerTickFails, List.copyOf(fluidOutputs), List.copyOf(recipeRequirements), parallelized, List.copyOf(levelRequirements), allowPartialOutputs, new LinkedHashSet<>(requiredHostIds));
     }
 
     public void build() {
