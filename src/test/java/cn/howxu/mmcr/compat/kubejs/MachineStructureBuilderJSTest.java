@@ -3,7 +3,10 @@ package cn.howxu.mmcr.compat.kubejs;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.DynamicPatternSpec;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -14,6 +17,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
@@ -93,6 +97,63 @@ class MachineStructureBuilderJSTest {
         assertThat(definition.declarations()).extracting(Declaration::kind)
                 .containsExactly(Declaration.Kind.FULL, Declaration.Kind.FULL);
         assertThat(definition.declarations().get(1).pattern()).isEqualTo(alternative);
+    }
+
+    @Test
+    void builder_retains_complete_metadata_for_each_structure_declaration() {
+        Identifier coilType = Identifier.parse("test:coil");
+        MachineLevelRegistry.beginRegistration();
+        MachineLevelRegistry.registerType(new LevelType(coilType, Component.literal("Coils")));
+        BlockPos modifierPosition = new BlockPos(1, 0, 0);
+        BlockArray full = new BlockArray(Map.of(
+                BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
+                new BlockPos(0, 0, 1), new BlockPredicate.OfTag(BlockTags.MINEABLE_WITH_PICKAXE)));
+        BlockArray alternative = new BlockArray(Map.of(new BlockPos(2, 0, 0), new BlockPredicate.Any()));
+        BlockArray extension = new BlockArray(Map.of(new BlockPos(3, 0, 0), new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK)));
+        PortRequirementSpec ports = PortRequirementSpec.builder().min("item_input_bus", 1).build();
+        PortTierRequirementSpec tiers = PortTierRequirementSpec.builder().anyItemInput().build();
+        DynamicPatternSpec dynamic = new DynamicPatternSpec("length", new BlockArray(Map.of()), null,
+                1, 3, BlockPos.ZERO, new BlockPos(0, 0, 1), null);
+        SingleBlockModifierReplacement replacement = new SingleBlockModifierReplacement(
+                "speed", modifierPosition, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), "", ItemStack.EMPTY);
+
+        var definition = new MachineStructureBuilderJS("test:complete")
+                .fullStructure(full, ports, tiers, List.of(dynamic), Map.of(modifierPosition, List.of(replacement)),
+                        Map.of(BlockPos.ZERO, coilType))
+                .fullStructure(alternative, PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of())
+                .extension(extension, PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of())
+                .createObject();
+
+        assertThat(definition.declarations()).extracting(Declaration::kind)
+                .containsExactly(Declaration.Kind.FULL, Declaration.Kind.FULL, Declaration.Kind.EXTENSION);
+        assertThat(definition.portRequirements().requirements()).containsKey("item_input_bus");
+        assertThat(definition.portTierRequirements().requirements()).singleElement();
+        assertThat(definition.levelSlots()).containsEntry(BlockPos.ZERO, coilType);
+        assertThat(definition.modifierReplacements()).containsKey(modifierPosition);
+        assertThat(definition.declarations().get(1).pattern()).isEqualTo(alternative);
+        assertThat(definition.declarations().get(2).pattern()).isEqualTo(extension);
+    }
+
+    @Test
+    void builder_applies_declaration_metadata_to_compatible_pattern() {
+        Identifier coilType = Identifier.parse("test:coil");
+        MachineLevelRegistry.beginRegistration();
+        MachineLevelRegistry.registerType(new LevelType(coilType, Component.literal("Coils")));
+        DynamicPatternSpec dynamic = new DynamicPatternSpec("length", new BlockArray(Map.of()), null,
+                1, 3, BlockPos.ZERO, new BlockPos(0, 0, 1), null);
+
+        var definition = new MachineStructureBuilderJS("test:compatible")
+                .portRequirements(PortRequirementSpec.builder().min("item_input_bus", 1).build())
+                .portTierRequirements(PortTierRequirementSpec.builder().anyItemInput().build())
+                .dynamicPattern(dynamic)
+                .levelSlot(BlockPos.ZERO, coilType.toString())
+                .pattern("C", Map.of("C", Blocks.IRON_BLOCK))
+                .createObject();
+
+        assertThat(definition.portRequirements().requirements()).containsKey("item_input_bus");
+        assertThat(definition.portTierRequirements().requirements()).singleElement();
+        assertThat(definition.dynamicPatterns()).containsExactly(dynamic);
+        assertThat(definition.levelSlots()).containsEntry(BlockPos.ZERO, coilType);
     }
 
     @Test
