@@ -160,6 +160,15 @@ class StructurePreviewSchemaFactoryTest {
     }
 
     @Test
+    void createBuildsSchemaForTheRequestedStructureStage() {
+        MachineStructureStage second = stage(2, Blocks.GOLD_BLOCK.defaultBlockState());
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(second, MMCR.id("stage_preview"));
+
+        assertThat(schema.stateAt(BlockPos.ZERO)).isEqualTo(Blocks.GOLD_BLOCK.defaultBlockState());
+    }
+
+    @Test
     void factory_keeps_every_concrete_block_option_as_a_preview_candidate() {
         BlockPredicate predicate = new BlockPredicate.AnyOf(List.of(
                 new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
@@ -224,6 +233,11 @@ class StructurePreviewSchemaFactoryTest {
         slots.keySet().forEach(position -> pattern.put(position, new BlockPredicate.Any()));
         return new MachineStructureStage(1, new BlockArray(pattern), PortRequirementSpec.none(),
                 PortTierRequirementSpec.none(), List.of(), Map.of(), slots);
+    }
+
+    private static MachineStructureStage stage(int index, BlockState state) {
+        return new MachineStructureStage(index, new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlockState(state))),
+                PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of());
     }
 
     private static void registerLevels(Map<Identifier, List<net.minecraft.world.level.block.Block>> levelsByType) {

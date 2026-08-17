@@ -250,6 +250,50 @@ class JeiStructurePreviewWidgetTest {
     }
 
     @Test
+    void multiStagePreviewCyclesTheLevelControlAndClosesThePreviousPreview() {
+        List<RecordingPreviewWidget> previews = new ArrayList<>();
+        List<StructurePreviewSchema> schemas = List.of(
+                schema(Blocks.IRON_BLOCK.defaultBlockState()),
+                schema(Blocks.GOLD_BLOCK.defaultBlockState()));
+        List<StructurePreviewSchema> previewSchemas = new ArrayList<>();
+        JeiStructurePreviewWidget.PreviewFactory factory = previewSchema -> {
+            previewSchemas.add(previewSchema);
+            RecordingPreviewWidget preview = new RecordingPreviewWidget();
+            previews.add(preview);
+            return preview;
+        };
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(schemas, factory, 0, 0, 160, 92);
+        RecordingTooltip tooltip = new RecordingTooltip();
+
+        assertThat(previewSchemas).containsExactly(schemas.get(0));
+        assertThat(widget.handleInput(77, 106, leftPress(true))).isTrue();
+        assertThat(previews).hasSize(1);
+        assertThat(previews.getFirst().closes).isZero();
+        assertThat(previewSchemas).containsExactly(schemas.get(0));
+
+        widget.getTooltip(tooltip, 77, 106);
+        assertThat(tooltip.text().getFirst().getString()).isEqualTo("jei.mmcr.structure_preview.next_level");
+        assertThat(widget.handleInput(77, 106, leftPress(false))).isTrue();
+        assertThat(previews).hasSize(2);
+        assertThat(previews.getFirst().closes).isEqualTo(1);
+        assertThat(previewSchemas).containsExactly(schemas.get(0), schemas.get(1));
+
+        assertThat(widget.handleInput(77, 106, leftPress(false))).isTrue();
+        assertThat(previews).hasSize(3);
+        assertThat(previews.get(1).closes).isEqualTo(1);
+        assertThat(previewSchemas).containsExactly(schemas.get(0), schemas.get(1), schemas.get(0));
+    }
+
+    @Test
+    void singleStagePreviewDoesNotConsumeTheLevelControl() {
+        RecordingPreviewWidget preview = new RecordingPreviewWidget();
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(List.of(schema(Blocks.IRON_BLOCK.defaultBlockState())),
+                ignored -> preview, 0, 0, 160, 92);
+
+        assertThat(widget.handleInput(77, 106, leftPress(false))).isFalse();
+    }
+
+    @Test
     void renderUsesJeiLayoutOriginForTheAbsolutePreviewViewport() {
         RecordingPreviewWidget preview = new RecordingPreviewWidget();
         JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 4, 64, 160, 92);

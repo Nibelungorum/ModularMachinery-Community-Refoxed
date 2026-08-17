@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.client.preview.StructurePreviewRenderer;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchemaFactory;
@@ -44,6 +45,10 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private StructurePreviewSchema schema;
     private final Machine machine;
     private final StructurePreviewCompilation compilation;
+    private final List<MachineStructureStage> stages;
+    private List<StructurePreviewSchema> stageSchemas;
+    private PreviewFactory previewFactory;
+    private int selectedStage;
     private final LongSupplier clock = System::currentTimeMillis;
     private boolean previewDragActive;
     private boolean closed;
@@ -57,22 +62,17 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         this.schema = null;
         this.machine = machine;
         this.compilation = compilation;
+        this.stages = machine.structureStages();
+        this.stageSchemas = List.of();
+        this.previewFactory = this::createPreview;
         this.x = x;
         this.y = y;
         this.width = width;
         this.height = height;
     }
 
-    private static StructurePreviewSchema createSchema(Machine machine) {
-        return new StructurePreviewSchemaFactory().create(machine);
-    }
-
-    private JeiStructurePreviewWidget(StructurePreviewSchema schema, int x, int y, int width, int height) {
-        this(schema, new StructurePreviewWidget(new StructurePreviewRenderer(schema)), x, y, width, height);
-    }
-
-    private JeiStructurePreviewWidget(StructurePreviewSchema schema, StructurePreviewWidget widget, int x, int y, int width, int height) {
-        this(new Preview() {
+    private static Preview adapt(StructurePreviewWidget widget) {
+        return new Preview() {
             @Override public boolean mouseClicked(double mouseX, double mouseY, int button) { return widget.mouseClicked(mouseX, mouseY, button); }
             @Override public boolean mouseReleased(double mouseX, double mouseY, int button) { return widget.mouseReleased(mouseX, mouseY, button); }
             @Override public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) { return widget.mouseDragged(mouseX, mouseY, button, dragX, dragY); }
@@ -87,7 +87,11 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
             @Override public int selectedLayer() { return widget.selectedLayer(); }
             @Override public Object hoverHit() { return widget.hoverHit(); }
             @Override public Object selectedHit() { return widget.selectedHit(); }
-        }, schema, x, y, width, height);
+        };
+    }
+
+    private Preview createPreview(StructurePreviewSchema previewSchema) {
+        return adapt(new StructurePreviewWidget(new StructurePreviewRenderer(previewSchema)));
     }
 
     private JeiStructurePreviewWidget(Preview preview, StructurePreviewSchema schema, int x, int y, int width, int height) {
@@ -95,6 +99,9 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         this.schema = schema;
         this.machine = null;
         this.compilation = null;
+        this.stages = List.of();
+        this.stageSchemas = List.of();
+        this.previewFactory = null;
         this.x = x;
         this.y = y;
         this.width = width;
@@ -113,6 +120,13 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         return new JeiStructurePreviewWidget(factory.create(schema), schema, x, y, width, height);
     }
 
+    static JeiStructurePreviewWidget forTesting(List<StructurePreviewSchema> schemas, PreviewFactory factory, int x, int y, int width, int height) {
+        JeiStructurePreviewWidget widget = new JeiStructurePreviewWidget(factory.create(schemas.getFirst()), schemas.getFirst(), x, y, width, height);
+        widget.stageSchemas = List.copyOf(schemas);
+        widget.previewFactory = factory;
+        return widget;
+    }
+
     @Override public ScreenPosition getPosition() { return new ScreenPosition(x, y); }
     @Override public ScreenRectangle getArea() { return new ScreenRectangle(x, y, LAYOUT_WIDTH, height + 54); }
 
@@ -127,7 +141,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         GuiGraphicsExtractorAccessor extractor = (GuiGraphicsExtractorAccessor) graphics;
         ScreenPosition origin = absoluteGuiOrigin(extractor.mmcr$getMouseX(), extractor.mmcr$getMouseY(), mouseX, mouseY);
         preview.render(graphics, 0, 0, width, height, origin.x(), origin.y());
-        String[] labels = {"+", "-", "A", "R"};
+        String[] labels = hasMultipleStages() ? new String[]{"+", "-", "A", "R", "M"} : new String[]{"+", "-", "A", "R"};
         for (int index = 0; index < labels.length; index++) {
             int controlX = index * CONTROL_STEP;
             int controlY = height + 14;
@@ -140,6 +154,10 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
                 ? Component.translatable("jei.mmcr.structure_preview.all_layers")
                 : Component.translatable("jei.mmcr.structure_preview.layer", selectedLayer, layers.indexOf(selectedLayer) + 1, layers.size());
         graphics.text(Minecraft.getInstance().font, layerText, 0, height + 4, 0xFF404040, false);
+        if (stages.size() > 1) {
+            graphics.text(Minecraft.getInstance().font, Component.literal("Level=" + stages.get(selectedStage).number()),
+                    Minecraft.getInstance().font.width(layerText) + 4, height + 4, 0xFF404040, false);
+        }
         renderCandidates(graphics);
     }
 
@@ -168,22 +186,21 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         StructurePreviewSchema completed = compilation.schema();
         if (completed != null && preview == null) {
             schema = completed;
-            StructurePreviewWidget widget = new StructurePreviewWidget(new StructurePreviewRenderer(completed));
-            preview = new Preview() {
-                @Override public boolean mouseClicked(double mouseX, double mouseY, int button) { return widget.mouseClicked(mouseX, mouseY, button); }
-                @Override public boolean mouseReleased(double mouseX, double mouseY, int button) { return widget.mouseReleased(mouseX, mouseY, button); }
-                @Override public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) { return widget.mouseDragged(mouseX, mouseY, button, dragX, dragY); }
-                @Override public boolean mouseScrolled(double mouseX, double mouseY, double scrollDelta) { return widget.mouseScrolled(mouseX, mouseY, scrollDelta); }
-                @Override public void render(GuiGraphicsExtractor graphics, int x, int y, int width, int height, int originX, int originY) { widget.render(graphics, x, y, width, height, 0, originX, originY); }
-                @Override public void previous() { widget.selectPreviousLayer(); }
-                @Override public void next() { widget.selectNextLayer(); }
-                @Override public void all() { widget.showAllLayers(); }
-                @Override public void reset() { widget.reset(); }
-                @Override public int selectedLayer() { return widget.selectedLayer(); }
-                @Override public Object hoverHit() { return widget.hoverHit(); }
-                @Override public Object selectedHit() { return widget.selectedHit(); }
-            };
+            preview = createPreview(completed);
         }
+    }
+
+    private boolean hasMultipleStages() {
+        return stages.size() > 1 || stageSchemas.size() > 1;
+    }
+
+    private void selectNextStage() {
+        selectedStage = (selectedStage + 1) % (stages.isEmpty() ? stageSchemas.size() : stages.size());
+        preview.close();
+        schema = stages.isEmpty()
+                ? stageSchemas.get(selectedStage)
+                : new StructurePreviewSchemaFactory().create(stages.get(selectedStage), machine.registryName());
+        preview = previewFactory.create(schema);
     }
 
     static ScreenPosition absoluteGuiOrigin(int absoluteMouseX, int absoluteMouseY, double localMouseX, double localMouseY) {
@@ -217,6 +234,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
                 case 1 -> preview.next();
                 case 2 -> preview.all();
                 case 3 -> preview.reset();
+                case 4 -> selectNextStage();
                 default -> { }
             }
             return true;
@@ -250,14 +268,15 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private int controlAt(double mouseX, double mouseY) {
         if (mouseX < 0 || mouseY < height + 14 || mouseY >= height + 14 + CONTROL_SIZE) return -1;
         int column = (int) mouseX / CONTROL_STEP;
-        return column >= 0 && column < 4 && mouseX < column * CONTROL_STEP + CONTROL_SIZE ? column : -1;
+        int controls = hasMultipleStages() ? 5 : 4;
+        return column >= 0 && column < controls && mouseX < column * CONTROL_STEP + CONTROL_SIZE ? column : -1;
     }
 
     @Override
     public void getTooltip(ITooltipBuilder tooltip, double mouseX, double mouseY) {
         int control = controlAt(mouseX, mouseY);
         if (control >= 0) {
-            String[] keys = {"previous_layer", "next_layer", "all_layers", "reset"};
+            String[] keys = {"previous_layer", "next_layer", "all_layers", "reset", "next_level"};
             tooltip.add(Component.translatable("jei.mmcr.structure_preview." + keys[control]));
             return;
         }

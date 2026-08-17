@@ -32,7 +32,11 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         Objects.requireNonNull(machine, "machine");
         List<MachineStructureStage> stages = machine.structureStages();
         if (stages.isEmpty()) throw new IllegalArgumentException("machine structure stages empty");
-        return create(stages.getFirst(), machine.registryName(), StructurePreviewVariantSelection.defaults());
+        return create(stages.getFirst(), machine.registryName());
+    }
+
+    public StructurePreviewSchema create(MachineStructureStage stage, Identifier machineId) {
+        return create(stage, machineId, StructurePreviewVariantSelection.defaults());
     }
 
     public StructurePreviewSchema create(MachineStructureStage stage, Identifier machineId,
