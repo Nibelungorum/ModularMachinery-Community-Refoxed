@@ -1,4 +1,4 @@
-name: Dev Release
+name: Nightly Dev Release
 
 on:
   workflow_dispatch:
