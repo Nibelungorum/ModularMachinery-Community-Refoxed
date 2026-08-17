@@ -64,7 +64,7 @@ jobs:
         run: ./gradlew runGameTestServer --no-daemon
 
       - name: Build
-        run: ./gradlew build
+        run: ./gradlew build --no-daemon
 
       - name: Build release notes
         id: notes
