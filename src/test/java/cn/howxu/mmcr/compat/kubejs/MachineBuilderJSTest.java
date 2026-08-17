@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -179,6 +180,44 @@ class MachineBuilderJSTest {
         assertThat(registration.allowMultithreading()).isTrue();
         assertThat(registration.allowParallelism()).isTrue();
         assertThat(registration.maxParallelAmount()).isEqualTo(12);
+    }
+
+    @Test
+    void builder_maps_direct_registration_settings() {
+        MachineControllerSpec controllerSpec = new MachineControllerSpec(
+                Identifier.parse("mmcr_kubejs:explicit_controller"),
+                Identifier.parse("mmcr_kubejs:block/front"),
+                Identifier.parse("mmcr_kubejs:block/side"),
+                Identifier.parse("mmcr_kubejs:block/top"),
+                Identifier.parse("mmcr_kubejs:block/bottom"),
+                true);
+        MachineAppearanceSpec appearance = new MachineAppearanceSpec(
+                Identifier.parse("mmcr_kubejs:explicit_casing"),
+                Identifier.parse("mmcr_kubejs:block/controller"),
+                Identifier.parse("mmcr_kubejs:block/port"));
+
+        var registration = new MachineBuilderJS("mmcr_kubejs:kubejs_test")
+                .recipeFamily("mmcr_kubejs:kubejs_family")
+                .expandableStructure(true)
+                .factoryThreads(4)
+                .controllerSpec(controllerSpec)
+                .appearance(appearance)
+                .role("module")
+                .createObject();
+
+        assertThat(registration.recipeFamilyId()).isEqualTo(Identifier.parse("mmcr_kubejs:kubejs_family"));
+        assertThat(registration.expandableStructure()).isTrue();
+        assertThat(registration.maxParallelAmount()).isEqualTo(4);
+        assertThat(registration.controllerSpec()).isSameAs(controllerSpec);
+        assertThat(registration.appearance()).isSameAs(appearance);
+        assertThat(registration.role()).isEqualTo(MachineRole.MODULE);
+    }
+
+    @Test
+    void builder_reports_valid_roles_for_invalid_role() {
+        assertThatThrownBy(() -> new MachineBuilderJS("mmcr_kubejs:kubejs_test").role("factory"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Valid roles: [NORMAL, HOST, MODULE]");
     }
 
     @Test
