@@ -133,6 +133,20 @@ class PluginBindingTest {
     }
 
     @Test
+    void recipe_builder_collects_recipe_while_server_reload_transaction_is_active() {
+        var recipeId = MMCR.id("kubejs_transaction_collected_recipe");
+        var reload = new Object();
+
+        Plugin.beginServerReload(reload, 0);
+        new MachineRecipeBuilderJS(recipeId)
+                .machine("mmcr:alloy_furnace")
+                .build();
+
+        assertThat(RecipeRegistry.containsStatic(recipeId)).isFalse();
+        Plugin.abortServerReload(reload);
+    }
+
+    @Test
     void recipe_builder_has_a_stable_public_kubejs_binding() {
         assertThat(Plugin.RECIPE_BUILDER_BINDING).isEqualTo("MMCR_RECIPE_BUILDER");
         assertThat(Plugin.RECIPE_BUILDER_CLASS).isEqualTo(MachineRecipeBuilderJS.class);
