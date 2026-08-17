@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -43,7 +44,7 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
             StructurePreviewVariantSelection selection) {
         Objects.requireNonNull(machineId, "machineId");
         StructurePreviewSchema resolved = resolve(stage, selection);
-        return new StructurePreviewSchema(machineId, resolved.states(), resolved.levelSlots(), resolved.candidates());
+        return new StructurePreviewSchema(machineId, resolved.states(), resolved.levelSlots(), resolved.previewCandidates(), true);
     }
 
     @Override
@@ -52,7 +53,7 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         Objects.requireNonNull(selection, "selection");
         Map<BlockPos, BlockState> states = new LinkedHashMap<>();
         Map<BlockPos, Identifier> levelSlots = new LinkedHashMap<>();
-        Map<BlockPos, List<ItemStack>> candidates = new LinkedHashMap<>();
+        Map<BlockPos, List<StructurePreviewSchema.Candidate>> candidates = new LinkedHashMap<>();
         int levelRank = highestSharedLevelRank(stage);
         for (var entry : stage.pattern().pattern().entrySet()) {
             BlockPos position = entry.getKey().immutable();
@@ -62,11 +63,11 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
                     : levelState(levelSlot, levelRank);
             if (state == null) continue;
             states.put(position, orientController(position, state, stage.pattern().pattern()));
-            List<ItemStack> positionCandidates = candidates(entry.getValue());
+            List<StructurePreviewSchema.Candidate> positionCandidates = candidates(entry.getValue(), stage.modifierReplacements().get(position));
             if (!positionCandidates.isEmpty()) candidates.put(position, positionCandidates);
             if (levelSlot != null) levelSlots.put(position, levelSlot);
         }
-        return new StructurePreviewSchema(RESOLVED_STAGE_ID, states, levelSlots, candidates);
+        return new StructurePreviewSchema(RESOLVED_STAGE_ID, states, levelSlots, candidates, true);
     }
 
     private static int highestSharedLevelRank(MachineStructureStage stage) {
@@ -77,25 +78,28 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
                 .max().orElse(-1);
     }
 
-    private static List<ItemStack> candidates(BlockPredicate predicate) {
-        List<ItemStack> candidates = new ArrayList<>();
-        collectCandidates(predicate, candidates);
+    private static List<StructurePreviewSchema.Candidate> candidates(BlockPredicate predicate, List<SingleBlockModifierReplacement> replacements) {
+        List<StructurePreviewSchema.Candidate> candidates = new ArrayList<>();
+        collectCandidates(predicate, candidates, false);
+        if (replacements != null) {
+            replacements.forEach(replacement -> collectCandidates(replacement.getReplacement(), candidates, true));
+        }
         return List.copyOf(candidates);
     }
 
-    private static void collectCandidates(BlockPredicate predicate, List<ItemStack> candidates) {
+    private static void collectCandidates(BlockPredicate predicate, List<StructurePreviewSchema.Candidate> candidates, boolean modifier) {
         switch (predicate) {
-            case BlockPredicate.OfBlock block -> addCandidate(block.block(), candidates);
-            case BlockPredicate.OfBlockState state -> addCandidate(state.state().getBlock(), candidates);
-            case BlockPredicate.AnyOf anyOf -> anyOf.children().forEach(child -> collectCandidates(child, candidates));
+            case BlockPredicate.OfBlock block -> addCandidate(block.block(), candidates, modifier);
+            case BlockPredicate.OfBlockState state -> addCandidate(state.state().getBlock(), candidates, modifier);
+            case BlockPredicate.AnyOf anyOf -> anyOf.children().forEach(child -> collectCandidates(child, candidates, modifier));
             default -> { }
         }
     }
 
-    private static void addCandidate(net.minecraft.world.level.block.Block block, List<ItemStack> candidates) {
+    private static void addCandidate(net.minecraft.world.level.block.Block block, List<StructurePreviewSchema.Candidate> candidates, boolean modifier) {
         ItemStack stack = new ItemStack(block);
-        if (!stack.isEmpty() && candidates.stream().noneMatch(existing -> ItemStack.isSameItemSameComponents(existing, stack))) {
-            candidates.add(stack);
+        if (!stack.isEmpty() && candidates.stream().noneMatch(existing -> ItemStack.isSameItemSameComponents(existing.stack(), stack))) {
+            candidates.add(new StructurePreviewSchema.Candidate(stack, modifier));
         }
     }
 

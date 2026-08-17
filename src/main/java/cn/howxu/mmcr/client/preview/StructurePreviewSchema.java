@@ -21,7 +21,7 @@ public final class StructurePreviewSchema {
     private final Identifier machineId;
     private final Map<BlockPos, BlockState> states;
     private final Map<BlockPos, Identifier> levelSlots;
-    private final Map<BlockPos, List<ItemStack>> candidates;
+    private final Map<BlockPos, List<Candidate>> candidates;
     private final BlockPos min;
     private final BlockPos max;
     private final List<Float> center;
@@ -34,6 +34,13 @@ public final class StructurePreviewSchema {
 
     public StructurePreviewSchema(Identifier machineId, Map<BlockPos, BlockState> states,
             Map<BlockPos, Identifier> levelSlots, Map<BlockPos, List<ItemStack>> candidates) {
+        this(machineId, states, levelSlots, candidates.entrySet().stream().collect(java.util.stream.Collectors.toMap(
+                Map.Entry::getKey, entry -> entry.getValue().stream().map(stack -> new Candidate(stack, false)).toList(),
+                (left, right) -> left, LinkedHashMap::new)), true);
+    }
+
+    public StructurePreviewSchema(Identifier machineId, Map<BlockPos, BlockState> states,
+            Map<BlockPos, Identifier> levelSlots, Map<BlockPos, List<Candidate>> candidates, boolean markedCandidates) {
         this.machineId = Objects.requireNonNull(machineId, "machineId");
         this.states = copyPositions(states);
         this.levelSlots = copyPositions(levelSlots);
@@ -94,10 +101,20 @@ public final class StructurePreviewSchema {
     }
 
     public List<ItemStack> candidatesAt(BlockPos position) {
-        return candidates.getOrDefault(position, List.of()).stream().map(ItemStack::copy).toList();
+        return previewCandidatesAt(position).stream().map(Candidate::stack).toList();
     }
 
     public Map<BlockPos, List<ItemStack>> candidates() {
+        Map<BlockPos, List<ItemStack>> copy = new LinkedHashMap<>();
+        candidates.forEach((position, values) -> copy.put(position, values.stream().map(Candidate::stack).toList()));
+        return Collections.unmodifiableMap(copy);
+    }
+
+    public List<Candidate> previewCandidatesAt(BlockPos position) {
+        return candidates.getOrDefault(position, List.of()).stream().map(Candidate::copy).toList();
+    }
+
+    public Map<BlockPos, List<Candidate>> previewCandidates() {
         return copyCandidates(candidates);
     }
 
@@ -126,11 +143,21 @@ public final class StructurePreviewSchema {
         return Collections.unmodifiableMap(copy);
     }
 
-    private static Map<BlockPos, List<ItemStack>> copyCandidates(Map<BlockPos, List<ItemStack>> source) {
-        Map<BlockPos, List<ItemStack>> copy = new LinkedHashMap<>();
+    private static Map<BlockPos, List<Candidate>> copyCandidates(Map<BlockPos, List<Candidate>> source) {
+        Map<BlockPos, List<Candidate>> copy = new LinkedHashMap<>();
         source.forEach((position, stacks) -> copy.put(position.immutable(),
-                List.copyOf(stacks.stream().map(ItemStack::copy).toList())));
+                List.copyOf(stacks.stream().map(Candidate::copy).toList())));
         return Collections.unmodifiableMap(copy);
+    }
+
+    public record Candidate(ItemStack stack, boolean modifier) {
+        public Candidate {
+            stack = stack.copy();
+        }
+
+        private Candidate copy() {
+            return new Candidate(stack, modifier);
+        }
     }
 
 }

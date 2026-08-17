@@ -213,6 +213,23 @@ class JeiStructurePreviewWidgetTest {
     }
 
     @Test
+    void structurePreviewMarksModifierCandidatesInTheirTooltip() {
+        RecordingPreviewWidget preview = new RecordingPreviewWidget();
+        preview.selected = hitAt(0, 0, 0);
+        RecordingTooltip tooltip = new RecordingTooltip();
+        BlockPos position = BlockPos.ZERO;
+        StructurePreviewSchema schema = new StructurePreviewSchema(MMCR.id("modifier_tooltip"),
+                Map.of(position, Blocks.GOLD_BLOCK.defaultBlockState()), Map.of(), Map.of(position,
+                List.of(new StructurePreviewSchema.Candidate(new ItemStack(Blocks.GOLD_BLOCK), true))), true);
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, schema, 0, 0, 160, 92);
+
+        widget.getTooltip(tooltip, 6, 125);
+
+        assertThat(tooltip.text()).extracting(FormattedText::getString).containsExactly(
+                new ItemStack(Blocks.GOLD_BLOCK).getHoverName().getString(), "jei.mmcr.structure_preview.modifier");
+    }
+
+    @Test
     void structurePreviewShowsTheFixedBlockWhenItHasNoAlternatives() {
         RecordingPreviewWidget preview = new RecordingPreviewWidget();
         preview.selected = hitAt(0, 0, 0);

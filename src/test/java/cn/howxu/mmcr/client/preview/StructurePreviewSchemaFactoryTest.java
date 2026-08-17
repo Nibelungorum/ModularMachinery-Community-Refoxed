@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -184,6 +185,26 @@ class StructurePreviewSchemaFactoryTest {
     }
 
     @Test
+    void factory_adds_modifier_replacement_blocks_after_the_original_preview_candidates() {
+        BlockPos position = BlockPos.ZERO;
+        MachineStructureStage stage = new MachineStructureStage(1, new BlockArray(Map.of(
+                position, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))), PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), Map.of(position, List.of(
+                modifierReplacement(position, Blocks.GOLD_BLOCK),
+                modifierReplacement(position, Blocks.DIAMOND_BLOCK),
+                new SingleBlockModifierReplacement("unrepresentable", position, new BlockPredicate.Any(), List.of(), "",
+                        ItemStack.EMPTY))), Map.of());
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("modifier_candidates"),
+                StructurePreviewVariantSelection.defaults());
+
+        assertThat(schema.candidatesAt(position)).extracting(ItemStack::getItem).containsExactly(
+                Blocks.IRON_BLOCK.asItem(), Blocks.GOLD_BLOCK.asItem(), Blocks.DIAMOND_BLOCK.asItem());
+        assertThat(schema.previewCandidatesAt(position)).extracting(StructurePreviewSchema.Candidate::modifier).containsExactly(
+                false, true, true);
+    }
+
+    @Test
     void factory_orients_controller_face_away_from_the_structure() {
         BlockState controller = ModBlocks.CONTROLLER.get().defaultBlockState();
         MachineStructureStage stage = new MachineStructureStage(1, new BlockArray(Map.of(
@@ -238,6 +259,11 @@ class StructurePreviewSchemaFactoryTest {
     private static MachineStructureStage stage(int index, BlockState state) {
         return new MachineStructureStage(index, new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlockState(state))),
                 PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of());
+    }
+
+    private static SingleBlockModifierReplacement modifierReplacement(BlockPos position, net.minecraft.world.level.block.Block block) {
+        return new SingleBlockModifierReplacement(block.getDescriptionId(), position, new BlockPredicate.OfBlock(block),
+                List.of(), "", new ItemStack(block));
     }
 
     private static void registerLevels(Map<Identifier, List<net.minecraft.world.level.block.Block>> levelsByType) {

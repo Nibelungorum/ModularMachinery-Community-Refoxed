@@ -173,11 +173,15 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     }
 
     private List<ItemStack> displayedStacks(BlockPos position) {
-        List<ItemStack> candidates = schema.candidatesAt(position);
+        return displayedCandidates(position).stream().map(StructurePreviewSchema.Candidate::stack).toList();
+    }
+
+    private List<StructurePreviewSchema.Candidate> displayedCandidates(BlockPos position) {
+        List<StructurePreviewSchema.Candidate> candidates = schema.previewCandidatesAt(position);
         if (!candidates.isEmpty()) return candidates;
         net.minecraft.world.level.block.state.BlockState state = schema.stateAt(position);
         if (state == null || state.getBlock().asItem() == net.minecraft.world.item.Items.AIR) return List.of();
-        return List.of(new ItemStack(state.getBlock()));
+        return List.of(new StructurePreviewSchema.Candidate(new ItemStack(state.getBlock()), false));
     }
 
     private void ensurePreviewStarted() {
@@ -281,13 +285,15 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
             return;
         }
         if (schema == null || !(preview.selectedHit() instanceof BlockHitResult hit)) return;
-        List<ItemStack> candidates = displayedStacks(hit.getBlockPos());
+        List<StructurePreviewSchema.Candidate> candidates = displayedCandidates(hit.getBlockPos());
         int itemY = height + 33;
         int itemIndex = (int) (mouseX / 18);
         if (mouseY >= itemY && mouseY < itemY + 16 && itemIndex >= 0 && itemIndex < candidates.size()) {
             int offset = (int) Math.floorDiv(clock.getAsLong(), 1000) % candidates.size();
-            ItemStack stack = candidates.get((itemIndex + offset) % candidates.size());
+            StructurePreviewSchema.Candidate candidate = candidates.get((itemIndex + offset) % candidates.size());
+            ItemStack stack = candidate.stack();
             tooltip.add(stack.getHoverName());
+            if (candidate.modifier()) tooltip.add(Component.translatable("jei.mmcr.structure_preview.modifier"));
             tooltip.setIngredient(new ItemStackIngredient(stack));
         }
     }
