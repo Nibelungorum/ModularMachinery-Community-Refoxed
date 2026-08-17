@@ -15,6 +15,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -38,7 +39,7 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
             StructurePreviewVariantSelection selection) {
         Objects.requireNonNull(machineId, "machineId");
         StructurePreviewSchema resolved = resolve(stage, selection);
-        return new StructurePreviewSchema(machineId, resolved.states(), resolved.levelSlots());
+        return new StructurePreviewSchema(machineId, resolved.states(), resolved.levelSlots(), resolved.candidates());
     }
 
     @Override
@@ -57,7 +58,8 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
                     : levelState(levelSlot, levelRank);
             if (state == null) continue;
             states.put(position, orientController(position, state, stage.pattern().pattern()));
-            if (!state.isAir()) candidates.put(position, List.of(new ItemStack(state.getBlock().asItem())));
+            List<ItemStack> positionCandidates = candidates(entry.getValue());
+            if (!positionCandidates.isEmpty()) candidates.put(position, positionCandidates);
             if (levelSlot != null) levelSlots.put(position, levelSlot);
         }
         return new StructurePreviewSchema(RESOLVED_STAGE_ID, states, levelSlots, candidates);
@@ -69,6 +71,28 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
                         .mapToInt(MachineLevel::priority)
                         .max().orElse(-1))
                 .max().orElse(-1);
+    }
+
+    private static List<ItemStack> candidates(BlockPredicate predicate) {
+        List<ItemStack> candidates = new ArrayList<>();
+        collectCandidates(predicate, candidates);
+        return List.copyOf(candidates);
+    }
+
+    private static void collectCandidates(BlockPredicate predicate, List<ItemStack> candidates) {
+        switch (predicate) {
+            case BlockPredicate.OfBlock block -> addCandidate(block.block(), candidates);
+            case BlockPredicate.OfBlockState state -> addCandidate(state.state().getBlock(), candidates);
+            case BlockPredicate.AnyOf anyOf -> anyOf.children().forEach(child -> collectCandidates(child, candidates));
+            default -> { }
+        }
+    }
+
+    private static void addCandidate(net.minecraft.world.level.block.Block block, List<ItemStack> candidates) {
+        ItemStack stack = new ItemStack(block);
+        if (!stack.isEmpty() && candidates.stream().noneMatch(existing -> ItemStack.isSameItemSameComponents(existing, stack))) {
+            candidates.add(stack);
+        }
     }
 
     private static BlockState levelState(Identifier typeId, int levelRank) {

@@ -19,6 +19,7 @@ import net.minecraft.network.chat.FormattedText;
 import net.minecraft.world.inventory.tooltip.TooltipComponent;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.core.Direction;
 import org.junit.jupiter.api.Test;
@@ -200,9 +201,10 @@ class JeiStructurePreviewWidgetTest {
         assertThat(tooltip.text().getFirst().getString()).isEqualTo("jei.mmcr.structure_preview.previous_layer");
 
         tooltip.clear();
-        widget.getTooltip(tooltip, 6, 130);
+        widget.getTooltip(tooltip, 6, 125);
         assertThat(tooltip.text().getFirst().getString())
                 .isEqualTo(new net.minecraft.world.item.ItemStack(Items.IRON_INGOT).getHoverName().getString());
+        assertThat(tooltip.ingredient().getItem()).isEqualTo(Items.IRON_INGOT);
     }
 
     @Test
@@ -213,7 +215,7 @@ class JeiStructurePreviewWidgetTest {
         JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview,
                 schema(Blocks.IRON_BLOCK.defaultBlockState()), 0, 0, 160, 92);
 
-        widget.getTooltip(tooltip, 6, 130);
+        widget.getTooltip(tooltip, 6, 125);
 
         assertThat(tooltip.text().getFirst().getString())
                 .isEqualTo(new net.minecraft.world.item.ItemStack(Blocks.IRON_BLOCK).getHoverName().getString());
@@ -366,15 +368,17 @@ class JeiStructurePreviewWidgetTest {
 
     private static final class RecordingTooltip implements ITooltipBuilder {
         private final List<FormattedText> text = new ArrayList<>();
+        private ITypedIngredient<?> ingredient;
 
         @Override public void add(FormattedText component) { text.add(component); }
         @Override public void addAll(Collection<? extends FormattedText> components) { text.addAll(components); }
         @Override public void add(TooltipComponent component) { }
         @Override public void addKeyUsageComponent(String translationKey, IJeiKeyMapping keyMapping) { }
-        @Override public void setIngredient(ITypedIngredient<?> typedIngredient) { }
+        @Override public void setIngredient(ITypedIngredient<?> typedIngredient) { ingredient = typedIngredient; }
         @Override public void clearIngredient() { }
         @Override public List<Either<FormattedText, TooltipComponent>> getLines() { return List.of(); }
         private List<FormattedText> text() { return text; }
+        private ItemStack ingredient() { return (ItemStack) ingredient.getIngredient(); }
         @Override public void clear() { text.clear(); }
     }
 }

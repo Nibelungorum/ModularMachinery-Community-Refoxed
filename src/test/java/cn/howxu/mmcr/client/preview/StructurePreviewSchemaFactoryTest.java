@@ -160,6 +160,21 @@ class StructurePreviewSchemaFactoryTest {
     }
 
     @Test
+    void factory_keeps_every_concrete_block_option_as_a_preview_candidate() {
+        BlockPredicate predicate = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get())));
+        MachineStructureStage stage = new MachineStructureStage(1, new BlockArray(Map.of(BlockPos.ZERO, predicate)),
+                PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of());
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("port_candidates"),
+                StructurePreviewVariantSelection.defaults());
+
+        assertThat(schema.candidatesAt(BlockPos.ZERO)).extracting(ItemStack::getItem).containsExactlyInAnyOrder(
+                Blocks.IRON_BLOCK.asItem(), ModBlocks.BLOCKS.get("item_input_bus").get().asItem());
+    }
+
+    @Test
     void factory_orients_controller_face_away_from_the_structure() {
         BlockState controller = ModBlocks.CONTROLLER.get().defaultBlockState();
         MachineStructureStage stage = new MachineStructureStage(1, new BlockArray(Map.of(

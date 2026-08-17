@@ -97,6 +97,10 @@ public final class StructurePreviewSchema {
         return candidates.getOrDefault(position, List.of()).stream().map(ItemStack::copy).toList();
     }
 
+    public Map<BlockPos, List<ItemStack>> candidates() {
+        return copyCandidates(candidates);
+    }
+
     public BlockPos min() {
         return min;
     }

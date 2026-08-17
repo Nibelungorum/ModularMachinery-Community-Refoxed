@@ -13,6 +13,8 @@ import mezz.jei.api.gui.inputs.IJeiInputHandler;
 import mezz.jei.api.gui.inputs.IJeiUserInput;
 import mezz.jei.api.gui.builder.ITooltipBuilder;
 import mezz.jei.api.gui.widgets.IRecipeWidget;
+import mezz.jei.api.constants.VanillaTypes;
+import mezz.jei.api.ingredients.ITypedIngredient;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.ScreenPosition;
@@ -146,7 +148,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         List<ItemStack> candidates = displayedStacks(hit.getBlockPos());
         if (candidates.isEmpty()) return;
         int offset = (int) Math.floorDiv(clock.getAsLong(), 1000) % candidates.size();
-        int itemY = y + height + 38;
+        int itemY = y + height + 33;
         for (int index = 0; index < candidates.size() && index * 18 + 16 <= width; index++) {
             graphics.item(candidates.get((index + offset) % candidates.size()), x + index * 18, itemY, 0);
         }
@@ -261,12 +263,19 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         }
         if (schema == null || !(preview.selectedHit() instanceof BlockHitResult hit)) return;
         List<ItemStack> candidates = displayedStacks(hit.getBlockPos());
-        int itemY = y + height + 38;
+        int itemY = y + height + 33;
         int itemIndex = (int) ((mouseX - x) / 18);
         if (mouseY >= itemY && mouseY < itemY + 16 && itemIndex >= 0 && itemIndex < candidates.size()) {
             int offset = (int) Math.floorDiv(clock.getAsLong(), 1000) % candidates.size();
-            tooltip.add(candidates.get((itemIndex + offset) % candidates.size()).getHoverName());
+            ItemStack stack = candidates.get((itemIndex + offset) % candidates.size());
+            tooltip.add(stack.getHoverName());
+            tooltip.setIngredient(new ItemStackIngredient(stack));
         }
+    }
+
+    private record ItemStackIngredient(ItemStack stack) implements ITypedIngredient<ItemStack> {
+        @Override public mezz.jei.api.ingredients.IIngredientType<ItemStack> getType() { return VanillaTypes.ITEM_STACK; }
+        @Override public ItemStack getIngredient() { return stack; }
     }
 
     interface Preview {
