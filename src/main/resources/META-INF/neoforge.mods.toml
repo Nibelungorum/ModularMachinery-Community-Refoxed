@@ -18,6 +18,7 @@ config="mmcr.mixins.json"
 
 [[mixins]]
 config="mmcr.jei.mixins.json"
+requiredMods=["jei"]
 
 [[dependencies.${mod_id}]]
 modId="neoforge"
