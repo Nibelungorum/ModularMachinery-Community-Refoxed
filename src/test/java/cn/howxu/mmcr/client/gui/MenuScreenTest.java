@@ -19,6 +19,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.level.block.Blocks;
@@ -45,6 +46,16 @@ class MenuScreenTest {
         TestBootstrap.bootstrap();
         bind(ModUIs.ITEM_BUS, new MenuType<>((containerId, playerInventory) -> new ItemBusMenu(containerId, playerInventory), FeatureFlags.VANILLA_SET));
         bind(ModUIs.MACHINE_CONTROLLER, new MenuType<>(MachineControllerMenu::clientOpen, FeatureFlags.VANILLA_SET));
+    }
+
+    @Test
+    void recipe_lock_button_loses_focus_after_click() {
+        Button button = Button.builder(Component.empty(), ignored -> {}).bounds(0, 0, 20, 20).build();
+        button.setFocused(true);
+
+        MachineMenuScreen.clearRecipeLockButtonFocus(button);
+
+        assertThat(button.isFocused()).isFalse();
     }
 
     @Test

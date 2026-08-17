@@ -323,8 +323,10 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         if (menu instanceof MachineControllerMenu controller) {
             Rect rect = recipeLockButtonRect(leftPos, topPos, imageWidth, imageHeight);
             recipeLockButton = addRenderableWidget(Button.builder(Component.empty(),
-                    button -> ClientPacketDistributor.sendToServer(new PktRecipeLockPayload(
-                            controller.controllerPos(), 0))).bounds(rect.left(), rect.top(), rect.width(), rect.height()).build());
+                    button -> {
+                        ClientPacketDistributor.sendToServer(new PktRecipeLockPayload(controller.controllerPos(), 0));
+                        clearRecipeLockButtonFocus(button);
+                    }).bounds(rect.left(), rect.top(), rect.width(), rect.height()).build());
             updateRecipeLockTooltip(controller);
         }
     }
@@ -861,6 +863,10 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
 
     private static ItemStack recipeLockIcon() {
         return new ItemStack(Items.KNOWLEDGE_BOOK);
+    }
+
+    static void clearRecipeLockButtonFocus(Button button) {
+        button.setFocused(false);
     }
 
     private static Component tooltipComponent(List<Component> lines) {

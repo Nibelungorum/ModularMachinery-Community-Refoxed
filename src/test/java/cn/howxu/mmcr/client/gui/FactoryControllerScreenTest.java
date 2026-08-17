@@ -11,6 +11,8 @@ import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.network.FactoryControllerSnapshot;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import net.minecraft.network.chat.contents.TranslatableContents;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.network.chat.Component;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
@@ -32,6 +34,16 @@ class FactoryControllerScreenTest {
         cn.howxu.mmcr.test.TestBootstrap.bootstrap();
         bind(cn.howxu.mmcr.registry.ModUIs.FACTORY_CONTROLLER,
                 new MenuType<>(FactoryControllerMenu::clientOpen, FeatureFlags.VANILLA_SET));
+    }
+
+    @Test
+    void recipe_lock_button_loses_focus_after_click() {
+        Button button = Button.builder(Component.empty(), ignored -> {}).bounds(0, 0, 20, 20).build();
+        button.setFocused(true);
+
+        FactoryControllerScreen.clearRecipeLockButtonFocus(button);
+
+        assertThat(button.isFocused()).isFalse();
     }
 
     @Test

@@ -72,8 +72,10 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
         super.init();
         Rect rect = recipeLockButtonRect(leftPos, topPos, imageWidth, imageHeight);
         recipeLockButton = addRenderableWidget(Button.builder(Component.empty(),
-                button -> ClientPacketDistributor.sendToServer(new PktRecipeLockPayload(
-                        menu.controllerPos(), menu.selectedThreadIndex()))).bounds(rect.left(), rect.top(), rect.width(), rect.height()).build());
+                button -> {
+                    ClientPacketDistributor.sendToServer(new PktRecipeLockPayload(menu.controllerPos(), menu.selectedThreadIndex()));
+                    clearRecipeLockButtonFocus(button);
+                }).bounds(rect.left(), rect.top(), rect.width(), rect.height()).build());
         updateRecipeLockTooltip();
     }
 
@@ -340,6 +342,10 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
 
     private static ItemStack recipeLockIcon() {
         return new ItemStack(Items.KNOWLEDGE_BOOK);
+    }
+
+    static void clearRecipeLockButtonFocus(Button button) {
+        button.setFocused(false);
     }
 
     private static Component tooltipComponent(List<Component> lines) {
