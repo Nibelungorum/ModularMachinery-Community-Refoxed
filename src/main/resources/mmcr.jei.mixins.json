@@ -4,6 +4,7 @@
   "package": "cn.howxu.mmcr.mixin.compat.jei",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "JeiRecipeManagerMixin",
     "JeiRecipeGuiLogicMixin",
     "JeiRecipesGuiMixin"
   ],

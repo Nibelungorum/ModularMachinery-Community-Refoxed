@@ -42,7 +42,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     private static final int FLUID_SLOT_CAPACITY = 1000;
     private static final int OVERFLOW_TEXT_OFFSET_X = 5;
-    static final int RECIPE_ARROW_X = 64;
+    static final int RECIPE_ARROW_X = 72;
     static final int RECIPE_ARROW_Y = 8;
     static final int ITEM_OVERLAY_X = 0;
     static final int ITEM_OVERLAY_Y = 0;
@@ -74,12 +74,22 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     @Override
     public int getWidth() {
-        return MachineRecipeLayout.WIDTH;
+        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
+            case 1 -> 168;
+            case 2 -> 168;
+            case 3 -> 168;
+            default -> 168;
+        };
     }
 
     @Override
     public int getHeight() {
-        return MachineRecipeLayout.HEIGHT;
+        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
+            case 1 -> 300;
+            case 2 -> 280;
+            case 3 -> 220;
+            default -> 150;
+        };
     }
 
     @Override

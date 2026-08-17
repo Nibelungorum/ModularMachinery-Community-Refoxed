@@ -99,14 +99,14 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         String[] keys = {"previous_layer", "next_layer", "all_layers", "reset"};
         for (int index = 0; index < keys.length; index++) {
             graphics.text(Minecraft.getInstance().font, Component.translatable("jei.mmcr.structure_preview." + keys[index]),
-                    x + index * 40, y + height + 2, 0xFF404040, false);
+                    x + index * 40, y + height + 14, 0xFF404040, false);
         }
         int selectedLayer = preview.selectedLayer();
         List<Integer> layers = schema == null ? List.of() : schema.layers();
         Component layerText = selectedLayer < 0
                 ? Component.translatable("jei.mmcr.structure_preview.all_layers")
                 : Component.translatable("jei.mmcr.structure_preview.layer", selectedLayer, layers.indexOf(selectedLayer) + 1, layers.size());
-        graphics.text(Minecraft.getInstance().font, layerText, x, y + height - 10, 0xFF404040, false);
+        graphics.text(Minecraft.getInstance().font, layerText, x, y + height + 4, 0xFF404040, false);
     }
 
     static ScreenPosition absoluteGuiOrigin(int absoluteMouseX, int absoluteMouseY, double localMouseX, double localMouseY) {

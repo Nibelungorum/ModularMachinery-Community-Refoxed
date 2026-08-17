@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.jei;
 
+import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -26,8 +27,6 @@ public record MachineRecipeLayout(
     public static final int HEIGHT = 150;
 
     private static final int COLUMNS = 3;
-    private static final int ROWS = 6;
-    private static final int MAX_VISIBLE = COLUMNS * ROWS;
     private static final int SLOT_SIZE = 18;
     private static final int SLOT_START_Y = 8;
     private static final int TEXT_OFFSET_Y = 4;
@@ -36,14 +35,46 @@ public record MachineRecipeLayout(
         return new MachineRecipeLayout(
                 WIDTH,
                 HEIGHT,
-                region(display.fluidInputs().size(), display.itemInputs().size(), 8),
-                region(display.fluidOutputs().size(), display.itemOutputs().size(), 91, true),
+                region(display.fluidInputs().size(), display.itemInputs().size(), 12),
+                region(display.fluidOutputs().size(), display.itemOutputs().size(), 102, true),
                 8,
                 hostRequirementTextY(display),
                 durationTextY(display),
-                132,
-                130
+                transferButtonXForGuiScale(),
+                transferButtonYForGuiScale()
         );
+    }
+
+    // 转移按钮位置
+    private static int transferButtonXForGuiScale() {
+        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
+            case 1 -> 152;
+            case 2 -> 152;
+            case 3 -> 152;
+            default -> 152;
+        };
+    }
+
+    private static int transferButtonYForGuiScale() {
+        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
+            case 1 -> 285;
+            case 2 -> 265;
+            case 3 -> 205;
+            default -> 135;
+        };
+    }
+    // 槽位行数
+    private static int rows() {
+        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
+            case 1 -> 14;
+            case 2 -> 11;
+            case 3 -> 8;
+            default -> 5;
+        };
+    }
+
+    private static int maxVisible() {
+        return COLUMNS * rows();
     }
 
     private static int hostRequirementTextY(MachineRecipeDisplay display) {
@@ -62,7 +93,7 @@ public record MachineRecipeLayout(
     }
 
     private static int visibleRows(int entryCount) {
-        return Math.min(ROWS, (entryCount + COLUMNS - 1) / COLUMNS);
+        return Math.min(rows(), (entryCount + COLUMNS - 1) / COLUMNS);
     }
 
     private static RegionPlan region(int fluidCount, int itemCount, int startX) {
@@ -78,31 +109,32 @@ public record MachineRecipeLayout(
             entries.add(new EntryPlan(Kind.ITEM, index));
         }
 
-        boolean overflowing = entries.size() > MAX_VISIBLE;
-        int visibleCount = Math.min(entries.size(), overflowing ? MAX_VISIBLE - 1 : MAX_VISIBLE);
+        int maxVisible = maxVisible();
+        boolean overflowing = entries.size() > maxVisible;
+        int visibleCount = Math.min(entries.size(), overflowing ? maxVisible - 1 : maxVisible);
         List<SlotPlan> slots = new ArrayList<>(visibleCount);
         for (int cell = 0; cell < visibleCount; cell++) {
             EntryPlan entry = entries.get(cell);
             int column = cell % COLUMNS;
             int row = cell / COLUMNS;
-            if (rightAlign && !(overflowing && row == (MAX_VISIBLE - 1) / COLUMNS)) {
+            if (rightAlign && !(overflowing && row == (maxVisible - 1) / COLUMNS)) {
                 int entriesInRow = Math.min(COLUMNS, visibleCount - row * COLUMNS);
                 column += COLUMNS - entriesInRow;
             }
             slots.add(new SlotPlan(entry, startX + column * SLOT_SIZE, SLOT_START_Y + row * SLOT_SIZE));
         }
         List<EntryPlan> hiddenEntries = overflowing
-                ? entries.subList(MAX_VISIBLE - 1, entries.size())
+                ? entries.subList(maxVisible - 1, entries.size())
                 : List.of();
-        OverflowSlotPlan overflowSlot = overflowing ? overflowSlot(startX, rightAlign) : null;
+        OverflowSlotPlan overflowSlot = overflowing ? overflowSlot(startX, rightAlign, maxVisible) : null;
         return new RegionPlan(List.copyOf(slots), overflowSlot, List.copyOf(hiddenEntries));
     }
 
-    private static OverflowSlotPlan overflowSlot(int startX, boolean rightAlign) {
-        int column = (MAX_VISIBLE - 1) % COLUMNS;
-        int row = (MAX_VISIBLE - 1) / COLUMNS;
+    private static OverflowSlotPlan overflowSlot(int startX, boolean rightAlign, int maxVisible) {
+        int column = (maxVisible - 1) % COLUMNS;
+        int row = (maxVisible - 1) / COLUMNS;
         if (rightAlign) {
-            column += COLUMNS - Math.min(COLUMNS, MAX_VISIBLE - row * COLUMNS);
+            column += COLUMNS - Math.min(COLUMNS, maxVisible - row * COLUMNS);
         }
         return new OverflowSlotPlan(startX + column * SLOT_SIZE, SLOT_START_Y + row * SLOT_SIZE);
     }
