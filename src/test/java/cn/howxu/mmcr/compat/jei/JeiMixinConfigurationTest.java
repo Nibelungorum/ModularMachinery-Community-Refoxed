@@ -36,11 +36,19 @@ class JeiMixinConfigurationTest {
                 .contains("method = \"copyTextureToBuffer")
                 .contains("@Inject(")
                 .doesNotContain("DepthTextureReadbackBridge");
+        assertThat(source("JeiRecipeManagerMixin.java"))
+                .contains("IRecipeCategory<?> recipeCategory,")
+                .contains("Object recipe,")
+                .contains("IFocusGroup focusGroup)");
     }
 
     private static String source(String fileName) throws IOException {
+        String directory = switch (fileName) {
+            case "JeiRecipeGuiLogicMixin.java", "JeiRecipeManagerMixin.java" -> "compat/jei/";
+            default -> "client/preview/";
+        };
         return java.nio.file.Files.readString(java.nio.file.Path.of("src/main/java/cn/howxu/mmcr/mixin")
-                .resolve(fileName.equals("JeiRecipeGuiLogicMixin.java") ? "compat/jei/" : "client/preview/")
+                .resolve(directory)
                 .resolve(fileName));
     }
 }
