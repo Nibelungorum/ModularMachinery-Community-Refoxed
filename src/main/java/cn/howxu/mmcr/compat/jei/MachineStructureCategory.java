@@ -73,10 +73,10 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
 
     private static int previewHeight() {
         return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
-            case 1 -> 265;
-            case 2 -> 244;
-            case 3 -> 186;
-            default -> 116;
+            case 1 -> 245;
+            case 2 -> 224;
+            case 3 -> 166;
+            default -> 96;
         };
     }
 }
