@@ -18,11 +18,11 @@ class MachineStructureCategoryTest {
     void category_uses_a_single_full_page_preview() throws IOException {
         String source = Files.readString(Path.of("src/main/java/cn/howxu/mmcr/compat/jei/MachineStructureCategory.java"));
 
-        assertThat(source).contains("private static final int PREVIEW_X = 4;");
-        assertThat(source).contains("private static final int PREVIEW_Y = 20;");
-        assertThat(source).contains("private static final int PREVIEW_WIDTH = 160;");
-        assertThat(source).contains("private static final int PREVIEW_HEIGHT = 92;");
-        assertThat(source).contains("@Override public int getWidth() { return 168; }");
-        assertThat(source).contains("@Override public int getHeight() { return 128; }");
+        assertThat(source).contains("private static final int PREVIEW_X = 2;");
+        assertThat(source).contains("private static final int PREVIEW_Y = 4;");
+        assertThat(source).contains("case 1 -> 300;");
+        assertThat(source).contains("case 2 -> 280;");
+        assertThat(source).contains("case 3 -> 220;");
+        assertThat(source).contains("default -> 150;");
     }
 }

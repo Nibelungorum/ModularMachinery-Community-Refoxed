@@ -32,22 +32,25 @@ public record MachineRecipeLayout(
     private static final int TEXT_OFFSET_Y = 4;
 
     public static MachineRecipeLayout forDisplay(MachineRecipeDisplay display) {
+        return forDisplay(display, (int) Minecraft.getInstance().getWindow().getGuiScale());
+    }
+
+    public static MachineRecipeLayout forDisplay(MachineRecipeDisplay display, int guiScale) {
         return new MachineRecipeLayout(
                 WIDTH,
                 HEIGHT,
-                region(display.fluidInputs().size(), display.itemInputs().size(), 12),
-                region(display.fluidOutputs().size(), display.itemOutputs().size(), 102, true),
+                region(display.fluidInputs().size(), display.itemInputs().size(), 12, false, guiScale),
+                region(display.fluidOutputs().size(), display.itemOutputs().size(), 102, true, guiScale),
                 8,
-                hostRequirementTextY(display),
-                durationTextY(display),
-                transferButtonXForGuiScale(),
-                transferButtonYForGuiScale()
+                hostRequirementTextY(display, guiScale),
+                durationTextY(display, guiScale),
+                transferButtonXForGuiScale(guiScale),
+                transferButtonYForGuiScale(guiScale)
         );
     }
 
-    // 转移按钮位置
-    private static int transferButtonXForGuiScale() {
-        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
+    private static int transferButtonXForGuiScale(int guiScale) {
+        return switch (guiScale) {
             case 1 -> 152;
             case 2 -> 152;
             case 3 -> 152;
@@ -55,17 +58,16 @@ public record MachineRecipeLayout(
         };
     }
 
-    private static int transferButtonYForGuiScale() {
-        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
+    private static int transferButtonYForGuiScale(int guiScale) {
+        return switch (guiScale) {
             case 1 -> 285;
             case 2 -> 265;
             case 3 -> 205;
             default -> 135;
         };
     }
-    // 槽位行数
-    private static int rows() {
-        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
+    private static int rows(int guiScale) {
+        return switch (guiScale) {
             case 1 -> 14;
             case 2 -> 11;
             case 3 -> 8;
@@ -73,34 +75,30 @@ public record MachineRecipeLayout(
         };
     }
 
-    private static int maxVisible() {
-        return COLUMNS * rows();
+    private static int maxVisible(int guiScale) {
+        return COLUMNS * rows(guiScale);
     }
 
-    private static int hostRequirementTextY(MachineRecipeDisplay display) {
-        return baseMetadataTextY(display);
+    private static int hostRequirementTextY(MachineRecipeDisplay display, int guiScale) {
+        return baseMetadataTextY(display, guiScale);
     }
 
-    private static int durationTextY(MachineRecipeDisplay display) {
-        return baseMetadataTextY(display) + (display.requiredHostIds().isEmpty() ? 0 : 10);
+    private static int durationTextY(MachineRecipeDisplay display, int guiScale) {
+        return baseMetadataTextY(display, guiScale) + (display.requiredHostIds().isEmpty() ? 0 : 10);
     }
 
-    private static int baseMetadataTextY(MachineRecipeDisplay display) {
-        int inputRows = visibleRows(display.fluidInputs().size() + display.itemInputs().size());
-        int outputRows = visibleRows(display.fluidOutputs().size() + display.itemOutputs().size());
+    private static int baseMetadataTextY(MachineRecipeDisplay display, int guiScale) {
+        int inputRows = visibleRows(display.fluidInputs().size() + display.itemInputs().size(), guiScale);
+        int outputRows = visibleRows(display.fluidOutputs().size() + display.itemOutputs().size(), guiScale);
         int rowCount = Math.max(1, Math.max(inputRows, outputRows));
         return SLOT_START_Y + rowCount * SLOT_SIZE + TEXT_OFFSET_Y;
     }
 
-    private static int visibleRows(int entryCount) {
-        return Math.min(rows(), (entryCount + COLUMNS - 1) / COLUMNS);
+    private static int visibleRows(int entryCount, int guiScale) {
+        return Math.min(rows(guiScale), (entryCount + COLUMNS - 1) / COLUMNS);
     }
 
-    private static RegionPlan region(int fluidCount, int itemCount, int startX) {
-        return region(fluidCount, itemCount, startX, false);
-    }
-
-    private static RegionPlan region(int fluidCount, int itemCount, int startX, boolean rightAlign) {
+    private static RegionPlan region(int fluidCount, int itemCount, int startX, boolean rightAlign, int guiScale) {
         List<EntryPlan> entries = new ArrayList<>(fluidCount + itemCount);
         for (int index = 0; index < fluidCount; index++) {
             entries.add(new EntryPlan(Kind.FLUID, index));
@@ -109,7 +107,7 @@ public record MachineRecipeLayout(
             entries.add(new EntryPlan(Kind.ITEM, index));
         }
 
-        int maxVisible = maxVisible();
+        int maxVisible = maxVisible(guiScale);
         boolean overflowing = entries.size() > maxVisible;
         int visibleCount = Math.min(entries.size(), overflowing ? maxVisible - 1 : maxVisible);
         List<SlotPlan> slots = new ArrayList<>(visibleCount);
