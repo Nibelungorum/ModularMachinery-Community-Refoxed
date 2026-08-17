@@ -2,6 +2,10 @@ name: Tag Release
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag
+        required: true
 
 permissions:
   contents: write
@@ -14,6 +18,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.tag }}
           fetch-depth: 0
 
       - name: Set up Java
@@ -31,7 +36,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          tag="${GITHUB_REF_NAME}"
+          tag="${{ inputs.tag }}"
           hash="$(git rev-parse --short HEAD)"
           version="${tag}+${hash}"
 
@@ -61,10 +66,10 @@ jobs:
         run: ./gradlew runGameTestServer --no-daemon
 
       - name: Build
-        run: ./gradlew build
+        run: ./gradlew build --no-daemon
 
       - name: Publish to Maven
-        run: ./gradlew publish
+        run: ./gradlew publish --no-daemon
         env:
           MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}

@@ -6,11 +6,10 @@ modId="${mod_id}"
 version="${mod_version}"
 displayName="${mod_name}"
 logoFile="mmcr.png"
-authors="howxu, HellFirePvP, wiiv, KasumiNova, youyihj, ikexing"
+authors="howxu"
 credits="Based on HellFirePvP code, wiiv most the textures :3, KasumiNova improvements, more MMCE contributors and MMCR contributors!"
 description='''
-Structure previews include adapted LowDragLib2 code under LGPL-3.0-or-later.
-See NOTICE and LICENSES/LGPL-3.0.txt.
+Modular Machinery Community Edition on newer Minecraft! Enjoy brand-new features and extreme performance improvements — unleash your creativity to build multiblock machines and all kinds of recipes!
 '''
 
 [[mixins]]
