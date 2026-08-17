@@ -49,3 +49,9 @@ docs/
 AGENTS.md
 .codegraph
 TODO.md
+
+### KubeJS ingnore
+example/client_scripts/*
+example/config/*
+example/data/*
+example/README.txt
