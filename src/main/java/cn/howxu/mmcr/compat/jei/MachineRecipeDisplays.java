@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 import net.minecraft.core.RegistryAccess;
@@ -44,6 +45,17 @@ public final class MachineRecipeDisplays {
                 MachineRecipeDisplay::machineId,
                 LinkedHashMap::new,
                 Collectors.toList()));
+    }
+
+    public static Map<Identifier, List<MachineRecipeDisplay>> byMachine(RuntimeContentSnapshot snapshot) {
+        RegistryAccess registryAccess = registryAccess();
+        return snapshot.recipes().values().stream()
+                .map(recipe -> MachineRecipeDisplay.from(recipe, registryAccess))
+                .sorted(ORDER)
+                .collect(Collectors.groupingBy(
+                        MachineRecipeDisplay::machineId,
+                        LinkedHashMap::new,
+                        Collectors.toList()));
     }
 
     private static RegistryAccess registryAccess() {

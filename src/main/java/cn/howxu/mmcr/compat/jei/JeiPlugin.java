@@ -15,6 +15,7 @@ import mezz.jei.api.registration.IRecipeCatalystRegistration;
 import mezz.jei.api.registration.IRecipeCategoryRegistration;
 import mezz.jei.api.registration.IRecipeRegistration;
 import mezz.jei.api.registration.IRecipeTransferRegistration;
+import mezz.jei.api.runtime.IJeiRuntime;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
@@ -40,8 +41,14 @@ public final class JeiPlugin implements IModPlugin {
     public void registerCategories(IRecipeCategoryRegistration registration) {
         var guiHelper = registration.getJeiHelpers().getGuiHelper();
         registration.addRecipeCategories(new MachineStructureCategory(guiHelper));
+        JeiRuntimeReloader.markRegisteredMachineCategories(MachineRegistry.getAll().keySet());
         MachineRegistry.getAll().values().forEach(machine ->
                 registration.addRecipeCategories(new MachineRecipeCategory(guiHelper, machine)));
+    }
+
+    @Override
+    public void onRuntimeAvailable(IJeiRuntime runtime) {
+        JeiRuntimeReloader.setRuntime(runtime);
     }
 
     @Override
