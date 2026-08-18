@@ -204,6 +204,27 @@ class StructurePreviewSchemaFactoryTest {
     }
 
     @Test
+    void factory_keeps_base_candidate_first_when_modifiers_have_higher_level_priority() {
+        Identifier modifierLevels = MMCR.id("preview_modifier_priority");
+        registerLevels(Map.of(modifierLevels, List.of(Blocks.IRON_BLOCK, Blocks.DIAMOND_BLOCK)));
+        BlockPos position = BlockPos.ZERO;
+        MachineStructureStage stage = new MachineStructureStage(1, new BlockArray(Map.of(
+                position, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))), PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), Map.of(position, List.of(
+                modifierReplacement(position, Blocks.DIAMOND_BLOCK),
+                modifierReplacement(position, Blocks.GOLD_BLOCK))), Map.of());
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("modifier_priority_candidates"),
+                StructurePreviewVariantSelection.defaults());
+
+        assertThat(schema.stateAt(position)).isEqualTo(Blocks.IRON_BLOCK.defaultBlockState());
+        assertThat(schema.candidatesAt(position)).extracting(ItemStack::getItem).containsExactly(
+                Blocks.IRON_BLOCK.asItem(), Blocks.DIAMOND_BLOCK.asItem(), Blocks.GOLD_BLOCK.asItem());
+        assertThat(schema.previewCandidatesAt(position)).extracting(StructurePreviewSchema.Candidate::modifier).containsExactly(
+                false, true, true);
+    }
+
+    @Test
     void factory_orients_controller_face_away_from_the_structure() {
         BlockState controller = ModBlocks.controllerFor(MMCR.id("blast_furnace")).get().defaultBlockState();
         MachineStructureStage stage = new MachineStructureStage(1, new BlockArray(Map.of(
@@ -274,7 +295,7 @@ class StructurePreviewSchemaFactoryTest {
             for (int index = 0; index < entry.getValue().size(); index++) {
                 var block = entry.getValue().get(index);
                 MachineLevelRegistry.registerLevel(new MachineLevel(MMCR.id(entry.getKey().getPath() + "_" + index), entry.getKey(), index,
-                        new BlockPredicate.OfBlockState(block.defaultBlockState()), new ItemStack(block), LevelModifier.IDENTITY));
+                        new BlockPredicate.OfBlockState(block.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
             }
         }
         MachineLevelRegistry.freezeRegistration();

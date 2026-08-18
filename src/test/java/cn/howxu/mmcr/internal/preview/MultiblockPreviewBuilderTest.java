@@ -51,6 +51,18 @@ class MultiblockPreviewBuilderTest {
     }
 
     @Test
+    void build_uses_original_base_predicate_when_modifier_alternatives_are_supported_by_matching() {
+        var level = LevelStub.create(Map.of());
+        var controller = new BlockPos(0, 64, 0);
+        var basePosition = new BlockPos(1, 0, 0);
+        var pattern = new BlockArray(Map.of(basePosition, new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE)));
+
+        var snapshot = MultiblockPreviewBuilder.build(level, controller, pattern, 8192);
+
+        assertEquals(Blocks.BLAST_FURNACE.defaultBlockState(), entriesByPosition(snapshot).get(basePosition));
+    }
+
+    @Test
     void preview_state_prefers_normal_blocks_before_interfaces_in_any_of() {
         var result = MultiblockPreviewBuilder.previewState(new BlockPredicate.AnyOf(List.of(
                 new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()),
