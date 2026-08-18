@@ -288,8 +288,8 @@ public class MachineRecipeBuilderJS {
         if (machineId == null) {
             throw new IllegalStateException("machine() not called");
         }
-        if (tickTime < 0 || energyPerTick < 0 || maxThreads < 0) {
-            throw new IllegalArgumentException("Recipe counts must not be negative");
+        if (tickTime < 1 || energyPerTick < 0 || maxThreads < 0) {
+            throw new IllegalArgumentException("Recipe tick time must be >= 1 and counts must not be negative");
         }
         for (MachineIngredient input : inputs) {
             if ((input instanceof MachineIngredient.ItemIngredient item && item.count() < 0)
@@ -327,7 +327,9 @@ public class MachineRecipeBuilderJS {
             }
         }
 
-        var recipeRequirements = new ArrayList<MachineRequirement>();
+        List<MachineRequirement> recipeRequirements = deriveRequirements || !requirements.isEmpty()
+                ? new ArrayList<>()
+                : null;
         if (deriveRequirements) {
             for (MachineIngredient input : recipeInputs) recipeRequirements.add(MachineRequirement.fromInput(input));
             for (int index = 0; index < recipeOutputs.size(); index++) {
@@ -335,10 +337,11 @@ public class MachineRecipeBuilderJS {
             }
             for (FluidStack fluidOutput : fluidOutputs) recipeRequirements.add(MachineRequirement.fluidOutput(fluidOutput));
         }
-        recipeRequirements.addAll(requirements);
+        if (recipeRequirements != null) recipeRequirements.addAll(requirements);
 
         return new MachineRecipe(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(recipeOutputs), List.copyOf(conditions), priority, maxThreads,
-                cancelIfPerTickFails, List.copyOf(fluidOutputs), List.copyOf(recipeRequirements), parallelized, List.copyOf(levelRequirements), allowPartialOutputs, new LinkedHashSet<>(requiredHostIds));
+                cancelIfPerTickFails, List.copyOf(fluidOutputs), recipeRequirements == null ? List.of() : List.copyOf(recipeRequirements), parallelized,
+                List.copyOf(levelRequirements), allowPartialOutputs, new LinkedHashSet<>(requiredHostIds), deriveRequirements);
     }
 
     public void build() {

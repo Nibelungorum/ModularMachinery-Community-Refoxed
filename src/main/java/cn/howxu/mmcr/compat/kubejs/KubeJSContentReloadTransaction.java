@@ -55,7 +55,6 @@ final class KubeJSContentReloadTransaction {
     }
 
     private void validate() {
-        MachineStructureRegistry.validateDynamicRoles(structures);
         for (MachineRecipe recipe : recipes.values()) {
             if (RecipeRegistry.containsStatic(recipe.id())) {
                 throw new IllegalStateException("Dynamic recipe conflicts with static recipe: " + recipe.id());

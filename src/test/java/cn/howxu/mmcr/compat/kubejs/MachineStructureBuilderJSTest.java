@@ -157,6 +157,34 @@ class MachineStructureBuilderJSTest {
     }
 
     @Test
+    void builder_applies_class_metadata_set_after_full_structure() {
+        Identifier coilType = Identifier.parse("test:coil");
+        MachineLevelRegistry.beginRegistration();
+        MachineLevelRegistry.registerType(new LevelType(coilType, Component.literal("Coils")));
+        BlockArray full = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+        DynamicPatternSpec dynamic = new DynamicPatternSpec("length", new BlockArray(Map.of()), null,
+                1, 3, BlockPos.ZERO, new BlockPos(0, 0, 1), null);
+        var replacement = new SingleBlockModifierReplacement("speed", new BlockPos(1, 0, 0),
+                new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), "", ItemStack.EMPTY);
+
+        var definition = new MachineStructureBuilderJS("test:full_then_metadata")
+                .fullStructure(full)
+                .portRequirements(PortRequirementSpec.builder().min("item_input_bus", 1).build())
+                .portTierRequirements(PortTierRequirementSpec.builder().anyItemInput().build())
+                .dynamicPattern(dynamic)
+                .levelSlot(BlockPos.ZERO, coilType.toString())
+                .addModifier(replacement)
+                .createObject();
+
+        assertThat(definition.pattern()).isEqualTo(full);
+        assertThat(definition.portRequirements().requirements()).containsKey("item_input_bus");
+        assertThat(definition.portTierRequirements().requirements()).singleElement();
+        assertThat(definition.dynamicPatterns()).containsExactly(dynamic);
+        assertThat(definition.levelSlots()).containsEntry(BlockPos.ZERO, coilType);
+        assertThat(definition.modifierReplacements()).containsKey(new BlockPos(1, 0, 0));
+    }
+
+    @Test
     void extension_requires_an_existing_full_structure() {
         assertThatThrownBy(() -> new MachineStructureBuilderJS("mmcr:expandable")
                 .extension(new BlockArray(Map.of())))

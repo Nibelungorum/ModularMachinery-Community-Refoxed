@@ -38,6 +38,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     public transient Map<BlockPos, Identifier> levelSlots = new LinkedHashMap<>();
     private final List<Declaration> declarations = new ArrayList<>();
     private boolean patternDeclaration;
+    private boolean classMetadataChanged;
 
     public MachineStructureBuilderJS(Identifier id) {
         super(id);
@@ -92,6 +93,8 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
             Map<BlockPos, List<SingleBlockModifierReplacement>> modifiers, Map<BlockPos, Identifier> levels) {
         declarations.add(new Declaration(Declaration.Kind.FULL, Objects.requireNonNull(pattern), ports, tiers,
                 dynamicPatterns, modifiers, validateLevelSlots(levels)));
+        patternDeclaration = false;
+        classMetadataChanged = false;
         return this;
     }
 
@@ -110,21 +113,25 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
 
     public MachineStructureBuilderJS portRequirements(PortRequirementSpec requirements) {
         portRequirements = Objects.requireNonNull(requirements, "requirements");
+        classMetadataChanged = true;
         return this;
     }
 
     public MachineStructureBuilderJS portTierRequirements(PortTierRequirementSpec requirements) {
         portTierRequirements = Objects.requireNonNull(requirements, "requirements");
+        classMetadataChanged = true;
         return this;
     }
 
     public MachineStructureBuilderJS levelSlot(BlockPos pos, String typeId) {
         levelSlots.put(Objects.requireNonNull(pos, "pos"), validateLevelType(Identifier.parse(typeId)));
+        classMetadataChanged = true;
         return this;
     }
 
     public MachineStructureBuilderJS dynamicPattern(DynamicPatternSpec pattern) {
         dynamicPatterns.add(Objects.requireNonNull(pattern, "pattern"));
+        classMetadataChanged = true;
         return this;
     }
 
@@ -132,6 +139,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         Objects.requireNonNull(replacement, "replacement");
         BlockPos pos = Objects.requireNonNull(replacement.getPos(), "replacement.pos");
         modifierReplacements.computeIfAbsent(pos, ignored -> new ArrayList<>()).add(replacement);
+        classMetadataChanged = true;
         return this;
     }
 
@@ -141,7 +149,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
             return new MachineStructureDefinition(id, pattern, portRequirements, portTierRequirements,
                     dynamicPatterns, modifierReplacements, validateLevelSlots(levelSlots));
         }
-        if (!patternDeclaration) return new MachineStructureDefinition(id, declarations);
+        if (!patternDeclaration && !classMetadataChanged) return new MachineStructureDefinition(id, declarations);
         List<Declaration> result = new ArrayList<>(declarations);
         Declaration first = result.getFirst();
         result.set(0, new Declaration(first.kind(), first.pattern(), portRequirements, portTierRequirements,

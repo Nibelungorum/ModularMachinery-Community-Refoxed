@@ -208,4 +208,33 @@ class ModuleRecipeBuilderJSTest {
         assertThat(recipe.requirements()).doesNotContain(MachineRequirement.fromInput(iron));
     }
 
+    @Test
+    void derive_requirements_false_with_empty_requirements_keeps_runtime_requirements_empty() {
+        Identifier machineId = MMCR.id("module_machine");
+        MachineDefinitions.register(MachineRegistration.builder(machineId).build());
+        var iron = new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1);
+
+        var recipe = new MachineRecipeBuilderJS("mmcr:legacy_input_no_requirements")
+                .machine(machineId.toString())
+                .inputs(List.of(iron))
+                .deriveRequirements(false)
+                .createObject();
+
+        assertThat(recipe.requirements()).isEmpty();
+        assertThat(recipe.inputs()).isEmpty();
+    }
+
+    @Test
+    void create_object_rejects_zero_tick_time() {
+        Identifier machineId = MMCR.id("module_machine");
+        MachineDefinitions.register(MachineRegistration.builder(machineId).build());
+
+        assertThatThrownBy(() -> new MachineRecipeBuilderJS("mmcr:zero_tick")
+                .machine(machineId.toString())
+                .tickTime(0)
+                .createObject())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("tick time must be >= 1");
+    }
+
 }
