@@ -88,6 +88,15 @@ class MachineRecipeDataReloadListenerTest {
         assertThat(snapshot).containsOnlyKeys(Identifier.parse("mmcr_test:good"));
     }
 
+    @Test
+    void nonMachineRecipeFilesAreIgnoredBeforeMachineRecipeParsing() {
+        var snapshot = MachineRecipeDataReloadListener.load(resources(Map.of(
+                Identifier.parse("minecraft:recipes/vanilla.json"), resource("{\"type\":\"minecraft:crafting_shaped\"}"),
+                Identifier.parse("mmcr_test:recipes/good.json"), resource(recipeJson()))), registries);
+
+        assertThat(snapshot).containsOnlyKeys(Identifier.parse("mmcr_test:good"));
+    }
+
     private static ResourceManager resources(Map<Identifier, Resource> resources) {
         return (ResourceManager) Proxy.newProxyInstance(
                 MachineRecipeDataReloadListenerTest.class.getClassLoader(), new Class<?>[]{ResourceManager.class},

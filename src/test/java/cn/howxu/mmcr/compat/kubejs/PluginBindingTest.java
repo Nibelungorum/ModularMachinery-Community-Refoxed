@@ -106,6 +106,21 @@ class PluginBindingTest {
     }
 
     @Test
+    void duplicate_recipe_id_is_rejected_without_changing_transaction_snapshot() {
+        var id = MMCR.id("kubejs_duplicate_recipe");
+        var transaction = new KubeJSContentReloadTransaction();
+        transaction.registerStructure(structure(MMCR.id("alloy_furnace")));
+        transaction.registerRecipe(new MachineRecipe(id, MMCR.id("alloy_furnace"), 1, List.of(), List.of()));
+
+        assertThatThrownBy(() -> transaction.registerRecipe(
+                new MachineRecipe(id, MMCR.id("alloy_furnace"), 2, List.of(), List.of())))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(id.toString());
+        transaction.commit();
+        assertThat(RecipeRegistry.getRecipe(id).tickTime()).isEqualTo(1);
+    }
+
+    @Test
     void server_script_error_discards_collected_content_and_preserves_previous_snapshot() {
         var machineId = MMCR.id("alloy_furnace");
         var previousRecipeId = MMCR.id("kubejs_transaction_error_previous_recipe");

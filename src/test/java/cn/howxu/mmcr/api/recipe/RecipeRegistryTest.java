@@ -8,8 +8,10 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RecipeRegistryTest {
 
@@ -79,6 +81,39 @@ class RecipeRegistryTest {
 
         assertThat(RecipeRegistry.getRecipe(oldId)).isNull();
         assertThat(RecipeRegistry.dataPackSnapshot()).containsOnlyKeys(newId);
+    }
+
+    @Test
+    void effectiveCountIndexAndPriorityFollowAllThreeLayersAndDeletion() {
+        var staticRecipe = recipe("mmcr:static_layered", "mmcr:layered_machine");
+        var dataPackRecipe = new MachineRecipe(staticRecipe.id(), staticRecipe.machineId(), 1,
+                List.of(), List.of(), List.of(), 5, 1, false, List.of(), List.of(), false, List.of(), false, Set.of());
+        var dynamicRecipe = recipe("mmcr:kjs_layered", "mmcr:layered_machine");
+        RecipeRegistry.register(staticRecipe);
+        RecipeRegistry.replaceDataPack(Map.of(staticRecipe.id(), dataPackRecipe));
+        RecipeRegistry.replaceDynamic(Map.of(dynamicRecipe.id(), dynamicRecipe));
+
+        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(2);
+        assertThat(RecipeRegistry.recipes()).containsExactly(dataPackRecipe, dynamicRecipe);
+        assertThat(RecipeRegistry.byMachineId(staticRecipe.machineId())).containsExactly(dynamicRecipe, dataPackRecipe);
+
+        RecipeRegistry.replaceDataPack(Map.of());
+
+        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(2);
+        assertThat(RecipeRegistry.getRecipe(staticRecipe.id())).isSameAs(staticRecipe);
+        assertThat(RecipeRegistry.byMachineId(staticRecipe.machineId())).containsExactly(dynamicRecipe, staticRecipe);
+    }
+
+    @Test
+    void staticAndDataPackSnapshotsAreImmutablePublishedLayers() {
+        var id = Identifier.parse("mmcr:immutable_layers");
+        var recipe = recipe(id.toString(), "mmcr:layered_machine");
+        RecipeRegistry.register(recipe);
+        RecipeRegistry.replaceDataPack(Map.of(id, recipe("mmcr:immutable_layers", "mmcr:layered_machine")));
+
+        assertThatThrownBy(() -> RecipeRegistry.dataPackSnapshot().clear())
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThat(RecipeRegistry.staticSnapshot()).containsEntry(id, recipe);
     }
 
     private static MachineRecipe recipe(String id, String machineId) {

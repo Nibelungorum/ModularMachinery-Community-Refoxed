@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.MMCR;
 import net.minecraft.resources.Identifier;
 
 import java.util.Collections;
@@ -10,14 +11,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import cn.howxu.mmcr.MMCR;
 
 public final class RecipeRegistry {
 
     private static final Map<Identifier, MachineRecipe> STATIC_RECIPES = new LinkedHashMap<>();
-    private static volatile Map<Identifier, MachineRecipe> DATA_PACK_RECIPES = Map.of();
-    private static volatile Map<Identifier, MachineRecipe> DYNAMIC_RECIPES = Map.of();
-    private static volatile Map<Identifier, TreeMap<Integer, TreeSet<MachineRecipe>>> BY_MACHINE = Map.of();
+    private static volatile State STATE = State.empty();
     private static long reloadVersion;
     private static long registryVersion;
 
@@ -35,16 +33,15 @@ public final class RecipeRegistry {
             throw new IllegalStateException("Recipe already registered: " + recipe.id());
         }
         STATIC_RECIPES.put(recipe.id(), recipe);
-        rebuildIndex();
+        publish(STATIC_RECIPES, STATE.dataPack(), STATE.dynamic());
         registryVersion++;
     }
 
     public static MachineRecipe getRecipe(Identifier id) {
         if (id == null) return null;
-        MachineRecipe recipe = DATA_PACK_RECIPES.get(id);
-        if (recipe != null) return recipe;
-        recipe = DYNAMIC_RECIPES.get(id);
-        return recipe != null ? recipe : STATIC_RECIPES.get(id);
+        State state = STATE;
+        MachineRecipe recipe = state.effective().get(id);
+        return recipe;
     }
 
     public static List<MachineRecipe> byMachine(Machine machine) {
@@ -54,17 +51,15 @@ public final class RecipeRegistry {
 
     public static List<MachineRecipe> byMachineId(Identifier machineId) {
         if (machineId == null) return Collections.emptyList();
-        TreeMap<Integer, TreeSet<MachineRecipe>> priorityMap = BY_MACHINE.get(machineId);
-        if (priorityMap == null) return Collections.emptyList();
-        return priorityMap.values().stream().flatMap(TreeSet::stream).toList();
+        return STATE.byMachine().getOrDefault(machineId, List.of());
     }
 
     public static List<MachineRecipe> recipes() {
-        return List.copyOf(mergedRecipes().values());
+        return STATE.effectiveValues();
     }
 
     public static int registeredRecipeCount() {
-        return mergedRecipes().size();
+        return STATE.effective().size();
     }
 
     public static long reloadVersion() {
@@ -76,83 +71,100 @@ public final class RecipeRegistry {
     }
 
     public static boolean containsStatic(Identifier id) {
-        return STATIC_RECIPES.containsKey(id);
+        return STATE.staticRecipes().containsKey(id);
     }
 
     public static void replaceDynamic(Map<Identifier, MachineRecipe> recipes) {
         Map<Identifier, MachineRecipe> replacement = new LinkedHashMap<>();
         for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
             Identifier id = entry.getKey();
-            if (STATIC_RECIPES.containsKey(id)) {
+            if (STATE.staticRecipes().containsKey(id)) {
                 throw new IllegalStateException("Dynamic recipe conflicts with static recipe: " + id);
             }
-            if (DATA_PACK_RECIPES.containsKey(id)) {
+            if (STATE.dataPack().containsKey(id)) {
                 throw new IllegalStateException("Dynamic recipe conflicts with data-pack recipe: " + id);
             }
             replacement.put(entry.getKey(), entry.getValue());
         }
-        DYNAMIC_RECIPES = Map.copyOf(replacement);
-        rebuildIndex();
+        publish(STATE.staticRecipes(), STATE.dataPack(), replacement);
         reloadVersion++;
         registryVersion++;
     }
 
     public static Map<Identifier, MachineRecipe> dynamicSnapshot() {
-        return Map.copyOf(DYNAMIC_RECIPES);
+        return STATE.dynamic();
     }
 
     public static Map<Identifier, MachineRecipe> dataPackSnapshot() {
-        return Map.copyOf(DATA_PACK_RECIPES);
+        return STATE.dataPack();
     }
 
     public static Map<Identifier, MachineRecipe> staticSnapshot() {
-        return Map.copyOf(STATIC_RECIPES);
+        return STATE.staticRecipes();
     }
 
     public static void replaceDataPack(Map<Identifier, MachineRecipe> recipes) {
         Map<Identifier, MachineRecipe> replacement = new LinkedHashMap<>();
         for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
-            if (STATIC_RECIPES.containsKey(entry.getKey())) {
-                MMCR.LOG.warn("Data-pack recipe {} overrides static recipe {}", entry.getKey(), entry.getKey());
+            if (STATE.staticRecipes().containsKey(entry.getKey())) {
+                MMCR.LOG.warn("Data-pack recipe {} overrides static recipe {} from the static layer", entry.getKey(), entry.getKey());
             }
             replacement.put(entry.getKey(), entry.getValue());
         }
-        DATA_PACK_RECIPES = Map.copyOf(replacement);
-        rebuildIndex();
+        publish(STATE.staticRecipes(), replacement, STATE.dynamic());
         reloadVersion++;
         registryVersion++;
     }
 
-    private static Map<Identifier, MachineRecipe> mergedRecipes() {
-        Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>(STATIC_RECIPES);
-        recipes.putAll(DATA_PACK_RECIPES);
-        for (Map.Entry<Identifier, MachineRecipe> entry : DYNAMIC_RECIPES.entrySet()) {
+    private static void publish(Map<Identifier, MachineRecipe> staticRecipes,
+                                Map<Identifier, MachineRecipe> dataPack,
+                                Map<Identifier, MachineRecipe> dynamic) {
+        Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>(staticRecipes);
+        recipes.putAll(dataPack);
+        for (Map.Entry<Identifier, MachineRecipe> entry : dynamic.entrySet()) {
             recipes.putIfAbsent(entry.getKey(), entry.getValue());
         }
-        return recipes;
-    }
-
-    private static void rebuildIndex() {
-        Map<Identifier, TreeMap<Integer, TreeSet<MachineRecipe>>> byMachine = new LinkedHashMap<>();
-        for (MachineRecipe recipe : mergedRecipes().values()) {
-            TreeMap<Integer, TreeSet<MachineRecipe>> priorities = byMachine.computeIfAbsent(
+        Map<Identifier, List<MachineRecipe>> byMachine = new LinkedHashMap<>();
+        Map<Identifier, TreeMap<Integer, TreeSet<MachineRecipe>>> ordered = new LinkedHashMap<>();
+        for (MachineRecipe recipe : recipes.values()) {
+            TreeMap<Integer, TreeSet<MachineRecipe>> priorities = ordered.computeIfAbsent(
                     recipe.machineId(), ignored -> new TreeMap<>());
             priorities.computeIfAbsent(recipe.priority(), ignored ->
                     new TreeSet<>(Comparator.comparing(MachineRecipe::id))).add(recipe);
         }
-        BY_MACHINE = Map.copyOf(byMachine);
+        for (Map.Entry<Identifier, TreeMap<Integer, TreeSet<MachineRecipe>>> entry : ordered.entrySet()) {
+            byMachine.put(entry.getKey(), entry.getValue().values().stream().flatMap(TreeSet::stream).toList());
+        }
+        STATE = new State(immutable(staticRecipes), immutable(dataPack), immutable(dynamic),
+                immutable(recipes), immutable(byMachine));
     }
 
     public static void clearAll() {
         STATIC_RECIPES.clear();
-        DATA_PACK_RECIPES = Map.of();
-        DYNAMIC_RECIPES = Map.of();
-        BY_MACHINE = Map.of();
+        STATE = State.empty();
         reloadVersion++;
         registryVersion++;
     }
 
     public static void clearForTesting() {
         clearAll();
+    }
+
+    private static <K, V> Map<K, V> immutable(Map<K, V> values) {
+        return Collections.unmodifiableMap(new LinkedHashMap<>(values));
+    }
+
+    private record State(Map<Identifier, MachineRecipe> staticRecipes,
+                         Map<Identifier, MachineRecipe> dataPack,
+                         Map<Identifier, MachineRecipe> dynamic,
+                         Map<Identifier, MachineRecipe> effective,
+                         Map<Identifier, List<MachineRecipe>> byMachine) {
+        private static State empty() {
+            return new State(Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
+        }
+
+        private List<MachineRecipe> effectiveValues() {
+            return List.copyOf(effective.values());
+        }
     }
 }

@@ -4,6 +4,8 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeJson;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.Identifier;
@@ -55,7 +57,11 @@ public final class MachineRecipeDataReloadListener extends SimplePreparableReloa
             Identifier recipeId = Identifier.fromNamespaceAndPath(resourceLocation.getNamespace(),
                     resourceLocation.getPath().substring("recipes/".length(), resourceLocation.getPath().length() - ".json".length()));
             try (Reader reader = entry.getValue().openAsReader()) {
-                recipes.put(recipeId, MachineRecipeJson.parse(recipeId, JsonParser.parseReader(reader).getAsJsonObject(), registries));
+                JsonElement element = JsonParser.parseReader(reader);
+                if (!element.isJsonObject()) continue;
+                JsonObject object = element.getAsJsonObject();
+                if (!object.has("type") || !MachineRecipeJson.TYPE.toString().equals(object.get("type").getAsString())) continue;
+                recipes.put(recipeId, MachineRecipeJson.parse(recipeId, object, registries));
             } catch (Exception exception) {
                 MMCR.LOG.error("Failed to load machine recipe {} from {}", recipeId, resourceLocation, exception);
             }
