@@ -13,6 +13,8 @@ import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Map;
 
@@ -94,7 +96,41 @@ class MachineStructureRequirementsTest {
                 .hasMessageContaining("L");
     }
 
+    @Test
+    void publicDeclarationAndStageApiDoNotAcceptOrExposePositionBoundRequirementMaps() {
+        assertThat(MachineStructureDefinition.Declaration.class.isRecord()).isFalse();
+        assertThat(MachineStructureStage.class.isRecord()).isFalse();
+        assertThat(publicConstructorSignatures(MachineStructureDefinition.class))
+                .noneMatch(MachineStructureRequirementsTest::isPositionBoundRequirementMap);
+        assertThat(publicConstructorSignatures(MachineStructureDefinition.Declaration.class))
+                .noneMatch(MachineStructureRequirementsTest::isPositionBoundRequirementMap);
+        assertThat(publicConstructorSignatures(MachineStructureStage.class))
+                .noneMatch(MachineStructureRequirementsTest::isPositionBoundRequirementMap);
+    }
+
     private static SingleBlockModifierReplacement replacement(String name, BlockPredicate predicate) {
         return new SingleBlockModifierReplacement(name, predicate, List.of(), ItemStack.EMPTY);
+    }
+
+    private static List<Type> publicConstructorSignatures(Class<?> type) {
+        java.util.ArrayList<Type> signatures = new java.util.ArrayList<>();
+        for (var constructor : type.getConstructors()) {
+            signatures.addAll(List.of(constructor.getGenericParameterTypes()));
+        }
+        return List.copyOf(signatures);
+    }
+
+    private static boolean isPositionBoundRequirementMap(Type type) {
+        if (!(type instanceof ParameterizedType parameterized) || parameterized.getRawType() != Map.class) return false;
+        Type[] arguments = parameterized.getActualTypeArguments();
+        return arguments.length == 2 && arguments[0] == BlockPos.class
+                && (arguments[1] == Identifier.class || isSingleBlockModifierReplacementList(arguments[1]));
+    }
+
+    private static boolean isSingleBlockModifierReplacementList(Type type) {
+        return type instanceof ParameterizedType parameterized
+                && parameterized.getRawType() == List.class
+                && parameterized.getActualTypeArguments().length == 1
+                && parameterized.getActualTypeArguments()[0] == SingleBlockModifierReplacement.class;
     }
 }

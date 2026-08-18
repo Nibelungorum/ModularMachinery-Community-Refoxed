@@ -29,12 +29,11 @@ public record MachineStructureDefinition(Identifier machineId, List<Declaration>
             PortRequirementSpec portRequirements,
             PortTierRequirementSpec portTierRequirements,
             List<DynamicPatternSpec> dynamicPatterns,
-            Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
-            Map<BlockPos, Identifier> levelSlots) {
+            MachineStructureRequirements requirements) {
         this(machineId, List.of(new Declaration(Declaration.Kind.FULL, pattern,
                 portRequirements == null ? PortRequirementSpec.none() : portRequirements,
                 portTierRequirements == null ? PortTierRequirementSpec.none() : portTierRequirements,
-                dynamicPatterns, modifierReplacements, levelSlots)));
+                dynamicPatterns, requirements)));
     }
 
     public MachineStructureDefinition(
@@ -42,18 +41,8 @@ public record MachineStructureDefinition(Identifier machineId, List<Declaration>
             BlockArray pattern,
             PortRequirementSpec portRequirements,
             List<DynamicPatternSpec> dynamicPatterns,
-            Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements) {
-        this(machineId, pattern, portRequirements, PortTierRequirementSpec.none(), dynamicPatterns, modifierReplacements, Map.of());
-    }
-
-    public MachineStructureDefinition(
-            Identifier machineId,
-            BlockArray pattern,
-            PortRequirementSpec portRequirements,
-            PortTierRequirementSpec portTierRequirements,
-            List<DynamicPatternSpec> dynamicPatterns,
-            Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements) {
-        this(machineId, pattern, portRequirements, portTierRequirements, dynamicPatterns, modifierReplacements, Map.of());
+            MachineStructureRequirements requirements) {
+        this(machineId, pattern, portRequirements, PortTierRequirementSpec.none(), dynamicPatterns, requirements);
     }
 
     public BlockArray pattern() {
@@ -89,23 +78,9 @@ public record MachineStructureDefinition(Identifier machineId, List<Declaration>
     private static MachineStructureRequirementCompiler.Compiled compiled(Declaration declaration) {
         MachineStructureRequirementCompiler.Compiled compiled =
                 MachineStructureRequirementCompiler.compile(declaration.pattern(), declaration.requirements());
-        Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements =
-                new LinkedHashMap<>(declaration.modifierReplacements());
-        compiled.modifierReplacements().forEach((position, replacements) ->
-                modifierReplacements.merge(position, replacements, (left, right) -> {
-                    java.util.ArrayList<SingleBlockModifierReplacement> merged = new java.util.ArrayList<>(left);
-                    merged.addAll(right);
-                    return List.copyOf(merged);
-                }));
-        Map<BlockPos, Identifier> levelSlots = new LinkedHashMap<>(declaration.levelSlots());
-        compiled.levelSlots().forEach((position, typeId) -> {
-            Identifier existing = levelSlots.putIfAbsent(position, typeId);
-            if (existing != null && !existing.equals(typeId)) {
-                throw new IllegalArgumentException("conflicting compiled requirement at " + position);
-            }
-        });
         return new MachineStructureRequirementCompiler.Compiled(
-                Collections.unmodifiableMap(modifierReplacements), Collections.unmodifiableMap(levelSlots));
+                Collections.unmodifiableMap(new LinkedHashMap<>(compiled.modifierReplacements())),
+                Collections.unmodifiableMap(new LinkedHashMap<>(compiled.levelSlots())));
     }
 
     /**
@@ -113,39 +88,48 @@ public record MachineStructureDefinition(Identifier machineId, List<Declaration>
      *
      * @author howxu <dev@howxu.cn>
      */
-        public record Declaration(
-                Kind kind,
-                BlockArray pattern,
-                PortRequirementSpec portRequirements,
-                PortTierRequirementSpec portTierRequirements,
-                List<DynamicPatternSpec> dynamicPatterns,
-                MachineStructureRequirements requirements,
-                Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
-                Map<BlockPos, Identifier> levelSlots) {
+    public static final class Declaration {
+        private final Kind kind;
+        private final BlockArray pattern;
+        private final PortRequirementSpec portRequirements;
+        private final PortTierRequirementSpec portTierRequirements;
+        private final List<DynamicPatternSpec> dynamicPatterns;
+        private final MachineStructureRequirements requirements;
 
-            public Declaration(Kind kind, BlockArray pattern, PortRequirementSpec portRequirements,
-                    PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
-                    MachineStructureRequirements requirements) {
-                this(kind, pattern, portRequirements, portTierRequirements, dynamicPatterns,
-                        requirements, Map.of(), Map.of());
-            }
-
-            public Declaration(Kind kind, BlockArray pattern, PortRequirementSpec portRequirements,
-                    PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
-                    Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
-                    Map<BlockPos, Identifier> levelSlots) {
-                this(kind, pattern, portRequirements, portTierRequirements, dynamicPatterns,
-                        MachineStructureRequirements.EMPTY, modifierReplacements, levelSlots);
-            }
-
-        public Declaration {
-            Objects.requireNonNull(kind, "kind");
+        public Declaration(Kind kind, BlockArray pattern, PortRequirementSpec portRequirements,
+                PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
+                MachineStructureRequirements requirements) {
+            this.kind = Objects.requireNonNull(kind, "kind");
             Objects.requireNonNull(pattern, "pattern");
-            pattern = new BlockArray(pattern.pattern(), copyStringMap(pattern.tagsByPosition()), pattern.symbolsByPosition());
-            dynamicPatterns = List.copyOf(dynamicPatterns == null ? List.of() : dynamicPatterns);
-            requirements = (requirements == null ? MachineStructureRequirements.EMPTY : requirements).validate(pattern);
-            modifierReplacements = copyNestedMap(modifierReplacements == null ? Map.of() : modifierReplacements);
-            levelSlots = copyMap(levelSlots == null ? Map.of() : levelSlots);
+            this.pattern = new BlockArray(pattern.pattern(), copyStringMap(pattern.tagsByPosition()), pattern.symbolsByPosition());
+            this.portRequirements = portRequirements;
+            this.portTierRequirements = portTierRequirements;
+            this.dynamicPatterns = List.copyOf(dynamicPatterns == null ? List.of() : dynamicPatterns);
+            this.requirements = (requirements == null ? MachineStructureRequirements.EMPTY : requirements).validate(this.pattern);
+        }
+
+        public Kind kind() {
+            return kind;
+        }
+
+        public BlockArray pattern() {
+            return pattern;
+        }
+
+        public PortRequirementSpec portRequirements() {
+            return portRequirements;
+        }
+
+        public PortTierRequirementSpec portTierRequirements() {
+            return portTierRequirements;
+        }
+
+        public List<DynamicPatternSpec> dynamicPatterns() {
+            return dynamicPatterns;
+        }
+
+        public MachineStructureRequirements requirements() {
+            return requirements;
         }
 
         public static Declaration full(BlockArray pattern) {
@@ -157,21 +141,10 @@ public record MachineStructureDefinition(Identifier machineId, List<Declaration>
             return new Declaration(Kind.EXTENSION, pattern, null, null, List.of(), MachineStructureRequirements.EMPTY);
         }
 
-        private static Map<BlockPos, List<SingleBlockModifierReplacement>> copyNestedMap(
-                Map<BlockPos, List<SingleBlockModifierReplacement>> source) {
-            Map<BlockPos, List<SingleBlockModifierReplacement>> copy = new LinkedHashMap<>();
-            source.forEach((position, values) -> copy.put(position, List.copyOf(values)));
-            return Collections.unmodifiableMap(copy);
-        }
-
-        private static Map<BlockPos, List<String>> copyStringMap(Map<BlockPos, List<String>> source) {
+        private static Map<net.minecraft.core.BlockPos, List<String>> copyStringMap(Map<net.minecraft.core.BlockPos, List<String>> source) {
             Map<BlockPos, List<String>> copy = new LinkedHashMap<>();
             source.forEach((position, values) -> copy.put(position, List.copyOf(values)));
             return Collections.unmodifiableMap(copy);
-        }
-
-        private static <T> Map<BlockPos, T> copyMap(Map<BlockPos, T> source) {
-            return Collections.unmodifiableMap(new LinkedHashMap<>(source));
         }
 
         public enum Kind {

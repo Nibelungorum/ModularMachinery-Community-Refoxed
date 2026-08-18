@@ -189,7 +189,7 @@ class BuildPlacementConsistencyTest {
     private static Machine stagedFixture(Identifier id, BlockArray... stages) {
         List<MachineStructureStage> structureStages = java.util.stream.IntStream.range(0, stages.length)
                 .mapToObj(index -> new MachineStructureStage(index + 1, stages[index], PortRequirementSpec.none(),
-                        PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of()))
+                        PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY))
                 .toList();
         return new DynamicMachine(
                 id,

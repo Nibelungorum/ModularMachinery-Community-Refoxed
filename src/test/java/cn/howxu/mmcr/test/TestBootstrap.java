@@ -143,11 +143,11 @@ public final class TestBootstrap {
 
     private static void registerGameTestMachineStructures(DynamicContentReloadService.Candidate candidate) {
         candidate.registerStructure(new MachineStructureDefinition(id("test_cube"), org.nibelungorum.TestMachines.casingCubePattern(),
-                PortRequirementSpec.none(), List.of(), Map.of()));
+                PortRequirementSpec.none(), List.of(), cn.howxu.mmcr.api.machine.MachineStructureRequirements.EMPTY));
         candidate.registerStructure(new MachineStructureDefinition(id("controller_tick"), org.nibelungorum.TestMachines.casingCubePattern(),
-                PortRequirementSpec.none(), List.of(), Map.of()));
+                PortRequirementSpec.none(), List.of(), cn.howxu.mmcr.api.machine.MachineStructureRequirements.EMPTY));
         candidate.registerStructure(new MachineStructureDefinition(id("iron_compressor"), org.nibelungorum.TestMachines.ironCompressorPattern(),
-                PortRequirementSpec.none(), List.of(), Map.of()));
+                PortRequirementSpec.none(), List.of(), cn.howxu.mmcr.api.machine.MachineStructureRequirements.EMPTY));
         candidate.registerStructure(new MachineStructureDefinition(id("distillation_tower_test"), org.nibelungorum.TestMachines.distillationTowerDeclarations()));
         candidate.registerStructure(new MachineStructureDefinition(id("expandable_structure_stages"), org.nibelungorum.TestMachines.expandableStageDeclarations()));
         candidate.registerStructure(new MachineStructureDefinition(id("expandable_structure_vertical_roll"), org.nibelungorum.TestMachines.expandableStageDeclarations()));

@@ -99,34 +99,22 @@ public final class DefaultMachines {
     private static MachineStructureDefinition structureOf(Machine machine) {
         return new MachineStructureDefinition(machine.registryName(), machine.structureStages().stream()
                 .map(stage -> new Declaration(Declaration.Kind.FULL, stage.pattern(), stage.portRequirements(),
-                        stage.portTierRequirements(), stage.dynamicPatterns(), stage.requirements(),
-                        stage.modifierReplacements(), stage.levelSlots()))
+                        stage.portTierRequirements(), stage.dynamicPatterns(), stage.requirements()))
                 .toList());
     }
 
     private static MachineStructureDefinition thermalSmeltingFurnaceStructure() {
         Machine machine = thermalSmeltingFurnace();
-        Map<BlockPos, Identifier> levelSlots = new LinkedHashMap<>();
-        for (var entry : machine.pattern().pattern().entrySet()) {
-            if (isThermalSmeltingCoil(entry.getValue())) {
-                levelSlots.put(entry.getKey(), DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE);
-            }
-        }
+        MachineStructureRequirements requirements = MachineStructureRequirements.builder()
+                .levelSlot('X', DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE)
+                .build(machine.pattern());
         return new MachineStructureDefinition(
                 machine.registryName(),
                 machine.pattern(),
                 machine.portRequirements(),
                 machine.portTierRequirements(),
                 machine.dynamicPatterns(),
-                Map.of(),
-                levelSlots);
-    }
-
-    private static boolean isThermalSmeltingCoil(BlockPredicate predicate) {
-        return predicate.matches(Blocks.COPPER_BLOCK.defaultBlockState())
-                && predicate.matches(Blocks.IRON_BLOCK.defaultBlockState())
-                && predicate.matches(Blocks.GOLD_BLOCK.defaultBlockState())
-                && predicate.matches(Blocks.DIAMOND_BLOCK.defaultBlockState());
+                requirements);
     }
 
     /**
@@ -231,7 +219,7 @@ public final class DefaultMachines {
                 1,
                 List.of(),
                 List.of(new MachineStructureStage(1, pattern, portRequirements, tierRequirements,
-                        List.of(), alloyFurnaceRequirements(), Map.of(), Map.of())));
+                        List.of(), alloyFurnaceRequirements())));
     }
 
     /**
@@ -571,7 +559,8 @@ public final class DefaultMachines {
                 .controller('E')
                 .build();
         return new MachineStructureDefinition(SPACE_ELEVATOR_ID, pattern, PortRequirementSpec.none(),
-                PortTierRequirementSpec.builder().anyItemInput().anyEnergyInput().build(), List.of(), Map.of());
+                PortTierRequirementSpec.builder().anyItemInput().anyEnergyInput().build(), List.of(),
+                MachineStructureRequirements.EMPTY);
     }
 
     private static MachineStructureDefinition spaceReassemblerStructure() {
@@ -594,7 +583,8 @@ public final class DefaultMachines {
                 .controller('F')
                 .build();
         return new MachineStructureDefinition(SPACE_REASSEMBLER_ID, pattern, PortRequirementSpec.none(),
-                PortTierRequirementSpec.builder().anyItemInput().anyItemOutput().anyEnergyInput().build(), List.of(), Map.of());
+                PortTierRequirementSpec.builder().anyItemInput().anyItemOutput().anyEnergyInput().build(), List.of(),
+                MachineStructureRequirements.EMPTY);
     }
 
     private static BlockArray ecoMatrixPattern(int width, BlockPredicate a, Block controller) {
@@ -615,7 +605,7 @@ public final class DefaultMachines {
 
     private static Declaration declaration(BlockArray pattern, PortTierRequirementSpec requirements) {
         return new Declaration(Declaration.Kind.FULL, pattern, PortRequirementSpec.none(), requirements,
-                List.of(), Map.of(), Map.of());
+                List.of(), MachineStructureRequirements.EMPTY);
     }
 
     private static BlockPredicate portFamily(IOType ioType, PortTierRequirementSpec.PortCategory category) {

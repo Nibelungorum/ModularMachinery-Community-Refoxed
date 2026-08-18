@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -119,7 +120,8 @@ class DynamicContentReloadServiceTest {
 
     private static MachineStructureDefinition structure(String id) {
         Identifier identifier = Identifier.parse(id);
-        return new MachineStructureDefinition(identifier, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(), Map.of());
+        return new MachineStructureDefinition(identifier, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(),
+                MachineStructureRequirements.EMPTY);
     }
 
     private static MachineStructureDefinition failingStructure(String id) {
@@ -127,6 +129,6 @@ class DynamicContentReloadServiceTest {
         BlockPos outsidePattern = new BlockPos(1, 0, 0);
         var replacement = new SingleBlockModifierReplacement("invalid", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), ItemStack.EMPTY);
         return new MachineStructureDefinition(identifier, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(),
-                Map.of(outsidePattern, List.of(replacement)));
+                MachineStructureRequirements.builder().modifier('X', replacement).build());
     }
 }

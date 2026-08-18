@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -106,7 +107,8 @@ class DynamicModuleReloadValidationTest {
         for (int index = 0; index < couplers; index++) {
             pattern.put(new BlockPos(index, 0, 0), BlockPredicate.machineCoupler());
         }
-        return new MachineStructureDefinition(id, new BlockArray(pattern), PortRequirementSpec.none(), List.of(), Map.of());
+        return new MachineStructureDefinition(id, new BlockArray(pattern), PortRequirementSpec.none(), List.of(),
+                MachineStructureRequirements.EMPTY);
     }
 
     private static MachineRecipe recipe(Identifier id, Identifier machineId) {

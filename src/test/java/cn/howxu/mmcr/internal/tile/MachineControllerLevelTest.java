@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.level.LevelMismatch;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
@@ -181,11 +182,16 @@ class MachineControllerLevelTest {
         MachineLevelRegistry.freezeRegistration();
 
         Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
-        pattern.put(new BlockPos(1, 0, 0), new BlockPredicate.AnyOf(List.of(copper.statePredicate(), kanthal.statePredicate())));
-        pattern.put(new BlockPos(2, 0, 0), new BlockPredicate.AnyOf(List.of(copper.statePredicate(), kanthal.statePredicate())));
+        BlockPos firstSlot = new BlockPos(1, 0, 0);
+        BlockPos secondSlot = new BlockPos(2, 0, 0);
+        pattern.put(firstSlot, new BlockPredicate.AnyOf(List.of(copper.statePredicate(), kanthal.statePredicate())));
+        pattern.put(secondSlot, new BlockPredicate.AnyOf(List.of(copper.statePredicate(), kanthal.statePredicate())));
+        BlockArray blockArray = new BlockArray(pattern, Map.of(), Map.of(firstSlot, 'A', secondSlot, 'B'));
         MachineStructureRegistry.replaceDynamic(Map.of(MACHINE_ID, new MachineStructureDefinition(
-                MACHINE_ID, new BlockArray(pattern), null, null, List.of(), Map.of(),
-                Map.of(new BlockPos(1, 0, 0), COIL_TYPE, new BlockPos(2, 0, 0), COIL_TYPE))));
+                MACHINE_ID, blockArray, null, null, List.of(), MachineStructureRequirements.builder()
+                .levelSlot('A', COIL_TYPE)
+                .levelSlot('B', COIL_TYPE)
+                .build(blockArray))));
 
         MachineControllerBlockEntity controller = allocateController();
         setField(MachineControllerBlockEntity.class, controller, "foundModifiers", new LinkedHashMap<>());
@@ -210,11 +216,16 @@ class MachineControllerLevelTest {
     private MachineControllerBlockEntity controllerWithUnresolvedSlot() throws Exception {
         MachineControllerBlockEntity controller = controllerWithSlots(Blocks.COPPER_BLOCK, Blocks.COPPER_BLOCK);
         Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
-        pattern.put(new BlockPos(1, 0, 0), new BlockPredicate.AnyOf(List.of(copper.statePredicate(), kanthal.statePredicate())));
-        pattern.put(new BlockPos(2, 0, 0), new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK));
+        BlockPos firstSlot = new BlockPos(1, 0, 0);
+        BlockPos secondSlot = new BlockPos(2, 0, 0);
+        pattern.put(firstSlot, new BlockPredicate.AnyOf(List.of(copper.statePredicate(), kanthal.statePredicate())));
+        pattern.put(secondSlot, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK));
+        BlockArray blockArray = new BlockArray(pattern, Map.of(), Map.of(firstSlot, 'A', secondSlot, 'B'));
         MachineStructureRegistry.replaceDynamic(Map.of(MACHINE_ID, new MachineStructureDefinition(
-                MACHINE_ID, new BlockArray(pattern), null, null, List.of(), Map.of(),
-                Map.of(new BlockPos(1, 0, 0), COIL_TYPE, new BlockPos(2, 0, 0), COIL_TYPE))));
+                MACHINE_ID, blockArray, null, null, List.of(), MachineStructureRequirements.builder()
+                .levelSlot('A', COIL_TYPE)
+                .levelSlot('B', COIL_TYPE)
+                .build(blockArray))));
         BlockPos controllerPos = controller.getBlockPos();
         setField(BlockEntity.class, controller, "level", LevelStub.create(Map.of(
                 controllerPos, testControllerBlock(),
@@ -248,7 +259,7 @@ class MachineControllerLevelTest {
         patternBlocks.forEach((pos, block) -> patternPredicates.put(pos, new BlockPredicate.OfBlock(block)));
         BlockArray pattern = new BlockArray(patternPredicates);
         MachineStructureRegistry.replaceDynamic(Map.of(MACHINE_ID, new MachineStructureDefinition(
-                MACHINE_ID, pattern, null, null, List.of(), Map.of(), Map.of())));
+                MACHINE_ID, pattern, null, null, List.of(), MachineStructureRequirements.EMPTY)));
 
         MachineControllerBlockEntity controller = allocateController();
         setField(MachineControllerBlockEntity.class, controller, "foundModifiers", new LinkedHashMap<>());

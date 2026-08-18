@@ -44,7 +44,7 @@ public final class MachinePatternCompiler {
     private static CompiledMachinePattern compileStage(Machine machine, int stageNumber, BlockArray pattern,
                                                        Map<BlockArrayCache.Key, BlockArray> cache) {
         return compileStage(machine, new MachineStructureStage(stageNumber, pattern, machine.portRequirements(),
-                machine.portTierRequirements(), machine.dynamicPatterns(), Map.of(), Map.of()), cache);
+                machine.portTierRequirements(), machine.dynamicPatterns(), MachineStructureRequirements.EMPTY), cache);
     }
 
     private static CompiledMachinePattern compileStage(Machine parent, MachineStructureStage stage,

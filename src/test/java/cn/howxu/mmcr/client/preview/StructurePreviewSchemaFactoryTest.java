@@ -110,10 +110,15 @@ class StructurePreviewSchemaFactoryTest {
     void factory_keeps_level_slots_with_air_for_unresolved_states() {
         BlockPos resolved = BlockPos.ZERO;
         BlockPos unresolved = new BlockPos(1, 0, 0);
-        MachineStructureStage stage = new MachineStructureStage(1, new BlockArray(Map.of(
+        BlockArray pattern = new BlockArray(Map.of(
                 resolved, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
-                unresolved, new BlockPredicate.Any())), PortRequirementSpec.none(), PortTierRequirementSpec.none(),
-                List.of(), Map.of(), Map.of(resolved, MMCR.id("coil"), unresolved, MMCR.id("casing")));
+                unresolved, new BlockPredicate.Any()), Map.of(), Map.of(resolved, 'A', unresolved, 'B'));
+        MachineStructureStage stage = new MachineStructureStage(1, pattern,
+                PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(),
+                MachineStructureRequirements.builder()
+                        .levelSlot('A', MMCR.id("coil"))
+                        .levelSlot('B', MMCR.id("casing"))
+                        .build(pattern));
 
         StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("slots"),
                 StructurePreviewVariantSelection.defaults());
@@ -126,15 +131,23 @@ class StructurePreviewSchemaFactoryTest {
     @Test
     void factory_uses_only_the_complete_first_stage_of_a_multi_stage_machine() {
         BlockPos firstStageOnly = new BlockPos(1, 0, 0);
-        MachineStructureStage firstStage = new MachineStructureStage(1, new BlockArray(Map.of(
+        BlockArray firstPattern = new BlockArray(Map.of(
                 BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
-                firstStageOnly, new BlockPredicate.OfBlock(Blocks.COPPER_BLOCK))), PortRequirementSpec.none(),
-                PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of(firstStageOnly, MMCR.id("first_slot")));
+                firstStageOnly, new BlockPredicate.OfBlock(Blocks.COPPER_BLOCK)), Map.of(),
+                Map.of(BlockPos.ZERO, 'A', firstStageOnly, 'B'));
+        MachineStructureStage firstStage = new MachineStructureStage(1, firstPattern, PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.builder()
+                        .levelSlot('B', MMCR.id("first_slot"))
+                        .build(firstPattern));
         BlockPos finalStageOnly = new BlockPos(2, 0, 0);
-        MachineStructureStage finalStage = new MachineStructureStage(2, new BlockArray(Map.of(
+        BlockArray finalPattern = new BlockArray(Map.of(
                 BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
-                finalStageOnly, new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK))), PortRequirementSpec.none(),
-                PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of(finalStageOnly, MMCR.id("final_slot")));
+                finalStageOnly, new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK)), Map.of(),
+                Map.of(BlockPos.ZERO, 'A', finalStageOnly, 'B'));
+        MachineStructureStage finalStage = new MachineStructureStage(2, finalPattern, PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.builder()
+                        .levelSlot('B', MMCR.id("final_slot"))
+                        .build(finalPattern));
         Machine machine = machineWithStages(new BlockArray(Map.of(
                 BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.EMERALD_BLOCK))), List.of(firstStage, finalStage));
 
@@ -153,7 +166,7 @@ class StructurePreviewSchemaFactoryTest {
                 new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
         BlockState preferredState = predicate.preferredState().orElseThrow();
         MachineStructureStage stage = new MachineStructureStage(1, new BlockArray(Map.of(BlockPos.ZERO, predicate)),
-                PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of());
+                PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
 
         StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("default_variant"),
                 StructurePreviewVariantSelection.defaults());
@@ -176,7 +189,7 @@ class StructurePreviewSchemaFactoryTest {
                 new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
                 new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get())));
         MachineStructureStage stage = new MachineStructureStage(1, new BlockArray(Map.of(BlockPos.ZERO, predicate)),
-                PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of());
+                PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
 
         StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("port_candidates"),
                 StructurePreviewVariantSelection.defaults());
@@ -188,12 +201,14 @@ class StructurePreviewSchemaFactoryTest {
     @Test
     void factory_adds_modifier_replacement_blocks_after_the_original_preview_candidates() {
         BlockPos position = BlockPos.ZERO;
-        MachineStructureStage stage = new MachineStructureStage(1, new BlockArray(Map.of(
-                position, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))), PortRequirementSpec.none(),
-                PortTierRequirementSpec.none(), List.of(), Map.of(position, List.of(
-                modifierReplacement(position, Blocks.GOLD_BLOCK),
-                modifierReplacement(position, Blocks.DIAMOND_BLOCK),
-                new SingleBlockModifierReplacement("unrepresentable", new BlockPredicate.Any(), List.of(), ItemStack.EMPTY))), Map.of());
+        BlockArray pattern = new BlockArray(Map.of(position, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)),
+                Map.of(), Map.of(position, 'M'));
+        MachineStructureStage stage = new MachineStructureStage(1, pattern, PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.builder()
+                .modifier('M', modifierReplacement(position, Blocks.GOLD_BLOCK))
+                .modifier('M', modifierReplacement(position, Blocks.DIAMOND_BLOCK))
+                .modifier('M', new SingleBlockModifierReplacement("unrepresentable", new BlockPredicate.Any(), List.of(), ItemStack.EMPTY))
+                .build(pattern));
 
         StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("modifier_candidates"),
                 StructurePreviewVariantSelection.defaults());
@@ -218,7 +233,7 @@ class StructurePreviewSchemaFactoryTest {
                 .modifier('H', modifierReplacement(Blocks.GOLD_BLOCK))
                 .build(pattern);
         MachineStructureStage stage = new MachineStructureStage(1, pattern, PortRequirementSpec.none(),
-                PortTierRequirementSpec.none(), List.of(), requirements, Map.of(), Map.of());
+                PortTierRequirementSpec.none(), List.of(), requirements);
 
         StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("modifier_priority_candidates"),
                 StructurePreviewVariantSelection.defaults());
@@ -236,7 +251,7 @@ class StructurePreviewSchemaFactoryTest {
         MachineStructureStage stage = new MachineStructureStage(1, new BlockArray(Map.of(
                 BlockPos.ZERO, new BlockPredicate.OfBlock(controller.getBlock()),
                 new BlockPos(0, 0, -1), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))),
-                PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of());
+                PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
 
         StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("preview_machine"),
                 StructurePreviewVariantSelection.defaults());
@@ -277,14 +292,23 @@ class StructurePreviewSchemaFactoryTest {
 
     private static MachineStructureStage stageWithSlots(Map<BlockPos, Identifier> slots) {
         Map<BlockPos, BlockPredicate> pattern = new java.util.LinkedHashMap<>();
-        slots.keySet().forEach(position -> pattern.put(position, new BlockPredicate.Any()));
-        return new MachineStructureStage(1, new BlockArray(pattern), PortRequirementSpec.none(),
-                PortTierRequirementSpec.none(), List.of(), Map.of(), slots);
+        Map<BlockPos, Character> symbols = new java.util.LinkedHashMap<>();
+        MachineStructureRequirements.Builder requirements = MachineStructureRequirements.builder();
+        int index = 0;
+        for (var entry : slots.entrySet()) {
+            char symbol = (char) ('A' + index++);
+            pattern.put(entry.getKey(), new BlockPredicate.Any());
+            symbols.put(entry.getKey(), symbol);
+            requirements.levelSlot(symbol, entry.getValue());
+        }
+        BlockArray blockArray = new BlockArray(pattern, Map.of(), symbols);
+        return new MachineStructureStage(1, blockArray, PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), requirements.build(blockArray));
     }
 
     private static MachineStructureStage stage(int index, BlockState state) {
         return new MachineStructureStage(index, new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlockState(state))),
-                PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of());
+                PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
     }
 
     private static SingleBlockModifierReplacement modifierReplacement(BlockPos position, net.minecraft.world.level.block.Block block) {

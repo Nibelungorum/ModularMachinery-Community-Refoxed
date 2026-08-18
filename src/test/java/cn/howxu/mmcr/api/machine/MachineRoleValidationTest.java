@@ -209,7 +209,8 @@ class MachineRoleValidationTest {
     }
 
     private static MachineStructureDefinition structure(Identifier id, BlockArray pattern) {
-        return new MachineStructureDefinition(id, pattern, PortRequirementSpec.none(), List.of(), Map.of());
+        return new MachineStructureDefinition(id, pattern, PortRequirementSpec.none(), List.of(),
+                MachineStructureRequirements.EMPTY);
     }
 
     private static BlockArray patternWithCouplers(int count) {

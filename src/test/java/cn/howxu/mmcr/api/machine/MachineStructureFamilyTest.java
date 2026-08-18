@@ -30,7 +30,7 @@ class MachineStructureFamilyTest {
     void legacyDefinitionBecomesOneFullStage() {
         BlockArray base = array(Map.of(BlockPos.ZERO, controller(), new BlockPos(1, 0, 0), casing()));
         MachineStructureDefinition definition = new MachineStructureDefinition(
-                MMCR.id("legacy"), base, PortRequirementSpec.none(), List.of(), Map.of());
+                MMCR.id("legacy"), base, PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
 
         MachineStructureFamily family = MachineStructureFamily.of(definition);
 
@@ -79,11 +79,11 @@ class MachineStructureFamilyTest {
         PortRequirementSpec replacementPorts = PortRequirementSpec.builder().min("energy_input", 2).build();
         Declaration base = new Declaration(Declaration.Kind.FULL,
                 array(Map.of(BlockPos.ZERO, controller())), basePorts, PortTierRequirementSpec.none(),
-                List.of(), Map.of(), Map.of());
+                List.of(), MachineStructureRequirements.EMPTY);
         Declaration inherited = Declaration.extension(array(Map.of(new BlockPos(1, 0, 0), casing())));
         Declaration replaced = new Declaration(Declaration.Kind.EXTENSION,
                 array(Map.of(new BlockPos(2, 0, 0), casing())), replacementPorts, null,
-                List.of(), Map.of(), Map.of());
+                List.of(), MachineStructureRequirements.EMPTY);
 
         List<MachineStructureStage> stages = MachineStructureFamily.of(
                 definition("requirements", base, inherited, replaced)).stages();
@@ -142,9 +142,11 @@ class MachineStructureFamilyTest {
         replacementMap.put(pos, replacements);
         Map<BlockPos, Identifier> levelSlots = new LinkedHashMap<>();
         levelSlots.put(pos, MMCR.id("coil"));
-        Declaration declaration = new Declaration(Declaration.Kind.FULL,
-                array(Map.of(BlockPos.ZERO, controller(), pos, casing())), null, null,
-                List.of(), replacementMap, levelSlots);
+        BlockArray pattern = new BlockArray(Map.of(BlockPos.ZERO, controller(), pos, casing()),
+                Map.of(), Map.of(BlockPos.ZERO, 'C', pos, 'M'));
+        Declaration declaration = new Declaration(Declaration.Kind.FULL, pattern, null, null, List.of(),
+                MachineStructureRequirements.builder().modifier('M', replacement("speed", casing()))
+                        .levelSlot('M', MMCR.id("coil")).build(pattern));
 
         MachineStructureStage stage = MachineStructureFamily.of(definition("immutable", declaration)).stages().getFirst();
         replacements.add(null);
@@ -152,7 +154,9 @@ class MachineStructureFamilyTest {
         levelSlots.clear();
 
         assertThat(stage.modifierReplacements()).containsKey(pos);
-        assertThat(stage.modifierReplacements().get(pos)).isEmpty();
+        assertThat(stage.modifierReplacements().get(pos)).singleElement()
+                .extracting(SingleBlockModifierReplacement::getModifierName)
+                .isEqualTo("speed");
         assertThat(stage.levelSlots()).containsEntry(pos, MMCR.id("coil"));
         assertThatThrownBy(() -> stage.modifierReplacements().put(pos, List.of()))
                 .isInstanceOf(UnsupportedOperationException.class);

@@ -78,7 +78,8 @@ public record DynamicMachine(
         dynamicPatterns = List.copyOf(dynamicPatterns == null ? List.of() : dynamicPatterns);
         factoryThreads = List.copyOf(factoryThreads == null ? List.of() : factoryThreads);
         structureStages = structureStages == null || structureStages.isEmpty()
-                ? List.of(new MachineStructureStage(1, pattern, portRequirements, portTierRequirements, dynamicPatterns, modifierReplacements, Map.of()))
+                ? List.of(MachineStructureStage.withCompiledRequirements(1, pattern, portRequirements,
+                        portTierRequirements, dynamicPatterns, MachineStructureRequirements.EMPTY, modifierReplacements, Map.of()))
                 : List.copyOf(structureStages);
         role = role == null ? MachineRole.NORMAL : role;
         acceptedModuleIds = copyAcceptedModuleIds(acceptedModuleIds);

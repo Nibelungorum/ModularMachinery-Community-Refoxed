@@ -97,7 +97,8 @@ class MachineRegistryTest {
     void installingStructuresRebuildsMergedCompiledCache() {
         var staticMachine = new DynamicMachine(Identifier.parse("mmcr:static"), "Static", new BlockArray(Map.of()));
         var dynamicId = Identifier.parse("mmcr:dynamic");
-        var dynamicStructure = new MachineStructureDefinition(dynamicId, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(), Map.of());
+        var dynamicStructure = new MachineStructureDefinition(dynamicId, new BlockArray(Map.of()),
+                PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
         MachineRegistry.register(staticMachine);
         MachineDefinitions.register(MachineRegistration.builder(dynamicId).localizedName("Dynamic").build());
 
@@ -122,7 +123,8 @@ class MachineRegistryTest {
                 .allowParallelism(true)
                 .maxParallelAmount(9)
                 .build();
-        var structure = new MachineStructureDefinition(dynamicId, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(), Map.of());
+        var structure = new MachineStructureDefinition(dynamicId, new BlockArray(Map.of()), PortRequirementSpec.none(),
+                List.of(), MachineStructureRequirements.EMPTY);
 
         var runtime = MachineStructureRegistry.toRuntimeMachine(registration, structure);
 

@@ -90,6 +90,6 @@ class MachineDefinitionBootstrapTest {
 
     private static MachineStructureDefinition structure(String id) {
         return new MachineStructureDefinition(Identifier.parse(id), new cn.howxu.mmcr.api.machine.BlockArray(Map.of()),
-                PortRequirementSpec.none(), List.of(), Map.of());
+                PortRequirementSpec.none(), List.of(), cn.howxu.mmcr.api.machine.MachineStructureRequirements.EMPTY);
     }
 }

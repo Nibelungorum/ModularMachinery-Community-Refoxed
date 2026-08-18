@@ -49,7 +49,7 @@ public interface Machine {
 
     default List<MachineStructureStage> structureStages() {
         return List.of(new MachineStructureStage(1, pattern(), portRequirements(), portTierRequirements(),
-                dynamicPatterns(), MachineStructureRequirements.EMPTY, Map.of(), Map.of()));
+                dynamicPatterns(), MachineStructureRequirements.EMPTY));
     }
 
     default int maxParallelism() {

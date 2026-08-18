@@ -2969,7 +2969,8 @@ class MachineControllerBlockEntityTest {
         List<cn.howxu.mmcr.api.machine.MachineStructureStage> structureStages = new ArrayList<>();
         for (int i = 0; i < stages.length; i++) {
             structureStages.add(new cn.howxu.mmcr.api.machine.MachineStructureStage(
-                    i + 1, stages[i], PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of()));
+                    i + 1, stages[i], PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(),
+                    cn.howxu.mmcr.api.machine.MachineStructureRequirements.EMPTY));
         }
         return stagedMachineWithController(id, controllerSpec, structureStages);
     }
@@ -2991,12 +2992,13 @@ class MachineControllerBlockEntityTest {
                         value, RecipeModifier.Operation.ADD, false)), ItemStack.EMPTY);
         return new cn.howxu.mmcr.api.machine.MachineStructureStage(
                 number,
-                new BlockArray(Map.of(rawPos, new BlockPredicate.OfBlock(patternBlock))),
+                new BlockArray(Map.of(rawPos, new BlockPredicate.OfBlock(patternBlock)), Map.of(), Map.of(rawPos, 'M')),
                 PortRequirementSpec.none(),
                 PortTierRequirementSpec.none(),
                 List.of(),
-                Map.of(rawPos, List.of(replacement)),
-                Map.of());
+                cn.howxu.mmcr.api.machine.MachineStructureRequirements.builder()
+                        .modifier('M', replacement)
+                        .build(new BlockArray(Map.of(rawPos, new BlockPredicate.OfBlock(patternBlock)), Map.of(), Map.of(rawPos, 'M'))));
     }
 
     private static BlockArray anyItemOrEnergyInputPattern() {

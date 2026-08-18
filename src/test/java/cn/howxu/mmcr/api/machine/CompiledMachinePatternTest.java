@@ -114,9 +114,9 @@ class CompiledMachinePatternTest {
             @Override public MachineControllerSpec controller() { return MachineControllerSpec.defaultsFor(id); }
             @Override public List<MachineStructureStage> structureStages() {
                 return List.of(new MachineStructureStage(1, first, PortRequirementSpec.none(),
-                        PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of()),
+                        PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY),
                         new MachineStructureStage(2, second, PortRequirementSpec.none(),
-                                PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of()));
+                                PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY));
             }
             private Identifier machineId() { return id; }
         };
@@ -137,7 +137,11 @@ class CompiledMachinePatternTest {
         BlockArray first = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE)));
         BlockPos stagePort = new BlockPos(2, 0, 0);
         BlockArray second = new BlockArray(Map.of(rawPosition, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
-                stagePort, new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get())));
+                stagePort, new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get())),
+                Map.of(), Map.of(rawPosition, 'M', stagePort, 'P'));
+        MachineStructureRequirements secondRequirements = MachineStructureRequirements.builder()
+                .modifier('M', replacement)
+                .build(second);
         DynamicPatternSpec dynamic = new DynamicPatternSpec("stage_dynamic", new BlockArray(Map.of()), null,
                 0, 1, BlockPos.ZERO, BlockPos.ZERO, java.util.Set.of(Direction.SOUTH));
         Machine machine = new Machine() {
@@ -146,9 +150,9 @@ class CompiledMachinePatternTest {
             @Override public MachineControllerSpec controller() { return MachineControllerSpec.defaultsFor(id); }
             @Override public List<MachineStructureStage> structureStages() {
                 return List.of(new MachineStructureStage(1, first, PortRequirementSpec.none(), PortTierRequirementSpec.none(),
-                                List.of(), Map.of(), Map.of()),
+                                List.of(), MachineStructureRequirements.EMPTY),
                         new MachineStructureStage(2, second, PortRequirementSpec.none(), PortTierRequirementSpec.none(),
-                                List.of(dynamic), Map.of(rawPosition, List.of(replacement)), Map.of()));
+                                List.of(dynamic), secondRequirements));
             }
         };
 

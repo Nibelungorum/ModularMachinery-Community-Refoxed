@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.command;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
@@ -80,6 +81,7 @@ class ReloadCommandTest {
     }
 
     private static MachineStructureDefinition structure(Identifier id) {
-        return new MachineStructureDefinition(id, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(), Map.of());
+        return new MachineStructureDefinition(id, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(),
+                MachineStructureRequirements.EMPTY);
     }
 }

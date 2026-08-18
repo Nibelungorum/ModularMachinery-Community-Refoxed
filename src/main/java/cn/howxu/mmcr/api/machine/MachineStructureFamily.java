@@ -52,8 +52,8 @@ public record MachineStructureFamily(List<MachineStructureStage> stages) {
                 portTierRequirements = defaultTiers(declaration.portTierRequirements());
                 dynamicPatterns = new ArrayList<>(declaration.dynamicPatterns());
                 requirements = declaration.requirements();
-                modifierReplacements = copyNestedMap(declaration.modifierReplacements());
-                levelSlots = new LinkedHashMap<>(declaration.levelSlots());
+                modifierReplacements = Map.of();
+                levelSlots = Map.of();
             } else {
                 pattern = mergeMap(pattern, declaration.pattern().pattern(), stageNumber, "predicate");
                 tags = mergeMap(tags, declaration.pattern().tagsByPosition(), stageNumber, "tags");
@@ -63,13 +63,12 @@ public record MachineStructureFamily(List<MachineStructureStage> stages) {
                 dynamicPatterns = mergeList(dynamicPatterns, declaration.dynamicPatterns(), stageNumber, "dynamic pattern");
                 requirements = MachineStructureRequirements.merge(requirements, declaration.requirements(), stageNumber)
                         .validate(new BlockArray(pattern, tags, symbols));
-                modifierReplacements = mergeMap(
-                        modifierReplacements, declaration.modifierReplacements(), stageNumber, "modifier replacements");
-                levelSlots = mergeMap(levelSlots, declaration.levelSlots(), stageNumber, "level slot");
+                modifierReplacements = Map.of();
+                levelSlots = Map.of();
             }
 
             rejectMultipleControllers(pattern, stageNumber);
-            stages.add(new MachineStructureStage(stageNumber, new BlockArray(pattern, tags, symbols),
+            stages.add(MachineStructureStage.withCompiledRequirements(stageNumber, new BlockArray(pattern, tags, symbols),
                     portRequirements, portTierRequirements, dynamicPatterns, requirements, modifierReplacements, levelSlots));
         }
         return new MachineStructureFamily(stages);

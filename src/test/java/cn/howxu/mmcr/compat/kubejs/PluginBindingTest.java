@@ -176,7 +176,7 @@ class PluginBindingTest {
         previous.commit();
         var takeoverStructure = new MachineStructureDefinition(machineId,
                 new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK))),
-                PortRequirementSpec.none(), List.of(), Map.of());
+                PortRequirementSpec.none(), List.of(), cn.howxu.mmcr.api.machine.MachineStructureRequirements.EMPTY);
         MachineStructureRegistry.replaceDynamic(Map.of(machineId, takeoverStructure));
         RecipeRegistry.replaceDynamic(Map.of(recipeId, new MachineRecipe(recipeId, machineId, 2, List.of(), List.of())));
 
@@ -522,6 +522,7 @@ class PluginBindingTest {
     }
 
     private static MachineStructureDefinition structure(net.minecraft.resources.Identifier id) {
-        return new MachineStructureDefinition(id, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(), Map.of());
+        return new MachineStructureDefinition(id, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(),
+                cn.howxu.mmcr.api.machine.MachineStructureRequirements.EMPTY);
     }
 }

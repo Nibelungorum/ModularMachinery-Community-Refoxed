@@ -15,36 +15,81 @@ import java.util.Collections;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record MachineStructureStage(
-        int number,
-        BlockArray pattern,
-        PortRequirementSpec portRequirements,
-        PortTierRequirementSpec portTierRequirements,
-        List<DynamicPatternSpec> dynamicPatterns,
-        MachineStructureRequirements requirements,
-        Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
-        Map<BlockPos, Identifier> levelSlots) {
+public final class MachineStructureStage {
+    private final int number;
+    private final BlockArray pattern;
+    private final PortRequirementSpec portRequirements;
+    private final PortTierRequirementSpec portTierRequirements;
+    private final List<DynamicPatternSpec> dynamicPatterns;
+    private final MachineStructureRequirements requirements;
+    private final Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements;
+    private final Map<BlockPos, Identifier> levelSlots;
 
     public MachineStructureStage(int number, BlockArray pattern, PortRequirementSpec portRequirements,
             PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
-            Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
-            Map<BlockPos, Identifier> levelSlots) {
+            MachineStructureRequirements requirements) {
         this(number, pattern, portRequirements, portTierRequirements, dynamicPatterns,
-                MachineStructureRequirements.EMPTY, modifierReplacements, levelSlots);
+                requirements, Map.of(), Map.of());
     }
 
-    public MachineStructureStage {
+    static MachineStructureStage withCompiledRequirements(int number, BlockArray pattern, PortRequirementSpec portRequirements,
+            PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
+            MachineStructureRequirements requirements, Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
+            Map<BlockPos, Identifier> levelSlots) {
+        return new MachineStructureStage(number, pattern, portRequirements, portTierRequirements, dynamicPatterns,
+                requirements, modifierReplacements, levelSlots);
+    }
+
+    private MachineStructureStage(int number, BlockArray pattern, PortRequirementSpec portRequirements,
+            PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
+            MachineStructureRequirements requirements, Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
+            Map<BlockPos, Identifier> levelSlots) {
         if (number < 1) throw new IllegalArgumentException("stage number must be positive");
         Objects.requireNonNull(pattern, "pattern");
         Objects.requireNonNull(portRequirements, "portRequirements");
         Objects.requireNonNull(portTierRequirements, "portTierRequirements");
-        pattern = new BlockArray(pattern.pattern(), copyNestedMap(pattern.tagsByPosition()), pattern.symbolsByPosition());
-        dynamicPatterns = List.copyOf(dynamicPatterns);
-        requirements = (requirements == null ? MachineStructureRequirements.EMPTY : requirements).validate(pattern);
+        this.number = number;
+        this.pattern = new BlockArray(pattern.pattern(), copyNestedMap(pattern.tagsByPosition()), pattern.symbolsByPosition());
+        this.portRequirements = portRequirements;
+        this.portTierRequirements = portTierRequirements;
+        this.dynamicPatterns = List.copyOf(dynamicPatterns);
+        this.requirements = (requirements == null ? MachineStructureRequirements.EMPTY : requirements).validate(this.pattern);
         MachineStructureRequirementCompiler.Compiled compiled =
-                MachineStructureRequirementCompiler.compile(pattern, requirements);
-        modifierReplacements = mergeNestedMaps(modifierReplacements, compiled.modifierReplacements());
-        levelSlots = Collections.unmodifiableMap(mergeMaps(levelSlots, compiled.levelSlots()));
+                MachineStructureRequirementCompiler.compile(this.pattern, this.requirements);
+        this.modifierReplacements = mergeNestedMaps(modifierReplacements, compiled.modifierReplacements());
+        this.levelSlots = Collections.unmodifiableMap(mergeMaps(levelSlots, compiled.levelSlots()));
+    }
+
+    public int number() {
+        return number;
+    }
+
+    public BlockArray pattern() {
+        return pattern;
+    }
+
+    public PortRequirementSpec portRequirements() {
+        return portRequirements;
+    }
+
+    public PortTierRequirementSpec portTierRequirements() {
+        return portTierRequirements;
+    }
+
+    public List<DynamicPatternSpec> dynamicPatterns() {
+        return dynamicPatterns;
+    }
+
+    public MachineStructureRequirements requirements() {
+        return requirements;
+    }
+
+    public Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements() {
+        return modifierReplacements;
+    }
+
+    public Map<BlockPos, Identifier> levelSlots() {
+        return levelSlots;
     }
 
     private static <T> Map<BlockPos, List<T>> copyNestedMap(Map<BlockPos, List<T>> source) {

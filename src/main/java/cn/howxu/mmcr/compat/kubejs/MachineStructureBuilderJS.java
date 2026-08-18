@@ -150,8 +150,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     public MachineStructureDefinition createObject() {
         if (declarations.isEmpty()) {
             return new MachineStructureDefinition(id, List.of(new Declaration(Declaration.Kind.FULL, pattern,
-                    portRequirements, portTierRequirements, dynamicPatterns, requirements,
-                    Map.of(), Map.of())));
+                    portRequirements, portTierRequirements, dynamicPatterns, requirements)));
         }
         applyPendingPatternMetadata();
         if (!classMetadataChanged) return new MachineStructureDefinition(id, declarations);
