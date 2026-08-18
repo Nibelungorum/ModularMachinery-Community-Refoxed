@@ -1,0 +1,33 @@
+{
+  "type": "mmcr:machine_recipe",
+  "machine": "mmcr:cracker",
+  "tick_time": 160,
+  "inputs": [
+    {
+      "type": "item",
+      "item": ["minecraft:coal"],
+      "count": 8
+    },
+    {
+      "type": "item",
+      "item": ["minecraft:lapis_lazuli"],
+      "count": 1
+    },
+    {
+      "type": "energy",
+      "fe_per_tick": 100
+    }
+  ],
+  "outputs": [
+    {
+      "id": "minecraft:redstone",
+      "count": 4
+    }
+  ],
+  "fluid_outputs": [
+    {
+      "fluid": "minecraft:water",
+      "amount": 500
+    }
+  ]
+}

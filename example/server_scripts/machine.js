@@ -181,7 +181,6 @@ ServerEvents.recipes(function(event) {
       type: 'mmcr:machine_recipe',
       machine: cloneId(machine),
       tick_time: ticks,
-      inputs: inputs,
       requirements: requirements,
       max_threads: maxThreads,
       priority: priority,
@@ -222,7 +221,6 @@ ServerEvents.recipes(function(event) {
       var deferredFluidOutput = deferredFluidOutputs[deferredFluidOutputIndex]
       requirements.push({ type: 'fluid', io: 'output', stack: { fluid: deferredFluidOutput[0], amount: deferredFluidOutput[1] } })
     }
-    recipeJson.inputs = []
     event.custom(recipeJson).id(cloneId(path))
   }
   function inputToRequirement(input) {
@@ -287,7 +285,7 @@ ServerEvents.recipes(function(event) {
     recipe(prefix + 'chanced_input', machine, 20, [], [{ id: 'minecraft:emerald', count: 1 }], { componentInputs: [['minecraft:diamond', 1, { 'minecraft:custom_name': { text: 'Chance' } }, 0.5]] })
     recipe(prefix + 'non_consumable_input', machine, 20, [], [{ id: 'minecraft:emerald', count: 1 }], { componentInputs: [['minecraft:diamond', 1, { 'minecraft:custom_name': { text: 'Keep' } }, 0]] })
     recipe(prefix + 'non_consumable_sharpness_input', machine, 100, [], [], { componentInputs: [['minecraft:diamond_sword', 1, { 'minecraft:enchantments': { 'minecraft:sharpness': 2 } }, 0]] })
-    recipe(prefix + 'enchanted_output', machine, 100, [item('minecraft:iron_sword')], [], { requirements: [api.itemOutputRequirementWithComponents('minecraft:iron_sword', 1, json({ 'minecraft:enchantments': { 'minecraft:sharpness': 2 }, 'minecraft:repair_cost': 1 }), 1)] })
+    recipe(prefix + 'enchanted_output', machine, 100, [item('minecraft:iron_sword')], [], { requirements: [{ type: 'item', io: 'output', stack: { id: 'minecraft:iron_sword', count: 1, components: { 'minecraft:enchantments': { 'minecraft:sharpness': 2 }, 'minecraft:repair_cost': 1 } } }] })
     recipe(prefix + 'input_to_plain_output', machine, 20, [], [{ id: 'minecraft:emerald', count: 1 }], { componentInputs: [['minecraft:diamond', 1, { 'minecraft:custom_name': { text: 'Input Only' } }]] })
     recipe(prefix + 'plain_input_to_output', machine, 20, [item('minecraft:iron_ingot')], [{ id: 'minecraft:gold_ingot', count: 1, components: { 'minecraft:custom_name': { text: 'Output Only' } } }])
     recipe(prefix + 'input_to_output', machine, 20, [], [{ id: 'minecraft:gold_ingot', count: 1, components: { 'minecraft:custom_name': { text: 'Output' } } }], { componentInputs: [['minecraft:diamond', 1, { 'minecraft:custom_name': { text: 'Input' } }]] })
