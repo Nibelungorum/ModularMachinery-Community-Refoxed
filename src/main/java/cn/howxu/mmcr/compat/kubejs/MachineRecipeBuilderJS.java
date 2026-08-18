@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
@@ -20,6 +21,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -32,6 +34,12 @@ public class MachineRecipeBuilderJS {
     public final List<MachineIngredient> inputs = new ArrayList<>();
     public final List<ItemStack> outputs = new ArrayList<>();
     private final List<Float> outputChances = new ArrayList<>();
+    private final List<FluidStack> fluidOutputs = new ArrayList<>();
+    private final List<RecipeModifier> conditions = new ArrayList<>();
+    private int priority = 0;
+    private int maxThreads = 1;
+    private boolean parallelized = false;
+    private boolean deriveRequirements = true;
     public int energyPerTick = 0;
     public boolean cancelIfPerTickFails = false;
     public final List<LevelRequirement> levelRequirements = new ArrayList<>();
@@ -72,18 +80,97 @@ public class MachineRecipeBuilderJS {
         return this;
     }
 
+    public MachineRecipeBuilderJS inputs(List<MachineIngredient> inputs) {
+        this.inputs.clear();
+        this.inputs.addAll(inputs);
+        return this;
+    }
+
+    public MachineRecipeBuilderJS addInput(MachineIngredient input) {
+        inputs.add(input);
+        return this;
+    }
+
+    public MachineRecipeBuilderJS outputs(List<ItemStack> outputs) {
+        this.outputs.clear();
+        outputChances.clear();
+        componentOutputs.clear();
+        for (ItemStack output : outputs) addOutput(output, 1F);
+        return this;
+    }
+
+    public MachineRecipeBuilderJS addOutput(ItemStack output, float chance) {
+        outputs.add(output);
+        outputChances.add(chance);
+        return this;
+    }
+
+    public MachineRecipeBuilderJS fluidOutputs(List<FluidStack> fluidOutputs) {
+        this.fluidOutputs.clear();
+        this.fluidOutputs.addAll(fluidOutputs);
+        return this;
+    }
+
+    public MachineRecipeBuilderJS requirements(List<MachineRequirement> requirements) {
+        this.requirements.clear();
+        this.requirements.addAll(requirements);
+        return this;
+    }
+
+    public MachineRecipeBuilderJS addRequirement(MachineRequirement requirement) {
+        requirements.add(requirement);
+        return this;
+    }
+
+    public MachineRecipeBuilderJS priority(int priority) {
+        this.priority = priority;
+        return this;
+    }
+
+    public MachineRecipeBuilderJS maxThreads(int maxThreads) {
+        this.maxThreads = maxThreads;
+        return this;
+    }
+
+    public MachineRecipeBuilderJS parallelized() {
+        return parallelized(true);
+    }
+
+    public MachineRecipeBuilderJS parallelized(boolean parallelized) {
+        this.parallelized = parallelized;
+        return this;
+    }
+
+    public MachineRecipeBuilderJS deriveRequirements(boolean deriveRequirements) {
+        this.deriveRequirements = deriveRequirements;
+        return this;
+    }
+
+    public MachineRecipeBuilderJS conditions(List<RecipeModifier> conditions) {
+        this.conditions.clear();
+        this.conditions.addAll(conditions);
+        return this;
+    }
+
     public MachineRecipeBuilderJS itemInput(String itemId, int count) {
         return addItemInput(Ingredient.of(item(itemId)), count, DataComponentPredicateSet.EMPTY, 1F);
     }
 
     public MachineRecipeBuilderJS tagInput(String tagId, int count) {
-        return addItemInput(Ingredient.of(BuiltInRegistries.ITEM.getOrThrow(TagKey.create(Registries.ITEM, Identifier.parse(tagId)))), count,
+        return addItemInput(Ingredient.of(tagItems(tagId)), count,
                 DataComponentPredicateSet.EMPTY, 1F);
     }
 
     public MachineRecipeBuilderJS itemInputWithComponents(String itemId, int count, JsonElement components) {
-        return addItemInput(Ingredient.of(item(itemId)), count,
-                DataComponentPredicateSet.CODEC.parse(JsonOps.INSTANCE, components).getOrThrow(), 1F);
+        return itemInputWithComponents(itemId, count, components, 1F);
+    }
+
+    public MachineRecipeBuilderJS itemInputWithComponents(String itemId, int count, JsonElement components, float consumeChance) {
+        return addItemInput(Ingredient.of(item(itemId)), count, componentPredicates(components), consumeChance);
+    }
+
+    public MachineRecipeBuilderJS tagInputWithComponents(String tagId, int count, JsonElement components, float consumeChance) {
+        return addItemInput(Ingredient.of(tagItems(tagId)), count, componentPredicates(components), consumeChance);
     }
 
     public MachineRecipeBuilderJS notConsumableItemInput(String itemId, int count) {
@@ -107,6 +194,9 @@ public class MachineRecipeBuilderJS {
     }
 
     public MachineRecipeBuilderJS itemOutputWithComponents(String itemId, int count, JsonElement components) {
+        if (count < 0) {
+            throw new IllegalArgumentException("Component item output count must not be negative: " + count);
+        }
         JsonObject stack = new JsonObject();
         stack.addProperty("id", itemId);
         stack.addProperty("count", count);
@@ -127,6 +217,11 @@ public class MachineRecipeBuilderJS {
 
     public MachineRecipeBuilderJS allowPartialOutputs() {
         this.allowPartialOutputs = true;
+        return this;
+    }
+
+    public MachineRecipeBuilderJS allowPartialOutputs(boolean allowPartialOutputs) {
+        this.allowPartialOutputs = allowPartialOutputs;
         return this;
     }
 
@@ -180,9 +275,34 @@ public class MachineRecipeBuilderJS {
         return BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId));
     }
 
-    public void build() {
+    private DataComponentPredicateSet componentPredicates(JsonElement components) {
+        return DataComponentPredicateSet.CODEC.parse(JsonOps.INSTANCE, components).getOrThrow();
+    }
+
+    private net.minecraft.core.HolderSet.Named<net.minecraft.world.item.Item> tagItems(String tagId) {
+        var tag = TagKey.create(Registries.ITEM, Identifier.parse(tagId));
+        return BuiltInRegistries.ITEM.get(tag).orElseGet(() -> net.minecraft.core.HolderSet.emptyNamed(BuiltInRegistries.ITEM, tag));
+    }
+
+    public MachineRecipe createObject() {
         if (machineId == null) {
             throw new IllegalStateException("machine() not called");
+        }
+        if (tickTime < 1 || energyPerTick < 0 || maxThreads < 0) {
+            throw new IllegalArgumentException("Recipe tick time must be >= 1 and counts must not be negative");
+        }
+        for (MachineIngredient input : inputs) {
+            if ((input instanceof MachineIngredient.ItemIngredient item && item.count() < 0)
+                    || (input instanceof MachineIngredient.FluidIngredient fluid && fluid.amount() < 0)
+                    || (input instanceof MachineIngredient.EnergyIngredient energy && energy.fePerTick() < 0)) {
+                throw new IllegalArgumentException("Recipe counts must not be negative");
+            }
+        }
+        for (ItemStack output : outputs) {
+            if (output.getCount() < 0) throw new IllegalArgumentException("Item output count must not be negative");
+        }
+        for (FluidStack output : fluidOutputs) {
+            if (output.getAmount() < 0) throw new IllegalArgumentException("Fluid output amount must not be negative");
         }
 
         var recipeInputs = new ArrayList<>(inputs);
@@ -207,15 +327,31 @@ public class MachineRecipeBuilderJS {
             }
         }
 
-        var requirements = new ArrayList<MachineRequirement>();
-        for (MachineIngredient input : recipeInputs) requirements.add(MachineRequirement.fromInput(input));
-        for (int index = 0; index < recipeOutputs.size(); index++) {
-            requirements.add(MachineRequirement.itemOutput(recipeOutputs.get(index), recipeOutputChances.get(index)));
+        List<MachineRequirement> recipeRequirements = deriveRequirements || !requirements.isEmpty()
+                ? new ArrayList<>()
+                : null;
+        if (deriveRequirements) {
+            for (MachineIngredient input : recipeInputs) recipeRequirements.add(MachineRequirement.fromInput(input));
+            for (int index = 0; index < recipeOutputs.size(); index++) {
+                recipeRequirements.add(MachineRequirement.itemOutput(recipeOutputs.get(index), recipeOutputChances.get(index)));
+            }
+            for (FluidStack fluidOutput : fluidOutputs) recipeRequirements.add(MachineRequirement.fluidOutput(fluidOutput));
         }
-        requirements.addAll(this.requirements);
+        if (recipeRequirements != null) recipeRequirements.addAll(requirements);
 
-        RecipeRegistry.register(new MachineRecipe(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(recipeOutputs), List.of(), 0, 1,
-                cancelIfPerTickFails, List.of(), List.copyOf(requirements), false, List.copyOf(levelRequirements), allowPartialOutputs, new LinkedHashSet<>(requiredHostIds)));
+        return new MachineRecipe(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(recipeOutputs), List.copyOf(conditions), priority, maxThreads,
+                cancelIfPerTickFails, List.copyOf(fluidOutputs), recipeRequirements == null ? List.of() : List.copyOf(recipeRequirements), parallelized,
+                List.copyOf(levelRequirements), allowPartialOutputs, new LinkedHashSet<>(requiredHostIds), deriveRequirements);
+    }
+
+    public void build() {
+        var recipe = createObject();
+        var transaction = KubeJSContentReloadTransaction.active();
+        if (transaction != null) {
+            transaction.registerRecipe(recipe);
+        } else {
+            RecipeRegistry.register(recipe);
+        }
     }
 
     private record ComponentOutput(int index, JsonObject stack) {

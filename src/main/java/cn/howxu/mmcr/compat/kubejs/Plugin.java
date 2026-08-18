@@ -1,9 +1,23 @@
 package cn.howxu.mmcr.compat.kubejs;
 
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.recipe.LevelRequirement;
+import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
+import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import dev.latvian.mods.kubejs.recipe.component.RecipeComponentTypeRegistry;
 import dev.latvian.mods.kubejs.recipe.schema.RecipeFactoryRegistry;
 import dev.latvian.mods.kubejs.recipe.schema.RecipeSchemaRegistry;
@@ -13,14 +27,19 @@ import dev.latvian.mods.kubejs.script.ScriptManager;
 import dev.latvian.mods.kubejs.script.ScriptType;
 import net.neoforged.fml.loading.FMLLoader;
 
+import java.util.IdentityHashMap;
 import java.util.Map;
 
 public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     static final String RECIPE_BUILDER_BINDING = "MMCR_RECIPE_BUILDER";
     static final Class<MachineRecipeBuilderJS> RECIPE_BUILDER_CLASS = MachineRecipeBuilderJS.class;
+    private static final Map<Object, ServerReload> SERVER_RELOADS = new IdentityHashMap<>();
 
     @Override
     public void beforeScriptsLoaded(ScriptManager manager) {
+        if (manager.scriptType == ScriptType.SERVER) {
+            beginServerReload(manager, manager.scriptType.console.errors.size());
+        }
         if (manager.scriptType == ScriptType.STARTUP) {
             MachineLevelRegistry.beginRegistration();
             registerDevelopmentMachineLevels();
@@ -29,13 +48,57 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
 
     @Override
     public void afterScriptsLoaded(ScriptManager manager) {
+        if (manager.scriptType == ScriptType.SERVER) {
+            completeServerReload(manager, manager.scriptType.console.errors.size());
+        }
         if (manager.scriptType == ScriptType.STARTUP) {
             MachineLevelRegistry.freezeRegistration();
         }
     }
 
+    private record ServerReload(KubeJSContentReloadTransaction transaction, int errorCount) {
+    }
+
+    static void beginServerReload(Object manager, int errorCount) {
+        var transaction = new KubeJSContentReloadTransaction();
+        SERVER_RELOADS.put(manager, new ServerReload(transaction, errorCount));
+        KubeJSContentReloadTransaction.activate(transaction);
+    }
+
+    static void completeServerReload(Object manager, int errorCount) {
+        ServerReload reload = SERVER_RELOADS.remove(manager);
+        try {
+            if (reload != null && errorCount == reload.errorCount()) {
+                reload.transaction().commit();
+            }
+        } finally {
+            KubeJSContentReloadTransaction.deactivate();
+        }
+    }
+
+    static void abortServerReload(Object manager) {
+        SERVER_RELOADS.remove(manager);
+        KubeJSContentReloadTransaction.deactivate();
+    }
+
     @Override
     public void registerBindings(BindingRegistry bindings) {
+        bindings.add("MMCR_API", new KubeJSApi());
+        bindings.add("MMCR_MACHINE_DEFINITIONS", MachineDefinitions.class);
+        bindings.add("MMCR_MACHINE_STRUCTURES", MachineStructureRegistry.class);
+        bindings.add("MMCR_RECIPE_REGISTRY", RecipeRegistry.class);
+        bindings.add("MMCR_BLOCK_ARRAY", BlockArray.class);
+        bindings.add("MMCR_BLOCK_PREDICATE", BlockPredicate.class);
+        bindings.add("MMCR_MACHINE_REGISTRATION", MachineRegistration.class);
+        bindings.add("MMCR_STRUCTURE_DEFINITION", MachineStructureDefinition.class);
+        bindings.add("MMCR_PORT_REQUIREMENTS", PortRequirementSpec.class);
+        bindings.add("MMCR_PORT_TIER_REQUIREMENTS", PortTierRequirementSpec.class);
+        bindings.add("MMCR_MACHINE_INGREDIENT", MachineIngredient.class);
+        bindings.add("MMCR_MACHINE_RECIPE", MachineRecipe.class);
+        bindings.add("MMCR_RECIPE_MODIFIER", RecipeModifier.class);
+        bindings.add("MMCR_SINGLE_BLOCK_MODIFIER", SingleBlockModifierReplacement.class);
+        bindings.add("MMCR_LEVEL_REQUIREMENT", LevelRequirement.class);
+        bindings.add("MMCR_SMART_INTERFACE_REQUIREMENT", SmartInterfaceRequirement.class);
         bindings.add("MMCR_MACHINES", MachineRegistry.class);
         bindings.add("MMCR_RECIPES", RecipeRegistry.class);
         bindings.add("MMCR_MACHINE_BUILDER", MachineBuilderJS.class);

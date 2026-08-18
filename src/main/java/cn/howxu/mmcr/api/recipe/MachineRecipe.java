@@ -201,19 +201,42 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                          List<FluidStack> fluidOutputs,
                           List<MachineRequirement> requirements,
                           boolean parallelized,
-                          List<LevelRequirement> levelRequirements,
-                          boolean allowPartialOutputs,
-                          Set<Identifier> requiredHostIds) {
+                           List<LevelRequirement> levelRequirements,
+                           boolean allowPartialOutputs,
+                           Set<Identifier> requiredHostIds) {
+        this(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure,
+                fluidOutputs, requirements, parallelized, levelRequirements, allowPartialOutputs, requiredHostIds, true);
+    }
+
+    public MachineRecipe(Identifier id,
+                         Identifier machineId,
+                         int tickTime,
+                         List<MachineIngredient> inputs,
+                         List<ItemStack> outputs,
+                         List<RecipeModifier> modifiers,
+                         int priority,
+                         int maxThreads,
+                         boolean cancelRecipeOnPerTickFailure,
+                         List<FluidStack> fluidOutputs,
+                         List<MachineRequirement> requirements,
+                         boolean parallelized,
+                         List<LevelRequirement> levelRequirements,
+                         boolean allowPartialOutputs,
+                         Set<Identifier> requiredHostIds,
+                         boolean deriveEmptyRequirements) {
         if (id == null) {
             throw new IllegalArgumentException("Recipe id must not be null");
         }
         if (machineId == null) {
             throw new IllegalArgumentException("Recipe machineId must not be null");
         }
+        if (tickTime < 1) {
+            throw new IllegalArgumentException("Recipe tick time must be >= 1");
+        }
         this.id = id;
         this.machineId = machineId;
-        this.tickTime = Math.max(1, tickTime);
-        this.requirements = requirements == null || requirements.isEmpty()
+        this.tickTime = tickTime;
+        this.requirements = requirements == null || (deriveEmptyRequirements && requirements.isEmpty())
                 ? deriveRequirements(inputs, outputs, fluidOutputs)
                 : List.copyOf(requirements);
         this.modifiers = modifiers == null ? Collections.emptyList() : List.copyOf(modifiers);

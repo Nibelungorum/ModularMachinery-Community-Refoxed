@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
@@ -16,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
@@ -37,6 +39,12 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient Identifier runningSoundId;
     public transient Identifier finishSoundId;
     public transient BlockArray pattern;
+    private Identifier recipeFamilyId;
+    private boolean expandableStructure;
+    private MachineControllerSpec explicitControllerSpec;
+    private MachineAppearanceSpec explicitAppearance;
+    private MachineRole role = MachineRole.NORMAL;
+    private boolean explicitRole;
     private final Set<Identifier> acceptedModuleIds = new LinkedHashSet<>();
     private boolean module;
     private final List<String> controllerTooltip = new ArrayList<>();
@@ -66,9 +74,9 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public MachineRegistration createObject() {
         var registration = MachineRegistration.builder(id)
                 .displayNameKey(displayNameKey)
-                .controllerSpec(controllerSpec())
-                .appearance(appearanceSpec())
-                .recipeFamilyId(id)
+                .controllerSpec(explicitControllerSpec != null ? explicitControllerSpec : controllerSpec())
+                .appearance(explicitAppearance != null ? explicitAppearance : appearanceSpec())
+                .recipeFamilyId(recipeFamilyId != null ? recipeFamilyId : id)
                 .allowModifiers(allowModifiers)
                 .allowMultithreading(allowMultithreading)
                 .allowParallelism(allowParallelism)
@@ -77,11 +85,54 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .finishSound(finishSoundId)
                 .pattern(pattern)
                 .shareSmartInterfaces(shareSmartInterfaces);
+        if (expandableStructure) registration.expandableStructure();
+        if (explicitRole && (role == MachineRole.NORMAL && (!acceptedModuleIds.isEmpty() || module)
+                || role == MachineRole.HOST && module)) {
+            throw new IllegalArgumentException("Machine roles are mutually exclusive");
+        }
         acceptedModuleIds.forEach(registration::host);
-        if (module) registration.module();
+        if (module || explicitRole && role == MachineRole.MODULE) registration.module();
+        if (explicitRole && role == MachineRole.HOST && acceptedModuleIds.isEmpty()) {
+            throw new IllegalArgumentException("HOST role requires at least one accepted module ID; use host(...)");
+        }
         smartInterfaceTypes.forEach(registration::smartInterfaceType);
         smartInterfaceModifiers.forEach(registration::smartInterfaceModifier);
         return registration.build();
+    }
+
+    public MachineBuilderJS recipeFamily(String recipeFamilyId) {
+        this.recipeFamilyId = Identifier.parse(recipeFamilyId);
+        return this;
+    }
+
+    public MachineBuilderJS expandableStructure(boolean expandableStructure) {
+        this.expandableStructure = expandableStructure;
+        return this;
+    }
+
+    public MachineBuilderJS factoryThreads(int factoryThreads) {
+        return maxParallelAmount(factoryThreads);
+    }
+
+    public MachineBuilderJS controllerSpec(MachineControllerSpec controllerSpec) {
+        this.explicitControllerSpec = controllerSpec;
+        return this;
+    }
+
+    public MachineBuilderJS appearance(MachineAppearanceSpec appearance) {
+        this.explicitAppearance = appearance;
+        return this;
+    }
+
+    public MachineBuilderJS role(String role) {
+        try {
+            this.role = MachineRole.valueOf(role.toUpperCase(Locale.ROOT));
+            this.explicitRole = true;
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("Invalid machine role '" + role + "'. Valid roles: "
+                    + java.util.Arrays.toString(MachineRole.values()), exception);
+        }
+        return this;
     }
 
     public MachineBuilderJS runningSound(String soundId) {

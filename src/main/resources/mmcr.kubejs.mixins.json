@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "cn.howxu.mmcr.mixin.compat.kubejs",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "ScriptManagerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
