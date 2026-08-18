@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.kubejs;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
@@ -60,6 +61,20 @@ class PluginBindingTest {
         transaction.commit();
 
         assertThat(MachineStructureRegistry.dynamicSnapshot()).containsKey(machineId);
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(recipeId);
+    }
+
+    @Test
+    void kubejs_recipe_reload_keeps_builtin_machine_structure() {
+        var machineId = MMCR.id("alloy_furnace");
+        var recipeId = MMCR.id("kubejs_recipe_with_builtin_structure");
+        MachineStructureRegistry.replaceDynamic(Map.of(machineId, structure(machineId)));
+
+        var transaction = new KubeJSContentReloadTransaction();
+        transaction.registerRecipe(new MachineRecipe(recipeId, machineId, 1, List.of(), List.of()));
+        transaction.commit();
+
+        assertThat(MachineRegistry.getMachine(machineId)).isNotNull();
         assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(recipeId);
     }
 

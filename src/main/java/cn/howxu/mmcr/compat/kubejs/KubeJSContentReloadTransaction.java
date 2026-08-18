@@ -53,12 +53,18 @@ final class KubeJSContentReloadTransaction {
     }
 
     void commit() {
-        validate();
-        MachineStructureRegistry.replaceDynamic(structures);
-        RecipeRegistry.replaceDynamic(recipes);
+        Map<Identifier, MachineStructureDefinition> mergedStructures = new LinkedHashMap<>(
+                MachineStructureRegistry.dynamicSnapshot());
+        mergedStructures.putAll(structures);
+        Map<Identifier, MachineRecipe> mergedRecipes = new LinkedHashMap<>(RecipeRegistry.dynamicSnapshot());
+        mergedRecipes.putAll(recipes);
+        validate(mergedStructures, mergedRecipes);
+        MachineStructureRegistry.replaceDynamic(mergedStructures);
+        RecipeRegistry.replaceDynamic(mergedRecipes);
     }
 
-    private void validate() {
+    private void validate(Map<Identifier, MachineStructureDefinition> structures,
+                          Map<Identifier, MachineRecipe> recipes) {
         for (MachineRecipe recipe : recipes.values()) {
             if (RecipeRegistry.containsStatic(recipe.id())) {
                 throw new IllegalStateException("Dynamic recipe conflicts with static recipe: " + recipe.id());
