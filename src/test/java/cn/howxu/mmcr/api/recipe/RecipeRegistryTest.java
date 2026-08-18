@@ -116,6 +116,17 @@ class RecipeRegistryTest {
         assertThat(RecipeRegistry.staticSnapshot()).containsEntry(id, recipe);
     }
 
+    @Test
+    void dataPackOverridePublishesObservableSourceWarning() {
+        var id = Identifier.parse("mmcr:warning_recipe");
+        RecipeRegistry.register(recipe(id.toString(), "mmcr:warning_machine"));
+
+        RecipeRegistry.replaceDataPack(Map.of(id, recipe(id.toString(), "mmcr:warning_machine")));
+
+        assertThat(RecipeRegistry.lastDataPackWarnings())
+                .containsExactly("data-pack layer recipe mmcr:warning_recipe overrides static layer recipe mmcr:warning_recipe");
+    }
+
     private static MachineRecipe recipe(String id, String machineId) {
         return new MachineRecipe(Identifier.parse(id), Identifier.parse(machineId), 1, List.of(), List.of());
     }

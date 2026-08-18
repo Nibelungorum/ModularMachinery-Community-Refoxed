@@ -60,7 +60,9 @@ public final class MachineRecipeDataReloadListener extends SimplePreparableReloa
                 JsonElement element = JsonParser.parseReader(reader);
                 if (!element.isJsonObject()) continue;
                 JsonObject object = element.getAsJsonObject();
-                if (!object.has("type") || !MachineRecipeJson.TYPE.toString().equals(object.get("type").getAsString())) continue;
+                if (!object.has("type") || !object.get("type").isJsonPrimitive()
+                        || !object.get("type").getAsJsonPrimitive().isString()
+                        || !MachineRecipeJson.TYPE.toString().equals(object.get("type").getAsString())) continue;
                 recipes.put(recipeId, MachineRecipeJson.parse(recipeId, object, registries));
             } catch (Exception exception) {
                 MMCR.LOG.error("Failed to load machine recipe {} from {}", recipeId, resourceLocation, exception);

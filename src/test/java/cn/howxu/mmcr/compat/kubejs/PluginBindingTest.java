@@ -106,6 +106,21 @@ class PluginBindingTest {
     }
 
     @Test
+    void datapack_conflict_does_not_publish_transaction_structure_or_recipe() {
+        var machineId = MMCR.id("kubejs_datapack_conflict_structure");
+        var recipeId = MMCR.id("kubejs_datapack_conflict_structure_recipe");
+        RecipeRegistry.replaceDataPack(Map.of(recipeId,
+                new MachineRecipe(recipeId, MMCR.id("alloy_furnace"), 2, List.of(), List.of())));
+        var transaction = new KubeJSContentReloadTransaction();
+        transaction.registerStructure(structure(machineId));
+        transaction.registerRecipe(new MachineRecipe(recipeId, machineId, 3, List.of(), List.of()));
+
+        assertThatThrownBy(transaction::commit).isInstanceOf(IllegalStateException.class);
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).doesNotContainKey(machineId);
+        assertThat(RecipeRegistry.dynamicSnapshot()).doesNotContainKey(recipeId);
+    }
+
+    @Test
     void duplicate_recipe_id_is_rejected_without_changing_transaction_snapshot() {
         var id = MMCR.id("kubejs_duplicate_recipe");
         var transaction = new KubeJSContentReloadTransaction();

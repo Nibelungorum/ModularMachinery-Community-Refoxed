@@ -103,15 +103,22 @@ public final class RecipeRegistry {
         return STATE.staticRecipes();
     }
 
+    public static List<String> lastDataPackWarnings() {
+        return STATE.warnings();
+    }
+
     public static void replaceDataPack(Map<Identifier, MachineRecipe> recipes) {
         Map<Identifier, MachineRecipe> replacement = new LinkedHashMap<>();
+        List<String> warnings = new java.util.ArrayList<>();
         for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
             if (STATE.staticRecipes().containsKey(entry.getKey())) {
-                MMCR.LOG.warn("Data-pack recipe {} overrides static recipe {} from the static layer", entry.getKey(), entry.getKey());
+                String warning = "data-pack layer recipe " + entry.getKey() + " overrides static layer recipe " + entry.getKey();
+                warnings.add(warning);
+                MMCR.LOG.warn(warning);
             }
             replacement.put(entry.getKey(), entry.getValue());
         }
-        publish(STATE.staticRecipes(), replacement, STATE.dynamic());
+        publish(STATE.staticRecipes(), replacement, STATE.dynamic(), warnings);
         reloadVersion++;
         registryVersion++;
     }
@@ -119,6 +126,13 @@ public final class RecipeRegistry {
     private static void publish(Map<Identifier, MachineRecipe> staticRecipes,
                                 Map<Identifier, MachineRecipe> dataPack,
                                 Map<Identifier, MachineRecipe> dynamic) {
+        publish(staticRecipes, dataPack, dynamic, List.of());
+    }
+
+    private static void publish(Map<Identifier, MachineRecipe> staticRecipes,
+                                Map<Identifier, MachineRecipe> dataPack,
+                                Map<Identifier, MachineRecipe> dynamic,
+                                List<String> warnings) {
         Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>(staticRecipes);
         recipes.putAll(dataPack);
         for (Map.Entry<Identifier, MachineRecipe> entry : dynamic.entrySet()) {
@@ -136,7 +150,7 @@ public final class RecipeRegistry {
             byMachine.put(entry.getKey(), entry.getValue().values().stream().flatMap(TreeSet::stream).toList());
         }
         STATE = new State(immutable(staticRecipes), immutable(dataPack), immutable(dynamic),
-                immutable(recipes), immutable(byMachine));
+                immutable(recipes), immutable(byMachine), List.copyOf(warnings));
     }
 
     public static void clearAll() {
@@ -158,9 +172,10 @@ public final class RecipeRegistry {
                          Map<Identifier, MachineRecipe> dataPack,
                          Map<Identifier, MachineRecipe> dynamic,
                          Map<Identifier, MachineRecipe> effective,
-                         Map<Identifier, List<MachineRecipe>> byMachine) {
+                         Map<Identifier, List<MachineRecipe>> byMachine,
+                         List<String> warnings) {
         private static State empty() {
-            return new State(Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
+            return new State(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), List.of());
         }
 
         private List<MachineRecipe> effectiveValues() {

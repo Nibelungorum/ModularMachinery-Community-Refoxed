@@ -97,6 +97,15 @@ class MachineRecipeDataReloadListenerTest {
         assertThat(snapshot).containsOnlyKeys(Identifier.parse("mmcr_test:good"));
     }
 
+    @Test
+    void missingOrNonStringTypeIsIgnoredWithoutErroringAsMachineRecipe() {
+        var snapshot = MachineRecipeDataReloadListener.load(resources(Map.of(
+                Identifier.parse("minecraft:recipes/missing_type.json"), resource("{}"),
+                Identifier.parse("minecraft:recipes/object_type.json"), resource("{\"type\":{}}"))), registries);
+
+        assertThat(snapshot).isEmpty();
+    }
+
     private static ResourceManager resources(Map<Identifier, Resource> resources) {
         return (ResourceManager) Proxy.newProxyInstance(
                 MachineRecipeDataReloadListenerTest.class.getClassLoader(), new Class<?>[]{ResourceManager.class},
