@@ -109,6 +109,22 @@ class StructureMatcherTest {
     }
 
     @Test
+    void base_or_replacement_predicate_matches_configured_position() {
+        BlockPos pos = new BlockPos(1, 0, 0);
+        BlockArray pattern = new BlockArray(Map.of(pos, new BlockPredicate.OfBlock(Blocks.FURNACE)));
+        var replacement = new SingleBlockModifierReplacement(
+                "speed", new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK), List.of(), ItemStack.EMPTY);
+        Map<BlockPos, List<SingleBlockModifierReplacement>> replacements = Map.of(pos, List.of(replacement));
+
+        assertThat(StructureMatcher.matchesRotated(pattern,
+                LevelStub.create(Map.of(pos, Blocks.FURNACE)), BlockPos.ZERO, replacements)).isTrue();
+        assertThat(StructureMatcher.matchesRotated(pattern,
+                LevelStub.create(Map.of(pos, Blocks.DIAMOND_BLOCK)), BlockPos.ZERO, replacements)).isTrue();
+        assertThat(StructureMatcher.matchesRotated(pattern,
+                LevelStub.create(Map.of(pos, Blocks.GOLD_BLOCK)), BlockPos.ZERO, replacements)).isFalse();
+    }
+
+    @Test
     void replacement_matches_all_horizontal_rotations_without_mutating_pattern_positions() {
         BlockPos controllerPos = new BlockPos(8, 64, 8);
         BlockPos rawPos = new BlockPos(1, 0, 0);
@@ -130,6 +146,27 @@ class StructureMatcherTest {
         }
 
         assertThat(pattern.pattern().keySet()).containsExactlyInAnyOrder(rawPos, new BlockPos(0, 1, 0));
+    }
+
+    @Test
+    void compiled_modifier_replacement_is_reused_under_rotated_key() {
+        BlockPos rawPos = new BlockPos(1, 0, 0);
+        BlockArray pattern = new BlockArray(Map.of(rawPos, new BlockPredicate.OfBlock(Blocks.FURNACE)));
+        var replacement = new SingleBlockModifierReplacement(
+                "speed", new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK), List.of(), ItemStack.EMPTY);
+        DynamicMachine machine = new DynamicMachine(
+                net.minecraft.resources.Identifier.fromNamespaceAndPath("mmcr", "matcher_rotated_replacement"),
+                "Matcher Rotated Replacement",
+                pattern,
+                MachineControllerSpec.defaultsFor(net.minecraft.resources.Identifier.fromNamespaceAndPath("mmcr", "matcher_rotated_replacement")),
+                PortRequirementSpec.none(),
+                List.of(),
+                Map.of(rawPos, List.of(replacement)));
+        CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
+        BlockPos rotatedPos = BlockRotator.rotateSouthTo(rawPos, Direction.WEST);
+
+        assertThat(compiled.modifierReplacements(Direction.WEST)).containsOnlyKeys(rotatedPos);
+        assertThat(compiled.modifierReplacements(Direction.WEST).get(rotatedPos)).containsExactly(replacement);
     }
 
     @Test

@@ -1845,6 +1845,22 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void base_block_forms_without_activating_replacement_modifier() throws Exception {
+        var replacement = replacementAt(new BlockPos(1, 0, 0), Blocks.DIAMOND_BLOCK, "speed", 2F);
+        var machine = machineWithReplacements(replacement);
+        MachineRegistry.register(machine);
+
+        MachineControllerBlockEntity controller = controllerFor(machine);
+        placeControllerAndReplacement(controller, machine, Blocks.IRON_BLOCK);
+        levelOf(controller).setBlock(controller.getBlockPos().offset(1, 0, 0), Blocks.IRON_BLOCK.defaultBlockState(), 3);
+        tickUntilFormed(controller, machine);
+
+        assertThat(controller.isFormed()).isTrue();
+        assertThat(controller.getFoundModifiers()).isEmpty();
+        assertThat(controller.foundModifierList()).isEmpty();
+    }
+
+    @Test
     void duplicate_modifier_name_is_applied_once_and_reset_clears_it() throws Exception {
         var first = replacementAt(new BlockPos(1, 0, 0), Blocks.GOLD_BLOCK, "speed", 2F);
         var second = replacementAt(new BlockPos(2, 0, 0), Blocks.DIAMOND_BLOCK, "speed", 4F);

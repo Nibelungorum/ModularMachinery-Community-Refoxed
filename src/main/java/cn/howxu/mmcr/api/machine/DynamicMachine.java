@@ -232,15 +232,13 @@ public record DynamicMachine(
             }
             List<SingleBlockModifierReplacement> list = entry.getValue();
             if (list == null) throw new IllegalArgumentException("modifierReplacements list null");
-            list.forEach(DynamicMachine::validateReplacement);
+            for (SingleBlockModifierReplacement replacement : list) {
+                if (replacement == null) throw new IllegalArgumentException("modifier replacement null");
+                if (replacement.getReplacement() == null) throw new IllegalArgumentException("modifier replacement predicate null");
+            }
             copy.put(pos, List.copyOf(list));
         }
         return java.util.Collections.unmodifiableMap(copy);
-    }
-
-    private static void validateReplacement(SingleBlockModifierReplacement replacement) {
-        if (replacement == null) throw new IllegalArgumentException("modifier replacement null");
-        if (replacement.getReplacement() == null) throw new IllegalArgumentException("modifier replacement predicate null");
     }
 
     private static Set<Identifier> copyAcceptedModuleIds(Set<Identifier> acceptedModuleIds) {
