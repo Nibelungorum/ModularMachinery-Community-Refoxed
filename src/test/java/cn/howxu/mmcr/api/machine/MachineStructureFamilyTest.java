@@ -94,6 +94,47 @@ class MachineStructureFamilyTest {
     }
 
     @Test
+    void extensionMergesCharacterRequirementsWithoutReplacingExistingOnes() {
+        SingleBlockModifierReplacement baseReplacement = replacement("base", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK));
+        SingleBlockModifierReplacement extensionReplacement = replacement("extension", new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK));
+        Declaration base = new Declaration(Declaration.Kind.FULL,
+                BlockArray.builder().pattern("CM").set('C', controller()).set('M', casing()).build(),
+                null, null, List.of(),
+                MachineStructureRequirements.builder().modifier('M', baseReplacement).levelSlot('M', MMCR.id("base_coil")).build());
+        Declaration extension = new Declaration(Declaration.Kind.EXTENSION,
+                characterArray(new BlockPos(2, 0, 0), 'M', casing()),
+                null, null, List.of(),
+                MachineStructureRequirements.builder().modifier('M', extensionReplacement).build());
+
+        MachineStructureStage stage = MachineStructureFamily.of(definition("requirements_merge", base, extension))
+                .stages().getLast();
+
+        assertThat(stage.requirements().modifierReplacements().get('M'))
+                .containsExactly(baseReplacement, extensionReplacement);
+        assertThat(stage.requirements().levelSlots()).containsEntry('M', MMCR.id("base_coil"));
+        assertThat(stage.modifierReplacements()).hasSize(2);
+        assertThat(stage.levelSlots()).containsEntry(new BlockPos(1, 0, 0), MMCR.id("base_coil"));
+    }
+
+    @Test
+    void extensionRejectsConflictingCharacterLevelRequirement() {
+        Declaration base = new Declaration(Declaration.Kind.FULL,
+                BlockArray.builder().pattern("CM").set('C', controller()).set('M', casing()).build(),
+                null, null, List.of(),
+                MachineStructureRequirements.builder().levelSlot('M', MMCR.id("base_coil")).build());
+        Declaration extension = new Declaration(Declaration.Kind.EXTENSION,
+                characterArray(new BlockPos(2, 0, 0), 'M', casing()),
+                null, null, List.of(),
+                MachineStructureRequirements.builder().levelSlot('M', MMCR.id("other_coil")).build());
+
+        assertThatThrownBy(() -> MachineStructureFamily.of(definition("requirements_conflict", base, extension)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("stage 2")
+                .hasMessageContaining("conflicting level slot")
+                .hasMessageContaining("M");
+    }
+
+    @Test
     void stageSnapshotsDefensivelyCopyCoordinateMetadata() {
         BlockPos pos = new BlockPos(1, 0, 0);
         List<SingleBlockModifierReplacement> replacements = new ArrayList<>();
@@ -210,6 +251,10 @@ class MachineStructureFamilyTest {
         return new BlockArray(pattern);
     }
 
+    private static BlockArray characterArray(BlockPos position, char symbol, BlockPredicate predicate) {
+        return new BlockArray(Map.of(position, predicate), Map.of(), Map.of(position, symbol));
+    }
+
     private static BlockPredicate controller() {
         return new BlockPredicate.OfBlock(ModBlocks.controllerFor(MMCR.id("blast_furnace")).get());
     }
@@ -228,5 +273,9 @@ class MachineStructureFamilyTest {
 
     private static BlockPredicate otherCasing() {
         return new BlockPredicate.OfBlock(Blocks.DEEPSLATE);
+    }
+
+    private static SingleBlockModifierReplacement replacement(String name, BlockPredicate predicate) {
+        return new SingleBlockModifierReplacement(name, BlockPos.ZERO, predicate, List.of(), "", net.minecraft.world.item.ItemStack.EMPTY);
     }
 }

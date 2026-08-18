@@ -72,12 +72,40 @@ public record MachineStructureDefinition(Identifier machineId, List<Declaration>
         return declarations.getFirst().dynamicPatterns();
     }
 
+    public MachineStructureRequirements requirements() {
+        return declarations.getFirst().requirements();
+    }
+
     public Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements() {
-        return declarations.getFirst().modifierReplacements();
+        Declaration declaration = declarations.getFirst();
+        return compiled(declaration).modifierReplacements();
     }
 
     public Map<BlockPos, Identifier> levelSlots() {
-        return declarations.getFirst().levelSlots();
+        Declaration declaration = declarations.getFirst();
+        return compiled(declaration).levelSlots();
+    }
+
+    private static MachineStructureRequirementCompiler.Compiled compiled(Declaration declaration) {
+        MachineStructureRequirementCompiler.Compiled compiled =
+                MachineStructureRequirementCompiler.compile(declaration.pattern(), declaration.requirements());
+        Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements =
+                new LinkedHashMap<>(declaration.modifierReplacements());
+        compiled.modifierReplacements().forEach((position, replacements) ->
+                modifierReplacements.merge(position, replacements, (left, right) -> {
+                    java.util.ArrayList<SingleBlockModifierReplacement> merged = new java.util.ArrayList<>(left);
+                    merged.addAll(right);
+                    return List.copyOf(merged);
+                }));
+        Map<BlockPos, Identifier> levelSlots = new LinkedHashMap<>(declaration.levelSlots());
+        compiled.levelSlots().forEach((position, typeId) -> {
+            Identifier existing = levelSlots.putIfAbsent(position, typeId);
+            if (existing != null && !existing.equals(typeId)) {
+                throw new IllegalArgumentException("conflicting compiled requirement at " + position);
+            }
+        });
+        return new MachineStructureRequirementCompiler.Compiled(
+                Collections.unmodifiableMap(modifierReplacements), Collections.unmodifiableMap(levelSlots));
     }
 
     /**
@@ -85,31 +113,48 @@ public record MachineStructureDefinition(Identifier machineId, List<Declaration>
      *
      * @author howxu <dev@howxu.cn>
      */
-    public record Declaration(
-            Kind kind,
-            BlockArray pattern,
-            PortRequirementSpec portRequirements,
-            PortTierRequirementSpec portTierRequirements,
-            List<DynamicPatternSpec> dynamicPatterns,
-            Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
-            Map<BlockPos, Identifier> levelSlots) {
+        public record Declaration(
+                Kind kind,
+                BlockArray pattern,
+                PortRequirementSpec portRequirements,
+                PortTierRequirementSpec portTierRequirements,
+                List<DynamicPatternSpec> dynamicPatterns,
+                MachineStructureRequirements requirements,
+                Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
+                Map<BlockPos, Identifier> levelSlots) {
+
+            public Declaration(Kind kind, BlockArray pattern, PortRequirementSpec portRequirements,
+                    PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
+                    MachineStructureRequirements requirements) {
+                this(kind, pattern, portRequirements, portTierRequirements, dynamicPatterns,
+                        requirements, Map.of(), Map.of());
+            }
+
+            public Declaration(Kind kind, BlockArray pattern, PortRequirementSpec portRequirements,
+                    PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
+                    Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
+                    Map<BlockPos, Identifier> levelSlots) {
+                this(kind, pattern, portRequirements, portTierRequirements, dynamicPatterns,
+                        MachineStructureRequirements.EMPTY, modifierReplacements, levelSlots);
+            }
 
         public Declaration {
             Objects.requireNonNull(kind, "kind");
             Objects.requireNonNull(pattern, "pattern");
-            pattern = new BlockArray(pattern.pattern(), copyStringMap(pattern.tagsByPosition()));
+            pattern = new BlockArray(pattern.pattern(), copyStringMap(pattern.tagsByPosition()), pattern.symbolsByPosition());
             dynamicPatterns = List.copyOf(dynamicPatterns == null ? List.of() : dynamicPatterns);
+            requirements = (requirements == null ? MachineStructureRequirements.EMPTY : requirements).validate(pattern);
             modifierReplacements = copyNestedMap(modifierReplacements == null ? Map.of() : modifierReplacements);
             levelSlots = copyMap(levelSlots == null ? Map.of() : levelSlots);
         }
 
         public static Declaration full(BlockArray pattern) {
             return new Declaration(Kind.FULL, pattern, PortRequirementSpec.none(), PortTierRequirementSpec.none(),
-                    List.of(), Map.of(), Map.of());
+                    List.of(), MachineStructureRequirements.EMPTY);
         }
 
         public static Declaration extension(BlockArray pattern) {
-            return new Declaration(Kind.EXTENSION, pattern, null, null, List.of(), Map.of(), Map.of());
+            return new Declaration(Kind.EXTENSION, pattern, null, null, List.of(), MachineStructureRequirements.EMPTY);
         }
 
         private static Map<BlockPos, List<SingleBlockModifierReplacement>> copyNestedMap(

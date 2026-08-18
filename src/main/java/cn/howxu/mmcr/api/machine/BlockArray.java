@@ -10,15 +10,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.ToIntFunction;
 
-public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, List<String>> tagsByPosition) {
+public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, List<String>> tagsByPosition,
+                         Map<BlockPos, Character> symbolsByPosition) {
 
     public BlockArray(Map<BlockPos, BlockPredicate> pattern) {
-        this(pattern, Map.of());
+        this(pattern, Map.of(), Map.of());
+    }
+
+    public BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, List<String>> tagsByPosition) {
+        this(pattern, tagsByPosition, Map.of());
     }
 
     public BlockArray {
         pattern = Collections.unmodifiableMap(new LinkedHashMap<>(pattern));
         tagsByPosition = tagsByPosition == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(tagsByPosition));
+        symbolsByPosition = symbolsByPosition == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(symbolsByPosition));
     }
 
     public @Nullable BlockPredicate get(BlockPos pos) {
@@ -70,11 +76,21 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
         }
         if (combined.equals(existing)) return this;
         merged.put(pos, Collections.unmodifiableList(combined));
-        return new BlockArray(pattern, merged);
+        return new BlockArray(pattern, merged, symbolsByPosition);
     }
 
     public BlockArray withPattern(Map<BlockPos, BlockPredicate> rotated) {
-        return new BlockArray(rotated, rotateTags(rotated.keySet()));
+        return new BlockArray(rotated, rotateTags(rotated.keySet()), retainSymbols(rotated.keySet()));
+    }
+
+    private Map<BlockPos, Character> retainSymbols(java.util.Set<BlockPos> newPositions) {
+        if (symbolsByPosition.isEmpty()) return Map.of();
+        Map<BlockPos, Character> retained = new LinkedHashMap<>();
+        for (BlockPos newPos : newPositions) {
+            Character symbol = symbolsByPosition.get(newPos);
+            if (symbol != null) retained.put(newPos, symbol);
+        }
+        return retained;
     }
 
     private Map<BlockPos, List<String>> rotateTags(java.util.Set<BlockPos> newPositions) {
@@ -172,6 +188,7 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
 
         public BlockArray build() {
             entries.clear();
+            LinkedHashMap<BlockPos, Character> symbolsByPosition = new LinkedHashMap<>();
             if (slices.isEmpty()) {
                 throw new IllegalStateException("pattern(...) must be provided before build()");
             }
@@ -193,18 +210,24 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
                         BlockPos pos = new BlockPos(x, y, z);
                         if (c == controllerSymbol) controller = pos;
                         entries.put(pos, predicate);
+                        symbolsByPosition.put(pos, c);
                     }
                 }
             }
             if (controller != null && !controller.equals(BlockPos.ZERO)) {
                 LinkedHashMap<BlockPos, BlockPredicate> normalized = new LinkedHashMap<>();
+                LinkedHashMap<BlockPos, Character> normalizedSymbols = new LinkedHashMap<>();
                 for (var entry : entries.entrySet()) {
-                    normalized.put(entry.getKey().subtract(controller), entry.getValue());
+                    BlockPos normalizedPos = entry.getKey().subtract(controller);
+                    normalized.put(normalizedPos, entry.getValue());
+                    normalizedSymbols.put(normalizedPos, symbolsByPosition.get(entry.getKey()));
                 }
                 entries.clear();
                 entries.putAll(normalized);
+                symbolsByPosition.clear();
+                symbolsByPosition.putAll(normalizedSymbols);
             }
-            return new BlockArray(entries);
+            return new BlockArray(entries, Map.of(), symbolsByPosition);
         }
     }
 }

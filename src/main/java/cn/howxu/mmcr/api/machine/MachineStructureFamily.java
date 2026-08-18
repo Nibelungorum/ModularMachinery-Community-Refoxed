@@ -33,9 +33,11 @@ public record MachineStructureFamily(List<MachineStructureStage> stages) {
         List<MachineStructureStage> stages = new ArrayList<>(declarations.size());
         Map<BlockPos, BlockPredicate> pattern = Map.of();
         Map<BlockPos, List<String>> tags = Map.of();
+        Map<BlockPos, Character> symbols = Map.of();
         PortRequirementSpec portRequirements = PortRequirementSpec.none();
         PortTierRequirementSpec portTierRequirements = PortTierRequirementSpec.none();
         List<DynamicPatternSpec> dynamicPatterns = List.of();
+        MachineStructureRequirements requirements = MachineStructureRequirements.EMPTY;
         Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements = Map.of();
         Map<BlockPos, Identifier> levelSlots = Map.of();
 
@@ -45,25 +47,30 @@ public record MachineStructureFamily(List<MachineStructureStage> stages) {
             if (declaration.kind() == Declaration.Kind.FULL) {
                 pattern = new LinkedHashMap<>(declaration.pattern().pattern());
                 tags = copyNestedMap(declaration.pattern().tagsByPosition());
+                symbols = new LinkedHashMap<>(declaration.pattern().symbolsByPosition());
                 portRequirements = defaultPorts(declaration.portRequirements());
                 portTierRequirements = defaultTiers(declaration.portTierRequirements());
                 dynamicPatterns = new ArrayList<>(declaration.dynamicPatterns());
+                requirements = declaration.requirements();
                 modifierReplacements = copyNestedMap(declaration.modifierReplacements());
                 levelSlots = new LinkedHashMap<>(declaration.levelSlots());
             } else {
                 pattern = mergeMap(pattern, declaration.pattern().pattern(), stageNumber, "predicate");
                 tags = mergeMap(tags, declaration.pattern().tagsByPosition(), stageNumber, "tags");
+                symbols = mergeMap(symbols, declaration.pattern().symbolsByPosition(), stageNumber, "symbol");
                 if (declaration.portRequirements() != null) portRequirements = declaration.portRequirements();
                 if (declaration.portTierRequirements() != null) portTierRequirements = declaration.portTierRequirements();
                 dynamicPatterns = mergeList(dynamicPatterns, declaration.dynamicPatterns(), stageNumber, "dynamic pattern");
+                requirements = MachineStructureRequirements.merge(requirements, declaration.requirements(), stageNumber)
+                        .validate(new BlockArray(pattern, tags, symbols));
                 modifierReplacements = mergeMap(
                         modifierReplacements, declaration.modifierReplacements(), stageNumber, "modifier replacements");
                 levelSlots = mergeMap(levelSlots, declaration.levelSlots(), stageNumber, "level slot");
             }
 
             rejectMultipleControllers(pattern, stageNumber);
-            stages.add(new MachineStructureStage(stageNumber, new BlockArray(pattern, tags),
-                    portRequirements, portTierRequirements, dynamicPatterns, modifierReplacements, levelSlots));
+            stages.add(new MachineStructureStage(stageNumber, new BlockArray(pattern, tags, symbols),
+                    portRequirements, portTierRequirements, dynamicPatterns, requirements, modifierReplacements, levelSlots));
         }
         return new MachineStructureFamily(stages);
     }

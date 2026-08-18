@@ -80,7 +80,11 @@ public final class BlockArrayCache {
         for (var entry : key.pattern().tagsByPosition().entrySet()) {
             rotatedTags.put(BlockRotator.rotateSouthTo(entry.getKey(), key.facing(), key.rollFacing()), entry.getValue());
         }
-        return new BlockArray(rotated, rotatedTags);
+        Map<BlockPos, Character> rotatedSymbols = new LinkedHashMap<>();
+        for (var entry : key.pattern().symbolsByPosition().entrySet()) {
+            rotatedSymbols.put(BlockRotator.rotateSouthTo(entry.getKey(), key.facing(), key.rollFacing()), entry.getValue());
+        }
+        return new BlockArray(rotated, rotatedTags, rotatedSymbols);
     }
 
     private static void add(Map<Key, BlockArray> cache, BlockArray pattern, Direction facing) {
