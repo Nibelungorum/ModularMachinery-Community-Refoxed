@@ -22,7 +22,9 @@ import cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockPreviewPayload;
 import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
 import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
+import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
 import cn.howxu.mmcr.internal.network.PktSmartInterfaceUpdatePayload;
+import cn.howxu.mmcr.internal.network.RuntimeContentServerBridge;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModDataComponents;
@@ -82,15 +84,17 @@ public class MMCR {
         NeoForge.EVENT_BUS.addListener(StructureDirtyEvents::onChunkLoaded);
         NeoForge.EVENT_BUS.addListener(SharedIoEvents::onLevelTick);
         NeoForge.EVENT_BUS.addListener(SharedIoEvents::onLevelUnload);
+        NeoForge.EVENT_BUS.addListener(RuntimeContentServerBridge::onServerAboutToStart);
+        NeoForge.EVENT_BUS.addListener(RuntimeContentServerBridge::onServerStopped);
         NeoForge.EVENT_BUS.addListener((AddServerReloadListenersEvent event) -> MachineRecipeDataReloadListener.register(event));
         NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedInEvent event) -> {
             if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
-                cn.howxu.mmcr.internal.network.ControllerSpecSync.sendTo(player);
+                cn.howxu.mmcr.internal.network.RuntimeContentSync.sendTo(player);
             }
         });
         NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerChangedDimensionEvent event) -> {
             if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
-                cn.howxu.mmcr.internal.network.ControllerSpecSync.sendTo(player);
+                cn.howxu.mmcr.internal.network.RuntimeContentSync.sendTo(player);
             }
         });
         NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent ev) -> {
@@ -115,6 +119,10 @@ public class MMCR {
                             PktMachineAppearancePayload.TYPE,
                             PktMachineAppearancePayload.STREAM_CODEC,
                             PktMachineAppearancePayload::handle)
+                    .playToClient(
+                            PktRuntimeContentPayload.TYPE,
+                            PktRuntimeContentPayload.STREAM_CODEC,
+                            PktRuntimeContentPayload::handle)
                     .playToClient(
                             PktMultiblockMismatchHighlightPayload.TYPE,
                             PktMultiblockMismatchHighlightPayload.STREAM_CODEC,

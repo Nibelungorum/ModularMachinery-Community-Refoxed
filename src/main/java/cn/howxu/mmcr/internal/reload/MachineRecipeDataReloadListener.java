@@ -47,6 +47,8 @@ public final class MachineRecipeDataReloadListener extends SimplePreparableReloa
 
     @Override
     protected void apply(Map<Identifier, MachineRecipe> recipes, ResourceManager resourceManager, ProfilerFiller profiler) {
+        // Vanilla data-pack reload does not expose MinecraftServer to this listener apply hook.
+        // Call applySnapshotFromServerReloadHook when a server-aware reload integration is available.
         applySnapshot(recipes);
     }
 
@@ -72,6 +74,18 @@ public final class MachineRecipeDataReloadListener extends SimplePreparableReloa
     }
 
     void applySnapshot(Map<Identifier, MachineRecipe> recipes) {
+        publishSnapshot(recipes);
+    }
+
+    /**
+     * Applies the data-pack layer for a reload hook that can close over MinecraftServer and run runtime sync.
+     */
+    void applySnapshotFromServerReloadHook(Map<Identifier, MachineRecipe> recipes, Runnable sync) {
+        publishSnapshot(recipes);
+        sync.run();
+    }
+
+    private void publishSnapshot(Map<Identifier, MachineRecipe> recipes) {
         Map<Identifier, MachineRecipe> replacement = Map.copyOf(recipes);
         RecipeRegistry.replaceDataPack(replacement);
         snapshot = replacement;
