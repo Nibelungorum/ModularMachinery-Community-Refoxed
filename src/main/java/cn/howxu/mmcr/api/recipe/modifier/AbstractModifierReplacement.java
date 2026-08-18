@@ -4,6 +4,7 @@ import net.minecraft.world.item.ItemStack;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public abstract class AbstractModifierReplacement {
@@ -51,5 +52,17 @@ public abstract class AbstractModifierReplacement {
 
     public ItemStack getDescriptiveStack() {
         return descriptiveStack;
+    }
+
+    protected boolean baseEquals(AbstractModifierReplacement other) {
+        return Objects.equals(modifierName, other.modifierName)
+                && modifiers.equals(other.modifiers)
+                && description.equals(other.description)
+                && ItemStack.matches(descriptiveStack, other.descriptiveStack);
+    }
+
+    protected int baseHashCode() {
+        return Objects.hash(modifierName, modifiers, description,
+                ItemStack.hashItemAndComponents(descriptiveStack), descriptiveStack.getCount());
     }
 }

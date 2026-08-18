@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
+import java.util.Objects;
 
 public class MultiBlockModifierReplacement extends AbstractModifierReplacement {
 
@@ -16,5 +17,17 @@ public class MultiBlockModifierReplacement extends AbstractModifierReplacement {
 
     public BlockArray getBlockArray() {
         return blockArray;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (!(obj instanceof MultiBlockModifierReplacement other)) return false;
+        return baseEquals(other) && Objects.equals(blockArray, other.blockArray);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(baseHashCode(), blockArray);
     }
 }

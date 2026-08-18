@@ -22,4 +22,16 @@ public class SingleBlockModifierReplacement extends AbstractModifierReplacement 
     public BlockPredicate getReplacement() {
         return replacement;
     }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (!(obj instanceof SingleBlockModifierReplacement other)) return false;
+        return baseEquals(other) && replacement.equals(other.replacement);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(baseHashCode(), replacement);
+    }
 }

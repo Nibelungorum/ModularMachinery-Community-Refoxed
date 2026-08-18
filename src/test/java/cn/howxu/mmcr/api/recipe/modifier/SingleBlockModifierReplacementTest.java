@@ -57,4 +57,17 @@ class SingleBlockModifierReplacementTest {
         assertThatThrownBy(() -> replacement.getModifiers().add(null))
                 .isInstanceOf(UnsupportedOperationException.class);
     }
+
+    @Test
+    void replacements_with_same_values_compare_equal() {
+        RecipeModifier modifier = new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 2F,
+                RecipeModifier.Operation.MULTIPLY, false);
+        var first = new SingleBlockModifierReplacement(
+                "speed", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(modifier), new ItemStack(Blocks.GOLD_BLOCK));
+        var second = new SingleBlockModifierReplacement(
+                "speed", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(modifier), new ItemStack(Blocks.GOLD_BLOCK));
+
+        assertThat(first).isEqualTo(second);
+        assertThat(first).hasSameHashCodeAs(second);
+    }
 }

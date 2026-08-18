@@ -6,11 +6,13 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonParser;
@@ -147,6 +149,24 @@ class PluginBindingTest {
 
         assertThat(MachineStructureRegistry.dynamicSnapshot()).containsOnlyKeys(keptMachineId);
         assertThat(RecipeRegistry.dynamicSnapshot()).containsOnlyKeys(keptRecipeId);
+    }
+
+    @Test
+    void server_reload_removes_republished_script_structure_with_modifier_requirements() {
+        var removedMachineId = MMCR.id("alloy_furnace");
+        var keptMachineId = MMCR.id("cracker");
+
+        var previous = new KubeJSContentReloadTransaction();
+        previous.registerStructure(modifierStructure(removedMachineId));
+        previous.commit();
+        MachineStructureRegistry.replaceDynamic(Map.of(removedMachineId, modifierStructure(removedMachineId)));
+
+        var reload = new Object();
+        Plugin.beginServerReload(reload, 0);
+        KubeJSContentReloadTransaction.active().registerStructure(structure(keptMachineId));
+        Plugin.completeServerReload(reload, 0);
+
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsOnlyKeys(keptMachineId);
     }
 
     @Test
@@ -524,5 +544,19 @@ class PluginBindingTest {
     private static MachineStructureDefinition structure(net.minecraft.resources.Identifier id) {
         return new MachineStructureDefinition(id, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(),
                 cn.howxu.mmcr.api.machine.MachineStructureRequirements.EMPTY);
+    }
+
+    private static MachineStructureDefinition modifierStructure(net.minecraft.resources.Identifier id) {
+        BlockArray pattern = BlockArray.builder()
+                .pattern("M")
+                .set('M', new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))
+                .build();
+        MachineStructureRequirements requirements = MachineStructureRequirements.builder()
+                .modifier('M', new SingleBlockModifierReplacement("speed", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
+                        List.of(new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 2F,
+                                RecipeModifier.Operation.MULTIPLY, false)),
+                        new ItemStack(Blocks.GOLD_BLOCK)))
+                .build(pattern);
+        return new MachineStructureDefinition(id, pattern, PortRequirementSpec.none(), List.of(), requirements);
     }
 }
