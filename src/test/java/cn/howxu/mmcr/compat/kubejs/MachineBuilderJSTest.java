@@ -14,6 +14,9 @@ import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
+import dev.latvian.mods.rhino.ContextFactory;
+import dev.latvian.mods.rhino.Wrapper;
+import dev.latvian.mods.rhino.ScriptableObject;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
@@ -315,6 +318,51 @@ class MachineBuilderJSTest {
                 Identifier.parse("kubejs:steel_casing"),
                 Identifier.parse("kubejs:block/steel_casing"),
                 Identifier.parse("kubejs:block/steel_casing")));
+    }
+
+    @Test
+    void rhino_string_appearance_uses_machine_basic_block_overload() {
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        ScriptableObject.putProperty(scope, "builder", new MachineBuilderJS("mmcr:electric_press"), context);
+
+        var result = (Wrapper) context.evaluateString(scope, """
+                builder.appearance('minecraft:bricks').createObject();
+                """, "appearance-test", 1, null);
+        var registration = (cn.howxu.mmcr.api.machine.MachineRegistration) result.unwrap();
+
+        assertThat(registration.appearance()).isEqualTo(new MachineAppearanceSpec(
+                Identifier.withDefaultNamespace("bricks"),
+                Identifier.withDefaultNamespace("block/bricks"),
+                Identifier.withDefaultNamespace("block/bricks")));
+    }
+
+    @Test
+    void rhino_startup_builder_accepts_example_string_overloads() {
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        ScriptableObject.putProperty(scope, "builder", new MachineBuilderJS("mmcr:space_elevator"), context);
+
+        var result = (Wrapper) context.evaluateString(scope, """
+                builder.appearance('minecraft:smooth_quartz')
+                  .machineBasicBlock('minecraft:smooth_quartz')
+                  .controllerTextures('minecraft:block/quartz_block_top', 'minecraft:block/quartz_block_side')
+                  .controllerBaseTexture('minecraft:block/quartz_block_bottom')
+                  .formedPortBaseTexture('minecraft:block/quartz_block_bottom')
+                  .host('mmcr:space_reassembler')
+                  .runningSound('minecraft:block.furnace.fire_crackle')
+                  .finishSound('minecraft:entity.ender_dragon.growl')
+                  .createObject();
+                """, "startup-builder-test", 1, null);
+        var registration = (cn.howxu.mmcr.api.machine.MachineRegistration) result.unwrap();
+
+        assertThat(registration.acceptedModuleIds()).containsExactly(Identifier.parse("mmcr:space_reassembler"));
+        assertThat(registration.appearance().machineBasicBlock()).isEqualTo(Identifier.withDefaultNamespace("smooth_quartz"));
+        assertThat(registration.controllerSpec().frontTexture()).isEqualTo(Identifier.parse("minecraft:block/quartz_block_top"));
+        assertThat(registration.appearance().controllerBaseTexture())
+                .isEqualTo(Identifier.parse("minecraft:block/quartz_block_bottom"));
+        assertThat(registration.runningSoundId()).isEqualTo(Identifier.parse("minecraft:block.furnace.fire_crackle"));
+        assertThat(registration.finishSoundId()).isEqualTo(Identifier.parse("minecraft:entity.ender_dragon.growl"));
     }
 
     @Test

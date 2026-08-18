@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
@@ -13,11 +14,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 import dev.latvian.mods.kubejs.recipe.RecipesKubeEvent;
-import dev.latvian.mods.kubejs.script.BindingRegistry;
-import dev.latvian.mods.kubejs.script.KubeJSContext;
-import dev.latvian.mods.kubejs.script.KubeJSContextFactory;
 import dev.latvian.mods.kubejs.util.RegistryOpsContainer;
-import dev.latvian.mods.rhino.NativeObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.core.component.DataComponentMap;
@@ -178,22 +175,10 @@ class PluginBindingTest {
     }
 
     @Test
-    void plugin_exposes_new_public_kubejs_bindings_only() {
-        var factory = new KubeJSContextFactory(null);
-        var context = new KubeJSContext(factory);
-        var scope = new NativeObject(factory);
-
-        new Plugin().registerBindings(new BindingRegistry(context, scope));
-
-        assertThat(scope.getIds(context)).contains("mmcrAPI", "MMCREvents");
-        assertThat(scope.getIds(context)).doesNotContain(
-                "MMCR_API", "MMCR", "MMCR_MACHINE_BUILDER", "MMCR_STRUCTURE_BUILDER", "MMCR_RECIPE_BUILDER",
-                "MMCR_MACHINE_DEFINITIONS", "MMCR_MACHINE_STRUCTURES", "MMCR_RECIPE_REGISTRY",
-                "MMCR_BLOCK_ARRAY", "MMCR_BLOCK_PREDICATE", "MMCR_MACHINE_REGISTRATION",
-                "MMCR_STRUCTURE_DEFINITION", "MMCR_PORT_REQUIREMENTS", "MMCR_PORT_TIER_REQUIREMENTS",
-                "MMCR_MACHINE_INGREDIENT", "MMCR_MACHINE_RECIPE", "MMCR_RECIPE_MODIFIER",
-                "MMCR_SINGLE_BLOCK_MODIFIER", "MMCR_LEVEL_REQUIREMENT", "MMCR_SMART_INTERFACE_REQUIREMENT",
-                "MMCR_MACHINES", "MMCR_RECIPES");
+    void old_meta_inf_kubejs_plugin_discovery_file_is_not_present() {
+        assertThat(getClass().getClassLoader().getResource("META-INF/kubejs.plugins.txt"))
+                .as("KubeJS 26 discovers plugins from the resource root, not META-INF")
+                .isNull();
     }
 
     @Test
@@ -216,14 +201,43 @@ class PluginBindingTest {
     }
 
     @Test
+    void startup_scripts_run_inside_machine_registry_phase() {
+        MachineDefinitions.clearForTesting();
+
+        try {
+            Plugin.beginStartupRegistryPhaseForTesting();
+            new MMCRStartupEventJS().createMachine("mmcr:kubejs_lifecycle_press").register();
+            Plugin.freezeStartupRegistryPhaseForTesting();
+
+            assertThat(MachineDefinitions.getRegistration(MMCR.id("kubejs_lifecycle_press"))).isNotNull();
+            assertThat(MachineDefinitions.isRegistryPhaseOpen()).isFalse();
+        } finally {
+            TestBootstrap.restoreMachineDefinitions();
+        }
+    }
+
+    @Test
+    void startup_hot_reload_does_not_reopen_frozen_machine_registrations() {
+        MachineDefinitions.clearForTesting();
+        MachineDefinitions.register(new MMCRStartupEventJS().createMachine("mmcr:frozen_lifecycle_press").createObject());
+        MachineDefinitions.freezeRegistryPhase();
+
+        Plugin.beginStartupRegistryPhaseForTesting();
+
+        assertThat(MachineDefinitions.getRegistration(MMCR.id("frozen_lifecycle_press"))).isNotNull();
+        assertThat(MachineDefinitions.isRegistryPhaseOpen()).isFalse();
+
+        TestBootstrap.restoreMachineDefinitions();
+    }
+
+    @Test
     void server_event_exposes_server_declaration_api_only() {
         var event = new MMCRServerEventJS();
 
         assertThat(event.api()).isInstanceOf(KubeJSApi.class);
         assertThat(event.createStructure("mmcr:test_structure")).isInstanceOf(MachineStructureBuilderJS.class);
-        assertThat(event.createRecipe("mmcr:test_recipe")).isInstanceOf(MachineRecipeBuilderJS.class);
         assertThat(event.getClass().getMethods()).extracting(java.lang.reflect.Method::getName)
-                .doesNotContain("createMachine", "createLevelType", "createLevel", "levelSlot");
+                .doesNotContain("createMachine", "createLevelType", "createLevel", "levelSlot", "createRecipe");
     }
 
     @Test

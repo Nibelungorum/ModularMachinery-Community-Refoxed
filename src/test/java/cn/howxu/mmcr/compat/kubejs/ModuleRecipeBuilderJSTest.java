@@ -71,11 +71,11 @@ class ModuleRecipeBuilderJSTest {
     }
 
     @Test
-    void server_event_creates_recipe_builder() {
+    void public_recipe_builder_creates_recipe_object() {
         Identifier machineId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
 
-        var recipe = new MMCRServerEventJS().createRecipe("mmcr:event_recipe")
+        var recipe = new MachineRecipeBuilderJS("mmcr:event_recipe")
                 .machine(machineId.toString())
                 .tickTime(1)
                 .createObject();

@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
+import dev.latvian.mods.rhino.util.HideFromJS;
 import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
@@ -119,6 +120,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return this;
     }
 
+    @HideFromJS
     public MachineBuilderJS appearance(MachineAppearanceSpec appearance) {
         this.explicitAppearance = appearance;
         return this;
@@ -139,6 +141,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return runningSound(Identifier.parse(soundId));
     }
 
+    @HideFromJS
     public MachineBuilderJS runningSound(Identifier soundId) {
         this.runningSoundId = soundId;
         return this;
@@ -148,6 +151,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return finishSound(Identifier.parse(soundId));
     }
 
+    @HideFromJS
     public MachineBuilderJS finishSound(Identifier soundId) {
         this.finishSoundId = soundId;
         return this;
@@ -161,6 +165,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return this;
     }
 
+    @HideFromJS
     public MachineBuilderJS host(Collection<String> moduleIds) {
         if (moduleIds == null) return this;
         for (String moduleId : moduleIds) {
@@ -187,6 +192,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return registerRunningSound(Identifier.parse(soundId));
     }
 
+    @HideFromJS
     public MachineBuilderJS registerRunningSound(Identifier soundId) {
         this.runningSoundId = soundId;
         MachineSoundRegistry.requestRegistration(soundId);
@@ -197,6 +203,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return registerFinishSound(Identifier.parse(soundId));
     }
 
+    @HideFromJS
     public MachineBuilderJS registerFinishSound(Identifier soundId) {
         this.finishSoundId = soundId;
         MachineSoundRegistry.requestRegistration(soundId);
@@ -215,6 +222,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return controllerTextures(Identifier.parse(front), Identifier.parse(otherFive));
     }
 
+    @HideFromJS
     public MachineBuilderJS controllerTextures(Identifier front, Identifier otherFive) {
         this.controllerFrontTexture = front;
         this.controllerSideTexture = otherFive;
@@ -223,6 +231,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return this;
     }
 
+    @HideFromJS
     public MachineBuilderJS controllerTextures(Identifier front, Identifier side, Identifier top, Identifier bottom) {
         this.controllerFrontTexture = front;
         this.controllerSideTexture = side;
@@ -235,6 +244,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return controllerFrontTexture(Identifier.parse(texture));
     }
 
+    @HideFromJS
     public MachineBuilderJS controllerFrontTexture(Identifier texture) {
         this.controllerFrontTexture = texture;
         return this;
@@ -244,6 +254,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return controllerSideTexture(Identifier.parse(texture));
     }
 
+    @HideFromJS
     public MachineBuilderJS controllerSideTexture(Identifier texture) {
         this.controllerSideTexture = texture;
         return this;
@@ -253,6 +264,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return controllerTopTexture(Identifier.parse(texture));
     }
 
+    @HideFromJS
     public MachineBuilderJS controllerTopTexture(Identifier texture) {
         this.controllerTopTexture = texture;
         return this;
@@ -262,6 +274,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return controllerBottomTexture(Identifier.parse(texture));
     }
 
+    @HideFromJS
     public MachineBuilderJS controllerBottomTexture(Identifier texture) {
         this.controllerBottomTexture = texture;
         return this;
@@ -331,6 +344,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return machineBasicBlock(Identifier.parse(blockId));
     }
 
+    @HideFromJS
     public MachineBuilderJS machineBasicBlock(Identifier blockId) {
         this.machineBasicBlock = blockId;
         return this;
@@ -340,6 +354,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return controllerBaseTexture(Identifier.parse(textureId));
     }
 
+    @HideFromJS
     public MachineBuilderJS controllerBaseTexture(Identifier textureId) {
         this.controllerBaseTexture = textureId;
         return this;
@@ -349,6 +364,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return formedPortBaseTexture(Identifier.parse(textureId));
     }
 
+    @HideFromJS
     public MachineBuilderJS formedPortBaseTexture(Identifier textureId) {
         this.formedPortBaseTexture = textureId;
         return this;

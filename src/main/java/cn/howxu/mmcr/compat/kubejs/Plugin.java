@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import dev.latvian.mods.kubejs.event.EventGroupWrapper;
 import dev.latvian.mods.kubejs.recipe.component.RecipeComponentTypeRegistry;
 import dev.latvian.mods.kubejs.recipe.schema.RecipeFactoryRegistry;
 import dev.latvian.mods.kubejs.recipe.schema.RecipeSchemaRegistry;
@@ -22,9 +24,9 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
             beginServerReload(manager, manager.scriptType.console.errors.size());
         }
         if (manager.scriptType == ScriptType.STARTUP) {
+            beginStartupRegistryPhase();
             MachineLevelRegistry.beginRegistration();
             registerDevelopmentMachineLevels();
-            MMCREvents.postStartup();
         }
     }
 
@@ -35,8 +37,29 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
             completeServerReload(manager, manager.scriptType.console.errors.size());
         }
         if (manager.scriptType == ScriptType.STARTUP) {
+            MMCREvents.postStartup();
             MachineLevelRegistry.freezeRegistration();
+            freezeStartupRegistryPhase();
         }
+    }
+
+    private static void beginStartupRegistryPhase() {
+        if (!MachineDefinitions.allRegistrations().isEmpty() && !MachineDefinitions.isRegistryPhaseOpen()) return;
+        MachineDefinitions.beginRegistryPhase();
+    }
+
+    private static void freezeStartupRegistryPhase() {
+        if (!MachineDefinitions.isRegistryPhaseOpen()) return;
+        MachineDefinitions.bootstrapBuiltins();
+        MachineDefinitions.freezeRegistryPhase();
+    }
+
+    static void beginStartupRegistryPhaseForTesting() {
+        beginStartupRegistryPhase();
+    }
+
+    static void freezeStartupRegistryPhaseForTesting() {
+        freezeStartupRegistryPhase();
     }
 
     private record ServerReload(KubeJSContentReloadTransaction transaction, int errorCount) {
@@ -67,7 +90,7 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     @Override
     public void registerBindings(BindingRegistry bindings) {
         bindings.add("mmcrAPI", new KubeJSApi());
-        bindings.add("MMCREvents", MMCREvents.class);
+        bindings.add("MMCREvents", new EventGroupWrapper(bindings.type(), MMCREvents.group()));
     }
 
     @Override

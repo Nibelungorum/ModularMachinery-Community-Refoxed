@@ -1,1 +1,0 @@
-cn.howxu.mmcr.compat.kubejs.Plugin

@@ -31,7 +31,7 @@ import java.util.Objects;
 public final class MachineRecipe implements Recipe<RecipeInput> {
 
     public static final MapCodec<MachineRecipe> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
-            Identifier.CODEC.fieldOf("id").forGetter(MachineRecipe::id),
+            Identifier.CODEC.optionalFieldOf("id", cn.howxu.mmcr.MMCR.id("generated_recipe")).forGetter(MachineRecipe::id),
             Identifier.CODEC.fieldOf("machine").forGetter(MachineRecipe::machineId),
             Codec.INT.fieldOf("tick_time").forGetter(MachineRecipe::tickTime),
             MachineIngredient.CODEC.listOf().optionalFieldOf("inputs", Collections.emptyList()).forGetter(recipe -> Collections.emptyList()),
@@ -490,6 +490,12 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
 
     public List<MachineRequirement> requirements() {
         return requirements;
+    }
+
+    public MachineRecipe withId(Identifier id) {
+        return new MachineRecipe(id, machineId, tickTime, List.of(), List.of(), modifiers, priority, maxThreads,
+                cancelRecipeOnPerTickFailure, List.of(), requirements, parallelized, levelRequirements,
+                allowPartialOutputs, requiredHostIds, false);
     }
 
     public List<LevelRequirement> levelRequirements() {

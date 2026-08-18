@@ -18,7 +18,4 @@ public final class MMCRServerEventJS implements KubeEvent {
         return new MachineStructureBuilderJS(id);
     }
 
-    public MachineRecipeBuilderJS createRecipe(String id) {
-        return new MachineRecipeBuilderJS(id);
-    }
 }
