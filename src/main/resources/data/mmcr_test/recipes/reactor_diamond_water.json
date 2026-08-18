@@ -27,7 +27,7 @@
   ],
   "fluid_outputs": [
     {
-      "fluid": "minecraft:lava",
+      "id": "minecraft:lava",
       "amount": 500
     }
   ]

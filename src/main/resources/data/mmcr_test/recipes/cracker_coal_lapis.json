@@ -26,7 +26,7 @@
   ],
   "fluid_outputs": [
     {
-      "fluid": "minecraft:water",
+      "id": "minecraft:water",
       "amount": 500
     }
   ]

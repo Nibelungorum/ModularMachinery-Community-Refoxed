@@ -5,9 +5,7 @@
   "inputs": [
     {
       "type": "item",
-      "item": {
-        "tag": "minecraft:logs"
-      },
+      "item": "#minecraft:logs",
       "count": 1
     }
   ],

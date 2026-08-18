@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -350,12 +351,29 @@ public final class MachineStructureSyncCodec {
         ByteBufCodecs.STRING_UTF8.encode(buf, replacement.getModifierName());
         writeBlockPredicate(buf, replacement.getReplacement());
         writeRecipeModifiers(buf, replacement.getModifiers());
-        buf.writeJsonWithCodec(ItemStack.CODEC, replacement.getDescriptiveStack());
+        writeItemStack(buf, replacement.getDescriptiveStack());
     }
 
     private static SingleBlockModifierReplacement readReplacement(RegistryFriendlyByteBuf buf) {
         return new SingleBlockModifierReplacement(ByteBufCodecs.STRING_UTF8.decode(buf),
-                readBlockPredicate(buf), readRecipeModifiers(buf), buf.readLenientJsonWithCodec(ItemStack.CODEC));
+                readBlockPredicate(buf), readRecipeModifiers(buf), readItemStack(buf));
+    }
+
+    private static void writeItemStack(RegistryFriendlyByteBuf buf, ItemStack stack) {
+        if (stack.isEmpty()) {
+            buf.writeVarInt(0);
+            return;
+        }
+        buf.writeVarInt(stack.getCount());
+        Identifier.STREAM_CODEC.encode(buf, BuiltInRegistries.ITEM.getKey(stack.getItem()));
+        DataComponentPatch.STREAM_CODEC.encode(buf, stack.getComponentsPatch());
+    }
+
+    private static ItemStack readItemStack(RegistryFriendlyByteBuf buf) {
+        int count = buf.readVarInt();
+        if (count <= 0) return ItemStack.EMPTY;
+        var item = BuiltInRegistries.ITEM.getValue(Identifier.STREAM_CODEC.decode(buf));
+        return new ItemStack(item.builtInRegistryHolder(), count, DataComponentPatch.STREAM_CODEC.decode(buf));
     }
 
     private static void writeRecipeModifiers(RegistryFriendlyByteBuf buf, List<RecipeModifier> values) {

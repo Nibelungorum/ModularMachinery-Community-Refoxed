@@ -17,6 +17,7 @@ import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -95,6 +96,29 @@ class RuntimeContentSnapshotTest {
 
         assertThat(decoded.machineId()).isEqualTo(original.machineId());
         assertThat(decoded.declarations()).isEqualTo(original.declarations());
+    }
+
+    @Test
+    void structureSyncCodecRoundTripsModifierReplacementDescriptiveStack() {
+        BlockArray blockArray = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)),
+                Map.of(), Map.of(BlockPos.ZERO, 'M'));
+        MachineStructureRequirements requirements = MachineStructureRequirements.builder()
+                .modifier('M', new SingleBlockModifierReplacement("speed", new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK),
+                        List.of(new RecipeModifier("input_bus", RecipeModifier.IOType.INPUT, 2F,
+                                RecipeModifier.Operation.MULTIPLY, false)),
+                        new ItemStack(Items.DIAMOND_BLOCK)))
+                .build(blockArray);
+        MachineStructureDefinition original = new MachineStructureDefinition(MMCR.id("modifier_sync"), blockArray,
+                PortRequirementSpec.none(), cn.howxu.mmcr.api.machine.PortTierRequirementSpec.none(), List.of(), requirements);
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+
+        MachineStructureSyncCodec.encode(buf, original);
+        MachineStructureDefinition decoded = MachineStructureSyncCodec.decode(buf);
+
+        SingleBlockModifierReplacement decodedReplacement = decoded.declarations().getFirst()
+                .requirements().modifierReplacements().get('M').getFirst();
+        assertThat(decodedReplacement.getDescriptiveStack().getItem()).isEqualTo(Items.DIAMOND_BLOCK);
+        assertThat(decodedReplacement.getReplacement()).isEqualTo(new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK));
     }
 
     @Test

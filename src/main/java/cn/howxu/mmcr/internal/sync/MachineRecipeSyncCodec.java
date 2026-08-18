@@ -11,7 +11,10 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
+import io.netty.handler.codec.DecoderException;
+import io.netty.handler.codec.EncoderException;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.resources.Identifier;
@@ -100,10 +103,10 @@ public final class MachineRecipeSyncCodec {
                     writeJson(buf, Ingredient.CODEC.encodeStart(buf.registryAccess().createSerializationContext(JsonOps.INSTANCE),
                             item.item()).getOrThrow());
                     buf.writeVarInt(item.count());
-                    buf.writeJsonWithCodec(DataComponentPredicateSet.CODEC, item.components());
+                    writeJsonWithRegistryCodec(buf, DataComponentPredicateSet.CODEC, item.components());
                     buf.writeFloat(item.consumeChance());
                 } else {
-                    buf.writeJsonWithCodec(ItemStack.CODEC, item.stack(null));
+                    writeJsonWithRegistryCodec(buf, ItemStack.CODEC, item.stack(buf.registryAccess().createSerializationContext(JsonOps.INSTANCE)));
                     buf.writeFloat(item.chance());
                 }
             }
@@ -112,10 +115,10 @@ public final class MachineRecipeSyncCodec {
                 buf.writeEnum(fluid.io());
                 writeStringList(buf, fluid.tags());
                 if (fluid.io() == RecipeModifier.IOType.INPUT) {
-                    buf.writeJsonWithCodec(FluidIngredient.CODEC, fluid.fluid());
+                    writeJsonWithRegistryCodec(buf, FluidIngredient.CODEC, fluid.fluid());
                     buf.writeVarInt(fluid.amount());
                 } else {
-                    buf.writeJsonWithCodec(FluidStack.CODEC, fluid.stack());
+                    writeJsonWithRegistryCodec(buf, FluidStack.CODEC, fluid.stack());
                     buf.writeFloat(fluid.chance());
                 }
             }
@@ -144,19 +147,19 @@ public final class MachineRecipeSyncCodec {
                     Ingredient ingredient = Ingredient.CODEC.parse(buf.registryAccess().createSerializationContext(JsonOps.INSTANCE),
                             normalizeIngredient(readJson(buf))).getOrThrow();
                     int count = buf.readVarInt();
-                    DataComponentPredicateSet components = buf.readLenientJsonWithCodec(DataComponentPredicateSet.CODEC);
+                    DataComponentPredicateSet components = readJsonWithRegistryCodec(buf, DataComponentPredicateSet.CODEC);
                     yield new ItemRequirement(io, ingredient, count, ItemStack.EMPTY, 1F, tags, components, buf.readFloat());
                 }
-                yield new ItemRequirement(io, null, 0, buf.readLenientJsonWithCodec(ItemStack.CODEC), buf.readFloat(), tags);
+                yield new ItemRequirement(io, null, 0, readJsonWithRegistryCodec(buf, ItemStack.CODEC), buf.readFloat(), tags);
             }
             case FLUID -> {
                 RecipeModifier.IOType io = buf.readEnum(RecipeModifier.IOType.class);
                 List<String> tags = readStringList(buf, MAX_TAGS, "tag");
                 if (io == RecipeModifier.IOType.INPUT) {
-                    FluidIngredient ingredient = buf.readLenientJsonWithCodec(FluidIngredient.CODEC);
+                    FluidIngredient ingredient = readJsonWithRegistryCodec(buf, FluidIngredient.CODEC);
                     yield new FluidRequirement(io, ingredient, buf.readVarInt(), FluidStack.EMPTY, tags);
                 }
-                yield new FluidRequirement(io, null, 0, buf.readLenientJsonWithCodec(FluidStack.CODEC), buf.readFloat(), tags);
+                yield new FluidRequirement(io, null, 0, readJsonWithRegistryCodec(buf, FluidStack.CODEC), buf.readFloat(), tags);
             }
             case ENERGY -> {
                 RecipeModifier.IOType io = buf.readEnum(RecipeModifier.IOType.class);
@@ -171,7 +174,7 @@ public final class MachineRecipeSyncCodec {
     private static void writeModifiers(RegistryFriendlyByteBuf buf, List<RecipeModifier> values) {
         buf.writeVarInt(values.size());
         for (RecipeModifier value : values) {
-            buf.writeJsonWithCodec(RecipeModifier.CODEC, value);
+            writeJsonWithRegistryCodec(buf, RecipeModifier.CODEC, value);
         }
     }
 
@@ -180,7 +183,7 @@ public final class MachineRecipeSyncCodec {
         checkSize(count, MAX_MODIFIERS, "modifier");
         List<RecipeModifier> values = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            values.add(buf.readLenientJsonWithCodec(RecipeModifier.CODEC));
+            values.add(readJsonWithRegistryCodec(buf, RecipeModifier.CODEC));
         }
         return List.copyOf(values);
     }
@@ -188,7 +191,7 @@ public final class MachineRecipeSyncCodec {
     private static void writeLevelRequirements(RegistryFriendlyByteBuf buf, List<LevelRequirement> values) {
         buf.writeVarInt(values.size());
         for (LevelRequirement value : values) {
-            buf.writeJsonWithCodec(LevelRequirement.CODEC, value);
+            writeJsonWithRegistryCodec(buf, LevelRequirement.CODEC, value);
         }
     }
 
@@ -197,7 +200,7 @@ public final class MachineRecipeSyncCodec {
         checkSize(count, MAX_LEVEL_REQUIREMENTS, "level requirement");
         List<LevelRequirement> values = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            values.add(buf.readLenientJsonWithCodec(LevelRequirement.CODEC));
+            values.add(readJsonWithRegistryCodec(buf, LevelRequirement.CODEC));
         }
         return List.copyOf(values);
     }
@@ -246,6 +249,16 @@ public final class MachineRecipeSyncCodec {
 
     private static JsonElement readJson(RegistryFriendlyByteBuf buf) {
         return JsonParser.parseString(ByteBufCodecs.STRING_UTF8.decode(buf));
+    }
+
+    private static <T> void writeJsonWithRegistryCodec(RegistryFriendlyByteBuf buf, Codec<T> codec, T value) {
+        var result = codec.encodeStart(buf.registryAccess().createSerializationContext(JsonOps.INSTANCE), value);
+        writeJson(buf, result.getOrThrow(message -> new EncoderException("Failed to encode: " + message + " " + value)));
+    }
+
+    private static <T> T readJsonWithRegistryCodec(RegistryFriendlyByteBuf buf, Codec<T> codec) {
+        var result = codec.parse(buf.registryAccess().createSerializationContext(JsonOps.INSTANCE), readJson(buf));
+        return result.getOrThrow(message -> new DecoderException("Failed to decode json: " + message));
     }
 
     private static JsonElement normalizeIngredient(JsonElement value) {
