@@ -213,6 +213,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     public void onMachineDestroyed() {
+        notifyPreviewReceiversCleared();
         resetMachine(true, false);
     }
 
@@ -822,6 +823,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private void notifyPreviewReceiversStructureFormed() {
+        notifyPreviewReceiversCleared();
+    }
+
+    private void notifyPreviewReceiversCleared() {
         if (!(level instanceof ServerLevel serverLevel)) {
             previewReceivers().clear();
             return;

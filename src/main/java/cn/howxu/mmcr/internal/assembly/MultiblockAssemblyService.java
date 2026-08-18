@@ -25,6 +25,8 @@ import java.util.Optional;
  */
 public final class MultiblockAssemblyService {
 
+    public static final int MAX_BLOCKS_PER_OPERATION = 163_840;
+
     private MultiblockAssemblyService() {}
 
     public record Placement(BlockPos pos, BlockState state, ItemStack requirement, BlockPredicate predicate) {
@@ -53,6 +55,12 @@ public final class MultiblockAssemblyService {
         return placements;
     }
 
+    public static <T> List<T> limitOperation(List<T> entries) {
+        return entries.size() > MAX_BLOCKS_PER_OPERATION
+                ? entries.subList(0, MAX_BLOCKS_PER_OPERATION)
+                : entries;
+    }
+
     public static List<ItemStack> aggregateRequirements(List<Placement> placements) {
         List<ItemStack> requirements = new ArrayList<>();
         for (Placement placement : placements) {
@@ -70,6 +78,7 @@ public final class MultiblockAssemblyService {
         List<Placement> placements = createTemplatePlacements(controller.getBlockPos(), pattern).stream()
                 .filter(placement -> player.level().getBlockState(placement.pos()).isAir())
                 .toList();
+        placements = limitOperation(placements);
         if (placements.isEmpty()) {
             return new Result(InteractionResult.SUCCESS, 0, new ComponentKey("message.mmcr.terminal.build.none"));
         }
@@ -99,6 +108,7 @@ public final class MultiblockAssemblyService {
         BlockArray pattern = controller.assemblyPattern(machine.get());
         List<Placement> template = createTemplatePlacements(controller.getBlockPos(), pattern);
         int removed = 0;
+        maxBlocks = Math.min(maxBlocks, MAX_BLOCKS_PER_OPERATION);
         for (Placement placement : template) {
             if (removed >= maxBlocks) break;
             BlockState current = player.level().getBlockState(placement.pos());

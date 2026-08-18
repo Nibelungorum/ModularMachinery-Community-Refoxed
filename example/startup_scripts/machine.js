@@ -10,7 +10,7 @@ MMCREvents.startup(function(event) {
 
   function register(path, configure) {
     var builder = event.createMachine(cloneId(path))
-      .displayNameKey('machine.mmcr.' + path)
+      .displayNameKey('machine.mmcr_kubejs.' + path)
       .recipeFamily(cloneId(path))
     configure(builder)
     builder.register()

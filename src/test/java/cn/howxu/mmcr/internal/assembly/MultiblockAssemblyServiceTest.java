@@ -125,6 +125,18 @@ class MultiblockAssemblyServiceTest {
                 MultiblockAssemblyService.extractAvailablePlacements(List.of(template), source).getFirst().state());
     }
 
+    @Test
+    void limitsOneOperationToGtceuScaleBatchSize() {
+        List<MultiblockAssemblyService.Placement> placements = java.util.stream.IntStream.range(0, 163841)
+                .mapToObj(index -> new MultiblockAssemblyService.Placement(
+                        new BlockPos(index, 0, 0), Blocks.STONE.defaultBlockState(),
+                        itemStack(Items.STONE, 1)))
+                .toList();
+
+        assertEquals(163840, MultiblockAssemblyService.MAX_BLOCKS_PER_OPERATION);
+        assertEquals(163840, MultiblockAssemblyService.limitOperation(placements).size());
+    }
+
     private static ItemStack itemStack(net.minecraft.world.item.Item item, int count) {
         return new ItemStack(Holder.direct(item, DataComponentMap.EMPTY), count);
     }

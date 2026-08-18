@@ -16,7 +16,7 @@ public final class Config {
                 .defineInRange("machine_check_interval_ticks", DEFAULT_MACHINE_CHECK_INTERVAL_TICKS, 1, 600);
         TERMINAL_MAX_DEMOLISH_BLOCKS = b
                 .comment("Maximum blocks removed by one terminal demolish operation")
-                .defineInRange("terminal_max_demolish_blocks", 2048, 1, 1_000_000);
+                .defineInRange("terminal_max_demolish_blocks", 163840, 1, 1_000_000);
         ENERGY_CONSUMPTION_MULTIPLIER = b
                 .comment("Global multiplier on energy consumption")
                 .defineInRange("energy_consumption_multiplier", 1.0, 0.0, 100.0);
