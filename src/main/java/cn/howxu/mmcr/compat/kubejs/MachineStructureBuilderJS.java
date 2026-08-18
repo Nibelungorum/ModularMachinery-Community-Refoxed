@@ -91,6 +91,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     public MachineStructureBuilderJS fullStructure(BlockArray pattern, PortRequirementSpec ports,
             PortTierRequirementSpec tiers, List<DynamicPatternSpec> dynamicPatterns,
             Map<BlockPos, List<SingleBlockModifierReplacement>> modifiers, Map<BlockPos, Identifier> levels) {
+        applyPendingPatternMetadata();
         declarations.add(new Declaration(Declaration.Kind.FULL, Objects.requireNonNull(pattern), ports, tiers,
                 dynamicPatterns, modifiers, validateLevelSlots(levels)));
         patternDeclaration = false;
@@ -106,6 +107,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
             PortTierRequirementSpec tiers, List<DynamicPatternSpec> dynamicPatterns,
             Map<BlockPos, List<SingleBlockModifierReplacement>> modifiers, Map<BlockPos, Identifier> levels) {
         if (declarations.isEmpty()) throw new IllegalStateException("extension requires a full structure first");
+        applyPendingPatternMetadata();
         declarations.add(new Declaration(Declaration.Kind.EXTENSION, Objects.requireNonNull(pattern), ports, tiers,
                 dynamicPatterns, modifiers, validateLevelSlots(levels)));
         return this;
@@ -149,7 +151,8 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
             return new MachineStructureDefinition(id, pattern, portRequirements, portTierRequirements,
                     dynamicPatterns, modifierReplacements, validateLevelSlots(levelSlots));
         }
-        if (!patternDeclaration && !classMetadataChanged) return new MachineStructureDefinition(id, declarations);
+        applyPendingPatternMetadata();
+        if (!classMetadataChanged) return new MachineStructureDefinition(id, declarations);
         List<Declaration> result = new ArrayList<>(declarations);
         Declaration first = result.getFirst();
         result.set(0, new Declaration(first.kind(), first.pattern(), portRequirements, portTierRequirements,
@@ -174,6 +177,14 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
             case LevelSlot levelSlot -> levelPredicate(levelSlot);
             default -> throw new IllegalArgumentException("Unknown pattern key value: " + value);
         };
+    }
+
+    private void applyPendingPatternMetadata() {
+        if (!patternDeclaration || !classMetadataChanged || declarations.isEmpty()) return;
+        Declaration first = declarations.getFirst();
+        declarations.set(0, new Declaration(first.kind(), first.pattern(), portRequirements, portTierRequirements,
+                dynamicPatterns, modifierReplacements, validateLevelSlots(levelSlots)));
+        classMetadataChanged = false;
     }
 
     private static BlockPredicate levelPredicate(LevelSlot slot) {

@@ -237,4 +237,13 @@ class ModuleRecipeBuilderJSTest {
                 .hasMessageContaining("tick time must be >= 1");
     }
 
+    @Test
+    void machine_recipe_constructor_rejects_zero_tick_time() {
+        Identifier machineId = MMCR.id("module_machine");
+
+        assertThatThrownBy(() -> new MachineRecipe(MMCR.id("zero_tick_constructor"), machineId, 0, List.of(), List.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("tick time must be >= 1");
+    }
+
 }

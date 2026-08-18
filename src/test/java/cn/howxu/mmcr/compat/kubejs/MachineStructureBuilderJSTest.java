@@ -185,6 +185,21 @@ class MachineStructureBuilderJSTest {
     }
 
     @Test
+    void builder_applies_pattern_metadata_before_appending_full_structure() {
+        BlockArray alternative = new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK)));
+
+        var definition = new MachineStructureBuilderJS("test:pattern_then_full")
+                .pattern("C", Map.of("C", Blocks.IRON_BLOCK))
+                .portRequirements(PortRequirementSpec.builder().min("item_input_bus", 1).build())
+                .fullStructure(alternative)
+                .createObject();
+
+        assertThat(definition.declarations()).hasSize(2);
+        assertThat(definition.declarations().getFirst().portRequirements().requirements()).containsKey("item_input_bus");
+        assertThat(definition.declarations().get(1).pattern()).isEqualTo(alternative);
+    }
+
+    @Test
     void extension_requires_an_existing_full_structure() {
         assertThatThrownBy(() -> new MachineStructureBuilderJS("mmcr:expandable")
                 .extension(new BlockArray(Map.of())))

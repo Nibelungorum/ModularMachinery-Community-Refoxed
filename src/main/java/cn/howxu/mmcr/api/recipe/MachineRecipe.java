@@ -230,9 +230,12 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         if (machineId == null) {
             throw new IllegalArgumentException("Recipe machineId must not be null");
         }
+        if (tickTime < 1) {
+            throw new IllegalArgumentException("Recipe tick time must be >= 1");
+        }
         this.id = id;
         this.machineId = machineId;
-        this.tickTime = Math.max(1, tickTime);
+        this.tickTime = tickTime;
         this.requirements = requirements == null || (deriveEmptyRequirements && requirements.isEmpty())
                 ? deriveRequirements(inputs, outputs, fluidOutputs)
                 : List.copyOf(requirements);
