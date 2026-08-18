@@ -8,6 +8,7 @@ import net.minecraft.resources.Identifier;
 
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -51,14 +52,18 @@ public final class JeiRuntimeReloader {
         if (current == null) return;
         Runnable reload = () -> {
             Map<Identifier, List<MachineRecipeDisplay>> displaysByMachine = MachineRecipeDisplays.byMachine(snapshot);
-            Map<Identifier, List<MachineRecipeDisplay>> updatedVisible = new LinkedHashMap<>(visibleDisplaysByMachine);
-            for (Identifier machineId : snapshot.structures().keySet()) {
+            Map<Identifier, List<MachineRecipeDisplay>> previousVisible = visibleDisplaysByMachine;
+            Map<Identifier, List<MachineRecipeDisplay>> updatedVisible = new LinkedHashMap<>();
+            Set<Identifier> refreshedMachineIds = new LinkedHashSet<>(previousVisible.keySet());
+            refreshedMachineIds.addAll(snapshot.structures().keySet());
+            for (Identifier machineId : refreshedMachineIds) {
                 if (categoriesCaptured && !REGISTERED_MACHINE_CATEGORIES.contains(machineId)) {
                     MMCR.LOG.warn("JEI category for synced machine {} was not registered; restart or reload JEI to view it", machineId);
                     continue;
                 }
                 var type = JeiMachineRecipeTypes.forMachine(machineId);
-                current.getRecipeManager().hideRecipes(type, visibleDisplaysByMachine.getOrDefault(machineId, List.of()));
+                current.getRecipeManager().hideRecipes(type, previousVisible.getOrDefault(machineId, List.of()));
+                if (!snapshot.structures().containsKey(machineId)) continue;
                 List<MachineRecipeDisplay> displays = displaysByMachine.getOrDefault(machineId, List.of());
                 current.getRecipeManager().addRecipes(type, displays);
                 updatedVisible.put(machineId, displays);

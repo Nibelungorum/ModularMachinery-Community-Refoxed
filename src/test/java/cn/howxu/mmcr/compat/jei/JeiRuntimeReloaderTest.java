@@ -88,6 +88,26 @@ class JeiRuntimeReloaderTest {
         assertThat(manager.hiddenTypes()).isEmpty();
     }
 
+    @Test
+    void reloadHidesVisibleDisplaysForRemovedMachine() {
+        FakeRecipeManager manager = new FakeRecipeManager();
+        Identifier machineId = MMCR.id("alloy_furnace");
+        Identifier recipeId = MMCR.id("removed_runtime_recipe");
+        RecipeRegistry.clearForTesting();
+        JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
+        JeiRuntimeReloader.setRuntime(runtime(manager));
+
+        JeiRuntimeReloader.reloadIfAvailable(snapshotWithRecipe(machineId, recipeId));
+        manager.clearRecordedCalls();
+
+        JeiRuntimeReloader.reloadIfAvailable(RuntimeContentSnapshot.empty());
+
+        assertThat(manager.hiddenTypes()).containsExactly(JeiMachineRecipeTypes.forMachine(machineId));
+        assertThat(manager.hiddenRecipeIds()).containsExactly(recipeId);
+        assertThat(manager.addedTypes()).doesNotContain(JeiMachineRecipeTypes.forMachine(machineId));
+        assertThat(manager.addedRecipeIds()).doesNotContain(recipeId);
+    }
+
     private static RuntimeContentSnapshot snapshotWithRecipe(Identifier machineId, Identifier recipeId) {
         return new RuntimeContentSnapshot(
                 Map.of(machineId, new cn.howxu.mmcr.api.machine.MachineStructureDefinition(
@@ -116,6 +136,7 @@ class JeiRuntimeReloaderTest {
         private final List<IRecipeType<?>> addedTypes = new ArrayList<>();
         private final List<Identifier> addedRecipeIds = new ArrayList<>();
         private final List<IRecipeType<?>> hiddenTypes = new ArrayList<>();
+        private final List<Identifier> hiddenRecipeIds = new ArrayList<>();
 
         IRecipeManager proxy() {
             return (IRecipeManager) Proxy.newProxyInstance(
@@ -132,7 +153,12 @@ class JeiRuntimeReloaderTest {
                         }
                         if (method.getName().equals("hideRecipes")) {
                             hiddenTypes.add((IRecipeType<?>) args[0]);
-                            assertThat((Collection<?>) args[1]).allMatch(MachineRecipeDisplay.class::isInstance);
+                            Collection<?> displays = (Collection<?>) args[1];
+                            assertThat(displays).allMatch(MachineRecipeDisplay.class::isInstance);
+                            displays.stream()
+                                    .map(MachineRecipeDisplay.class::cast)
+                                    .map(MachineRecipeDisplay::recipeId)
+                                    .forEach(hiddenRecipeIds::add);
                             return null;
                         }
                         if (method.getName().equals("hashCode")) return System.identityHashCode(proxy);
@@ -152,6 +178,17 @@ class JeiRuntimeReloaderTest {
 
         List<IRecipeType<?>> hiddenTypes() {
             return hiddenTypes;
+        }
+
+        List<Identifier> hiddenRecipeIds() {
+            return hiddenRecipeIds;
+        }
+
+        void clearRecordedCalls() {
+            addedTypes.clear();
+            addedRecipeIds.clear();
+            hiddenTypes.clear();
+            hiddenRecipeIds.clear();
         }
     }
 }
