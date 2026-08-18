@@ -108,6 +108,23 @@ class JeiRuntimeReloaderTest {
         assertThat(manager.addedRecipeIds()).doesNotContain(recipeId);
     }
 
+    @Test
+    void reloadDoesNotHidePreExistingStaticDisplayForUnsyncedMachine() {
+        FakeRecipeManager manager = new FakeRecipeManager();
+        Identifier machineId = MMCR.id("alloy_furnace");
+        Identifier staticRecipeId = MMCR.id("pre_existing_static_recipe");
+        RecipeRegistry.register(new MachineRecipe(staticRecipeId, machineId, 20, List.of(),
+                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1))));
+        JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
+        JeiRuntimeReloader.setRuntime(runtime(manager));
+
+        JeiRuntimeReloader.reloadIfAvailable(RuntimeContentSnapshot.empty());
+
+        assertThat(manager.hiddenRecipeIds()).doesNotContain(staticRecipeId);
+        assertThat(manager.hiddenTypes()).isEmpty();
+        assertThat(manager.addedTypes()).isEmpty();
+    }
+
     private static RuntimeContentSnapshot snapshotWithRecipe(Identifier machineId, Identifier recipeId) {
         return new RuntimeContentSnapshot(
                 Map.of(machineId, new cn.howxu.mmcr.api.machine.MachineStructureDefinition(

@@ -37,7 +37,7 @@ public final class JeiRuntimeReloader {
 
     public static void setRuntime(IJeiRuntime runtime) {
         JeiRuntimeReloader.runtime = runtime;
-        visibleDisplaysByMachine = MachineRecipeDisplays.byMachine();
+        visibleDisplaysByMachine = Map.of();
     }
 
     public static void clearRuntimeForTesting() {
