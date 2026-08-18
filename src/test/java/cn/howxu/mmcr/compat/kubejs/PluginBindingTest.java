@@ -32,6 +32,7 @@ import java.lang.ScopedValue;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -122,6 +123,33 @@ class PluginBindingTest {
 
         assertThat(MachineStructureRegistry.dynamicSnapshot()).containsOnlyKeys(keptMachineId);
         assertThat(RecipeRegistry.dynamicSnapshot()).containsOnlyKeys(keptRecipeId);
+    }
+
+    @Test
+    void successful_kubejs_server_reload_runs_completion_sync_after_commit() {
+        var machineId = MMCR.id("alloy_furnace");
+        var recipeId = MMCR.id("kubejs_sync_after_commit_recipe");
+        var reload = new Object();
+        AtomicInteger syncs = new AtomicInteger();
+
+        Plugin.beginServerReload(reload, 0);
+        KubeJSContentReloadTransaction.active().registerStructure(structure(machineId));
+        KubeJSContentReloadTransaction.active().registerRecipe(new MachineRecipe(recipeId, machineId, 1, List.of(), List.of()));
+        Plugin.completeServerReload(reload, 0, server -> syncs.incrementAndGet());
+
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(recipeId);
+        assertThat(syncs).hasValue(1);
+    }
+
+    @Test
+    void failed_kubejs_server_reload_does_not_run_completion_sync() {
+        var reload = new Object();
+        AtomicInteger syncs = new AtomicInteger();
+
+        Plugin.beginServerReload(reload, 0);
+        Plugin.completeServerReload(reload, 1, server -> syncs.incrementAndGet());
+
+        assertThat(syncs).hasValue(0);
     }
 
     @Test

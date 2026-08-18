@@ -9,6 +9,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
@@ -18,6 +19,7 @@ import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 import java.io.Reader;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * Loads machine recipes supplied by server data packs.
@@ -72,8 +74,13 @@ public final class MachineRecipeDataReloadListener extends SimplePreparableReloa
     }
 
     void applySnapshot(Map<Identifier, MachineRecipe> recipes) {
+        applySnapshot(recipes, server -> {});
+    }
+
+    void applySnapshot(Map<Identifier, MachineRecipe> recipes, Consumer<MinecraftServer> sync) {
         Map<Identifier, MachineRecipe> replacement = Map.copyOf(recipes);
         RecipeRegistry.replaceDataPack(replacement);
         snapshot = replacement;
+        sync.accept(null);
     }
 }

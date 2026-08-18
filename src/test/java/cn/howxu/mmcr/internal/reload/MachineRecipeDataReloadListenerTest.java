@@ -16,6 +16,7 @@ import java.io.InputStream;
 import java.io.ByteArrayInputStream;
 import java.lang.reflect.Proxy;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -76,6 +77,24 @@ class MachineRecipeDataReloadListenerTest {
 
         assertThat(RecipeRegistry.getRecipe(id)).isSameAs(recipe);
         assertThat(RecipeRegistry.dataPackSnapshot()).containsEntry(id, recipe);
+        RecipeRegistry.replaceDataPack(Map.of());
+    }
+
+    @Test
+    void applyingSnapshotWithServerSyncRunsSyncAfterPublishingDataPackLayer() {
+        var id = Identifier.parse("mmcr_test:published_sync_recipe");
+        var recipe = new MachineRecipe(id, Identifier.parse("mmcr:alloy_furnace"), 1,
+                java.util.List.of(), java.util.List.of());
+        var listener = new MachineRecipeDataReloadListener(registries);
+        AtomicInteger syncs = new AtomicInteger();
+
+        listener.applySnapshot(Map.of(id, recipe), server -> {
+            assertThat(RecipeRegistry.getRecipe(id)).isSameAs(recipe);
+            assertThat(server).isNull();
+            syncs.incrementAndGet();
+        });
+
+        assertThat(syncs).hasValue(1);
         RecipeRegistry.replaceDataPack(Map.of());
     }
 

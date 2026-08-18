@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import dev.latvian.mods.kubejs.event.EventGroupWrapper;
 import dev.latvian.mods.kubejs.recipe.component.RecipeComponentTypeRegistry;
 import dev.latvian.mods.kubejs.recipe.schema.RecipeFactoryRegistry;
@@ -10,10 +11,12 @@ import dev.latvian.mods.kubejs.event.EventGroupRegistry;
 import dev.latvian.mods.kubejs.script.BindingRegistry;
 import dev.latvian.mods.kubejs.script.ScriptManager;
 import dev.latvian.mods.kubejs.script.ScriptType;
+import net.minecraft.server.MinecraftServer;
 import net.neoforged.fml.loading.FMLLoader;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 
 public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     private static final Map<Object, ServerReload> SERVER_RELOADS = new IdentityHashMap<>();
@@ -72,10 +75,21 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     }
 
     static void completeServerReload(Object manager, int errorCount) {
+        completeServerReload(manager, errorCount, (MinecraftServer) null);
+    }
+
+    static void completeServerReload(Object manager, int errorCount, MinecraftServer server) {
+        completeServerReload(manager, errorCount, ignored -> {
+            if (server != null) RuntimeContentSync.sendToAll(server);
+        });
+    }
+
+    static void completeServerReload(Object manager, int errorCount, Consumer<MinecraftServer> sync) {
         ServerReload reload = SERVER_RELOADS.remove(manager);
         try {
             if (reload != null && errorCount == reload.errorCount()) {
                 reload.transaction().commit();
+                sync.accept(null);
             }
         } finally {
             KubeJSContentReloadTransaction.deactivate();
