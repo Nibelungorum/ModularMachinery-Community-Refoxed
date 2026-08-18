@@ -125,4 +125,10 @@ class KubeJSApiTest {
         assertThat(stack.getFluid()).isSameAs(Fluids.WATER);
         assertThat(stack.getAmount()).isEqualTo(250);
     }
+
+    @Test
+    void api_is_documented_as_lower_camel_kubejs_binding() {
+        assertThat(KubeJSApi.class.getDeclaredAnnotation(Deprecated.class)).isNull();
+        assertThat(new KubeJSApi().pos(1, 2, 3)).isEqualTo(new net.minecraft.core.BlockPos(1, 2, 3));
+    }
 }

@@ -48,6 +48,10 @@ final class KubeJSContentReloadTransaction {
         }
     }
 
+    boolean isEmpty() {
+        return structures.isEmpty() && recipes.isEmpty();
+    }
+
     void commit() {
         validate();
         MachineStructureRegistry.replaceDynamic(structures);

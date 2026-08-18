@@ -71,6 +71,19 @@ class ModuleRecipeBuilderJSTest {
     }
 
     @Test
+    void server_event_creates_recipe_builder() {
+        Identifier machineId = MMCR.id("module_machine");
+        MachineDefinitions.register(MachineRegistration.builder(machineId).build());
+
+        var recipe = new MMCRServerEventJS().createRecipe("mmcr:event_recipe")
+                .machine(machineId.toString())
+                .tickTime(1)
+                .createObject();
+
+        assertThat(recipe.id()).isEqualTo(MMCR.id("event_recipe"));
+    }
+
+    @Test
     void create_object_preserves_complete_public_recipe_values() {
         Identifier machineId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());

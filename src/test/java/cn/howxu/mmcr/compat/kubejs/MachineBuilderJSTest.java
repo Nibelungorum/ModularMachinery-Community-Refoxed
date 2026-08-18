@@ -131,6 +131,14 @@ class MachineBuilderJSTest {
     }
 
     @Test
+    void startup_event_creates_machine_builder() {
+        var builder = new MMCRStartupEventJS().createMachine("mmcr:event_machine");
+
+        assertThat(builder).isInstanceOf(MachineBuilderJS.class);
+        assertThat(builder.createObject().id()).isEqualTo(MMCR.id("event_machine"));
+    }
+
+    @Test
     void startup_builder_sets_controller_tooltip_lines() {
         var registration = new MachineBuilderJS(MMCR.id("arc_furnace"))
                 .controllerTooltip("tooltip.mmcr.arc_furnace.0", "tooltip.mmcr.arc_furnace.1")

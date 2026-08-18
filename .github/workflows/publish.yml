@@ -117,6 +117,7 @@ jobs:
           github-tag: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.version }}
           version: ${{ steps.version.outputs.version }}
+          version-type: release
           changelog: ${{ steps.notes.outputs.body }}
           files: build/libs/!(*-@(dev|sources|javadoc)).jar
           loaders: neoforge

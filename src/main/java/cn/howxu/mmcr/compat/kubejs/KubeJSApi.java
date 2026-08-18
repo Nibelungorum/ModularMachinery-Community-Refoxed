@@ -33,7 +33,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Public declaration helpers exposed to KubeJS as {@code MMCR_API}.
+ * Public declaration helpers exposed to KubeJS as {@code mmcrAPI} and via MMCR event objects.
  *
  * @author howxu <dev@howxu.cn>
  */

@@ -45,6 +45,14 @@ class MachineLevelBuilderJSTest {
     }
 
     @Test
+    void startup_event_creates_level_builders() {
+        var event = new MMCRStartupEventJS();
+
+        assertThat(event.createLevelType("mmcr:event_level_type")).isInstanceOf(LevelTypeBuilderJS.class);
+        assertThat(event.createLevel("mmcr:event_level")).isInstanceOf(MachineLevelBuilderJS.class);
+    }
+
+    @Test
     void modifier_rejects_non_positive_multipliers() {
         var builder = new MachineLevelBuilderJS("test:copper_coil");
 

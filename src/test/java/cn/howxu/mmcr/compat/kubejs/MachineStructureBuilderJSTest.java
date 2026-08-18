@@ -55,6 +55,14 @@ class MachineStructureBuilderJSTest {
     }
 
     @Test
+    void server_event_creates_structure_builder() {
+        var builder = new MMCRServerEventJS().createStructure("mmcr:event_structure");
+
+        assertThat(builder).isInstanceOf(MachineStructureBuilderJS.class);
+        assertThat(builder.createObject().machineId()).isEqualTo(MMCR.id("event_structure"));
+    }
+
+    @Test
     void pattern_retains_level_slot_coordinates_and_uses_the_type_predicate() {
         Identifier coilType = Identifier.parse("test:coil");
         MachineLevelRegistry.beginRegistration();

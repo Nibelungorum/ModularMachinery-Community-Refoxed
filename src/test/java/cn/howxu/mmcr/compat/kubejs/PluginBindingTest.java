@@ -29,6 +29,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.ScopedValue;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -148,30 +149,81 @@ class PluginBindingTest {
     }
 
     @Test
-    void recipe_builder_has_a_stable_public_kubejs_binding() {
-        assertThat(Plugin.RECIPE_BUILDER_BINDING).isEqualTo("MMCR_RECIPE_BUILDER");
-        assertThat(Plugin.RECIPE_BUILDER_CLASS).isEqualTo(MachineRecipeBuilderJS.class);
+    void empty_server_reload_preserves_existing_dynamic_content() {
+        var machineId = MMCR.id("alloy_furnace");
+        var recipeId = MMCR.id("kubejs_transaction_previous_recipe");
+        var previous = new KubeJSContentReloadTransaction();
+        previous.registerStructure(structure(machineId));
+        previous.registerRecipe(new MachineRecipe(recipeId, machineId, 1, List.of(), List.of()));
+        previous.commit();
+        var previousStructures = MachineStructureRegistry.dynamicSnapshot();
+        var previousRecipes = RecipeRegistry.dynamicSnapshot();
+
+        var reload = new Object();
+        Plugin.beginServerReload(reload, 0);
+        Plugin.completeServerReload(reload, 0);
+
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousStructures);
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousRecipes);
     }
 
     @Test
-    void plugin_exposes_stable_public_declaration_bindings() {
+    void kubejs_plugin_discovery_file_points_to_mmcr_plugin() throws Exception {
+        try (var stream = getClass().getClassLoader().getResourceAsStream("kubejs.plugins.txt")) {
+            assertThat(stream).as("kubejs.plugins.txt must exist for KubeJS 26 plugin discovery").isNotNull();
+            String content = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+            assertThat(content.lines().map(String::trim).filter(line -> !line.isBlank() && !line.startsWith("#")))
+                    .contains("cn.howxu.mmcr.compat.kubejs.Plugin kubejs");
+        }
+    }
+
+    @Test
+    void plugin_exposes_new_public_kubejs_bindings_only() {
         var factory = new KubeJSContextFactory(null);
         var context = new KubeJSContext(factory);
         var scope = new NativeObject(factory);
 
         new Plugin().registerBindings(new BindingRegistry(context, scope));
 
-        assertThat(scope.getIds(context)).contains(
-                "MMCR_API", "MMCR_MACHINE_DEFINITIONS", "MMCR_MACHINE_STRUCTURES", "MMCR_RECIPE_REGISTRY",
+        assertThat(scope.getIds(context)).contains("mmcrAPI", "MMCREvents");
+        assertThat(scope.getIds(context)).doesNotContain(
+                "MMCR_API", "MMCR", "MMCR_MACHINE_BUILDER", "MMCR_STRUCTURE_BUILDER", "MMCR_RECIPE_BUILDER",
+                "MMCR_MACHINE_DEFINITIONS", "MMCR_MACHINE_STRUCTURES", "MMCR_RECIPE_REGISTRY",
                 "MMCR_BLOCK_ARRAY", "MMCR_BLOCK_PREDICATE", "MMCR_MACHINE_REGISTRATION",
                 "MMCR_STRUCTURE_DEFINITION", "MMCR_PORT_REQUIREMENTS", "MMCR_PORT_TIER_REQUIREMENTS",
                 "MMCR_MACHINE_INGREDIENT", "MMCR_MACHINE_RECIPE", "MMCR_RECIPE_MODIFIER",
-                "MMCR_SINGLE_BLOCK_MODIFIER", "MMCR_LEVEL_REQUIREMENT", "MMCR_SMART_INTERFACE_REQUIREMENT");
+                "MMCR_SINGLE_BLOCK_MODIFIER", "MMCR_LEVEL_REQUIREMENT", "MMCR_SMART_INTERFACE_REQUIREMENT",
+                "MMCR_MACHINES", "MMCR_RECIPES");
     }
 
     @Test
-    void plugin_exposes_smart_interface_update_event() {
-        assertThat(Plugin.events()).containsKey("mmcr.smart_interface.updated");
+    void plugin_exposes_strict_mmcr_startup_and_server_events() {
+        assertThat(Plugin.events()).containsEntry("mmcr.startup", "mmcr.startup");
+        assertThat(Plugin.events()).containsEntry("mmcr.server", "mmcr.server");
+        assertThat(Plugin.events()).containsEntry("mmcr.smart_interface.updated", "mmcr.smart_interface.updated");
+    }
+
+    @Test
+    void startup_event_exposes_startup_declaration_api_only() {
+        var event = new MMCRStartupEventJS();
+
+        assertThat(event.api()).isInstanceOf(KubeJSApi.class);
+        assertThat(event.createMachine("mmcr:test_machine")).isInstanceOf(MachineBuilderJS.class);
+        assertThat(event.createLevelType("mmcr:test_type")).isInstanceOf(LevelTypeBuilderJS.class);
+        assertThat(event.createLevel("mmcr:test_level")).isInstanceOf(MachineLevelBuilderJS.class);
+        assertThat(event.getClass().getMethods()).extracting(java.lang.reflect.Method::getName)
+                .doesNotContain("createStructure", "createRecipe");
+    }
+
+    @Test
+    void server_event_exposes_server_declaration_api_only() {
+        var event = new MMCRServerEventJS();
+
+        assertThat(event.api()).isInstanceOf(KubeJSApi.class);
+        assertThat(event.createStructure("mmcr:test_structure")).isInstanceOf(MachineStructureBuilderJS.class);
+        assertThat(event.createRecipe("mmcr:test_recipe")).isInstanceOf(MachineRecipeBuilderJS.class);
+        assertThat(event.getClass().getMethods()).extracting(java.lang.reflect.Method::getName)
+                .doesNotContain("createMachine", "createLevelType", "createLevel", "levelSlot");
     }
 
     @Test

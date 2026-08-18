@@ -1,18 +1,20 @@
 // KubeJS recreation of the development defaults. It deliberately does not read mmcr:* definitions.
-const NS = 'mmcr_kubejs'
-const cloneId = path => `${NS}:kubejs_${path}`
-const register = (path, configure) => {
-  const builder = new MMCR_MACHINE_BUILDER(cloneId(path))
-    .displayNameKey(`machine.mmcr.${path}`)
-    .recipeFamily(cloneId(path))
-  configure(builder)
-  builder.register()
-}
+MMCREvents.startup(event => {
+  const api = event.api()
+  const NS = 'mmcr_kubejs'
+  const cloneId = path => `${NS}:kubejs_${path}`
+  const register = (path, configure) => {
+    const builder = event.createMachine(cloneId(path))
+      .displayNameKey(`machine.mmcr.${path}`)
+      .recipeFamily(cloneId(path))
+    configure(builder)
+    builder.register()
+  }
 
 const couplerPattern = count => {
   const blocks = new java.util.LinkedHashMap()
-  for (let x = 0; x < count; x++) blocks.put(MMCR_API.pos(x, 0, 0), MMCR_API.coupler())
-  return MMCR_API.blockArray(blocks)
+  for (let x = 0; x < count; x++) blocks.put(api.pos(x, 0, 0), api.coupler())
+  return api.blockArray(blocks)
 }
 
 register('blast_furnace', builder => builder
@@ -41,3 +43,4 @@ register('space_elevator', builder => builder
   .host(cloneId('space_reassembler')).pattern(couplerPattern(3)))
 register('space_reassembler', builder => builder
   .appearance('minecraft:quartz_pillar').module().pattern(couplerPattern(1)))
+})
