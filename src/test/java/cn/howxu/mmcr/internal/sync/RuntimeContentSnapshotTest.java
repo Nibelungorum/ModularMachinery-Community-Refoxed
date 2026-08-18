@@ -3,13 +3,18 @@ package cn.howxu.mmcr.internal.sync;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
@@ -151,6 +156,45 @@ class RuntimeContentSnapshotTest {
     }
 
     @Test
+    void applyClientReplacesOldDynamicStructuresAndRecipes() {
+        Identifier oldMachine = MMCR.id("alloy_furnace");
+        Identifier newMachine = MMCR.id("cracker");
+        Identifier oldRecipe = MMCR.id("old_synced_recipe");
+        Identifier newRecipe = MMCR.id("new_synced_recipe");
+        registerMachineIfMissing(oldMachine);
+        registerMachineIfMissing(newMachine);
+        MachineStructureRegistry.replaceDynamic(Map.of(oldMachine, structure(oldMachine)));
+        RecipeRegistry.replaceDynamic(Map.of(oldRecipe, recipe(oldRecipe, oldMachine)));
+
+        new RuntimeContentSnapshot(
+                Map.of(newMachine, structure(newMachine)),
+                Map.of(newRecipe, recipe(newRecipe, newMachine)),
+                Map.of(newMachine, MachineControllerSpec.defaultsFor(newMachine)),
+                Map.of(), 12L).applyClient();
+
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsOnlyKeys(newMachine);
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsOnlyKeys(newRecipe);
+        assertThat(MachineRegistry.getMachine(oldMachine)).isNull();
+        assertThat(RecipeRegistry.getRecipe(oldRecipe)).isNull();
+    }
+
+    @Test
+    void applyClientRemovesDynamicContentOmittedFromSnapshot() {
+        Identifier removedMachine = MMCR.id("old_runtime_machine");
+        Identifier removedRecipe = MMCR.id("removed_synced_recipe");
+        registerMachineIfMissing(removedMachine);
+        MachineStructureRegistry.replaceDynamic(Map.of(removedMachine, structure(removedMachine)));
+        RecipeRegistry.replaceDynamic(Map.of(removedRecipe, recipe(removedRecipe, removedMachine)));
+
+        RuntimeContentSnapshot.empty().applyClient();
+
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).doesNotContainKey(removedMachine);
+        assertThat(RecipeRegistry.dynamicSnapshot()).doesNotContainKey(removedRecipe);
+        assertThat(MachineRegistry.getMachine(removedMachine)).isNull();
+        assertThat(RecipeRegistry.getRecipe(removedRecipe)).isNull();
+    }
+
+    @Test
     void structureSyncCodecRejectsOversizedDeclarationCountOnEncode() {
         List<MachineStructureDefinition.Declaration> declarations = java.util.Collections.nCopies(1025,
                 structure(MMCR.id("alloy_furnace")).declarations().getFirst());
@@ -167,6 +211,12 @@ class RuntimeContentSnapshotTest {
         Map<Identifier, T> map = new LinkedHashMap<>();
         map.put(id, (T) new Object());
         return map;
+    }
+
+    private static void registerMachineIfMissing(Identifier id) {
+        if (MachineDefinitions.getRegistration(id) == null) {
+            MachineDefinitions.register(MachineRegistration.builder(id).build());
+        }
     }
 
     private static MachineStructureDefinition structure(Identifier id) {
