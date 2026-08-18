@@ -212,10 +212,7 @@ public record DynamicMachine(
         Direction normalizedRoll = BlockRotator.normalizedRoll(facing, rollFacing);
         for (var entry : modifierReplacements.entrySet()) {
             BlockPos rotatedPos = BlockRotator.rotateSouthTo(entry.getKey(), facing, normalizedRoll);
-            List<SingleBlockModifierReplacement> replacements = entry.getValue().stream()
-                    .map(replacement -> replacement.copyAt(rotatedPos))
-                    .toList();
-            rotated.put(rotatedPos, replacements);
+            rotated.put(rotatedPos, List.copyOf(entry.getValue()));
         }
         return java.util.Collections.unmodifiableMap(rotated);
     }
@@ -235,20 +232,15 @@ public record DynamicMachine(
             }
             List<SingleBlockModifierReplacement> list = entry.getValue();
             if (list == null) throw new IllegalArgumentException("modifierReplacements list null");
-            copy.put(pos, List.copyOf(list.stream()
-                    .map(replacement -> validateReplacement(pos, replacement).copyAt(pos))
-                    .toList()));
+            list.forEach(DynamicMachine::validateReplacement);
+            copy.put(pos, List.copyOf(list));
         }
         return java.util.Collections.unmodifiableMap(copy);
     }
 
-    private static SingleBlockModifierReplacement validateReplacement(
-            BlockPos pos, SingleBlockModifierReplacement replacement) {
+    private static void validateReplacement(SingleBlockModifierReplacement replacement) {
         if (replacement == null) throw new IllegalArgumentException("modifier replacement null");
-        if (replacement.getPos() == null) throw new IllegalArgumentException("modifier replacement position null");
         if (replacement.getReplacement() == null) throw new IllegalArgumentException("modifier replacement predicate null");
-        if (!pos.equals(replacement.getPos())) throw new IllegalArgumentException("modifier replacement position mismatch");
-        return replacement;
     }
 
     private static Set<Identifier> copyAcceptedModuleIds(Set<Identifier> acceptedModuleIds) {

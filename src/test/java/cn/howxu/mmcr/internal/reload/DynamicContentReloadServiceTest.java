@@ -125,8 +125,7 @@ class DynamicContentReloadServiceTest {
     private static MachineStructureDefinition failingStructure(String id) {
         Identifier identifier = Identifier.parse(id);
         BlockPos outsidePattern = new BlockPos(1, 0, 0);
-        var replacement = new SingleBlockModifierReplacement(
-                "invalid", outsidePattern, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), "", ItemStack.EMPTY);
+        var replacement = new SingleBlockModifierReplacement("invalid", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), ItemStack.EMPTY);
         return new MachineStructureDefinition(identifier, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(),
                 Map.of(outsidePattern, List.of(replacement)));
     }

@@ -255,9 +255,7 @@ class BlockArrayTest {
     void vertical_roll_uses_same_coordinate_transform_as_block_array() {
         Identifier id = Identifier.fromNamespaceAndPath("mmcr", "compiled_vertical_replacement");
         BlockPos rawPos = new BlockPos(1, 0, 0);
-        var replacement = new SingleBlockModifierReplacement(
-                "speed", rawPos, new BlockPredicate.Any(),
-                List.of(), "", ItemStack.EMPTY);
+        var replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.Any(), List.of(), ItemStack.EMPTY);
         var machine = new DynamicMachine(id, "Compiled Vertical Replacement",
                 new BlockArray(Map.of(rawPos, new BlockPredicate.Any())),
                 MachineControllerSpec.defaultsFor(id), PortRequirementSpec.none(), List.of(),

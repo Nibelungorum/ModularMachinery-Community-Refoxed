@@ -192,8 +192,7 @@ class StructurePreviewSchemaFactoryTest {
                 PortTierRequirementSpec.none(), List.of(), Map.of(position, List.of(
                 modifierReplacement(position, Blocks.GOLD_BLOCK),
                 modifierReplacement(position, Blocks.DIAMOND_BLOCK),
-                new SingleBlockModifierReplacement("unrepresentable", position, new BlockPredicate.Any(), List.of(), "",
-                        ItemStack.EMPTY))), Map.of());
+                new SingleBlockModifierReplacement("unrepresentable", new BlockPredicate.Any(), List.of(), ItemStack.EMPTY))), Map.of());
 
         StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("modifier_candidates"),
                 StructurePreviewVariantSelection.defaults());
@@ -262,8 +261,8 @@ class StructurePreviewSchemaFactoryTest {
     }
 
     private static SingleBlockModifierReplacement modifierReplacement(BlockPos position, net.minecraft.world.level.block.Block block) {
-        return new SingleBlockModifierReplacement(block.getDescriptionId(), position, new BlockPredicate.OfBlock(block),
-                List.of(), "", new ItemStack(block));
+        return new SingleBlockModifierReplacement(block.getDescriptionId(), new BlockPredicate.OfBlock(block),
+                List.of(), new ItemStack(block));
     }
 
     private static void registerLevels(Map<Identifier, List<net.minecraft.world.level.block.Block>> levelsByType) {

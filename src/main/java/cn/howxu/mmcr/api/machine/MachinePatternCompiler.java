@@ -80,7 +80,7 @@ public final class MachinePatternCompiler {
         Map<BlockPos, List<SingleBlockModifierReplacement>> replacements = new java.util.LinkedHashMap<>();
         for (var entry : stage.modifierReplacements().entrySet()) {
             BlockPos rotatedPos = BlockRotator.rotateSouthTo(entry.getKey(), facing, Direction.SOUTH);
-            replacements.put(rotatedPos, entry.getValue().stream().map(replacement -> replacement.copyAt(rotatedPos)).toList());
+            replacements.put(rotatedPos, List.copyOf(entry.getValue()));
         }
         return Map.copyOf(replacements);
     }

@@ -1808,10 +1808,8 @@ class MachineControllerBlockEntityTest {
         BlockArray pattern = onePortPattern(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("item_input_bus").get());
         var replacement = new SingleBlockModifierReplacement(
                 "cached_replacement",
-                relativeReplacementPos,
                 new BlockPredicate.OfBlock(cn.howxu.mmcr.registry.ModBlocks.BLOCKS.get("energy_input_hatch").get()),
                 List.of(),
-                "",
                 net.minecraft.world.item.ItemStack.EMPTY);
         DynamicMachine machine = new DynamicMachine(
                 MMCR.id("cached_replacement_machine"),
@@ -2128,9 +2126,9 @@ class MachineControllerBlockEntityTest {
         var spec = new cn.howxu.mmcr.api.machine.MachineControllerSpec(
                 defaults.id(), defaults.frontTexture(), defaults.sideTexture(), defaults.topTexture(), defaults.bottomTexture(), true, true);
         var replacement = new SingleBlockModifierReplacement(
-                "roll_modifier", rawPos, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
+                "roll_modifier", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
                 List.of(new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.INPUT,
-                        3F, RecipeModifier.Operation.ADD, false)), "", ItemStack.EMPTY);
+                        3F, RecipeModifier.Operation.ADD, false)), ItemStack.EMPTY);
         DynamicMachine machine = new DynamicMachine(
                 MMCR.id("vertical_symmetric_modifier_roll"), "Vertical Symmetric Modifier Roll",
                 new BlockArray(Map.of(rawPos, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))),
@@ -2168,9 +2166,9 @@ class MachineControllerBlockEntityTest {
         var spec = new cn.howxu.mmcr.api.machine.MachineControllerSpec(
                 defaults.id(), defaults.frontTexture(), defaults.sideTexture(), defaults.topTexture(), defaults.bottomTexture(), true, true);
         var replacement = new SingleBlockModifierReplacement(
-                "matched_roll_modifier", rawPos, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
+                "matched_roll_modifier", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
                 List.of(new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.INPUT,
-                        4F, RecipeModifier.Operation.ADD, false)), "", ItemStack.EMPTY);
+                        4F, RecipeModifier.Operation.ADD, false)), ItemStack.EMPTY);
         DynamicMachine machine = new DynamicMachine(
                 MMCR.id("vertical_symmetric_matched_modifier_roll"), "Vertical Symmetric Matched Modifier Roll",
                 new BlockArray(Map.of(rawPos, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))),
@@ -2505,13 +2503,13 @@ class MachineControllerBlockEntityTest {
     @Test
     void modifier_only_refresh_updates_active_total_tick() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
-        DynamicMachine machine = machineWithReplacements(new SingleBlockModifierReplacement(
-                "duration_half",
+        DynamicMachine machine = machineWithReplacements(replacementAt(
                 new BlockPos(1, 0, 0),
+                "duration_half",
                 new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
                 List.of(new RecipeModifier(IntegrationTypeHelper.TARGET_DURATION, RecipeModifier.IOType.INPUT,
                         0.5F, RecipeModifier.Operation.MULTIPLY, false)),
-                "", ItemStack.EMPTY));
+                ItemStack.EMPTY));
         MachineRegistry.register(machine);
         MachineRecipe recipe = new MachineRecipe(MMCR.id("duration_refresh_recipe"), machine.registryName(), 100, List.of(), List.of());
         MachineControllerBlockEntity controller = controllerFor(machine);
@@ -2972,9 +2970,9 @@ class MachineControllerBlockEntityTest {
             int number, Block patternBlock, Block replacementBlock, String modifierName, float value) {
         BlockPos rawPos = new BlockPos(1, 0, 0);
         var replacement = new SingleBlockModifierReplacement(
-                modifierName, rawPos, new BlockPredicate.OfBlock(replacementBlock),
+                modifierName, new BlockPredicate.OfBlock(replacementBlock),
                 List.of(new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.INPUT,
-                        value, RecipeModifier.Operation.ADD, false)), "", ItemStack.EMPTY);
+                        value, RecipeModifier.Operation.ADD, false)), ItemStack.EMPTY);
         return new cn.howxu.mmcr.api.machine.MachineStructureStage(
                 number,
                 new BlockArray(Map.of(rawPos, new BlockPredicate.OfBlock(patternBlock))),
@@ -3009,24 +3007,27 @@ class MachineControllerBlockEntityTest {
         return new BlockArray(blocks);
     }
 
-    private static SingleBlockModifierReplacement replacementAt(
+    private static PositionedReplacement replacementAt(
             BlockPos pos, Block block, String name, float value) {
-        return new SingleBlockModifierReplacement(
-                name, pos, new BlockPredicate.OfBlock(block),
+        return replacementAt(pos, name, new BlockPredicate.OfBlock(block),
                 List.of(new RecipeModifier("item", RecipeModifier.IOType.INPUT,
-                        value, RecipeModifier.Operation.ADD, false)),
-                "", ItemStack.EMPTY);
+                        value, RecipeModifier.Operation.ADD, false)), ItemStack.EMPTY);
+    }
+
+    private static PositionedReplacement replacementAt(
+            BlockPos pos, String name, BlockPredicate predicate, List<RecipeModifier> modifiers, ItemStack stack) {
+        return new PositionedReplacement(pos, new SingleBlockModifierReplacement(name, predicate, modifiers, stack));
     }
 
     private static DynamicMachine machineWithReplacements(
-            SingleBlockModifierReplacement... replacements) {
+            PositionedReplacement... replacements) {
         Identifier id = MMCR.id("position_modifier_test");
         Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
         pattern.put(BlockPos.ZERO, new BlockPredicate.Any());
         Map<BlockPos, List<SingleBlockModifierReplacement>> modifierMap = new LinkedHashMap<>();
-        for (SingleBlockModifierReplacement replacement : replacements) {
-            pattern.put(replacement.getPos(), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK));
-            modifierMap.computeIfAbsent(replacement.getPos(), ignored -> new ArrayList<>()).add(replacement);
+        for (PositionedReplacement replacement : replacements) {
+            pattern.put(replacement.pos(), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK));
+            modifierMap.computeIfAbsent(replacement.pos(), ignored -> new ArrayList<>()).add(replacement.replacement());
         }
         return new DynamicMachine(id, "Position Modifier Test", new BlockArray(pattern),
                 MachineControllerSpec.defaultsFor(id), PortRequirementSpec.none(), List.of(), modifierMap);
@@ -3066,9 +3067,9 @@ class MachineControllerBlockEntityTest {
             }
         }
         int index = 0;
-        for (List<SingleBlockModifierReplacement> replacements : machine.modifierReplacements().values()) {
-            for (SingleBlockModifierReplacement replacement : replacements) {
-                blocks.put(controllerPos.offset(replacement.getPos()), replacementBlockFor(replacement, replacementBlocks[index++]));
+        for (var entry : machine.modifierReplacements().entrySet()) {
+            for (SingleBlockModifierReplacement replacement : entry.getValue()) {
+                blocks.put(controllerPos.offset(entry.getKey()), replacementBlockFor(replacement, replacementBlocks[index++]));
             }
         }
         for (var entry : blocks.entrySet()) {
@@ -3081,6 +3082,9 @@ class MachineControllerBlockEntityTest {
         if (replacement.getReplacement().matches(fallback.defaultBlockState())) return fallback;
         if (replacement.getReplacement() instanceof BlockPredicate.OfBlock of) return of.block();
         return fallback;
+    }
+
+    private record PositionedReplacement(BlockPos pos, SingleBlockModifierReplacement replacement) {
     }
 
     private static void tickUntilFormed(

@@ -95,6 +95,6 @@ class MachineStructureRequirementsTest {
     }
 
     private static SingleBlockModifierReplacement replacement(String name, BlockPredicate predicate) {
-        return new SingleBlockModifierReplacement(name, BlockPos.ZERO, predicate, List.of(), "", ItemStack.EMPTY);
+        return new SingleBlockModifierReplacement(name, predicate, List.of(), ItemStack.EMPTY);
     }
 }

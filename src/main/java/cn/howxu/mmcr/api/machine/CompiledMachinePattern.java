@@ -96,8 +96,7 @@ public record CompiledMachinePattern(
         Direction normalizedRoll = BlockRotator.normalizedRoll(facing, rollFacing);
         for (var entry : raw.entrySet()) {
             BlockPos rotatedPos = BlockRotator.rotateSouthTo(entry.getKey(), facing, normalizedRoll);
-            rotated.put(rotatedPos, entry.getValue().stream()
-                    .map(replacement -> replacement.copyAt(rotatedPos)).toList());
+            rotated.put(rotatedPos, List.copyOf(entry.getValue()));
         }
         return Map.copyOf(rotated);
     }

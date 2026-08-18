@@ -9,7 +9,9 @@ import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration;
+import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
+import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
@@ -95,13 +97,11 @@ public final class DefaultMachines {
     }
 
     private static MachineStructureDefinition structureOf(Machine machine) {
-        return new MachineStructureDefinition(
-                machine.registryName(),
-                machine.pattern(),
-                machine.portRequirements(),
-                machine.portTierRequirements(),
-                machine.dynamicPatterns(),
-                machine instanceof DynamicMachine dynamic ? dynamic.modifierReplacements() : Map.of());
+        return new MachineStructureDefinition(machine.registryName(), machine.structureStages().stream()
+                .map(stage -> new Declaration(Declaration.Kind.FULL, stage.pattern(), stage.portRequirements(),
+                        stage.portTierRequirements(), stage.dynamicPatterns(), stage.requirements(),
+                        stage.modifierReplacements(), stage.levelSlots()))
+                .toList());
     }
 
     private static MachineStructureDefinition thermalSmeltingFurnaceStructure() {
@@ -224,28 +224,28 @@ public final class DefaultMachines {
                 portRequirements,
                 tierRequirements,
                 List.of(),
-                alloyFurnaceModifiers());
+                Map.of(),
+                1,
+                false,
+                false,
+                1,
+                List.of(),
+                List.of(new MachineStructureStage(1, pattern, portRequirements, tierRequirements,
+                        List.of(), alloyFurnaceRequirements(), Map.of(), Map.of())));
     }
 
     /**
      * 合金炉 M 位置允许两种 modifier 方块：
      * <ul>
-     *     <li>钻石块 → 配方时间 × 0.5</li>
-     *     <li>金块 → 产物数量 × 2</li>
+     *     <li>diamond block -> recipe duration x 0.5</li>
+     *     <li>gold block -> output item count x 2</li>
      * </ul>
      * 原方块（高炉）仍为默认可选方块，不挂载 modifier。
      */
-    private static Map<BlockPos, List<SingleBlockModifierReplacement>> alloyFurnaceModifiers() {
-        BlockPos[] mPositions = {
-                new BlockPos(0, -1, -1),
-                new BlockPos(0, 1, -1),
-        };
-        Map<BlockPos, List<SingleBlockModifierReplacement>> map = new LinkedHashMap<>();
-        for (BlockPos pos : mPositions) {
-            List<SingleBlockModifierReplacement> replacements = new ArrayList<>(2);
-            replacements.add(new SingleBlockModifierReplacement(
+    private static MachineStructureRequirements alloyFurnaceRequirements() {
+        return MachineStructureRequirements.builder()
+                .modifier('M', new SingleBlockModifierReplacement(
                     "alloy_furnace_diamond_speedup",
-                    pos,
                     new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK),
                     List.of(new RecipeModifier(
                             "duration",
@@ -253,11 +253,9 @@ public final class DefaultMachines {
                             0.5F,
                             RecipeModifier.Operation.MULTIPLY,
                             false)),
-                    "钻石块：配方时间折半",
-                    new ItemStack(Holder.direct(Items.DIAMOND_BLOCK, DataComponentMap.EMPTY))));
-            replacements.add(new SingleBlockModifierReplacement(
+                    new ItemStack(Holder.direct(Items.DIAMOND_BLOCK, DataComponentMap.EMPTY))))
+                .modifier('M', new SingleBlockModifierReplacement(
                     "alloy_furnace_gold_doubling",
-                    pos,
                     new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
                     List.of(new RecipeModifier(
                             "item",
@@ -265,11 +263,8 @@ public final class DefaultMachines {
                             2.0F,
                             RecipeModifier.Operation.MULTIPLY,
                             false)),
-                    "金块：产物数量翻倍",
-                    new ItemStack(Holder.direct(Items.GOLD_BLOCK, DataComponentMap.EMPTY))));
-            map.put(pos, replacements);
-        }
-        return map;
+                    new ItemStack(Holder.direct(Items.GOLD_BLOCK, DataComponentMap.EMPTY))))
+                .build();
     }
 
     public static Machine cracker(Block itemInput, Block itemOutput, Block fluidOutput, Block energyInput) {

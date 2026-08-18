@@ -99,9 +99,7 @@ class StructureMatcherTest {
         BlockArray pattern = new BlockArray(Map.of(
                 BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE),
                 replacementPos, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
-        var replacement = new SingleBlockModifierReplacement(
-                "speed", replacementPos, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
-                List.of(), "", ItemStack.EMPTY);
+        var replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), ItemStack.EMPTY);
         var level = LevelStub.create(Map.of(
                 BlockPos.ZERO, Blocks.STONE,
                 replacementPos, Blocks.GOLD_BLOCK));
@@ -117,9 +115,7 @@ class StructureMatcherTest {
         BlockArray pattern = new BlockArray(Map.of(
                 rawPos, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
                 new BlockPos(0, 1, 0), new BlockPredicate.OfBlock(Blocks.STONE)));
-        var replacement = new SingleBlockModifierReplacement(
-                "speed", rawPos, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
-                List.of(), "", ItemStack.EMPTY);
+        var replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), ItemStack.EMPTY);
         Map<BlockPos, List<SingleBlockModifierReplacement>> replacementMap = Map.of(rawPos, List.of(replacement));
 
         for (Direction facing : Direction.Plane.HORIZONTAL) {
@@ -158,9 +154,7 @@ class StructureMatcherTest {
         BlockArray pattern = new BlockArray(Map.of(
                 BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE),
                 expected, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
-        var replacement = new SingleBlockModifierReplacement(
-                "speed", wrong, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
-                List.of(), "", ItemStack.EMPTY);
+        var replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), ItemStack.EMPTY);
 
         assertThat(StructureMatcher.matchesRotated(pattern,
                 LevelStub.create(Map.of(BlockPos.ZERO, Blocks.STONE, expected, Blocks.GOLD_BLOCK)),
@@ -171,10 +165,8 @@ class StructureMatcherTest {
     void multiple_replacements_at_one_position_use_any_matching_predicate() {
         BlockPos pos = new BlockPos(1, 0, 0);
         BlockArray pattern = new BlockArray(Map.of(pos, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
-        var first = new SingleBlockModifierReplacement("first", pos,
-                new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), "", ItemStack.EMPTY);
-        var second = new SingleBlockModifierReplacement("second", pos,
-                new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK), List.of(), "", ItemStack.EMPTY);
+        var first = new SingleBlockModifierReplacement("first", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), ItemStack.EMPTY);
+        var second = new SingleBlockModifierReplacement("second", new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK), List.of(), ItemStack.EMPTY);
 
         assertThat(StructureMatcher.matchesRotated(pattern,
                 LevelStub.create(Map.of(pos, Blocks.DIAMOND_BLOCK)), BlockPos.ZERO,

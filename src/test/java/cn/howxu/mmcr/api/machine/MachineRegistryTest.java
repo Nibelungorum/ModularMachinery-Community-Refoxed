@@ -51,9 +51,7 @@ class MachineRegistryTest {
     @Test
     void dynamic_machine_exposes_immutable_replacement_map() {
         BlockPos position = new BlockPos(1, 0, 0);
-        var replacement = new SingleBlockModifierReplacement(
-                "speed", position, new BlockPredicate.Any(),
-                List.of(), "", ItemStack.EMPTY);
+        var replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.Any(), List.of(), ItemStack.EMPTY);
         var machine = new DynamicMachine(
                 Identifier.fromNamespaceAndPath("mmcr", "replacement_machine"),
                 "Replacement Machine", new BlockArray(Map.of(position, new BlockPredicate.Any())),
@@ -69,9 +67,7 @@ class MachineRegistryTest {
     @Test
     void dynamic_machine_rejects_replacement_outside_pattern() {
         BlockPos position = new BlockPos(1, 0, 0);
-        var replacement = new SingleBlockModifierReplacement(
-                "speed", position, new BlockPredicate.Any(),
-                List.of(), "", ItemStack.EMPTY);
+        var replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.Any(), List.of(), ItemStack.EMPTY);
         Identifier id = Identifier.fromNamespaceAndPath("mmcr", "outside_replacement_machine");
 
         assertThatThrownBy(() -> new DynamicMachine(
@@ -82,11 +78,9 @@ class MachineRegistryTest {
     }
 
     @Test
-    void dynamic_machine_deep_copies_replacement_metadata() {
+    void dynamic_machine_preserves_replacement_metadata() {
         BlockPos position = new BlockPos(1, 0, 0);
-        var replacement = new SingleBlockModifierReplacement(
-                "speed", position, new BlockPredicate.Any(),
-                List.of(), "", ItemStack.EMPTY);
+        var replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.Any(), List.of(), ItemStack.EMPTY);
         Identifier id = Identifier.fromNamespaceAndPath("mmcr", "copied_replacement_machine");
         var machine = new DynamicMachine(
                 id, "Copied Replacement Machine",
@@ -94,12 +88,9 @@ class MachineRegistryTest {
                 MachineControllerSpec.defaultsFor(id), PortRequirementSpec.none(), List.of(),
                 Map.of(position, List.of(replacement)));
 
-        replacement.setPos(new BlockPos(2, 0, 0));
-
         assertThat(machine.modifierReplacementsAt(position)).singleElement()
-                .isNotSameAs(replacement)
-                .extracting(SingleBlockModifierReplacement::getPos)
-                .isEqualTo(position);
+                .extracting(SingleBlockModifierReplacement::getModifierName)
+                .isEqualTo("speed");
     }
 
     @Test

@@ -137,9 +137,9 @@ public final class KubeJSApi {
         return new RecipeModifier(target, ioType(io), value, operation(operation), chance);
     }
 
-    public SingleBlockModifierReplacement singleBlockModifier(String name, BlockPos pos, BlockPredicate predicate,
-            List<RecipeModifier> modifiers, String description, ItemStack display) {
-        return new SingleBlockModifierReplacement(name, pos, predicate, modifiers, description, display);
+    public SingleBlockModifierReplacement singleBlockModifier(String name, BlockPredicate predicate,
+            List<RecipeModifier> modifiers, ItemStack display) {
+        return new SingleBlockModifierReplacement(name, predicate, modifiers, display);
     }
 
     public LevelRequirement levelRequirement(String typeId, String levelId) {

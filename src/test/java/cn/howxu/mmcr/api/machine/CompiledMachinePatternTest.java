@@ -65,9 +65,7 @@ class CompiledMachinePatternTest {
     void compiled_pattern_contains_rotated_replacements_for_horizontal_facing() {
         Identifier id = Identifier.fromNamespaceAndPath("mmcr", "compiled_replacement");
         BlockPos rawPos = new BlockPos(-1, 0, 0);
-        var replacement = new SingleBlockModifierReplacement(
-                "speed", rawPos, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
-                List.of(), "", ItemStack.EMPTY);
+        var replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), ItemStack.EMPTY);
         var machine = new DynamicMachine(
                 id, "Compiled Replacement", new BlockArray(Map.of(
                         BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE),
@@ -135,8 +133,7 @@ class CompiledMachinePatternTest {
     void stage_compiled_modifier_replacements_support_vertical_roll_without_parent_type_checks() {
         Identifier id = Identifier.parse("mmcr:compiled_stage_modifiers");
         BlockPos rawPosition = new BlockPos(1, 0, 0);
-        var replacement = new SingleBlockModifierReplacement("stage_modifier", rawPosition,
-                new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), "", ItemStack.EMPTY);
+        var replacement = new SingleBlockModifierReplacement("stage_modifier", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), ItemStack.EMPTY);
         BlockArray first = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE)));
         BlockPos stagePort = new BlockPos(2, 0, 0);
         BlockArray second = new BlockArray(Map.of(rawPosition, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),

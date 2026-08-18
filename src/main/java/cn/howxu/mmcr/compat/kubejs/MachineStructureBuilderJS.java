@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicPatternSpec;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
@@ -34,6 +35,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     public transient PortRequirementSpec portRequirements = PortRequirementSpec.none();
     public transient PortTierRequirementSpec portTierRequirements = PortTierRequirementSpec.none();
     public transient List<DynamicPatternSpec> dynamicPatterns = new ArrayList<>();
+    public transient MachineStructureRequirements requirements = MachineStructureRequirements.EMPTY;
     public transient Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements = new LinkedHashMap<>();
     public transient Map<BlockPos, Identifier> levelSlots = new LinkedHashMap<>();
     private final List<Declaration> declarations = new ArrayList<>();
@@ -50,6 +52,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
 
     public MachineStructureBuilderJS pattern(String grid, Map<String, Object> keys) {
         var blocks = new HashMap<BlockPos, BlockPredicate>();
+        var symbolsByPosition = new HashMap<BlockPos, Character>();
         var rows = grid.trim().split("\\s+");
 
         for (int y = 0; y < rows.length; y++) {
@@ -70,17 +73,18 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
 
                 BlockPos pos = new BlockPos(x, y, 0);
                 blocks.put(pos, toPredicate(value));
+                symbolsByPosition.put(pos, key);
                 if (value instanceof LevelSlot levelSlot) {
                     levelSlots.put(pos, levelSlot.typeId());
                 }
             }
         }
 
-        pattern = new BlockArray(Map.copyOf(blocks));
+        pattern = new BlockArray(Map.copyOf(blocks), Map.of(), Map.copyOf(symbolsByPosition));
         declarations.clear();
         patternDeclaration = true;
         declarations.add(new Declaration(Declaration.Kind.FULL, pattern, portRequirements,
-                portTierRequirements, dynamicPatterns, modifierReplacements, levelSlots));
+                portTierRequirements, dynamicPatterns, requirements, modifierReplacements, levelSlots));
         return this;
     }
 
@@ -139,10 +143,9 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         return this;
     }
 
-    public MachineStructureBuilderJS addModifier(SingleBlockModifierReplacement replacement) {
+    public MachineStructureBuilderJS addModifier(char symbol, SingleBlockModifierReplacement replacement) {
         Objects.requireNonNull(replacement, "replacement");
-        BlockPos pos = Objects.requireNonNull(replacement.getPos(), "replacement.pos");
-        modifierReplacements.computeIfAbsent(pos, ignored -> new ArrayList<>()).add(replacement);
+        requirements = appendModifier(requirements, symbol, replacement);
         classMetadataChanged = true;
         return this;
     }
@@ -150,15 +153,16 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     @Override
     public MachineStructureDefinition createObject() {
         if (declarations.isEmpty()) {
-            return new MachineStructureDefinition(id, pattern, portRequirements, portTierRequirements,
-                    dynamicPatterns, modifierReplacements, validateLevelSlots(levelSlots, pattern));
+            return new MachineStructureDefinition(id, List.of(new Declaration(Declaration.Kind.FULL, pattern,
+                    portRequirements, portTierRequirements, dynamicPatterns, requirements,
+                    modifierReplacements, validateLevelSlots(levelSlots, pattern))));
         }
         applyPendingPatternMetadata();
         if (!classMetadataChanged) return new MachineStructureDefinition(id, declarations);
         List<Declaration> result = new ArrayList<>(declarations);
         Declaration first = result.getFirst();
         result.set(0, new Declaration(first.kind(), first.pattern(), portRequirements, portTierRequirements,
-                dynamicPatterns, modifierReplacements, validateLevelSlots(levelSlots, first.pattern())));
+                dynamicPatterns, requirements, modifierReplacements, validateLevelSlots(levelSlots, first.pattern())));
         return new MachineStructureDefinition(id, result);
     }
 
@@ -181,13 +185,22 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         };
     }
 
+    private static MachineStructureRequirements appendModifier(
+            MachineStructureRequirements requirements, char symbol, SingleBlockModifierReplacement replacement) {
+        MachineStructureRequirements.Builder builder = MachineStructureRequirements.builder();
+        requirements.modifierReplacements().forEach((existingSymbol, replacements) ->
+                replacements.forEach(existing -> builder.modifier(existingSymbol, existing)));
+        requirements.levelSlots().forEach(builder::levelSlot);
+        return builder.modifier(symbol, replacement).build();
+    }
+
     private void applyPendingPatternMetadata() {
         if (!patternDeclaration || !classMetadataChanged || declarations.isEmpty()) return;
-        Declaration first = declarations.getFirst();
-        declarations.set(0, new Declaration(first.kind(), first.pattern(), portRequirements, portTierRequirements,
-                dynamicPatterns, modifierReplacements, validateLevelSlots(levelSlots, first.pattern())));
-        classMetadataChanged = false;
-    }
+            Declaration first = declarations.getFirst();
+            declarations.set(0, new Declaration(first.kind(), first.pattern(), portRequirements, portTierRequirements,
+                    dynamicPatterns, requirements, modifierReplacements, validateLevelSlots(levelSlots, first.pattern())));
+            classMetadataChanged = false;
+        }
 
     private static BlockPredicate levelPredicate(LevelSlot slot) {
         validateLevelType(slot.typeId());

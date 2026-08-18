@@ -38,13 +38,11 @@ class MachineStructureBuilderJSTest {
 
     @Test
     void server_structure_builder_creates_structure_definition() {
-        var replacement = new SingleBlockModifierReplacement(
-                "speed", new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
-                List.of(), "", ItemStack.EMPTY);
+        var replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), ItemStack.EMPTY);
 
         var structure = new MachineStructureBuilderJS("mmcr:arc_furnace")
                 .pattern("_I", Map.of("I", Blocks.IRON_BLOCK))
-                .addModifier(replacement)
+                .addModifier('I', replacement)
                 .createObject();
 
         assertThat(structure.machineId()).isEqualTo(MMCR.id("arc_furnace"));
@@ -122,8 +120,7 @@ class MachineStructureBuilderJSTest {
         PortTierRequirementSpec tiers = PortTierRequirementSpec.builder().anyItemInput().build();
         DynamicPatternSpec dynamic = new DynamicPatternSpec("length", new BlockArray(Map.of()), null,
                 1, 3, BlockPos.ZERO, new BlockPos(0, 0, 1), null);
-        SingleBlockModifierReplacement replacement = new SingleBlockModifierReplacement(
-                "speed", modifierPosition, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), "", ItemStack.EMPTY);
+        SingleBlockModifierReplacement replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), ItemStack.EMPTY);
 
         var definition = new MachineStructureBuilderJS("test:complete")
                 .fullStructure(full, ports, tiers, List.of(dynamic), Map.of(modifierPosition, List.of(replacement)),
@@ -147,7 +144,8 @@ class MachineStructureBuilderJSTest {
         Identifier coilType = Identifier.parse("test:coil");
         MachineLevelRegistry.beginRegistration();
         MachineLevelRegistry.registerType(new LevelType(coilType, Component.literal("Coils")));
-        BlockArray full = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+        BlockArray full = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)),
+                Map.of(), Map.of(BlockPos.ZERO, 'C'));
 
         assertThatThrownBy(() -> new MachineStructureBuilderJS("test:bad_level_slot")
                 .fullStructure(full, PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(),
@@ -204,8 +202,7 @@ class MachineStructureBuilderJSTest {
         BlockArray full = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
         DynamicPatternSpec dynamic = new DynamicPatternSpec("length", new BlockArray(Map.of()), null,
                 1, 3, BlockPos.ZERO, new BlockPos(0, 0, 1), null);
-        var replacement = new SingleBlockModifierReplacement("speed", new BlockPos(1, 0, 0),
-                new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), "", ItemStack.EMPTY);
+        var replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), ItemStack.EMPTY);
 
         var definition = new MachineStructureBuilderJS("test:full_then_metadata")
                 .fullStructure(full)
@@ -213,7 +210,7 @@ class MachineStructureBuilderJSTest {
                 .portTierRequirements(PortTierRequirementSpec.builder().anyItemInput().build())
                 .dynamicPattern(dynamic)
                 .levelSlot(BlockPos.ZERO, coilType.toString())
-                .addModifier(replacement)
+                .addModifier('C', replacement)
                 .createObject();
 
         assertThat(definition.pattern()).isEqualTo(full);
@@ -221,7 +218,7 @@ class MachineStructureBuilderJSTest {
         assertThat(definition.portTierRequirements().requirements()).singleElement();
         assertThat(definition.dynamicPatterns()).containsExactly(dynamic);
         assertThat(definition.levelSlots()).containsEntry(BlockPos.ZERO, coilType);
-        assertThat(definition.modifierReplacements()).containsKey(new BlockPos(1, 0, 0));
+        assertThat(definition.modifierReplacements()).containsKey(BlockPos.ZERO);
     }
 
     @Test

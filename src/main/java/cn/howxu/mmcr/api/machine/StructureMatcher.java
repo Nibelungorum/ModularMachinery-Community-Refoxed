@@ -37,9 +37,7 @@ public final class StructureMatcher {
         Map<BlockPos, List<SingleBlockModifierReplacement>> rotated = new LinkedHashMap<>();
         for (var entry : replacements.entrySet()) {
             BlockPos rotatedPos = BlockRotator.rotateSouthTo(entry.getKey(), facing);
-            rotated.put(rotatedPos, entry.getValue().stream()
-                    .map(replacement -> replacement.copyAt(rotatedPos))
-                    .toList());
+            rotated.put(rotatedPos, List.copyOf(entry.getValue()));
         }
         return Map.copyOf(rotated);
     }
