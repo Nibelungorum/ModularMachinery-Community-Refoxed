@@ -167,6 +167,15 @@ class MachineRecipeJsonTest {
                     assertThat(error.path()).isEqualTo("tick_time");
                 });
 
+        var fractionalTick = recipeJson();
+        fractionalTick.addProperty("tick_time", 1.5);
+        assertThatThrownBy(() -> MachineRecipeJson.parse(id("fractional_tick"), fractionalTick, registries))
+                .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class, error -> {
+                    assertThat(error.recipeId()).isEqualTo(id("fractional_tick"));
+                    assertThat(error.path()).isEqualTo("tick_time");
+                    assertThat(error.getCause()).isNotNull();
+                });
+
         var malformed = recipeJson();
         malformed.add("inputs", array(new JsonObject()));
         assertThatThrownBy(() -> MachineRecipeJson.parse(id("bad_input"), malformed, registries))

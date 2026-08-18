@@ -108,7 +108,11 @@ public final class MachineRecipeJson {
             if (!object.get(field).isJsonPrimitive() || !object.get(field).getAsJsonPrimitive().isNumber()) {
                 fail(id, field, "must be an integer", null);
             }
-            return object.get(field).getAsInt();
+            var number = object.get(field).getAsJsonPrimitive().getAsNumber();
+            if (number.doubleValue() != Math.rint(number.doubleValue())) {
+                fail(id, field, "must be an integer", new IllegalArgumentException("fractional number"));
+            }
+            return number.intValue();
         } catch (RuntimeException exception) {
             fail(id, field, "must be an integer", exception);
             throw exception;
