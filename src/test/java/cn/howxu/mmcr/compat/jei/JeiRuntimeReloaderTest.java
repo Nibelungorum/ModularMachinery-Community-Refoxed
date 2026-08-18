@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.jei;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
@@ -130,7 +131,7 @@ class JeiRuntimeReloaderTest {
                 Map.of(machineId, new cn.howxu.mmcr.api.machine.MachineStructureDefinition(
                         machineId,
                         new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE))),
-                        PortRequirementSpec.none(), List.of(), Map.of())),
+                        PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY)),
                 Map.of(recipeId, new MachineRecipe(recipeId, machineId, 20, List.of(),
                         List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)))),
                 Map.of(), Map.of(), 1L);

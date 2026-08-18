@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -53,7 +54,8 @@ class RuntimeContentSyncTest {
     }
 
     private static MachineStructureDefinition structure(Identifier id) {
-        return new MachineStructureDefinition(id, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(), Map.of());
+        return new MachineStructureDefinition(id, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(),
+                MachineStructureRequirements.EMPTY);
     }
 
     private static MachineRecipe recipe(Identifier id, Identifier machineId) {

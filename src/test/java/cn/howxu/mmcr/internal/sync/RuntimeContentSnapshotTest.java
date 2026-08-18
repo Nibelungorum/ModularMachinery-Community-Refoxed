@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.LevelRequirement;
@@ -238,11 +239,12 @@ class RuntimeContentSnapshotTest {
         Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
         pattern.put(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE));
         pattern.put(BlockPos.ZERO.east(), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK));
-        BlockArray blockArray = new BlockArray(pattern).tagged(BlockPos.ZERO.east(), "input_bus");
+        BlockArray blockArray = new BlockArray(pattern, Map.of(), Map.of(BlockPos.ZERO.east(), 'L'))
+                .tagged(BlockPos.ZERO.east(), "input_bus");
         PortRequirementSpec portRequirements = PortRequirementSpec.builder().min("item_input_bus", 1).build();
         return new MachineStructureDefinition(id, blockArray, portRequirements,
-                cn.howxu.mmcr.api.machine.PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of(
-                BlockPos.ZERO.east(), MMCR.id("coil")));
+                cn.howxu.mmcr.api.machine.PortTierRequirementSpec.none(), List.of(),
+                MachineStructureRequirements.builder().levelSlot('L', MMCR.id("coil")).build(blockArray));
     }
 
     private static MachineRecipe recipe(Identifier id, Identifier machineId) {

@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicPatternSpec;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -40,12 +41,10 @@ public final class MachineStructureSyncCodec {
     private static final int MAX_PORT_REQUIREMENTS = 1024;
     private static final int MAX_TIER_REQUIREMENTS = 1024;
     private static final int MAX_DYNAMIC_PATTERNS = 1024;
-    private static final int MAX_REPLACEMENT_POSITIONS = 8192;
     private static final int MAX_REPLACEMENTS = 1024;
-    private static final int MAX_LEVEL_SLOTS = 8192;
+    private static final int MAX_SYMBOL_REQUIREMENTS = 256;
     private static final int MAX_CHILD_PREDICATES = 1024;
     private static final int MAX_MODIFIERS = 1024;
-    private static final int MAX_DESCRIPTION_LINES = 1024;
     private static final int MAX_FACES = Direction.values().length;
 
     private MachineStructureSyncCodec() {
@@ -77,8 +76,7 @@ public final class MachineStructureSyncCodec {
         writePortRequirements(buf, declaration.portRequirements());
         writePortTierRequirements(buf, declaration.portTierRequirements());
         writeDynamicPatterns(buf, declaration.dynamicPatterns());
-        writeModifierReplacements(buf, declaration.modifierReplacements());
-        writeLevelSlots(buf, declaration.levelSlots());
+        writeRequirements(buf, declaration.requirements());
     }
 
     private static MachineStructureDefinition.Declaration readDeclaration(RegistryFriendlyByteBuf buf) {
@@ -87,10 +85,9 @@ public final class MachineStructureSyncCodec {
         PortRequirementSpec portRequirements = readPortRequirements(buf);
         PortTierRequirementSpec portTierRequirements = readPortTierRequirements(buf);
         List<DynamicPatternSpec> dynamicPatterns = readDynamicPatterns(buf);
-        Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements = readModifierReplacements(buf);
-        Map<BlockPos, Identifier> levelSlots = readLevelSlots(buf);
+        MachineStructureRequirements requirements = readRequirements(buf);
         return new MachineStructureDefinition.Declaration(kind, pattern, portRequirements, portTierRequirements,
-                dynamicPatterns, modifierReplacements, levelSlots);
+                dynamicPatterns, requirements);
     }
 
     private static void writeBlockArray(RegistryFriendlyByteBuf buf, BlockArray value) {
@@ -105,6 +102,12 @@ public final class MachineStructureSyncCodec {
         for (var entry : value.tagsByPosition().entrySet()) {
             buf.writeBlockPos(entry.getKey());
             writeStringList(buf, entry.getValue());
+        }
+        checkSize(value.symbolsByPosition().size(), MAX_BLOCKS, "block symbol position");
+        buf.writeVarInt(value.symbolsByPosition().size());
+        for (var entry : value.symbolsByPosition().entrySet()) {
+            buf.writeBlockPos(entry.getKey());
+            buf.writeChar(entry.getValue());
         }
     }
 
@@ -122,7 +125,13 @@ public final class MachineStructureSyncCodec {
         for (int i = 0; i < tagCount; i++) {
             tags.put(buf.readBlockPos(), readStringList(buf, MAX_TAGS, "block tag"));
         }
-        return new BlockArray(pattern, tags);
+        int symbolCount = buf.readVarInt();
+        checkSize(symbolCount, MAX_BLOCKS, "block symbol position");
+        Map<BlockPos, Character> symbols = new LinkedHashMap<>();
+        for (int i = 0; i < symbolCount; i++) {
+            symbols.put(buf.readBlockPos(), buf.readChar());
+        }
+        return new BlockArray(pattern, tags, symbols);
     }
 
     private static void writeBlockPredicate(RegistryFriendlyByteBuf buf, BlockPredicate predicate) {
@@ -297,12 +306,21 @@ public final class MachineStructureSyncCodec {
         return List.copyOf(values);
     }
 
+    private static void writeRequirements(RegistryFriendlyByteBuf buf, MachineStructureRequirements value) {
+        writeModifierReplacements(buf, value.modifierReplacements());
+        writeLevelSlots(buf, value.levelSlots());
+    }
+
+    private static MachineStructureRequirements readRequirements(RegistryFriendlyByteBuf buf) {
+        return new MachineStructureRequirements(readModifierReplacements(buf), readLevelSlots(buf));
+    }
+
     private static void writeModifierReplacements(RegistryFriendlyByteBuf buf,
-            Map<BlockPos, List<SingleBlockModifierReplacement>> values) {
-        checkSize(values.size(), MAX_REPLACEMENT_POSITIONS, "modifier replacement position");
+            Map<Character, List<SingleBlockModifierReplacement>> values) {
+        checkSize(values.size(), MAX_SYMBOL_REQUIREMENTS, "modifier replacement symbol");
         buf.writeVarInt(values.size());
         for (var entry : values.entrySet()) {
-            buf.writeBlockPos(entry.getKey());
+            buf.writeChar(entry.getKey());
             checkSize(entry.getValue().size(), MAX_REPLACEMENTS, "modifier replacement");
             buf.writeVarInt(entry.getValue().size());
             for (SingleBlockModifierReplacement replacement : entry.getValue()) {
@@ -311,37 +329,33 @@ public final class MachineStructureSyncCodec {
         }
     }
 
-    private static Map<BlockPos, List<SingleBlockModifierReplacement>> readModifierReplacements(RegistryFriendlyByteBuf buf) {
+    private static Map<Character, List<SingleBlockModifierReplacement>> readModifierReplacements(RegistryFriendlyByteBuf buf) {
         int count = buf.readVarInt();
-        checkSize(count, MAX_REPLACEMENT_POSITIONS, "modifier replacement position");
-        Map<BlockPos, List<SingleBlockModifierReplacement>> values = new LinkedHashMap<>();
+        checkSize(count, MAX_SYMBOL_REQUIREMENTS, "modifier replacement symbol");
+        Map<Character, List<SingleBlockModifierReplacement>> values = new LinkedHashMap<>();
         for (int i = 0; i < count; i++) {
-            BlockPos pos = buf.readBlockPos();
+            char symbol = buf.readChar();
             int replacementCount = buf.readVarInt();
             checkSize(replacementCount, MAX_REPLACEMENTS, "modifier replacement");
             List<SingleBlockModifierReplacement> replacements = new ArrayList<>(replacementCount);
             for (int j = 0; j < replacementCount; j++) {
                 replacements.add(readReplacement(buf));
             }
-            values.put(pos, List.copyOf(replacements));
+            values.put(symbol, List.copyOf(replacements));
         }
         return Map.copyOf(values);
     }
 
     private static void writeReplacement(RegistryFriendlyByteBuf buf, SingleBlockModifierReplacement replacement) {
         ByteBufCodecs.STRING_UTF8.encode(buf, replacement.getModifierName());
-        buf.writeBlockPos(replacement.getPos());
         writeBlockPredicate(buf, replacement.getReplacement());
         writeRecipeModifiers(buf, replacement.getModifiers());
-        writeStringList(buf, replacement.getDescriptionLines());
         buf.writeJsonWithCodec(ItemStack.CODEC, replacement.getDescriptiveStack());
     }
 
     private static SingleBlockModifierReplacement readReplacement(RegistryFriendlyByteBuf buf) {
-        return new SingleBlockModifierReplacement(ByteBufCodecs.STRING_UTF8.decode(buf), buf.readBlockPos(),
-                readBlockPredicate(buf), readRecipeModifiers(buf),
-                String.join("\n", readStringList(buf, MAX_DESCRIPTION_LINES, "description line")),
-                buf.readLenientJsonWithCodec(ItemStack.CODEC));
+        return new SingleBlockModifierReplacement(ByteBufCodecs.STRING_UTF8.decode(buf),
+                readBlockPredicate(buf), readRecipeModifiers(buf), buf.readLenientJsonWithCodec(ItemStack.CODEC));
     }
 
     private static void writeRecipeModifiers(RegistryFriendlyByteBuf buf, List<RecipeModifier> values) {
@@ -367,21 +381,21 @@ public final class MachineStructureSyncCodec {
         return List.copyOf(values);
     }
 
-    private static void writeLevelSlots(RegistryFriendlyByteBuf buf, Map<BlockPos, Identifier> values) {
-        checkSize(values.size(), MAX_LEVEL_SLOTS, "level slot");
+    private static void writeLevelSlots(RegistryFriendlyByteBuf buf, Map<Character, Identifier> values) {
+        checkSize(values.size(), MAX_SYMBOL_REQUIREMENTS, "level slot");
         buf.writeVarInt(values.size());
         for (var entry : values.entrySet()) {
-            buf.writeBlockPos(entry.getKey());
+            buf.writeChar(entry.getKey());
             Identifier.STREAM_CODEC.encode(buf, entry.getValue());
         }
     }
 
-    private static Map<BlockPos, Identifier> readLevelSlots(RegistryFriendlyByteBuf buf) {
+    private static Map<Character, Identifier> readLevelSlots(RegistryFriendlyByteBuf buf) {
         int count = buf.readVarInt();
-        checkSize(count, MAX_LEVEL_SLOTS, "level slot");
-        Map<BlockPos, Identifier> values = new LinkedHashMap<>();
+        checkSize(count, MAX_SYMBOL_REQUIREMENTS, "level slot");
+        Map<Character, Identifier> values = new LinkedHashMap<>();
         for (int i = 0; i < count; i++) {
-            values.put(buf.readBlockPos(), Identifier.STREAM_CODEC.decode(buf));
+            values.put(buf.readChar(), Identifier.STREAM_CODEC.decode(buf));
         }
         return Map.copyOf(values);
     }
