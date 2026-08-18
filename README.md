@@ -14,7 +14,7 @@ Optional integrations are available for JEI, KubeJS, and Jade.
 
 ## Downloads
 
-Release artifacts are published on the [GitHub releases page](https://github.com/Nibelungorum/ModularMachinery-Community-Refoxed/releases). CurseForge and Modrinth.
+Release artifacts are published on the [GitHub releases page](https://github.com/Nibelungorum/ModularMachinery-Community-Refoxed/releases), [CurseForge](https://www.curseforge.com/minecraft/mc-mods/modular-machinery-community-refoxed) and [Modrinth](https://modrinth.com/mod/modular-machinery-community-refoxed).
 
 ## Installation
 
