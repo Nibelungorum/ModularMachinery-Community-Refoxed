@@ -28,12 +28,12 @@ public final class MachineRecipeJson {
 
     public static MachineRecipe parse(Identifier id, JsonElement json, HolderLookup.Provider registries) {
         if (id == null) throw new IllegalArgumentException("Recipe id must not be null");
-        if (json == null || !json.isJsonObject()) fail(id, "$", "recipe must be an object");
+        if (json == null || !json.isJsonObject()) fail(id, "$", "recipe must be an object", null);
         var object = json.getAsJsonObject();
         requireType(id, object);
 
         Identifier machineId = parseIdentifier(id, object, "machine");
-        if (MachineRegistry.getMachine(machineId) == null) fail(id, "machine", "unknown machine " + machineId);
+        if (MachineRegistry.getMachine(machineId) == null) fail(id, "machine", "unknown machine " + machineId, null);
         int tickTime = intField(id, object, "tick_time", true, 0);
         if (tickTime < 1) fail(id, "tick_time", "must be >= 1");
 
@@ -55,33 +55,46 @@ public final class MachineRecipeJson {
         if (!object.has("requirements")) requirements = List.of();
         List<LevelRequirement> levels = parseList(id, object, "level_requirements", LevelRequirement.CODEC, ops);
         Set<Identifier> hosts = Set.copyOf(parseList(id, object, "required_host_ids", Identifier.CODEC, ops));
+        int maxThreads = intField(id, object, "max_threads", false, 1);
+        if (maxThreads < 0) fail(id, "max_threads", "must be >= 0");
 
         if (object.has("requirements")) {
             return new MachineRecipe(id, machineId, tickTime, inputs, outputs, modifiers,
-                    intField(id, object, "priority", false, 0), intField(id, object, "max_threads", false, 1),
+                    intField(id, object, "priority", false, 0), maxThreads,
                     boolField(id, object, "cancelIfPerTickFails", false), fluidOutputs, requirements,
                     boolField(id, object, "parallelized", false), levels,
                     boolField(id, object, "allow_partial_outputs", false), hosts);
         }
         return new MachineRecipe(id, machineId, tickTime, inputs, outputs, modifiers,
-                intField(id, object, "priority", false, 0), intField(id, object, "max_threads", false, 1),
+                intField(id, object, "priority", false, 0), maxThreads,
                 boolField(id, object, "cancelIfPerTickFails", false), fluidOutputs, Collections.emptyList(),
                 boolField(id, object, "parallelized", false), levels,
                 boolField(id, object, "allow_partial_outputs", false), hosts, true);
     }
 
     private static void requireType(Identifier id, JsonObject object) {
-        if (!object.has("type") || !TYPE.toString().equals(object.get("type").getAsString())) {
-            fail(id, "type", "expected " + TYPE);
+        if (!object.has("type")) {
+            fail(id, "type", "expected " + TYPE, null);
+        }
+        try {
+            if (!object.get("type").isJsonPrimitive() || !object.get("type").getAsJsonPrimitive().isString()
+                    || !TYPE.toString().equals(object.get("type").getAsString())) {
+                fail(id, "type", "expected " + TYPE, null);
+            }
+        } catch (RuntimeException exception) {
+            fail(id, "type", "must be a string", exception);
         }
     }
 
     private static Identifier parseIdentifier(Identifier id, JsonObject object, String field) {
-        if (!object.has(field)) fail(id, field, "is required");
+        if (!object.has(field)) fail(id, field, "is required", null);
         try {
+            if (!object.get(field).isJsonPrimitive() || !object.get(field).getAsJsonPrimitive().isString()) {
+                fail(id, field, "must be a string", null);
+            }
             return Identifier.parse(object.get(field).getAsString());
         } catch (RuntimeException exception) {
-            fail(id, field, "invalid identifier");
+            fail(id, field, "invalid identifier", exception);
             throw exception;
         }
     }
@@ -92,9 +105,12 @@ public final class MachineRecipeJson {
             return defaultValue;
         }
         try {
+            if (!object.get(field).isJsonPrimitive() || !object.get(field).getAsJsonPrimitive().isNumber()) {
+                fail(id, field, "must be an integer", null);
+            }
             return object.get(field).getAsInt();
         } catch (RuntimeException exception) {
-            fail(id, field, "must be an integer");
+            fail(id, field, "must be an integer", exception);
             throw exception;
         }
     }
@@ -102,9 +118,12 @@ public final class MachineRecipeJson {
     private static boolean boolField(Identifier id, JsonObject object, String field, boolean defaultValue) {
         if (!object.has(field)) return defaultValue;
         try {
+            if (!object.get(field).isJsonPrimitive() || !object.get(field).getAsJsonPrimitive().isBoolean()) {
+                fail(id, field, "must be a boolean", null);
+            }
             return object.get(field).getAsBoolean();
         } catch (RuntimeException exception) {
-            fail(id, field, "must be a boolean");
+            fail(id, field, "must be a boolean", exception);
             throw exception;
         }
     }
@@ -113,8 +132,15 @@ public final class MachineRecipeJson {
                                         com.mojang.serialization.DynamicOps<JsonElement> ops) {
         if (!object.has(field)) return List.of();
         try {
-            return codec.listOf().parse(ops, object.get(field)).getOrThrow(error ->
-                    new RecipeJsonException(id, field, error));
+            if (!object.get(field).isJsonArray()) fail(id, field, "must be an array", new IllegalArgumentException("expected array"));
+            var values = new java.util.ArrayList<T>();
+            var array = object.getAsJsonArray(field);
+            for (int index = 0; index < array.size(); index++) {
+                int elementIndex = index;
+                values.add(codec.parse(ops, array.get(index)).getOrThrow(error ->
+                        new RecipeJsonException(id, field + "[" + elementIndex + "]" + errorPath(error), error, new IllegalArgumentException(error))));
+            }
+            return List.copyOf(values);
         } catch (RecipeJsonException exception) {
             throw exception;
         } catch (RuntimeException exception) {
@@ -123,17 +149,39 @@ public final class MachineRecipeJson {
     }
 
     private static void fail(Identifier id, String path, String message) {
-        throw new RecipeJsonException(id, path, message);
+        fail(id, path, message, null);
+    }
+
+    private static void fail(Identifier id, String path, String message, Throwable cause) {
+        throw new RecipeJsonException(id, path, message, cause);
+    }
+
+    private static String errorPath(String error) {
+        int separator = error.indexOf(": ");
+        return separator < 0 ? "" : "." + error.substring(0, separator);
     }
 
     /** Structured error raised while decoding a machine recipe JSON document. */
     public static final class RecipeJsonException extends IllegalArgumentException {
+        private final Identifier recipeId;
+        private final String path;
+
         public RecipeJsonException(Identifier id, String path, String message) {
-            super("Recipe " + id + " at " + path + ": " + message);
+            this(id, path, message, null);
         }
 
         public RecipeJsonException(Identifier id, String path, String message, Throwable cause) {
             super("Recipe " + id + " at " + path + ": " + message, cause);
+            this.recipeId = id;
+            this.path = path;
+        }
+
+        public Identifier recipeId() {
+            return recipeId;
+        }
+
+        public String path() {
+            return path;
         }
     }
 }
