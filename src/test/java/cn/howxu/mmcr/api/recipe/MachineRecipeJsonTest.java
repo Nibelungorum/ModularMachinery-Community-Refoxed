@@ -176,6 +176,15 @@ class MachineRecipeJsonTest {
                     assertThat(error.getCause()).isNotNull();
                 });
 
+        var overflowingEnergy = recipeJson();
+        overflowingEnergy.addProperty("energy_per_tick", 2147483648L);
+        assertThatThrownBy(() -> MachineRecipeJson.parse(id("overflowing_energy"), overflowingEnergy, registries))
+                .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class, error -> {
+                    assertThat(error.recipeId()).isEqualTo(id("overflowing_energy"));
+                    assertThat(error.path()).isEqualTo("energy_per_tick");
+                    assertThat(error.getCause()).isNotNull();
+                });
+
         var malformed = recipeJson();
         malformed.add("inputs", array(new JsonObject()));
         assertThatThrownBy(() -> MachineRecipeJson.parse(id("bad_input"), malformed, registries))

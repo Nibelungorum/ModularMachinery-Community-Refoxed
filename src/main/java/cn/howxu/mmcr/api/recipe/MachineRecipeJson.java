@@ -14,6 +14,7 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.math.BigDecimal;
 
 /**
  * Parses the shared data pack and KubeJS machine recipe JSON contract.
@@ -109,10 +110,15 @@ public final class MachineRecipeJson {
                 fail(id, field, "must be an integer", null);
             }
             var number = object.get(field).getAsJsonPrimitive().getAsNumber();
-            if (number.doubleValue() != Math.rint(number.doubleValue())) {
+            var exact = new BigDecimal(number.toString());
+            if (exact.stripTrailingZeros().scale() > 0) {
                 fail(id, field, "must be an integer", new IllegalArgumentException("fractional number"));
             }
-            return number.intValue();
+            if (exact.compareTo(BigDecimal.valueOf(Integer.MIN_VALUE)) < 0
+                    || exact.compareTo(BigDecimal.valueOf(Integer.MAX_VALUE)) > 0) {
+                fail(id, field, "must fit in a Java int", new IllegalArgumentException("integer out of range"));
+            }
+            return exact.intValue();
         } catch (RuntimeException exception) {
             fail(id, field, "must be an integer", exception);
             throw exception;
