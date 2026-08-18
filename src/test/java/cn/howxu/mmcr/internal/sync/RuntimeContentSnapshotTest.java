@@ -30,9 +30,12 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.nibelungorum.DefaultMachineLevels;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +52,11 @@ class RuntimeContentSnapshotTest {
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
         registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+    }
+
+    @BeforeEach
+    void restoreDefaultRuntimeState() {
+        TestBootstrap.registerRuntimeBuiltins();
     }
 
     @Test
@@ -156,6 +164,13 @@ class RuntimeContentSnapshotTest {
     }
 
     @Test
+    void runtimeContentPayloadDoesNotHardReferenceOptionalJeiReloader() throws IOException {
+        String classBytes = classBytes(PktRuntimeContentPayload.class);
+
+        assertThat(classBytes).doesNotContain("cn/howxu/mmcr/compat/jei/JeiRuntimeReloader");
+    }
+
+    @Test
     void applyClientReplacesOldDynamicStructuresAndRecipes() {
         Identifier oldMachine = MMCR.id("alloy_furnace");
         Identifier newMachine = MMCR.id("cracker");
@@ -237,5 +252,13 @@ class RuntimeContentSnapshotTest {
                 List.of(new ItemStack(Items.GOLD_INGOT, 4)),
                 List.of(), 0, 1, true, List.of(), List.of(), false,
                 List.of(), true, Set.of());
+    }
+
+    private static String classBytes(Class<?> type) throws IOException {
+        String resource = type.getSimpleName() + ".class";
+        try (InputStream stream = type.getResourceAsStream(resource)) {
+            if (stream == null) throw new IOException("Missing class resource " + resource);
+            return new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.ISO_8859_1);
+        }
     }
 }

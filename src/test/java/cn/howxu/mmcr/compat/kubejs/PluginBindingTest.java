@@ -12,6 +12,8 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.internal.network.RuntimeContentServerBridge;
+import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
@@ -21,9 +23,13 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.resources.RegistryOps;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.dedicated.DedicatedServer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -33,6 +39,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -50,6 +57,9 @@ class PluginBindingTest {
     @AfterEach
     void clearRecipes() {
         KubeJSContentReloadTransaction.clearPublishedForTesting();
+        Plugin.clearCurrentServerForTesting();
+        RuntimeContentServerBridge.clearForTesting();
+        RuntimeContentSync.resetSenderForTesting();
         MachineStructureRegistry.clearForTesting();
         RecipeRegistry.clearForTesting();
     }
@@ -139,6 +149,39 @@ class PluginBindingTest {
 
         assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(recipeId);
         assertThat(synced).isTrue();
+    }
+
+    @Test
+    void after_scripts_loaded_server_path_sends_runtime_sync_when_current_server_is_available() {
+        var machineId = MMCR.id("alloy_furnace");
+        var recipeId = MMCR.id("kubejs_after_scripts_sync_recipe");
+        var reload = new Object();
+        AtomicBoolean synced = new AtomicBoolean();
+        Plugin.setCurrentServerSyncForTesting(() -> {
+            synced.set(true);
+            return true;
+        });
+
+        Plugin.beginServerReload(reload, 0);
+        KubeJSContentReloadTransaction.active().registerStructure(structure(machineId));
+        KubeJSContentReloadTransaction.active().registerRecipe(new MachineRecipe(recipeId, machineId, 1, List.of(), List.of()));
+        Plugin.completeServerReload(reload, 0);
+
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(recipeId);
+        assertThat(synced).isTrue();
+    }
+
+    @Test
+    void runtime_content_server_bridge_clears_current_server_on_matching_stop_event() {
+        MinecraftServer server = (MinecraftServer) allocate(DedicatedServer.class);
+        AtomicInteger sends = new AtomicInteger();
+        RuntimeContentSync.setSenderForTesting(target -> sends.incrementAndGet());
+
+        RuntimeContentServerBridge.onServerAboutToStart(new ServerAboutToStartEvent(server));
+        RuntimeContentServerBridge.onServerStopped(new ServerStoppedEvent(server));
+
+        assertThat(RuntimeContentServerBridge.sendToCurrentServer()).isFalse();
+        assertThat(sends).hasValue(0);
     }
 
     @Test

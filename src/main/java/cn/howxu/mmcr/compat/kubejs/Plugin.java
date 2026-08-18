@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.internal.network.RuntimeContentServerBridge;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import dev.latvian.mods.kubejs.event.EventGroupWrapper;
 import dev.latvian.mods.kubejs.recipe.component.RecipeComponentTypeRegistry;
@@ -16,9 +17,11 @@ import net.neoforged.fml.loading.FMLLoader;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     private static final Map<Object, ServerReload> SERVER_RELOADS = new IdentityHashMap<>();
+    private static BooleanSupplier currentServerSync = RuntimeContentServerBridge::sendToCurrentServer;
 
     @Override
     public void beforeScriptsLoaded(ScriptManager manager) {
@@ -74,7 +77,7 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     }
 
     static void completeServerReload(Object manager, int errorCount) {
-        completeServerReload(manager, errorCount, (MinecraftServer) null);
+        completeServerReload(manager, errorCount, currentServerSync);
     }
 
     static void completeServerReload(Object manager, int errorCount, MinecraftServer server) {
@@ -85,6 +88,11 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
 
     static void completeServerReloadForTesting(Object manager, int errorCount, Runnable afterCommit) {
         completeServerReload(manager, errorCount, afterCommit);
+    }
+
+    private static void completeServerReload(Object manager, int errorCount, BooleanSupplier afterCommit) {
+        Runnable sync = afterCommit::getAsBoolean;
+        completeServerReload(manager, errorCount, sync);
     }
 
     private static void completeServerReload(Object manager, int errorCount, Runnable afterCommit) {
@@ -102,6 +110,22 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     static void abortServerReload(Object manager) {
         SERVER_RELOADS.remove(manager);
         KubeJSContentReloadTransaction.deactivate();
+    }
+
+    static void setCurrentServerForTesting(MinecraftServer server) {
+        currentServerSync = () -> {
+            if (server == null) return false;
+            RuntimeContentSync.sendToAll(server);
+            return true;
+        };
+    }
+
+    static void clearCurrentServerForTesting() {
+        currentServerSync = RuntimeContentServerBridge::sendToCurrentServer;
+    }
+
+    static void setCurrentServerSyncForTesting(BooleanSupplier sync) {
+        currentServerSync = sync;
     }
 
     @Override

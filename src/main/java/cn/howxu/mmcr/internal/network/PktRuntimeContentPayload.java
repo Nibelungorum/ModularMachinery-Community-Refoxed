@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.compat.jei.JeiRuntimeReloader;
+import cn.howxu.mmcr.internal.sync.JeiRuntimeReloadBridge;
 import cn.howxu.mmcr.internal.sync.MachineRecipeSyncCodec;
 import cn.howxu.mmcr.internal.sync.MachineStructureSyncCodec;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
@@ -66,7 +66,7 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
     public void handle(IPayloadContext context) {
         context.enqueueWork(() -> {
             snapshot.applyClient();
-            JeiRuntimeReloader.reloadIfAvailable(snapshot);
+            JeiRuntimeReloadBridge.reloadIfAvailable(snapshot);
         });
     }
 
