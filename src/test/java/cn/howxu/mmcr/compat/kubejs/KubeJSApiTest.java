@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
@@ -10,6 +11,7 @@ import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.network.chat.Component;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.Fluids;
@@ -164,6 +166,21 @@ class KubeJSApiTest {
         assertThat(definition.pattern().pattern().get(net.minecraft.core.BlockPos.ZERO)
                 .matches(Blocks.BRICKS.defaultBlockState())).isTrue();
         assertThat(definition.requirements().modifierReplacements()).isEmpty();
+    }
+
+    @Test
+    void block_array_can_bind_script_symbol_metadata_for_character_requirements() {
+        var replacement = api.singleBlockModifier("diamond_speedup",
+                new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK), List.of(), ItemStack.EMPTY);
+        var pattern = api.blockArray(
+                Map.of(BlockPos.ZERO, api.block("minecraft:blast_furnace")),
+                Map.of(BlockPos.ZERO, 'M'));
+
+        var requirements = MachineStructureRequirements.builder()
+                .modifier('M', replacement)
+                .build(pattern);
+
+        assertThat(requirements.modifierReplacements()).containsEntry('M', List.of(replacement));
     }
 
     @Test

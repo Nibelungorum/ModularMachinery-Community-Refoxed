@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 
@@ -17,6 +18,7 @@ import java.util.Collections;
  */
 public final class MachineStructureStage {
     private final int number;
+    private final Declaration.Kind kind;
     private final BlockArray pattern;
     private final PortRequirementSpec portRequirements;
     private final PortTierRequirementSpec portTierRequirements;
@@ -28,7 +30,7 @@ public final class MachineStructureStage {
     public MachineStructureStage(int number, BlockArray pattern, PortRequirementSpec portRequirements,
             PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
             MachineStructureRequirements requirements) {
-        this(number, pattern, portRequirements, portTierRequirements, dynamicPatterns,
+        this(number, Declaration.Kind.FULL, pattern, portRequirements, portTierRequirements, dynamicPatterns,
                 requirements, Map.of(), Map.of());
     }
 
@@ -36,19 +38,30 @@ public final class MachineStructureStage {
             PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
             MachineStructureRequirements requirements, Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
             Map<BlockPos, Identifier> levelSlots) {
-        return new MachineStructureStage(number, pattern, portRequirements, portTierRequirements, dynamicPatterns,
+        return withCompiledRequirements(number, Declaration.Kind.FULL, pattern, portRequirements, portTierRequirements,
+                dynamicPatterns, requirements, modifierReplacements, levelSlots);
+    }
+
+    static MachineStructureStage withCompiledRequirements(int number, Declaration.Kind kind, BlockArray pattern,
+            PortRequirementSpec portRequirements, PortTierRequirementSpec portTierRequirements,
+            List<DynamicPatternSpec> dynamicPatterns, MachineStructureRequirements requirements,
+            Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
+            Map<BlockPos, Identifier> levelSlots) {
+        return new MachineStructureStage(number, kind, pattern, portRequirements, portTierRequirements, dynamicPatterns,
                 requirements, modifierReplacements, levelSlots);
     }
 
-    private MachineStructureStage(int number, BlockArray pattern, PortRequirementSpec portRequirements,
+    private MachineStructureStage(int number, Declaration.Kind kind, BlockArray pattern, PortRequirementSpec portRequirements,
             PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
             MachineStructureRequirements requirements, Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
             Map<BlockPos, Identifier> levelSlots) {
         if (number < 1) throw new IllegalArgumentException("stage number must be positive");
+        Objects.requireNonNull(kind, "kind");
         Objects.requireNonNull(pattern, "pattern");
         Objects.requireNonNull(portRequirements, "portRequirements");
         Objects.requireNonNull(portTierRequirements, "portTierRequirements");
         this.number = number;
+        this.kind = kind;
         this.pattern = new BlockArray(pattern.pattern(), copyNestedMap(pattern.tagsByPosition()), pattern.symbolsByPosition());
         this.portRequirements = portRequirements;
         this.portTierRequirements = portTierRequirements;
@@ -62,6 +75,10 @@ public final class MachineStructureStage {
 
     public int number() {
         return number;
+    }
+
+    public Declaration.Kind kind() {
+        return kind;
     }
 
     public BlockArray pattern() {
@@ -97,6 +114,7 @@ public final class MachineStructureStage {
         if (this == obj) return true;
         if (!(obj instanceof MachineStructureStage other)) return false;
         return number == other.number
+                && kind == other.kind
                 && pattern.equals(other.pattern)
                 && portRequirements.equals(other.portRequirements)
                 && portTierRequirements.equals(other.portTierRequirements)
@@ -108,7 +126,7 @@ public final class MachineStructureStage {
 
     @Override
     public int hashCode() {
-        return Objects.hash(number, pattern, portRequirements, portTierRequirements, dynamicPatterns,
+        return Objects.hash(number, kind, pattern, portRequirements, portTierRequirements, dynamicPatterns,
                 requirements, modifierReplacements, levelSlots);
     }
 

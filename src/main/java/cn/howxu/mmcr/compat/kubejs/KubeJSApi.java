@@ -29,6 +29,7 @@ import com.google.gson.JsonElement;
 import com.mojang.serialization.JsonOps;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -87,6 +88,17 @@ public final class KubeJSApi {
     }
 
     public BlockArray blockArray(Map<BlockPos, BlockPredicate> blocks) { return new BlockArray(blocks); }
+
+    public BlockArray blockArray(Map<BlockPos, BlockPredicate> blocks, Map<BlockPos, ?> symbolsByPosition) {
+        Map<BlockPos, Character> symbols = new LinkedHashMap<>();
+        for (var entry : symbolsByPosition.entrySet()) {
+            Object value = entry.getValue();
+            if (value instanceof Character symbol) symbols.put(entry.getKey(), symbol);
+            else if (value instanceof String string && string.length() == 1) symbols.put(entry.getKey(), string.charAt(0));
+            else throw new IllegalArgumentException("Invalid block array symbol at " + entry.getKey() + ": " + value);
+        }
+        return new BlockArray(blocks, Map.of(), symbols);
+    }
 
     public PortRequirementSpec portRequirements(Map<String, Object> ranges) {
         var builder = PortRequirementSpec.builder();

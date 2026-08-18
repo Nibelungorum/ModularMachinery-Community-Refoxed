@@ -98,7 +98,7 @@ public final class DefaultMachines {
 
     private static MachineStructureDefinition structureOf(Machine machine) {
         return new MachineStructureDefinition(machine.registryName(), machine.structureStages().stream()
-                .map(stage -> new Declaration(Declaration.Kind.FULL, stage.pattern(), stage.portRequirements(),
+                .map(stage -> new Declaration(stage.kind(), stage.pattern(), stage.portRequirements(),
                         stage.portTierRequirements(), stage.dynamicPatterns(), stage.requirements()))
                 .toList());
     }

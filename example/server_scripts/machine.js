@@ -38,6 +38,7 @@ function parallelControllers() {
 function parallelSlots(base) { return api.anyOf(base, allPorts(), parallelControllers()) }
 function pattern(slices, keys, controller) {
   var entries = new LinkedHashMap()
+  var symbols = new LinkedHashMap()
   var centerHeight = slices[0].length
   var centerWidth = slices[0][0].length
   var controllerPos = null
@@ -53,20 +54,24 @@ function pattern(slices, keys, controller) {
         if (predicate === undefined) continue
         var pos = api.pos(column - Math.floor(centerWidth / 2), row - Math.floor(centerHeight / 2), z - Math.floor(slices.length / 2))
         entries.put(pos, predicate)
+        symbols.put(pos, symbol)
         if (symbol === controller) controllerPos = pos
       }
     }
   }
-  if (controllerPos === null || (controllerPos.x === 0 && controllerPos.y === 0 && controllerPos.z === 0)) return api.blockArray(entries)
+  if (controllerPos === null || (controllerPos.x === 0 && controllerPos.y === 0 && controllerPos.z === 0)) return api.blockArray(entries, symbols)
   var normalized = new LinkedHashMap()
+  var normalizedSymbols = new LinkedHashMap()
   var iterator = entries.entrySet().iterator()
   while (iterator.hasNext()) {
     var entry = iterator.next()
     var entryPos = entry.getKey()
     var entryPredicate = entry.getValue()
-    normalized.put(api.pos(entryPos.x - controllerPos.x, entryPos.y - controllerPos.y, entryPos.z - controllerPos.z), entryPredicate)
+    var normalizedPos = api.pos(entryPos.x - controllerPos.x, entryPos.y - controllerPos.y, entryPos.z - controllerPos.z)
+    normalized.put(normalizedPos, entryPredicate)
+    normalizedSymbols.put(normalizedPos, symbols.get(entryPos))
   }
-  return api.blockArray(normalized)
+  return api.blockArray(normalized, normalizedSymbols)
 }
 function full(path, array, tiers) {
   if (tiers === undefined) tiers = []

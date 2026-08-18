@@ -60,6 +60,18 @@ class MachineStructureFamilyTest {
     }
 
     @Test
+    void stagesRememberTheDeclarationKindThatCreatedThem() {
+        BlockArray base = array(Map.of(BlockPos.ZERO, controller(), new BlockPos(1, 0, 0), casing()));
+        BlockArray extension = array(Map.of(new BlockPos(2, 0, 0), casing()));
+
+        List<MachineStructureStage> stages = MachineStructureFamily.of(definition("stage_kind",
+                Declaration.full(base), Declaration.extension(extension))).stages();
+
+        assertThat(stages).extracting(MachineStructureStage::kind)
+                .containsExactly(Declaration.Kind.FULL, Declaration.Kind.EXTENSION);
+    }
+
+    @Test
     void extensionMergesEquivalentPredicatesAndTags() {
         BlockPos casingPos = new BlockPos(1, 0, 0);
         BlockArray base = array(Map.of(BlockPos.ZERO, controller(), casingPos, casing())).tagged(casingPos, "shell");

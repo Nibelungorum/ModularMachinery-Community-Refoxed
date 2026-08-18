@@ -70,4 +70,15 @@ class SingleBlockModifierReplacementTest {
         assertThat(first).isEqualTo(second);
         assertThat(first).hasSameHashCodeAs(second);
     }
+
+    @Test
+    void descriptive_stack_count_participates_in_equals_and_hash_code() {
+        var first = new SingleBlockModifierReplacement(
+                "speed", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), new ItemStack(Blocks.GOLD_BLOCK, 1));
+        var second = new SingleBlockModifierReplacement(
+                "speed", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), new ItemStack(Blocks.GOLD_BLOCK, 64));
+
+        assertThat(first).isNotEqualTo(second);
+        assertThat(first.hashCode()).isNotEqualTo(second.hashCode());
+    }
 }
