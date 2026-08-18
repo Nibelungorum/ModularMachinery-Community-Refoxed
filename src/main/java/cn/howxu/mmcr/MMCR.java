@@ -86,12 +86,12 @@ public class MMCR {
         NeoForge.EVENT_BUS.addListener((AddServerReloadListenersEvent event) -> MachineRecipeDataReloadListener.register(event));
         NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedInEvent event) -> {
             if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
-                cn.howxu.mmcr.internal.network.ControllerSpecSync.sendTo(player);
+                cn.howxu.mmcr.internal.network.RuntimeContentSync.sendTo(player);
             }
         });
         NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerChangedDimensionEvent event) -> {
             if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
-                cn.howxu.mmcr.internal.network.ControllerSpecSync.sendTo(player);
+                cn.howxu.mmcr.internal.network.RuntimeContentSync.sendTo(player);
             }
         });
         NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent ev) -> {

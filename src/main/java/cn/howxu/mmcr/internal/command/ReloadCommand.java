@@ -17,7 +17,7 @@ public final class ReloadCommand {
                         .requires(src -> src.permissions().hasPermission(net.minecraft.server.permissions.Permissions.COMMANDS_ADMIN))
                         .executes(ctx -> {
                             var result = DynamicContentReloadService.reload(candidate -> {});
-                            cn.howxu.mmcr.internal.network.ControllerSpecSync.sendToAll(ctx.getSource().getServer());
+                            cn.howxu.mmcr.internal.network.RuntimeContentSync.sendToAll(ctx.getSource().getServer());
                             ctx.getSource().sendSuccess(() -> Component.translatable("command.mmcr.reload.success",
                                     result.addedStructures().size(), result.updatedStructures().size(),
                                     result.removedStructures().size(), result.addedRecipes(),
