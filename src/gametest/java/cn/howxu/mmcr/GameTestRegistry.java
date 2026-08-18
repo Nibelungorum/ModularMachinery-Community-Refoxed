@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -94,11 +95,11 @@ public final class GameTestRegistry {
 
     public static void registerMachineStructures(DynamicContentReloadService.Candidate candidate) {
         candidate.registerStructure(new MachineStructureDefinition(MMCR.id("test_cube"), TestMachines.casingCubePattern(),
-                PortRequirementSpec.none(), java.util.List.of(), java.util.Map.of()));
+                PortRequirementSpec.none(), java.util.List.of(), MachineStructureRequirements.EMPTY));
         candidate.registerStructure(new MachineStructureDefinition(MMCR.id("controller_tick"), TestMachines.casingCubePattern(),
-                PortRequirementSpec.none(), java.util.List.of(), java.util.Map.of()));
+                PortRequirementSpec.none(), java.util.List.of(), MachineStructureRequirements.EMPTY));
         candidate.registerStructure(new MachineStructureDefinition(MMCR.id("iron_compressor"), TestMachines.ironCompressorPattern(),
-                PortRequirementSpec.none(), java.util.List.of(), java.util.Map.of()));
+                PortRequirementSpec.none(), java.util.List.of(), MachineStructureRequirements.EMPTY));
         candidate.registerStructure(new MachineStructureDefinition(MMCR.id("distillation_tower_test"), TestMachines.distillationTowerDeclarations()));
         candidate.registerStructure(new MachineStructureDefinition(MMCR.id("expandable_structure_stages"), TestMachines.expandableStageDeclarations()));
         candidate.registerStructure(new MachineStructureDefinition(MMCR.id("expandable_structure_vertical_roll"), TestMachines.expandableStageDeclarations()));

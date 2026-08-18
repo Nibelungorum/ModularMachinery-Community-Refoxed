@@ -2,6 +2,7 @@
 MMCREvents.server(function(event) {
   var api = event.api()
   var LinkedHashMap = Java.loadClass('java.util.LinkedHashMap')
+  var MachineStructureRequirements = Java.loadClass('cn.howxu.mmcr.api.machine.MachineStructureRequirements')
   var NS = 'mmcr_kubejs'
   function cloneId(path) { return NS + ':kubejs_' + path }
   function controllerBlock(path) { return api.block('mmcr:kubejs_' + path + '_controller') }
@@ -70,7 +71,7 @@ function pattern(slices, keys, controller) {
 function full(path, array, tiers) {
   if (tiers === undefined) tiers = []
   event.createStructure(cloneId(path))
-    .fullStructure(array, api.portRequirements({}), api.portTierRequirements(tiers), [], new LinkedHashMap(), new LinkedHashMap()).build()
+    .fullStructure(array, api.portRequirements({}), api.portTierRequirements(tiers), [], MachineStructureRequirements.EMPTY).build()
 }
 function json(value) {
   return JsonIO.parseRaw(JSON.stringify(value))
@@ -94,18 +95,13 @@ full('blast_furnace', pattern([
   C: controllerBlock('blast_furnace'), I: api.anyOf(itemIn, itemOut, fluidIn, fluidOut, energyIn, energyOut)
 }, 'C'), ['energy_input_hatch>=ludicrous', 'item_input_bus>=normal', 'item_output_bus>=tiny'])
 
-var alloyModifiers = new LinkedHashMap()
-var alloyModifierPositions = [api.pos(0, -1, -1), api.pos(0, 1, -1)]
-for (var alloyModifierIndex = 0; alloyModifierIndex < alloyModifierPositions.length; alloyModifierIndex++) {
-  var pos = alloyModifierPositions[alloyModifierIndex]
-  alloyModifiers.put(pos, [
-    api.singleBlockModifier('alloy_furnace_diamond_speedup', pos, api.block('minecraft:diamond_block'), [api.modifier('duration', 'input', 0.5, 'multiply', false)], '钻石块：配方时间折半', Item.of('minecraft:diamond_block')),
-    api.singleBlockModifier('alloy_furnace_gold_doubling', pos, api.block('minecraft:gold_block'), [api.modifier('item', 'output', 2, 'multiply', false)], '金块：产物数量翻倍', Item.of('minecraft:gold_block'))
-  ])
-}
+var alloyRequirements = MachineStructureRequirements.builder()
+  .modifier('M', api.singleBlockModifier('alloy_furnace_diamond_speedup', api.block('minecraft:diamond_block'), [api.modifier('duration', 'input', 0.5, 'multiply', false)], Item.of('minecraft:diamond_block')))
+  .modifier('M', api.singleBlockModifier('alloy_furnace_gold_doubling', api.block('minecraft:gold_block'), [api.modifier('item', 'output', 2, 'multiply', false)], Item.of('minecraft:gold_block')))
+  .build()
 event.createStructure(cloneId('alloy_furnace')).fullStructure(pattern([
   ['XXX', 'XIX', 'XXX'], ['XMX', 'I I', 'XMX'], ['XXX', 'XCX', 'XXX']
-], { X: api.block('minecraft:bricks'), I: api.anyOf(itemIn, itemOut, energyIn), M: api.block('minecraft:blast_furnace'), C: controllerBlock('alloy_furnace') }, 'C'), api.portRequirements({}), api.portTierRequirements([]), [], alloyModifiers, new LinkedHashMap()).build()
+], { X: api.block('minecraft:bricks'), I: api.anyOf(itemIn, itemOut, energyIn), M: api.block('minecraft:blast_furnace'), C: controllerBlock('alloy_furnace') }, 'C'), api.portRequirements({}), api.portTierRequirements([]), [], alloyRequirements).build()
 
 full('cracker', pattern([
   ['AAA', 'AAA', 'AAA'], ['XBX', 'B B', 'XBX'], ['XDX', 'D D', 'XDX'], ['XEX', 'ECE', 'XEX']
@@ -118,13 +114,8 @@ full('reactor', pattern([
 
 var thermalA = api.anyOf(api.block('minecraft:smooth_basalt'), itemIn, itemOut, energyIn, factory, parallelControllers())
 var thermalPattern = pattern([['AAA','XXX','XXX','AAA'], ['AAA','X X','X X','ADA'], ['ABA','XXX','XXX','AAA']], { X: api.anyOf(api.block('minecraft:copper_block'), api.block('minecraft:iron_block'), api.block('minecraft:gold_block'), api.block('minecraft:diamond_block')), A: thermalA, B: controllerBlock('thermal_smelting_furnace'), D: api.block('minecraft:reinforced_deepslate') }, 'B')
-var thermalLevels = new LinkedHashMap()
-var thermalSlices = [['AAA','XXX','XXX','AAA'], ['AAA','X X','X X','ADA'], ['ABA','XXX','XXX','AAA']]
-// Normalize each coil position against the centered pattern and controller B offset.
-for (var z = 0; z < thermalSlices.length; z++) for (var row = 0; row < 4; row++) for (var column = 0; column < 3; column++) {
-  if (thermalSlices[z][row][column] === 'X') thermalLevels.put(api.pos(column - 1, row - 2, z - 1), api.id('mmcr:thermal_smelting_coil'))
-}
-event.createStructure(cloneId('thermal_smelting_furnace')).fullStructure(thermalPattern, api.portRequirements({}), api.portTierRequirements(['item_input_bus>=tiny', 'item_output_bus>=tiny', 'energy_input_hatch>=tiny']), [], new LinkedHashMap(), thermalLevels).build()
+var thermalRequirements = MachineStructureRequirements.builder().levelSlot('X', api.id('mmcr:thermal_smelting_coil')).build()
+event.createStructure(cloneId('thermal_smelting_furnace')).fullStructure(thermalPattern, api.portRequirements({}), api.portTierRequirements(['item_input_bus>=tiny', 'item_output_bus>=tiny', 'energy_input_hatch>=tiny']), [], thermalRequirements).build()
 
 var purpurB = api.anyOf(api.block('minecraft:purpur_pillar'), itemIn, itemOut, energyIn, factory, smart, parallelControllers())
 full('purpur_furnace', pattern([
@@ -136,9 +127,9 @@ var towerC = api.anyOf(api.block('minecraft:deepslate_bricks'), api.block('mmcr:
 function tower(rows) { return pattern(rows, { X: api.block('minecraft:polished_blackstone'), A: towerA, B: api.block('minecraft:polished_blackstone_bricks'), C: towerC, D: api.block('minecraft:gilded_blackstone'), E: controllerBlock('distillation_tower') }, 'E') }
 var towerTiers = ['item_input_bus>=tiny', 'item_output_bus>=tiny', 'energy_input_hatch>=tiny']
 var towerBuilder = event.createStructure(cloneId('distillation_tower'))
-towerBuilder.fullStructure(tower([['  XXX  ','  AAA  ','       ','       '],[' XXXXX ',' B   B ','  ACA  ','       '],['XXXXXXX','A     A',' B   B ','  DDD  '],['XXXXXXX','A     A',' B   B ','  DDD  '],['XXXXXXX','A     A',' B   B ','  DDD  '],[' XXXXX ',' B   B ','  BBB  ','       '],['  XXX  ','  BEB  ','       ','       ']]), api.portRequirements({}), api.portTierRequirements(towerTiers), [], new LinkedHashMap(), new LinkedHashMap())
-towerBuilder.fullStructure(tower([['  XXX  ','  AAA  ','       ','       ','       '],[' XXXXX ',' B   B ','  ACA  ','  ACA  ','       '],['XXXXXXX','A     A',' B   B ',' B   B ','  DDD  '],['XXXXXXX','A     A',' B   B ',' B   B ','  DDD  '],['XXXXXXX','A     A',' B   B ',' B   B ','  DDD  '],[' XXXXX ',' B   B ','  BBB  ','  BBB  ','       '],['  XXX  ','  BEB  ','       ','       ','       ']]), api.portRequirements({}), api.portTierRequirements(towerTiers), [], new LinkedHashMap(), new LinkedHashMap())
-towerBuilder.fullStructure(tower([['  XXX  ','  AAA  ','       ','       ','       ','       '],[' XXXXX ',' B   B ','  ACA  ','  ACA  ','  ACA  ','       '],['XXXXXXX','A     A',' B   B ',' B   B ',' B   B ','  DDD  '],['XXXXXXX','A     A',' B   B ',' B   B ',' B   B ','  DDD  '],['XXXXXXX','A     A',' B   B ',' B   B ',' B   B ','  DDD  '],[' XXXXX ',' B   B ','  BBB  ','  BBB  ','  BBB  ','       '],['  XXX  ','  BEB  ','       ','       ','       ','       ']]), api.portRequirements({}), api.portTierRequirements(towerTiers), [], new LinkedHashMap(), new LinkedHashMap()).build()
+towerBuilder.fullStructure(tower([['  XXX  ','  AAA  ','       ','       '],[' XXXXX ',' B   B ','  ACA  ','       '],['XXXXXXX','A     A',' B   B ','  DDD  '],['XXXXXXX','A     A',' B   B ','  DDD  '],['XXXXXXX','A     A',' B   B ','  DDD  '],[' XXXXX ',' B   B ','  BBB  ','       '],['  XXX  ','  BEB  ','       ','       ']]), api.portRequirements({}), api.portTierRequirements(towerTiers), [], MachineStructureRequirements.EMPTY)
+towerBuilder.fullStructure(tower([['  XXX  ','  AAA  ','       ','       ','       '],[' XXXXX ',' B   B ','  ACA  ','  ACA  ','       '],['XXXXXXX','A     A',' B   B ',' B   B ','  DDD  '],['XXXXXXX','A     A',' B   B ',' B   B ','  DDD  '],['XXXXXXX','A     A',' B   B ',' B   B ','  DDD  '],[' XXXXX ',' B   B ','  BBB  ','  BBB  ','       '],['  XXX  ','  BEB  ','       ','       ','       ']]), api.portRequirements({}), api.portTierRequirements(towerTiers), [], MachineStructureRequirements.EMPTY)
+towerBuilder.fullStructure(tower([['  XXX  ','  AAA  ','       ','       ','       ','       '],[' XXXXX ',' B   B ','  ACA  ','  ACA  ','  ACA  ','       '],['XXXXXXX','A     A',' B   B ',' B   B ',' B   B ','  DDD  '],['XXXXXXX','A     A',' B   B ',' B   B ',' B   B ','  DDD  '],['XXXXXXX','A     A',' B   B ',' B   B ',' B   B ','  DDD  '],[' XXXXX ',' B   B ','  BBB  ','  BBB  ','  BBB  ','       '],['  XXX  ','  BEB  ','       ','       ','       ','       ']]), api.portRequirements({}), api.portTierRequirements(towerTiers), [], MachineStructureRequirements.EMPTY).build()
 
 var ecoA = api.anyOf(api.block('minecraft:resin_bricks'), allPorts())
 var ecoBuilder = event.createStructure(cloneId('eco_matrix'))
@@ -149,7 +140,7 @@ for (var ecoWidthIndex = 0; ecoWidthIndex < ecoWidths.length; ecoWidthIndex++) {
   var a = 'A'.repeat(width)
   var middle = 'A' + ' '.repeat(width - 2) + 'A'
   var controller = 'AB' + 'A'.repeat(width - 2)
-  ecoBuilder.fullStructure(pattern([[x, a, x], [x, middle, x], [x, controller, x]], { X: api.block('minecraft:sea_lantern'), A: ecoA, B: controllerBlock('eco_matrix') }, 'B'), api.portRequirements({}), api.portTierRequirements(['energy_input_hatch>=tiny']), [], new LinkedHashMap(), new LinkedHashMap())
+  ecoBuilder.fullStructure(pattern([[x, a, x], [x, middle, x], [x, controller, x]], { X: api.block('minecraft:sea_lantern'), A: ecoA, B: controllerBlock('eco_matrix') }, 'B'), api.portRequirements({}), api.portTierRequirements(['energy_input_hatch>=tiny']), [], MachineStructureRequirements.EMPTY)
 }
 ecoBuilder.build()
 

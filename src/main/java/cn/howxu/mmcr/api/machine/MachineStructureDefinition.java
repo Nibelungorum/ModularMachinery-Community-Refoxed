@@ -132,6 +132,23 @@ public record MachineStructureDefinition(Identifier machineId, List<Declaration>
             return requirements;
         }
 
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) return true;
+            if (!(obj instanceof Declaration other)) return false;
+            return kind == other.kind
+                    && pattern.equals(other.pattern)
+                    && Objects.equals(portRequirements, other.portRequirements)
+                    && Objects.equals(portTierRequirements, other.portTierRequirements)
+                    && dynamicPatterns.equals(other.dynamicPatterns)
+                    && requirements.equals(other.requirements);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(kind, pattern, portRequirements, portTierRequirements, dynamicPatterns, requirements);
+        }
+
         public static Declaration full(BlockArray pattern) {
             return new Declaration(Kind.FULL, pattern, PortRequirementSpec.none(), PortTierRequirementSpec.none(),
                     List.of(), MachineStructureRequirements.EMPTY);

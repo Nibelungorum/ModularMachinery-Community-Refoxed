@@ -92,6 +92,26 @@ public final class MachineStructureStage {
         return levelSlots;
     }
 
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (!(obj instanceof MachineStructureStage other)) return false;
+        return number == other.number
+                && pattern.equals(other.pattern)
+                && portRequirements.equals(other.portRequirements)
+                && portTierRequirements.equals(other.portTierRequirements)
+                && dynamicPatterns.equals(other.dynamicPatterns)
+                && requirements.equals(other.requirements)
+                && modifierReplacements.equals(other.modifierReplacements)
+                && levelSlots.equals(other.levelSlots);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(number, pattern, portRequirements, portTierRequirements, dynamicPatterns,
+                requirements, modifierReplacements, levelSlots);
+    }
+
     private static <T> Map<BlockPos, List<T>> copyNestedMap(Map<BlockPos, List<T>> source) {
         Map<BlockPos, List<T>> copy = new LinkedHashMap<>();
         source.forEach((position, values) -> copy.put(position, List.copyOf(values)));
