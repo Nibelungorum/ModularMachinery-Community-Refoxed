@@ -5,7 +5,7 @@ sourceSets.main.resources {
 }
 
 sourceSets.test {
-    resources.srcDirs('src/test/resources')
+    resources.setSrcDirs(['src/test/resources'])
 }
 
 tasks.withType(ProcessResources).configureEach {

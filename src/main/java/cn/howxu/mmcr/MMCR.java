@@ -9,6 +9,7 @@ import cn.howxu.mmcr.internal.command.BuildCommand;
 import cn.howxu.mmcr.internal.command.ExportCommand;
 import cn.howxu.mmcr.internal.command.ReloadCommand;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
+import cn.howxu.mmcr.internal.reload.MachineRecipeDataReloadListener;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.event.StructureDirtyEvents;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
@@ -40,6 +41,7 @@ import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
@@ -80,6 +82,7 @@ public class MMCR {
         NeoForge.EVENT_BUS.addListener(StructureDirtyEvents::onChunkLoaded);
         NeoForge.EVENT_BUS.addListener(SharedIoEvents::onLevelTick);
         NeoForge.EVENT_BUS.addListener(SharedIoEvents::onLevelUnload);
+        NeoForge.EVENT_BUS.addListener((AddServerReloadListenersEvent event) -> MachineRecipeDataReloadListener.register(event));
         NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedInEvent event) -> {
             if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
                 cn.howxu.mmcr.internal.network.ControllerSpecSync.sendTo(player);

@@ -1,0 +1,5 @@
+{
+  "type": "mmcr:machine_recipe",
+  "machine": "mmcr:alloy_furnace",
+  "tick_time": 20
+}
