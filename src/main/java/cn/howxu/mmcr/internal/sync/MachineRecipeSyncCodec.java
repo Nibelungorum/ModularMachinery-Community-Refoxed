@@ -262,10 +262,7 @@ public final class MachineRecipeSyncCodec {
     }
 
     private static JsonElement normalizeIngredient(JsonElement value) {
-        if (!value.isJsonPrimitive()) return value;
-        var array = new com.google.gson.JsonArray();
-        array.add(value);
-        return array;
+        return value;
     }
 
     private enum RequirementKind {

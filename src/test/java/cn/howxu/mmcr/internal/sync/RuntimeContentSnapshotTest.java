@@ -23,10 +23,13 @@ import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
 import cn.howxu.mmcr.test.TestBootstrap;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderSet;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.RegistryOps;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -38,6 +41,7 @@ import org.nibelungorum.DefaultMachineLevels;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Method;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -166,6 +170,21 @@ class RuntimeContentSnapshotTest {
             assertThat(item.stack().getItem()).isEqualTo(Items.GOLD_INGOT);
             assertThat(item.stack().getCount()).isEqualTo(4);
         });
+    }
+
+    @Test
+    void recipeSyncCodecNormalizesLegacyTagIngredientString() throws Exception {
+        Method normalize = MachineRecipeSyncCodec.class.getDeclaredMethod("normalizeIngredient", com.google.gson.JsonElement.class);
+        normalize.setAccessible(true);
+
+        var normalized = normalize.invoke(null, com.google.gson.JsonParser.parseString("\"#minecraft:planks\""));
+
+        assertThat(normalized).isInstanceOfSatisfying(com.google.gson.JsonPrimitive.class, primitive ->
+                assertThat(primitive.getAsString()).isEqualTo("#minecraft:planks"));
+        var ops = RegistryOps.create(com.mojang.serialization.JsonOps.INSTANCE, registries);
+        var encodedTag = Ingredient.CODEC.encodeStart(ops,
+                Ingredient.of(HolderSet.emptyNamed(BuiltInRegistries.ITEM, ItemTags.LOGS))).getOrThrow();
+        assertThat(encodedTag.getAsString()).isEqualTo("#minecraft:logs");
     }
 
     @Test
