@@ -116,8 +116,7 @@ jobs:
           environment: client | server
           game-versions: 26.1.2
           java: 25
-          # Configure these after creating the distribution projects.
-          # modrinth-id: <project-id>
-          # modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
-          # curseforge-id: <project-id>
-          # curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          modrinth-id: bUctkb7B
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          curseforge-id: 1654570
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
