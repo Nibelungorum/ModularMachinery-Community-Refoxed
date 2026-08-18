@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.MachineRecipeJson;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -339,9 +340,12 @@ public class MachineRecipeBuilderJS {
         }
         if (recipeRequirements != null) recipeRequirements.addAll(requirements);
 
-        return new MachineRecipe(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(recipeOutputs), List.copyOf(conditions), priority, maxThreads,
-                cancelIfPerTickFails, List.copyOf(fluidOutputs), recipeRequirements == null ? List.of() : List.copyOf(recipeRequirements), parallelized,
-                List.copyOf(levelRequirements), allowPartialOutputs, new LinkedHashSet<>(requiredHostIds), deriveRequirements);
+        return MachineRecipeJson.normalize(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(recipeOutputs),
+                List.copyOf(conditions), priority, maxThreads, cancelIfPerTickFails, List.copyOf(fluidOutputs),
+                recipeRequirements == null ? List.of() : List.copyOf(recipeRequirements), parallelized,
+                List.copyOf(levelRequirements), allowPartialOutputs, new LinkedHashSet<>(requiredHostIds),
+                deriveRequirements,
+                machine -> MachineRegistry.getMachine(machine) != null || MachineDefinitions.getRegistration(machine) != null);
     }
 
     public void build() {

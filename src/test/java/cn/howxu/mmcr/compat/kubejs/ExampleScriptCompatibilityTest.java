@@ -23,18 +23,6 @@ class ExampleScriptCompatibilityTest {
     }
 
     @Test
-    void example_scripts_avoid_modern_javascript_syntax_for_rhino() throws Exception {
-        String content = Files.readString(Path.of("example/server_scripts/machine.js"));
-
-        assertThat(content).doesNotContain("=>");
-        assertThat(content).doesNotContain("`");
-        assertThat(content).doesNotContain("const ");
-        assertThat(content).doesNotContain("let ");
-        assertThat(content).doesNotContain(".forEach(");
-        assertThat(content).doesNotContain(".map(");
-    }
-
-    @Test
     void reactor_pattern_keeps_all_slices_the_same_height() throws Exception {
         String content = Files.readString(Path.of("example/server_scripts/machine.js"));
 

@@ -15,6 +15,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.math.BigDecimal;
+import java.util.function.Predicate;
 
 /**
  * Parses the shared data pack and KubeJS machine recipe JSON contract.
@@ -28,13 +29,18 @@ public final class MachineRecipeJson {
     }
 
     public static MachineRecipe parse(Identifier id, JsonElement json, HolderLookup.Provider registries) {
+        return parse(id, json, registries, machineId -> MachineRegistry.getMachine(machineId) != null);
+    }
+
+    public static MachineRecipe parse(Identifier id, JsonElement json, HolderLookup.Provider registries,
+                                      Predicate<Identifier> machineExists) {
         if (id == null) throw new IllegalArgumentException("Recipe id must not be null");
         if (json == null || !json.isJsonObject()) fail(id, "$", "recipe must be an object", null);
         var object = json.getAsJsonObject();
         requireType(id, object);
 
         Identifier machineId = parseIdentifier(id, object, "machine");
-        if (MachineRegistry.getMachine(machineId) == null) fail(id, "machine", "unknown machine " + machineId, null);
+        if (!machineExists.test(machineId)) fail(id, "machine", "unknown machine " + machineId, null);
         int tickTime = intField(id, object, "tick_time", true, 0);
         if (tickTime < 1) fail(id, "tick_time", "must be >= 1");
 
@@ -55,22 +61,41 @@ public final class MachineRecipeJson {
         List<MachineRequirement> requirements = parseList(id, object, "requirements", MachineRequirement.CODEC, ops);
         if (!object.has("requirements")) requirements = List.of();
         List<LevelRequirement> levels = parseList(id, object, "level_requirements", LevelRequirement.CODEC, ops);
-        Set<Identifier> hosts = Set.copyOf(parseList(id, object, "required_host_ids", Identifier.CODEC, ops));
+        Set<Identifier> hosts = new java.util.LinkedHashSet<>(parseList(id, object, "required_host_ids", Identifier.CODEC, ops));
         int maxThreads = intField(id, object, "max_threads", false, 1);
         if (maxThreads < 0) fail(id, "max_threads", "must be >= 0");
 
-        if (object.has("requirements")) {
+        if (object.has("requirements") && !requirements.isEmpty()) {
             return new MachineRecipe(id, machineId, tickTime, inputs, outputs, modifiers,
                     intField(id, object, "priority", false, 0), maxThreads,
                     boolField(id, object, "cancelIfPerTickFails", false), fluidOutputs, requirements,
                     boolField(id, object, "parallelized", false), levels,
-                    boolField(id, object, "allow_partial_outputs", false), hosts);
+                    boolField(id, object, "allow_partial_outputs", false), hosts, false);
         }
         return new MachineRecipe(id, machineId, tickTime, inputs, outputs, modifiers,
                 intField(id, object, "priority", false, 0), maxThreads,
                 boolField(id, object, "cancelIfPerTickFails", false), fluidOutputs, Collections.emptyList(),
                 boolField(id, object, "parallelized", false), levels,
                 boolField(id, object, "allow_partial_outputs", false), hosts, true);
+    }
+
+    public static MachineRecipe normalize(Identifier id, Identifier machineId, int tickTime,
+                                          List<MachineIngredient> inputs, List<net.minecraft.world.item.ItemStack> outputs,
+                                          List<RecipeModifier> modifiers, int priority, int maxThreads,
+                                          boolean cancelIfPerTickFails, List<FluidStack> fluidOutputs,
+                                          List<MachineRequirement> requirements, boolean parallelized,
+                                          List<LevelRequirement> levels, boolean allowPartialOutputs,
+                                          Set<Identifier> hosts, boolean deriveRequirements,
+                                          Predicate<Identifier> machineExists) {
+        if (id == null) throw new IllegalArgumentException("Recipe id must not be null");
+        if (machineId == null || !machineExists.test(machineId)) {
+            throw new RecipeJsonException(id, "machine", "unknown machine " + machineId, null);
+        }
+        if (tickTime < 1) throw new RecipeJsonException(id, "tick_time", "must be >= 1", null);
+        if (maxThreads < 0) throw new RecipeJsonException(id, "max_threads", "must be >= 0", null);
+        return new MachineRecipe(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads,
+                cancelIfPerTickFails, fluidOutputs, requirements, parallelized, levels, allowPartialOutputs,
+                hosts, deriveRequirements);
     }
 
     private static void requireType(Identifier id, JsonObject object) {

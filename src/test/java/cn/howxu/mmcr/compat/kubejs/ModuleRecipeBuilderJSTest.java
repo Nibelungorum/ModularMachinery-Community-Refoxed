@@ -3,8 +3,12 @@ package cn.howxu.mmcr.compat.kubejs;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.MachineRecipeJson;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -17,6 +21,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonObject;
+import com.mojang.serialization.JsonOps;
+import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
@@ -42,6 +49,7 @@ class ModuleRecipeBuilderJSTest {
     @AfterEach
     void cleanup() {
         MachineDefinitions.clearForTesting();
+        MachineRegistry.clearForTesting();
         RecipeRegistry.clearForTesting();
     }
 
@@ -118,6 +126,51 @@ class ModuleRecipeBuilderJSTest {
         assertThat(recipe.doesCancelRecipeOnPerTickFailure()).isTrue();
         assertThat(recipe.allowPartialOutputs()).isTrue();
         assertThat(recipe.requiredHostIds()).containsExactly(Identifier.parse("mmcr:space_elevator"));
+    }
+
+    @Test
+    void create_object_matches_shared_json_parser_for_complete_recipe_values() {
+        Identifier machineId = MMCR.id("module_machine");
+        Identifier recipeId = MMCR.id("shared_parser_recipe");
+        MachineDefinitions.register(MachineRegistration.builder(machineId).build());
+        MachineRegistry.register(new DynamicMachine(machineId, "Module Machine", new BlockArray(java.util.Map.of())));
+        var input = new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2, null, 0.5F);
+        var output = new ItemStack(Items.DIAMOND, 1);
+        var builder = new MachineRecipeBuilderJS(recipeId)
+                .machine(machineId.toString())
+                .tickTime(20)
+                .inputs(List.of(input))
+                .outputs(List.of(output))
+                .energyPerTick(80)
+                .priority(7)
+                .maxThreads(3)
+                .parallelized()
+                .cancelIfPerTickFails(true)
+                .allowPartialOutputs()
+                .requiredHosts("mmcr:space_elevator")
+                .deriveRequirements(false)
+                .requirements(List.of(MachineRequirement.fromInput(input)));
+
+        MachineRecipe built = builder.createObject();
+        JsonObject json = new JsonObject();
+        json.addProperty("type", "mmcr:machine_recipe");
+        json.addProperty("machine", machineId.toString());
+        json.addProperty("tick_time", 20);
+        json.add("inputs", MachineIngredient.CODEC.listOf().encodeStart(JsonOps.INSTANCE, List.of(input)).getOrThrow());
+        json.addProperty("energy_per_tick", 80);
+        json.add("outputs", ItemStack.CODEC.listOf().encodeStart(JsonOps.INSTANCE, List.of(output)).getOrThrow());
+        json.addProperty("priority", 7);
+        json.addProperty("max_threads", 3);
+        json.addProperty("parallelized", true);
+        json.addProperty("cancelIfPerTickFails", true);
+        json.addProperty("allow_partial_outputs", true);
+        json.add("required_host_ids", Identifier.CODEC.listOf().encodeStart(JsonOps.INSTANCE,
+                List.of(Identifier.parse("mmcr:space_elevator"))).getOrThrow());
+        json.add("requirements", MachineRequirement.CODEC.listOf().encodeStart(JsonOps.INSTANCE,
+                List.of(MachineRequirement.fromInput(input))).getOrThrow());
+
+        MachineRecipe parsed = MachineRecipeJson.parse(recipeId, json, VanillaRegistries.createLookup());
+        assertThat(built).usingRecursiveComparison().isEqualTo(parsed);
     }
 
     @Test
