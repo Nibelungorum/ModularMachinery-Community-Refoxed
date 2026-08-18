@@ -22,6 +22,10 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.core.Direction;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.client.preview.StructurePreviewSchemaFactory;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
@@ -241,6 +245,60 @@ class JeiStructurePreviewWidgetTest {
 
         assertThat(tooltip.text().getFirst().getString())
                 .isEqualTo(new net.minecraft.world.item.ItemStack(Blocks.IRON_BLOCK).getHoverName().getString());
+    }
+
+    @Test
+    void structurePreviewShowsCandidatesForHoveredBlockWhenNothingIsSelected() {
+        RecordingPreviewWidget preview = new RecordingPreviewWidget();
+        preview.hover = hitAt(0, 0, 0);
+        RecordingTooltip tooltip = new RecordingTooltip();
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview,
+                schemaWithCandidate(Blocks.IRON_BLOCK.defaultBlockState()), 0, 0, 160, 92);
+
+        widget.getTooltip(tooltip, 6, 125);
+
+        assertThat(tooltip.text().getFirst().getString())
+                .isEqualTo(new net.minecraft.world.item.ItemStack(Items.IRON_INGOT).getHoverName().getString());
+    }
+
+    @Test
+    void displayedCandidatesAreResolvableRenderableItemStacks() {
+        RecordingPreviewWidget preview = new RecordingPreviewWidget();
+        preview.hover = hitAt(0, 0, 0);
+        StructurePreviewSchema schema = schemaWithCandidate(Blocks.IRON_BLOCK.defaultBlockState());
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, schema, 0, 0, 160, 92);
+
+        java.util.List<StructurePreviewSchema.Candidate> candidates = schema.previewCandidatesAt(BlockPos.ZERO);
+
+        assertThat(candidates).as("expected at least one candidate for IRON_BLOCK block").isNotEmpty();
+        candidates.forEach(candidate -> {
+            assertThat(candidate.stack().isEmpty())
+                    .as("candidate stack must not be empty so the JEI carousel can render it")
+                    .isFalse();
+            assertThat(candidate.stack().typeHolder().unwrapKey())
+                    .as("candidate stack must resolve to a registry holder so JEI can render and label it")
+                    .isPresent();
+        });
+    }
+
+    @Test
+    void factoryBuiltCandidatesAreResolvableRenderableItemStacks() {
+        BlockArray pattern = new BlockArray(Map.of(
+                BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+        DynamicMachine machine = new DynamicMachine(MMCR.id("widget_factory_candidates"), "machine.widget.factory.candidates", pattern);
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(machine);
+
+        java.util.List<StructurePreviewSchema.Candidate> candidates = schema.previewCandidatesAt(BlockPos.ZERO);
+
+        assertThat(candidates).as("factory must produce candidates for IRON_BLOCK block").isNotEmpty();
+        candidates.forEach(candidate -> {
+            assertThat(candidate.stack().isEmpty())
+                    .as("factory candidate stack must not be empty so the JEI carousel can render it")
+                    .isFalse();
+            assertThat(candidate.stack().typeHolder().unwrapKey())
+                    .as("factory candidate stack must resolve to a registry holder so JEI can render and label it")
+                    .isPresent();
+        });
     }
 
     @Test

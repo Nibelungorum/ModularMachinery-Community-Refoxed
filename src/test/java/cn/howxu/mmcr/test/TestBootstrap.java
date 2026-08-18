@@ -83,6 +83,7 @@ public final class TestBootstrap {
         addTestMachineSuppliers();
         MachineDefinitions.bootstrapBuiltins();
         Bootstrap.bootStrap();
+        bindAllVanillaItemComponents();
         bindController(MMCR.id("blast_furnace"));
         bindController(id("alloy_furnace"));
         bindController(id("cracker"));
@@ -322,6 +323,17 @@ public final class TestBootstrap {
             }
         }
         throw new NoSuchFieldException(name);
+    }
+
+    private static void bindAllVanillaItemComponents() {
+        for (Item item : BuiltInRegistries.ITEM) {
+            Holder.Reference<Item> holder = item.builtInRegistryHolder();
+            try {
+                holder.components();
+            } catch (NullPointerException ignored) {
+                holder.bindComponents(DataComponentMap.EMPTY);
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")

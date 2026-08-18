@@ -172,6 +172,11 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         }
     }
 
+    private Object candidateHit() {
+        Object selected = preview.selectedHit();
+        return selected == null ? preview.hoverHit() : selected;
+    }
+
     private List<ItemStack> displayedStacks(BlockPos position) {
         return displayedCandidates(position).stream().map(StructurePreviewSchema.Candidate::stack).toList();
     }
@@ -284,7 +289,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
             tooltip.add(Component.translatable("jei.mmcr.structure_preview." + keys[control]));
             return;
         }
-        if (schema == null || !(preview.selectedHit() instanceof BlockHitResult hit)) return;
+        if (schema == null || !(candidateHit() instanceof BlockHitResult hit)) return;
         List<StructurePreviewSchema.Candidate> candidates = displayedCandidates(hit.getBlockPos());
         int itemY = height + 33;
         int itemIndex = (int) (mouseX / 18);
