@@ -617,6 +617,11 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     }
 
     @Override
+    public boolean isSpecial() {
+        return true;
+    }
+
+    @Override
     public RecipeBookCategory recipeBookCategory() {
         return new RecipeBookCategory();
     }
