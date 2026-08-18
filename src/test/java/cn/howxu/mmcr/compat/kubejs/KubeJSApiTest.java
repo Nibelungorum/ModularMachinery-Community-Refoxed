@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -124,6 +125,22 @@ class KubeJSApiTest {
 
         assertThat(stack.getFluid()).isSameAs(Fluids.WATER);
         assertThat(stack.getAmount()).isEqualTo(250);
+    }
+
+    @Test
+    void single_block_modifier_factory_preserves_four_argument_value_state() {
+        var predicate = new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK);
+        var modifier = new RecipeModifier("duration", RecipeModifier.IOType.INPUT, 0.5F,
+                RecipeModifier.Operation.MULTIPLY, false);
+        var display = new ItemStack(Blocks.DIAMOND_BLOCK);
+
+        var replacement = api.singleBlockModifier("diamond_speedup", predicate, List.of(modifier), display);
+
+        assertThat(replacement.getModifierName()).isEqualTo("diamond_speedup");
+        assertThat(replacement.getReplacement()).isSameAs(predicate);
+        assertThat(replacement.getModifiers()).containsExactly(modifier);
+        assertThat(replacement.getDescriptiveStack()).isSameAs(display);
+        assertThat(replacement.getDescriptionLines()).isEmpty();
     }
 
     @Test

@@ -143,13 +143,6 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         return this;
     }
 
-    public MachineStructureBuilderJS addModifier(char symbol, SingleBlockModifierReplacement replacement) {
-        Objects.requireNonNull(replacement, "replacement");
-        requirements = appendModifier(requirements, symbol, replacement);
-        classMetadataChanged = true;
-        return this;
-    }
-
     @Override
     public MachineStructureDefinition createObject() {
         if (declarations.isEmpty()) {
@@ -185,22 +178,13 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         };
     }
 
-    private static MachineStructureRequirements appendModifier(
-            MachineStructureRequirements requirements, char symbol, SingleBlockModifierReplacement replacement) {
-        MachineStructureRequirements.Builder builder = MachineStructureRequirements.builder();
-        requirements.modifierReplacements().forEach((existingSymbol, replacements) ->
-                replacements.forEach(existing -> builder.modifier(existingSymbol, existing)));
-        requirements.levelSlots().forEach(builder::levelSlot);
-        return builder.modifier(symbol, replacement).build();
-    }
-
     private void applyPendingPatternMetadata() {
         if (!patternDeclaration || !classMetadataChanged || declarations.isEmpty()) return;
-            Declaration first = declarations.getFirst();
-            declarations.set(0, new Declaration(first.kind(), first.pattern(), portRequirements, portTierRequirements,
-                    dynamicPatterns, requirements, modifierReplacements, validateLevelSlots(levelSlots, first.pattern())));
-            classMetadataChanged = false;
-        }
+        Declaration first = declarations.getFirst();
+        declarations.set(0, new Declaration(first.kind(), first.pattern(), portRequirements, portTierRequirements,
+                dynamicPatterns, requirements, modifierReplacements, validateLevelSlots(levelSlots, first.pattern())));
+        classMetadataChanged = false;
+    }
 
     private static BlockPredicate levelPredicate(LevelSlot slot) {
         validateLevelType(slot.typeId());

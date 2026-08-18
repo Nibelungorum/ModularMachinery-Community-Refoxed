@@ -38,18 +38,12 @@ class MachineStructureBuilderJSTest {
 
     @Test
     void server_structure_builder_creates_structure_definition() {
-        var replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), ItemStack.EMPTY);
-
         var structure = new MachineStructureBuilderJS("mmcr:arc_furnace")
                 .pattern("_I", Map.of("I", Blocks.IRON_BLOCK))
-                .addModifier('I', replacement)
                 .createObject();
 
         assertThat(structure.machineId()).isEqualTo(MMCR.id("arc_furnace"));
         assertThat(structure.pattern().pattern()).containsKey(new BlockPos(1, 0, 0));
-        assertThat(structure.modifierReplacements().get(new BlockPos(1, 0, 0))).singleElement()
-                .extracting(SingleBlockModifierReplacement::getModifierName)
-                .isEqualTo("speed");
     }
 
     @Test
@@ -202,7 +196,6 @@ class MachineStructureBuilderJSTest {
         BlockArray full = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
         DynamicPatternSpec dynamic = new DynamicPatternSpec("length", new BlockArray(Map.of()), null,
                 1, 3, BlockPos.ZERO, new BlockPos(0, 0, 1), null);
-        var replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), ItemStack.EMPTY);
 
         var definition = new MachineStructureBuilderJS("test:full_then_metadata")
                 .fullStructure(full)
@@ -210,7 +203,6 @@ class MachineStructureBuilderJSTest {
                 .portTierRequirements(PortTierRequirementSpec.builder().anyItemInput().build())
                 .dynamicPattern(dynamic)
                 .levelSlot(BlockPos.ZERO, coilType.toString())
-                .addModifier('C', replacement)
                 .createObject();
 
         assertThat(definition.pattern()).isEqualTo(full);
@@ -218,7 +210,6 @@ class MachineStructureBuilderJSTest {
         assertThat(definition.portTierRequirements().requirements()).singleElement();
         assertThat(definition.dynamicPatterns()).containsExactly(dynamic);
         assertThat(definition.levelSlots()).containsEntry(BlockPos.ZERO, coilType);
-        assertThat(definition.modifierReplacements()).containsKey(BlockPos.ZERO);
     }
 
     @Test
