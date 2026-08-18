@@ -10,6 +10,8 @@ import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.Blocks;
@@ -97,7 +99,7 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
     }
 
     private static void addCandidate(net.minecraft.world.level.block.Block block, List<StructurePreviewSchema.Candidate> candidates, boolean modifier) {
-        ItemStack stack = new ItemStack(block);
+        ItemStack stack = new ItemStack(Holder.direct(block.asItem(), DataComponentMap.EMPTY));
         if (!stack.isEmpty() && candidates.stream().noneMatch(existing -> ItemStack.isSameItemSameComponents(existing.stack(), stack))) {
             candidates.add(new StructurePreviewSchema.Candidate(stack, modifier));
         }

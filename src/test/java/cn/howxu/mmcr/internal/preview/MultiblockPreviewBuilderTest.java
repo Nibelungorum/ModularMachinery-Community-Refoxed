@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.preview;
 
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.LevelStub;
@@ -9,6 +10,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
@@ -55,10 +57,19 @@ class MultiblockPreviewBuilderTest {
         var level = LevelStub.create(Map.of());
         var controller = new BlockPos(0, 64, 0);
         var basePosition = new BlockPos(1, 0, 0);
+        var modifierAlternatives = List.of(
+                modifierReplacement(Blocks.DIAMOND_BLOCK),
+                modifierReplacement(Blocks.GOLD_BLOCK));
+        var effectiveMatchingPredicate = new BlockPredicate.AnyOf(List.of(
+                modifierAlternatives.get(0).getReplacement(),
+                modifierAlternatives.get(1).getReplacement(),
+                new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE)));
         var pattern = new BlockArray(Map.of(basePosition, new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE)));
 
         var snapshot = MultiblockPreviewBuilder.build(level, controller, pattern, 8192);
 
+        assertEquals(Blocks.DIAMOND_BLOCK.defaultBlockState(),
+                MultiblockPreviewBuilder.previewState(effectiveMatchingPredicate).orElseThrow());
         assertEquals(Blocks.BLAST_FURNACE.defaultBlockState(), entriesByPosition(snapshot).get(basePosition));
     }
 
@@ -146,5 +157,10 @@ class MultiblockPreviewBuilderTest {
     private static Map<BlockPos, net.minecraft.world.level.block.state.BlockState> entriesByPosition(MultiblockPreviewSnapshot snapshot) {
         return snapshot.entries().stream().collect(java.util.stream.Collectors.toMap(
                 MultiblockPreviewSnapshot.Entry::relativePos, MultiblockPreviewSnapshot.Entry::state));
+    }
+
+    private static SingleBlockModifierReplacement modifierReplacement(net.minecraft.world.level.block.Block block) {
+        return new SingleBlockModifierReplacement(block.getDescriptionId(), new BlockPredicate.OfBlock(block),
+                List.of(), new ItemStack(block));
     }
 }

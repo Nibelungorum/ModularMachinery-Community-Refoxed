@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
@@ -207,19 +208,24 @@ class StructurePreviewSchemaFactoryTest {
     void factory_keeps_base_candidate_first_when_modifiers_have_higher_level_priority() {
         Identifier modifierLevels = MMCR.id("preview_modifier_priority");
         registerLevels(Map.of(modifierLevels, List.of(Blocks.IRON_BLOCK, Blocks.DIAMOND_BLOCK)));
-        BlockPos position = BlockPos.ZERO;
-        MachineStructureStage stage = new MachineStructureStage(1, new BlockArray(Map.of(
-                position, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))), PortRequirementSpec.none(),
-                PortTierRequirementSpec.none(), List.of(), Map.of(position, List.of(
-                modifierReplacement(position, Blocks.DIAMOND_BLOCK),
-                modifierReplacement(position, Blocks.GOLD_BLOCK))), Map.of());
+        BlockArray pattern = BlockArray.builder()
+                .pattern("H")
+                .set('H', new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE))
+                .build();
+        BlockPos position = pattern.pattern().keySet().iterator().next();
+        MachineStructureRequirements requirements = MachineStructureRequirements.builder()
+                .modifier('H', modifierReplacement(Blocks.DIAMOND_BLOCK))
+                .modifier('H', modifierReplacement(Blocks.GOLD_BLOCK))
+                .build(pattern);
+        MachineStructureStage stage = new MachineStructureStage(1, pattern, PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), requirements, Map.of(), Map.of());
 
         StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("modifier_priority_candidates"),
                 StructurePreviewVariantSelection.defaults());
 
-        assertThat(schema.stateAt(position)).isEqualTo(Blocks.IRON_BLOCK.defaultBlockState());
+        assertThat(schema.stateAt(position)).isEqualTo(Blocks.BLAST_FURNACE.defaultBlockState());
         assertThat(schema.candidatesAt(position)).extracting(ItemStack::getItem).containsExactly(
-                Blocks.IRON_BLOCK.asItem(), Blocks.DIAMOND_BLOCK.asItem(), Blocks.GOLD_BLOCK.asItem());
+                Blocks.BLAST_FURNACE.asItem(), Blocks.DIAMOND_BLOCK.asItem(), Blocks.GOLD_BLOCK.asItem());
         assertThat(schema.previewCandidatesAt(position)).extracting(StructurePreviewSchema.Candidate::modifier).containsExactly(
                 false, true, true);
     }
@@ -282,6 +288,10 @@ class StructurePreviewSchemaFactoryTest {
     }
 
     private static SingleBlockModifierReplacement modifierReplacement(BlockPos position, net.minecraft.world.level.block.Block block) {
+        return modifierReplacement(block);
+    }
+
+    private static SingleBlockModifierReplacement modifierReplacement(net.minecraft.world.level.block.Block block) {
         return new SingleBlockModifierReplacement(block.getDescriptionId(), new BlockPredicate.OfBlock(block),
                 List.of(), new ItemStack(block));
     }
