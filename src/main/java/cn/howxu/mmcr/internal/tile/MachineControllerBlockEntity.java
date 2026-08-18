@@ -841,6 +841,12 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         }
     }
 
+    @Override
+    public void preRemoveSideEffects(BlockPos pos, BlockState state) {
+        super.preRemoveSideEffects(pos, state);
+        if (level != null && !level.isClientSide()) notifyPreviewReceiversCleared();
+    }
+
     private void sendStructureMismatchDiagnostic(ServerPlayer player, StructureMatcher.Mismatch mismatch) {
         BlockPos pos = mismatch.worldPos();
         player.sendSystemMessage(Component.translatable(
