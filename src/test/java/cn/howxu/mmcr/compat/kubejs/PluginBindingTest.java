@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
@@ -22,6 +23,7 @@ import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -46,6 +48,7 @@ class PluginBindingTest {
 
     @AfterEach
     void clearRecipes() {
+        KubeJSContentReloadTransaction.clearPublishedForTesting();
         MachineStructureRegistry.clearForTesting();
         RecipeRegistry.clearForTesting();
     }
@@ -96,6 +99,94 @@ class PluginBindingTest {
         assertThatThrownBy(invalid::commit).isInstanceOf(IllegalStateException.class);
         assertThat(MachineStructureRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousStructures);
         assertThat(RecipeRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousRecipes);
+    }
+
+    @Test
+    void successful_kubejs_server_reload_replaces_previous_script_snapshot() {
+        var removedMachineId = MMCR.id("alloy_furnace");
+        var keptMachineId = MMCR.id("cracker");
+        var removedRecipeId = MMCR.id("kubejs_transaction_removed_recipe");
+        var keptRecipeId = MMCR.id("kubejs_transaction_kept_recipe");
+
+        var previous = new KubeJSContentReloadTransaction();
+        previous.registerStructure(structure(removedMachineId));
+        previous.registerStructure(structure(keptMachineId));
+        previous.registerRecipe(new MachineRecipe(removedRecipeId, removedMachineId, 1, List.of(), List.of()));
+        previous.commit();
+
+        var reload = new Object();
+        Plugin.beginServerReload(reload, 0);
+        KubeJSContentReloadTransaction.active().registerStructure(structure(keptMachineId));
+        KubeJSContentReloadTransaction.active().registerRecipe(new MachineRecipe(keptRecipeId, keptMachineId, 1, List.of(), List.of()));
+        Plugin.completeServerReload(reload, 0);
+
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsOnlyKeys(keptMachineId);
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsOnlyKeys(keptRecipeId);
+    }
+
+    @Test
+    void server_reload_removes_previous_script_ids_even_if_registry_republished_instances() {
+        var removedMachineId = MMCR.id("alloy_furnace");
+        var keptMachineId = MMCR.id("cracker");
+        var removedRecipeId = MMCR.id("kubejs_transaction_republished_removed_recipe");
+        var keptRecipeId = MMCR.id("kubejs_transaction_republished_kept_recipe");
+
+        var previous = new KubeJSContentReloadTransaction();
+        previous.registerStructure(structure(removedMachineId));
+        previous.registerRecipe(new MachineRecipe(removedRecipeId, removedMachineId, 1, List.of(), List.of()));
+        previous.commit();
+        MachineStructureRegistry.replaceDynamic(Map.of(removedMachineId, structure(removedMachineId)));
+        RecipeRegistry.replaceDynamic(Map.of(removedRecipeId,
+                new MachineRecipe(removedRecipeId, removedMachineId, 1, List.of(), List.of())));
+
+        var reload = new Object();
+        Plugin.beginServerReload(reload, 0);
+        KubeJSContentReloadTransaction.active().registerStructure(structure(keptMachineId));
+        KubeJSContentReloadTransaction.active().registerRecipe(new MachineRecipe(keptRecipeId, keptMachineId, 1, List.of(), List.of()));
+        Plugin.completeServerReload(reload, 0);
+
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsOnlyKeys(keptMachineId);
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsOnlyKeys(keptRecipeId);
+    }
+
+    @Test
+    void successful_empty_server_reload_removes_previous_script_snapshot() {
+        var machineId = MMCR.id("alloy_furnace");
+        var recipeId = MMCR.id("kubejs_transaction_empty_reload_removed_recipe");
+        var previous = new KubeJSContentReloadTransaction();
+        previous.registerStructure(structure(machineId));
+        previous.registerRecipe(new MachineRecipe(recipeId, machineId, 1, List.of(), List.of()));
+        previous.commit();
+
+        var reload = new Object();
+        Plugin.beginServerReload(reload, 0);
+        Plugin.completeServerReload(reload, 0);
+
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).doesNotContainKey(machineId);
+        assertThat(RecipeRegistry.dynamicSnapshot()).isEmpty();
+    }
+
+    @Test
+    void empty_server_reload_preserves_same_id_content_replaced_outside_script_snapshot() {
+        var machineId = MMCR.id("alloy_furnace");
+        var recipeId = MMCR.id("kubejs_transaction_external_takeover_recipe");
+        var previous = new KubeJSContentReloadTransaction();
+        previous.registerStructure(structure(machineId));
+        previous.registerRecipe(new MachineRecipe(recipeId, machineId, 1, List.of(), List.of()));
+        previous.commit();
+        var takeoverStructure = new MachineStructureDefinition(machineId,
+                new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK))),
+                PortRequirementSpec.none(), List.of(), Map.of());
+        MachineStructureRegistry.replaceDynamic(Map.of(machineId, takeoverStructure));
+        RecipeRegistry.replaceDynamic(Map.of(recipeId, new MachineRecipe(recipeId, machineId, 2, List.of(), List.of())));
+
+        var reload = new Object();
+        Plugin.beginServerReload(reload, 0);
+        Plugin.completeServerReload(reload, 0);
+
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsEntry(machineId, takeoverStructure);
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsOnlyKeys(recipeId);
+        assertThat(RecipeRegistry.getRecipe(recipeId).tickTime()).isEqualTo(2);
     }
 
     @Test
@@ -215,11 +306,9 @@ class PluginBindingTest {
     @Test
     void empty_server_reload_preserves_existing_dynamic_content() {
         var machineId = MMCR.id("alloy_furnace");
-        var recipeId = MMCR.id("kubejs_transaction_previous_recipe");
-        var previous = new KubeJSContentReloadTransaction();
-        previous.registerStructure(structure(machineId));
-        previous.registerRecipe(new MachineRecipe(recipeId, machineId, 1, List.of(), List.of()));
-        previous.commit();
+        var recipeId = MMCR.id("non_script_dynamic_recipe");
+        MachineStructureRegistry.replaceDynamic(Map.of(machineId, structure(machineId)));
+        RecipeRegistry.replaceDynamic(Map.of(recipeId, new MachineRecipe(recipeId, machineId, 1, List.of(), List.of())));
         var previousStructures = MachineStructureRegistry.dynamicSnapshot();
         var previousRecipes = RecipeRegistry.dynamicSnapshot();
 

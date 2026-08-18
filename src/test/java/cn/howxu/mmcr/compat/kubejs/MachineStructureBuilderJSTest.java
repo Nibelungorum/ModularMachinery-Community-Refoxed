@@ -143,6 +143,38 @@ class MachineStructureBuilderJSTest {
     }
 
     @Test
+    void full_structure_rejects_level_slot_outside_pattern() {
+        Identifier coilType = Identifier.parse("test:coil");
+        MachineLevelRegistry.beginRegistration();
+        MachineLevelRegistry.registerType(new LevelType(coilType, Component.literal("Coils")));
+        BlockArray full = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+
+        assertThatThrownBy(() -> new MachineStructureBuilderJS("test:bad_level_slot")
+                .fullStructure(full, PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(),
+                        Map.of(new BlockPos(0, 0, 1), coilType))
+                .createObject())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Level slot outside structure pattern")
+                .hasMessageContaining("BlockPos{x=0, y=0, z=1}");
+    }
+
+    @Test
+    void full_structure_rejects_class_level_slot_outside_pattern() {
+        Identifier coilType = Identifier.parse("test:coil");
+        MachineLevelRegistry.beginRegistration();
+        MachineLevelRegistry.registerType(new LevelType(coilType, Component.literal("Coils")));
+        BlockArray full = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+
+        assertThatThrownBy(() -> new MachineStructureBuilderJS("test:bad_class_level_slot")
+                .fullStructure(full)
+                .levelSlot(new BlockPos(0, 0, 1), coilType.toString())
+                .createObject())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Level slot outside structure pattern")
+                .hasMessageContaining("BlockPos{x=0, y=0, z=1}");
+    }
+
+    @Test
     void builder_applies_declaration_metadata_to_compatible_pattern() {
         Identifier coilType = Identifier.parse("test:coil");
         MachineLevelRegistry.beginRegistration();

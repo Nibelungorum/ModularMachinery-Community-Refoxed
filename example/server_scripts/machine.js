@@ -120,9 +120,9 @@ var thermalA = api.anyOf(api.block('minecraft:smooth_basalt'), itemIn, itemOut, 
 var thermalPattern = pattern([['AAA','XXX','XXX','AAA'], ['AAA','X X','X X','ADA'], ['ABA','XXX','XXX','AAA']], { X: api.anyOf(api.block('minecraft:copper_block'), api.block('minecraft:iron_block'), api.block('minecraft:gold_block'), api.block('minecraft:diamond_block')), A: thermalA, B: controllerBlock('thermal_smelting_furnace'), D: api.block('minecraft:reinforced_deepslate') }, 'B')
 var thermalLevels = new LinkedHashMap()
 var thermalSlices = [['AAA','XXX','XXX','AAA'], ['AAA','X X','X X','ADA'], ['ABA','XXX','XXX','AAA']]
-// Normalize each coil position relative to B at slice 2, row 2, column 1, as BlockArray.Builder does.
+// Normalize each coil position against the centered pattern and controller B offset.
 for (var z = 0; z < thermalSlices.length; z++) for (var row = 0; row < 4; row++) for (var column = 0; column < 3; column++) {
-  if (thermalSlices[z][row][column] === 'X') thermalLevels.put(api.pos(column - 1, row - 2, z - 2), api.id('mmcr:thermal_smelting_coil'))
+  if (thermalSlices[z][row][column] === 'X') thermalLevels.put(api.pos(column - 1, row - 2, z - 1), api.id('mmcr:thermal_smelting_coil'))
 }
 event.createStructure(cloneId('thermal_smelting_furnace')).fullStructure(thermalPattern, api.portRequirements({}), api.portTierRequirements(['item_input_bus>=tiny', 'item_output_bus>=tiny', 'energy_input_hatch>=tiny']), [], new LinkedHashMap(), thermalLevels).build()
 
@@ -219,7 +219,7 @@ ServerEvents.recipes(function(event) {
     }
     for (var deferredFluidOutputIndex = 0; deferredFluidOutputIndex < deferredFluidOutputs.length; deferredFluidOutputIndex++) {
       var deferredFluidOutput = deferredFluidOutputs[deferredFluidOutputIndex]
-      requirements.push({ type: 'fluid', io: 'output', stack: { fluid: deferredFluidOutput[0], amount: deferredFluidOutput[1] } })
+      requirements.push({ type: 'fluid', io: 'output', stack: { id: deferredFluidOutput[0], amount: deferredFluidOutput[1] } })
     }
     event.custom(recipeJson).id(cloneId(path))
   }
@@ -291,7 +291,12 @@ ServerEvents.recipes(function(event) {
     recipe(prefix + 'input_to_output', machine, 20, [], [{ id: 'minecraft:gold_ingot', count: 1, components: { 'minecraft:custom_name': { text: 'Output' } } }], { componentInputs: [['minecraft:diamond', 1, { 'minecraft:custom_name': { text: 'Input' } }]] })
     recipe(prefix + 'mixed_inputs', machine, 20, [item('minecraft:iron_ingot')], [{ id: 'minecraft:emerald', count: 1 }], { componentInputs: [['minecraft:diamond', 1, { 'minecraft:custom_name': { text: 'Named' } }]] })
     recipe(prefix + 'mixed_outputs', machine, 20, [item('minecraft:iron_ingot')], [{ id: 'minecraft:gold_ingot', count: 1, components: { 'minecraft:custom_name': { text: 'Named Output' } } }, { id: 'minecraft:emerald', count: 1 }])
-    recipe(prefix + 'chanced_outputs', machine, 20, [item('minecraft:iron_ingot')], [], { requirements: [api.itemInputRequirement('minecraft:apple', 1), api.itemOutputRequirement('minecraft:emerald', 1, 1), api.itemOutputRequirement('minecraft:diamond', 1, 0.5), api.fluidOutputRequirement('minecraft:lava', 250, 0.25)], deriveRequirements: false })
+    recipe(prefix + 'chanced_outputs', machine, 20, [item('minecraft:iron_ingot')], [], { requirements: [
+      { type: 'item', io: 'input', item: 'minecraft:apple', count: 1 },
+      { type: 'item', io: 'output', stack: { id: 'minecraft:emerald', count: 1 } },
+      { type: 'item', io: 'output', stack: { id: 'minecraft:diamond', count: 1 }, chance: 0.5 },
+      { type: 'fluid', io: 'output', stack: { id: 'minecraft:lava', amount: 250 }, chance: 0.25 }
+    ], deriveRequirements: false })
     recipe(prefix + 'complex', machine, 20, [item('minecraft:stick'), chance('minecraft:iron_nugget', 1, 0.5), chance('minecraft:gold_nugget', 1, 0.25)], [{ id: 'minecraft:emerald', count: 1 }, { id: 'minecraft:diamond', count: 1, chance: 0.5 }, { id: 'minecraft:redstone', count: 1, chance: 0.25 }])
   }
   recipe('blast_furnace_component_tag_input', 'blast_furnace', 20, [{ type: 'item', item: '#minecraft:logs', count: 1 }], [{ id: 'minecraft:charcoal', count: 1 }])

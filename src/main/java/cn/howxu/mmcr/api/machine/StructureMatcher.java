@@ -89,8 +89,11 @@ public final class StructureMatcher {
                         .thenComparingInt(entry -> entry.getKey().getZ()))
                 .toList()) {
             BlockPos worldPos = ctrlPos.offset(entry.getKey());
-            MachineLevel actual = MachineLevelRegistry.findLevel(level.getBlockState(worldPos))
-                    .orElseThrow(() -> new IllegalStateException("Level slot did not resolve: " + worldPos));
+            Optional<MachineLevel> actualLevel = MachineLevelRegistry.findLevel(level.getBlockState(worldPos));
+            if (actualLevel.isEmpty()) {
+                return new LevelResolution(Map.of(), new LevelMismatch(entry.getValue(), foundLevels.get(entry.getValue()), null, worldPos));
+            }
+            MachineLevel actual = actualLevel.get();
             MachineLevel expected = foundLevels.putIfAbsent(entry.getValue(), actual);
             if (expected != null && !expected.equals(actual)) {
                 return new LevelResolution(Map.of(), new LevelMismatch(entry.getValue(), expected, actual, worldPos));

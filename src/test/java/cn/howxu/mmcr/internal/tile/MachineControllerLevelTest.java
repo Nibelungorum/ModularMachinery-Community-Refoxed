@@ -81,6 +81,18 @@ class MachineControllerLevelTest {
     }
 
     @Test
+    void rejectsUnresolvedLevelSlotWithoutCrashing() throws Exception {
+        MachineControllerBlockEntity controller = controllerWithUnresolvedSlot();
+
+        assertThat(tryForm(controller)).isFalse();
+        assertThat(controller.getLastStructureError()).isInstanceOf(LevelMismatch.class);
+        LevelMismatch mismatch = (LevelMismatch) controller.getLastStructureError();
+        assertThat(mismatch.expected()).isEqualTo(copper);
+        assertThat(mismatch.actual()).isNull();
+        assertThat(mismatch.worldPos()).isEqualTo(controller.getBlockPos().offset(2, 0, 0));
+    }
+
+    @Test
     void defaultControllerSpecFormsHorizontallyAndRejectsVerticalFacing() throws Exception {
         MachineControllerBlockEntity controller = controllerWithPattern(MachineControllerSpec.defaultsFor(MACHINE_ID), Direction.SOUTH,
                 Map.of(new BlockPos(1, 0, 0), Blocks.IRON_BLOCK));
@@ -192,6 +204,22 @@ class MachineControllerLevelTest {
                 controllerPos.offset(1, 0, 0), first,
                 controllerPos.offset(2, 0, 0), second), List.of(controller));
         setField(BlockEntity.class, controller, "level", level);
+        return controller;
+    }
+
+    private MachineControllerBlockEntity controllerWithUnresolvedSlot() throws Exception {
+        MachineControllerBlockEntity controller = controllerWithSlots(Blocks.COPPER_BLOCK, Blocks.COPPER_BLOCK);
+        Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
+        pattern.put(new BlockPos(1, 0, 0), new BlockPredicate.AnyOf(List.of(copper.statePredicate(), kanthal.statePredicate())));
+        pattern.put(new BlockPos(2, 0, 0), new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK));
+        MachineStructureRegistry.replaceDynamic(Map.of(MACHINE_ID, new MachineStructureDefinition(
+                MACHINE_ID, new BlockArray(pattern), null, null, List.of(), Map.of(),
+                Map.of(new BlockPos(1, 0, 0), COIL_TYPE, new BlockPos(2, 0, 0), COIL_TYPE))));
+        BlockPos controllerPos = controller.getBlockPos();
+        setField(BlockEntity.class, controller, "level", LevelStub.create(Map.of(
+                controllerPos, testControllerBlock(),
+                controllerPos.offset(1, 0, 0), Blocks.COPPER_BLOCK,
+                controllerPos.offset(2, 0, 0), Blocks.GOLD_BLOCK), List.of(controller)));
         return controller;
     }
 

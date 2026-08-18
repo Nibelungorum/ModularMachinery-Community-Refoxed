@@ -92,8 +92,9 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
             PortTierRequirementSpec tiers, List<DynamicPatternSpec> dynamicPatterns,
             Map<BlockPos, List<SingleBlockModifierReplacement>> modifiers, Map<BlockPos, Identifier> levels) {
         applyPendingPatternMetadata();
-        declarations.add(new Declaration(Declaration.Kind.FULL, Objects.requireNonNull(pattern), ports, tiers,
-                dynamicPatterns, modifiers, validateLevelSlots(levels)));
+        BlockArray fullPattern = Objects.requireNonNull(pattern);
+        declarations.add(new Declaration(Declaration.Kind.FULL, fullPattern, ports, tiers,
+                dynamicPatterns, modifiers, validateLevelSlots(levels, fullPattern)));
         patternDeclaration = false;
         classMetadataChanged = false;
         return this;
@@ -108,8 +109,9 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
             Map<BlockPos, List<SingleBlockModifierReplacement>> modifiers, Map<BlockPos, Identifier> levels) {
         if (declarations.isEmpty()) throw new IllegalStateException("extension requires a full structure first");
         applyPendingPatternMetadata();
-        declarations.add(new Declaration(Declaration.Kind.EXTENSION, Objects.requireNonNull(pattern), ports, tiers,
-                dynamicPatterns, modifiers, validateLevelSlots(levels)));
+        BlockArray extensionPattern = Objects.requireNonNull(pattern);
+        declarations.add(new Declaration(Declaration.Kind.EXTENSION, extensionPattern, ports, tiers,
+                dynamicPatterns, modifiers, validateLevelSlots(levels, extensionPattern)));
         return this;
     }
 
@@ -149,14 +151,14 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     public MachineStructureDefinition createObject() {
         if (declarations.isEmpty()) {
             return new MachineStructureDefinition(id, pattern, portRequirements, portTierRequirements,
-                    dynamicPatterns, modifierReplacements, validateLevelSlots(levelSlots));
+                    dynamicPatterns, modifierReplacements, validateLevelSlots(levelSlots, pattern));
         }
         applyPendingPatternMetadata();
         if (!classMetadataChanged) return new MachineStructureDefinition(id, declarations);
         List<Declaration> result = new ArrayList<>(declarations);
         Declaration first = result.getFirst();
         result.set(0, new Declaration(first.kind(), first.pattern(), portRequirements, portTierRequirements,
-                dynamicPatterns, modifierReplacements, validateLevelSlots(levelSlots)));
+                dynamicPatterns, modifierReplacements, validateLevelSlots(levelSlots, first.pattern())));
         return new MachineStructureDefinition(id, result);
     }
 
@@ -183,7 +185,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         if (!patternDeclaration || !classMetadataChanged || declarations.isEmpty()) return;
         Declaration first = declarations.getFirst();
         declarations.set(0, new Declaration(first.kind(), first.pattern(), portRequirements, portTierRequirements,
-                dynamicPatterns, modifierReplacements, validateLevelSlots(levelSlots)));
+                dynamicPatterns, modifierReplacements, validateLevelSlots(levelSlots, first.pattern())));
         classMetadataChanged = false;
     }
 
@@ -200,6 +202,16 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         Map<BlockPos, Identifier> result = new LinkedHashMap<>();
         Objects.requireNonNull(levels, "levels").forEach((pos, typeId) ->
                 result.put(Objects.requireNonNull(pos, "level pos"), validateLevelType(typeId)));
+        return result;
+    }
+
+    private static Map<BlockPos, Identifier> validateLevelSlots(Map<BlockPos, Identifier> levels, BlockArray pattern) {
+        Map<BlockPos, Identifier> result = validateLevelSlots(levels);
+        for (BlockPos pos : result.keySet()) {
+            if (!pattern.pattern().containsKey(pos)) {
+                throw new IllegalArgumentException("Level slot outside structure pattern: " + pos);
+            }
+        }
         return result;
     }
 

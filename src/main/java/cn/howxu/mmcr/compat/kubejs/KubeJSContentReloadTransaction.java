@@ -18,6 +18,8 @@ import java.util.Map;
  */
 final class KubeJSContentReloadTransaction {
     private static final ThreadLocal<KubeJSContentReloadTransaction> ACTIVE = new ThreadLocal<>();
+    private static Map<Identifier, MachineStructureDefinition> publishedStructures = Map.of();
+    private static Map<Identifier, MachineRecipe> publishedRecipes = Map.of();
 
     private final Map<Identifier, MachineStructureDefinition> structures = new LinkedHashMap<>();
     private final Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>();
@@ -32,6 +34,11 @@ final class KubeJSContentReloadTransaction {
 
     static void deactivate() {
         ACTIVE.remove();
+    }
+
+    static void clearPublishedForTesting() {
+        publishedStructures = Map.of();
+        publishedRecipes = Map.of();
     }
 
     void registerStructure(MachineStructureDefinition structure) {
@@ -55,12 +62,26 @@ final class KubeJSContentReloadTransaction {
     void commit() {
         Map<Identifier, MachineStructureDefinition> mergedStructures = new LinkedHashMap<>(
                 MachineStructureRegistry.dynamicSnapshot());
+        removePublishedStructures(mergedStructures);
         mergedStructures.putAll(structures);
         Map<Identifier, MachineRecipe> mergedRecipes = new LinkedHashMap<>(RecipeRegistry.dynamicSnapshot());
+        removePublishedRecipes(mergedRecipes);
         mergedRecipes.putAll(recipes);
         validate(mergedStructures, mergedRecipes);
         MachineStructureRegistry.replaceDynamic(mergedStructures);
         RecipeRegistry.replaceDynamic(mergedRecipes);
+        publishedStructures = Map.copyOf(structures);
+        publishedRecipes = Map.copyOf(recipes);
+    }
+
+    private static void removePublishedStructures(Map<Identifier, MachineStructureDefinition> mergedStructures) {
+        publishedStructures.forEach((id, structure) -> mergedStructures.computeIfPresent(id,
+                (ignored, current) -> current.equals(structure) ? null : current));
+    }
+
+    private static void removePublishedRecipes(Map<Identifier, MachineRecipe> mergedRecipes) {
+        publishedRecipes.forEach((id, recipe) -> mergedRecipes.computeIfPresent(id,
+                (ignored, current) -> current.equals(recipe) ? null : current));
     }
 
     private void validate(Map<Identifier, MachineStructureDefinition> structures,

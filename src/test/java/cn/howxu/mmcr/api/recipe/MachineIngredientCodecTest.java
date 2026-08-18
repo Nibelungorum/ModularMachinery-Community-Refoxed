@@ -120,6 +120,8 @@ class MachineIngredientCodecTest {
         var requirement = new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new FluidStack(Fluids.WATER, 1000));
 
         var json = MachineRequirement.CODEC.encodeStart(jsonOps(), requirement).getOrThrow();
+        assertThat(json.getAsJsonObject().getAsJsonObject("stack").get("id").getAsString()).isEqualTo("minecraft:water");
+        assertThat(json.getAsJsonObject().getAsJsonObject("stack").has("fluid")).isFalse();
         var back = MachineRequirement.CODEC.parse(jsonOps(), json).getOrThrow();
 
         assertThat(back).isInstanceOfSatisfying(FluidRequirement.class, decoded -> {

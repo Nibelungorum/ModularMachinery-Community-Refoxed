@@ -74,7 +74,7 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     static void completeServerReload(Object manager, int errorCount) {
         ServerReload reload = SERVER_RELOADS.remove(manager);
         try {
-            if (reload != null && errorCount == reload.errorCount() && !reload.transaction().isEmpty()) {
+            if (reload != null && errorCount == reload.errorCount()) {
                 reload.transaction().commit();
             }
         } finally {
