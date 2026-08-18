@@ -142,6 +142,11 @@ public final class KubeJSApi {
         return new SingleBlockModifierReplacement(name, predicate, modifiers, display);
     }
 
+    public MachineStructureBuilderJS.PatternEntry patternEntry(BlockPredicate base,
+            List<SingleBlockModifierReplacement> modifiers) {
+        return new MachineStructureBuilderJS.PatternEntry(base, modifiers);
+    }
+
     public LevelRequirement levelRequirement(String typeId, String levelId) {
         Identifier type = Identifier.parse(typeId);
         Identifier level = Identifier.parse(levelId);

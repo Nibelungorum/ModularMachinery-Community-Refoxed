@@ -170,6 +170,33 @@ class StructureMatcherTest {
     }
 
     @Test
+    void character_bound_modifier_requirements_match_every_generated_position() {
+        BlockArray pattern = BlockArray.builder()
+                .pattern("MM")
+                .set('M', new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE))
+                .build();
+        var replacement = new SingleBlockModifierReplacement(
+                "speed", new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK), List.of(), ItemStack.EMPTY);
+        MachineStructureDefinition definition = new MachineStructureDefinition(
+                net.minecraft.resources.Identifier.fromNamespaceAndPath("mmcr", "matcher_key_replacement"),
+                List.of(new MachineStructureDefinition.Declaration(
+                        MachineStructureDefinition.Declaration.Kind.FULL,
+                        pattern,
+                        PortRequirementSpec.none(),
+                        PortTierRequirementSpec.none(),
+                        List.of(),
+                        MachineStructureRequirements.builder().modifier('M', replacement).build())));
+
+        assertThat(StructureMatcher.matchesRotated(pattern,
+                LevelStub.create(Map.of(new BlockPos(-1, 0, 0), Blocks.DIAMOND_BLOCK,
+                        BlockPos.ZERO, Blocks.DIAMOND_BLOCK)),
+                BlockPos.ZERO, definition.modifierReplacements())).isTrue();
+        assertThat(definition.modifierReplacements())
+                .containsEntry(new BlockPos(-1, 0, 0), List.of(replacement))
+                .containsEntry(BlockPos.ZERO, List.of(replacement));
+    }
+
+    @Test
     void staged_vertical_rotation_matches_non_default_roll_without_mutating_stage_pattern() {
         BlockPos controllerPos = new BlockPos(8, 64, 8);
         BlockPos rawPos = new BlockPos(1, 0, 0);

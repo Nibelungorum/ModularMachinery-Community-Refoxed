@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.machine;
 
 import net.minecraft.core.BlockPos;
 import org.jetbrains.annotations.Nullable;
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -131,6 +132,7 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
     public static final class Builder {
         private final LinkedHashMap<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
         private final Map<Character, BlockPredicate> symbols = new LinkedHashMap<>();
+        private final MachineStructureRequirements.Builder requirements = MachineStructureRequirements.builder();
         private List<List<String>> slices = List.of();
         private char controllerSymbol = 'C';
         private int width = -1;
@@ -171,6 +173,20 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
             }
             symbols.put(symbol, predicate);
             return this;
+        }
+
+        public Builder set(char symbol, BlockPredicate predicate, SingleBlockModifierReplacement... modifiers) {
+            set(symbol, predicate);
+            if (modifiers != null) {
+                for (SingleBlockModifierReplacement modifier : modifiers) {
+                    requirements.modifier(symbol, modifier);
+                }
+            }
+            return this;
+        }
+
+        public MachineStructureRequirements requirements() {
+            return requirements.build(build());
         }
 
         public Builder air(BlockPredicate airPredicate) {

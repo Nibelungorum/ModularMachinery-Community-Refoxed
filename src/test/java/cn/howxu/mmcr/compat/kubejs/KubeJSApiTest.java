@@ -144,6 +144,29 @@ class KubeJSApiTest {
     }
 
     @Test
+    void pattern_entry_factory_preserves_base_and_modifier_alternatives() {
+        var base = new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE);
+        var replacement = api.singleBlockModifier("diamond_speedup",
+                new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK), List.of(), ItemStack.EMPTY);
+
+        var entry = api.patternEntry(base, List.of(replacement));
+
+        assertThat(entry.base()).isSameAs(base);
+        assertThat(entry.modifiers()).containsExactly(replacement);
+    }
+
+    @Test
+    void pattern_accepts_plain_block_predicate_without_modifiers() {
+        var definition = new MachineStructureBuilderJS("test:plain_pattern_key")
+                .pattern("B", Map.of("B", api.block("minecraft:bricks")))
+                .createObject();
+
+        assertThat(definition.pattern().pattern().get(net.minecraft.core.BlockPos.ZERO)
+                .matches(Blocks.BRICKS.defaultBlockState())).isTrue();
+        assertThat(definition.requirements().modifierReplacements()).isEmpty();
+    }
+
+    @Test
     void api_is_documented_as_lower_camel_kubejs_binding() {
         assertThat(KubeJSApi.class.getDeclaredAnnotation(Deprecated.class)).isNull();
         assertThat(new KubeJSApi().pos(1, 2, 3)).isEqualTo(new net.minecraft.core.BlockPos(1, 2, 3));

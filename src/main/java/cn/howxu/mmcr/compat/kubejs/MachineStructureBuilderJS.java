@@ -19,7 +19,7 @@ import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -36,8 +36,6 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     public transient PortTierRequirementSpec portTierRequirements = PortTierRequirementSpec.none();
     public transient List<DynamicPatternSpec> dynamicPatterns = new ArrayList<>();
     public transient MachineStructureRequirements requirements = MachineStructureRequirements.EMPTY;
-    public transient Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements = new LinkedHashMap<>();
-    public transient Map<BlockPos, Identifier> levelSlots = new LinkedHashMap<>();
     private final List<Declaration> declarations = new ArrayList<>();
     private boolean patternDeclaration;
     private boolean classMetadataChanged;
@@ -53,6 +51,8 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     public MachineStructureBuilderJS pattern(String grid, Map<String, Object> keys) {
         var blocks = new HashMap<BlockPos, BlockPredicate>();
         var symbolsByPosition = new HashMap<BlockPos, Character>();
+        var requirementBuilder = MachineStructureRequirements.builder();
+        var requirementKeys = new HashSet<Character>();
         var rows = grid.trim().split("\\s+");
 
         for (int y = 0; y < rows.length; y++) {
@@ -72,50 +72,59 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
                 }
 
                 BlockPos pos = new BlockPos(x, y, 0);
-                blocks.put(pos, toPredicate(value));
+                PatternEntry entry = toPatternEntry(value);
+                blocks.put(pos, entry.base());
                 symbolsByPosition.put(pos, key);
-                if (value instanceof LevelSlot levelSlot) {
-                    levelSlots.put(pos, levelSlot.typeId());
+                if (requirementKeys.add(key)) {
+                    for (SingleBlockModifierReplacement modifier : entry.modifiers()) {
+                        requirementBuilder.modifier(key, modifier);
+                    }
+                    if (value instanceof LevelSlot levelSlot) {
+                        requirementBuilder.levelSlot(key, validateLevelType(levelSlot.typeId()));
+                    }
                 }
             }
         }
 
         pattern = new BlockArray(Map.copyOf(blocks), Map.of(), Map.copyOf(symbolsByPosition));
+        requirements = requirementBuilder.build(pattern);
         declarations.clear();
         patternDeclaration = true;
         declarations.add(new Declaration(Declaration.Kind.FULL, pattern, portRequirements,
-                portTierRequirements, dynamicPatterns, requirements, modifierReplacements, levelSlots));
+                portTierRequirements, dynamicPatterns, requirements));
         return this;
     }
 
     public MachineStructureBuilderJS fullStructure(BlockArray pattern) {
-        return fullStructure(pattern, PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of());
+        return fullStructure(pattern, PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(),
+                MachineStructureRequirements.EMPTY);
     }
 
     public MachineStructureBuilderJS fullStructure(BlockArray pattern, PortRequirementSpec ports,
             PortTierRequirementSpec tiers, List<DynamicPatternSpec> dynamicPatterns,
-            Map<BlockPos, List<SingleBlockModifierReplacement>> modifiers, Map<BlockPos, Identifier> levels) {
+            MachineStructureRequirements requirements) {
         applyPendingPatternMetadata();
         BlockArray fullPattern = Objects.requireNonNull(pattern);
         declarations.add(new Declaration(Declaration.Kind.FULL, fullPattern, ports, tiers,
-                dynamicPatterns, modifiers, validateLevelSlots(levels, fullPattern)));
+                dynamicPatterns, requirements));
         patternDeclaration = false;
         classMetadataChanged = false;
         return this;
     }
 
     public MachineStructureBuilderJS extension(BlockArray pattern) {
-        return extension(pattern, PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of());
+        return extension(pattern, PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(),
+                MachineStructureRequirements.EMPTY);
     }
 
     public MachineStructureBuilderJS extension(BlockArray pattern, PortRequirementSpec ports,
             PortTierRequirementSpec tiers, List<DynamicPatternSpec> dynamicPatterns,
-            Map<BlockPos, List<SingleBlockModifierReplacement>> modifiers, Map<BlockPos, Identifier> levels) {
+            MachineStructureRequirements requirements) {
         if (declarations.isEmpty()) throw new IllegalStateException("extension requires a full structure first");
         applyPendingPatternMetadata();
         BlockArray extensionPattern = Objects.requireNonNull(pattern);
         declarations.add(new Declaration(Declaration.Kind.EXTENSION, extensionPattern, ports, tiers,
-                dynamicPatterns, modifiers, validateLevelSlots(levels, extensionPattern)));
+                dynamicPatterns, requirements));
         return this;
     }
 
@@ -131,12 +140,6 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         return this;
     }
 
-    public MachineStructureBuilderJS levelSlot(BlockPos pos, String typeId) {
-        levelSlots.put(Objects.requireNonNull(pos, "pos"), validateLevelType(Identifier.parse(typeId)));
-        classMetadataChanged = true;
-        return this;
-    }
-
     public MachineStructureBuilderJS dynamicPattern(DynamicPatternSpec pattern) {
         dynamicPatterns.add(Objects.requireNonNull(pattern, "pattern"));
         classMetadataChanged = true;
@@ -148,14 +151,14 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         if (declarations.isEmpty()) {
             return new MachineStructureDefinition(id, List.of(new Declaration(Declaration.Kind.FULL, pattern,
                     portRequirements, portTierRequirements, dynamicPatterns, requirements,
-                    modifierReplacements, validateLevelSlots(levelSlots, pattern))));
+                    Map.of(), Map.of())));
         }
         applyPendingPatternMetadata();
         if (!classMetadataChanged) return new MachineStructureDefinition(id, declarations);
         List<Declaration> result = new ArrayList<>(declarations);
         Declaration first = result.getFirst();
         result.set(0, new Declaration(first.kind(), first.pattern(), portRequirements, portTierRequirements,
-                dynamicPatterns, requirements, modifierReplacements, validateLevelSlots(levelSlots, first.pattern())));
+                dynamicPatterns, requirements));
         return new MachineStructureDefinition(id, result);
     }
 
@@ -167,13 +170,15 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         transaction.registerStructure(createObject());
     }
 
-    private static BlockPredicate toPredicate(Object value) {
+    private static PatternEntry toPatternEntry(Object value) {
         return switch (value) {
-            case String blockId -> new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId)));
-            case Block block -> new BlockPredicate.OfBlock(block);
-            case BlockState state -> new BlockPredicate.OfBlockState(state);
-            case BlockPredicate predicate -> predicate;
-            case LevelSlot levelSlot -> levelPredicate(levelSlot);
+            case PatternEntry entry -> entry;
+            case String blockId -> new PatternEntry(
+                    new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId))), List.of());
+            case Block block -> new PatternEntry(new BlockPredicate.OfBlock(block), List.of());
+            case BlockState state -> new PatternEntry(new BlockPredicate.OfBlockState(state), List.of());
+            case BlockPredicate predicate -> new PatternEntry(predicate, List.of());
+            case LevelSlot levelSlot -> new PatternEntry(levelPredicate(levelSlot), List.of());
             default -> throw new IllegalArgumentException("Unknown pattern key value: " + value);
         };
     }
@@ -182,7 +187,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         if (!patternDeclaration || !classMetadataChanged || declarations.isEmpty()) return;
         Declaration first = declarations.getFirst();
         declarations.set(0, new Declaration(first.kind(), first.pattern(), portRequirements, portTierRequirements,
-                dynamicPatterns, requirements, modifierReplacements, validateLevelSlots(levelSlots, first.pattern())));
+                dynamicPatterns, requirements));
         classMetadataChanged = false;
     }
 
@@ -195,28 +200,24 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         return new BlockPredicate.AnyOf(levels.stream().map(level -> level.statePredicate()).toList());
     }
 
-    private static Map<BlockPos, Identifier> validateLevelSlots(Map<BlockPos, Identifier> levels) {
-        Map<BlockPos, Identifier> result = new LinkedHashMap<>();
-        Objects.requireNonNull(levels, "levels").forEach((pos, typeId) ->
-                result.put(Objects.requireNonNull(pos, "level pos"), validateLevelType(typeId)));
-        return result;
-    }
-
-    private static Map<BlockPos, Identifier> validateLevelSlots(Map<BlockPos, Identifier> levels, BlockArray pattern) {
-        Map<BlockPos, Identifier> result = validateLevelSlots(levels);
-        for (BlockPos pos : result.keySet()) {
-            if (!pattern.pattern().containsKey(pos)) {
-                throw new IllegalArgumentException("Level slot outside structure pattern: " + pos);
-            }
-        }
-        return result;
-    }
-
     private static Identifier validateLevelType(Identifier typeId) {
         Objects.requireNonNull(typeId, "typeId");
         if (MachineLevelRegistry.getType(typeId) == null) {
             throw new IllegalArgumentException("Unknown machine level type: " + typeId);
         }
         return typeId;
+    }
+
+    /**
+     * Character-key structure declaration value carrying a base predicate plus modifier alternatives.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    public record PatternEntry(BlockPredicate base, List<SingleBlockModifierReplacement> modifiers) {
+        public PatternEntry {
+            Objects.requireNonNull(base, "base");
+            modifiers = List.copyOf(modifiers == null ? List.of() : modifiers);
+            modifiers.forEach(modifier -> Objects.requireNonNull(modifier, "modifier"));
+        }
     }
 }
