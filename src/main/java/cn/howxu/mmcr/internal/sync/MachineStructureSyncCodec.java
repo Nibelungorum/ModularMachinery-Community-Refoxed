@@ -53,6 +53,7 @@ public final class MachineStructureSyncCodec {
 
     public static void encode(RegistryFriendlyByteBuf buf, MachineStructureDefinition value) {
         Identifier.STREAM_CODEC.encode(buf, value.machineId());
+        checkSize(value.declarations().size(), MAX_DECLARATIONS, "declaration");
         buf.writeVarInt(value.declarations().size());
         for (MachineStructureDefinition.Declaration declaration : value.declarations()) {
             writeDeclaration(buf, declaration);
@@ -93,11 +94,13 @@ public final class MachineStructureSyncCodec {
     }
 
     private static void writeBlockArray(RegistryFriendlyByteBuf buf, BlockArray value) {
+        checkSize(value.pattern().size(), MAX_BLOCKS, "block pattern");
         buf.writeVarInt(value.pattern().size());
         for (var entry : value.pattern().entrySet()) {
             buf.writeBlockPos(entry.getKey());
             writeBlockPredicate(buf, entry.getValue());
         }
+        checkSize(value.tagsByPosition().size(), MAX_TAGS, "block tag position");
         buf.writeVarInt(value.tagsByPosition().size());
         for (var entry : value.tagsByPosition().entrySet()) {
             buf.writeBlockPos(entry.getKey());
@@ -141,6 +144,7 @@ public final class MachineStructureSyncCodec {
             }
             case BlockPredicate.AnyOf anyOf -> {
                 buf.writeEnum(PredicateKind.ANY_OF);
+                checkSize(anyOf.children().size(), MAX_CHILD_PREDICATES, "child predicate");
                 buf.writeVarInt(anyOf.children().size());
                 for (BlockPredicate child : anyOf.children()) {
                     writeBlockPredicate(buf, child);
@@ -172,6 +176,7 @@ public final class MachineStructureSyncCodec {
 
     private static void writeBlockState(RegistryFriendlyByteBuf buf, BlockState state) {
         Identifier.STREAM_CODEC.encode(buf, BuiltInRegistries.BLOCK.getKey(state.getBlock()));
+        checkSize(state.getProperties().size(), 64, "block state property");
         buf.writeVarInt(state.getProperties().size());
         for (Property<?> property : state.getProperties()) {
             ByteBufCodecs.STRING_UTF8.encode(buf, property.getName());
@@ -202,6 +207,7 @@ public final class MachineStructureSyncCodec {
     }
 
     private static void writePortRequirements(RegistryFriendlyByteBuf buf, PortRequirementSpec value) {
+        checkSize(value.requirements().size(), MAX_PORT_REQUIREMENTS, "port requirement");
         buf.writeVarInt(value.requirements().size());
         for (var entry : value.requirements().entrySet()) {
             ByteBufCodecs.STRING_UTF8.encode(buf, entry.getKey());
@@ -226,6 +232,7 @@ public final class MachineStructureSyncCodec {
     }
 
     private static void writePortTierRequirements(RegistryFriendlyByteBuf buf, PortTierRequirementSpec value) {
+        checkSize(value.requirements().size(), MAX_TIER_REQUIREMENTS, "port tier requirement");
         buf.writeVarInt(value.requirements().size());
         for (PortTierRequirementSpec.Requirement requirement : value.requirements()) {
             buf.writeEnum(requirement.category());
@@ -247,6 +254,7 @@ public final class MachineStructureSyncCodec {
     }
 
     private static void writeDynamicPatterns(RegistryFriendlyByteBuf buf, List<DynamicPatternSpec> values) {
+        checkSize(values.size(), MAX_DYNAMIC_PATTERNS, "dynamic pattern");
         buf.writeVarInt(values.size());
         for (DynamicPatternSpec value : values) {
             ByteBufCodecs.STRING_UTF8.encode(buf, value.name());
@@ -257,6 +265,7 @@ public final class MachineStructureSyncCodec {
             buf.writeVarInt(value.maxSize());
             buf.writeBlockPos(value.offsetStart());
             buf.writeBlockPos(value.structureSizeOffset());
+            checkSize(value.allowedFaces().size(), MAX_FACES, "allowed face");
             buf.writeVarInt(value.allowedFaces().size());
             for (Direction face : value.allowedFaces()) {
                 buf.writeEnum(face);
@@ -290,9 +299,11 @@ public final class MachineStructureSyncCodec {
 
     private static void writeModifierReplacements(RegistryFriendlyByteBuf buf,
             Map<BlockPos, List<SingleBlockModifierReplacement>> values) {
+        checkSize(values.size(), MAX_REPLACEMENT_POSITIONS, "modifier replacement position");
         buf.writeVarInt(values.size());
         for (var entry : values.entrySet()) {
             buf.writeBlockPos(entry.getKey());
+            checkSize(entry.getValue().size(), MAX_REPLACEMENTS, "modifier replacement");
             buf.writeVarInt(entry.getValue().size());
             for (SingleBlockModifierReplacement replacement : entry.getValue()) {
                 writeReplacement(buf, replacement);
@@ -334,6 +345,7 @@ public final class MachineStructureSyncCodec {
     }
 
     private static void writeRecipeModifiers(RegistryFriendlyByteBuf buf, List<RecipeModifier> values) {
+        checkSize(values.size(), MAX_MODIFIERS, "recipe modifier");
         buf.writeVarInt(values.size());
         for (RecipeModifier value : values) {
             ByteBufCodecs.STRING_UTF8.encode(buf, value.getTarget());
@@ -356,6 +368,7 @@ public final class MachineStructureSyncCodec {
     }
 
     private static void writeLevelSlots(RegistryFriendlyByteBuf buf, Map<BlockPos, Identifier> values) {
+        checkSize(values.size(), MAX_LEVEL_SLOTS, "level slot");
         buf.writeVarInt(values.size());
         for (var entry : values.entrySet()) {
             buf.writeBlockPos(entry.getKey());
@@ -374,6 +387,7 @@ public final class MachineStructureSyncCodec {
     }
 
     private static void writeStringList(RegistryFriendlyByteBuf buf, List<String> values) {
+        checkSize(values.size(), MAX_TAGS, "string");
         buf.writeVarInt(values.size());
         for (String value : values) {
             ByteBufCodecs.STRING_UTF8.encode(buf, value);

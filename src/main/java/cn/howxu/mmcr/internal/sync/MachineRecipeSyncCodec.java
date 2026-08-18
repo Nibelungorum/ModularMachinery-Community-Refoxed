@@ -70,7 +70,7 @@ public final class MachineRecipeSyncCodec {
         boolean allowPartialOutputs = buf.readBoolean();
         Set<Identifier> hosts = readRequiredHosts(buf);
         return new MachineRecipe(id, machineId, tickTime, List.of(), List.of(), modifiers, priority, maxThreads,
-                cancelIfPerTickFails, List.of(), requirements, parallelized, levels, allowPartialOutputs, hosts, false);
+                cancelIfPerTickFails, List.of(), requirements, parallelized, levels, allowPartialOutputs, hosts);
     }
 
     private static void writeRequirements(RegistryFriendlyByteBuf buf, List<MachineRequirement> values) {
