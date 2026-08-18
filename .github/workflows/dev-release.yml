@@ -72,7 +72,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          previous_tag="$(git tag --merged HEAD --sort=-v:refname | awk '/^[0-9]+\.[0-9]+\.[0-9]+$/ { print; exit }')"
+          current_version="${{ steps.version.outputs.version }}"
+
+          previous_tag="$(
+            gh release list --limit 50 --json tagName --jq '.[].tagName' \
+              | grep -vFx "$current_version" \
+              | head -n1
+          )"
           if [ -n "$previous_tag" ]; then
             range="${previous_tag}..HEAD"
           else
