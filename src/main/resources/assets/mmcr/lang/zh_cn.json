@@ -251,7 +251,7 @@
   "jei.mmcr.machine_recipe.component_constraints": "需要特定数据组件",
   "jei.mmcr.machine_recipe.consume_chance": "消耗概率: %s",
   "jei.mmcr.machine_recipe.duration": "耗时: %s tick %s 秒",
-  "jei.mmcr.machine_recipe.energy_in": "能量输入: %s FE/t",
+  "jei.mmcr.machine_recipe.energy_in": "能量输入: %s FE/t (%s FE)",
   "jei.mmcr.machine_recipe.energy_out": "能量输出: %s FE/t",
   "jei.mmcr.machine_recipe.input_overflow": "其余材料: ",
   "jei.mmcr.machine_recipe.keep": "不消耗",

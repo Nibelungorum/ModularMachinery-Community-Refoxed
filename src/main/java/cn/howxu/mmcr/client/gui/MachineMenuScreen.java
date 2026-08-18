@@ -81,9 +81,9 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     static final int TANK_TITLE_OFFSET_Y = 3;
     static final int ITEM_BUS_TITLE_OFFSET_X = -4;
     static final int ITEM_BUS_TITLE_OFFSET_Y = -2;
-    static final int CONTROLLER_STATUS_OFFSET_Y = 12;
-    private static final float CONTROLLER_DETAIL_SCALE = 1.0F;
-    private static final int CONTROLLER_DETAIL_LINE_SPACING = 14;
+    static final int CONTROLLER_STATUS_OFFSET_Y = 10;
+    private static final float CONTROLLER_DETAIL_SCALE = 0.85F;
+    private static final int CONTROLLER_DETAIL_LINE_SPACING = 10;
     static final int STORAGE_TEXT_OFFSET_Y = 12;
     static final int HIDDEN_INVENTORY_LABEL_Y = -1000;
 
@@ -340,7 +340,16 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     @Override
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         if (shouldRenderTitle(menu instanceof FluidHatchMenu, menu instanceof EnergyHatchMenu, menu instanceof ItemBusMenu, autoIOPage)) {
-            graphics.text(font, title, titleLabelX, titleLabelY, titleColor(menu instanceof MachineControllerMenu), false);
+            if (menu instanceof MachineControllerMenu) {
+                float scale = controllerDetailScale();
+                graphics.pose().pushMatrix();
+                graphics.pose().scale(scale, scale);
+                graphics.text(font, title, (int) (titleLabelX / scale), (int) (titleLabelY / scale),
+                        titleColor(true), false);
+                graphics.pose().popMatrix();
+            } else {
+                graphics.text(font, title, titleLabelX, titleLabelY, titleColor(false), false);
+            }
         }
         if (menu instanceof MachineControllerMenu mc) renderControllerStatus(graphics, mc, 0, 0);
     }

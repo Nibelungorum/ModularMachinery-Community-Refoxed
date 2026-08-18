@@ -251,7 +251,7 @@
   "jei.mmcr.machine_recipe.component_constraints": "Additional component requirements apply",
   "jei.mmcr.machine_recipe.consume_chance": "Consume Chance: %s",
   "jei.mmcr.machine_recipe.duration": "Duration: %s t %s s",
-  "jei.mmcr.machine_recipe.energy_in": "Energy Input: %s FE/t",
+  "jei.mmcr.machine_recipe.energy_in": "Energy Input: %s FE/t (%s FE)",
   "jei.mmcr.machine_recipe.energy_out": "Energy Output: %s FE/t",
   "jei.mmcr.machine_recipe.input_overflow": "Additional Ingredients: ",
   "jei.mmcr.machine_recipe.keep": "Keep",

@@ -47,7 +47,9 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     static final int PROGRESS_THREAD_OVERLAY = 0x6600AA55;
     static final int SELECTED_THREAD_OVERLAY = 0x66A8D8FF;
     static final int LOCKED_THREAD_OVERLAY = 0x66FFD966;
-    private static final int DETAIL_LINE_SPACING = 14;
+    private static final int DETAIL_LINE_SPACING = 10;
+    private static final float DETAIL_TEXT_SCALE = 0.85F;
+    private static final float THREAD_TEXT_SCALE = 0.85F;
     private static final int RECIPE_LOCK_BUTTON_SIZE = 20;
     private static final int PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR = 82;
     private static final int RECIPE_LOCK_ENABLED_BG_COLOR = 0xFF66BB6A;
@@ -214,8 +216,10 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
                 graphics.fill(lockedOverlayX(elementX), lockedOverlayY(y),
                         lockedOverlayRight(elementX), lockedOverlayBottom(y), LOCKED_THREAD_OVERLAY);
             }
-            graphics.text(font, Component.translatable("gui.mmcr.factory.thread", thread.index()), leftPos + THREAD_ROW_X + 3, y + 3, 0xFF222222, false);
-            graphics.text(font, Component.translatable(thread.active() ? "gui.mmcr.controller.running" : "gui.mmcr.controller.idle"), leftPos + THREAD_ROW_X + 3, y + 15, 0xFF222222, false);
+            renderThreadText(graphics, Component.translatable("gui.mmcr.factory.thread", thread.index()),
+                    leftPos + THREAD_ROW_X + 3, y + 3);
+            renderThreadText(graphics, Component.translatable(thread.active() ? "gui.mmcr.controller.running" : "gui.mmcr.controller.idle"),
+                    leftPos + THREAD_ROW_X + 3, y + 15);
         }
         if (shouldRenderScrollbar(menu.threads().size())) {
             int scrollbarX = leftPos + SCROLLBAR_X;
@@ -226,6 +230,10 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
         FactoryRecipeScheduler.ThreadSnapshot selected = menu.selectedThread();
         int x = leftPos + 113;
         int y = topPos + 12;
+        graphics.pose().pushMatrix();
+        graphics.pose().scale(DETAIL_TEXT_SCALE, DETAIL_TEXT_SCALE);
+        x = (int) (x / DETAIL_TEXT_SCALE);
+        y = (int) (y / DETAIL_TEXT_SCALE);
         String machineName = menu.machineName().isEmpty() ? title.getString() : menu.machineName();
         graphics.text(font, Component.translatable(machineName).append(" #" + selected.index()), x, detailTitleY(y), MachineMenuScreen.CONTROLLER_TITLE_COLOR, true);
         int lineY = nextDetailY(y);
@@ -264,6 +272,15 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
             graphics.text(font, Component.translatable("gui.mmcr.controller.progress", percent + "%"), x, lineY,
                     MachineMenuScreen.PROGRESS_STATUS_COLOR, true);
         }
+        graphics.pose().popMatrix();
+    }
+
+    private void renderThreadText(GuiGraphicsExtractor graphics, Component text, int x, int y) {
+        graphics.pose().pushMatrix();
+        graphics.pose().translate(x, y);
+        graphics.pose().scale(THREAD_TEXT_SCALE, THREAD_TEXT_SCALE);
+        graphics.text(font, text, 0, 0, 0xFF222222, false);
+        graphics.pose().popMatrix();
     }
 
     @Override

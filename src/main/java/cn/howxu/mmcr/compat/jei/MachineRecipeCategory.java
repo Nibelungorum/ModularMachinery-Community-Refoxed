@@ -42,6 +42,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     private static final int FLUID_SLOT_CAPACITY = 1000;
     private static final int OVERFLOW_TEXT_OFFSET_X = 5;
+    private static final float TEXT_SCALE = 0.85F;
+    private static final int TEXT_LINE_SPACING = 8;
+    private static final float SMART_INTERFACE_TEXT_SCALE = 0.85F;
+    private static final int SMART_INTERFACE_LINE_SPACING = 8;
     static final int RECIPE_ARROW_X = 72;
     static final int RECIPE_ARROW_Y = 8;
     static final int ITEM_OVERLAY_X = 0;
@@ -114,48 +118,57 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     public void draw(MachineRecipeDisplay recipe, IRecipeSlotsView recipeSlotsView, GuiGraphicsExtractor guiGraphics, double mouseX, double mouseY) {
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
         long gameTime = Minecraft.getInstance().level == null ? 0L : Minecraft.getInstance().level.getGameTime();
+        guiGraphics.pose().pushMatrix();
+        guiGraphics.pose().scale(TEXT_SCALE, TEXT_SCALE);
+        int textX = (int) (layout.durationTextX() / TEXT_SCALE);
         Component hostRequirement = hostRequirementComponent(recipe, gameTime);
         if (!hostRequirement.getString().isEmpty()) {
-            guiGraphics.text(Minecraft.getInstance().font, hostRequirement,
-                    layout.durationTextX(), layout.hostRequirementTextY(), 0xFF404040, false);
+            guiGraphics.text(Minecraft.getInstance().font, hostRequirement, textX,
+                    (int) (layout.hostRequirementTextY() / TEXT_SCALE), 0xFF404040, false);
         }
         guiGraphics.text(Minecraft.getInstance().font,
                 Component.translatable("jei.mmcr.machine_recipe.duration", recipe.durationTicks(), seconds(recipe.durationTicks())),
-                layout.durationTextX(), layout.durationTextY(), 0xFF404040, false);
+                textX, (int) (layout.durationTextY() / TEXT_SCALE), 0xFF404040, false);
 
-        int y = layout.durationTextY() + 10;
+        int y = layout.durationTextY() + TEXT_LINE_SPACING;
         for (EnergyIngredient energy : recipe.energyInputs()) {
             guiGraphics.text(Minecraft.getInstance().font,
-                    Component.translatable("jei.mmcr.machine_recipe.energy_in", energy.fePerTick()),
-                    layout.durationTextX(), y, 0xFF404040, false);
-            y += 10;
+                    Component.translatable("jei.mmcr.machine_recipe.energy_in", energy.fePerTick(),
+                            (long) energy.fePerTick() * recipe.durationTicks()),
+                    textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
+            y += TEXT_LINE_SPACING;
         }
         for (EnergyIngredient energy : recipe.energyOutputs()) {
             guiGraphics.text(Minecraft.getInstance().font,
                     Component.translatable("jei.mmcr.machine_recipe.energy_out", energy.fePerTick()),
-                    layout.durationTextX(), y, 0xFF404040, false);
-            y += 10;
+                    textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
+            y += TEXT_LINE_SPACING;
         }
         for (LevelRequirement requirement : sortedLevelRequirements(recipe.recipe())) {
             guiGraphics.text(Minecraft.getInstance().font, levelRequirement(requirement, gameTime),
-                    layout.durationTextX(), y, 0xFF404040, false);
-            y += 10;
+                    textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
+            y += TEXT_LINE_SPACING;
         }
+        guiGraphics.pose().popMatrix();
+        guiGraphics.pose().pushMatrix();
+        guiGraphics.pose().scale(SMART_INTERFACE_TEXT_SCALE, SMART_INTERFACE_TEXT_SCALE);
+        textX = (int) (layout.durationTextX() / SMART_INTERFACE_TEXT_SCALE);
         for (MachineRecipeDisplay.SmartInterfaceDisplay smartInterface : recipe.smartInterfaceInputs()) {
             guiGraphics.text(Minecraft.getInstance().font, smartInterface.label(),
-                    layout.durationTextX(), y, 0xFF404040, false);
-            y += 10;
+                    textX, (int) (y / SMART_INTERFACE_TEXT_SCALE), 0xFF404040, false);
+            y += SMART_INTERFACE_LINE_SPACING;
         }
         for (MachineRecipeDisplay.SmartInterfaceDisplay smartInterface : recipe.smartInterfaceOutputs()) {
             guiGraphics.text(Minecraft.getInstance().font, smartInterface.label(),
-                    layout.durationTextX(), y, 0xFF404040, false);
-            y += 10;
+                    textX, (int) (y / SMART_INTERFACE_TEXT_SCALE), 0xFF404040, false);
+            y += SMART_INTERFACE_LINE_SPACING;
         }
         for (MachineRecipeDisplay.SmartInterfaceModifierDisplay modifier : recipe.smartInterfaceModifiers()) {
             guiGraphics.text(Minecraft.getInstance().font, Component.literal(modifier.label()),
-                    layout.durationTextX(), y, 0xFF404040, false);
-            y += 10;
+                    textX, (int) (y / SMART_INTERFACE_TEXT_SCALE), 0xFF404040, false);
+            y += SMART_INTERFACE_LINE_SPACING;
         }
+        guiGraphics.pose().popMatrix();
         drawOverflowSlot(layout.inputs().overflowSlot(), guiGraphics, slotBackground);
         drawOverflowSlot(layout.outputs().overflowSlot(), guiGraphics, slotBackground);
     }
@@ -388,19 +401,19 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private static java.util.Optional<Component> smartInterfaceTooltip(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
             double mouseX, double mouseY) {
         if (mouseX < layout.durationTextX()) return java.util.Optional.empty();
-        int y = layout.durationTextY() + 10 * (1 + recipe.energyInputs().size() + recipe.energyOutputs().size()
+        int y = layout.durationTextY() + TEXT_LINE_SPACING * (1 + recipe.energyInputs().size() + recipe.energyOutputs().size()
                 + sortedLevelRequirements(recipe.recipe()).size());
         for (MachineRecipeDisplay.SmartInterfaceDisplay smartInterface : recipe.smartInterfaceInputs()) {
-            if (mouseY >= y && mouseY < y + 10) return java.util.Optional.of(smartInterface.tooltip());
-            y += 10;
+            if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING) return java.util.Optional.of(smartInterface.tooltip());
+            y += TEXT_LINE_SPACING;
         }
         for (MachineRecipeDisplay.SmartInterfaceDisplay smartInterface : recipe.smartInterfaceOutputs()) {
-            if (mouseY >= y && mouseY < y + 10) return java.util.Optional.of(smartInterface.tooltip());
-            y += 10;
+            if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING) return java.util.Optional.of(smartInterface.tooltip());
+            y += TEXT_LINE_SPACING;
         }
         for (MachineRecipeDisplay.SmartInterfaceModifierDisplay modifier : recipe.smartInterfaceModifiers()) {
-            if (mouseY >= y && mouseY < y + 10) return java.util.Optional.of(modifier.tooltip());
-            y += 10;
+            if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING) return java.util.Optional.of(modifier.tooltip());
+            y += TEXT_LINE_SPACING;
         }
         return java.util.Optional.empty();
     }
