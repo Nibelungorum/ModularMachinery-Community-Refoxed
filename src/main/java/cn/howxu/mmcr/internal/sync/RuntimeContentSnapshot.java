@@ -30,4 +30,8 @@ public record RuntimeContentSnapshot(
     public static RuntimeContentSnapshot empty() {
         return new RuntimeContentSnapshot(Map.of(), Map.of(), Map.of(), Map.of(), 0L);
     }
+
+    public void applyClient() {
+        // Task 5 installs the runtime content into client registries.
+    }
 }

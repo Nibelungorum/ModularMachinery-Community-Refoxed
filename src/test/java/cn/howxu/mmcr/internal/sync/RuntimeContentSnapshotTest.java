@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
 import cn.howxu.mmcr.test.TestBootstrap;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
@@ -130,6 +131,26 @@ class RuntimeContentSnapshotTest {
     }
 
     @Test
+    void runtimeContentPayloadRoundTripsCompleteSnapshot() {
+        Identifier machineId = MMCR.id("alloy_furnace");
+        RuntimeContentSnapshot snapshot = new RuntimeContentSnapshot(
+                Map.of(machineId, structure(machineId)),
+                Map.of(MMCR.id("sync_recipe"), recipe(MMCR.id("sync_recipe"), machineId)),
+                Map.of(machineId, MachineControllerSpec.defaultsFor(machineId)),
+                Map.of(machineId, MachineAppearanceSpec.defaults()),
+                11L);
+        PktRuntimeContentPayload payload = new PktRuntimeContentPayload(snapshot);
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+
+        PktRuntimeContentPayload.STREAM_CODEC.encode(buf, payload);
+        PktRuntimeContentPayload decoded = PktRuntimeContentPayload.STREAM_CODEC.decode(buf);
+
+        assertThat(decoded.snapshot().structures()).containsOnlyKeys(machineId);
+        assertThat(decoded.snapshot().recipes()).containsOnlyKeys(MMCR.id("sync_recipe"));
+        assertThat(decoded.snapshot().recipeVersion()).isEqualTo(11L);
+    }
+
+    @Test
     void structureSyncCodecRejectsOversizedDeclarationCountOnEncode() {
         List<MachineStructureDefinition.Declaration> declarations = java.util.Collections.nCopies(1025,
                 structure(MMCR.id("alloy_furnace")).declarations().getFirst());
@@ -157,5 +178,14 @@ class RuntimeContentSnapshotTest {
         return new MachineStructureDefinition(id, blockArray, portRequirements,
                 cn.howxu.mmcr.api.machine.PortTierRequirementSpec.none(), List.of(), Map.of(), Map.of(
                 BlockPos.ZERO.east(), MMCR.id("coil")));
+    }
+
+    private static MachineRecipe recipe(Identifier id, Identifier machineId) {
+        return new MachineRecipe(
+                id, machineId, 40,
+                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
+                List.of(new ItemStack(Items.GOLD_INGOT, 4)),
+                List.of(), 0, 1, true, List.of(), List.of(), false,
+                List.of(), true, Set.of());
     }
 }

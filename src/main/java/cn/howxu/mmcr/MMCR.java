@@ -22,6 +22,7 @@ import cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockPreviewPayload;
 import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
 import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
+import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
 import cn.howxu.mmcr.internal.network.PktSmartInterfaceUpdatePayload;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -115,6 +116,10 @@ public class MMCR {
                             PktMachineAppearancePayload.TYPE,
                             PktMachineAppearancePayload.STREAM_CODEC,
                             PktMachineAppearancePayload::handle)
+                    .playToClient(
+                            PktRuntimeContentPayload.TYPE,
+                            PktRuntimeContentPayload.STREAM_CODEC,
+                            PktRuntimeContentPayload::handle)
                     .playToClient(
                             PktMultiblockMismatchHighlightPayload.TYPE,
                             PktMultiblockMismatchHighlightPayload.STREAM_CODEC,
