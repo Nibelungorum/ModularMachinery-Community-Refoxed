@@ -16,7 +16,6 @@ import net.neoforged.fml.loading.FMLLoader;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
-import java.util.function.Consumer;
 
 public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     private static final Map<Object, ServerReload> SERVER_RELOADS = new IdentityHashMap<>();
@@ -79,17 +78,21 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     }
 
     static void completeServerReload(Object manager, int errorCount, MinecraftServer server) {
-        completeServerReload(manager, errorCount, ignored -> {
+        completeServerReload(manager, errorCount, () -> {
             if (server != null) RuntimeContentSync.sendToAll(server);
         });
     }
 
-    static void completeServerReload(Object manager, int errorCount, Consumer<MinecraftServer> sync) {
+    static void completeServerReloadForTesting(Object manager, int errorCount, Runnable afterCommit) {
+        completeServerReload(manager, errorCount, afterCommit);
+    }
+
+    private static void completeServerReload(Object manager, int errorCount, Runnable afterCommit) {
         ServerReload reload = SERVER_RELOADS.remove(manager);
         try {
             if (reload != null && errorCount == reload.errorCount()) {
                 reload.transaction().commit();
-                sync.accept(null);
+                afterCommit.run();
             }
         } finally {
             KubeJSContentReloadTransaction.deactivate();

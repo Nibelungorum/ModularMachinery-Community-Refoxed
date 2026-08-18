@@ -8,12 +8,14 @@ import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.permissions.PermissionSet;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
@@ -23,6 +25,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -35,6 +39,7 @@ class ReloadCommandTest {
 
     @AfterEach
     void cleanup() {
+        RuntimeContentSync.resetSenderForTesting();
         MachineDefinitions.clearForTesting();
         MachineRegistry.clearForTesting();
         MachineStructureRegistry.clearForTesting();
@@ -48,10 +53,18 @@ class ReloadCommandTest {
         DynamicContentReloadService.reload(candidate -> candidate.registerStructure(structure(removed)));
         CommandDispatcher<CommandSourceStack> dispatcher = new CommandDispatcher<>();
         ReloadCommand.register(dispatcher);
+        AtomicBoolean syncCalled = new AtomicBoolean();
+        AtomicReference<MinecraftServer> syncedServer = new AtomicReference<>();
+        RuntimeContentSync.setSenderForTesting(server -> {
+            syncCalled.set(true);
+            syncedServer.set(server);
+        });
 
         int result = dispatcher.execute("mmcr reload", source());
 
         assertThat(result).isEqualTo(1);
+        assertThat(syncCalled).isTrue();
+        assertThat(syncedServer).hasValue(null);
     }
 
     private CommandSourceStack source() {
@@ -82,4 +95,5 @@ class ReloadCommandTest {
     private static MachineStructureDefinition structure(Identifier id) {
         return new MachineStructureDefinition(id, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(), Map.of());
     }
+
 }

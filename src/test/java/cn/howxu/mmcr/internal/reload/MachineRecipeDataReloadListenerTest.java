@@ -16,7 +16,7 @@ import java.io.InputStream;
 import java.io.ByteArrayInputStream;
 import java.lang.reflect.Proxy;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -81,20 +81,19 @@ class MachineRecipeDataReloadListenerTest {
     }
 
     @Test
-    void applyingSnapshotWithServerSyncRunsSyncAfterPublishingDataPackLayer() {
+    void serverReloadHookAppliesSnapshotAndRunsSyncAfterPublishingDataPackLayer() {
         var id = Identifier.parse("mmcr_test:published_sync_recipe");
         var recipe = new MachineRecipe(id, Identifier.parse("mmcr:alloy_furnace"), 1,
                 java.util.List.of(), java.util.List.of());
         var listener = new MachineRecipeDataReloadListener(registries);
-        AtomicInteger syncs = new AtomicInteger();
+        AtomicBoolean synced = new AtomicBoolean();
 
-        listener.applySnapshot(Map.of(id, recipe), server -> {
+        listener.applySnapshotFromServerReloadHook(Map.of(id, recipe), () -> {
             assertThat(RecipeRegistry.getRecipe(id)).isSameAs(recipe);
-            assertThat(server).isNull();
-            syncs.incrementAndGet();
+            synced.set(true);
         });
 
-        assertThat(syncs).hasValue(1);
+        assertThat(synced).isTrue();
         RecipeRegistry.replaceDataPack(Map.of());
     }
 

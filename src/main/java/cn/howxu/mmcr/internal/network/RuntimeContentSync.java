@@ -7,12 +7,16 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.PacketDistributor;
 
+import java.util.function.Consumer;
+
 /**
  * Builds and sends server-authoritative runtime content snapshots.
  *
  * @author howxu <dev@howxu.cn>
  */
 public final class RuntimeContentSync {
+    private static Consumer<MinecraftServer> sender = RuntimeContentSync::sendToAllPlayers;
+
     private RuntimeContentSync() {
     }
 
@@ -30,9 +34,21 @@ public final class RuntimeContentSync {
     }
 
     public static void sendToAll(MinecraftServer server) {
+        sender.accept(server);
+    }
+
+    private static void sendToAllPlayers(MinecraftServer server) {
         if (server == null) return;
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             sendTo(player);
         }
+    }
+
+    public static void setSenderForTesting(Consumer<MinecraftServer> sender) {
+        RuntimeContentSync.sender = java.util.Objects.requireNonNull(sender);
+    }
+
+    public static void resetSenderForTesting() {
+        sender = RuntimeContentSync::sendToAllPlayers;
     }
 }
