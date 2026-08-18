@@ -53,6 +53,34 @@ class RecipeRegistryTest {
         assertThat(RecipeRegistry.registryVersion()).isGreaterThan(registryVersion);
     }
 
+    @Test
+    void dataPackRecipeOverridesStaticRecipeAndKeepsStaticSnapshot() {
+        var id = Identifier.parse("mmcr:layered_recipe");
+        var staticRecipe = recipe("mmcr:layered_recipe", "mmcr:static_machine");
+        var dataPackRecipe = recipe("mmcr:layered_recipe", "mmcr:datapack_machine");
+        RecipeRegistry.register(staticRecipe);
+
+        RecipeRegistry.replaceDataPack(Map.of(id, dataPackRecipe));
+
+        assertThat(RecipeRegistry.getRecipe(id)).isSameAs(dataPackRecipe);
+        assertThat(RecipeRegistry.dataPackSnapshot()).containsEntry(id, dataPackRecipe);
+        assertThat(RecipeRegistry.staticSnapshot()).containsEntry(id, staticRecipe);
+        assertThat(RecipeRegistry.byMachineId(staticRecipe.machineId())).isEmpty();
+        assertThat(RecipeRegistry.byMachineId(dataPackRecipe.machineId())).containsExactly(dataPackRecipe);
+    }
+
+    @Test
+    void replacingDataPackSnapshotRemovesDeletedRecipes() {
+        var oldId = Identifier.parse("mmcr:old_datapack_recipe");
+        var newId = Identifier.parse("mmcr:new_datapack_recipe");
+        RecipeRegistry.replaceDataPack(Map.of(oldId, recipe(oldId.toString(), "mmcr:alloy_furnace")));
+
+        RecipeRegistry.replaceDataPack(Map.of(newId, recipe(newId.toString(), "mmcr:alloy_furnace")));
+
+        assertThat(RecipeRegistry.getRecipe(oldId)).isNull();
+        assertThat(RecipeRegistry.dataPackSnapshot()).containsOnlyKeys(newId);
+    }
+
     private static MachineRecipe recipe(String id, String machineId) {
         return new MachineRecipe(Identifier.parse(id), Identifier.parse(machineId), 1, List.of(), List.of());
     }

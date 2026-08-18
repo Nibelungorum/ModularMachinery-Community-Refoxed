@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.reload;
 
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.resources.Identifier;
@@ -62,6 +63,20 @@ class MachineRecipeDataReloadListenerTest {
         assertThat(listener.snapshot()).containsOnlyKeys(Identifier.parse("mmcr_test:new_recipe"));
         assertThatThrownBy(() -> listener.snapshot().put(Identifier.parse("mmcr_test:other_recipe"), recipe()))
                 .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void applyingSnapshotPublishesDataPackLayerToRecipeRegistry() {
+        var id = Identifier.parse("mmcr_test:published_recipe");
+        var recipe = new MachineRecipe(id, Identifier.parse("mmcr:alloy_furnace"), 1,
+                java.util.List.of(), java.util.List.of());
+        var listener = new MachineRecipeDataReloadListener(registries);
+
+        listener.applySnapshot(Map.of(id, recipe));
+
+        assertThat(RecipeRegistry.getRecipe(id)).isSameAs(recipe);
+        assertThat(RecipeRegistry.dataPackSnapshot()).containsEntry(id, recipe);
+        RecipeRegistry.replaceDataPack(Map.of());
     }
 
     @Test

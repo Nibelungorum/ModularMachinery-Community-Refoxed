@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.reload;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeJson;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import com.google.gson.JsonParser;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.Identifier;
@@ -63,6 +64,8 @@ public final class MachineRecipeDataReloadListener extends SimplePreparableReloa
     }
 
     void applySnapshot(Map<Identifier, MachineRecipe> recipes) {
-        snapshot = Map.copyOf(recipes);
+        Map<Identifier, MachineRecipe> replacement = Map.copyOf(recipes);
+        RecipeRegistry.replaceDataPack(replacement);
+        snapshot = replacement;
     }
 }

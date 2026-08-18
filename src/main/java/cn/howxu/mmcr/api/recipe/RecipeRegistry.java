@@ -10,10 +10,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import cn.howxu.mmcr.MMCR;
 
 public final class RecipeRegistry {
 
     private static final Map<Identifier, MachineRecipe> STATIC_RECIPES = new LinkedHashMap<>();
+    private static volatile Map<Identifier, MachineRecipe> DATA_PACK_RECIPES = Map.of();
     private static volatile Map<Identifier, MachineRecipe> DYNAMIC_RECIPES = Map.of();
     private static volatile Map<Identifier, TreeMap<Integer, TreeSet<MachineRecipe>>> BY_MACHINE = Map.of();
     private static long reloadVersion;
@@ -39,8 +41,10 @@ public final class RecipeRegistry {
 
     public static MachineRecipe getRecipe(Identifier id) {
         if (id == null) return null;
-        MachineRecipe recipe = STATIC_RECIPES.get(id);
-        return recipe != null ? recipe : DYNAMIC_RECIPES.get(id);
+        MachineRecipe recipe = DATA_PACK_RECIPES.get(id);
+        if (recipe != null) return recipe;
+        recipe = DYNAMIC_RECIPES.get(id);
+        return recipe != null ? recipe : STATIC_RECIPES.get(id);
     }
 
     public static List<MachineRecipe> byMachine(Machine machine) {
@@ -60,7 +64,7 @@ public final class RecipeRegistry {
     }
 
     public static int registeredRecipeCount() {
-        return STATIC_RECIPES.size() + DYNAMIC_RECIPES.size();
+        return mergedRecipes().size();
     }
 
     public static long reloadVersion() {
@@ -78,8 +82,12 @@ public final class RecipeRegistry {
     public static void replaceDynamic(Map<Identifier, MachineRecipe> recipes) {
         Map<Identifier, MachineRecipe> replacement = new LinkedHashMap<>();
         for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
-            if (STATIC_RECIPES.containsKey(entry.getKey())) {
-                throw new IllegalStateException("Dynamic recipe conflicts with static recipe: " + entry.getKey());
+            Identifier id = entry.getKey();
+            if (STATIC_RECIPES.containsKey(id)) {
+                throw new IllegalStateException("Dynamic recipe conflicts with static recipe: " + id);
+            }
+            if (DATA_PACK_RECIPES.containsKey(id)) {
+                throw new IllegalStateException("Dynamic recipe conflicts with data-pack recipe: " + id);
             }
             replacement.put(entry.getKey(), entry.getValue());
         }
@@ -93,9 +101,34 @@ public final class RecipeRegistry {
         return Map.copyOf(DYNAMIC_RECIPES);
     }
 
+    public static Map<Identifier, MachineRecipe> dataPackSnapshot() {
+        return Map.copyOf(DATA_PACK_RECIPES);
+    }
+
+    public static Map<Identifier, MachineRecipe> staticSnapshot() {
+        return Map.copyOf(STATIC_RECIPES);
+    }
+
+    public static void replaceDataPack(Map<Identifier, MachineRecipe> recipes) {
+        Map<Identifier, MachineRecipe> replacement = new LinkedHashMap<>();
+        for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
+            if (STATIC_RECIPES.containsKey(entry.getKey())) {
+                MMCR.LOG.warn("Data-pack recipe {} overrides static recipe {}", entry.getKey(), entry.getKey());
+            }
+            replacement.put(entry.getKey(), entry.getValue());
+        }
+        DATA_PACK_RECIPES = Map.copyOf(replacement);
+        rebuildIndex();
+        reloadVersion++;
+        registryVersion++;
+    }
+
     private static Map<Identifier, MachineRecipe> mergedRecipes() {
         Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>(STATIC_RECIPES);
-        recipes.putAll(DYNAMIC_RECIPES);
+        recipes.putAll(DATA_PACK_RECIPES);
+        for (Map.Entry<Identifier, MachineRecipe> entry : DYNAMIC_RECIPES.entrySet()) {
+            recipes.putIfAbsent(entry.getKey(), entry.getValue());
+        }
         return recipes;
     }
 
@@ -112,6 +145,7 @@ public final class RecipeRegistry {
 
     public static void clearAll() {
         STATIC_RECIPES.clear();
+        DATA_PACK_RECIPES = Map.of();
         DYNAMIC_RECIPES = Map.of();
         BY_MACHINE = Map.of();
         reloadVersion++;

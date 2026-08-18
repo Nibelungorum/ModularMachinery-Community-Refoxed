@@ -63,6 +63,9 @@ final class KubeJSContentReloadTransaction {
             if (RecipeRegistry.containsStatic(recipe.id())) {
                 throw new IllegalStateException("Dynamic recipe conflicts with static recipe: " + recipe.id());
             }
+            if (RecipeRegistry.dataPackSnapshot().containsKey(recipe.id())) {
+                throw new IllegalStateException("Dynamic recipe conflicts with data-pack recipe: " + recipe.id());
+            }
             if (MachineDefinitions.getRegistration(recipe.machineId()) == null) {
                 throw new IllegalStateException("No startup machine registration for recipe: " + recipe.machineId());
             }

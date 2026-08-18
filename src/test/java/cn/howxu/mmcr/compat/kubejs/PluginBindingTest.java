@@ -84,6 +84,28 @@ class PluginBindingTest {
     }
 
     @Test
+    void datapack_conflict_rejects_entire_kubejs_transaction_and_preserves_old_snapshot() {
+        var machineId = MMCR.id("alloy_furnace");
+        var previousId = MMCR.id("kubejs_previous_after_datapack_conflict");
+        var conflictId = MMCR.id("kubejs_datapack_conflict");
+        var previous = new KubeJSContentReloadTransaction();
+        previous.registerStructure(structure(machineId));
+        previous.registerRecipe(new MachineRecipe(previousId, machineId, 1, List.of(), List.of()));
+        previous.commit();
+        var previousRecipes = RecipeRegistry.dynamicSnapshot();
+        RecipeRegistry.replaceDataPack(Map.of(conflictId,
+                new MachineRecipe(conflictId, machineId, 2, List.of(), List.of())));
+
+        var invalid = new KubeJSContentReloadTransaction();
+        invalid.registerRecipe(new MachineRecipe(conflictId, machineId, 3, List.of(), List.of()));
+
+        assertThatThrownBy(invalid::commit).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("data-pack");
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousRecipes);
+        assertThat(RecipeRegistry.getRecipe(conflictId).tickTime()).isEqualTo(2);
+    }
+
+    @Test
     void server_script_error_discards_collected_content_and_preserves_previous_snapshot() {
         var machineId = MMCR.id("alloy_furnace");
         var previousRecipeId = MMCR.id("kubejs_transaction_error_previous_recipe");
