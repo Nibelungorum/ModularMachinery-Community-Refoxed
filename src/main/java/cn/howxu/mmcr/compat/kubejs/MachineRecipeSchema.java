@@ -16,6 +16,7 @@ import dev.latvian.mods.kubejs.recipe.schema.RecipeSchema;
 import dev.latvian.mods.kubejs.recipe.schema.RecipeSchemaRegistry;
 import dev.latvian.mods.kubejs.recipe.schema.function.RecipeFunctionInstance;
 import dev.latvian.mods.kubejs.recipe.schema.function.ResolvedRecipeSchemaFunction;
+import dev.latvian.mods.kubejs.util.IntBounds;
 import dev.latvian.mods.kubejs.util.JsonUtils;
 import dev.latvian.mods.rhino.type.TypeInfo;
 import net.minecraft.resources.ResourceKey;
@@ -33,18 +34,18 @@ public final class MachineRecipeSchema {
             new RecipeKey<>(NumberComponent.NON_NEGATIVE_INT, "tick_time", ComponentRole.OTHER);
 
     public static final RecipeKey<List<JsonElement>> INPUTS =
-            new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false), "inputs", ComponentRole.INPUT)
+            new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false, IntBounds.OPTIONAL, java.util.Optional.empty()), "inputs", ComponentRole.INPUT)
                     .optional(List.of()).exclude();
 
     public static final RecipeKey<Integer> ENERGY_PER_TICK =
             new RecipeKey<>(NumberComponent.NON_NEGATIVE_INT, "energy_per_tick", ComponentRole.OTHER).optional(0);
 
     public static final RecipeKey<List<JsonElement>> OUTPUTS =
-            new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false), "outputs", ComponentRole.OUTPUT)
+            new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false, IntBounds.OPTIONAL, java.util.Optional.empty()), "outputs", ComponentRole.OUTPUT)
                     .optional(List.of()).exclude();
 
     public static final RecipeKey<List<JsonElement>> MODIFIERS =
-            new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false), "modifiers", ComponentRole.OTHER)
+            new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false, IntBounds.OPTIONAL, java.util.Optional.empty()), "modifiers", ComponentRole.OTHER)
                     .optional(List.of()).exclude();
 
     public static final RecipeKey<Integer> MAX_THREADS =

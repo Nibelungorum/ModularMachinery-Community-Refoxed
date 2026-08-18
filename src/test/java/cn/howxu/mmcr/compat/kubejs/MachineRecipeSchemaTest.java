@@ -73,6 +73,13 @@ class MachineRecipeSchemaTest {
     }
 
     @Test
+    void schema_allows_empty_recipe_lists() {
+        assertThat(((ListRecipeComponent<?>) MachineRecipeSchema.INPUTS.component).allowEmpty()).isTrue();
+        assertThat(((ListRecipeComponent<?>) MachineRecipeSchema.OUTPUTS.component).allowEmpty()).isTrue();
+        assertThat(((ListRecipeComponent<?>) MachineRecipeSchema.MODIFIERS.component).allowEmpty()).isTrue();
+    }
+
+    @Test
     void schema_exposes_parallel_opt_in_keys() {
         assertThat(MachineRecipeSchema.SCHEMA.keys).contains(
                 MachineRecipeSchema.PARALLELIZED,
