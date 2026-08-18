@@ -1,0 +1,18 @@
+{
+  "type": "mmcr:machine_recipe",
+  "machine": "mmcr:iron_compressor",
+  "tick_time": 7,
+  "inputs": [
+    {
+      "type": "item",
+      "item": ["minecraft:coal"],
+      "count": 1
+    }
+  ],
+  "outputs": [
+    {
+      "id": "minecraft:diamond",
+      "count": 1
+    }
+  ]
+}

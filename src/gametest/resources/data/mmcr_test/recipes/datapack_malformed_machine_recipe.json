@@ -1,0 +1,8 @@
+{
+  "type": "mmcr:machine_recipe",
+  "machine": "mmcr:iron_compressor",
+  "tick_time": 0,
+  "inputs": [
+    {}
+  ]
+}

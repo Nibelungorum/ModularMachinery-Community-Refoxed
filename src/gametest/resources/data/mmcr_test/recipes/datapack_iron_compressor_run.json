@@ -1,0 +1,23 @@
+{
+  "type": "mmcr:machine_recipe",
+  "machine": "mmcr:iron_compressor",
+  "tick_time": 20,
+  "inputs": [
+    {
+      "type": "item",
+      "item": ["minecraft:copper_ingot"],
+      "count": 1
+    },
+    {
+      "type": "energy",
+      "fe_per_tick": 50
+    }
+  ],
+  "outputs": [
+    {
+      "id": "minecraft:iron_nugget",
+      "count": 1
+    }
+  ],
+  "priority": -100
+}

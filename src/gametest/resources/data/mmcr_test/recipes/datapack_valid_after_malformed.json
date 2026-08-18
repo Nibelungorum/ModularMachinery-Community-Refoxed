@@ -1,0 +1,12 @@
+{
+  "type": "mmcr:machine_recipe",
+  "machine": "mmcr:iron_compressor",
+  "tick_time": 5,
+  "inputs": [],
+  "outputs": [
+    {
+      "id": "minecraft:iron_nugget",
+      "count": 1
+    }
+  ]
+}

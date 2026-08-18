@@ -5,6 +5,8 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import com.mojang.serialization.MapCodec;
@@ -16,6 +18,9 @@ import net.minecraft.gametest.framework.TestEnvironmentDefinition;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Rotation;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import org.nibelungorum.DefaultRecipes;
@@ -34,6 +39,9 @@ public final class GameTestRegistry {
         register(event, "expandable_structure_stages", 120, helper -> new ExpandableStructureGameTest().upgradesAndDowngradesHighestAvailableStage(helper));
         register(event, "expandable_structure_vertical_roll", 120, helper -> new ExpandableStructureGameTest().verticalNonDefaultRollUsesStageSelection(helper));
         register(event, "e2e_recipe_run", 200, helper -> new E2ERecipeRunGameTest().ironCompressorRuns(helper));
+        register(event, "datapack_recipe_run", 160, helper -> new DataPackRecipeGameTest().dataPackRecipeRunsOnMachine(helper));
+        register(event, "datapack_recipe_override", 100, helper -> new DataPackRecipeGameTest().dataPackRecipeOverridesStaticRecipe(helper));
+        register(event, "datapack_recipe_malformed_isolation", 100, helper -> new DataPackRecipeGameTest().malformedDataPackRecipeDoesNotBlockValidRecipe(helper));
         register(event, "e2e_distillation_tower_partial_outputs", 160, helper -> new E2ERecipeRunGameTest().distillationTowerUnlocksPartialFluidOutputsByStage(helper));
         register(event, "energy_hatch_capability", 100, helper -> new EnergyHatchCapabilityGameTest().energyHatchStoresFE(helper));
         register(event, "fluid_hatch_capability", 100, helper -> new FluidHatchCapabilityGameTest().fluidHatchStoresWater(helper));
@@ -98,6 +106,12 @@ public final class GameTestRegistry {
 
     public static void registerRecipes() {
         DefaultRecipes.registerStatic(DefaultRecipes.gameTestRecipes());
+        Identifier id = Identifier.parse("mmcr_test:datapack_static_override");
+        if (RecipeRegistry.getRecipe(id) == null) {
+            RecipeRegistry.register(new MachineRecipe(id, MMCR.id("iron_compressor"), 20,
+                    java.util.List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.COAL), 1)),
+                    java.util.List.of(new ItemStack(Items.CHARCOAL))));
+        }
     }
 
     private static void register(RegisterGameTestsEvent event, String name, int maxTicks, Consumer<GameTestHelper> test) {
