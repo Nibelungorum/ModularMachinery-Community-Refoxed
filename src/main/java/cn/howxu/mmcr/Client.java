@@ -1,7 +1,11 @@
 package cn.howxu.mmcr;
 
-import cn.howxu.mmcr.client.gui.MachineMenuScreen;
+import cn.howxu.mmcr.client.gui.EnergyHatchScreen;
 import cn.howxu.mmcr.client.gui.FactoryControllerScreen;
+import cn.howxu.mmcr.client.gui.FactorySchedulerScreen;
+import cn.howxu.mmcr.client.gui.FluidHatchScreen;
+import cn.howxu.mmcr.client.gui.ItemBusScreen;
+import cn.howxu.mmcr.client.gui.MachineControllerScreen;
 import cn.howxu.mmcr.client.gui.SmartInterfaceScreen;
 import cn.howxu.mmcr.client.controller.ControllerModelInvalidator;
 import cn.howxu.mmcr.client.controller.ControllerSpecCache;
@@ -65,7 +69,11 @@ public class Client {
     }
 
     private static void registerMenuScreens(RegisterMenuScreensEvent event) {
-        MachineMenuScreen.registerScreens(event);
+        event.register(ModUIs.ITEM_BUS.get(), ItemBusScreen::new);
+        event.register(ModUIs.FLUID_HATCH.get(), FluidHatchScreen::new);
+        event.register(ModUIs.ENERGY_HATCH.get(), EnergyHatchScreen::new);
+        event.register(ModUIs.MACHINE_CONTROLLER.get(), MachineControllerScreen::new);
+        event.register(ModUIs.FACTORY_SCHEDULER.get(), FactorySchedulerScreen::new);
         event.register(ModUIs.FACTORY_CONTROLLER.get(), FactoryControllerScreen::new);
         event.register(ModUIs.SMART_INTERFACE.get(), SmartInterfaceScreen::new);
     }

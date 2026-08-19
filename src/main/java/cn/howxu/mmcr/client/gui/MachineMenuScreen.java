@@ -15,7 +15,6 @@ import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
 import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
-import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.util.ReadableNumber;
 
@@ -39,7 +38,6 @@ import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.neoforged.neoforge.fluids.FluidStack;
 
@@ -55,7 +53,7 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 /** 一个屏幕入口,按具体菜单类型分派纹理 / 尺寸 / 自定义渲染。 */
-public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainerMenu> implements MenuAccess<AbstractContainerMenu> {
+public class MachineMenuScreen<M extends AbstractContainerMenu> extends AbstractContainerScreen<M> implements MenuAccess<M> {
 
     public static final int GUI_TEXTURE_SIZE = 256;
 
@@ -115,7 +113,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     private final EnumMap<Direction, Button> autoIOSideButtons = new EnumMap<>(Direction.class);
     private final List<HiddenSlotPosition> hiddenSlotPositions = new ArrayList<>();
 
-    public MachineMenuScreen(AbstractContainerMenu menu, Inventory inventory, Component title) {
+    public MachineMenuScreen(M menu, Inventory inventory, Component title) {
         super(menu, inventory, title,
                 menu instanceof MachineControllerMenu ? 176 : 176,
                 imageHeightFor(menu));
@@ -905,15 +903,6 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     }
 
     private record HiddenSlotPosition(int index, Slot slot) {
-    }
-
-    /** 把同一个 {@link MachineMenuScreen} 注册到所有 MMCR 菜单类型(根据具体菜单类型分派渲染)。 */
-    public static void registerScreens(RegisterMenuScreensEvent event) {
-        event.register(ModUIs.ITEM_BUS.get(),          MachineMenuScreen::new);
-        event.register(ModUIs.FLUID_HATCH.get(),       MachineMenuScreen::new);
-        event.register(ModUIs.ENERGY_HATCH.get(),      MachineMenuScreen::new);
-        event.register(ModUIs.MACHINE_CONTROLLER.get(), MachineMenuScreen::new);
-        event.register(ModUIs.FACTORY_SCHEDULER.get(),  MachineMenuScreen::new);
     }
 
     private static class AutoIOToggleButton extends Button {
