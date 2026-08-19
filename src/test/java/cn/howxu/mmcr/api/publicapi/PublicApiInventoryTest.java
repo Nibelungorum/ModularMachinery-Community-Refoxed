@@ -9,6 +9,11 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Guards the planned public API inventory before concrete public types are implemented.
+ *
+ * @author howxu &lt;dev@howxu.cn&gt;
+ */
 class PublicApiInventoryTest {
 
     private static final String PUBLIC_API_PACKAGE = "cn.howxu.mmcr.api.publicapi";
