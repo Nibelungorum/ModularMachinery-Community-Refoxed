@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.client.gui.MachineMenuScreen;
+import cn.howxu.mmcr.client.gui.MachineControllerScreen;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -41,7 +41,7 @@ class JeiPluginGuiHandlerTest {
 
     @Test
     void gui_handler_opens_only_its_machine_structure_display() {
-        AtomicReference<IGuiContainerHandler<MachineMenuScreen<?>>> handler = new AtomicReference<>();
+        AtomicReference<IGuiContainerHandler<MachineControllerScreen>> handler = new AtomicReference<>();
         new JeiPlugin().registerGuiHandlers(registration(handler));
         IRecipesGui recipesGui = recipesGui();
 
@@ -54,7 +54,7 @@ class JeiPluginGuiHandlerTest {
 
     @Test
     void gui_handler_has_no_click_area_without_a_resolved_machine() {
-        AtomicReference<IGuiContainerHandler<MachineMenuScreen<?>>> handler = new AtomicReference<>();
+        AtomicReference<IGuiContainerHandler<MachineControllerScreen>> handler = new AtomicReference<>();
         new JeiPlugin().registerGuiHandlers(registration(handler));
 
         assertThat(handler.get().getGuiClickableAreas(screenWith(null), 10, 30)).isEmpty();
@@ -63,13 +63,13 @@ class JeiPluginGuiHandlerTest {
     private final AtomicReference<List<IFocus<?>>> focuses = new AtomicReference<>();
 
     @SuppressWarnings("unchecked")
-    private static IGuiHandlerRegistration registration(AtomicReference<IGuiContainerHandler<MachineMenuScreen<?>>> handler) {
+    private static IGuiHandlerRegistration registration(AtomicReference<IGuiContainerHandler<MachineControllerScreen>> handler) {
         return (IGuiHandlerRegistration) Proxy.newProxyInstance(
                 JeiPluginGuiHandlerTest.class.getClassLoader(),
                 new Class<?>[]{IGuiHandlerRegistration.class},
                 (proxy, method, args) -> {
                     if (method.getName().equals("addGuiContainerHandler")) {
-                        handler.set((IGuiContainerHandler<MachineMenuScreen<?>>) args[1]);
+                        handler.set((IGuiContainerHandler<MachineControllerScreen>) args[1]);
                         return null;
                     }
                     if (method.getName().equals("hashCode")) return System.identityHashCode(proxy);
@@ -119,7 +119,7 @@ class JeiPluginGuiHandlerTest {
                 });
     }
 
-    private static MachineMenuScreen<?> screenWith(Identifier machineId) {
+    private static MachineControllerScreen screenWith(Identifier machineId) {
         MachineControllerMenu menu = new MachineControllerMenu(1, new Inventory(null, null)) {
             @Override
             public Identifier machineId() {
@@ -130,7 +130,7 @@ class JeiPluginGuiHandlerTest {
             java.lang.reflect.Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
             unsafeField.setAccessible(true);
             sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
-            MachineMenuScreen<?> screen = (MachineMenuScreen<?>) unsafe.allocateInstance(MachineMenuScreen.class);
+            MachineControllerScreen screen = (MachineControllerScreen) unsafe.allocateInstance(MachineControllerScreen.class);
             java.lang.reflect.Field menuField = AbstractContainerScreen.class.getDeclaredField("menu");
             menuField.setAccessible(true);
             menuField.set(screen, menu);

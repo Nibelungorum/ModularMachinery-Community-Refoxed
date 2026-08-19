@@ -1,7 +1,9 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
@@ -21,6 +23,7 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.text.NumberFormat;
 
 /**
  * MMCE-style two-column factory controller display backed only by synchronized menu data.
@@ -28,6 +31,13 @@ import java.util.Map;
  * @author howxu <dev@howxu.cn>
  */
 public final class FactoryControllerScreen extends AbstractContainerScreen<FactoryControllerMenu> {
+    private static final NumberFormat NUMBER_FORMAT = NumberFormat.getIntegerInstance();
+    private static final int CONTROLLER_TITLE_COLOR = 0xFFE8E8E8;
+    private static final int STATUS_LABEL_COLOR = CONTROLLER_TITLE_COLOR;
+    private static final int FORMED_STATUS_COLOR = 0xFF55FF55;
+    private static final int UNFORMED_STATUS_COLOR = 0xFFFF5555;
+    private static final int IDLE_STATUS_COLOR = 0xFFFFAA00;
+    private static final int PROGRESS_STATUS_COLOR = -1;
     static final int IMAGE_WIDTH = 280;
     static final int IMAGE_HEIGHT = 213;
     static final int THREAD_ROW_X = 8;
@@ -105,8 +115,38 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
         return menu.currentParallelism();
     }
 
+    private static Component levelLine(MachineLevel level) {
+        var type = MachineLevelRegistry.getType(level.typeId());
+        if (type == null || !(level.statePredicate() instanceof BlockPredicate.OfBlockState predicate)) return Component.empty();
+        return Component.translatable("gui.mmcr.controller.level", type.displayName(), predicate.state().getBlock().getName());
+    }
+
+    private static String controllerStatusKey(boolean formed, boolean active) {
+        if (!formed) return "gui.mmcr.controller.unformed";
+        return active ? "gui.mmcr.controller.running" : "gui.mmcr.controller.idle";
+    }
+
+    private static int controllerStatusColor(boolean formed, boolean active) {
+        if (!formed) return UNFORMED_STATUS_COLOR;
+        return active ? FORMED_STATUS_COLOR : IDLE_STATUS_COLOR;
+    }
+
+    private static Component parallelSlotLine(int parallelSlots) {
+        return Component.translatable("gui.mmcr.controller.parallel_slots", Component.literal(NUMBER_FORMAT.format(parallelSlots)));
+    }
+
+    private static Component parallelLine(int parallelism, int maxParallelism) {
+        return Component.translatable("gui.mmcr.controller.parallel", Component.literal(NUMBER_FORMAT.format(parallelism)),
+                Component.literal(NUMBER_FORMAT.format(maxParallelism)));
+    }
+
+    private static Component factoryThreadLine(int activeThreadCount, int threadCount) {
+        return Component.translatable("gui.mmcr.controller.threads", Component.literal(NUMBER_FORMAT.format(activeThreadCount)),
+                Component.literal(NUMBER_FORMAT.format(threadCount)));
+    }
+
     static List<Component> levelLines(Map<?, MachineLevel> levels) {
-        return levels.values().stream().map(MachineMenuScreen::levelLine).toList();
+        return levels.values().stream().map(FactoryControllerScreen::levelLine).toList();
     }
 
     static String selectedFailureUnloc(FactoryControllerMenu menu) {
@@ -235,42 +275,42 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
         x = (int) (x / DETAIL_TEXT_SCALE);
         y = (int) (y / DETAIL_TEXT_SCALE);
         String machineName = menu.machineName().isEmpty() ? title.getString() : menu.machineName();
-        graphics.text(font, Component.translatable(machineName).append(" #" + selected.index()), x, detailTitleY(y), MachineMenuScreen.CONTROLLER_TITLE_COLOR, true);
+        graphics.text(font, Component.translatable(machineName).append(" #" + selected.index()), x, detailTitleY(y), CONTROLLER_TITLE_COLOR, true);
         int lineY = nextDetailY(y);
-        graphics.text(font, Component.translatable("gui.mmcr.controller.status_label"), x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
-        graphics.text(font, Component.translatable(MachineMenuScreen.controllerStatusKey(menu.isFormed(), selected.active())),
+        graphics.text(font, Component.translatable("gui.mmcr.controller.status_label"), x, lineY, STATUS_LABEL_COLOR, true);
+        graphics.text(font, Component.translatable(controllerStatusKey(menu.isFormed(), selected.active())),
                 x + font.width(Component.translatable("gui.mmcr.controller.status_label")) + 4, lineY,
-                MachineMenuScreen.controllerStatusColor(menu.isFormed(), selected.active()), true);
+                controllerStatusColor(menu.isFormed(), selected.active()), true);
         lineY = nextDetailY(lineY);
         var owner = menu.resolvedOwner();
         if (owner != null) {
             for (Component levelLine : levelLines(owner.getFoundLevels())) {
-                graphics.text(font, levelLine, x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
+                graphics.text(font, levelLine, x, lineY, STATUS_LABEL_COLOR, true);
                 lineY = nextDetailY(lineY);
             }
         }
         String failure = selectedFailureUnloc(menu);
         if (!failure.isEmpty()) {
             graphics.text(font, Component.translatable("gui.mmcr.controller.last_failure", Component.translatable(failure)),
-                    x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
+                    x, lineY, STATUS_LABEL_COLOR, true);
             lineY = nextDetailY(lineY);
         }
         if (menu.parallelSlots() > 0) {
-            graphics.text(font, MachineMenuScreen.parallelSlotLine(menu.parallelSlots()), x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
+            graphics.text(font, parallelSlotLine(menu.parallelSlots()), x, lineY, STATUS_LABEL_COLOR, true);
             lineY = nextDetailY(lineY);
         }
-        graphics.text(font, MachineMenuScreen.parallelLine(selectedParallelism(menu), menu.maxParallelism()), x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
+        graphics.text(font, parallelLine(selectedParallelism(menu), menu.maxParallelism()), x, lineY, STATUS_LABEL_COLOR, true);
         lineY = nextDetailY(lineY);
         if (menu.isRedstonePaused()) {
-            graphics.text(font, Component.translatable("gui.mmcr.controller.redstone_stopped"), x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
+            graphics.text(font, Component.translatable("gui.mmcr.controller.redstone_stopped"), x, lineY, STATUS_LABEL_COLOR, true);
             lineY = nextDetailY(lineY);
         }
-        graphics.text(font, MachineMenuScreen.factoryThreadLine(menu.activeThreadCount(), menu.threadCount()), x, lineY, MachineMenuScreen.STATUS_LABEL_COLOR, true);
+        graphics.text(font, factoryThreadLine(menu.activeThreadCount(), menu.threadCount()), x, lineY, STATUS_LABEL_COLOR, true);
         lineY = nextDetailY(lineY);
         if (selected.totalTick() > 0) {
             int percent = progressWidth(selected.tick(), selected.totalTick()) * 100 / THREAD_ROW_WIDTH;
             graphics.text(font, Component.translatable("gui.mmcr.controller.progress", percent + "%"), x, lineY,
-                    MachineMenuScreen.PROGRESS_STATUS_COLOR, true);
+                    PROGRESS_STATUS_COLOR, true);
         }
         graphics.pose().popMatrix();
     }

@@ -2,7 +2,7 @@ package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.client.gui.MachineMenuScreen;
+import cn.howxu.mmcr.client.gui.MachineControllerScreen;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.registry.ModBlocks;
 import mezz.jei.api.IModPlugin;
@@ -91,10 +91,10 @@ public final class JeiPlugin implements IModPlugin {
 
     @Override
     public void registerGuiHandlers(IGuiHandlerRegistration registration) {
-        registration.addGuiContainerHandler(MachineMenuScreen.class, new IGuiContainerHandler<>() {
+        registration.addGuiContainerHandler(MachineControllerScreen.class, new IGuiContainerHandler<>() {
             @Override
-            public Collection<IGuiClickableArea> getGuiClickableAreas(MachineMenuScreen screen, double mouseX, double mouseY) {
-                if (!(screen.getMenu() instanceof MachineControllerMenu menu)) return List.of();
+            public Collection<IGuiClickableArea> getGuiClickableAreas(MachineControllerScreen screen, double mouseX, double mouseY) {
+                MachineControllerMenu menu = screen.getMenu();
                 Identifier machineId = menu.machineId();
                 if (machineId == null) return List.of();
                 ItemStack controller = new ItemStack(ModBlocks.controllerFor(machineId).get());
