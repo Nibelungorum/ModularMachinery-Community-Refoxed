@@ -59,12 +59,10 @@ public final class FluidGuiRenderer {
     public static void drawFluid(GuiGraphicsExtractor graphics, FluidStack fluid, int x, int y, int width, int height) {
         TextureAtlasSprite sprite = stillSprite(fluid);
         int color = fluidColor(fluid);
-        int atlasWidth = Math.round(sprite.contents().width() / (sprite.getU1() - sprite.getU0()));
-        int atlasHeight = Math.round(sprite.contents().height() / (sprite.getV1() - sprite.getV0()));
         for (Tile tile : tiles(x, y, width, height)) {
             graphics.blit(RenderPipelines.GUI_TEXTURED, sprite.atlasLocation(),
-                    tile.x(), tile.y() + tile.maskTop, sprite.getX(), sprite.getY(),
-                    tile.width(), tile.height(), atlasWidth, atlasHeight, color);
+                    tile.x(), tile.y() + tile.maskTop, 0, tile.maskTop(),
+                    tile.width(), tile.height(), TILE_SIZE, TILE_SIZE, color);
         }
     }
 

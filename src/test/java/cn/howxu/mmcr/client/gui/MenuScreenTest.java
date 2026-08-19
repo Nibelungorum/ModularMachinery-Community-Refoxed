@@ -87,6 +87,14 @@ class MenuScreenTest {
     }
 
     @Test
+    void fluid_capacity_text_starts_after_the_fluid_name_line() {
+        int titleY = MachineMenuScreen.titleY(6, true);
+
+        assertThat(MachineMenuScreen.fluidStorageTextY(titleY))
+                .isGreaterThanOrEqualTo(MachineMenuScreen.fluidInfoTextY(titleY) + 9);
+    }
+
+    @Test
     void auto_io_page_allows_player_hotbar_slots_with_low_backing_indices() throws Exception {
         MachineMenuScreen screen = screenForMenu(new ItemBusMenu(1, new Inventory(null, null)));
         Field autoIOPage = MachineMenuScreen.class.getDeclaredField("autoIOPage");
