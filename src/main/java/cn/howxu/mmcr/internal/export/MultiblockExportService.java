@@ -109,9 +109,10 @@ public final class MultiblockExportService {
 
     public static Path nextExportPath(Path gameDir, LocalDateTime timestamp) {
         String prefix = FILE_TIME.format(timestamp) + "-多方块导出-";
+        Path exportDir = gameDir.resolve("mmcr_structure_export");
         int index = 1;
         while (true) {
-            Path path = gameDir.resolve(prefix + index + ".txt");
+            Path path = exportDir.resolve(prefix + index + ".txt");
             if (!Files.exists(path)) return path;
             index++;
         }
@@ -126,6 +127,7 @@ public final class MultiblockExportService {
                                    Direction controllerFace, Direction rollFacing) throws IOException {
         String text = renderJava(entries, controllerFace, rollFacing);
         Path path = nextExportPath(gameDir, timestamp);
+        Files.createDirectories(path.getParent());
         Files.writeString(path, text);
         return path;
     }

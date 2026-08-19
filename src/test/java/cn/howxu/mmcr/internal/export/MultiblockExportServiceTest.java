@@ -161,10 +161,12 @@ class MultiblockExportServiceTest {
     @Test
     void nextExportPathIncrementsWhenNameExists() throws Exception {
         LocalDateTime timestamp = LocalDateTime.of(2026, 8, 5, 12, 30, 15);
-        Path first = tempDir.resolve("2026-08-05-12-30-15-多方块导出-1.txt");
+        Path exportDir = tempDir.resolve("mmcr_structure_export");
+        Files.createDirectories(exportDir);
+        Path first = exportDir.resolve("2026-08-05-12-30-15-多方块导出-1.txt");
         Files.writeString(first, "existing");
 
         assertThat(MultiblockExportService.nextExportPath(tempDir, timestamp))
-                .isEqualTo(tempDir.resolve("2026-08-05-12-30-15-多方块导出-2.txt"));
+                .isEqualTo(exportDir.resolve("2026-08-05-12-30-15-多方块导出-2.txt"));
     }
 }
