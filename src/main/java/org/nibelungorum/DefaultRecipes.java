@@ -10,6 +10,10 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeModifierValue;
+import cn.howxu.mmcr.internal.api.PublicRecipeAdapter;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -99,6 +103,32 @@ public final class DefaultRecipes {
         recipes.put(ecoMatrixRecipe.id(), ecoMatrixRecipe);
         for (MachineRecipe recipe : spaceRecipes()) recipes.put(recipe.id(), recipe);
         return Map.copyOf(recipes);
+    }
+
+    public static MachineRecipe publicRecipe(Identifier id) {
+        MachineRecipeBuilder builder = switch (id.toString()) {
+            case "mmcr:blast_furnace_iron_to_nugget" -> MachineRecipeBuilder.recipe(id, BLAST_FURNACE_ID)
+                    .duration(200).inputItem(Items.IRON_INGOT, 1).inputEnergy(1).outputItem(Items.IRON_NUGGET, 1);
+            case "mmcr:cracker_coal_lapis" -> MachineRecipeBuilder.recipe(id, CRACKER_ID)
+                    .duration(160).inputItem(Items.COAL, 8).inputItem(Items.LAPIS_LAZULI, 1)
+                    .inputEnergy(100).outputItem(Items.REDSTONE, 4).outputFluid(Fluids.WATER, 500);
+            case "mmcr:blast_furnace_component_chance" -> MachineRecipeBuilder.recipe(id, BLAST_FURNACE_ID)
+                    .duration(100).inputItem(Ingredient.of(Items.DIAMOND), 1,
+                            DataComponentPredicateSet.EMPTY, 0.5F)
+                    .outputChance(item(Items.EMERALD, 1), 0.25F);
+            case "mmcr:thermal_smelting_furnace_level" -> MachineRecipeBuilder.recipe(id, THERMAL_SMELTING_FURNACE_ID)
+                    .duration(120).inputItem(Items.RAW_COPPER, 1).inputEnergy(400)
+                    .outputItem(Items.COPPER_INGOT, 1)
+                    .levelRequirement(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE, DefaultMachineLevels.COPPER_COIL)
+                    .modifier(new RecipeModifierValue("duration", RecipeIo.INPUT, 0.5F,
+                            RecipeModifierValue.Operation.MULTIPLY, false));
+            case "mmcr:space_reassembler_hosted" -> MachineRecipeBuilder.recipe(id, SPACE_REASSEMBLER_ID)
+                    .duration(400).inputFluid(Fluids.WATER, 250).inputEnergy(8_000)
+                    .outputItem(PotionContents.createItemStack(Items.POTION, Potions.HEALING))
+                    .requiredHost(SPACE_ELEVATOR_ID);
+            default -> throw new IllegalArgumentException("Unknown public built-in recipe " + id);
+        };
+        return PublicRecipeAdapter.toRecipe(builder.build());
     }
 
     public static List<MachineRecipe> gameTestRecipes() {

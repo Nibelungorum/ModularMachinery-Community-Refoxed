@@ -12,6 +12,9 @@ import cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration;
 import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
+import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
+import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
+import cn.howxu.mmcr.internal.api.PublicMachineAdapter;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
@@ -84,8 +87,10 @@ public final class DefaultMachines {
         Block energyOutput = ModBlocks.BLOCKS.get("energy_output_hatch").get();
 
         Map<Identifier, MachineStructureDefinition> structures = new LinkedHashMap<>();
-        structures.put(BLAST_FURNACE_ID, structureOf(blastFurnace(casing, itemInput, itemOutput, fluidInput, fluidOutput, energyInput, energyOutput)));
-        structures.put(ALLOY_FURNACE_ID, structureOf(alloyFurnace(itemInput, itemOutput, energyInput)));
+        structures.put(BLAST_FURNACE_ID, PublicMachineAdapter.toStructureDefinition(
+                BuiltinMachines.publicDefinitions().get(BLAST_FURNACE_ID)));
+        structures.put(ALLOY_FURNACE_ID, PublicMachineAdapter.toStructureDefinition(
+                BuiltinMachines.publicDefinitions().get(ALLOY_FURNACE_ID)));
         structures.put(CRACKER_ID, structureOf(cracker(itemInput, itemOutput, fluidOutput, energyInput)));
         structures.put(REACTOR_ID, structureOf(reactor(itemInput, itemOutput, fluidInput, fluidOutput, energyOutput)));
         structures.put(THERMAL_SMELTING_FURNACE_ID, thermalSmeltingFurnaceStructure());
@@ -96,6 +101,10 @@ public final class DefaultMachines {
         structures.put(SPACE_REASSEMBLER_ID, spaceReassemblerStructure());
         structures.put(MONSTER_FARM_ID, structureOf(monsterFarm()));
         return Map.copyOf(structures);
+    }
+
+    public static Machine publicMachine(MachineDefinition definition) {
+        return PublicMachineAdapter.toDynamicMachine(definition);
     }
 
     public static Machine monsterFarm() {

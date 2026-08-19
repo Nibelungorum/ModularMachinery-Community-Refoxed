@@ -7,12 +7,20 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
+import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
+import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.internal.api.PublicMachineAdapter;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Blocks;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import net.minecraft.resources.Identifier;
 import net.minecraft.core.BlockPos;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.List;
 
 /**
  * Built-in machine definitions registered through the {@link MachineDefinitions}
@@ -78,6 +86,7 @@ public final class BuiltinMachines {
                     .appearance(MachineAppearanceSpec.fromBasicBlock(Identifier.withDefaultNamespace("bricks")))
                     .recipeFamilyId(ALLOY_FURNACE_ID)
                     .allowModifiers(true)
+                    .expandableStructure()
                     .build();
         });
         MachineDefinitions.addBuiltinSupplier(() -> {
@@ -192,6 +201,40 @@ public final class BuiltinMachines {
                     .controllerSpec(controller)
                     .build();
         });
+    }
+
+    public static Map<Identifier, MachineDefinition> publicDefinitions() {
+        MachineDefinition blast = MachineBuilder.machine(BLAST_FURNACE_ID)
+                .displayNameKey("machine.mmcr.blast_furnace")
+                .pattern(pattern -> pattern.layer("XXX", "XCX", "XXX")
+                        .where('X', cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block(Blocks.IRON_BLOCK))
+                        .where('C', cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block(Blocks.BLAST_FURNACE))
+                        .controller('C'))
+                .portTiers(tiers -> tiers.minEnergyInput(PortTiers.EnergyTier.LUDICROUS)
+                        .minItemInput(PortTiers.ItemTier.NORMAL).anyItemOutput())
+                .maxParallelism(Integer.MAX_VALUE)
+                .parallelizable(true)
+                .factory(factory -> factory.hasFactory(true).threadLimit(4))
+                .build();
+        RecipeModifier modifier = new RecipeModifier("duration", RecipeModifier.IOType.INPUT, 0.5F,
+                RecipeModifier.Operation.MULTIPLY, false);
+        MachineDefinition alloy = MachineBuilder.machine(ALLOY_FURNACE_ID)
+                .displayNameKey("machine.mmcr.alloy_furnace")
+                .appearance(appearance -> appearance.machineBasicBlock(Identifier.withDefaultNamespace("bricks")))
+                .pattern(pattern -> pattern.layer("XXX", "XMX", "XCX")
+                        .where('X', cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block(Blocks.BRICKS))
+                        .where('M', cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block(Blocks.BLAST_FURNACE))
+                        .where('C', cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block(Blocks.FURNACE))
+                        .controller('C'))
+                .requirements(requirements -> requirements.modifier('M', cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block(Blocks.DIAMOND_BLOCK),
+                        List.of(modifier), new ItemStack(Blocks.DIAMOND_BLOCK)))
+                .stage(stage -> stage.extension().pattern(pattern -> pattern.layer("XXX", "XMX", "XCX")
+                        .where('X', cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block(Blocks.BRICKS))
+                        .where('M', cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block(Blocks.BLAST_FURNACE))
+                        .where('C', cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block(Blocks.FURNACE))
+                        .controller('C')))
+                .build();
+        return Map.of(blast.id(), blast, alloy.id(), alloy);
     }
 
     private static BlockArray couplerPattern(int count) {
