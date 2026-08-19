@@ -6,5 +6,11 @@ package cn.howxu.mmcr.api.publicapi;
  * @author howxu <dev@howxu.cn>
  */
 public interface MachineDefinitionProvider {
+    /**
+     * Registers this provider's definitions during startup.
+     *
+     * @throws ApiRegistrationException if startup registration has not begun, has been finalized,
+     *                                   or a declaration is invalid or duplicated
+     */
     void register();
 }

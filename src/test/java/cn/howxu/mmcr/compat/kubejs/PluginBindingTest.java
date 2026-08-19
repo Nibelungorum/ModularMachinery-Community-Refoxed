@@ -9,8 +9,10 @@ import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.publicapi.MachineApi;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -476,6 +478,25 @@ class PluginBindingTest {
         assertThat(MachineDefinitions.isRegistryPhaseOpen()).isFalse();
 
         TestBootstrap.restoreMachineDefinitions();
+    }
+
+    @Test
+    void kubejs_startup_after_mmcr_freezes_empty_machine_registry_without_reopening_it() {
+        MachineDefinitions.clearForTesting();
+        try {
+            PublicApiBootstrap.begin();
+            PublicApiBootstrap.freezeAndInstall();
+
+            assertThat(MachineDefinitions.isRegistryPhaseOpen()).isFalse();
+
+            Plugin.beginStartupRegistryPhaseForTesting();
+
+            assertThat(MachineDefinitions.isRegistryPhaseOpen()).isFalse();
+            assertThat(MachineApi.isRegistrationOpen()).isFalse();
+        } finally {
+            PublicApiBootstrap.clearForTesting();
+            TestBootstrap.restoreMachineDefinitions();
+        }
     }
 
     @Test

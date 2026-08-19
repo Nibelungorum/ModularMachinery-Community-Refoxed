@@ -51,7 +51,7 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
 
     private static void beginStartupRegistryPhase() {
         PublicApiBootstrap.begin();
-        if (!MachineDefinitions.allRegistrations().isEmpty() && !MachineDefinitions.isRegistryPhaseOpen()) return;
+        if (!MachineDefinitions.isRegistryPhaseOpen()) return;
         MachineDefinitions.beginRegistryPhase();
     }
 
