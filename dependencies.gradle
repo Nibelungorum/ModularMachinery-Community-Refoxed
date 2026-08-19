@@ -42,8 +42,9 @@ dependencies {
     implementation "org.appliedenergistics:appliedenergistics2:26.1.11-SNAPSHOT:api"
 
     // 投影
-    runtimeOnly "curse.maven:forgematica-912441:8385300"
-    runtimeOnly "curse.maven:mafglib-910766:8533026"
+    // runtimeOnly "curse.maven:forgematica-912441:8385300"
+    // runtimeOnly "curse.maven:mafglib-910766:8533026"
+    // runtimeOnly "maven.modrinth:bsJhdceD:jJ23wJ7U"
 }
 
 dependencies {
