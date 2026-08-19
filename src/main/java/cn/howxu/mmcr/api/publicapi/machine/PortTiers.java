@@ -100,6 +100,14 @@ public record PortTiers(List<Requirement> requirements) {
             if (ioType == null) throw new IllegalArgumentException("ioType null");
             if (minTier < 0) throw new IllegalArgumentException("minTier must be >= 0");
             if (minTierId == null || minTierId.isBlank()) throw new IllegalArgumentException("minTierId blank");
+            String expectedTierId = switch (category) {
+                case ITEM -> minTier < ItemTier.values().length ? ItemTier.values()[minTier].id() : null;
+                case FLUID -> minTier < FluidTier.values().length ? FluidTier.values()[minTier].id() : null;
+                case ENERGY -> minTier < EnergyTier.values().length ? EnergyTier.values()[minTier].id() : null;
+            };
+            if (!minTierId.equals(expectedTierId)) {
+                throw new IllegalArgumentException("minTier and minTierId do not match");
+            }
         }
     }
 

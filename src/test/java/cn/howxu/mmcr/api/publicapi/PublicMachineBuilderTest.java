@@ -274,6 +274,54 @@ class PublicMachineBuilderTest {
     }
 
     @Test
+    void adapter_numbers_equal_stages_by_position_and_registration_rejects_unrepresentable_fields() {
+        PatternDefinition pattern = PatternBuilder.pattern()
+                .layer("F")
+                .where('F', BlockPredicate.block(Blocks.FURNACE))
+                .controller('F')
+                .build();
+        MachineDefinition definition = MachineBuilder.machine(MMCR.id("repeated_stage"))
+                .pattern(builder -> builder
+                        .layer("F")
+                        .where('F', BlockPredicate.block(Blocks.FURNACE))
+                        .controller('F'))
+                .stage(stage -> stage.extension().pattern(builder -> builder
+                        .layer("F")
+                        .where('F', BlockPredicate.block(Blocks.FURNACE))
+                        .controller('F')))
+                .stage(stage -> stage.extension().pattern(builder -> builder
+                        .layer("F")
+                        .where('F', BlockPredicate.block(Blocks.FURNACE))
+                        .controller('F')))
+                .build();
+
+        assertThat(PublicMachineAdapter.toDynamicMachine(definition).structureStages())
+                .extracting(cn.howxu.mmcr.api.machine.MachineStructureStage::number)
+                .containsExactly(1, 2, 3);
+        assertThatThrownBy(() -> PublicMachineAdapter.toRegistration(definition))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("structure stages");
+        assertThat(pattern).isNotNull();
+    }
+
+    @Test
+    void direct_public_value_construction_rejects_blank_display_name_and_mismatched_port_tier() {
+        PatternDefinition pattern = PatternBuilder.pattern()
+                .layer("F")
+                .where('F', BlockPredicate.block(Blocks.FURNACE))
+                .controller('F')
+                .build();
+        assertThatThrownBy(() -> new MachineDefinition(MMCR.id("blank_name"), " ", pattern, null, null,
+                null, null, null, null, null, null, null, 1, false, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("displayNameKey");
+        assertThatThrownBy(() -> new PortTiers.Requirement(PortTiers.PortCategory.ITEM,
+                cn.howxu.mmcr.util.IOType.INPUT, 1, "tiny"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("do not match");
+    }
+
+    @Test
     void machine_builder_preserves_role_module_semantics_and_rejects_invalid_combinations() {
         Identifier moduleId = MMCR.id("processing_module");
         MachineDefinition host = MachineBuilder.machine(MMCR.id("host"))

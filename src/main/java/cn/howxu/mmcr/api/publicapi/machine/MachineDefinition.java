@@ -35,6 +35,9 @@ public record MachineDefinition(
     public MachineDefinition {
         if (id == null) throw new IllegalArgumentException("id null");
         if (pattern == null) throw new IllegalArgumentException("pattern null");
+        if (displayNameKey != null && displayNameKey.isBlank()) {
+            throw new IllegalArgumentException("displayNameKey blank");
+        }
         displayNameKey = MachineRegistration.defaultDisplayNameKey(id, displayNameKey);
         controller = controller == null ? ControllerSpec.builder().build() : controller;
         appearance = appearance == null ? AppearanceSpec.builder().build() : appearance;
