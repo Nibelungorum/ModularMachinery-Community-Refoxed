@@ -4,11 +4,20 @@ import cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderState;
 import cn.howxu.mmcr.client.preview.scene.PreviewScenePictureInPictureRenderer;
 import cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderer;
 import cn.howxu.mmcr.mixin.client.preview.GuiGraphicsExtractorAccessor;
+
+import cn.howxu.mmcr.client.preview.scene.PreviewSceneCamera;
+import cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderContext;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
 import net.minecraft.world.phys.BlockHitResult;
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+
+import org.joml.Matrix4f;
+import org.joml.Vector4f;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -35,7 +44,7 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
         this.level = PreviewLevel.create(schema, () -> PreviewVisibility.ALL);
         this.scene = new PreviewSceneRenderer(level, schema);
         this.pictureInPicture = new PreviewScenePictureInPictureRenderer(
-                net.minecraft.client.Minecraft.getInstance().renderBuffers().bufferSource());
+                Minecraft.getInstance().renderBuffers().bufferSource());
         StructurePreviewReloadListener.register(this);
     }
 
@@ -63,7 +72,7 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
         int mouseY = graphics.mmcr$getMouseY();
         PreviewViewport absoluteViewport = context.absoluteViewport();
         PreviewViewport.FramebufferViewport framebuffer = context.framebufferViewport();
-        int guiScale = net.minecraft.client.Minecraft.getInstance().getWindow().getGuiScale();
+        int guiScale = Minecraft.getInstance().getWindow().getGuiScale();
         PreviewFrameViewport frame = new PreviewFrameViewport(absoluteViewport, framebuffer,
                 absoluteViewport.width() * guiScale, absoluteViewport.height() * guiScale, guiScale);
         if (!frame.containsAbsoluteGui(mouseX, mouseY)) hoverHit = null;
@@ -87,7 +96,7 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
     }
 
     /** Called after PiP has flushed its scene buffers into the owned depth texture. */
-    public void onPictureInPicturePrepared(GpuTexture depthTexture, cn.howxu.mmcr.client.preview.scene.PreviewSceneCamera camera,
+    public void onPictureInPicturePrepared(GpuTexture depthTexture, PreviewSceneCamera camera,
                                             int mouseX, int mouseY, PreviewFrameViewport frame) {
         lifecycle.drainOwnerQueue();
         if (closed) return;
@@ -119,7 +128,7 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
         }
     }
 
-    public void renderScene(cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderContext context, PreviewCamera camera) {
+    public void renderScene(PreviewSceneRenderContext context, PreviewCamera camera) {
         scene.render(context, camera, hoverHit, selectedHit);
     }
 
@@ -136,10 +145,10 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
 
     void markDirty() {
         if (closed) return;
-        if (net.minecraft.client.Minecraft.getInstance().isSameThread()) {
+        if (Minecraft.getInstance().isSameThread()) {
             scene.markDirty();
         } else {
-            net.minecraft.client.Minecraft.getInstance().execute(() -> {
+            Minecraft.getInstance().execute(() -> {
                 if (!closed) scene.markDirty();
             });
         }
@@ -149,10 +158,10 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
     public void close() {
         if (!lifecycle.queueRelease(this::releaseResources)) return;
         StructurePreviewReloadListener.unregister(this);
-        if (net.minecraft.client.Minecraft.getInstance().isSameThread()) {
+        if (Minecraft.getInstance().isSameThread()) {
             lifecycle.drainOwnerQueue();
         } else {
-            net.minecraft.client.Minecraft.getInstance().execute(lifecycle::drainOwnerQueue);
+            Minecraft.getInstance().execute(lifecycle::drainOwnerQueue);
         }
     }
 
@@ -161,11 +170,11 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
             hoverHit = null;
             return;
         }
-        org.joml.Vector4f point = new org.joml.Vector4f(sample.ndcX(), sample.ndcY(), depth * 2.0F - 1.0F, 1.0F);
-        org.joml.Matrix4f inverse = sample.camera().projection().mul(sample.camera().view(), new org.joml.Matrix4f()).invert();
+        Vector4f point = new Vector4f(sample.ndcX(), sample.ndcY(), depth * 2.0F - 1.0F, 1.0F);
+        Matrix4f inverse = sample.camera().projection().mul(sample.camera().view(), new Matrix4f()).invert();
         inverse.transform(point);
-        net.minecraft.world.phys.Vec3 target = new net.minecraft.world.phys.Vec3(point.x / point.w, point.y / point.w, point.z / point.w);
-        hoverHit = copyHit(scene.clip(new net.minecraft.world.phys.Vec3(sample.camera().eye()), target));
+        Vec3 target = new Vec3(point.x / point.w, point.y / point.w, point.z / point.w);
+        hoverHit = copyHit(scene.clip(new Vec3(sample.camera().eye()), target));
     }
 
     private static @Nullable BlockHitResult copyHit(@Nullable BlockHitResult hit) {

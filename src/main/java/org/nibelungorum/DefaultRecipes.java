@@ -36,12 +36,18 @@ import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
+
+import net.minecraft.world.item.alchemy.Potion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+
+import java.util.stream.Stream;
 
 /**
  * Built-in actual recipe content. Machine startup registration creates the recipe
@@ -72,7 +78,7 @@ public final class DefaultRecipes {
     }
 
     public static Map<Identifier, MachineRecipe> recipes() {
-        Map<Identifier, MachineRecipe> recipes = new java.util.LinkedHashMap<>();
+        Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>();
         for (Definition definition : definitions()) {
             MachineRecipe recipe = createRecipe(definition);
             recipes.put(recipe.id(), recipe);
@@ -148,7 +154,7 @@ public final class DefaultRecipes {
                 List.of(), 0, 1, true, List.of(), List.of(), false, List.of(), Set.of(SPACE_ELEVATOR_ID));
     }
 
-    private static ItemStack potion(net.minecraft.core.Holder<net.minecraft.world.item.alchemy.Potion> potion) {
+    private static ItemStack potion(Holder<Potion> potion) {
         bindItem(Items.POTION);
         return PotionContents.createItemStack(Items.POTION, potion);
     }
@@ -327,7 +333,7 @@ public final class DefaultRecipes {
 
     private static DataComponentPredicateSet componentsFromData(JsonObject root) {
         JsonObject components = root.getAsJsonObject("components");
-        Map<DataComponentType<?>, ComponentPredicate> predicates = new java.util.LinkedHashMap<>();
+        Map<DataComponentType<?>, ComponentPredicate> predicates = new LinkedHashMap<>();
         for (var entry : components.entrySet()) {
             DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(Identifier.parse(entry.getKey()));
             if (type == null) throw new IllegalArgumentException("Unknown data component type " + entry.getKey());
@@ -338,7 +344,7 @@ public final class DefaultRecipes {
 
     private static DataComponentPredicateSet componentsFromData(String componentsData) {
         JsonObject components = JsonParser.parseString(componentsData).getAsJsonObject();
-        Map<DataComponentType<?>, ComponentPredicate> predicates = new java.util.LinkedHashMap<>();
+        Map<DataComponentType<?>, ComponentPredicate> predicates = new LinkedHashMap<>();
         for (var entry : components.entrySet()) {
             DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(Identifier.parse(entry.getKey()));
             if (type == null) throw new IllegalArgumentException("Unknown data component type " + entry.getKey());
@@ -414,7 +420,7 @@ public final class DefaultRecipes {
         var coal = itemInput(Items.COAL, 1);
         var energy = energyInput(energyPerTick);
         var result = item(output, count);
-        List<MachineRequirement> requirements = new java.util.ArrayList<>();
+        List<MachineRequirement> requirements = new ArrayList<>();
         requirements.add(MachineRequirement.fromInput(coal));
         requirements.add(MachineRequirement.fromInput(energy));
         requirements.add(MachineRequirement.itemOutput(result));
@@ -425,14 +431,14 @@ public final class DefaultRecipes {
     }
 
     private static Definition thermalSmeltingDefinition(String level, Identifier levelId, int ticks,
-                                                        net.minecraft.world.item.Item input, net.minecraft.world.item.Item output, int energy) {
+                                                        Item input, Item output, int energy) {
         return new Definition(MMCR.id("thermal_smelting_furnace_" + level), THERMAL_SMELTING_FURNACE_ID, ticks,
                 List.of(itemInput(Items.COAL, 1), itemInput(input, 1), energyInput(energy)), List.of(item(output, 1)), List.of(), 4,
                 List.of(new LevelRequirement(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE, levelId)));
     }
 
     private static List<Definition> alloyFurnaceDefinitions() {
-        List<Definition> definitions = new java.util.ArrayList<>(standardDefinitions(ALLOY_FURNACE_ID, "alloy_furnace",
+        List<Definition> definitions = new ArrayList<>(standardDefinitions(ALLOY_FURNACE_ID, "alloy_furnace",
                 new Definition(ALLOY_FURNACE_NETHERITE_ID, ALLOY_FURNACE_ID, 100, List.of(itemInput(Items.ANCIENT_DEBRIS, 1), itemInput(Items.GOLD_INGOT, 1), energyInput(5)), List.of(item(Items.NETHERITE_INGOT, 1)), List.of())));
         definitions.add(new Definition(MMCR.id("alloy_furnace_jei_large"), ALLOY_FURNACE_ID, 400,
                 largeItemInputs(), largeItemOutputs(), List.of()));
@@ -442,7 +448,7 @@ public final class DefaultRecipes {
     }
 
     private static List<MachineIngredient> largeItemInputs() {
-        return java.util.stream.Stream.of(
+        return Stream.of(
                 Items.IRON_INGOT, Items.GOLD_INGOT, Items.COPPER_INGOT, Items.REDSTONE, Items.LAPIS_LAZULI,
                 Items.COAL, Items.DIAMOND, Items.EMERALD, Items.QUARTZ, Items.AMETHYST_SHARD,
                 Items.NETHERITE_SCRAP, Items.IRON_NUGGET, Items.GOLD_NUGGET, Items.COPPER_BLOCK, Items.IRON_BLOCK,
@@ -452,7 +458,7 @@ public final class DefaultRecipes {
     }
 
     private static List<ItemStack> largeItemOutputs() {
-        return java.util.stream.Stream.of(
+        return Stream.of(
                 Items.IRON_NUGGET, Items.GOLD_NUGGET, Items.COPPER_NUGGET, Items.REDSTONE, Items.LAPIS_LAZULI,
                 Items.COAL, Items.DIAMOND, Items.EMERALD, Items.QUARTZ, Items.AMETHYST_SHARD,
                 Items.NETHERITE_SCRAP, Items.IRON_INGOT, Items.GOLD_INGOT, Items.COPPER_INGOT, Items.IRON_BLOCK,
@@ -462,7 +468,7 @@ public final class DefaultRecipes {
     }
 
     private static List<MachineIngredient> twentyFiveItemInputs() {
-        return java.util.stream.Stream.of(
+        return Stream.of(
                 Items.IRON_INGOT, Items.GOLD_INGOT, Items.COPPER_INGOT, Items.REDSTONE, Items.LAPIS_LAZULI,
                 Items.COAL, Items.DIAMOND, Items.EMERALD, Items.QUARTZ, Items.AMETHYST_SHARD,
                 Items.NETHERITE_SCRAP, Items.IRON_NUGGET, Items.GOLD_NUGGET, Items.COPPER_BLOCK, Items.IRON_BLOCK,
@@ -472,7 +478,7 @@ public final class DefaultRecipes {
     }
 
     private static List<ItemStack> twentyFiveItemOutputs() {
-        return java.util.stream.Stream.of(
+        return Stream.of(
                 Items.RAW_COPPER, Items.RAW_GOLD, Items.RAW_IRON, Items.COAL_BLOCK, Items.QUARTZ_BLOCK,
                 Items.EMERALD_BLOCK, Items.DIAMOND_BLOCK, Items.LAPIS_BLOCK, Items.REDSTONE_BLOCK, Items.GOLD_BLOCK,
                 Items.IRON_BLOCK, Items.COPPER_BLOCK, Items.GOLD_NUGGET, Items.IRON_NUGGET, Items.NETHERITE_SCRAP,
@@ -496,7 +502,7 @@ public final class DefaultRecipes {
         );
     }
 
-    private static ItemStack item(net.minecraft.world.item.Item item, int count) {
+    private static ItemStack item(Item item, int count) {
         item.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         return new ItemStack(item, count);
     }
@@ -508,11 +514,11 @@ public final class DefaultRecipes {
         return stack;
     }
 
-    private static MachineIngredient itemInput(net.minecraft.world.item.Item item, int count) {
+    private static MachineIngredient itemInput(Item item, int count) {
         return new MachineIngredient.ItemIngredient(Ingredient.of(item), count);
     }
 
-    private static MachineIngredient itemInput(net.minecraft.world.item.Item item, int count, float consumeChance) {
+    private static MachineIngredient itemInput(Item item, int count, float consumeChance) {
         return new MachineIngredient.ItemIngredient(Ingredient.of(item), count, DataComponentPredicateSet.EMPTY, consumeChance);
     }
 

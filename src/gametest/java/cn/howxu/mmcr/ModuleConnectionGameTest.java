@@ -15,6 +15,8 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
 
+import net.minecraft.server.level.ServerLevel;
+
 import java.util.Map;
 import java.util.Set;
 
@@ -137,7 +139,7 @@ public class ModuleConnectionGameTest {
     private static void formAndRefresh(Fixture fixture) {
         fixture.host().serverTick();
         fixture.module().serverTick();
-        ModuleConnectionCoordinator.refresh((net.minecraft.server.level.ServerLevel) fixture.host().getLevel(), fixture.coupler());
+        ModuleConnectionCoordinator.refresh((ServerLevel) fixture.host().getLevel(), fixture.coupler());
     }
 
     private record Fixture(MachineControllerBlockEntity host, MachineControllerBlockEntity module,

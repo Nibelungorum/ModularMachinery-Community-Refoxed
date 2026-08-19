@@ -8,6 +8,8 @@ import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.util.IOType;
+
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
@@ -32,6 +34,10 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.redstone.Orientation;
 import net.minecraft.world.phys.BlockHitResult;
+
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.transfer.fluid.FluidUtil;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.function.Supplier;
@@ -66,13 +72,13 @@ public class IOPortBlock extends Block implements EntityBlock {
     }
 
     @Override
-    protected InteractionResult useItemOn(net.minecraft.world.item.ItemStack stack, BlockState state, Level level,
+    protected InteractionResult useItemOn(ItemStack stack, BlockState state, Level level,
                                           BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
         if (!player.isShiftKeyDown() && level.getBlockEntity(pos) instanceof FluidHatchBlockEntity hatch) {
             if (level.isClientSide()) return InteractionResult.TRY_WITH_EMPTY_HAND;
             ResourceHandler<FluidResource> handler = new PortFluidTransferHandler(
                     hatch.getResourceHandler(hit.getDirection()), hatch.ioType() == IOType.INPUT, hatch.ioType() == IOType.OUTPUT);
-            if (net.neoforged.neoforge.transfer.fluid.FluidUtil.interactWithFluidHandler(
+            if (FluidUtil.interactWithFluidHandler(
                     player, hand, pos, handler, null)) {
                 return InteractionResult.SUCCESS;
             }
@@ -93,7 +99,7 @@ public class IOPortBlock extends Block implements EntityBlock {
     @Override
     protected void neighborChanged(BlockState state, Level level, BlockPos pos, Block neighborBlock,
                                    @Nullable Orientation orientation, boolean movedByPiston) {
-        if (!level.isClientSide() && level.getBlockEntity(pos) instanceof cn.howxu.mmcr.internal.tile.IOPortBlockEntity port) {
+        if (!level.isClientSide() && level.getBlockEntity(pos) instanceof IOPortBlockEntity port) {
             port.markAutoIOCacheDirty();
         }
     }
@@ -111,7 +117,7 @@ public class IOPortBlock extends Block implements EntityBlock {
             Level level, BlockState state, BlockEntityType<T> beType) {
         if (level.isClientSide()) return null;
         return (lvl, pos, st, be) -> {
-            if (be instanceof cn.howxu.mmcr.internal.tile.IOPortBlockEntity port) port.serverTick();
+            if (be instanceof IOPortBlockEntity port) port.serverTick();
         };
     }
 
@@ -127,7 +133,7 @@ public class IOPortBlock extends Block implements EntityBlock {
     }
 
     private static AbstractContainerMenu openServerMenu(String kind, int containerId,
-                                                        net.minecraft.world.entity.player.Inventory playerInv,
+                                                        Inventory playerInv,
                                                         Level level, BlockPos pos) {
         return switch (menuKindFor(kind)) {
             case ITEM -> new ItemBusMenu(containerId, playerInv,

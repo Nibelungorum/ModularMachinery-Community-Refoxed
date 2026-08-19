@@ -2,6 +2,7 @@ package cn.howxu.mmcr.client.render;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.ArrayList;
 import cn.howxu.mmcr.mixin.client.preview.GuiGraphicsExtractorAccessor;
 import org.joml.Matrix3x2f;
 import com.mojang.blaze3d.textures.GpuSampler;
@@ -96,7 +97,7 @@ public final class FluidGuiRenderer {
         int[] widths = tileWidths(width);
         int[] heights = tileHeights(height);
         int yStart = y + height;
-        var result = new java.util.ArrayList<Tile>(widths.length * heights.length);
+        var result = new ArrayList<Tile>(widths.length * heights.length);
         for (int xTile = 0, xOffset = 0; xTile < widths.length; xTile++) {
             for (int yTile = 0; yTile < heights.length; yTile++) {
                 int tileWidth = widths[xTile];

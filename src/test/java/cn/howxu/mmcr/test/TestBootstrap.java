@@ -24,6 +24,8 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.PortKinds;
+
+import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
@@ -41,10 +43,15 @@ import org.nibelungorum.BuiltinMachines;
 import org.nibelungorum.DefaultMachineLevels;
 import org.nibelungorum.DefaultRecipes;
 
+import org.nibelungorum.DefaultMachines;
+import org.nibelungorum.TestMachines;
+
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
+
+import java.nio.file.Path;
 
 public final class TestBootstrap {
     private static boolean initialized;
@@ -62,11 +69,11 @@ public final class TestBootstrap {
         Class<?> distCls = Class.forName("net.neoforged.api.distmarker.Dist");
         Class<?> loadingModListCls = Class.forName("net.neoforged.fml.loading.LoadingModList");
         var fmlCtor = fmlLoaderCls.getDeclaredConstructor(
-                ClassLoader.class, String[].class, distCls, boolean.class, java.nio.file.Path.class);
+                ClassLoader.class, String[].class, distCls, boolean.class, Path.class);
         fmlCtor.setAccessible(true);
         Object fmlLoader = fmlCtor.newInstance(
                 Thread.currentThread().getContextClassLoader(), new String[0],
-                distCls.getField("CLIENT").get(null), false, java.nio.file.Path.of("."));
+                distCls.getField("CLIENT").get(null), false, Path.of("."));
 
         var lmlCtor = loadingModListCls.getDeclaredConstructor(
                 List.class, List.class, List.class, List.class, Map.class);
@@ -127,7 +134,7 @@ public final class TestBootstrap {
         restoreMachineDefinitions();
         registerDefaultMachineLevels();
         DynamicContentReloadService.reload(candidate -> {
-            org.nibelungorum.DefaultMachines.structures().values().forEach(candidate::registerStructure);
+            DefaultMachines.structures().values().forEach(candidate::registerStructure);
             registerGameTestMachineStructures(candidate);
         });
         DefaultRecipes.registerStatic(DefaultRecipes.recipes().values().stream().toList());
@@ -144,15 +151,15 @@ public final class TestBootstrap {
     }
 
     private static void registerGameTestMachineStructures(DynamicContentReloadService.Candidate candidate) {
-        candidate.registerStructure(new MachineStructureDefinition(id("test_cube"), org.nibelungorum.TestMachines.casingCubePattern(),
-                PortRequirementSpec.none(), List.of(), cn.howxu.mmcr.api.machine.MachineStructureRequirements.EMPTY));
-        candidate.registerStructure(new MachineStructureDefinition(id("controller_tick"), org.nibelungorum.TestMachines.casingCubePattern(),
-                PortRequirementSpec.none(), List.of(), cn.howxu.mmcr.api.machine.MachineStructureRequirements.EMPTY));
-        candidate.registerStructure(new MachineStructureDefinition(id("iron_compressor"), org.nibelungorum.TestMachines.ironCompressorPattern(),
-                PortRequirementSpec.none(), List.of(), cn.howxu.mmcr.api.machine.MachineStructureRequirements.EMPTY));
-        candidate.registerStructure(new MachineStructureDefinition(id("distillation_tower_test"), org.nibelungorum.TestMachines.distillationTowerDeclarations()));
-        candidate.registerStructure(new MachineStructureDefinition(id("expandable_structure_stages"), org.nibelungorum.TestMachines.expandableStageDeclarations()));
-        candidate.registerStructure(new MachineStructureDefinition(id("expandable_structure_vertical_roll"), org.nibelungorum.TestMachines.expandableStageDeclarations()));
+        candidate.registerStructure(new MachineStructureDefinition(id("test_cube"), TestMachines.casingCubePattern(),
+                PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY));
+        candidate.registerStructure(new MachineStructureDefinition(id("controller_tick"), TestMachines.casingCubePattern(),
+                PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY));
+        candidate.registerStructure(new MachineStructureDefinition(id("iron_compressor"), TestMachines.ironCompressorPattern(),
+                PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY));
+        candidate.registerStructure(new MachineStructureDefinition(id("distillation_tower_test"), TestMachines.distillationTowerDeclarations()));
+        candidate.registerStructure(new MachineStructureDefinition(id("expandable_structure_stages"), TestMachines.expandableStageDeclarations()));
+        candidate.registerStructure(new MachineStructureDefinition(id("expandable_structure_vertical_roll"), TestMachines.expandableStageDeclarations()));
     }
 
     private static void addTestMachineSuppliers() {

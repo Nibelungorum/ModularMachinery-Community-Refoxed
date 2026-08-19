@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.LinkedHashMap;
 
 /**
  * Client-only resource pack that supplies dynamic machine blockstate and item model definitions.
@@ -54,7 +55,7 @@ public final class RuntimeMachineResourcePack implements PackResources {
     }
 
     static Map<Identifier, String> resources() {
-        Map<Identifier, String> resources = new java.util.LinkedHashMap<>();
+        Map<Identifier, String> resources = new LinkedHashMap<>();
         RuntimeMachineModelRegistry.definitions().forEach(definition -> {
             String name = definition.blockName();
             resources.put(MMCR.id("blockstates/" + name + ".json"),

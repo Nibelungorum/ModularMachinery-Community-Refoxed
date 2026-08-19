@@ -18,6 +18,8 @@ import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.util.ReadableNumber;
+
+import cn.howxu.mmcr.internal.port.ItemBusSize;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -40,6 +42,8 @@ import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.neoforged.neoforge.fluids.FluidStack;
+
+import net.minecraft.client.gui.Font;
 
 import java.text.NumberFormat;
 import java.util.ArrayList;
@@ -616,7 +620,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         if (menu instanceof EnergyHatchMenu)        return TANK_TEXTURE;
         if (menu instanceof MachineControllerMenu)  return CONTROLLER_TEXTURE;
         if (menu instanceof FactorySchedulerMenu factory) return MMCR.id(factory.texturePath());
-        return MMCR.id(ItemBusMenu.texturePathForSize(cn.howxu.mmcr.internal.port.ItemBusSize.NORMAL));
+        return MMCR.id(ItemBusMenu.texturePathForSize(ItemBusSize.NORMAL));
     }
 
     private void renderFluidTank(GuiGraphicsExtractor g, FluidHatchMenu menu, int x, int y) {
@@ -943,7 +947,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
             graphics.pose().popMatrix();
         }
 
-        private void renderCenteredLine(GuiGraphicsExtractor graphics, net.minecraft.client.gui.Font font, Component text, int y, float scale) {
+        private void renderCenteredLine(GuiGraphicsExtractor graphics, Font font, Component text, int y, float scale) {
             int textWidth = font.width(text);
             int textX = (int) ((getX() + (getWidth() - textWidth * scale) / 2.0F) / scale);
             graphics.text(font, text, textX, (int) (y / scale), 0xFFFFFFFF, false);

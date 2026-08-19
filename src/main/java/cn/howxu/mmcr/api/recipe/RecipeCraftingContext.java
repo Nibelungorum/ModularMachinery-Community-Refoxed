@@ -19,6 +19,8 @@ import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
 import cn.howxu.mmcr.util.IOType;
+
+import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import com.mojang.serialization.DynamicOps;
@@ -29,12 +31,17 @@ import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.IItemHandlerModifiable;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
+
+import com.google.gson.JsonElement;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
+
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.crafting.Ingredient;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -44,6 +51,8 @@ import java.util.Comparator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
+
+import java.util.function.Function;
 
 public final class RecipeCraftingContext {
 
@@ -194,10 +203,10 @@ public final class RecipeCraftingContext {
             boolean valid = true;
             for (int j = 0; j < Math.max(0, routeInput.getIntOr("transfer_count", 0)); j++) {
                 ValueInput transferInput = routeInput.childOrEmpty("transfer_" + j);
-                net.minecraft.core.BlockPos pos = net.minecraft.core.BlockPos.of(transferInput.getLongOr("pos", Long.MIN_VALUE));
+                BlockPos pos = BlockPos.of(transferInput.getLongOr("pos", Long.MIN_VALUE));
                 int slot = transferInput.getIntOr("slot", -1);
                 int amount = transferInput.getIntOr("amount", 0);
-                if (pos.equals(net.minecraft.core.BlockPos.of(Long.MIN_VALUE)) || slot < 0 || amount <= 0) {
+                if (pos.equals(BlockPos.of(Long.MIN_VALUE)) || slot < 0 || amount <= 0) {
                     valid = false;
                     break;
                 }
@@ -217,10 +226,10 @@ public final class RecipeCraftingContext {
             boolean valid = true;
             for (int j = 0; j < Math.max(0, routeInput.getIntOr("transfer_count", 0)); j++) {
                 ValueInput transferInput = routeInput.childOrEmpty("transfer_" + j);
-                net.minecraft.core.BlockPos pos = net.minecraft.core.BlockPos.of(transferInput.getLongOr("pos", Long.MIN_VALUE));
+                BlockPos pos = BlockPos.of(transferInput.getLongOr("pos", Long.MIN_VALUE));
                 ItemStack stack = transferInput.read("stack", ItemStack.CODEC).orElse(ItemStack.EMPTY);
                 int slot = transferInput.getIntOr("slot", -1);
-                if (pos.equals(net.minecraft.core.BlockPos.of(Long.MIN_VALUE)) || stack.isEmpty() || slot < 0) {
+                if (pos.equals(BlockPos.of(Long.MIN_VALUE)) || stack.isEmpty() || slot < 0) {
                     valid = false;
                     break;
                 }
@@ -242,7 +251,7 @@ public final class RecipeCraftingContext {
             boolean valid = true;
             for (int j = 0; j < Math.max(0, routeInput.getIntOr("transfer_count", 0)); j++) {
                 ValueInput transferInput = routeInput.childOrEmpty("transfer_" + j);
-                net.minecraft.core.BlockPos pos = net.minecraft.core.BlockPos.of(transferInput.getLongOr("pos", Long.MIN_VALUE));
+                BlockPos pos = BlockPos.of(transferInput.getLongOr("pos", Long.MIN_VALUE));
                 FluidStack stack = transferInput.read("stack", FluidStack.CODEC).orElse(FluidStack.EMPTY);
                 int tank = transferInput.getIntOr("tank", -1);
                 if (stack.isEmpty() || tank < 0) {
@@ -265,10 +274,10 @@ public final class RecipeCraftingContext {
             boolean valid = true;
             for (int j = 0; j < Math.max(0, routeInput.getIntOr("transfer_count", 0)); j++) {
                 ValueInput transferInput = routeInput.childOrEmpty("transfer_" + j);
-                net.minecraft.core.BlockPos pos = net.minecraft.core.BlockPos.of(transferInput.getLongOr("pos", Long.MIN_VALUE));
+                BlockPos pos = BlockPos.of(transferInput.getLongOr("pos", Long.MIN_VALUE));
                 FluidStack stack = transferInput.read("stack", FluidStack.CODEC).orElse(FluidStack.EMPTY);
                 int tank = transferInput.getIntOr("tank", -1);
-                if (pos.equals(net.minecraft.core.BlockPos.of(Long.MIN_VALUE)) || stack.isEmpty() || tank < 0) {
+                if (pos.equals(BlockPos.of(Long.MIN_VALUE)) || stack.isEmpty() || tank < 0) {
                     valid = false;
                     break;
                 }
@@ -444,7 +453,7 @@ public final class RecipeCraftingContext {
                 .toList();
     }
 
-    private double levelMultiplier(java.util.function.Function<MachineLevel, cn.howxu.mmcr.api.machine.level.LevelModifier> accessor,
+    private double levelMultiplier(Function<MachineLevel, LevelModifier> accessor,
                                    LevelValue value) {
         double multiplier = 1D;
         for (MachineLevel level : sortedLevels()) {
@@ -804,7 +813,7 @@ public final class RecipeCraftingContext {
         return best;
     }
 
-    public int countMatchingItemInputs(net.minecraft.world.item.crafting.Ingredient ingredient, List<String> requiredTags) {
+    public int countMatchingItemInputs(Ingredient ingredient, List<String> requiredTags) {
         if (ingredient == null) return 0;
         int count = 0;
         for (ItemInputState state : itemInputStates(requiredTags)) {
@@ -1755,7 +1764,7 @@ public final class RecipeCraftingContext {
         return false;
     }
 
-    private @Nullable ItemBusBlockEntity itemBusAt(net.minecraft.core.BlockPos pos, IOType ioType) {
+    private @Nullable ItemBusBlockEntity itemBusAt(BlockPos pos, IOType ioType) {
         for (ProcessingComponent component : controller.getComponents()) {
             if (!(component.getContainer() instanceof ItemBusBlockEntity bus)) continue;
             if (bus.ioType() == ioType && component.getPos().equals(pos)) return bus;
@@ -1763,7 +1772,7 @@ public final class RecipeCraftingContext {
         return null;
     }
 
-    private @Nullable FluidHatchBlockEntity fluidHatchAt(net.minecraft.core.BlockPos pos, IOType ioType) {
+    private @Nullable FluidHatchBlockEntity fluidHatchAt(BlockPos pos, IOType ioType) {
         for (ProcessingComponent component : controller.getComponents()) {
             if (!(component.getContainer() instanceof FluidHatchBlockEntity hatch)) continue;
             if (hatch.ioType() == ioType && component.getPos().equals(pos)) return hatch;
@@ -1865,7 +1874,7 @@ public final class RecipeCraftingContext {
         }
     }
 
-    private DynamicOps<com.google.gson.JsonElement> componentOps() {
+    private DynamicOps<JsonElement> componentOps() {
         var level = controller.getLevel();
         return level == null ? JsonOps.INSTANCE : RegistryOps.create(JsonOps.INSTANCE, level.registryAccess());
     }
@@ -1973,16 +1982,16 @@ public final class RecipeCraftingContext {
 
     private record FluidOutputRoute(List<FluidOutputTransfer> transfers) {}
 
-    private record ItemInputTransfer(IItemHandler handler, @Nullable net.minecraft.core.BlockPos pos, int slot,
+    private record ItemInputTransfer(IItemHandler handler, @Nullable BlockPos pos, int slot,
                                      MachineIngredient.ItemIngredient ingredient, int amount) {}
 
-    private record ItemOutputTransfer(IItemHandler handler, @Nullable net.minecraft.core.BlockPos pos, int slot, ItemStack stack) {}
+    private record ItemOutputTransfer(IItemHandler handler, @Nullable BlockPos pos, int slot, ItemStack stack) {}
 
-    private record FluidInputTransfer(ResourceHandler<FluidResource> handler, @Nullable net.minecraft.core.BlockPos pos, int tank, FluidStack stack) {}
+    private record FluidInputTransfer(ResourceHandler<FluidResource> handler, @Nullable BlockPos pos, int tank, FluidStack stack) {}
 
-    private record PersistedFluidTransfer(net.minecraft.core.BlockPos pos, int tank, FluidStack stack) {}
+    private record PersistedFluidTransfer(BlockPos pos, int tank, FluidStack stack) {}
 
-    private record FluidOutputTransfer(ResourceHandler<FluidResource> handler, @Nullable net.minecraft.core.BlockPos pos, int tank, FluidStack stack) {}
+    private record FluidOutputTransfer(ResourceHandler<FluidResource> handler, @Nullable BlockPos pos, int tank, FluidStack stack) {}
 
     record ItemMatchKey(MachineIngredient.ItemIngredient ingredient, ItemStack stack) { }
 

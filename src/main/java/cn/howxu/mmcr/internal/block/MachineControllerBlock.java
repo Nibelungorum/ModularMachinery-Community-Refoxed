@@ -35,6 +35,8 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import org.jetbrains.annotations.Nullable;
 import net.minecraft.world.phys.BlockHitResult;
 
+import net.minecraft.world.entity.player.Inventory;
+
 import java.util.List;
 
 public class MachineControllerBlock extends Block implements EntityBlock {
@@ -156,7 +158,7 @@ public class MachineControllerBlock extends Block implements EntityBlock {
                 titleFor(machineId));
     }
 
-    static AbstractContainerMenu createMenu(int containerId, net.minecraft.world.entity.player.Inventory playerInventory,
+    static AbstractContainerMenu createMenu(int containerId, Inventory playerInventory,
                                             Player player, @Nullable MachineControllerBlockEntity controller) {
         if (controller != null && controller.hasFactoryController()) {
             return new FactoryControllerMenu(containerId, playerInventory, controller,

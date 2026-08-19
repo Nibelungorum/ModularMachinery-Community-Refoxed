@@ -46,13 +46,41 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.scores.Scoreboard;
 import net.neoforged.neoforge.entity.PartEntity;
 
+import net.minecraft.core.Direction;
+import net.minecraft.core.HolderSet;
+import net.minecraft.core.MappedRegistry;
+import net.minecraft.core.RegistrationInfo;
+import net.minecraft.core.particles.ExplosionParticleInfo;
+import net.minecraft.core.particles.ParticleOptions;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.util.AbortableIterationConsumer;
+import net.minecraft.util.valueproviders.ConstantInt;
+import net.minecraft.world.Difficulty;
+import net.minecraft.world.attribute.EnvironmentAttributeMap;
+import net.minecraft.world.damagesource.DamageType;
+import net.minecraft.world.damagesource.DamageTypes;
+import net.minecraft.world.level.CardinalLighting;
+import net.minecraft.world.level.biome.BiomeGenerationSettings;
+import net.minecraft.world.level.biome.BiomeSpecialEffects;
+import net.minecraft.world.level.biome.MobSpawnSettings;
+import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.entity.EntityTypeTest;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.ticks.BlackholeTickAccess;
+import net.minecraft.world.ticks.LevelTickAccess;
+
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
+
+import com.mojang.serialization.Lifecycle;
+import java.util.function.Consumer;
 
 /**
  * Render-only level that exposes an immutable structure-preview schema.
@@ -108,7 +136,7 @@ public final class PreviewLevel extends Level {
         return getBlockState(position).getFluidState();
     }
 
-    public float getShade(net.minecraft.core.Direction direction, boolean shade) {
+    public float getShade(Direction direction, boolean shade) {
         if (!shade) return 1.0F;
         return switch (direction) {
             case DOWN -> 0.5F;
@@ -136,7 +164,7 @@ public final class PreviewLevel extends Level {
         BlockEntity cached = blockEntities.get(immutablePosition);
         if (cached != null) return cached;
         assertRenderThread();
-        BlockEntity blockEntity = state.getBlock() instanceof net.minecraft.world.level.block.EntityBlock entityBlock
+        BlockEntity blockEntity = state.getBlock() instanceof EntityBlock entityBlock
                 ? entityBlock.newBlockEntity(immutablePosition, state) : null;
         if (blockEntity == null) return null;
         blockEntity.setLevel(this);
@@ -162,7 +190,7 @@ public final class PreviewLevel extends Level {
     @Override public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) { }
     @Override public void playSeededSound(Entity source, double x, double y, double z, Holder<SoundEvent> sound, SoundSource category, float volume, float pitch, long seed) { }
     @Override public void playSeededSound(Entity source, Entity entity, Holder<SoundEvent> sound, SoundSource category, float volume, float pitch, long seed) { }
-    @Override public void explode(Entity entity, DamageSource damageSource, ExplosionDamageCalculator calculator, double x, double y, double z, float radius, boolean fire, ExplosionInteraction interaction, net.minecraft.core.particles.ParticleOptions smallParticle, net.minecraft.core.particles.ParticleOptions largeParticle, WeightedList<net.minecraft.core.particles.ExplosionParticleInfo> particles, Holder<SoundEvent> soundEvent) { }
+    @Override public void explode(Entity entity, DamageSource damageSource, ExplosionDamageCalculator calculator, double x, double y, double z, float radius, boolean fire, ExplosionInteraction interaction, ParticleOptions smallParticle, ParticleOptions largeParticle, WeightedList<ExplosionParticleInfo> particles, Holder<SoundEvent> soundEvent) { }
     @Override public String gatherChunkSourceStats() { return chunkSource.gatherStats(); }
     @Override public void setRespawnData(LevelData.RespawnData respawnData) { }
     @Override public LevelData.RespawnData getRespawnData() { return LevelData.RespawnData.DEFAULT; }
@@ -185,30 +213,30 @@ public final class PreviewLevel extends Level {
     @Override public FeatureFlagSet enabledFeatures() { return FeatureFlags.DEFAULT_FLAGS; }
     @Override public WorldBorder getWorldBorder() { return worldBorder; }
     @Override public List<? extends Player> players() { return List.of(); }
-    @Override public net.minecraft.world.ticks.LevelTickAccess<Block> getBlockTicks() { return net.minecraft.world.ticks.BlackholeTickAccess.emptyLevelList(); }
-    @Override public net.minecraft.world.ticks.LevelTickAccess<Fluid> getFluidTicks() { return net.minecraft.world.ticks.BlackholeTickAccess.emptyLevelList(); }
+    @Override public LevelTickAccess<Block> getBlockTicks() { return BlackholeTickAccess.emptyLevelList(); }
+    @Override public LevelTickAccess<Fluid> getFluidTicks() { return BlackholeTickAccess.emptyLevelList(); }
     @Override public int getHeight(Heightmap.Types type, int x, int z) { return schema.max().getY() + 1; }
     @Override public int getSkyDarken() { return 0; }
 
     private static RegistryAccess previewRegistryAccess() {
-        net.minecraft.core.MappedRegistry<Biome> biomes = new net.minecraft.core.MappedRegistry<>(Registries.BIOME,
-                com.mojang.serialization.Lifecycle.stable());
+        MappedRegistry<Biome> biomes = new MappedRegistry<>(Registries.BIOME,
+                Lifecycle.stable());
         Biome biome = new Biome.BiomeBuilder().hasPrecipitation(false).temperature(0.8F).downfall(0.0F)
-                .specialEffects(new net.minecraft.world.level.biome.BiomeSpecialEffects.Builder().waterColor(0x3F76E4).build())
-                .mobSpawnSettings(new net.minecraft.world.level.biome.MobSpawnSettings.Builder().build())
-                .generationSettings(new net.minecraft.world.level.biome.BiomeGenerationSettings.PlainBuilder().build())
+                .specialEffects(new BiomeSpecialEffects.Builder().waterColor(0x3F76E4).build())
+                .mobSpawnSettings(new MobSpawnSettings.Builder().build())
+                .generationSettings(new BiomeGenerationSettings.PlainBuilder().build())
                 .build();
-        biomes.register(Biomes.PLAINS, biome, net.minecraft.core.RegistrationInfo.BUILT_IN);
-        net.minecraft.core.MappedRegistry<net.minecraft.world.damagesource.DamageType> damageTypes =
-                new net.minecraft.core.MappedRegistry<>(Registries.DAMAGE_TYPE, com.mojang.serialization.Lifecycle.stable());
-        for (java.lang.reflect.Field field : net.minecraft.world.damagesource.DamageTypes.class.getFields()) {
+        biomes.register(Biomes.PLAINS, biome, RegistrationInfo.BUILT_IN);
+        MappedRegistry<DamageType> damageTypes =
+                new MappedRegistry<>(Registries.DAMAGE_TYPE, Lifecycle.stable());
+        for (java.lang.reflect.Field field : DamageTypes.class.getFields()) {
             if (field.getType() != ResourceKey.class) continue;
             try {
                 @SuppressWarnings("unchecked")
-                ResourceKey<net.minecraft.world.damagesource.DamageType> key =
-                        (ResourceKey<net.minecraft.world.damagesource.DamageType>) field.get(null);
-                damageTypes.register(key, new net.minecraft.world.damagesource.DamageType(key.identifier().getPath(), 0.0F),
-                        net.minecraft.core.RegistrationInfo.BUILT_IN);
+                ResourceKey<DamageType> key =
+                        (ResourceKey<DamageType>) field.get(null);
+                damageTypes.register(key, new DamageType(key.identifier().getPath(), 0.0F),
+                        RegistrationInfo.BUILT_IN);
             } catch (IllegalAccessException exception) {
                 throw new IllegalStateException("cannot initialize preview damage registry", exception);
             }
@@ -219,10 +247,10 @@ public final class PreviewLevel extends Level {
 
     private static Holder<DimensionType> overworldType() {
         return Holder.direct(new DimensionType(true, false, false, false, 1.0D, false ? 0 : 256,
-                256, 256, net.minecraft.tags.BlockTags.INFINIBURN_OVERWORLD, 0.0F,
-                new DimensionType.MonsterSettings(net.minecraft.util.valueproviders.ConstantInt.of(0), 0),
-                DimensionType.Skybox.OVERWORLD, net.minecraft.world.level.CardinalLighting.Type.DEFAULT,
-                net.minecraft.world.attribute.EnvironmentAttributeMap.EMPTY, net.minecraft.core.HolderSet.empty(), java.util.Optional.empty()));
+                256, 256, BlockTags.INFINIBURN_OVERWORLD, 0.0F,
+                new DimensionType.MonsterSettings(ConstantInt.of(0), 0),
+                DimensionType.Skybox.OVERWORLD, CardinalLighting.Type.DEFAULT,
+                EnvironmentAttributeMap.EMPTY, HolderSet.empty(), Optional.empty()));
     }
 
     /**
@@ -234,7 +262,7 @@ public final class PreviewLevel extends Level {
         @Override public LevelData.RespawnData getRespawnData() { return LevelData.RespawnData.DEFAULT; }
         @Override public long getGameTime() { return 0L; }
         @Override public boolean isHardcore() { return false; }
-        @Override public net.minecraft.world.Difficulty getDifficulty() { return net.minecraft.world.Difficulty.PEACEFUL; }
+        @Override public Difficulty getDifficulty() { return Difficulty.PEACEFUL; }
         @Override public boolean isDifficultyLocked() { return true; }
         @Override public void setSpawn(LevelData.RespawnData respawnData) { }
     }
@@ -247,10 +275,10 @@ public final class PreviewLevel extends Level {
     private enum EmptyEntityGetter implements LevelEntityGetter<Entity> {
         INSTANCE;
         @Override public Entity get(int id) { return null; }
-        @Override public Entity get(java.util.UUID id) { return null; }
+        @Override public Entity get(UUID id) { return null; }
         @Override public Iterable<Entity> getAll() { return List.of(); }
-        @Override public <U extends Entity> void get(net.minecraft.world.level.entity.EntityTypeTest<Entity, U> type, net.minecraft.util.AbortableIterationConsumer<U> consumer) { }
-        @Override public void get(net.minecraft.world.phys.AABB bounds, java.util.function.Consumer<Entity> consumer) { }
-        @Override public <U extends Entity> void get(net.minecraft.world.level.entity.EntityTypeTest<Entity, U> type, net.minecraft.world.phys.AABB bounds, net.minecraft.util.AbortableIterationConsumer<U> consumer) { }
+        @Override public <U extends Entity> void get(EntityTypeTest<Entity, U> type, AbortableIterationConsumer<U> consumer) { }
+        @Override public void get(AABB bounds, Consumer<Entity> consumer) { }
+        @Override public <U extends Entity> void get(EntityTypeTest<Entity, U> type, AABB bounds, AbortableIterationConsumer<U> consumer) { }
     }
 }

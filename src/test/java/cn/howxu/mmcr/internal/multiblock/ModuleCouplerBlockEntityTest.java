@@ -18,6 +18,10 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Method;
 import java.util.stream.Stream;
 
+import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -27,7 +31,7 @@ class ModuleCouplerBlockEntityTest {
 
     private static final HolderLookup.Provider EMPTY_LOOKUP = HolderLookup.Provider.create(Stream.empty());
     private static final ResourceKey<Level> MODULE_DIMENSION = ResourceKey.create(
-            net.minecraft.core.registries.Registries.DIMENSION, Identifier.fromNamespaceAndPath("mmcr_test", "module"));
+            Registries.DIMENSION, Identifier.fromNamespaceAndPath("mmcr_test", "module"));
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -77,26 +81,26 @@ class ModuleCouplerBlockEntityTest {
         assertThat(second).isEqualTo(first);
     }
 
-    private static cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity coupler() {
-        return (cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity) ModBlockEntities.MODULE_BRIDGE.get().create(
+    private static ModuleCouplerBlockEntity coupler() {
+        return (ModuleCouplerBlockEntity) ModBlockEntities.MODULE_BRIDGE.get().create(
                 BlockPos.ZERO, ModBlocks.MODULE_BRIDGE.get().defaultBlockState());
     }
 
-    private static net.minecraft.world.level.storage.ValueInput inputFrom(cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity coupler) throws Exception {
+    private static ValueInput inputFrom(ModuleCouplerBlockEntity coupler) throws Exception {
         return TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, save(coupler).buildResult());
     }
 
-    private static TagValueOutput save(cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity coupler) throws Exception {
+    private static TagValueOutput save(ModuleCouplerBlockEntity coupler) throws Exception {
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        Method method = coupler.getClass().getDeclaredMethod("saveAdditional", net.minecraft.world.level.storage.ValueOutput.class);
+        Method method = coupler.getClass().getDeclaredMethod("saveAdditional", ValueOutput.class);
         method.setAccessible(true);
         method.invoke(coupler, output);
         return output;
     }
 
-    private static void invokeLoadAdditional(cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity coupler,
-                                             net.minecraft.world.level.storage.ValueInput input) throws Exception {
-        Method method = coupler.getClass().getDeclaredMethod("loadAdditional", net.minecraft.world.level.storage.ValueInput.class);
+    private static void invokeLoadAdditional(ModuleCouplerBlockEntity coupler,
+                                             ValueInput input) throws Exception {
+        Method method = coupler.getClass().getDeclaredMethod("loadAdditional", ValueInput.class);
         method.setAccessible(true);
         method.invoke(coupler, input);
     }

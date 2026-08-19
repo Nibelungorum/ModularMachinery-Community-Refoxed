@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
+import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class CompiledMachinePatternTest {
@@ -143,7 +144,7 @@ class CompiledMachinePatternTest {
                 .modifier('M', replacement)
                 .build(second);
         DynamicPatternSpec dynamic = new DynamicPatternSpec("stage_dynamic", new BlockArray(Map.of()), null,
-                0, 1, BlockPos.ZERO, BlockPos.ZERO, java.util.Set.of(Direction.SOUTH));
+                0, 1, BlockPos.ZERO, BlockPos.ZERO, Set.of(Direction.SOUTH));
         Machine machine = new Machine() {
             @Override public Identifier registryName() { return id; }
             @Override public BlockArray pattern() { return first; }

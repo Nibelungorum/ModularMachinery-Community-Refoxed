@@ -26,6 +26,10 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Set;
 
+import java.util.Map;
+import java.util.Optional;
+
+import cn.howxu.mmcr.api.machine.MachineRegistration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -56,7 +60,7 @@ class MachineBuilderJSTest {
 
         assertThat(builder.outputs)
                 .extracting(stack -> stack.typeHolder().unwrapKey())
-                .allMatch(java.util.Optional::isPresent);
+                .allMatch(Optional::isPresent);
         assertThat(builder.outputs)
                 .extracting(stack -> stack.typeHolder().unwrapKey().orElseThrow().identifier())
                 .containsExactly(MMCR.id("item_output_bus"), MMCR.id("item_input_bus"));
@@ -153,7 +157,7 @@ class MachineBuilderJSTest {
 
     @Test
     void startup_builder_preserves_static_pattern_for_role_validation() {
-        BlockArray pattern = new BlockArray(java.util.Map.of(BlockPos.ZERO, BlockPredicate.machineCoupler()));
+        BlockArray pattern = new BlockArray(Map.of(BlockPos.ZERO, BlockPredicate.machineCoupler()));
 
         var registration = new MachineBuilderJS(MMCR.id("static_module"))
                 .module()
@@ -329,7 +333,7 @@ class MachineBuilderJSTest {
         var result = (Wrapper) context.evaluateString(scope, """
                 builder.appearance('minecraft:bricks').createObject();
                 """, "appearance-test", 1, null);
-        var registration = (cn.howxu.mmcr.api.machine.MachineRegistration) result.unwrap();
+        var registration = (MachineRegistration) result.unwrap();
 
         assertThat(registration.appearance()).isEqualTo(new MachineAppearanceSpec(
                 Identifier.withDefaultNamespace("bricks"),
@@ -354,7 +358,7 @@ class MachineBuilderJSTest {
                   .finishSound('minecraft:entity.ender_dragon.growl')
                   .createObject();
                 """, "startup-builder-test", 1, null);
-        var registration = (cn.howxu.mmcr.api.machine.MachineRegistration) result.unwrap();
+        var registration = (MachineRegistration) result.unwrap();
 
         assertThat(registration.acceptedModuleIds()).containsExactly(Identifier.parse("mmcr:space_reassembler"));
         assertThat(registration.appearance().machineBasicBlock()).isEqualTo(Identifier.withDefaultNamespace("smooth_quartz"));

@@ -28,6 +28,9 @@ import net.minecraft.world.level.lighting.LevelLightEngine;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
 
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.material.FluidState;
+
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashSet;
@@ -107,8 +110,8 @@ public final class PreviewSceneMeshCompiler {
     private static BlockAndTintGetter previewRegion(PreviewLevel level) {
         return new BlockAndTintGetter() {
             @Override public BlockState getBlockState(BlockPos position) { return level.getBlockState(position); }
-            @Override public net.minecraft.world.level.material.FluidState getFluidState(BlockPos position) { return level.getFluidState(position); }
-            @Override public net.minecraft.world.level.block.entity.BlockEntity getBlockEntity(BlockPos position) { return null; }
+            @Override public FluidState getFluidState(BlockPos position) { return level.getFluidState(position); }
+            @Override public BlockEntity getBlockEntity(BlockPos position) { return null; }
             @Override public int getHeight() { return level.getHeight(); }
             @Override public int getMinY() { return level.getMinY(); }
             @Override public CardinalLighting cardinalLighting() { return CardinalLighting.DEFAULT; }

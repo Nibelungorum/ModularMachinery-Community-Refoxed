@@ -34,6 +34,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
+import com.google.gson.JsonArray;
+import com.mojang.serialization.JsonOps;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
@@ -66,7 +68,7 @@ class MachineRecipeSchemaTest {
         assertThat(modifiers.optional.getInformativeValue()).isEqualTo(List.of());
         assertThat(modifiers.component).isInstanceOfSatisfying(ListRecipeComponent.class, component -> {
             assertThat(component.component()).isSameAs(MachineRecipeSchema.JSON_ELEMENT);
-            assertThat(component.codec().parse(com.mojang.serialization.JsonOps.INSTANCE, new com.google.gson.JsonArray()).getOrThrow())
+            assertThat(component.codec().parse(JsonOps.INSTANCE, new JsonArray()).getOrThrow())
                     .isInstanceOf(List.class);
         });
         assertThat(MachineRecipeSchema.JSON_ELEMENT.typeInfo().asClass()).isEqualTo(JsonElement.class);

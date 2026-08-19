@@ -12,6 +12,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Collections;
 
 /**
  * Immutable conservative lookup index for machine recipe input items.
@@ -99,6 +100,6 @@ public final class RecipeCandidateIndex {
     }
 
     private static <T> Set<T> orderedSet(Set<T> values) {
-        return java.util.Collections.unmodifiableSet(new LinkedHashSet<>(values));
+        return Collections.unmodifiableSet(new LinkedHashSet<>(values));
     }
 }

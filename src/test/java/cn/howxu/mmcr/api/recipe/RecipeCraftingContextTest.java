@@ -64,6 +64,16 @@ import java.util.TreeMap;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.util.ProblemReporter;
 
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity;
+import cn.howxu.mmcr.util.IOType;
+import java.util.stream.Stream;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.material.Fluid;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class RecipeCraftingContextTest {
@@ -485,9 +495,9 @@ class RecipeCraftingContextTest {
         ));
         MachineControllerBlockEntity controller = controllerWithComponents(ironOnly, goldRoom);
         replaceComponents(controller, List.of(
-                new ProcessingComponent(new MachineComponent(PortKinds.ITEM_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT),
+                new ProcessingComponent(new MachineComponent(PortKinds.ITEM_OUTPUT, IOType.OUTPUT),
                         ironOnly, ironOnly.getBlockPos(), BlockPos.ZERO, List.of("iron")),
-                new ProcessingComponent(new MachineComponent(PortKinds.ITEM_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT),
+                new ProcessingComponent(new MachineComponent(PortKinds.ITEM_OUTPUT, IOType.OUTPUT),
                         goldRoom, goldRoom.getBlockPos(), BlockPos.ZERO, List.of("gold"))
         ));
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
@@ -536,11 +546,11 @@ class RecipeCraftingContextTest {
         ));
         MachineControllerBlockEntity controller = controllerWithComponents(water, item, lava);
         replaceComponents(controller, List.of(
-                new ProcessingComponent(new MachineComponent(PortKinds.FLUID_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT),
+                new ProcessingComponent(new MachineComponent(PortKinds.FLUID_OUTPUT, IOType.OUTPUT),
                         water, water.getBlockPos(), BlockPos.ZERO, List.of("water")),
-                new ProcessingComponent(new MachineComponent(PortKinds.ITEM_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT),
+                new ProcessingComponent(new MachineComponent(PortKinds.ITEM_OUTPUT, IOType.OUTPUT),
                         item, item.getBlockPos(), BlockPos.ZERO, (String) null),
-                new ProcessingComponent(new MachineComponent(PortKinds.FLUID_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT),
+                new ProcessingComponent(new MachineComponent(PortKinds.FLUID_OUTPUT, IOType.OUTPUT),
                         lava, lava.getBlockPos(), BlockPos.ZERO, List.of("lava"))
         ));
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
@@ -934,14 +944,14 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext source = new RecipeCraftingContext(controllerWithComponents(input));
         assertThat(source.simulateInputs(recipe)).isTrue();
         TagValueOutput saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+                HolderLookup.Provider.create(Stream.empty()));
         source.serialize(saved);
 
         MachineControllerBlockEntity restoredController = controllerWithComponents();
         RecipeCraftingContext restored = RecipeCraftingContext.from(restoredController, TagValueInput.create(
-                ProblemReporter.DISCARDING, HolderLookup.Provider.create(java.util.stream.Stream.empty()), saved.buildResult()));
+                ProblemReporter.DISCARDING, HolderLookup.Provider.create(Stream.empty()), saved.buildResult()));
         replaceComponents(restoredController, List.of(new ProcessingComponent(
-                new MachineComponent(PortKinds.FLUID_INPUT, cn.howxu.mmcr.util.IOType.INPUT), input,
+                new MachineComponent(PortKinds.FLUID_INPUT, IOType.INPUT), input,
                 input.getBlockPos(), BlockPos.ZERO, (String) null)));
 
         assertThat(restored.commitInputs(recipe)).isTrue();
@@ -1044,7 +1054,7 @@ class RecipeCraftingContextTest {
     @Test
     void commitIoTickDoesNotPartiallyProduceAcrossEnergyRequirements() throws Exception {
         EnergyOutputHatchBlockEntity hatch = energyOutputHatch(new BlockPos(1, 0, 0));
-        setField(cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity.class, hatch, "storage",
+        setField(EnergyHatchBlockEntity.class, hatch, "storage",
                 new LongEnergyStorage(30, 30, () -> {}));
         MachineControllerBlockEntity controller = controllerWithComponents(hatch);
         MachineRecipe recipe = explicitRequirementRecipe(
@@ -1206,7 +1216,7 @@ class RecipeCraftingContextTest {
                 new BlockPos(2, 0, 0), ModBlocks.SMART_INTERFACE.get().defaultBlockState());
         setBlockEntityLevel(smartInterface, controller.getLevel());
         replaceComponents(controller, List.of(
-                new ProcessingComponent(new MachineComponent(PortKinds.ITEM_INPUT, cn.howxu.mmcr.util.IOType.INPUT), input,
+                new ProcessingComponent(new MachineComponent(PortKinds.ITEM_INPUT, IOType.INPUT), input,
                         input.getBlockPos(), BlockPos.ZERO, (String) null),
                 new ProcessingComponent((MachineComponent) null, smartInterface, smartInterface.getBlockPos(), BlockPos.ZERO, (String) null)
         ));
@@ -1265,7 +1275,7 @@ class RecipeCraftingContextTest {
         @SuppressWarnings("unchecked")
         List<ProcessingComponent> list = (List<ProcessingComponent>) componentsField.get(controller);
         list.clear();
-        MachineComponent port = new MachineComponent(PortKinds.ITEM_INPUT, cn.howxu.mmcr.util.IOType.INPUT);
+        MachineComponent port = new MachineComponent(PortKinds.ITEM_INPUT, IOType.INPUT);
         list.add(new ProcessingComponent(port, untagged, untagged.getBlockPos(), BlockPos.ZERO, (String) null));
         list.add(new ProcessingComponent(port, tagged, tagged.getBlockPos(), BlockPos.ZERO, List.of("input_a")));
 
@@ -1298,7 +1308,7 @@ class RecipeCraftingContextTest {
         ItemInputBusBlockEntity selected = itemInputBus(new BlockPos(2, 0, 0));
         selected.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(2));
         MachineControllerBlockEntity controller = controllerWithComponents(wrongTag, selected);
-        MachineComponent port = new MachineComponent(PortKinds.ITEM_INPUT, cn.howxu.mmcr.util.IOType.INPUT);
+        MachineComponent port = new MachineComponent(PortKinds.ITEM_INPUT, IOType.INPUT);
         replaceComponents(controller, List.of(
                 new ProcessingComponent(port, wrongTag, wrongTag.getBlockPos(), BlockPos.ZERO, List.of("input_b")),
                 new ProcessingComponent(port, selected, selected.getBlockPos(), BlockPos.ZERO, List.of("input_a"))
@@ -1331,7 +1341,7 @@ class RecipeCraftingContextTest {
         tagged.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(4));
         MachineControllerBlockEntity controller = controllerWithComponents(tagged);
         replaceComponents(controller, List.of(new ProcessingComponent(
-                new MachineComponent(PortKinds.ITEM_INPUT, cn.howxu.mmcr.util.IOType.INPUT),
+                new MachineComponent(PortKinds.ITEM_INPUT, IOType.INPUT),
                 tagged,
                 tagged.getBlockPos(),
                 BlockPos.ZERO,
@@ -1359,7 +1369,7 @@ class RecipeCraftingContextTest {
         tagged.getMutableFluidStorage().setFluid(new FluidStack(Fluids.WATER, 1000));
         MachineControllerBlockEntity controller = controllerWithComponents(tagged);
         replaceComponents(controller, List.of(new ProcessingComponent(
-                new MachineComponent(PortKinds.FLUID_INPUT, cn.howxu.mmcr.util.IOType.INPUT),
+                new MachineComponent(PortKinds.FLUID_INPUT, IOType.INPUT),
                 tagged,
                 tagged.getBlockPos(),
                 BlockPos.ZERO,
@@ -1389,7 +1399,7 @@ class RecipeCraftingContextTest {
         other.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(4));
         MachineControllerBlockEntity controller = controllerWithComponents(tagged, other);
         setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
-        setField(BlockEntity.class, controller, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
+        setField(BlockEntity.class, controller, "blockState", Blocks.CHEST.defaultBlockState());
         BlockArray pattern = new BlockArray(java.util.Map.of(
                 tagged.getBlockPos(), new BlockPredicate.Any(),
                 other.getBlockPos(), new BlockPredicate.Any()
@@ -1440,7 +1450,7 @@ class RecipeCraftingContextTest {
 
         active.refreshTotalTick(context);
         List<MachineOutput> outputs = recipe.runtimeMachineOutputs(structureModifiers);
-        List<cn.howxu.mmcr.api.recipe.requirement.MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
+        List<MachineRequirement> requirements = recipe.runtimeRequirements(structureModifiers);
         var encoded = MachineRecipe.CODEC.codec().encodeStart(jsonOps(), recipe).getOrThrow();
         var decoded = MachineRecipe.CODEC.codec().parse(jsonOps(), encoded).getOrThrow();
 
@@ -1502,7 +1512,7 @@ class RecipeCraftingContextTest {
                         Items.IRON_NUGGET.getDefaultInstance().copyWithCount(2), 0.75F, List.of())
         ));
 
-        List<cn.howxu.mmcr.api.recipe.requirement.MachineRequirement> runtime = new RecipeCraftingContext(
+        List<MachineRequirement> runtime = new RecipeCraftingContext(
                 controllerWithMachineAndComponents(MMCR.id("test_machine"), smart)).runtimeRequirements(recipe);
 
         ItemRequirement item = (ItemRequirement) runtime.getFirst();
@@ -1554,7 +1564,7 @@ class RecipeCraftingContextTest {
         item.builtInRegistryHolder().bindComponents(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
     }
 
-    private static void bindFluidComponents(net.minecraft.world.level.material.Fluid fluid) {
+    private static void bindFluidComponents(Fluid fluid) {
         fluid.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
     }
 
@@ -1581,11 +1591,11 @@ class RecipeCraftingContextTest {
         MachineDefinitions.freezeRegistryPhase();
     }
 
-    private static MachineRecipe explicitItemRecipe(String path, List<cn.howxu.mmcr.api.recipe.requirement.MachineRequirement> requirements) {
+    private static MachineRecipe explicitItemRecipe(String path, List<MachineRequirement> requirements) {
         return explicitRequirementRecipe(path, requirements);
     }
 
-    private static MachineRecipe explicitRequirementRecipe(String path, List<cn.howxu.mmcr.api.recipe.requirement.MachineRequirement> requirements) {
+    private static MachineRecipe explicitRequirementRecipe(String path, List<MachineRequirement> requirements) {
         return new MachineRecipe(
                 Identifier.fromNamespaceAndPath("mmcr", path),
                 Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
@@ -1601,7 +1611,7 @@ class RecipeCraftingContextTest {
         );
     }
 
-    private static MachineRecipe partialRequirementRecipe(String path, List<cn.howxu.mmcr.api.recipe.requirement.MachineRequirement> requirements) {
+    private static MachineRecipe partialRequirementRecipe(String path, List<MachineRequirement> requirements) {
         return new MachineRecipe(
                 Identifier.fromNamespaceAndPath("mmcr", path),
                 Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
@@ -1638,9 +1648,9 @@ class RecipeCraftingContextTest {
             T bus = (T) unsafe.allocateInstance(type);
             setField(BlockEntity.class, bus, "type", null);
             setField(BlockEntity.class, bus, "worldPosition", pos);
-            setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
-            initializeLinkedAppearance((cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity) bus);
-            setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
+            setField(BlockEntity.class, bus, "blockState", Blocks.CHEST.defaultBlockState());
+            initializeLinkedAppearance((LinkedAppearanceBlockEntity) bus);
+            setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
             return bus;
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("Unable to allocate item bus for crafting context test", e);
@@ -1656,13 +1666,13 @@ class RecipeCraftingContextTest {
             T entity = (T) unsafe.allocateInstance(type);
             setField(BlockEntity.class, entity, "type", null);
             setField(BlockEntity.class, entity, "worldPosition", pos);
-            setField(BlockEntity.class, entity, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
-            if (entity instanceof cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity) {
-                setField(cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity.class, entity, "storage",
+            setField(BlockEntity.class, entity, "blockState", Blocks.CHEST.defaultBlockState());
+            if (entity instanceof FluidHatchBlockEntity) {
+                setField(FluidHatchBlockEntity.class, entity, "storage",
                         new LongFluidStorage(8000, () -> {}));
             }
-            if (entity instanceof cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity) {
-                setField(cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity.class, entity, "storage",
+            if (entity instanceof EnergyHatchBlockEntity) {
+                setField(EnergyHatchBlockEntity.class, entity, "storage",
                         new LongEnergyStorage(100000, 100000, () -> {}));
             }
             return entity;
@@ -1671,21 +1681,21 @@ class RecipeCraftingContextTest {
         }
     }
 
-    private static void initializeLinkedAppearance(cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity component)
+    private static void initializeLinkedAppearance(LinkedAppearanceBlockEntity component)
             throws ReflectiveOperationException {
-        setField(cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity.class, component,
+        setField(LinkedAppearanceBlockEntity.class, component,
                 "appearanceBaseTexture", cn.howxu.mmcr.MMCR.id("block/basic_casing"));
-        setField(cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity.class, component,
+        setField(LinkedAppearanceBlockEntity.class, component,
                 "linkedControllers", new TreeMap<>(BlockPos::compareTo));
-        setField(cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity.class, component,
+        setField(LinkedAppearanceBlockEntity.class, component,
                 "controllerLinkCheckCounter", 0);
     }
 
-    private static MachineControllerBlockEntity controllerWithComponents(net.minecraft.world.level.block.entity.BlockEntity... ports) {
+    private static MachineControllerBlockEntity controllerWithComponents(BlockEntity... ports) {
         return controllerWithComponents(List.of(ports), null);
     }
 
-    private static MachineControllerBlockEntity controllerWithComponents(List<net.minecraft.world.level.block.entity.BlockEntity> ports,
+    private static MachineControllerBlockEntity controllerWithComponents(List<BlockEntity> ports,
                                                                         RandomSource random) {
         try {
             Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
@@ -1695,7 +1705,7 @@ class RecipeCraftingContextTest {
             var level = random == null ? LevelStub.createWithBlockEntities(ports) : LevelStub.createWithBlockEntities(ports, random);
             setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
             setBlockEntityLevel(controller, level);
-            for (net.minecraft.world.level.block.entity.BlockEntity port : ports) {
+            for (BlockEntity port : ports) {
                 setBlockEntityLevel(port, level);
             }
             Field components = MachineControllerBlockEntity.class.getDeclaredField("components");
@@ -1704,7 +1714,7 @@ class RecipeCraftingContextTest {
             @SuppressWarnings("unchecked")
             List<ProcessingComponent> list = (List<ProcessingComponent>) components.get(controller);
             list.clear();
-            for (net.minecraft.world.level.block.entity.BlockEntity port : ports) {
+            for (BlockEntity port : ports) {
                 MachineComponent component = componentFor(port);
                 list.add(new ProcessingComponent(component, port, port.getBlockPos(), BlockPos.ZERO, (String) null));
             }
@@ -1715,7 +1725,7 @@ class RecipeCraftingContextTest {
     }
 
     private static MachineControllerBlockEntity controllerWithMachineAndComponents(Identifier machineId,
-            net.minecraft.world.level.block.entity.BlockEntity... ports) throws ReflectiveOperationException {
+            BlockEntity... ports) throws ReflectiveOperationException {
         MachineControllerBlockEntity controller = controllerWithComponents(ports);
         setField(MachineControllerBlockEntity.class, controller, "foundMachine",
                 new DynamicMachine(machineId, "Test Machine", new BlockArray(java.util.Map.of())));
@@ -1732,19 +1742,19 @@ class RecipeCraftingContextTest {
     }
 
     private static MachineComponent componentFor(BlockEntity port) {
-        if (port instanceof ItemInputBusBlockEntity) return new MachineComponent(PortKinds.ITEM_INPUT, cn.howxu.mmcr.util.IOType.INPUT);
-        if (port instanceof ItemOutputBusBlockEntity) return new MachineComponent(PortKinds.ITEM_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT);
-        if (port instanceof FluidInputHatchBlockEntity) return new MachineComponent(PortKinds.FLUID_INPUT, cn.howxu.mmcr.util.IOType.INPUT);
-        if (port instanceof FluidOutputHatchBlockEntity) return new MachineComponent(PortKinds.FLUID_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT);
-        if (port instanceof EnergyInputHatchBlockEntity) return new MachineComponent(PortKinds.ENERGY_INPUT, cn.howxu.mmcr.util.IOType.INPUT);
-        if (port instanceof EnergyOutputHatchBlockEntity) return new MachineComponent(PortKinds.ENERGY_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT);
+        if (port instanceof ItemInputBusBlockEntity) return new MachineComponent(PortKinds.ITEM_INPUT, IOType.INPUT);
+        if (port instanceof ItemOutputBusBlockEntity) return new MachineComponent(PortKinds.ITEM_OUTPUT, IOType.OUTPUT);
+        if (port instanceof FluidInputHatchBlockEntity) return new MachineComponent(PortKinds.FLUID_INPUT, IOType.INPUT);
+        if (port instanceof FluidOutputHatchBlockEntity) return new MachineComponent(PortKinds.FLUID_OUTPUT, IOType.OUTPUT);
+        if (port instanceof EnergyInputHatchBlockEntity) return new MachineComponent(PortKinds.ENERGY_INPUT, IOType.INPUT);
+        if (port instanceof EnergyOutputHatchBlockEntity) return new MachineComponent(PortKinds.ENERGY_OUTPUT, IOType.OUTPUT);
         if (port instanceof SmartInterfaceBlockEntity) return null;
         throw new IllegalArgumentException("Unknown port: " + port.getClass().getSimpleName());
     }
 
-    private static void setBlockEntityLevel(net.minecraft.world.level.block.entity.BlockEntity blockEntity, net.minecraft.world.level.Level level)
+    private static void setBlockEntityLevel(BlockEntity blockEntity, Level level)
             throws ReflectiveOperationException {
-        setField(net.minecraft.world.level.block.entity.BlockEntity.class, blockEntity, "level", level);
+        setField(BlockEntity.class, blockEntity, "level", level);
     }
 
     private static void setField(Class<?> declaringClass, Object target, String name, Object value) throws ReflectiveOperationException {

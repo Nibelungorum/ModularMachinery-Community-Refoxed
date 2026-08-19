@@ -17,6 +17,7 @@ import net.neoforged.fml.loading.FMLLoader;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.function.BooleanSupplier;
 
 public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
@@ -141,7 +142,7 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     }
 
     static Map<String, String> events() {
-        Map<String, String> events = new java.util.LinkedHashMap<>();
+        Map<String, String> events = new LinkedHashMap<>();
         events.putAll(MMCREvents.events());
         events.put(SmartInterfaceEvents.UPDATED_ID, SmartInterfaceEvents.UPDATED_ID);
         return events;

@@ -18,6 +18,8 @@ import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import net.minecraft.world.item.ItemStack;
 
+import net.neoforged.neoforge.items.IItemHandlerModifiable;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -149,7 +151,7 @@ public final class AutoIOTransferHandlers {
 
         @Override
         protected void revertToSnapshot(List<ItemStack> snapshot) {
-            if (!(handler instanceof net.neoforged.neoforge.items.IItemHandlerModifiable modifiable)) return;
+            if (!(handler instanceof IItemHandlerModifiable modifiable)) return;
             for (int slot = 0; slot < snapshot.size(); slot++) {
                 modifiable.setStackInSlot(slot, snapshot.get(slot).copy());
             }

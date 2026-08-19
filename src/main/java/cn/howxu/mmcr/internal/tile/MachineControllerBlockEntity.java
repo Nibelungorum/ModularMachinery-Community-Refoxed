@@ -47,6 +47,9 @@ import cn.howxu.mmcr.internal.preview.MultiblockPreviewPredicates;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
 import cn.howxu.mmcr.internal.recipe.RecipeStartDelay;
 import cn.howxu.mmcr.registry.ModBlockEntities;
+
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -74,9 +77,13 @@ import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.network.PacketDistributor;
+
+import net.minecraft.nbt.CompoundTag;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.mojang.serialization.Codec;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -87,6 +94,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Comparator;
+import java.util.OptionalInt;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -315,7 +324,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         this.clientActive = active;
         Map<Identifier, MachineLevel> levels = new LinkedHashMap<>();
         for (String id : foundLevelIds) {
-            MachineLevel foundLevel = cn.howxu.mmcr.api.machine.level.MachineLevelRegistry.getLevel(Identifier.parse(id));
+            MachineLevel foundLevel = MachineLevelRegistry.getLevel(Identifier.parse(id));
             if (foundLevel != null) levels.put(foundLevel.typeId(), foundLevel);
         }
         this.foundLevels = Map.copyOf(levels);
@@ -423,7 +432,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         }
         int base = Math.max(1, (int) max);
         int levelBonus = foundLevels == null ? 0 : foundLevels.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey(java.util.Comparator.comparing(Identifier::toString)))
+                .sorted(Map.Entry.comparingByKey(Comparator.comparing(Identifier::toString)))
                 .map(Map.Entry::getValue)
                 .mapToInt(foundLevel -> foundLevel.modifier().parallelismBonus())
                 .sum();
@@ -491,7 +500,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (machine == null || !machine.hasFactory()) return 1;
         int aggregatedThreads = factorySchedulerThreadCount();
         int levelBonus = foundLevels == null ? 0 : foundLevels.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey(java.util.Comparator.comparing(Identifier::toString)))
+                .sorted(Map.Entry.comparingByKey(Comparator.comparing(Identifier::toString)))
                 .map(Map.Entry::getValue)
                 .mapToInt(foundLevel -> foundLevel.modifier().factoryThreadBonus())
                 .sum();
@@ -1018,7 +1027,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 StructureClaimRegistry.Conflict conflict = result.conflict();
                 lastFormationFailure = new PortRequirementSpec.Failure(
                         "component_claim_conflict component=" + conflict.componentPos() + " owner=" + conflict.ownerPos(),
-                        0, 1, java.util.OptionalInt.empty(), PortRequirementSpec.FailureReason.MISSING);
+                        0, 1, OptionalInt.empty(), PortRequirementSpec.FailureReason.MISSING);
                 return false;
             }
             if (ModuleConnectionCoordinator.blocksHostFormation(serverLevel, candidate, stageCompiled, facing, getBlockPos())) {
@@ -1348,7 +1357,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                         failure.requirement().id(),
                         failure.actualPortIds().size(),
                         1,
-                        java.util.OptionalInt.empty(),
+                        OptionalInt.empty(),
                         PortRequirementSpec.FailureReason.MISSING));
     }
 
@@ -1360,7 +1369,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 "factory_controller",
                 count,
                 0,
-                java.util.OptionalInt.of(1),
+                OptionalInt.of(1),
                 PortRequirementSpec.FailureReason.TOO_MANY));
     }
 
@@ -1605,7 +1614,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         String lockedRecipe = thread == null ? lockedRecipeId == null ? "" : lockedRecipeId.toString() : thread.lockedRecipeId();
         Identifier machineId = machineId();
         String machineIdValue = machineId == null ? "" : machineId.toString();
-        int controllerRole = cn.howxu.mmcr.internal.menu.MachineControllerMenu.controllerRoleSyncValue(this);
+        int controllerRole = MachineControllerMenu.controllerRoleSyncValue(this);
         int installedModuleCount = installedModuleCount();
         Optional<Identifier> connectedHostId = connectedHostId();
         boolean moduleConnected = connectedHostId.isPresent();
@@ -1642,7 +1651,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         String lockedRecipe = thread == null ? lockedRecipeId == null ? "" : lockedRecipeId.toString() : thread.lockedRecipeId();
         Identifier machineId = machineId();
         String machineIdValue = machineId == null ? "" : machineId.toString();
-        int controllerRole = cn.howxu.mmcr.internal.menu.MachineControllerMenu.controllerRoleSyncValue(this);
+        int controllerRole = MachineControllerMenu.controllerRoleSyncValue(this);
         int installedModuleCount = installedModuleCount();
         Optional<Identifier> connectedHostId = connectedHostId();
         boolean moduleConnected = connectedHostId.isPresent();
@@ -2133,9 +2142,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     void bindDefaultMachine(Identifier machineId) {
-        Machine resolved = cn.howxu.mmcr.api.machine.MachineRegistry.getMachine(machineId);
+        Machine resolved = MachineRegistry.getMachine(machineId);
         if (resolved == null) {
-            for (Machine candidate : cn.howxu.mmcr.api.machine.MachineRegistry.getAll().values()) {
+            for (Machine candidate : MachineRegistry.getAll().values()) {
                 if (candidate.controller().id().equals(machineId)) {
                     resolved = candidate;
                     break;
@@ -2210,7 +2219,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
         output.putInt("matched_structure_stage", matchedStructureStage);
-        ValueOutput.TypedOutputList<String> levels = output.list("found_levels", com.mojang.serialization.Codec.STRING);
+        ValueOutput.TypedOutputList<String> levels = output.list("found_levels", Codec.STRING);
         for (MachineLevel foundLevel : (foundLevels == null ? Map.<Identifier, MachineLevel>of() : foundLevels).values()) {
             levels.add(foundLevel.id().toString());
         }
@@ -2242,8 +2251,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         active = null;
         context = null;
         Map<Identifier, MachineLevel> restoredLevels = new LinkedHashMap<>();
-        input.listOrEmpty("found_levels", com.mojang.serialization.Codec.STRING).forEach(id -> {
-            MachineLevel foundLevel = cn.howxu.mmcr.api.machine.level.MachineLevelRegistry.getLevel(Identifier.parse(id));
+        input.listOrEmpty("found_levels", Codec.STRING).forEach(id -> {
+            MachineLevel foundLevel = MachineLevelRegistry.getLevel(Identifier.parse(id));
             if (foundLevel != null) restoredLevels.put(foundLevel.typeId(), foundLevel);
         });
         foundLevels = Map.copyOf(restoredLevels);
@@ -2282,7 +2291,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     @Override
-    public net.minecraft.nbt.CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+    public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
         return saveCustomOnly(registries);
     }
 

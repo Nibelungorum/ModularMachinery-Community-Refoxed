@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import java.util.ArrayList;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MultiblockExportServiceTest {
@@ -111,7 +112,7 @@ class MultiblockExportServiceTest {
                 "XDX|D D|XDX",
                 "XEX|ECE|XEX"
         };
-        List<MultiblockExportService.SnapshotEntry> entries = new java.util.ArrayList<>();
+        List<MultiblockExportService.SnapshotEntry> entries = new ArrayList<>();
         for (int z = 0; z < rawSlices.length; z++) {
             String[] rows = rawSlices[z].split("\\|");
             for (int y = 0; y < rows.length; y++) {

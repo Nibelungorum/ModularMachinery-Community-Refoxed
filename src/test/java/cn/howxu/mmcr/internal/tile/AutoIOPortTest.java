@@ -18,6 +18,10 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Method;
 import java.util.stream.Stream;
 
+import java.util.List;
+
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -81,7 +85,7 @@ class AutoIOPortTest {
     @Test
     void toggling_auto_io_syncs_port_update_to_clients() {
         IOPortBlockEntity port = port("item_input_bus_normal");
-        var level = LevelStub.createWithBlockEntities(java.util.List.of(port));
+        var level = LevelStub.createWithBlockEntities(List.of(port));
         port.setLevel(level);
 
         port.toggleAutoIOEnabled();
@@ -110,13 +114,13 @@ class AutoIOPortTest {
     }
 
     private static void invokeSaveAdditional(IOPortBlockEntity port, TagValueOutput output) throws Exception {
-        Method method = port.getClass().getSuperclass().getDeclaredMethod("saveAdditional", net.minecraft.world.level.storage.ValueOutput.class);
+        Method method = port.getClass().getSuperclass().getDeclaredMethod("saveAdditional", ValueOutput.class);
         method.setAccessible(true);
         method.invoke(port, output);
     }
 
-    private static void invokeLoadAdditional(IOPortBlockEntity port, net.minecraft.world.level.storage.ValueInput input) throws Exception {
-        Method method = port.getClass().getSuperclass().getDeclaredMethod("loadAdditional", net.minecraft.world.level.storage.ValueInput.class);
+    private static void invokeLoadAdditional(IOPortBlockEntity port, ValueInput input) throws Exception {
+        Method method = port.getClass().getSuperclass().getDeclaredMethod("loadAdditional", ValueInput.class);
         method.setAccessible(true);
         method.invoke(port, input);
     }

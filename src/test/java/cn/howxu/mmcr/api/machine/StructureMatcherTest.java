@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import net.minecraft.resources.Identifier;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class StructureMatcherTest {
@@ -32,7 +33,7 @@ class StructureMatcherTest {
     void matches_compiled_uses_pre_rotated_pattern_for_facing() {
         BlockArray pattern = new BlockArray(Map.of(
                 new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE)));
-        DynamicMachine machine = new DynamicMachine(net.minecraft.resources.Identifier.fromNamespaceAndPath("mmcr", "matcher_compiled"), "Matcher Compiled", pattern);
+        DynamicMachine machine = new DynamicMachine(Identifier.fromNamespaceAndPath("mmcr", "matcher_compiled"), "Matcher Compiled", pattern);
         CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
         BlockPos controllerPos = new BlockPos(32, 64, 32);
         Level level = LevelStub.create(Map.of(controllerPos.offset(0, 0, 1), Blocks.STONE));
@@ -82,7 +83,7 @@ class StructureMatcherTest {
         BlockArray pattern = new BlockArray(Map.of(
                 BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE),
                 new BlockPos(20, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE)));
-        DynamicMachine machine = new DynamicMachine(net.minecraft.resources.Identifier.fromNamespaceAndPath("mmcr", "matcher_area_loaded"), "Matcher Area Loaded", pattern);
+        DynamicMachine machine = new DynamicMachine(Identifier.fromNamespaceAndPath("mmcr", "matcher_area_loaded"), "Matcher Area Loaded", pattern);
         CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
         BlockPos controllerPos = new BlockPos(0, 64, 0);
         Level level = LevelStub.createWithLoadedChunks(
@@ -155,10 +156,10 @@ class StructureMatcherTest {
         var replacement = new SingleBlockModifierReplacement(
                 "speed", new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK), List.of(), ItemStack.EMPTY);
         DynamicMachine machine = new DynamicMachine(
-                net.minecraft.resources.Identifier.fromNamespaceAndPath("mmcr", "matcher_rotated_replacement"),
+                Identifier.fromNamespaceAndPath("mmcr", "matcher_rotated_replacement"),
                 "Matcher Rotated Replacement",
                 pattern,
-                MachineControllerSpec.defaultsFor(net.minecraft.resources.Identifier.fromNamespaceAndPath("mmcr", "matcher_rotated_replacement")),
+                MachineControllerSpec.defaultsFor(Identifier.fromNamespaceAndPath("mmcr", "matcher_rotated_replacement")),
                 PortRequirementSpec.none(),
                 List.of(),
                 Map.of(rawPos, List.of(replacement)));
@@ -178,7 +179,7 @@ class StructureMatcherTest {
         var replacement = new SingleBlockModifierReplacement(
                 "speed", new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK), List.of(), ItemStack.EMPTY);
         MachineStructureDefinition definition = new MachineStructureDefinition(
-                net.minecraft.resources.Identifier.fromNamespaceAndPath("mmcr", "matcher_key_replacement"),
+                Identifier.fromNamespaceAndPath("mmcr", "matcher_key_replacement"),
                 List.of(new MachineStructureDefinition.Declaration(
                         MachineStructureDefinition.Declaration.Kind.FULL,
                         pattern,
@@ -243,7 +244,7 @@ class StructureMatcherTest {
                 new BlockPos(1, 0, 0), new BlockPredicate.AnyOf(List.of(BlockPredicate.machineCoupler())),
                 new BlockPos(0, 0, 1), new BlockPredicate.OfBlock(ModBlocks.SMART_INTERFACE.get())));
         DynamicMachine machine = new DynamicMachine(
-                net.minecraft.resources.Identifier.fromNamespaceAndPath("mmcr", "matcher_interfaces"),
+                Identifier.fromNamespaceAndPath("mmcr", "matcher_interfaces"),
                 "Matcher Interfaces", pattern);
 
         CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);

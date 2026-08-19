@@ -43,6 +43,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+
+import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
+import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.block.state.StateDefinition;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -210,8 +216,8 @@ class ModuleControllerMenuStateTest {
         setField(BlockEntity.class, host, "level", level);
         setField(BlockEntity.class, module, "level", level);
         setField(BlockEntity.class, coupler, "level", level);
-        if (hostFormed) cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.get(level).claim(hostPos, List.of());
-        if (moduleFormed) cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.get(level).claim(modulePos, List.of());
+        if (hostFormed) StructureClaimRegistry.get(level).claim(hostPos, List.of());
+        if (moduleFormed) StructureClaimRegistry.get(level).claim(modulePos, List.of());
         return new FormationFixture(level, host, module, coupler, hostPos, modulePos, couplerPos);
     }
 
@@ -235,10 +241,10 @@ class ModuleControllerMenuStateTest {
                 formed ? MachinePatternCompiler.compile(machine) : null);
         setField(MachineControllerBlockEntity.class, controller, "controllerFacing", formed ? Direction.SOUTH : null);
         setField(MachineControllerBlockEntity.class, controller, "matchedRollFacing", Direction.SOUTH);
-        setField(MachineControllerBlockEntity.class, controller, "components", new java.util.ArrayList<>());
+        setField(MachineControllerBlockEntity.class, controller, "components", new ArrayList<>());
         setField(MachineControllerBlockEntity.class, controller, "foundModifiers", new LinkedHashMap<>());
         setField(MachineControllerBlockEntity.class, controller, "foundLevels", Map.of());
-        setField(MachineControllerBlockEntity.class, controller, "linkedPortPositions", new java.util.HashSet<>());
+        setField(MachineControllerBlockEntity.class, controller, "linkedPortPositions", new HashSet<>());
         setField(BlockEntity.class, controller, "worldPosition", pos);
         setField(BlockEntity.class, controller, "blockState", controllerBlock(machine.registryName()).defaultBlockState()
                 .setValue(MachineControllerBlock.FACING, Direction.SOUTH)
@@ -251,8 +257,8 @@ class ModuleControllerMenuStateTest {
     private static MachineControllerBlock controllerBlock(Identifier machineId) throws Exception {
         MachineControllerBlock block = (MachineControllerBlock) unsafe().allocateInstance(MachineControllerBlock.class);
         setField(MachineControllerBlock.class, block, "machineId", machineId);
-        setField(net.minecraft.world.level.block.state.BlockBehaviour.class, block, "properties", Blocks.IRON_BLOCK.properties());
-        var builder = new net.minecraft.world.level.block.state.StateDefinition.Builder<Block, BlockState>(block);
+        setField(BlockBehaviour.class, block, "properties", Blocks.IRON_BLOCK.properties());
+        var builder = new StateDefinition.Builder<Block, BlockState>(block);
         builder.add(MachineControllerBlock.FACING, MachineControllerBlock.ROLL_FACING,
                 MachineControllerBlock.FORMED, MachineControllerBlock.ACTIVE);
         var stateDefinition = builder.create(Block::defaultBlockState, BlockState::new);

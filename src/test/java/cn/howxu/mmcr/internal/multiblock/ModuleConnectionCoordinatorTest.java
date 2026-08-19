@@ -32,6 +32,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+
+import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.block.state.StateDefinition;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -256,10 +261,10 @@ class ModuleConnectionCoordinatorTest {
                 formed ? MachinePatternCompiler.compile(machine) : null);
         setField(MachineControllerBlockEntity.class, controller, "controllerFacing", formed ? Direction.SOUTH : null);
         setField(MachineControllerBlockEntity.class, controller, "matchedRollFacing", Direction.SOUTH);
-        setField(MachineControllerBlockEntity.class, controller, "components", new java.util.ArrayList<>());
+        setField(MachineControllerBlockEntity.class, controller, "components", new ArrayList<>());
         setField(MachineControllerBlockEntity.class, controller, "foundModifiers", new LinkedHashMap<>());
         setField(MachineControllerBlockEntity.class, controller, "foundLevels", Map.of());
-        setField(MachineControllerBlockEntity.class, controller, "linkedPortPositions", new java.util.HashSet<>());
+        setField(MachineControllerBlockEntity.class, controller, "linkedPortPositions", new HashSet<>());
         setField(BlockEntity.class, controller, "worldPosition", pos);
         setField(BlockEntity.class, controller, "blockState", controllerBlock(machine.registryName()).defaultBlockState()
                 .setValue(MachineControllerBlock.FACING, Direction.SOUTH)
@@ -272,8 +277,8 @@ class ModuleConnectionCoordinatorTest {
     private static MachineControllerBlock controllerBlock(Identifier machineId) throws Exception {
         MachineControllerBlock block = (MachineControllerBlock) unsafe().allocateInstance(MachineControllerBlock.class);
         setField(MachineControllerBlock.class, block, "machineId", machineId);
-        setField(net.minecraft.world.level.block.state.BlockBehaviour.class, block, "properties", Blocks.IRON_BLOCK.properties());
-        var builder = new net.minecraft.world.level.block.state.StateDefinition.Builder<Block, BlockState>(block);
+        setField(BlockBehaviour.class, block, "properties", Blocks.IRON_BLOCK.properties());
+        var builder = new StateDefinition.Builder<Block, BlockState>(block);
         builder.add(MachineControllerBlock.FACING, MachineControllerBlock.ROLL_FACING,
                 MachineControllerBlock.FORMED, MachineControllerBlock.ACTIVE);
         var stateDefinition = builder.create(Block::defaultBlockState, BlockState::new);

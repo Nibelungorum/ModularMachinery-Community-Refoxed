@@ -43,6 +43,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import net.minecraft.resources.Identifier;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -267,7 +268,7 @@ class PluginBindingTest {
         previous.commit();
         var takeoverStructure = new MachineStructureDefinition(machineId,
                 new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK))),
-                PortRequirementSpec.none(), List.of(), cn.howxu.mmcr.api.machine.MachineStructureRequirements.EMPTY);
+                PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
         MachineStructureRegistry.replaceDynamic(Map.of(machineId, takeoverStructure));
         RecipeRegistry.replaceDynamic(Map.of(recipeId, new MachineRecipe(recipeId, machineId, 2, List.of(), List.of())));
 
@@ -620,12 +621,12 @@ class PluginBindingTest {
         }
     }
 
-    private static MachineStructureDefinition structure(net.minecraft.resources.Identifier id) {
+    private static MachineStructureDefinition structure(Identifier id) {
         return new MachineStructureDefinition(id, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(),
-                cn.howxu.mmcr.api.machine.MachineStructureRequirements.EMPTY);
+                MachineStructureRequirements.EMPTY);
     }
 
-    private static MachineStructureDefinition modifierStructure(net.minecraft.resources.Identifier id) {
+    private static MachineStructureDefinition modifierStructure(Identifier id) {
         BlockArray pattern = BlockArray.builder()
                 .pattern("M")
                 .set('M', new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))

@@ -31,6 +31,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
+import cn.howxu.mmcr.util.IOType;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class RecipeSearchTaskTest {
@@ -179,10 +186,10 @@ class RecipeSearchTaskTest {
     void computeBlocksLowerPriorityFallbackWhenFirstInputMatchHasInsufficientLevel() throws Exception {
         Identifier machineId = Identifier.fromNamespaceAndPath("mmcr", "machine");
         Identifier typeId = Identifier.fromNamespaceAndPath("test", "coil");
-        MachineLevel copper = level("task5:copper", typeId, 1, net.minecraft.world.level.block.Blocks.COPPER_BLOCK);
-        MachineLevel kanthal = level("task5:kanthal", typeId, 2, net.minecraft.world.level.block.Blocks.IRON_BLOCK);
+        MachineLevel copper = level("task5:copper", typeId, 1, Blocks.COPPER_BLOCK);
+        MachineLevel kanthal = level("task5:kanthal", typeId, 2, Blocks.IRON_BLOCK);
         MachineLevelRegistry.beginRegistration();
-        MachineLevelRegistry.registerType(new LevelType(typeId, net.minecraft.network.chat.Component.literal("Coils")));
+        MachineLevelRegistry.registerType(new LevelType(typeId, Component.literal("Coils")));
         MachineLevelRegistry.registerLevel(copper);
         MachineLevelRegistry.registerLevel(kanthal);
         MachineLevelRegistry.freezeRegistration();
@@ -249,7 +256,7 @@ class RecipeSearchTaskTest {
 
     private static MachineRecipe partialOutputRecipe(String path, Identifier machineId, List<ItemRequirement> inputs,
                                                      List<ItemRequirement> outputs) {
-        List<cn.howxu.mmcr.api.recipe.requirement.MachineRequirement> requirements = new ArrayList<>();
+        List<MachineRequirement> requirements = new ArrayList<>();
         requirements.addAll(inputs);
         requirements.addAll(outputs);
         return new MachineRecipe(
@@ -277,9 +284,9 @@ class RecipeSearchTaskTest {
                 false, levelRequirements);
     }
 
-    private static MachineLevel level(String id, Identifier typeId, int priority, net.minecraft.world.level.block.Block block) {
+    private static MachineLevel level(String id, Identifier typeId, int priority, Block block) {
         return new MachineLevel(Identifier.parse(id), typeId, priority,
-                new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState(block.defaultBlockState()),
+                new BlockPredicate.OfBlockState(block.defaultBlockState()),
                 ItemStack.EMPTY, LevelModifier.IDENTITY);
     }
 
@@ -290,8 +297,8 @@ class RecipeSearchTaskTest {
         ItemInputBusBlockEntity bus = (ItemInputBusBlockEntity) unsafe.allocateInstance(ItemInputBusBlockEntity.class);
         setField(BlockEntity.class, bus, "type", null);
         setField(BlockEntity.class, bus, "worldPosition", pos);
-        setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
-        setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
+        setField(BlockEntity.class, bus, "blockState", Blocks.CHEST.defaultBlockState());
+        setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
         return bus;
     }
 
@@ -302,8 +309,8 @@ class RecipeSearchTaskTest {
         ItemOutputBusBlockEntity bus = (ItemOutputBusBlockEntity) unsafe.allocateInstance(ItemOutputBusBlockEntity.class);
         setField(BlockEntity.class, bus, "type", null);
         setField(BlockEntity.class, bus, "worldPosition", pos);
-        setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
-        setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
+        setField(BlockEntity.class, bus, "blockState", Blocks.CHEST.defaultBlockState());
+        setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
         return bus;
     }
 
@@ -320,7 +327,7 @@ class RecipeSearchTaskTest {
             @SuppressWarnings("unchecked")
             List<ProcessingComponent> components = (List<ProcessingComponent>) fieldValue(MachineControllerBlockEntity.class, controller, "components");
             components.add(new ProcessingComponent(
-                    new MachineComponent(PortKinds.ITEM_INPUT, cn.howxu.mmcr.util.IOType.INPUT),
+                    new MachineComponent(PortKinds.ITEM_INPUT, IOType.INPUT),
                     port,
                     port.getBlockPos(),
                     BlockPos.ZERO,

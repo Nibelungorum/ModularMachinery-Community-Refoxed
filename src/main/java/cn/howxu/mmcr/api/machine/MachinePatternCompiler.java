@@ -9,11 +9,15 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
+import net.minecraft.resources.Identifier;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.Set;
 
 /**
  * Builds reusable structure lookup data from machine definitions.
@@ -77,7 +81,7 @@ public final class MachinePatternCompiler {
 
     private static Map<BlockPos, List<SingleBlockModifierReplacement>> rotatedModifierReplacements(
             MachineStructureStage stage, Direction facing) {
-        Map<BlockPos, List<SingleBlockModifierReplacement>> replacements = new java.util.LinkedHashMap<>();
+        Map<BlockPos, List<SingleBlockModifierReplacement>> replacements = new LinkedHashMap<>();
         for (var entry : stage.modifierReplacements().entrySet()) {
             BlockPos rotatedPos = BlockRotator.rotateSouthTo(entry.getKey(), facing, Direction.SOUTH);
             replacements.put(rotatedPos, List.copyOf(entry.getValue()));
@@ -86,7 +90,7 @@ public final class MachinePatternCompiler {
     }
 
     private record StageMachine(Machine parent, MachineStructureStage stage) implements Machine {
-        @Override public net.minecraft.resources.Identifier registryName() { return parent.registryName(); }
+        @Override public Identifier registryName() { return parent.registryName(); }
         @Override public BlockArray pattern() { return stage.pattern(); }
         @Override public MachineControllerSpec controller() { return parent.controller(); }
         @Override public MachineAppearanceSpec appearance() { return parent.appearance(); }
@@ -95,11 +99,11 @@ public final class MachinePatternCompiler {
         @Override public List<DynamicPatternSpec> dynamicPatterns() { return stage.dynamicPatterns(); }
         @Override public List<MachineStructureStage> structureStages() { return List.of(stage); }
         @Override public MachineRole role() { return parent.role(); }
-        @Override public java.util.Set<net.minecraft.resources.Identifier> acceptedModuleIds() { return parent.acceptedModuleIds(); }
+        @Override public Set<Identifier> acceptedModuleIds() { return parent.acceptedModuleIds(); }
     }
 
-    public static Map<net.minecraft.resources.Identifier, CompiledMachinePattern> compileAll(Collection<Machine> machines) {
-        java.util.LinkedHashMap<net.minecraft.resources.Identifier, CompiledMachinePattern> compiled = new java.util.LinkedHashMap<>();
+    public static Map<Identifier, CompiledMachinePattern> compileAll(Collection<Machine> machines) {
+        LinkedHashMap<Identifier, CompiledMachinePattern> compiled = new LinkedHashMap<>();
         for (Machine machine : machines) {
             compiled.put(machine.registryName(), compile(machine));
         }
@@ -221,7 +225,7 @@ public final class MachinePatternCompiler {
         return new CompiledDynamicPattern(spec, startPatterns, endPatterns, offsetStarts, structureSizeOffsets, allowedFaces);
     }
 
-    private static List<Direction> rotatedFaces(java.util.Set<Direction> faces, Direction facing) {
+    private static List<Direction> rotatedFaces(Set<Direction> faces, Direction facing) {
         ArrayList<Direction> rotated = new ArrayList<>();
         for (Direction face : faces) rotated.add(rotateFaceSouthTo(face, facing));
         return List.copyOf(rotated);

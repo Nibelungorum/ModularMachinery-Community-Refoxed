@@ -3,6 +3,9 @@ package cn.howxu.mmcr.api.recipe.component;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.JsonOps;
+
+import com.google.gson.JsonElement;
+import org.jetbrains.annotations.Nullable;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.world.item.ItemStack;
 
@@ -11,7 +14,7 @@ import net.minecraft.world.item.ItemStack;
  */
 public final class ComponentPredicates {
 
-    private static final DynamicOps<com.google.gson.JsonElement> COMPONENT_OPS = JsonOps.INSTANCE;
+    private static final DynamicOps<JsonElement> COMPONENT_OPS = JsonOps.INSTANCE;
 
     private ComponentPredicates() {
     }
@@ -36,7 +39,7 @@ public final class ComponentPredicates {
     }
 
     static <T> T exactValue(DataComponentType<T> type, ComponentPredicate predicate, ItemStack targetStack,
-            @org.jetbrains.annotations.Nullable DynamicOps<?> overrideOps) {
+            @Nullable DynamicOps<?> overrideOps) {
         if (!(predicate instanceof ComponentPredicate.Exact exact)) return null;
         return parseExactValue(type, exact, overrideOps == null ? exact.value().getOps() : overrideOps);
     }

@@ -17,6 +17,8 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Optional;
+
 /**
  * Client request to mutate Auto IO state on the currently open port menu.
  *
@@ -29,7 +31,7 @@ public record PktAutoIOConfigPayload(BlockPos pos, AutoIOAction action, @Nullabl
             BlockPos.STREAM_CODEC, PktAutoIOConfigPayload::pos,
             ByteBufCodecs.idMapper(index -> AutoIOAction.values()[index], AutoIOAction::ordinal), PktAutoIOConfigPayload::action,
             ByteBufCodecs.optional(ByteBufCodecs.idMapper(index -> Direction.values()[index], Direction::ordinal)),
-            payload -> java.util.Optional.ofNullable(payload.side),
+            payload -> Optional.ofNullable(payload.side),
             ByteBufCodecs.BOOL, PktAutoIOConfigPayload::enabled,
             (pos, action, side, enabled) -> new PktAutoIOConfigPayload(pos, action, side.orElse(null), enabled));
 

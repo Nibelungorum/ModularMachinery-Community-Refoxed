@@ -8,6 +8,9 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import java.util.Map;
+
+import cn.howxu.mmcr.internal.port.IOPortKind;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class PortTierRequirementSpecTest {
@@ -75,13 +78,13 @@ class PortTierRequirementSpecTest {
         var machine = new DynamicMachine(
                 cn.howxu.mmcr.MMCR.id("tier_default_machine"),
                 "Tier Default",
-                new BlockArray(java.util.Map.of()));
+                new BlockArray(Map.of()));
 
         assertThat(machine.portTierRequirements()).isSameAs(PortTierRequirementSpec.none());
         assertThat(((Machine) machine).portTierRequirements()).isSameAs(PortTierRequirementSpec.none());
     }
 
-    private static cn.howxu.mmcr.internal.port.IOPortKind kind(String id) {
+    private static IOPortKind kind(String id) {
         return PortKinds.all().stream()
                 .filter(kind -> kind.id().equals(id))
                 .findFirst()

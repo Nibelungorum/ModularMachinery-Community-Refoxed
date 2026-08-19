@@ -29,6 +29,8 @@ import org.nibelungorum.TestMachines;
 
 import java.util.function.Consumer;
 
+import java.util.List;
+
 public final class GameTestRegistry {
     private GameTestRegistry() {
     }
@@ -95,11 +97,11 @@ public final class GameTestRegistry {
 
     public static void registerMachineStructures(DynamicContentReloadService.Candidate candidate) {
         candidate.registerStructure(new MachineStructureDefinition(MMCR.id("test_cube"), TestMachines.casingCubePattern(),
-                PortRequirementSpec.none(), java.util.List.of(), MachineStructureRequirements.EMPTY));
+                PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY));
         candidate.registerStructure(new MachineStructureDefinition(MMCR.id("controller_tick"), TestMachines.casingCubePattern(),
-                PortRequirementSpec.none(), java.util.List.of(), MachineStructureRequirements.EMPTY));
+                PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY));
         candidate.registerStructure(new MachineStructureDefinition(MMCR.id("iron_compressor"), TestMachines.ironCompressorPattern(),
-                PortRequirementSpec.none(), java.util.List.of(), MachineStructureRequirements.EMPTY));
+                PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY));
         candidate.registerStructure(new MachineStructureDefinition(MMCR.id("distillation_tower_test"), TestMachines.distillationTowerDeclarations()));
         candidate.registerStructure(new MachineStructureDefinition(MMCR.id("expandable_structure_stages"), TestMachines.expandableStageDeclarations()));
         candidate.registerStructure(new MachineStructureDefinition(MMCR.id("expandable_structure_vertical_roll"), TestMachines.expandableStageDeclarations()));
@@ -110,8 +112,8 @@ public final class GameTestRegistry {
         Identifier id = Identifier.parse("mmcr_test:datapack_static_override");
         if (RecipeRegistry.getRecipe(id) == null) {
             RecipeRegistry.register(new MachineRecipe(id, MMCR.id("iron_compressor"), 20,
-                    java.util.List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.COAL), 1)),
-                    java.util.List.of(new ItemStack(Items.CHARCOAL))));
+                    List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.COAL), 1)),
+                    List.of(new ItemStack(Items.CHARCOAL))));
         }
     }
 

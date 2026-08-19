@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.Objects;
+import java.util.LinkedHashSet;
 
 public final class MachineRecipe implements Recipe<RecipeInput> {
 
@@ -268,12 +269,12 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     }
 
     private static Set<Identifier> copyHostIds(List<Identifier> ids) {
-        return copyHostIds(ids == null ? Set.of() : new java.util.LinkedHashSet<>(ids));
+        return copyHostIds(ids == null ? Set.of() : new LinkedHashSet<>(ids));
     }
 
     private static Set<Identifier> copyHostIds(Set<Identifier> ids) {
         if (ids == null || ids.isEmpty()) return Set.of();
-        java.util.LinkedHashSet<Identifier> copy = new java.util.LinkedHashSet<>();
+        LinkedHashSet<Identifier> copy = new LinkedHashSet<>();
         for (Identifier id : ids) {
             if (id == null) throw new IllegalArgumentException("Required host id must not be null");
             copy.add(id);

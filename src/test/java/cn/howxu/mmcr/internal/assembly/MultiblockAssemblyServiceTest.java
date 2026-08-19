@@ -21,6 +21,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
+import java.util.stream.IntStream;
+import net.minecraft.world.item.Item;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -127,7 +129,7 @@ class MultiblockAssemblyServiceTest {
 
     @Test
     void limitsOneOperationToGtceuScaleBatchSize() {
-        List<MultiblockAssemblyService.Placement> placements = java.util.stream.IntStream.range(0, 163841)
+        List<MultiblockAssemblyService.Placement> placements = IntStream.range(0, 163841)
                 .mapToObj(index -> new MultiblockAssemblyService.Placement(
                         new BlockPos(index, 0, 0), Blocks.STONE.defaultBlockState(),
                         itemStack(Items.STONE, 1)))
@@ -137,7 +139,7 @@ class MultiblockAssemblyServiceTest {
         assertEquals(163840, MultiblockAssemblyService.limitOperation(placements).size());
     }
 
-    private static ItemStack itemStack(net.minecraft.world.item.Item item, int count) {
+    private static ItemStack itemStack(Item item, int count) {
         return new ItemStack(Holder.direct(item, DataComponentMap.EMPTY), count);
     }
 }

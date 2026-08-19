@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MachinePortAppearanceTest {
@@ -94,13 +95,13 @@ class MachinePortAppearanceTest {
 
         TagValueOutput output = TagValueOutput.createWithContext(
                 ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+                HolderLookup.Provider.create(Stream.empty()));
         source.saveAdditional(output);
         IOPortBlockEntity restored = itemInputBus();
 
         restored.loadAdditional(TagValueInput.create(
                 ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(java.util.stream.Stream.empty()),
+                HolderLookup.Provider.create(Stream.empty()),
                 output.buildResult()));
 
         assertThat(restored.linkedControllerPositions()).containsExactlyInAnyOrder(first, second);

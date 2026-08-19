@@ -20,6 +20,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.Arrays;
 
 public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient String displayNameKey;
@@ -132,7 +133,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
             this.explicitRole = true;
         } catch (IllegalArgumentException exception) {
             throw new IllegalArgumentException("Invalid machine role '" + role + "'. Valid roles: "
-                    + java.util.Arrays.toString(MachineRole.values()), exception);
+                    + Arrays.toString(MachineRole.values()), exception);
         }
         return this;
     }

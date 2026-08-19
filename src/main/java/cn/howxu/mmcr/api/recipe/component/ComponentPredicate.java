@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -198,11 +199,11 @@ public sealed interface ComponentPredicate permits ComponentPredicate.Exact, Com
             this.serializedName = serializedName;
         }
 
-        private static java.util.Optional<TextMode> byName(String name) {
+        private static Optional<TextMode> byName(String name) {
             for (TextMode value : values()) {
-                if (value.serializedName.equals(name)) return java.util.Optional.of(value);
+                if (value.serializedName.equals(name)) return Optional.of(value);
             }
-            return java.util.Optional.empty();
+            return Optional.empty();
         }
     }
 }

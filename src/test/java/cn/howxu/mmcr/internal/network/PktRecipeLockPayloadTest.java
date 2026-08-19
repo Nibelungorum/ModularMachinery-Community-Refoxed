@@ -8,6 +8,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.neoforged.neoforge.network.connection.ConnectionType;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class PktRecipeLockPayloadTest {
@@ -34,7 +35,7 @@ class PktRecipeLockPayloadTest {
     @Test
     void machine_state_payload_preserves_the_complete_locked_recipe_id() {
         PktMachineStatePayload payload = new PktMachineStatePayload(new BlockPos(1, 2, 3), "", true, false,
-                java.util.List.of(), true, "other_namespace:recipe_with_a_long_id");
+                List.of(), true, "other_namespace:recipe_with_a_long_id");
 
         assertThat(payload.lockedRecipeId()).isEqualTo("other_namespace:recipe_with_a_long_id");
     }

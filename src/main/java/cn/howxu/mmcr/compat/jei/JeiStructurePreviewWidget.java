@@ -25,6 +25,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.BlockHitResult;
 
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.state.BlockState;
+
 import java.util.List;
 import java.util.function.LongSupplier;
 
@@ -184,8 +187,8 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private List<StructurePreviewSchema.Candidate> displayedCandidates(BlockPos position) {
         List<StructurePreviewSchema.Candidate> candidates = schema.previewCandidatesAt(position);
         if (!candidates.isEmpty()) return candidates;
-        net.minecraft.world.level.block.state.BlockState state = schema.stateAt(position);
-        if (state == null || state.getBlock().asItem() == net.minecraft.world.item.Items.AIR) return List.of();
+        BlockState state = schema.stateAt(position);
+        if (state == null || state.getBlock().asItem() == Items.AIR) return List.of();
         return List.of(new StructurePreviewSchema.Candidate(new ItemStack(state.getBlock()), false));
     }
 

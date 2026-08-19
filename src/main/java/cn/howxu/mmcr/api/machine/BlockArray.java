@@ -9,6 +9,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.ToIntFunction;
 
 public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, List<String>> tagsByPosition,
@@ -84,7 +85,7 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
         return new BlockArray(rotated, rotateTags(rotated.keySet()), retainSymbols(rotated.keySet()));
     }
 
-    private Map<BlockPos, Character> retainSymbols(java.util.Set<BlockPos> newPositions) {
+    private Map<BlockPos, Character> retainSymbols(Set<BlockPos> newPositions) {
         if (symbolsByPosition.isEmpty()) return Map.of();
         Map<BlockPos, Character> retained = new LinkedHashMap<>();
         for (BlockPos newPos : newPositions) {
@@ -94,7 +95,7 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
         return retained;
     }
 
-    private Map<BlockPos, List<String>> rotateTags(java.util.Set<BlockPos> newPositions) {
+    private Map<BlockPos, List<String>> rotateTags(Set<BlockPos> newPositions) {
         if (tagsByPosition.isEmpty()) return Map.of();
         Map<BlockPos, BlockPos> inverse = new LinkedHashMap<>();
         for (BlockPos newPos : newPositions) {

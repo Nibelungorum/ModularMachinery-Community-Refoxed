@@ -47,6 +47,18 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
+import com.google.gson.JsonPrimitive;
+import com.mojang.serialization.Dynamic;
+import com.mojang.serialization.JsonOps;
+import java.util.stream.IntStream;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.contents.TranslatableContents;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.level.block.Block;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -75,10 +87,10 @@ class MachineRecipeDisplayTest {
         MachineRecipeDisplay display = displayFor(SmartInterfaceRequirement.input("mode", 1F, 2F), machineId);
 
         assertThat(display.tooltips()).singleElement().satisfies(tooltip -> {
-            var contents = (net.minecraft.network.chat.contents.TranslatableContents) tooltip.getContents();
+            var contents = (TranslatableContents) tooltip.getContents();
             assertThat(contents.getKey()).isEqualTo("jei.mmcr.smart_interface.requirement.input");
-            assertThat(((net.minecraft.network.chat.contents.TranslatableContents)
-                    ((net.minecraft.network.chat.Component) contents.getArgs()[0]).getContents()).getKey())
+            assertThat(((TranslatableContents)
+                    ((Component) contents.getArgs()[0]).getContents()).getKey())
                     .isEqualTo("mmcr.smart_interface.type.mode");
             assertThat(contents.getArgs()[1]).isEqualTo("1.0 - 2.0");
         });
@@ -92,9 +104,9 @@ class MachineRecipeDisplayTest {
         MachineRecipeDisplay display = displayFor(SmartInterfaceRequirement.output("mode", 4F), machineId);
 
         assertThat(display.smartInterfaceOutputs()).singleElement().satisfies(output -> {
-            assertThat(((net.minecraft.network.chat.contents.TranslatableContents) output.label().getContents()).getKey())
+            assertThat(((TranslatableContents) output.label().getContents()).getKey())
                     .isEqualTo("mmcr.smart_interface.value");
-            assertThat(((net.minecraft.network.chat.contents.TranslatableContents) output.tooltip().getContents()).getKey())
+            assertThat(((TranslatableContents) output.tooltip().getContents()).getKey())
                     .isEqualTo("jei.mmcr.smart_interface.requirement.output");
         });
     }
@@ -111,15 +123,15 @@ class MachineRecipeDisplayTest {
         MachineRecipeDisplay temperature = displayFor(SmartInterfaceRequirement.input("Temperature", 5200F), machineId);
 
         assertThat(mode.smartInterfaceInputs()).singleElement().satisfies(input -> {
-            assertThat(((net.minecraft.network.chat.contents.TranslatableContents) input.label().getContents()).getKey())
+            assertThat(((TranslatableContents) input.label().getContents()).getKey())
                     .isEqualTo("mmcr.smart_interface.value");
-            assertThat(((net.minecraft.network.chat.contents.TranslatableContents) input.tooltip().getContents()).getArgs()[1])
+            assertThat(((TranslatableContents) input.tooltip().getContents()).getArgs()[1])
                     .isEqualTo("1");
         });
         assertThat(temperature.smartInterfaceInputs()).singleElement().satisfies(input -> {
-            assertThat(((net.minecraft.network.chat.contents.TranslatableContents) input.label().getContents()).getKey())
+            assertThat(((TranslatableContents) input.label().getContents()).getKey())
                     .isEqualTo("mmcr.smart_interface.value");
-            assertThat(((net.minecraft.network.chat.contents.TranslatableContents) input.tooltip().getContents()).getArgs()[1])
+            assertThat(((TranslatableContents) input.tooltip().getContents()).getArgs()[1])
                     .isEqualTo("5200");
         });
     }
@@ -224,10 +236,10 @@ class MachineRecipeDisplayTest {
 
         Component component = MachineRecipeCategory.hostRequirementComponent(display, 0);
 
-        assertThat(((net.minecraft.network.chat.contents.TranslatableContents) component.getContents()).getKey())
+        assertThat(((TranslatableContents) component.getContents()).getKey())
                 .isEqualTo("jei.mmcr.machine_recipe.required_host");
         assertThat(component.getString()).isEqualTo("jei.mmcr.machine_recipe.required_host");
-        assertThat(((Component) ((net.minecraft.network.chat.contents.TranslatableContents) component.getContents()).getArgs()[0]).getString())
+        assertThat(((Component) ((TranslatableContents) component.getContents()).getArgs()[0]).getString())
                 .isEqualTo("machine.mmcr.single_host");
     }
 
@@ -366,8 +378,8 @@ class MachineRecipeDisplayTest {
     void displayResolvesComponentsFromExplicitItemOutputRequirements() {
         DataComponentPredicateSet components = new DataComponentPredicateSet(Map.of(
                 DataComponents.REPAIR_COST, ComponentPredicate.exact(
-                        new com.mojang.serialization.Dynamic<>(com.mojang.serialization.JsonOps.INSTANCE,
-                                new com.google.gson.JsonPrimitive(1)))));
+                        new Dynamic<>(JsonOps.INSTANCE,
+                                new JsonPrimitive(1)))));
         MachineRecipe recipe = new MachineRecipe(
                 MMCR.id("explicit_component_output_display"), MMCR.id("alloy_furnace"), 40,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
@@ -425,7 +437,7 @@ class MachineRecipeDisplayTest {
                 MMCR.id("blast_furnace"),
                 40,
                 List.of(new MachineIngredient.ItemIngredient(
-                        Ingredient.of(HolderSet.emptyNamed(net.minecraft.core.registries.BuiltInRegistries.ITEM, ItemTags.LOGS)), 1)),
+                        Ingredient.of(HolderSet.emptyNamed(BuiltInRegistries.ITEM, ItemTags.LOGS)), 1)),
                 List.of()
         );
 
@@ -485,7 +497,7 @@ class MachineRecipeDisplayTest {
                 MMCR.id("jei_overflow"),
                 MMCR.id("blast_furnace"),
                 20,
-                java.util.stream.IntStream.range(0, 33)
+                IntStream.range(0, 33)
                         .<MachineIngredient>mapToObj(index -> new MachineIngredient.ItemIngredient(Ingredient.of(Items.COAL), 1))
                         .toList(),
                 List.of(),
@@ -555,7 +567,7 @@ class MachineRecipeDisplayTest {
     }
 
     private static Component hostRequirementArg(MachineRecipeDisplay display, long gameTime) {
-        var contents = (net.minecraft.network.chat.contents.TranslatableContents)
+        var contents = (TranslatableContents)
                 MachineRecipeCategory.hostRequirementComponent(display, gameTime).getContents();
         return (Component) contents.getArgs()[0];
     }
@@ -569,8 +581,8 @@ class MachineRecipeDisplayTest {
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(requirement)));
     }
 
-    private static void registerLevel(net.minecraft.resources.Identifier id, net.minecraft.resources.Identifier typeId,
-                                      int priority, net.minecraft.world.level.block.Block block) {
+    private static void registerLevel(Identifier id, Identifier typeId,
+                                      int priority, Block block) {
         MachineLevelRegistry.registerLevel(new MachineLevel(id, typeId, priority,
                 new BlockPredicate.OfBlockState(block.defaultBlockState()),
                 new ItemStack(Holder.direct(block.asItem(), DataComponentMap.EMPTY)), LevelModifier.IDENTITY));
@@ -580,21 +592,21 @@ class MachineRecipeDisplayTest {
         return namedSharpnessSword(4, "Better钻石剑", VanillaRegistries.createLookup());
     }
 
-    private static ItemStack namedSharpnessSword(int level, String name, net.minecraft.core.HolderLookup.Provider lookup) {
+    private static ItemStack namedSharpnessSword(int level, String name, HolderLookup.Provider lookup) {
         ItemStack stack = new ItemStack(Items.DIAMOND_SWORD);
         if (name != null) stack.set(DataComponents.CUSTOM_NAME, Component.literal(name));
         var enchantments = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
-        enchantments.set(lookup.lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT).getOrThrow(sharpnessKey()), level);
+        enchantments.set(lookup.lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(sharpnessKey()), level);
         stack.set(DataComponents.ENCHANTMENTS, enchantments.toImmutable());
         return stack;
     }
 
-    private static net.minecraft.resources.ResourceKey<net.minecraft.world.item.enchantment.Enchantment> sharpnessKey() {
-        return net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.ENCHANTMENT,
+    private static ResourceKey<Enchantment> sharpnessKey() {
+        return ResourceKey.create(Registries.ENCHANTMENT,
                 Identifier.parse("minecraft:sharpness"));
     }
 
-    private static void bindItemComponents(net.minecraft.world.item.Item... items) {
+    private static void bindItemComponents(Item... items) {
         for (var item : items) item.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
     }
 }

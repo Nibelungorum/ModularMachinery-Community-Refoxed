@@ -16,6 +16,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -89,7 +91,7 @@ class MachineDefinitionBootstrapTest {
     }
 
     private static MachineStructureDefinition structure(String id) {
-        return new MachineStructureDefinition(Identifier.parse(id), new cn.howxu.mmcr.api.machine.BlockArray(Map.of()),
-                PortRequirementSpec.none(), List.of(), cn.howxu.mmcr.api.machine.MachineStructureRequirements.EMPTY);
+        return new MachineStructureDefinition(Identifier.parse(id), new BlockArray(Map.of()),
+                PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
     }
 }

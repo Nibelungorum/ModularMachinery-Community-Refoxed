@@ -11,6 +11,8 @@ import com.mojang.blaze3d.vertex.MeshData;
 import net.minecraft.client.renderer.SectionBufferBuilderPack;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 
+import net.minecraft.core.BlockPos;
+
 import java.util.List;
 import java.util.IdentityHashMap;
 import java.util.Map;
@@ -81,12 +83,12 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
     static final class Meshes implements FullCache {
         private final SectionBufferBuilderPack builders;
         private final Map<ChunkSectionLayer, List<MeshData>> layers;
-        private final Set<net.minecraft.core.BlockPos> blockEntities;
+        private final Set<BlockPos> blockEntities;
         private final MeshData.SortState translucentSortState;
         private TranslucentOrder translucentOrder;
 
         Meshes(SectionBufferBuilderPack builders, Map<ChunkSectionLayer, List<MeshData>> layers,
-               Set<net.minecraft.core.BlockPos> blockEntities, MeshData.SortState translucentSortState) {
+               Set<BlockPos> blockEntities, MeshData.SortState translucentSortState) {
             this.builders = builders;
             this.layers = layers;
             this.blockEntities = blockEntities;
@@ -95,7 +97,7 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
 
         SectionBufferBuilderPack builders() { return builders; }
         Map<ChunkSectionLayer, List<MeshData>> layers() { return layers; }
-        Set<net.minecraft.core.BlockPos> blockEntities() { return blockEntities; }
+        Set<BlockPos> blockEntities() { return blockEntities; }
         MeshData.SortState translucentSortState() { return translucentSortState; }
         TranslucentOrder translucentOrder() { return translucentOrder; }
 

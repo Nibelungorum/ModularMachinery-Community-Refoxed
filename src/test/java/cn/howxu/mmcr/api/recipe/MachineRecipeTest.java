@@ -40,6 +40,12 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import java.util.Map;
+
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.item.enchantment.Enchantment;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -268,7 +274,7 @@ class MachineRecipeTest {
                 Identifier.fromNamespaceAndPath("mmcr", "machine"),
                 20,
                 List.of(
-                        new MachineIngredient.ItemIngredient(net.minecraft.world.item.crafting.Ingredient.of(Items.IRON_INGOT), 2),
+                        new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2),
                         new MachineIngredient.EnergyIngredient(40)
                 ),
                 List.of(new ItemStack(nugget, 1))
@@ -276,7 +282,7 @@ class MachineRecipeTest {
 
         assertThat(recipe.requirements()).hasSize(3);
         assertThat(recipe.inputs()).containsExactlyElementsOf(List.of(
-                new MachineIngredient.ItemIngredient(net.minecraft.world.item.crafting.Ingredient.of(Items.IRON_INGOT), 2),
+                new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2),
                 new MachineIngredient.EnergyIngredient(40)
         ));
         assertThat(recipe.outputs()).singleElement().satisfies(stack -> {
@@ -326,7 +332,7 @@ class MachineRecipeTest {
                 Identifier.fromNamespaceAndPath("mmcr", "gold"),
                 Identifier.fromNamespaceAndPath("mmcr", "other"), 20, List.of(), List.of());
 
-        var machine = new DynamicMachine(machineId, "Compressor", new BlockArray(java.util.Map.of()));
+        var machine = new DynamicMachine(machineId, "Compressor", new BlockArray(Map.of()));
         RecipeRegistry.register(recipe);
         RecipeRegistry.register(other);
 
@@ -487,7 +493,7 @@ class MachineRecipeTest {
                 Identifier.fromNamespaceAndPath("mmcr", "raw_preserved"),
                 Identifier.fromNamespaceAndPath("mmcr", "machine"),
                 100,
-                List.of(new MachineIngredient.ItemIngredient(net.minecraft.world.item.crafting.Ingredient.of(Items.IRON_INGOT), 2)),
+                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
                 List.of(Items.IRON_NUGGET.getDefaultInstance().copyWithCount(1)),
                 List.of(
                         new RecipeModifier(IntegrationTypeHelper.TARGET_DURATION, RecipeModifier.IOType.INPUT, 0.5F, RecipeModifier.Operation.MULTIPLY, false),
@@ -504,8 +510,8 @@ class MachineRecipeTest {
         assertThat(encoded.get("tick_time").getAsInt()).isEqualTo(100);
         assertThat(back.inputs().getFirst()).isEqualTo(recipe.inputs().getFirst());
         assertThat(back.outputs().getFirst().getCount()).isEqualTo(1);
-        assertThat(((cn.howxu.mmcr.api.recipe.requirement.ItemRequirement) back.runtimeRequirements().get(0)).count()).isEqualTo(6);
-        assertThat(((cn.howxu.mmcr.api.recipe.requirement.ItemRequirement) back.runtimeRequirements().get(1)).stack().getCount()).isEqualTo(4);
+        assertThat(((ItemRequirement) back.runtimeRequirements().get(0)).count()).isEqualTo(6);
+        assertThat(((ItemRequirement) back.runtimeRequirements().get(1)).stack().getCount()).isEqualTo(4);
     }
 
     @Test
@@ -514,7 +520,7 @@ class MachineRecipeTest {
                 Identifier.fromNamespaceAndPath("mmcr", "effective_modifiers"),
                 Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
                 20,
-                List.of(new MachineIngredient.ItemIngredient(net.minecraft.world.item.crafting.Ingredient.of(Items.IRON_INGOT), 2)),
+                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
                 List.of(),
                 List.of(new RecipeModifier("item", RecipeModifier.IOType.INPUT, 1F,
                         RecipeModifier.Operation.MULTIPLY, false)),
@@ -543,7 +549,7 @@ class MachineRecipeTest {
                 false,
                 List.of(),
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2,
-                        ItemStack.EMPTY, 1F, List.of(), cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet.EMPTY, 0.5F)),
+                        ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0.5F)),
                 false,
                 List.of());
 
@@ -682,10 +688,10 @@ class MachineRecipeTest {
         return RegistryOps.create(JsonOps.INSTANCE, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
     }
 
-    private static net.minecraft.core.Holder<net.minecraft.world.item.enchantment.Enchantment> enchantment(String id) {
-        return VanillaRegistries.createLookup().lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT)
-                .getOrThrow(net.minecraft.resources.ResourceKey.create(
-                        net.minecraft.core.registries.Registries.ENCHANTMENT, Identifier.parse(id)));
+    private static Holder<Enchantment> enchantment(String id) {
+        return VanillaRegistries.createLookup().lookupOrThrow(Registries.ENCHANTMENT)
+                .getOrThrow(ResourceKey.create(
+                        Registries.ENCHANTMENT, Identifier.parse(id)));
     }
 
     private static DynamicOps<JsonElement> componentJsonOps() {

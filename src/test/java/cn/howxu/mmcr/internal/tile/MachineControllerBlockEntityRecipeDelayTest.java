@@ -56,6 +56,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 
+import cn.howxu.mmcr.util.IOType;
+import java.util.stream.Collectors;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.block.state.StateDefinition;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -466,8 +471,8 @@ class MachineControllerBlockEntityRecipeDelayTest {
         ItemInputBusBlockEntity bus = (ItemInputBusBlockEntity) unsafe.allocateInstance(ItemInputBusBlockEntity.class);
         setField(BlockEntity.class, bus, "type", null);
         setField(BlockEntity.class, bus, "worldPosition", pos);
-        setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
-        setField(ItemInputBusBlockEntity.class, bus, "kind", cn.howxu.mmcr.registry.PortKinds.ITEM_INPUT);
+        setField(BlockEntity.class, bus, "blockState", Blocks.CHEST.defaultBlockState());
+        setField(ItemInputBusBlockEntity.class, bus, "kind", PortKinds.ITEM_INPUT);
         setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
         return bus;
     }
@@ -479,8 +484,8 @@ class MachineControllerBlockEntityRecipeDelayTest {
         ItemOutputBusBlockEntity bus = (ItemOutputBusBlockEntity) unsafe.allocateInstance(ItemOutputBusBlockEntity.class);
         setField(BlockEntity.class, bus, "type", null);
         setField(BlockEntity.class, bus, "worldPosition", pos);
-        setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
-        setField(ItemOutputBusBlockEntity.class, bus, "kind", cn.howxu.mmcr.registry.PortKinds.ITEM_OUTPUT);
+        setField(BlockEntity.class, bus, "blockState", Blocks.CHEST.defaultBlockState());
+        setField(ItemOutputBusBlockEntity.class, bus, "kind", PortKinds.ITEM_OUTPUT);
         setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
         return bus;
     }
@@ -518,8 +523,8 @@ class MachineControllerBlockEntityRecipeDelayTest {
         setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
         setField(BlockEntity.class, controller, "blockState", controllerBlock.defaultBlockState()
                 .setValue(MachineControllerBlock.FORMED, true)
-                .setValue(MachineControllerBlock.FACING, net.minecraft.core.Direction.NORTH)
-                .setValue(MachineControllerBlock.ROLL_FACING, net.minecraft.core.Direction.NORTH)
+                .setValue(MachineControllerBlock.FACING, Direction.NORTH)
+                .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH)
                 .setValue(MachineControllerBlock.ACTIVE, false));
         List<BlockEntity> blockEntities = new ArrayList<>(List.of(ports));
         blockEntities.add(controller);
@@ -537,14 +542,14 @@ class MachineControllerBlockEntityRecipeDelayTest {
         sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
         MachineControllerBlock block = (MachineControllerBlock) unsafe.allocateInstance(MachineControllerBlock.class);
         setField(MachineControllerBlock.class, block, "machineId", machineId);
-        setField(net.minecraft.world.level.block.state.BlockBehaviour.class, block, "properties", Blocks.IRON_BLOCK.properties());
-        var builder = new net.minecraft.world.level.block.state.StateDefinition.Builder<Block, net.minecraft.world.level.block.state.BlockState>(block);
+        setField(BlockBehaviour.class, block, "properties", Blocks.IRON_BLOCK.properties());
+        var builder = new StateDefinition.Builder<Block, BlockState>(block);
         builder.add(MachineControllerBlock.FACING, MachineControllerBlock.ROLL_FACING, MachineControllerBlock.FORMED, MachineControllerBlock.ACTIVE);
-        var stateDefinition = builder.create(Block::defaultBlockState, net.minecraft.world.level.block.state.BlockState::new);
+        var stateDefinition = builder.create(Block::defaultBlockState, BlockState::new);
         setField(Block.class, block, "stateDefinition", stateDefinition);
         setField(Block.class, block, "defaultBlockState", stateDefinition.any()
-                .setValue(MachineControllerBlock.FACING, net.minecraft.core.Direction.NORTH)
-                .setValue(MachineControllerBlock.ROLL_FACING, net.minecraft.core.Direction.NORTH)
+                .setValue(MachineControllerBlock.FACING, Direction.NORTH)
+                .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH)
                 .setValue(MachineControllerBlock.FORMED, false)
                 .setValue(MachineControllerBlock.ACTIVE, false));
         return block;
@@ -564,7 +569,7 @@ class MachineControllerBlockEntityRecipeDelayTest {
             List<ProcessingComponent> components = (List<ProcessingComponent>) fieldValue(MachineControllerBlockEntity.class, controller, "components");
             components.add(new ProcessingComponent(
                     new MachineComponent(port instanceof ItemOutputBusBlockEntity ? PortKinds.ITEM_OUTPUT : PortKinds.ITEM_INPUT,
-                            port instanceof ItemOutputBusBlockEntity ? cn.howxu.mmcr.util.IOType.OUTPUT : cn.howxu.mmcr.util.IOType.INPUT),
+                            port instanceof ItemOutputBusBlockEntity ? IOType.OUTPUT : IOType.INPUT),
                     port,
                     port.getBlockPos(),
                     BlockPos.ZERO,
@@ -579,7 +584,7 @@ class MachineControllerBlockEntityRecipeDelayTest {
         TestServerLevel level = (TestServerLevel) ((sun.misc.Unsafe) unsafeField.get(null)).allocateInstance(TestServerLevel.class);
         setField(TestServerLevel.class, level, "blocks", new HashMap<>());
         setField(TestServerLevel.class, level, "blockEntities", blockEntities.stream()
-                .collect(java.util.stream.Collectors.toMap(BlockEntity::getBlockPos, entity -> entity)));
+                .collect(Collectors.toMap(BlockEntity::getBlockPos, entity -> entity)));
         return level;
     }
 

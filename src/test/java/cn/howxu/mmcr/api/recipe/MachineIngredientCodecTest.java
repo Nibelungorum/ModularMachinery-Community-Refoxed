@@ -26,6 +26,9 @@ import java.lang.reflect.Constructor;
 import java.nio.file.Path;
 import java.util.List;
 
+import com.google.gson.JsonObject;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SuppressWarnings("deprecation")
@@ -43,7 +46,7 @@ class MachineIngredientCodecTest {
     }
 
     @Test void invalidItemIngredientComponentsProduceAnError() {
-        var json = new com.google.gson.JsonObject();
+        var json = new JsonObject();
         json.addProperty("type", "item");
         json.add("item", Ingredient.CODEC.encodeStart(jsonOps(), Ingredient.of(Items.IRON_INGOT)).getOrThrow());
         json.addProperty("count", 1);
@@ -53,7 +56,7 @@ class MachineIngredientCodecTest {
     }
 
     @Test void invalidItemRequirementComponentsProduceAnError() {
-        var json = new com.google.gson.JsonObject();
+        var json = new JsonObject();
         json.addProperty("type", "item");
         json.addProperty("io", "input");
         json.add("item", Ingredient.CODEC.encodeStart(jsonOps(), Ingredient.of(Items.IRON_INGOT)).getOrThrow());
@@ -87,7 +90,7 @@ class MachineIngredientCodecTest {
     }
 
     @Test void energyIngredient_codec_defaults_missing_io_to_input() {
-        var json = new com.google.gson.JsonObject();
+        var json = new JsonObject();
         json.addProperty("type", "energy");
         json.addProperty("fe_per_tick", 80);
 
@@ -107,7 +110,7 @@ class MachineIngredientCodecTest {
     }
 
     @Test void itemRequirement_roundtrip_with_io_and_tag() {
-        var requirement = new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 3, net.minecraft.world.item.ItemStack.EMPTY, List.of("north_buses"));
+        var requirement = new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 3, ItemStack.EMPTY, List.of("north_buses"));
 
         var json = MachineRequirement.CODEC.encodeStart(jsonOps(), requirement).getOrThrow();
         var back = MachineRequirement.CODEC.parse(jsonOps(), json).getOrThrow();
@@ -152,7 +155,7 @@ class MachineIngredientCodecTest {
     }
 
     @Test void energyRequirement_codec_defaults_missing_io_to_input() {
-        var json = new com.google.gson.JsonObject();
+        var json = new JsonObject();
         json.addProperty("type", "energy");
         json.addProperty("fe_per_tick", 90);
 
@@ -166,8 +169,8 @@ class MachineIngredientCodecTest {
 
     @Test void machineRecipe_inputs_excludes_output_energy_and_energyOutputs_exposes_it() {
         var recipe = new MachineRecipe(
-                net.minecraft.resources.Identifier.parse("mmcr:test_energy_output"),
-                net.minecraft.resources.Identifier.parse("mmcr:test_machine"),
+                Identifier.parse("mmcr:test_energy_output"),
+                Identifier.parse("mmcr:test_machine"),
                 20,
                 List.of(new MachineIngredient.EnergyIngredient(RecipeModifier.IOType.OUTPUT, 100)),
                 List.of()

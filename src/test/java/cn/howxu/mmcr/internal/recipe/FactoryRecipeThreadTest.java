@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -25,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class FactoryRecipeThreadTest {
     private static final HolderLookup.Provider EMPTY_LOOKUP =
-            HolderLookup.Provider.create(java.util.stream.Stream.empty());
+            HolderLookup.Provider.create(Stream.empty());
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {

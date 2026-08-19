@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Collections;
 
 /**
  * Network codec for server-authored runtime machine recipes.
@@ -219,7 +220,7 @@ public final class MachineRecipeSyncCodec {
         for (int i = 0; i < count; i++) {
             values.add(Identifier.STREAM_CODEC.decode(buf));
         }
-        return java.util.Collections.unmodifiableSet(values);
+        return Collections.unmodifiableSet(values);
     }
 
     private static void checkSize(int size, int max, String label) {

@@ -34,6 +34,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import java.util.LinkedHashMap;
+import java.util.TreeMap;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ModuleRecipeHostRequirementTest {
@@ -147,7 +149,7 @@ class ModuleRecipeHostRequirementTest {
                 .withRole(MachineRole.MODULE, Set.of());
         setField(MachineControllerBlockEntity.class, controller, "machine", machine);
         setField(MachineControllerBlockEntity.class, controller, "foundMachine", machine);
-        setField(MachineControllerBlockEntity.class, controller, "foundModifiers", new java.util.LinkedHashMap<>());
+        setField(MachineControllerBlockEntity.class, controller, "foundModifiers", new LinkedHashMap<>());
         setField(MachineControllerBlockEntity.class, controller, "foundLevels", Map.of());
         setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
         return controller;
@@ -164,7 +166,7 @@ class ModuleRecipeHostRequirementTest {
         setField(BlockEntity.class, bus, "blockState", Blocks.CHEST.defaultBlockState());
         setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(1));
         setField(LinkedAppearanceBlockEntity.class, bus, "appearanceBaseTexture", MMCR.id("block/basic_casing"));
-        setField(LinkedAppearanceBlockEntity.class, bus, "linkedControllers", new java.util.TreeMap<>(BlockPos::compareTo));
+        setField(LinkedAppearanceBlockEntity.class, bus, "linkedControllers", new TreeMap<>(BlockPos::compareTo));
         setField(LinkedAppearanceBlockEntity.class, bus, "controllerLinkCheckCounter", 0);
         return bus;
     }

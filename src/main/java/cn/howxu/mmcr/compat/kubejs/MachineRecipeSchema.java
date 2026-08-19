@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.MMCR;
+
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.Codec;
 import dev.latvian.mods.kubejs.recipe.RecipeKey;
@@ -20,9 +22,17 @@ import dev.latvian.mods.kubejs.util.IntBounds;
 import dev.latvian.mods.kubejs.util.JsonUtils;
 import dev.latvian.mods.rhino.type.TypeInfo;
 import net.minecraft.resources.ResourceKey;
+
+import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.mojang.serialization.Dynamic;
+import com.mojang.serialization.JsonOps;
+
 import java.util.List;
+import java.util.Optional;
 
 public final class MachineRecipeSchema {
     public static final RecipeComponent<JsonElement> JSON_ELEMENT = new JsonElementComponent();
@@ -34,18 +44,18 @@ public final class MachineRecipeSchema {
             new RecipeKey<>(NumberComponent.NON_NEGATIVE_INT, "tick_time", ComponentRole.OTHER);
 
     public static final RecipeKey<List<JsonElement>> INPUTS =
-            new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false, IntBounds.OPTIONAL, java.util.Optional.empty()), "inputs", ComponentRole.INPUT)
+            new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false, IntBounds.OPTIONAL, Optional.empty()), "inputs", ComponentRole.INPUT)
                     .optional(List.of()).exclude();
 
     public static final RecipeKey<Integer> ENERGY_PER_TICK =
             new RecipeKey<>(NumberComponent.NON_NEGATIVE_INT, "energy_per_tick", ComponentRole.OTHER).optional(0);
 
     public static final RecipeKey<List<JsonElement>> OUTPUTS =
-            new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false, IntBounds.OPTIONAL, java.util.Optional.empty()), "outputs", ComponentRole.OUTPUT)
+            new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false, IntBounds.OPTIONAL, Optional.empty()), "outputs", ComponentRole.OUTPUT)
                     .optional(List.of()).exclude();
 
     public static final RecipeKey<List<JsonElement>> MODIFIERS =
-            new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false, IntBounds.OPTIONAL, java.util.Optional.empty()), "modifiers", ComponentRole.OTHER)
+            new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false, IntBounds.OPTIONAL, Optional.empty()), "modifiers", ComponentRole.OTHER)
                     .optional(List.of()).exclude();
 
     public static final RecipeKey<Integer> MAX_THREADS =
@@ -87,7 +97,7 @@ public final class MachineRecipeSchema {
                             var hostId = (String) args.get(0);
                             var hosts = cx.recipe().json.getAsJsonArray("required_host_ids");
                             if (hosts == null) {
-                                hosts = new com.google.gson.JsonArray();
+                                hosts = new JsonArray();
                                 cx.recipe().json.add("required_host_ids", hosts);
                             }
                             hosts.add(hostId);
@@ -105,16 +115,16 @@ public final class MachineRecipeSchema {
                         public void execute(RecipeScriptContext cx, List<Object> args) {
                             var typeId = (String) args.get(0);
                             var levelId = (String) args.get(1);
-                            var level = cn.howxu.mmcr.api.machine.level.MachineLevelRegistry.getLevel(net.minecraft.resources.Identifier.parse(levelId));
-                            if (level == null || !level.typeId().equals(net.minecraft.resources.Identifier.parse(typeId))) {
+                            var level = MachineLevelRegistry.getLevel(Identifier.parse(levelId));
+                            if (level == null || !level.typeId().equals(Identifier.parse(typeId))) {
                                 throw new IllegalArgumentException("Machine level " + levelId + " does not belong to type " + typeId);
                             }
                             var levels = cx.recipe().json.getAsJsonArray("level_requirements");
                             if (levels == null) {
-                                levels = new com.google.gson.JsonArray();
+                                levels = new JsonArray();
                                 cx.recipe().json.add("level_requirements", levels);
                             }
-                            var requirement = new com.google.gson.JsonObject();
+                            var requirement = new JsonObject();
                             requirement.addProperty("type", typeId);
                             requirement.addProperty("level", levelId);
                             levels.add(requirement);
@@ -139,8 +149,8 @@ public final class MachineRecipeSchema {
 
         @Override
         public Codec<JsonElement> codec() {
-            return Codec.PASSTHROUGH.xmap(dynamic -> dynamic.convert(com.mojang.serialization.JsonOps.INSTANCE).getValue(),
-                    json -> new com.mojang.serialization.Dynamic<>(com.mojang.serialization.JsonOps.INSTANCE, json));
+            return Codec.PASSTHROUGH.xmap(dynamic -> dynamic.convert(JsonOps.INSTANCE).getValue(),
+                    json -> new Dynamic<>(JsonOps.INSTANCE, json));
         }
 
         @Override

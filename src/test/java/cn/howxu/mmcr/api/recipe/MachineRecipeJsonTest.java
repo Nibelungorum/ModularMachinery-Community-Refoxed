@@ -15,6 +15,8 @@ import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import net.minecraft.world.item.Items;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -45,7 +47,7 @@ class MachineRecipeJsonTest {
         assertThat(recipe.inputs()).singleElement().isInstanceOfSatisfying(MachineIngredient.ItemIngredient.class,
                 input -> assertThat(input.count()).isEqualTo(2));
         assertThat(recipe.outputs()).singleElement().satisfies(output -> {
-            assertThat(output.getItem()).isEqualTo(net.minecraft.world.item.Items.IRON_BLOCK);
+            assertThat(output.getItem()).isEqualTo(Items.IRON_BLOCK);
             assertThat(output.getCount()).isEqualTo(1);
         });
     }
@@ -109,7 +111,7 @@ class MachineRecipeJsonTest {
         assertThat(recipe.inputs()).hasSize(2);
         assertThat(recipe.inputs().getLast()).isEqualTo(new MachineIngredient.EnergyIngredient(80));
         assertThat(recipe.fluidOutputs()).singleElement().satisfies(fluid -> assertThat(fluid.getAmount()).isEqualTo(1000));
-        assertThat(recipe.requirements()).anyMatch(requirement -> requirement instanceof cn.howxu.mmcr.api.recipe.requirement.FluidRequirement fluid
+        assertThat(recipe.requirements()).anyMatch(requirement -> requirement instanceof FluidRequirement fluid
                 && fluid.chance() == 0.75F);
         assertThat(recipe.modifiers()).singleElement().satisfies(modifierValue -> {
             assertThat(modifierValue.getOperation()).isEqualTo(RecipeModifier.Operation.MULTIPLY);

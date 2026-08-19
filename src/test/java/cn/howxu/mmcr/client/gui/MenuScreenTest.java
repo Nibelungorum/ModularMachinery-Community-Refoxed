@@ -37,6 +37,8 @@ import java.util.Map;
 import java.util.List;
 import java.util.Optional;
 
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.world.SimpleContainer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MenuScreenTest {
@@ -109,10 +111,10 @@ class MenuScreenTest {
         autoIOPage.setAccessible(true);
         autoIOPage.setBoolean(screen, true);
 
-        Method isAutoIOPortSlot = MachineMenuScreen.class.getDeclaredMethod("isAutoIOPortSlot", net.minecraft.world.inventory.Slot.class, int.class);
+        Method isAutoIOPortSlot = MachineMenuScreen.class.getDeclaredMethod("isAutoIOPortSlot", Slot.class, int.class);
         isAutoIOPortSlot.setAccessible(true);
 
-        Slot hotbarSlot = new Slot(new net.minecraft.world.SimpleContainer(9), 0, 8, 142);
+        Slot hotbarSlot = new Slot(new SimpleContainer(9), 0, 8, 142);
         assertThat((boolean) isAutoIOPortSlot.invoke(screen, hotbarSlot, 33)).isFalse();
     }
 
@@ -194,7 +196,7 @@ class MenuScreenTest {
             unsafeField.setAccessible(true);
             sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
             MachineMenuScreen screen = (MachineMenuScreen) unsafe.allocateInstance(MachineMenuScreen.class);
-            setField(net.minecraft.client.gui.screens.inventory.AbstractContainerScreen.class, screen, "menu", menu);
+            setField(AbstractContainerScreen.class, screen, "menu", menu);
             setField(MachineMenuScreen.class, screen, "autoIOSideButtons", new EnumMap<>(Direction.class));
             setField(MachineMenuScreen.class, screen, "hiddenSlotPositions", new ArrayList<>());
             return screen;

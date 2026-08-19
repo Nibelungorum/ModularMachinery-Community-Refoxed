@@ -24,6 +24,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.fluids.FluidStack;
 
+import net.minecraft.core.HolderSet;
+import net.minecraft.world.item.Item;
+
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -272,7 +275,7 @@ public class MachineRecipeBuilderJS {
         return this;
     }
 
-    private net.minecraft.world.item.Item item(String itemId) {
+    private Item item(String itemId) {
         return BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId));
     }
 
@@ -280,9 +283,9 @@ public class MachineRecipeBuilderJS {
         return DataComponentPredicateSet.CODEC.parse(JsonOps.INSTANCE, components).getOrThrow();
     }
 
-    private net.minecraft.core.HolderSet.Named<net.minecraft.world.item.Item> tagItems(String tagId) {
+    private HolderSet.Named<Item> tagItems(String tagId) {
         var tag = TagKey.create(Registries.ITEM, Identifier.parse(tagId));
-        return BuiltInRegistries.ITEM.get(tag).orElseGet(() -> net.minecraft.core.HolderSet.emptyNamed(BuiltInRegistries.ITEM, tag));
+        return BuiltInRegistries.ITEM.get(tag).orElseGet(() -> HolderSet.emptyNamed(BuiltInRegistries.ITEM, tag));
     }
 
     public MachineRecipe createObject() {

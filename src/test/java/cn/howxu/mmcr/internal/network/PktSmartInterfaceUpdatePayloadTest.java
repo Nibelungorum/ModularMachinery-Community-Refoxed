@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 
+import net.minecraft.world.entity.player.Inventory;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class PktSmartInterfaceUpdatePayloadTest {
@@ -32,7 +33,7 @@ class PktSmartInterfaceUpdatePayloadTest {
     @Test
     void can_update_requires_open_menu_matching_pos_type_and_finite_value() {
         BlockPos pos = new BlockPos(1, 2, 3);
-        SmartInterfaceMenu menu = SmartInterfaceMenu.clientOpen(1, new net.minecraft.world.entity.player.Inventory(null, null), pos);
+        SmartInterfaceMenu menu = SmartInterfaceMenu.clientOpen(1, new Inventory(null, null), pos);
 
         assertThat(PktSmartInterfaceUpdatePayload.canUpdate(menu, pos, "temperature", 12F)).isTrue();
         assertThat(PktSmartInterfaceUpdatePayload.canUpdate(menu, pos, "", 12F)).isFalse();

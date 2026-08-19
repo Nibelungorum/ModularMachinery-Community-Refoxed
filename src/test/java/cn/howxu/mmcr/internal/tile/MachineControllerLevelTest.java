@@ -38,6 +38,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+
+import cn.howxu.mmcr.api.machine.Machine;
+import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.StateDefinition;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MachineControllerLevelTest {
@@ -196,8 +203,8 @@ class MachineControllerLevelTest {
         MachineControllerBlockEntity controller = allocateController();
         setField(MachineControllerBlockEntity.class, controller, "foundModifiers", new LinkedHashMap<>());
         setField(MachineControllerBlockEntity.class, controller, "foundLevels", Map.of());
-        setField(MachineControllerBlockEntity.class, controller, "components", new java.util.ArrayList<>());
-        setField(MachineControllerBlockEntity.class, controller, "linkedPortPositions", new java.util.HashSet<>());
+        setField(MachineControllerBlockEntity.class, controller, "components", new ArrayList<>());
+        setField(MachineControllerBlockEntity.class, controller, "linkedPortPositions", new HashSet<>());
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         var controllerBlock = testControllerBlock();
         var controllerState = controllerBlock.defaultBlockState()
@@ -264,8 +271,8 @@ class MachineControllerLevelTest {
         MachineControllerBlockEntity controller = allocateController();
         setField(MachineControllerBlockEntity.class, controller, "foundModifiers", new LinkedHashMap<>());
         setField(MachineControllerBlockEntity.class, controller, "foundLevels", Map.of());
-        setField(MachineControllerBlockEntity.class, controller, "components", new java.util.ArrayList<>());
-        setField(MachineControllerBlockEntity.class, controller, "linkedPortPositions", new java.util.HashSet<>());
+        setField(MachineControllerBlockEntity.class, controller, "components", new ArrayList<>());
+        setField(MachineControllerBlockEntity.class, controller, "linkedPortPositions", new HashSet<>());
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         var controllerBlock = testControllerBlock();
         var controllerState = controllerBlock.defaultBlockState()
@@ -286,13 +293,13 @@ class MachineControllerLevelTest {
         var block = (MachineControllerBlock) ((sun.misc.Unsafe) unsafeField.get(null))
                 .allocateInstance(MachineControllerBlock.class);
         setField(MachineControllerBlock.class, block, "machineId", MACHINE_ID);
-        setField(net.minecraft.world.level.block.state.BlockBehaviour.class, block, "properties", Blocks.IRON_BLOCK.properties());
-        var builder = new net.minecraft.world.level.block.state.StateDefinition.Builder<Block, net.minecraft.world.level.block.state.BlockState>(block);
+        setField(BlockBehaviour.class, block, "properties", Blocks.IRON_BLOCK.properties());
+        var builder = new StateDefinition.Builder<Block, BlockState>(block);
         builder.add(MachineControllerBlock.FACING,
                 MachineControllerBlock.ROLL_FACING,
                 MachineControllerBlock.FORMED,
                 MachineControllerBlock.ACTIVE);
-        var stateDefinition = builder.create(Block::defaultBlockState, net.minecraft.world.level.block.state.BlockState::new);
+        var stateDefinition = builder.create(Block::defaultBlockState, BlockState::new);
         setField(Block.class, block, "stateDefinition", stateDefinition);
         setField(Block.class, block, "defaultBlockState", stateDefinition.any()
                 .setValue(MachineControllerBlock.FACING, Direction.NORTH)
@@ -307,7 +314,7 @@ class MachineControllerLevelTest {
     }
 
     private static boolean tryForm(MachineControllerBlockEntity controller, Direction facing) throws Exception {
-        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("tryFormMachine", cn.howxu.mmcr.api.machine.Machine.class, Direction.class);
+        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("tryFormMachine", Machine.class, Direction.class);
         method.setAccessible(true);
         return (boolean) method.invoke(controller, MachineRegistry.getMachine(MACHINE_ID), facing);
     }

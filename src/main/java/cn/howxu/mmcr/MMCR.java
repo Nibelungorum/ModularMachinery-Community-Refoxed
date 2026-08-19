@@ -31,6 +31,8 @@ import cn.howxu.mmcr.registry.ModDataComponents;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.registry.ModRecipeTypes;
+
+import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -48,6 +50,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
+
+import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -88,13 +92,13 @@ public class MMCR {
         NeoForge.EVENT_BUS.addListener(RuntimeContentServerBridge::onServerStopped);
         NeoForge.EVENT_BUS.addListener((AddServerReloadListenersEvent event) -> MachineRecipeDataReloadListener.register(event));
         NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedInEvent event) -> {
-            if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
-                cn.howxu.mmcr.internal.network.RuntimeContentSync.sendTo(player);
+            if (event.getEntity() instanceof ServerPlayer player) {
+                RuntimeContentSync.sendTo(player);
             }
         });
         NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerChangedDimensionEvent event) -> {
-            if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
-                cn.howxu.mmcr.internal.network.RuntimeContentSync.sendTo(player);
+            if (event.getEntity() instanceof ServerPlayer player) {
+                RuntimeContentSync.sendTo(player);
             }
         });
         NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent ev) -> {

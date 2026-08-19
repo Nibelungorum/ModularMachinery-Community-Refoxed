@@ -25,7 +25,19 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.AABB;
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.CollisionContext;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+
+import com.mojang.blaze3d.vertex.PoseStack;
+import org.joml.Vector3f;
+import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -43,7 +55,7 @@ public final class PreviewSceneRenderer {
     private final PreviewSceneMeshCache meshes = new PreviewSceneMeshCache(null);
     private PreviewVisibility visibility = PreviewVisibility.ALL;
     private long requestedGeneration;
-    private org.joml.Vector3f lastEye;
+    private Vector3f lastEye;
     private boolean closed;
 
     public PreviewSceneRenderer(PreviewLevel level, StructurePreviewSchema schema) {
@@ -88,12 +100,12 @@ public final class PreviewSceneRenderer {
         }
     }
 
-    public BlockHitResult clip(net.minecraft.world.phys.Vec3 from, net.minecraft.world.phys.Vec3 to) {
-        net.minecraft.world.phys.HitResult result = level.clip(new net.minecraft.world.level.ClipContext(from, to,
-                net.minecraft.world.level.ClipContext.Block.OUTLINE, net.minecraft.world.level.ClipContext.Fluid.ANY,
-                net.minecraft.world.phys.shapes.CollisionContext.empty()));
+    public BlockHitResult clip(Vec3 from, Vec3 to) {
+        HitResult result = level.clip(new ClipContext(from, to,
+                ClipContext.Block.OUTLINE, ClipContext.Fluid.ANY,
+                CollisionContext.empty()));
         if (!(result instanceof BlockHitResult block)) return null;
-        net.minecraft.world.level.block.state.BlockState state = level.getBlockState(block.getBlockPos());
+        BlockState state = level.getBlockState(block.getBlockPos());
         return state != null && !state.isAir() && visibility.isVisible(block.getBlockPos(), state) ? block : null;
     }
 
@@ -167,13 +179,13 @@ public final class PreviewSceneRenderer {
     private void submitBlockEntities(PreviewSceneMeshCache.Meshes cache, PreviewSceneRenderContext context,
                                      PreviewSceneCamera sceneCamera) {
         if (context == null) return;
-        net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
+        Minecraft minecraft = Minecraft.getInstance();
         BlockEntityRenderDispatcher blockEntities = minecraft.getBlockEntityRenderDispatcher();
         FeatureRenderDispatcher features = minecraft.gameRenderer.getFeatureRenderDispatcher();
         CameraRenderState cameraState = context.cameraState();
-        blockEntities.prepare(new net.minecraft.world.phys.Vec3(sceneCamera.eye()));
+        blockEntities.prepare(new Vec3(sceneCamera.eye()));
         try {
-            for (net.minecraft.core.BlockPos position : cache.blockEntities()) {
+            for (BlockPos position : cache.blockEntities()) {
                 BlockEntity blockEntity = level.getBlockEntity(position);
                 if (blockEntity == null) continue;
                 try {
@@ -204,9 +216,9 @@ public final class PreviewSceneRenderer {
     private static void drawOutline(PreviewSceneRenderContext context, BlockHitResult hit, int color) {
         AABB box = new AABB(hit.getBlockPos()).inflate(0.002D);
         VertexConsumer vertices = context.bufferSource().getBuffer(RenderTypes.lines());
-        com.mojang.blaze3d.vertex.PoseStack poseStack = new com.mojang.blaze3d.vertex.PoseStack();
-        com.mojang.blaze3d.vertex.PoseStack.Pose pose = poseStack.last();
-        float width = net.minecraft.client.Minecraft.getInstance().gameRenderer.getGameRenderState().windowRenderState.appropriateLineWidth;
+        PoseStack poseStack = new PoseStack();
+        PoseStack.Pose pose = poseStack.last();
+        float width = Minecraft.getInstance().gameRenderer.getGameRenderState().windowRenderState.appropriateLineWidth;
         double x0 = box.minX, y0 = box.minY, z0 = box.minZ, x1 = box.maxX, y1 = box.maxY, z1 = box.maxZ;
         line(vertices, pose, x0, y0, z0, x1, y0, z0, color, width); line(vertices, pose, x1, y0, z0, x1, y0, z1, color, width);
         line(vertices, pose, x1, y0, z1, x0, y0, z1, color, width); line(vertices, pose, x0, y0, z1, x0, y0, z0, color, width);
@@ -217,7 +229,7 @@ public final class PreviewSceneRenderer {
         context.bufferSource().endLastBatch();
     }
 
-    private static void line(VertexConsumer vertices, com.mojang.blaze3d.vertex.PoseStack.Pose pose, double x0, double y0, double z0,
+    private static void line(VertexConsumer vertices, PoseStack.Pose pose, double x0, double y0, double z0,
                              double x1, double y1, double z1, int color, float width) {
         float nx = (float) (x1 - x0), ny = (float) (y1 - y0), nz = (float) (z1 - z0);
         vertices.addVertex(pose, (float) x0, (float) y0, (float) z0).setColor(color).setNormal(pose, nx, ny, nz).setLineWidth(width);
@@ -252,7 +264,7 @@ public final class PreviewSceneRenderer {
         ByteBuffer duplicate = source.duplicate();
         int size = duplicate.remaining();
         long pointer = destination.reserve(size);
-        org.lwjgl.system.MemoryUtil.memCopy(org.lwjgl.system.MemoryUtil.memAddress(duplicate), pointer, size);
+        MemoryUtil.memCopy(MemoryUtil.memAddress(duplicate), pointer, size);
         return destination.build();
     }
 
@@ -266,7 +278,7 @@ public final class PreviewSceneRenderer {
     }
 
     private void assertRenderThread() {
-        if (!net.minecraft.client.Minecraft.getInstance().isSameThread()) {
+        if (!Minecraft.getInstance().isSameThread()) {
             throw new IllegalStateException("preview scene rendering must occur on the render thread");
         }
     }

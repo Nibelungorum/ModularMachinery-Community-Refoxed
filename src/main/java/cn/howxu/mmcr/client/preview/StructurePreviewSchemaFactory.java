@@ -15,6 +15,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.item.ItemStack;
 
+import net.minecraft.world.level.block.Block;
+
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.List;
@@ -96,7 +98,7 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         }
     }
 
-    private static void addCandidate(net.minecraft.world.level.block.Block block, List<StructurePreviewSchema.Candidate> candidates, boolean modifier) {
+    private static void addCandidate(Block block, List<StructurePreviewSchema.Candidate> candidates, boolean modifier) {
         ItemStack stack = new ItemStack(block.asItem());
         if (!stack.isEmpty() && candidates.stream().noneMatch(existing -> ItemStack.isSameItemSameComponents(existing.stack(), stack))) {
             candidates.add(new StructurePreviewSchema.Candidate(stack, modifier));

@@ -3,6 +3,8 @@ package cn.howxu.mmcr.api.recipe.helper;
 import cn.howxu.mmcr.api.recipe.RequirementFailure;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Objects;
+
 public final class CraftCheck {
 
     public enum ResultType {
@@ -76,11 +78,11 @@ public final class CraftCheck {
         if (!(obj instanceof CraftCheck other)) return false;
         return type == other.type
                 && unlocalizedMessage.equals(other.unlocalizedMessage)
-                && java.util.Objects.equals(requirementFailure, other.requirementFailure);
+                && Objects.equals(requirementFailure, other.requirementFailure);
     }
 
     @Override
     public int hashCode() {
-        return java.util.Objects.hash(type, unlocalizedMessage, requirementFailure);
+        return Objects.hash(type, unlocalizedMessage, requirementFailure);
     }
 }

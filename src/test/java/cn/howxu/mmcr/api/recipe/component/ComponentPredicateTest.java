@@ -24,6 +24,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
+import net.minecraft.core.Holder;
+import net.minecraft.world.item.enchantment.Enchantment;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ComponentPredicateTest {
@@ -180,7 +182,7 @@ class ComponentPredicateTest {
         assertThat(predicates.matches(sword)).isFalse();
     }
 
-    private static ItemEnchantments enchantments(net.minecraft.core.Holder<net.minecraft.world.item.enchantment.Enchantment> enchantment,
+    private static ItemEnchantments enchantments(Holder<Enchantment> enchantment,
             int level) {
         var mutable = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
         mutable.set(enchantment, level);

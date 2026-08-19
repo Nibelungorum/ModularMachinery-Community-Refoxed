@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import net.minecraft.world.level.block.state.BlockState;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -135,7 +136,7 @@ class StructurePreviewWidgetTest {
     }
 
     private static StructurePreviewSchema schemaAtLayers(int... layers) {
-        Map<BlockPos, net.minecraft.world.level.block.state.BlockState> states = new LinkedHashMap<>();
+        Map<BlockPos, BlockState> states = new LinkedHashMap<>();
         for (int layer : layers) {
             states.put(new BlockPos(0, layer, 0), Blocks.IRON_BLOCK.defaultBlockState());
         }

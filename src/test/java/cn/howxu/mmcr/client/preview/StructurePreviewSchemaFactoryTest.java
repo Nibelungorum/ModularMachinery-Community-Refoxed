@@ -33,6 +33,9 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
+import java.util.LinkedHashMap;
+
+import net.minecraft.world.level.block.Block;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -82,7 +85,7 @@ class StructurePreviewSchemaFactoryTest {
         BlockArray pattern = new BlockArray(Map.of());
         Machine machine = new Machine() {
             @Override
-            public net.minecraft.resources.Identifier registryName() {
+            public Identifier registryName() {
                 return MMCR.id("empty_stages");
             }
 
@@ -97,7 +100,7 @@ class StructurePreviewSchemaFactoryTest {
             }
 
             @Override
-            public List<cn.howxu.mmcr.api.machine.MachineStructureStage> structureStages() {
+            public List<MachineStructureStage> structureStages() {
                 return List.of();
             }
         };
@@ -291,8 +294,8 @@ class StructurePreviewSchemaFactoryTest {
     }
 
     private static MachineStructureStage stageWithSlots(Map<BlockPos, Identifier> slots) {
-        Map<BlockPos, BlockPredicate> pattern = new java.util.LinkedHashMap<>();
-        Map<BlockPos, Character> symbols = new java.util.LinkedHashMap<>();
+        Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
+        Map<BlockPos, Character> symbols = new LinkedHashMap<>();
         MachineStructureRequirements.Builder requirements = MachineStructureRequirements.builder();
         int index = 0;
         for (var entry : slots.entrySet()) {
@@ -311,16 +314,16 @@ class StructurePreviewSchemaFactoryTest {
                 PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
     }
 
-    private static SingleBlockModifierReplacement modifierReplacement(BlockPos position, net.minecraft.world.level.block.Block block) {
+    private static SingleBlockModifierReplacement modifierReplacement(BlockPos position, Block block) {
         return modifierReplacement(block);
     }
 
-    private static SingleBlockModifierReplacement modifierReplacement(net.minecraft.world.level.block.Block block) {
+    private static SingleBlockModifierReplacement modifierReplacement(Block block) {
         return new SingleBlockModifierReplacement(block.getDescriptionId(), new BlockPredicate.OfBlock(block),
                 List.of(), new ItemStack(block));
     }
 
-    private static void registerLevels(Map<Identifier, List<net.minecraft.world.level.block.Block>> levelsByType) {
+    private static void registerLevels(Map<Identifier, List<Block>> levelsByType) {
         MachineLevelRegistry.beginRegistration();
         for (Identifier type : levelsByType.keySet()) {
             MachineLevelRegistry.registerType(new LevelType(type, Component.literal(type.toString())));

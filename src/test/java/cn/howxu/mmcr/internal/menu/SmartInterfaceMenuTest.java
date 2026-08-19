@@ -14,6 +14,7 @@ import net.neoforged.neoforge.network.IContainerFactory;
 
 import java.lang.reflect.Field;
 
+import io.netty.buffer.Unpooled;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class SmartInterfaceMenuTest {
@@ -27,7 +28,7 @@ class SmartInterfaceMenuTest {
     @Test
     void client_open_reads_only_the_interface_position() {
         BlockPos pos = new BlockPos(4, 5, 6);
-        FriendlyByteBuf buffer = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         buffer.writeBlockPos(pos);
 
         SmartInterfaceMenu menu = SmartInterfaceMenu.clientOpen(1, new Inventory(null, null), buffer);

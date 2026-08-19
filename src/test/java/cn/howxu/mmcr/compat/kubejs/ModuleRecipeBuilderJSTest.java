@@ -33,6 +33,9 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import java.util.Map;
+
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -99,7 +102,7 @@ class ModuleRecipeBuilderJSTest {
         Fluids.WATER.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         var itemInput = new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2);
         var fluidInput = new MachineIngredient.FluidIngredient(FluidIngredient.of(Fluids.WATER), 500);
-        var energyOutput = new MachineIngredient.EnergyIngredient(cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.OUTPUT, 20);
+        var energyOutput = new MachineIngredient.EnergyIngredient(RecipeModifier.IOType.OUTPUT, 20);
         var fluidOutput = new FluidStack(Fluids.WATER, 250);
         MachineRequirement requirement = SmartInterfaceRequirement.input("temperature", 25F);
 
@@ -133,7 +136,7 @@ class ModuleRecipeBuilderJSTest {
         Identifier machineId = MMCR.id("module_machine");
         Identifier recipeId = MMCR.id("shared_parser_recipe");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
-        MachineRegistry.register(new DynamicMachine(machineId, "Module Machine", new BlockArray(java.util.Map.of())));
+        MachineRegistry.register(new DynamicMachine(machineId, "Module Machine", new BlockArray(Map.of())));
         var input = new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2, null, 0.5F);
         var output = new ItemStack(Items.DIAMOND, 1);
         var builder = new MachineRecipeBuilderJS(recipeId)
@@ -232,7 +235,7 @@ class ModuleRecipeBuilderJSTest {
         assertThat(input.components().isEmpty()).isFalse();
         assertThat(recipe.requirements()).hasSize(3);
         assertThat(recipe.requirements().stream().filter(ItemRequirement.class::isInstance).map(ItemRequirement.class::cast)
-                .filter(requirement -> requirement.io() == cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.OUTPUT).toList()).singleElement().satisfies(requirement -> {
+                .filter(requirement -> requirement.io() == RecipeModifier.IOType.OUTPUT).toList()).singleElement().satisfies(requirement -> {
             assertThat(requirement.stack().getItem()).isSameAs(Items.EMERALD);
             assertThat(requirement.chance()).isEqualTo(0.25F);
         });

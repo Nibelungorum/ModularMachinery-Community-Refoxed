@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
+import java.util.LinkedHashMap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -214,7 +215,7 @@ class MachineRoleValidationTest {
     }
 
     private static BlockArray patternWithCouplers(int count) {
-        Map<BlockPos, BlockPredicate> pattern = new java.util.LinkedHashMap<>();
+        Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
         for (int index = 0; index < count; index++) {
             pattern.put(new BlockPos(index, 0, 0), BlockPredicate.machineCoupler());
         }

@@ -18,6 +18,9 @@ import org.junit.jupiter.api.BeforeAll;
 import java.util.List;
 import java.util.Map;
 
+import java.util.stream.Collectors;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -154,12 +157,12 @@ class MultiblockPreviewBuilderTest {
                 moduleOnly, Blocks.GOLD_BLOCK.defaultBlockState()), entriesByPosition(moduleSnapshot));
     }
 
-    private static Map<BlockPos, net.minecraft.world.level.block.state.BlockState> entriesByPosition(MultiblockPreviewSnapshot snapshot) {
-        return snapshot.entries().stream().collect(java.util.stream.Collectors.toMap(
+    private static Map<BlockPos, BlockState> entriesByPosition(MultiblockPreviewSnapshot snapshot) {
+        return snapshot.entries().stream().collect(Collectors.toMap(
                 MultiblockPreviewSnapshot.Entry::relativePos, MultiblockPreviewSnapshot.Entry::state));
     }
 
-    private static SingleBlockModifierReplacement modifierReplacement(net.minecraft.world.level.block.Block block) {
+    private static SingleBlockModifierReplacement modifierReplacement(Block block) {
         return new SingleBlockModifierReplacement(block.getDescriptionId(), new BlockPredicate.OfBlock(block),
                 List.of(), new ItemStack(block));
     }

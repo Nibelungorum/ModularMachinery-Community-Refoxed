@@ -21,6 +21,8 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
+import net.neoforged.neoforge.capabilities.Capabilities;
+
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -28,11 +30,11 @@ import java.util.Set;
 
 public final class ModCapabilities {
     public static final BlockCapability<ResourceHandler<ItemResource>, Direction> ITEM_BLOCK =
-            net.neoforged.neoforge.capabilities.Capabilities.Item.BLOCK;
+            Capabilities.Item.BLOCK;
     public static final BlockCapability<ResourceHandler<FluidResource>, Direction> FLUID_BLOCK =
-            net.neoforged.neoforge.capabilities.Capabilities.Fluid.BLOCK;
+            Capabilities.Fluid.BLOCK;
     public static final BlockCapability<EnergyHandler, Direction> ENERGY_BLOCK =
-            net.neoforged.neoforge.capabilities.Capabilities.Energy.BLOCK;
+            Capabilities.Energy.BLOCK;
 
     private ModCapabilities() {}
 

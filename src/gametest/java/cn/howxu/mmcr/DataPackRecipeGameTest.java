@@ -16,6 +16,8 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
+import net.minecraft.world.item.Item;
+
 /**
  * End-to-end data-pack machine recipe regressions.
  *
@@ -72,7 +74,7 @@ public class DataPackRecipeGameTest {
         helper.succeed();
     }
 
-    private static Fixture placeIronCompressor(GameTestHelper helper, net.minecraft.world.item.Item inputItem) {
+    private static Fixture placeIronCompressor(GameTestHelper helper, Item inputItem) {
         for (int x = 0; x < 3; x++) for (int z = 0; z < 3; z++) {
             helper.setBlock(new BlockPos(x, 1, z), ModBlocks.CASING.get().defaultBlockState());
         }

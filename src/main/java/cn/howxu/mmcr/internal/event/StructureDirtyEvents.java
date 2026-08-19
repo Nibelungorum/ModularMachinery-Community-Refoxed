@@ -3,6 +3,9 @@ package cn.howxu.mmcr.internal.event;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
+
+import cn.howxu.mmcr.internal.multiblock.ModuleConnectionCoordinator;
+import cn.howxu.mmcr.internal.multiblock.ModuleConnectionRefreshQueue;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -50,14 +53,14 @@ public final class StructureDirtyEvents {
     public static void onChunkUnloaded(ChunkEvent.Unload event) {
         MachineControllerBlockEntity.markStructureChunkDirty(event.getLevel(), event.getChunk().getPos());
         if (event.getLevel() instanceof ServerLevel serverLevel) {
-            cn.howxu.mmcr.internal.multiblock.ModuleConnectionCoordinator.enqueueCouplersInChunk(
+            ModuleConnectionCoordinator.enqueueCouplersInChunk(
                     serverLevel, event.getChunk().getPos());
         }
     }
 
     public static void onChunkLoaded(ChunkEvent.Load event) {
         if (event.getLevel() instanceof ServerLevel serverLevel) {
-            cn.howxu.mmcr.internal.multiblock.ModuleConnectionCoordinator.enqueueCouplersInChunk(
+            ModuleConnectionCoordinator.enqueueCouplersInChunk(
                     serverLevel, event.getChunk().getPos());
         }
     }
@@ -76,7 +79,7 @@ public final class StructureDirtyEvents {
 
     private static void enqueueCoupler(LevelAccessor level, BlockPos pos) {
         if (level instanceof ServerLevel serverLevel && level.getBlockEntity(pos) instanceof ModuleCouplerBlockEntity) {
-            cn.howxu.mmcr.internal.multiblock.ModuleConnectionRefreshQueue.enqueue(serverLevel, pos);
+            ModuleConnectionRefreshQueue.enqueue(serverLevel, pos);
         }
     }
 }

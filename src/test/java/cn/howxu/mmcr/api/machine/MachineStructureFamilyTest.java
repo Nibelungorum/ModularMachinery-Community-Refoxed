@@ -16,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import net.minecraft.world.item.ItemStack;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -292,6 +293,6 @@ class MachineStructureFamilyTest {
     }
 
     private static SingleBlockModifierReplacement replacement(String name, BlockPredicate predicate) {
-        return new SingleBlockModifierReplacement(name, predicate, List.of(), net.minecraft.world.item.ItemStack.EMPTY);
+        return new SingleBlockModifierReplacement(name, predicate, List.of(), ItemStack.EMPTY);
     }
 }

@@ -18,6 +18,11 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import java.util.Collection;
+import java.util.Set;
+
+import net.minecraft.core.Holder;
+import net.minecraft.tags.TagKey;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SuppressWarnings("deprecation")
@@ -28,11 +33,11 @@ class BlockPredicateTest {
         bindHolderTag(Blocks.DIRT.builtInRegistryHolder(), BlockTags.DIRT);
     }
 
-    private static void bindHolderTag(net.minecraft.core.Holder<?> holder, net.minecraft.tags.TagKey<?> tag) throws Exception {
+    private static void bindHolderTag(Holder<?> holder, TagKey<?> tag) throws Exception {
         java.lang.reflect.Method bindTags = Class.forName("net.minecraft.core.Holder$Reference")
-                .getDeclaredMethod("bindTags", java.util.Collection.class);
+                .getDeclaredMethod("bindTags", Collection.class);
         bindTags.setAccessible(true);
-        bindTags.invoke(holder, java.util.Set.of(tag));
+        bindTags.invoke(holder, Set.of(tag));
     }
 
     @AfterEach

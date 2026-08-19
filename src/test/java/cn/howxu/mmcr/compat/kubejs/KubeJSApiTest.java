@@ -25,6 +25,8 @@ import org.nibelungorum.DefaultMachineLevels;
 import java.util.List;
 import java.util.Map;
 
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -50,8 +52,8 @@ class KubeJSApiTest {
     void state_parses_default_and_property_block_states() {
         assertThat(api.state("minecraft:oak_log")).isEqualTo(new BlockPredicate.OfBlockState(Blocks.OAK_LOG.defaultBlockState()));
         assertThat(api.state("minecraft:oak_log[axis=x]")).isEqualTo(new BlockPredicate.OfBlockState(
-                Blocks.OAK_LOG.defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.AXIS,
-                        net.minecraft.core.Direction.Axis.X)));
+                Blocks.OAK_LOG.defaultBlockState().setValue(BlockStateProperties.AXIS,
+                        Direction.Axis.X)));
     }
 
     @Test
@@ -163,7 +165,7 @@ class KubeJSApiTest {
                 .pattern("B", Map.of("B", api.block("minecraft:bricks")))
                 .createObject();
 
-        assertThat(definition.pattern().pattern().get(net.minecraft.core.BlockPos.ZERO)
+        assertThat(definition.pattern().pattern().get(BlockPos.ZERO)
                 .matches(Blocks.BRICKS.defaultBlockState())).isTrue();
         assertThat(definition.requirements().modifierReplacements()).isEmpty();
     }
@@ -186,6 +188,6 @@ class KubeJSApiTest {
     @Test
     void api_is_documented_as_lower_camel_kubejs_binding() {
         assertThat(KubeJSApi.class.getDeclaredAnnotation(Deprecated.class)).isNull();
-        assertThat(new KubeJSApi().pos(1, 2, 3)).isEqualTo(new net.minecraft.core.BlockPos(1, 2, 3));
+        assertThat(new KubeJSApi().pos(1, 2, 3)).isEqualTo(new BlockPos(1, 2, 3));
     }
 }

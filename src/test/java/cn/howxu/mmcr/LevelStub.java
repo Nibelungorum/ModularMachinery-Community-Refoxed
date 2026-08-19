@@ -45,6 +45,9 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.world.level.entity.EntityTypeTest;
 import net.minecraft.world.level.material.Fluid;
 
+import net.minecraft.core.particles.ExplosionParticleInfo;
+import net.minecraft.world.level.biome.Biome;
+
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
@@ -55,6 +58,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
+
+import java.util.stream.Collectors;
 
 public final class LevelStub {
 
@@ -79,7 +84,7 @@ public final class LevelStub {
     public static Level createWithBlockEntities(List<BlockEntity> blockEntities) {
         Level level = create(Map.of());
         ((TestLevel) level).blockEntities = blockEntities.stream()
-                .collect(java.util.stream.Collectors.toMap(BlockEntity::getBlockPos, be -> be));
+                .collect(Collectors.toMap(BlockEntity::getBlockPos, be -> be));
         return level;
     }
 
@@ -92,7 +97,7 @@ public final class LevelStub {
     public static Level create(Map<BlockPos, Block> blocks, List<BlockEntity> blockEntities) {
         Level level = create(blocks);
         ((TestLevel) level).blockEntities = blockEntities.stream()
-                .collect(java.util.stream.Collectors.toMap(BlockEntity::getBlockPos, be -> be));
+                .collect(Collectors.toMap(BlockEntity::getBlockPos, be -> be));
         return level;
     }
 
@@ -189,7 +194,7 @@ public final class LevelStub {
         @Override public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) { sentBlockUpdates++; }
         @Override public void playSeededSound(Entity entity, double x, double y, double z, Holder<SoundEvent> sound, SoundSource source, float volume, float pitch, long seed) {}
         @Override public void playSeededSound(Entity sourceEntity, Entity entity, Holder<SoundEvent> sound, SoundSource source, float volume, float pitch, long seed) {}
-        @Override public void explode(Entity source, DamageSource damageSource, ExplosionDamageCalculator calculator, double x, double y, double z, float radius, boolean fire, ExplosionInteraction interaction, ParticleOptions smallExplosionParticles, ParticleOptions largeExplosionParticles, WeightedList<net.minecraft.core.particles.ExplosionParticleInfo> blockInteractionParticles, Holder<SoundEvent> explosionSound) {}
+        @Override public void explode(Entity source, DamageSource damageSource, ExplosionDamageCalculator calculator, double x, double y, double z, float radius, boolean fire, ExplosionInteraction interaction, ParticleOptions smallExplosionParticles, ParticleOptions largeExplosionParticles, WeightedList<ExplosionParticleInfo> blockInteractionParticles, Holder<SoundEvent> explosionSound) {}
         @Override public String gatherChunkSourceStats() { return "LevelStub"; }
         @Override public void setRespawnData(LevelData.RespawnData respawnData) {}
         @Override public LevelData.RespawnData getRespawnData() { return null; }
@@ -221,8 +226,8 @@ public final class LevelStub {
         @Override public RandomSource getRandom() { return random; }
         @Override public int getSeaLevel() { return 0; }
         @Override public FeatureFlagSet enabledFeatures() { return FeatureFlagSet.of(); }
-        @Override public Holder<net.minecraft.world.level.biome.Biome> getUncachedNoiseBiome(int x, int y, int z) { return null; }
-        @Override public List<net.minecraft.world.entity.Entity> getEntities(Entity entity, AABB area, Predicate<? super Entity> predicate) { return List.of(); }
+        @Override public Holder<Biome> getUncachedNoiseBiome(int x, int y, int z) { return null; }
+        @Override public List<Entity> getEntities(Entity entity, AABB area, Predicate<? super Entity> predicate) { return List.of(); }
         @Override public <T extends Entity> List<T> getEntities(EntityTypeTest<Entity, T> typeTest, AABB area, Predicate<? super T> predicate) { return List.of(); }
         @Override public List<? extends Player> players() { return List.of(); }
         @Override public List<VoxelShape> getEntityCollisions(Entity entity, AABB area) { return List.of(); }

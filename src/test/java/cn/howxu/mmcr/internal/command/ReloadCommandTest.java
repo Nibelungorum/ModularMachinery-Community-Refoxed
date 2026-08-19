@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import net.minecraft.network.chat.Component;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ReloadCommandTest {
@@ -71,7 +72,7 @@ class ReloadCommandTest {
     private CommandSourceStack source() {
         CommandSource source = new CommandSource() {
             @Override
-            public void sendSystemMessage(net.minecraft.network.chat.Component message) {
+            public void sendSystemMessage(Component message) {
             }
 
             @Override
@@ -90,7 +91,7 @@ class ReloadCommandTest {
             }
         };
         return new CommandSourceStack(source, Vec3.ZERO, Vec2.ZERO, null, PermissionSet.ALL_PERMISSIONS,
-                "test", net.minecraft.network.chat.Component.literal("test"), null, null);
+                "test", Component.literal("test"), null, null);
     }
 
     private static MachineStructureDefinition structure(Identifier id) {

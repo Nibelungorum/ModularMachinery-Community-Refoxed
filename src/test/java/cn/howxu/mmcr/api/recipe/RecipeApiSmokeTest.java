@@ -30,6 +30,10 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class RecipeApiSmokeTest {
@@ -233,7 +237,7 @@ class RecipeApiSmokeTest {
                 100,
                 List.of(
                         new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2),
-                        new MachineIngredient.FluidIngredient(net.neoforged.neoforge.fluids.crafting.FluidIngredient.of(Fluids.WATER), 250),
+                        new MachineIngredient.FluidIngredient(FluidIngredient.of(Fluids.WATER), 250),
                         new MachineIngredient.EnergyIngredient(40)
                 ),
                 List.of(Items.IRON_NUGGET.getDefaultInstance().copyWithCount(1)),
@@ -248,10 +252,10 @@ class RecipeApiSmokeTest {
         );
 
         assertThat(recipe.runtimeRequirements()).satisfies(requirements -> {
-            assertThat(((cn.howxu.mmcr.api.recipe.requirement.ItemRequirement) requirements.get(0)).count()).isEqualTo(4);
-            assertThat(((cn.howxu.mmcr.api.recipe.requirement.FluidRequirement) requirements.get(1)).amount()).isEqualTo(500);
-            assertThat(((cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement) requirements.get(2)).fePerTick()).isEqualTo(80);
-            assertThat(((cn.howxu.mmcr.api.recipe.requirement.ItemRequirement) requirements.get(3)).stack().getCount()).isEqualTo(3);
+            assertThat(((ItemRequirement) requirements.get(0)).count()).isEqualTo(4);
+            assertThat(((FluidRequirement) requirements.get(1)).amount()).isEqualTo(500);
+            assertThat(((EnergyRequirement) requirements.get(2)).fePerTick()).isEqualTo(80);
+            assertThat(((ItemRequirement) requirements.get(3)).stack().getCount()).isEqualTo(3);
         });
         assertThat(recipe.inputs()).contains(new MachineIngredient.EnergyIngredient(40));
         assertThat(recipe.outputs().getFirst().getCount()).isEqualTo(1);

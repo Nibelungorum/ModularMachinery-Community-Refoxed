@@ -16,6 +16,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Collections;
 
 /**
  * Reconciles host and module controllers that meet at one world-space module coupler.
@@ -155,7 +156,7 @@ public final class ModuleConnectionCoordinator {
             Machine moduleMachine = module.getFoundMachine();
             if (!hostMachine.acceptedModuleIds().contains(moduleMachine.registryName())) continue;
             Set<BlockPos> moduleCouplers = couplerWorldPositions(module);
-            if (java.util.Collections.disjoint(hostCouplers, moduleCouplers)) continue;
+            if (Collections.disjoint(hostCouplers, moduleCouplers)) continue;
             for (BlockPos moduleInterface : interfaceWorldPositions(module)) {
                 if (hostInterfaces.contains(moduleInterface)) return true;
             }

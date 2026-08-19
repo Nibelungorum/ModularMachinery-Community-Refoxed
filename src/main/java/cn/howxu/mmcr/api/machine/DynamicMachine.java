@@ -10,6 +10,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Collections;
 
 public record DynamicMachine(
         Identifier registryName,
@@ -215,7 +216,7 @@ public record DynamicMachine(
             BlockPos rotatedPos = BlockRotator.rotateSouthTo(entry.getKey(), facing, normalizedRoll);
             rotated.put(rotatedPos, List.copyOf(entry.getValue()));
         }
-        return java.util.Collections.unmodifiableMap(rotated);
+        return Collections.unmodifiableMap(rotated);
     }
 
     private static Map<BlockPos, List<SingleBlockModifierReplacement>> copyModifierReplacements(
@@ -239,7 +240,7 @@ public record DynamicMachine(
             }
             copy.put(pos, List.copyOf(list));
         }
-        return java.util.Collections.unmodifiableMap(copy);
+        return Collections.unmodifiableMap(copy);
     }
 
     private static Set<Identifier> copyAcceptedModuleIds(Set<Identifier> acceptedModuleIds) {
@@ -249,6 +250,6 @@ public record DynamicMachine(
             if (acceptedModuleId == null) throw new IllegalArgumentException("accepted module id null");
             copy.add(acceptedModuleId);
         }
-        return java.util.Collections.unmodifiableSet(copy);
+        return Collections.unmodifiableSet(copy);
     }
 }

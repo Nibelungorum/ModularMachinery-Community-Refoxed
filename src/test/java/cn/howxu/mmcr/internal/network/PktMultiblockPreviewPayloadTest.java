@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import io.netty.buffer.Unpooled;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class PktMultiblockPreviewPayloadTest {
@@ -32,7 +33,7 @@ class PktMultiblockPreviewPayloadTest {
                 200);
 
         var buffer = new RegistryFriendlyByteBuf(
-                io.netty.buffer.Unpooled.buffer(),
+                Unpooled.buffer(),
                 RegistryAccess.EMPTY,
                 ConnectionType.NEOFORGE);
         PktMultiblockPreviewPayload.STREAM_CODEC.encode(buffer, payload);
@@ -50,7 +51,7 @@ class PktMultiblockPreviewPayloadTest {
         var payload = PktMultiblockPreviewPayload.clear(Level.OVERWORLD, new BlockPos(1, 2, 3));
 
         var buffer = new RegistryFriendlyByteBuf(
-                io.netty.buffer.Unpooled.buffer(),
+                Unpooled.buffer(),
                 RegistryAccess.EMPTY,
                 ConnectionType.NEOFORGE);
         PktMultiblockPreviewPayload.STREAM_CODEC.encode(buffer, payload);

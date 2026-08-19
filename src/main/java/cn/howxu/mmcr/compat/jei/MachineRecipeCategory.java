@@ -32,6 +32,7 @@ import org.jspecify.annotations.Nullable;
 import java.util.List;
 import java.util.Locale;
 import java.util.Comparator;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -399,24 +400,24 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         return slot != null && mouseX >= slot.x() && mouseX < slot.x() + 16 && mouseY >= slot.y() && mouseY < slot.y() + 16;
     }
 
-    private static java.util.Optional<Component> smartInterfaceTooltip(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
+    private static Optional<Component> smartInterfaceTooltip(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
             double mouseX, double mouseY) {
-        if (mouseX < layout.durationTextX()) return java.util.Optional.empty();
+        if (mouseX < layout.durationTextX()) return Optional.empty();
         int y = layout.durationTextY() + TEXT_LINE_SPACING * (1 + recipe.energyInputs().size() + recipe.energyOutputs().size()
                 + sortedLevelRequirements(recipe.recipe()).size());
         for (MachineRecipeDisplay.SmartInterfaceDisplay smartInterface : recipe.smartInterfaceInputs()) {
-            if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING) return java.util.Optional.of(smartInterface.tooltip());
+            if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING) return Optional.of(smartInterface.tooltip());
             y += TEXT_LINE_SPACING;
         }
         for (MachineRecipeDisplay.SmartInterfaceDisplay smartInterface : recipe.smartInterfaceOutputs()) {
-            if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING) return java.util.Optional.of(smartInterface.tooltip());
+            if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING) return Optional.of(smartInterface.tooltip());
             y += TEXT_LINE_SPACING;
         }
         for (MachineRecipeDisplay.SmartInterfaceModifierDisplay modifier : recipe.smartInterfaceModifiers()) {
-            if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING) return java.util.Optional.of(modifier.tooltip());
+            if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING) return Optional.of(modifier.tooltip());
             y += TEXT_LINE_SPACING;
         }
-        return java.util.Optional.empty();
+        return Optional.empty();
     }
 
     private record TextOverlayDrawable(String text, int color, float scale) implements IDrawable {

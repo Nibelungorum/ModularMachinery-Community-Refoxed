@@ -21,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import net.minecraft.resources.Identifier;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class SmartInterfaceBindingCoordinatorTest {
@@ -143,12 +144,12 @@ class SmartInterfaceBindingCoordinatorTest {
         return controller(MMCR.id("block/basic_casing"));
     }
 
-    private static MachineControllerBlockEntity controller(net.minecraft.resources.Identifier texture) throws Exception {
+    private static MachineControllerBlockEntity controller(Identifier texture) throws Exception {
         return controller(BlockPos.ZERO, MMCR.id("binding_test"), texture);
     }
 
-    private static MachineControllerBlockEntity controller(BlockPos pos, net.minecraft.resources.Identifier machineId,
-                                                           net.minecraft.resources.Identifier texture) throws Exception {
+    private static MachineControllerBlockEntity controller(BlockPos pos, Identifier machineId,
+                                                           Identifier texture) throws Exception {
         Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
         unsafeField.setAccessible(true);
         MachineControllerBlockEntity controller = (MachineControllerBlockEntity) ((sun.misc.Unsafe) unsafeField.get(null))
@@ -156,7 +157,7 @@ class SmartInterfaceBindingCoordinatorTest {
         setField(BlockEntity.class, controller, "worldPosition", pos);
         setField(MachineControllerBlockEntity.class, controller, "foundMachine", new Machine() {
             @Override
-            public net.minecraft.resources.Identifier registryName() {
+            public Identifier registryName() {
                 return machineId;
             }
 

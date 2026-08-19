@@ -47,6 +47,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import java.util.Collections;
+
+import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
+import com.mojang.serialization.JsonOps;
+import java.nio.charset.StandardCharsets;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -113,7 +121,7 @@ class RuntimeContentSnapshotTest {
                         new ItemStack(Items.DIAMOND_BLOCK)))
                 .build(blockArray);
         MachineStructureDefinition original = new MachineStructureDefinition(MMCR.id("modifier_sync"), blockArray,
-                PortRequirementSpec.none(), cn.howxu.mmcr.api.machine.PortTierRequirementSpec.none(), List.of(), requirements);
+                PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), requirements);
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
 
         MachineStructureSyncCodec.encode(buf, original);
@@ -174,14 +182,14 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void recipeSyncCodecNormalizesLegacyTagIngredientString() throws Exception {
-        Method normalize = MachineRecipeSyncCodec.class.getDeclaredMethod("normalizeIngredient", com.google.gson.JsonElement.class);
+        Method normalize = MachineRecipeSyncCodec.class.getDeclaredMethod("normalizeIngredient", JsonElement.class);
         normalize.setAccessible(true);
 
-        var normalized = normalize.invoke(null, com.google.gson.JsonParser.parseString("\"#minecraft:planks\""));
+        var normalized = normalize.invoke(null, JsonParser.parseString("\"#minecraft:planks\""));
 
-        assertThat(normalized).isInstanceOfSatisfying(com.google.gson.JsonPrimitive.class, primitive ->
+        assertThat(normalized).isInstanceOfSatisfying(JsonPrimitive.class, primitive ->
                 assertThat(primitive.getAsString()).isEqualTo("#minecraft:planks"));
-        var ops = RegistryOps.create(com.mojang.serialization.JsonOps.INSTANCE, registries);
+        var ops = RegistryOps.create(JsonOps.INSTANCE, registries);
         var encodedTag = Ingredient.CODEC.encodeStart(ops,
                 Ingredient.of(HolderSet.emptyNamed(BuiltInRegistries.ITEM, ItemTags.LOGS))).getOrThrow();
         assertThat(encodedTag.getAsString()).isEqualTo("#minecraft:logs");
@@ -255,7 +263,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void structureSyncCodecRejectsOversizedDeclarationCountOnEncode() {
-        List<MachineStructureDefinition.Declaration> declarations = java.util.Collections.nCopies(1025,
+        List<MachineStructureDefinition.Declaration> declarations = Collections.nCopies(1025,
                 structure(MMCR.id("alloy_furnace")).declarations().getFirst());
         MachineStructureDefinition original = new MachineStructureDefinition(MMCR.id("oversized"), declarations);
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
@@ -286,7 +294,7 @@ class RuntimeContentSnapshotTest {
                 .tagged(BlockPos.ZERO.east(), "input_bus");
         PortRequirementSpec portRequirements = PortRequirementSpec.builder().min("item_input_bus", 1).build();
         return new MachineStructureDefinition(id, blockArray, portRequirements,
-                cn.howxu.mmcr.api.machine.PortTierRequirementSpec.none(), List.of(),
+                PortTierRequirementSpec.none(), List.of(),
                 MachineStructureRequirements.builder().levelSlot('L', MMCR.id("coil")).build(blockArray));
     }
 
@@ -303,7 +311,7 @@ class RuntimeContentSnapshotTest {
         String resource = type.getSimpleName() + ".class";
         try (InputStream stream = type.getResourceAsStream(resource)) {
             if (stream == null) throw new IOException("Missing class resource " + resource);
-            return new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.ISO_8859_1);
+            return new String(stream.readAllBytes(), StandardCharsets.ISO_8859_1);
         }
     }
 }

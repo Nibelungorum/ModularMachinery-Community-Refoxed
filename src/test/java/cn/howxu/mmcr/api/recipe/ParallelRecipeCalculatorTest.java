@@ -30,6 +30,7 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 
+import cn.howxu.mmcr.util.IOType;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -121,7 +122,7 @@ class ParallelRecipeCalculatorTest {
             @SuppressWarnings("unchecked")
             List<ProcessingComponent> components = (List<ProcessingComponent>) fieldValue(MachineControllerBlockEntity.class, controller, "components");
             components.add(new ProcessingComponent(
-                    new MachineComponent(PortKinds.ITEM_INPUT, cn.howxu.mmcr.util.IOType.INPUT),
+                    new MachineComponent(PortKinds.ITEM_INPUT, IOType.INPUT),
                     port,
                     port.getBlockPos(),
                     BlockPos.ZERO,

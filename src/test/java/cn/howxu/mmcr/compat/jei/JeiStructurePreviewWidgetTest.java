@@ -35,6 +35,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.input.InputWithModifiers;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class JeiStructurePreviewWidgetTest {
@@ -212,7 +216,7 @@ class JeiStructurePreviewWidgetTest {
         tooltip.clear();
         widget.getTooltip(tooltip, 6, 125);
         assertThat(tooltip.text().getFirst().getString())
-                .isEqualTo(new net.minecraft.world.item.ItemStack(Items.IRON_INGOT).getHoverName().getString());
+                .isEqualTo(new ItemStack(Items.IRON_INGOT).getHoverName().getString());
         assertThat(tooltip.ingredient().getItem()).isEqualTo(Items.IRON_INGOT);
     }
 
@@ -244,7 +248,7 @@ class JeiStructurePreviewWidgetTest {
         widget.getTooltip(tooltip, 6, 125);
 
         assertThat(tooltip.text().getFirst().getString())
-                .isEqualTo(new net.minecraft.world.item.ItemStack(Blocks.IRON_BLOCK).getHoverName().getString());
+                .isEqualTo(new ItemStack(Blocks.IRON_BLOCK).getHoverName().getString());
     }
 
     @Test
@@ -258,7 +262,7 @@ class JeiStructurePreviewWidgetTest {
         widget.getTooltip(tooltip, 6, 125);
 
         assertThat(tooltip.text().getFirst().getString())
-                .isEqualTo(new net.minecraft.world.item.ItemStack(Items.IRON_INGOT).getHoverName().getString());
+                .isEqualTo(new ItemStack(Items.IRON_INGOT).getHoverName().getString());
     }
 
     @Test
@@ -396,20 +400,20 @@ class JeiStructurePreviewWidgetTest {
         assertThat(preview.closes).isEqualTo(1);
     }
 
-    private static StructurePreviewSchema schema(net.minecraft.world.level.block.state.BlockState... states) {
-        Map<BlockPos, net.minecraft.world.level.block.state.BlockState> blocks = new LinkedHashMap<>();
+    private static StructurePreviewSchema schema(BlockState... states) {
+        Map<BlockPos, BlockState> blocks = new LinkedHashMap<>();
         for (int index = 0; index < states.length; index++) blocks.put(new BlockPos(index, 0, 0), states[index]);
         return new StructurePreviewSchema(MMCR.id("jei_widget_test"), blocks, Map.of());
     }
 
-    private static StructurePreviewSchema schemaWithCandidate(net.minecraft.world.level.block.state.BlockState state) {
+    private static StructurePreviewSchema schemaWithCandidate(BlockState state) {
         BlockPos position = BlockPos.ZERO;
         return new StructurePreviewSchema(MMCR.id("jei_widget_test"), Map.of(position, state), Map.of(),
-                Map.of(position, List.of(new net.minecraft.world.item.ItemStack(Items.IRON_INGOT))));
+                Map.of(position, List.of(new ItemStack(Items.IRON_INGOT))));
     }
 
     private static BlockHitResult hitAt(int x, int y, int z) {
-        return new BlockHitResult(new net.minecraft.world.phys.Vec3(x, y, z), Direction.UP, new BlockPos(x, y, z), false);
+        return new BlockHitResult(new Vec3(x, y, z), Direction.UP, new BlockPos(x, y, z), false);
     }
 
     private static IJeiUserInput leftPress(boolean simulate) {
@@ -430,7 +434,7 @@ class JeiStructurePreviewWidgetTest {
             }
 
             @Override
-            public boolean is(net.minecraft.client.KeyMapping keyMapping) {
+            public boolean is(KeyMapping keyMapping) {
                 return false;
             }
 
@@ -440,7 +444,7 @@ class JeiStructurePreviewWidgetTest {
             }
 
             @Override
-            public net.minecraft.client.input.InputWithModifiers getInputWithModifiers() {
+            public InputWithModifiers getInputWithModifiers() {
                 return null;
             }
         };

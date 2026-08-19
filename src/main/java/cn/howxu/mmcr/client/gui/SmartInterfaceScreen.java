@@ -16,6 +16,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.input.KeyEvent;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -69,7 +72,7 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
     }
 
     @Override
-    public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
+    public boolean keyPressed(KeyEvent event) {
         if (event.key() == 257 || event.key() == 335) {
             sendValue();
             return true;
@@ -235,7 +238,7 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
     private static final class NumericEditBox extends EditBox {
         private SmartInterfaceType.ValueType valueType = SmartInterfaceType.ValueType.FLOAT;
 
-        private NumericEditBox(net.minecraft.client.gui.Font font, int x, int y, int width, int height, Component message) {
+        private NumericEditBox(Font font, int x, int y, int width, int height, Component message) {
             super(font, x, y, width, height, message);
             setFilter(value -> acceptsInputCandidate(value, valueType));
         }

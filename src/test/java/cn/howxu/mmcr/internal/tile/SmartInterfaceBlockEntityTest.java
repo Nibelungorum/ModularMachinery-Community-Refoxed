@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
+import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
@@ -37,11 +38,11 @@ class SmartInterfaceBlockEntityTest {
         assertThat(owner.setValue("mode", 7F)).isTrue();
 
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+                HolderLookup.Provider.create(Stream.empty()));
         owner.saveAdditional(output);
         var restored = createSmartInterface();
         restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(java.util.stream.Stream.empty()), output.buildResult()));
+                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
 
         assertThat(restored.machineId()).contains(MMCR.id("test"));
         assertThat(restored.controllerPositions()).containsExactly(BlockPos.ZERO);
@@ -56,11 +57,11 @@ class SmartInterfaceBlockEntityTest {
         assertThat(legacy.bind(BlockPos.ZERO, MMCR.id("test"), "mode", 4F)).isTrue();
 
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+                HolderLookup.Provider.create(Stream.empty()));
         legacy.saveAdditional(output);
         var restored = createSmartInterface();
         restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(java.util.stream.Stream.empty()), output.buildResult()));
+                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
 
         assertThat(restored.machineId()).contains(MMCR.id("test"));
         assertThat(restored.value("mode")).contains(4F);

@@ -24,6 +24,9 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
+import cn.howxu.mmcr.api.machine.BlockArrayCache;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
+import net.minecraft.core.Direction;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -87,7 +90,7 @@ class DynamicContentReloadServiceTest {
         DynamicContentReloadService.reload(candidate -> candidate.registerStructure(oldStructure));
         var oldMachine = MachineRegistry.getMachine(Identifier.parse("mmcr:test_cube"));
         var oldCompiled = MachineRegistry.getCompiled(oldMachine.registryName());
-        var oldRotated = cn.howxu.mmcr.api.machine.BlockArrayCache.get(oldMachine.pattern(), net.minecraft.core.Direction.NORTH);
+        var oldRotated = BlockArrayCache.get(oldMachine.pattern(), Direction.NORTH);
 
         assertThatThrownBy(() -> DynamicContentReloadService.reload(candidate ->
                 candidate.registerStructure(failingStructure("mmcr:controller_tick"))))
@@ -95,14 +98,14 @@ class DynamicContentReloadServiceTest {
 
         assertThat(MachineRegistry.getMachine(oldMachine.registryName())).isNotNull();
         assertThat(MachineRegistry.getCompiled(oldMachine.registryName())).isSameAs(oldCompiled);
-        assertThat(cn.howxu.mmcr.api.machine.BlockArrayCache.get(oldMachine.pattern(), net.minecraft.core.Direction.NORTH))
+        assertThat(BlockArrayCache.get(oldMachine.pattern(), Direction.NORTH))
                 .isSameAs(oldRotated);
         assertThat(MachineRegistry.getMachine(Identifier.parse("mmcr:controller_tick"))).isNull();
     }
 
     @Test
     void candidateRecipeCanReferenceStaticMachine() {
-        var staticMachine = new cn.howxu.mmcr.api.machine.DynamicMachine(Identifier.parse("mmcr:static"), "mmcr:static", new BlockArray(Map.of()));
+        var staticMachine = new DynamicMachine(Identifier.parse("mmcr:static"), "mmcr:static", new BlockArray(Map.of()));
         MachineRegistry.register(staticMachine);
         DynamicContentReloadService.reload(candidate ->
                 candidate.registerRecipe(recipe("mmcr:static_recipe", "mmcr:static")));

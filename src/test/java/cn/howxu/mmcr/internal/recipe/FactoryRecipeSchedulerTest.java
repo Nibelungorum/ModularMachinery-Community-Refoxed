@@ -66,6 +66,16 @@ import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
+import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity;
+import cn.howxu.mmcr.registry.PortKinds;
+import cn.howxu.mmcr.util.IOType;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.Level;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class FactoryRecipeSchedulerTest {
@@ -161,7 +171,7 @@ class FactoryRecipeSchedulerTest {
         assertThat(snapshot.components()).isUnmodifiable();
 
         for (Field field : snapshot.getClass().getDeclaredFields()) {
-            assertThat(net.minecraft.world.level.Level.class.isAssignableFrom(field.getType())).isFalse();
+            assertThat(Level.class.isAssignableFrom(field.getType())).isFalse();
             assertThat(BlockEntity.class.isAssignableFrom(field.getType())).isFalse();
         }
         for (Field field : snapshot.components().getFirst().getClass().getDeclaredFields()) {
@@ -421,7 +431,7 @@ class FactoryRecipeSchedulerTest {
         setField(BlockEntity.class, input, "level", level);
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         registry.claim(controllerPos, List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
-                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)));
+                ComponentClaimPolicy.SHARED_SERIALIZED)));
         StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
         MachineRecipe cached = new MachineRecipe(MMCR.id("factory_cached_shared_sword"), MMCR.id("factory_cached_shared_failure"),
                 20, List.of(), List.of(), List.of(), 0, 0, false, List.of(), List.of(enchantedInput(2)), true);
@@ -516,7 +526,7 @@ class FactoryRecipeSchedulerTest {
         setField(BlockEntity.class, input, "level", level);
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         registry.claim(controllerPos, List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
-                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)));
+                ComponentClaimPolicy.SHARED_SERIALIZED)));
         StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_shared_continuation_recipe"),
                 MMCR.id("factory_shared_continuation"), 1, List.of(), List.of(), List.of(), 0, 1);
@@ -610,12 +620,12 @@ class FactoryRecipeSchedulerTest {
         saved.addThreadForTesting(FactoryRecipeThread.simple(null, new RecipeCraftingContextPool(), "factory-4"));
         saved.addThreadForTesting(FactoryRecipeThread.simple(null, new RecipeCraftingContextPool(), "factory-9"));
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+                HolderLookup.Provider.create(Stream.empty()));
         saved.save(output);
         MachineControllerBlockEntity controller = controller(MMCR.id("factory_loaded_lanes"));
         FactoryRecipeScheduler loaded = new FactoryRecipeScheduler(4, new RecipeCraftingContextPool());
         loaded.load(TagValueInput.create(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(java.util.stream.Stream.empty()), output.buildResult()), controller,
+                HolderLookup.Provider.create(Stream.empty()), output.buildResult()), controller,
                 new RecipeCraftingContextPool());
 
         loaded.tickThreads(controller, List.of(parallelizedRecipe("factory_loaded_lane_recipe", 0)),
@@ -638,7 +648,7 @@ class FactoryRecipeSchedulerTest {
         setField(BlockEntity.class, input, "level", level);
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         registry.claim(controllerPos, List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
-                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)));
+                ComponentClaimPolicy.SHARED_SERIALIZED)));
         StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_shared_start_recipe"), MMCR.id("factory_shared_start"),
                 20, List.of(), List.of(), List.of(), 0, 0, false, List.of(),
@@ -676,10 +686,10 @@ class FactoryRecipeSchedulerTest {
         setField(BlockEntity.class, input, "level", level);
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         List<StructureClaimRegistry.Claim> sharedInput = List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
-                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED));
+                ComponentClaimPolicy.SHARED_SERIALIZED));
         registry.claim(firstControllerPos, sharedInput);
         registry.claim(secondControllerPos, List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
-                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)));
+                ComponentClaimPolicy.SHARED_SERIALIZED)));
         StructureClaimRegistry.ResourceDomain domain = registry.domainFor(firstControllerPos);
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_shared_enchanted_recipe"), MMCR.id("factory_shared_enchanted"),
                 20, List.of(), List.of(), List.of(), 0, 0, false, List.of(), List.of(enchantedInput(2)), true);
@@ -715,7 +725,7 @@ class FactoryRecipeSchedulerTest {
         setField(BlockEntity.class, input, "level", level);
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         registry.claim(controllerPos, List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
-                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)));
+                ComponentClaimPolicy.SHARED_SERIALIZED)));
         StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_shared_failure_recipe"), MMCR.id("factory_shared_failure"),
                 20, List.of(), List.of(), List.of(), 0, 0, false, List.of(),
@@ -747,7 +757,7 @@ class FactoryRecipeSchedulerTest {
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_non_consumable_recipe"), MMCR.id("factory_non_consumable"),
                 20, List.of(), List.of(), List.of(), 0, 0, false, List.of(), List.of(
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
-                        ItemStack.EMPTY, 1F, List.of(), cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet.EMPTY, 0F)
+                        ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0F)
         ), true);
         RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2, pool);
@@ -778,7 +788,7 @@ class FactoryRecipeSchedulerTest {
         setField(BlockEntity.class, input, "level", level);
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         registry.claim(controllerPos, List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
-                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)));
+                ComponentClaimPolicy.SHARED_SERIALIZED)));
         StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
         MachineRecipe oldRecipe = new MachineRecipe(MMCR.id("factory_stale_start_old"), MMCR.id("factory_stale_start"),
                 20, List.of(), List.of(), List.of(), 0, 0, false, List.of(),
@@ -814,7 +824,7 @@ class FactoryRecipeSchedulerTest {
         setField(BlockEntity.class, input, "level", level);
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         List<StructureClaimRegistry.Claim> claims = List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
-                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED));
+                ComponentClaimPolicy.SHARED_SERIALIZED));
         registry.claim(controllerPos, claims);
         StructureClaimRegistry.ResourceDomain originalDomain = registry.domainFor(controllerPos);
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_domain_rebuild_recipe"), MMCR.id("factory_domain_rebuild"),
@@ -844,7 +854,7 @@ class FactoryRecipeSchedulerTest {
                 .set(DataComponents.MAX_STACK_SIZE, 64).build());
         ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
         ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(2, 64, 0));
-        setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, input, "handler", new ItemStackHandler(6) {
+        setField(ItemBusBlockEntity.class, input, "handler", new ItemStackHandler(6) {
             @Override
             public ItemStack extractItem(int slot, int amount, boolean simulate) {
                 ItemStack extracted = super.extractItem(slot, amount, simulate);
@@ -869,9 +879,9 @@ class FactoryRecipeSchedulerTest {
         setField(BlockEntity.class, energy, "level", level);
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         registry.claim(controllerPos, List.of(
-                new StructureClaimRegistry.Claim(input.getBlockPos(), cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED),
-                new StructureClaimRegistry.Claim(output.getBlockPos(), cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED),
-                new StructureClaimRegistry.Claim(energy.getBlockPos(), cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)
+                new StructureClaimRegistry.Claim(input.getBlockPos(), ComponentClaimPolicy.SHARED_SERIALIZED),
+                new StructureClaimRegistry.Claim(output.getBlockPos(), ComponentClaimPolicy.SHARED_SERIALIZED),
+                new StructureClaimRegistry.Claim(energy.getBlockPos(), ComponentClaimPolicy.SHARED_SERIALIZED)
         ));
         StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
         setField(MachineControllerBlockEntity.class, controller, "resourceDomain", domain);
@@ -917,7 +927,7 @@ class FactoryRecipeSchedulerTest {
                 .set(DataComponents.MAX_STACK_SIZE, 64).build());
         ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
         ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(2, 64, 0));
-        setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, input, "handler", new ItemStackHandler(6) {
+        setField(ItemBusBlockEntity.class, input, "handler", new ItemStackHandler(6) {
             @Override
             public ItemStack extractItem(int slot, int amount, boolean simulate) {
                 ItemStack extracted = super.extractItem(slot, amount, simulate);
@@ -943,9 +953,9 @@ class FactoryRecipeSchedulerTest {
         setField(BlockEntity.class, energy, "level", level);
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         registry.claim(controllerPos, List.of(
-                new StructureClaimRegistry.Claim(input.getBlockPos(), cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED),
-                new StructureClaimRegistry.Claim(output.getBlockPos(), cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED),
-                new StructureClaimRegistry.Claim(energy.getBlockPos(), cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)
+                new StructureClaimRegistry.Claim(input.getBlockPos(), ComponentClaimPolicy.SHARED_SERIALIZED),
+                new StructureClaimRegistry.Claim(output.getBlockPos(), ComponentClaimPolicy.SHARED_SERIALIZED),
+                new StructureClaimRegistry.Claim(energy.getBlockPos(), ComponentClaimPolicy.SHARED_SERIALIZED)
         ));
         StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
         setField(MachineControllerBlockEntity.class, controller, "resourceDomain", domain);
@@ -969,10 +979,10 @@ class FactoryRecipeSchedulerTest {
         assertThat(energy.getMutableEnergyStorage().getAmountAsLong()).isEqualTo(10);
 
         TagValueOutput saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+                HolderLookup.Provider.create(Stream.empty()));
         thread.save(saved);
         FactoryRecipeThread restored = FactoryRecipeThread.load(TagValueInput.create(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(java.util.stream.Stream.empty()), saved.buildResult()), controller,
+                HolderLookup.Provider.create(Stream.empty()), saved.buildResult()), controller,
                 new RecipeCraftingContextPool());
         output.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
         ((TestServerLevel) level).gameTime = 10L;
@@ -1012,9 +1022,9 @@ class FactoryRecipeSchedulerTest {
         setField(BlockEntity.class, energy, "level", level);
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         registry.claim(controllerPos, List.of(
-                new StructureClaimRegistry.Claim(input.getBlockPos(), cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED),
-                new StructureClaimRegistry.Claim(output.getBlockPos(), cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED),
-                new StructureClaimRegistry.Claim(energy.getBlockPos(), cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)
+                new StructureClaimRegistry.Claim(input.getBlockPos(), ComponentClaimPolicy.SHARED_SERIALIZED),
+                new StructureClaimRegistry.Claim(output.getBlockPos(), ComponentClaimPolicy.SHARED_SERIALIZED),
+                new StructureClaimRegistry.Claim(energy.getBlockPos(), ComponentClaimPolicy.SHARED_SERIALIZED)
         ));
         StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
         setField(MachineControllerBlockEntity.class, controller, "resourceDomain", domain);
@@ -1059,7 +1069,7 @@ class FactoryRecipeSchedulerTest {
                 .set(DataComponents.MAX_STACK_SIZE, 64).build());
         ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 64, 0));
         ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(2, 64, 0));
-        setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, input, "handler", new ItemStackHandler(6) {
+        setField(ItemBusBlockEntity.class, input, "handler", new ItemStackHandler(6) {
             @Override
             public ItemStack extractItem(int slot, int amount, boolean simulate) {
                 ItemStack extracted = super.extractItem(slot, amount, simulate);
@@ -1178,8 +1188,8 @@ class FactoryRecipeSchedulerTest {
         MachineControllerBlockEntity controller = controller(MMCR.id("paused_factory_machine"));
         MachineRecipe firstRecipe = recipe("paused_factory_first", 0);
         MachineRecipe secondRecipe = recipe("paused_factory_second", 0);
-        cn.howxu.mmcr.api.recipe.RecipeRegistry.register(firstRecipe);
-        cn.howxu.mmcr.api.recipe.RecipeRegistry.register(secondRecipe);
+        RecipeRegistry.register(firstRecipe);
+        RecipeRegistry.register(secondRecipe);
         RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(3, pool);
         FactoryRecipeThread first = FactoryRecipeThread.simple(controller, pool);
@@ -1190,8 +1200,8 @@ class FactoryRecipeSchedulerTest {
         secondActive.setTick(7);
         first.setActiveRecipeForTesting(firstActive);
         second.setActiveRecipeForTesting(secondActive);
-        setField(RecipeThread.class, first, "context", new cn.howxu.mmcr.api.recipe.RecipeCraftingContext(controller));
-        setField(RecipeThread.class, second, "context", new cn.howxu.mmcr.api.recipe.RecipeCraftingContext(controller));
+        setField(RecipeThread.class, first, "context", new RecipeCraftingContext(controller));
+        setField(RecipeThread.class, second, "context", new RecipeCraftingContext(controller));
         setField(RecipeThread.class, first, "lastFailureUnloc", "mmcr.failure.first");
         setField(RecipeThread.class, second, "lastFailureUnloc", "mmcr.failure.second");
         scheduler.addThreadForTesting(first);
@@ -1199,11 +1209,11 @@ class FactoryRecipeSchedulerTest {
         scheduler.pause();
 
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+                HolderLookup.Provider.create(Stream.empty()));
         scheduler.save(output);
         FactoryRecipeScheduler loaded = new FactoryRecipeScheduler(3, pool);
         loaded.load(TagValueInput.create(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(java.util.stream.Stream.empty()), output.buildResult()), controller, pool);
+                HolderLookup.Provider.create(Stream.empty()), output.buildResult()), controller, pool);
 
         assertThat(loaded.allThreads()).hasSize(3);
         List<FactoryRecipeThread> restored = loaded.allThreads().subList(1, 3);
@@ -1233,7 +1243,7 @@ class FactoryRecipeSchedulerTest {
         setField(BlockEntity.class, input, "level", level);
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         registry.claim(controllerPos, List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
-                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)));
+                ComponentClaimPolicy.SHARED_SERIALIZED)));
         StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_paused_shared_finish_recipe"),
                 MMCR.id("factory_paused_shared_finish"), 1, List.of(), List.of(), List.of(), 0, 1);
@@ -1264,7 +1274,7 @@ class FactoryRecipeSchedulerTest {
         setField(BlockEntity.class, input, "level", level);
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         registry.claim(controllerPos, List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
-                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)));
+                ComponentClaimPolicy.SHARED_SERIALIZED)));
         StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_paused_shared_continuation_recipe"),
                 MMCR.id("factory_paused_shared_continuation"), 1, List.of(), List.of(), List.of(), 0, 1);
@@ -1329,7 +1339,7 @@ class FactoryRecipeSchedulerTest {
         FactoryRecipeThread thread = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());
         setField(RecipeThread.class, thread, "startPending", true);
         setField(RecipeThread.class, thread, "pendingStartDomain",
-                new cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.ResourceDomain(1L, 1L, Set.of()));
+                new StructureClaimRegistry.ResourceDomain(1L, 1L, Set.of()));
 
         thread.tick();
 
@@ -1352,7 +1362,7 @@ class FactoryRecipeSchedulerTest {
         setField(BlockEntity.class, input, "level", level);
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         registry.claim(controllerPos, List.of(new StructureClaimRegistry.Claim(input.getBlockPos(),
-                cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy.SHARED_SERIALIZED)));
+                ComponentClaimPolicy.SHARED_SERIALIZED)));
         StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_async_failure_recipe"), MMCR.id("factory_async_failure"),
                 20, List.of(), List.of(), List.of(), 0, 0, false, List.of(),
@@ -1407,7 +1417,7 @@ class FactoryRecipeSchedulerTest {
         return sword;
     }
 
-    private static MachineControllerBlockEntity controller(net.minecraft.resources.Identifier machineId) throws Exception {
+    private static MachineControllerBlockEntity controller(Identifier machineId) throws Exception {
         Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
         unsafeField.setAccessible(true);
         MachineControllerBlockEntity controller = (MachineControllerBlockEntity) ((sun.misc.Unsafe) unsafeField.get(null))
@@ -1445,7 +1455,7 @@ class FactoryRecipeSchedulerTest {
         setField(BlockEntity.class, bus, "worldPosition", pos);
         setField(BlockEntity.class, bus, "blockState", Blocks.CHEST.defaultBlockState());
         initializeLinkedAppearance(bus);
-        setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6) {
+        setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6) {
             @Override protected void onContentsChanged(int slot) { }
         });
         return bus;
@@ -1460,7 +1470,7 @@ class FactoryRecipeSchedulerTest {
         setField(BlockEntity.class, bus, "worldPosition", pos);
         setField(BlockEntity.class, bus, "blockState", Blocks.CHEST.defaultBlockState());
         initializeLinkedAppearance(bus);
-        setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6) {
+        setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6) {
             @Override protected void onContentsChanged(int slot) { }
         });
         return bus;
@@ -1474,22 +1484,22 @@ class FactoryRecipeSchedulerTest {
         setField(BlockEntity.class, hatch, "type", null);
         setField(BlockEntity.class, hatch, "worldPosition", pos);
         setField(BlockEntity.class, hatch, "blockState", Blocks.CHEST.defaultBlockState());
-        setField(cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity.class, hatch, "storage",
+        setField(EnergyHatchBlockEntity.class, hatch, "storage",
                 new LongEnergyStorage(100, 100, () -> {}));
         return hatch;
     }
 
-    private static void initializeLinkedAppearance(cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity component)
+    private static void initializeLinkedAppearance(LinkedAppearanceBlockEntity component)
             throws ReflectiveOperationException {
-        setField(cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity.class, component,
+        setField(LinkedAppearanceBlockEntity.class, component,
                 "appearanceBaseTexture", cn.howxu.mmcr.MMCR.id("block/basic_casing"));
-        setField(cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity.class, component,
+        setField(LinkedAppearanceBlockEntity.class, component,
                 "linkedControllers", new TreeMap<>(BlockPos::compareTo));
-        setField(cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity.class, component,
+        setField(LinkedAppearanceBlockEntity.class, component,
                 "controllerLinkCheckCounter", 0);
     }
 
-    private static int itemCount(ItemOutputBusBlockEntity output, net.minecraft.world.item.Item item) {
+    private static int itemCount(ItemOutputBusBlockEntity output, Item item) {
         int count = 0;
         for (int slot = 0; slot < output.getItemStackHandler(null).getSlots(); slot++) {
             ItemStack stack = output.getItemStackHandler(null).getStackInSlot(slot);
@@ -1500,13 +1510,13 @@ class FactoryRecipeSchedulerTest {
 
     private static MachineComponent componentFor(BlockEntity component) {
         if (component instanceof ItemInputBusBlockEntity) {
-            return new MachineComponent(cn.howxu.mmcr.registry.PortKinds.ITEM_INPUT, cn.howxu.mmcr.util.IOType.INPUT);
+            return new MachineComponent(PortKinds.ITEM_INPUT, IOType.INPUT);
         }
         if (component instanceof ItemOutputBusBlockEntity) {
-            return new MachineComponent(cn.howxu.mmcr.registry.PortKinds.ITEM_OUTPUT, cn.howxu.mmcr.util.IOType.OUTPUT);
+            return new MachineComponent(PortKinds.ITEM_OUTPUT, IOType.OUTPUT);
         }
         if (component instanceof EnergyInputHatchBlockEntity) {
-            return new MachineComponent(cn.howxu.mmcr.registry.PortKinds.ENERGY_INPUT, cn.howxu.mmcr.util.IOType.INPUT);
+            return new MachineComponent(PortKinds.ENERGY_INPUT, IOType.INPUT);
         }
         throw new IllegalArgumentException("Unsupported test component: " + component.getClass().getSimpleName());
     }
@@ -1517,7 +1527,7 @@ class FactoryRecipeSchedulerTest {
         TestServerLevel level = (TestServerLevel) ((sun.misc.Unsafe) unsafeField.get(null)).allocateInstance(TestServerLevel.class);
         setField(TestServerLevel.class, level, "blocks", new HashMap<>());
         setField(TestServerLevel.class, level, "blockEntities", blockEntities.stream()
-                .collect(java.util.stream.Collectors.toMap(BlockEntity::getBlockPos, entity -> entity)));
+                .collect(Collectors.toMap(BlockEntity::getBlockPos, entity -> entity)));
         return level;
     }
 

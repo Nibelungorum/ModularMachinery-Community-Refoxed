@@ -2,6 +2,8 @@ package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+
+import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -93,7 +95,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
             if (player.level().getBlockEntity(pos) instanceof MachineControllerBlockEntity controller) {
                   controller.applyClientState(recipeName, formed, active, foundLevelIds, recipeLocked, lockedRecipeId);
             }
-            if (player.containerMenu instanceof cn.howxu.mmcr.internal.menu.MachineControllerMenu menu
+            if (player.containerMenu instanceof MachineControllerMenu menu
                     && menu.controllerPos().equals(pos)) {
                 menu.applyClientControllerState(machineId.isEmpty() ? null : Identifier.parse(machineId), controllerRole,
                         installedModuleCount, moduleConnected,

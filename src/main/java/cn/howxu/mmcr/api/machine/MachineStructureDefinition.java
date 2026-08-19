@@ -158,7 +158,7 @@ public record MachineStructureDefinition(Identifier machineId, List<Declaration>
             return new Declaration(Kind.EXTENSION, pattern, null, null, List.of(), MachineStructureRequirements.EMPTY);
         }
 
-        private static Map<net.minecraft.core.BlockPos, List<String>> copyStringMap(Map<net.minecraft.core.BlockPos, List<String>> source) {
+        private static Map<BlockPos, List<String>> copyStringMap(Map<BlockPos, List<String>> source) {
             Map<BlockPos, List<String>> copy = new LinkedHashMap<>();
             source.forEach((position, values) -> copy.put(position, List.copyOf(values)));
             return Collections.unmodifiableMap(copy);

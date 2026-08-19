@@ -4,6 +4,8 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 
+import net.minecraft.resources.Identifier;
+
 import java.util.Collections;
 import java.util.List;
 
@@ -180,8 +182,8 @@ public final class PreparedRecipe {
 
     public MachineRecipe toMachineRecipe() {
         return new MachineRecipe(
-                net.minecraft.resources.Identifier.parse(registryName),
-                net.minecraft.resources.Identifier.parse(machineId),
+                Identifier.parse(registryName),
+                Identifier.parse(machineId),
                 tickTime,
                 inputs,
                 outputs,

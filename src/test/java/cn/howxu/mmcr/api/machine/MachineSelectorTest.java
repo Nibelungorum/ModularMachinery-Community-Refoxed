@@ -18,7 +18,7 @@ class MachineSelectorTest {
     }
 
     private static Identifier id(String path) {
-        return net.minecraft.resources.Identifier.fromNamespaceAndPath("mmcr", path);
+        return Identifier.fromNamespaceAndPath("mmcr", path);
     }
 
     @Test

@@ -15,6 +15,9 @@ import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import com.mojang.serialization.DynamicOps;
+
+import com.google.gson.JsonElement;
+import com.mojang.serialization.JsonOps;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.resources.RegistryOps;
@@ -30,7 +33,10 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Optional;
 import java.util.stream.Collectors;
+
+import java.util.stream.Stream;
 
 /**
  * Immutable JEI-facing view of a machine recipe.
@@ -65,9 +71,9 @@ public record MachineRecipeDisplay(
     }
 
     public static MachineRecipeDisplay from(MachineRecipe recipe, RegistryAccess registryAccess) {
-        DynamicOps<com.google.gson.JsonElement> componentOps = registryAccess == null
-                ? com.mojang.serialization.JsonOps.INSTANCE
-                : RegistryOps.create(com.mojang.serialization.JsonOps.INSTANCE, registryAccess);
+        DynamicOps<JsonElement> componentOps = registryAccess == null
+                ? JsonOps.INSTANCE
+                : RegistryOps.create(JsonOps.INSTANCE, registryAccess);
         List<ItemInputDisplay> itemInputs = new ArrayList<>();
         List<FluidIngredient> fluidInputs = new ArrayList<>();
         List<Integer> fluidInputAmounts = new ArrayList<>();
@@ -145,32 +151,32 @@ public record MachineRecipeDisplay(
                 .collect(Collectors.collectingAndThen(Collectors.toCollection(LinkedHashSet::new), Collections::unmodifiableSet));
     }
 
-    private static java.util.stream.Stream<Holder<Item>> safeItems(Ingredient ingredient) {
+    private static Stream<Holder<Item>> safeItems(Ingredient ingredient) {
         try {
             return ingredient.items();
         } catch (UnsupportedOperationException ignored) {
-            return java.util.stream.Stream.empty();
+            return Stream.empty();
         }
     }
 
     public List<Component> tooltips() {
-        return java.util.stream.Stream.concat(
-                        java.util.stream.Stream.concat(smartInterfaceInputs.stream(), smartInterfaceOutputs.stream())
+        return Stream.concat(
+                        Stream.concat(smartInterfaceInputs.stream(), smartInterfaceOutputs.stream())
                                 .map(SmartInterfaceDisplay::tooltip),
                         smartInterfaceModifiers.stream().map(SmartInterfaceModifierDisplay::tooltip))
                 .toList();
     }
 
-    private static java.util.Optional<SmartInterfaceDisplay> smartInterfaceDisplay(SmartInterfaceType type,
+    private static Optional<SmartInterfaceDisplay> smartInterfaceDisplay(SmartInterfaceType type,
             SmartInterfaceRequirement requirement) {
-        if (type == null) return java.util.Optional.empty();
+        if (type == null) return Optional.empty();
         Component displayType = Component.translatable(type.translationKey());
         String value = valueText(type.valueType(), requirement.minValue(), requirement.maxValue());
         boolean input = requirement.io() == RecipeModifier.IOType.INPUT;
         Component tooltip = Component.translatable(input
                 ? "jei.mmcr.smart_interface.requirement.input"
                 : "jei.mmcr.smart_interface.requirement.output", displayType, value);
-        return java.util.Optional.of(new SmartInterfaceDisplay(displayType, value, input, tooltip));
+        return Optional.of(new SmartInterfaceDisplay(displayType, value, input, tooltip));
     }
 
     private static String valueText(SmartInterfaceType.ValueType valueType, float minValue, float maxValue) {
@@ -229,11 +235,11 @@ public record MachineRecipeDisplay(
         public ItemInputDisplay {
             baseStacks = baseStacks.stream().map(ItemStack::copy).toList();
             components = components == null ? DataComponentPredicateSet.EMPTY : components;
-            componentOps = componentOps == null ? com.mojang.serialization.JsonOps.INSTANCE : componentOps;
+            componentOps = componentOps == null ? JsonOps.INSTANCE : componentOps;
         }
 
         public ItemInputDisplay(List<ItemStack> baseStacks, int count, float consumeChance) {
-            this(null, baseStacks, count, consumeChance, DataComponentPredicateSet.EMPTY, com.mojang.serialization.JsonOps.INSTANCE);
+            this(null, baseStacks, count, consumeChance, DataComponentPredicateSet.EMPTY, JsonOps.INSTANCE);
         }
 
         public List<ItemStack> stacks() {

@@ -23,6 +23,8 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 
+import net.minecraft.core.registries.Registries;
+
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
@@ -170,7 +172,7 @@ public final class MachineStructureSyncCodec {
             case ANY -> new BlockPredicate.Any();
             case BLOCK -> new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.STREAM_CODEC.decode(buf)));
             case BLOCK_STATE -> new BlockPredicate.OfBlockState(readBlockState(buf));
-            case TAG -> new BlockPredicate.OfTag(TagKey.create(net.minecraft.core.registries.Registries.BLOCK,
+            case TAG -> new BlockPredicate.OfTag(TagKey.create(Registries.BLOCK,
                     Identifier.STREAM_CODEC.decode(buf)));
             case ANY_OF -> {
                 int count = buf.readVarInt();

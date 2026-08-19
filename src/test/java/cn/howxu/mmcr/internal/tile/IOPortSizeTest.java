@@ -13,6 +13,8 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import cn.howxu.mmcr.internal.port.IOPortKind;
+import net.minecraft.world.level.material.Fluids;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class IOPortSizeTest {
@@ -52,7 +54,7 @@ class IOPortSizeTest {
 
         assertThat(hatch.isTankEmpty()).isTrue();
 
-        tank(hatch).forceInsert(new FluidStack(net.minecraft.world.level.material.Fluids.WATER, 100), false);
+        tank(hatch).forceInsert(new FluidStack(Fluids.WATER, 100), false);
         assertThat(hatch.isTankEmpty()).isFalse();
 
         tank(hatch).forceExtract(100, false);
@@ -72,7 +74,7 @@ class IOPortSizeTest {
         return ModBlocks.BLOCKS.get(id).get().defaultBlockState();
     }
 
-    private static cn.howxu.mmcr.internal.port.IOPortKind kind(String id) {
+    private static IOPortKind kind(String id) {
         return PortKinds.all().stream()
                 .filter(kind -> kind.id().equals(id))
                 .findFirst()

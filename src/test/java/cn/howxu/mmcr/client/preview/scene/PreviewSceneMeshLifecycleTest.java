@@ -6,6 +6,7 @@ import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 
 import java.nio.ByteBuffer;
 
+import org.lwjgl.system.MemoryUtil;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -116,7 +117,7 @@ class PreviewSceneMeshLifecycleTest {
         try (ByteBufferBuilder publishedBuilder = new ByteBufferBuilder(4);
              ByteBufferBuilder drawBuilder = new ByteBufferBuilder(4)) {
             long address = publishedBuilder.reserve(4);
-            org.lwjgl.system.MemoryUtil.memPutInt(address, 0x12345678);
+            MemoryUtil.memPutInt(address, 0x12345678);
             ByteBufferBuilder.Result published = publishedBuilder.build();
 
             ByteBufferBuilder.Result draw = PreviewSceneRenderer.copyIndexForDraw(published, drawBuilder);

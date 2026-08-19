@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Collections;
+import java.util.ArrayList;
 
 /**
  * Immutable full snapshot of one publicly visible structure stage.
@@ -142,7 +143,7 @@ public final class MachineStructureStage {
         Map<BlockPos, List<SingleBlockModifierReplacement>> merged = new LinkedHashMap<>();
         if (explicit != null) explicit.forEach((position, values) -> merged.put(position, List.copyOf(values)));
         compiled.forEach((position, values) -> merged.merge(position, List.copyOf(values), (left, right) -> {
-            java.util.ArrayList<SingleBlockModifierReplacement> combined = new java.util.ArrayList<>(left);
+            ArrayList<SingleBlockModifierReplacement> combined = new ArrayList<>(left);
             combined.addAll(right);
             return List.copyOf(combined);
         }));

@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import cn.howxu.mmcr.util.IOType;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ProcessingComponentTest {
@@ -21,7 +22,7 @@ class ProcessingComponentTest {
 
     @Test
     void processingComponentConvertsLegacySingleTagToTagList() {
-        MachineComponent component = new MachineComponent(PortKinds.ITEM_INPUT, cn.howxu.mmcr.util.IOType.INPUT);
+        MachineComponent component = new MachineComponent(PortKinds.ITEM_INPUT, IOType.INPUT);
         BlockEntity container = null;
         BlockPos pos = new BlockPos(1, 2, 3);
         ProcessingComponent processing = new ProcessingComponent(component, container, pos, pos, "input_a");
@@ -32,7 +33,7 @@ class ProcessingComponentTest {
 
     @Test
     void processingComponentDefaultsNullTagToEmptyList() {
-        MachineComponent component = new MachineComponent(PortKinds.ITEM_INPUT, cn.howxu.mmcr.util.IOType.INPUT);
+        MachineComponent component = new MachineComponent(PortKinds.ITEM_INPUT, IOType.INPUT);
         BlockEntity container = null;
         BlockPos pos = new BlockPos(0, 0, 0);
         ProcessingComponent processing = new ProcessingComponent(component, container, pos, pos, (String) null);
@@ -43,7 +44,7 @@ class ProcessingComponentTest {
 
     @Test
     void processingComponentAcceptsMultiTagList() {
-        MachineComponent component = new MachineComponent(PortKinds.ITEM_INPUT, cn.howxu.mmcr.util.IOType.INPUT);
+        MachineComponent component = new MachineComponent(PortKinds.ITEM_INPUT, IOType.INPUT);
         BlockPos pos = new BlockPos(0, 0, 0);
         ProcessingComponent processing = new ProcessingComponent(component, null, pos, pos, List.of("input_a", "fast"));
 

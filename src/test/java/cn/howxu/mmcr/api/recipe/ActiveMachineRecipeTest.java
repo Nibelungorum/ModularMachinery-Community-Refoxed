@@ -39,6 +39,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
+import cn.howxu.mmcr.util.IOType;
+import java.util.stream.Stream;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.Blocks;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ActiveMachineRecipeTest {
@@ -78,10 +84,10 @@ class ActiveMachineRecipeTest {
         assertThat(fromNbt.getMaxParallelism()).isEqualTo(16);
         assertThat(fromNbt.getParallelism()).isEqualTo(16);
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, HolderLookup.Provider.create(Stream.empty()));
         active.serialize(output);
         CompoundTag tag = output.buildResult();
-        ActiveMachineRecipe fromValueInput = ActiveMachineRecipe.from(TagValueInput.create(ProblemReporter.DISCARDING, HolderLookup.Provider.create(java.util.stream.Stream.empty()), tag));
+        ActiveMachineRecipe fromValueInput = ActiveMachineRecipe.from(TagValueInput.create(ProblemReporter.DISCARDING, HolderLookup.Provider.create(Stream.empty()), tag));
 
         assertThat(fromValueInput.getMaxParallelism()).isEqualTo(16);
         assertThat(fromValueInput.getParallelism()).isEqualTo(16);
@@ -125,11 +131,11 @@ class ActiveMachineRecipeTest {
         assertThat(fromNbt.shouldRetryFinish(14)).isFalse();
         assertThat(fromNbt.shouldRetryFinish(15)).isTrue();
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, HolderLookup.Provider.create(Stream.empty()));
         active.serialize(output);
         ActiveMachineRecipe fromValueInput = ActiveMachineRecipe.from(TagValueInput.create(
                 ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(java.util.stream.Stream.empty()),
+                HolderLookup.Provider.create(Stream.empty()),
                 output.buildResult()));
 
         assertThat(fromValueInput.shouldRetryFinish(14)).isFalse();
@@ -232,7 +238,7 @@ class ActiveMachineRecipeTest {
                         Items.IRON_INGOT.getDefaultInstance(), 1F, List.of())), false);
         MachineControllerBlockEntity controller = controllerWithComponents();
         MachineLevel level = new MachineLevel(MMCR.id("level"), MMCR.id("coil"), 1,
-                new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState(net.minecraft.world.level.block.Blocks.IRON_BLOCK.defaultBlockState()),
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()),
                 ItemStack.EMPTY, new LevelModifier(0.5D, 1D, 0.5D, 0, 0));
         setField(MachineControllerBlockEntity.class, controller, "foundLevels", Map.of(level.typeId(), level));
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
@@ -260,7 +266,7 @@ class ActiveMachineRecipeTest {
         assertThat(new ActiveMachineRecipe(recipe).canStartCrafting(context)).isFalse();
     }
 
-    private static MachineRecipe inputRecipe(String path, net.minecraft.resources.Identifier machineId, Item item, int count) {
+    private static MachineRecipe inputRecipe(String path, Identifier machineId, Item item, int count) {
         return new MachineRecipe(
                 MMCR.id(path),
                 machineId,
@@ -285,15 +291,15 @@ class ActiveMachineRecipeTest {
     }
 
     @SuppressWarnings({"removal", "unchecked"})
-    private static <T extends cn.howxu.mmcr.internal.tile.ItemBusBlockEntity> T itemBus(Class<T> type, BlockPos pos) throws Exception {
+    private static <T extends ItemBusBlockEntity> T itemBus(Class<T> type, BlockPos pos) throws Exception {
         Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
         unsafeField.setAccessible(true);
         sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
         T bus = (T) unsafe.allocateInstance(type);
         setField(BlockEntity.class, bus, "type", null);
         setField(BlockEntity.class, bus, "worldPosition", pos);
-        setField(BlockEntity.class, bus, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
-        setField(cn.howxu.mmcr.internal.tile.ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
+        setField(BlockEntity.class, bus, "blockState", Blocks.CHEST.defaultBlockState());
+        setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(6));
         return bus;
     }
 
@@ -311,7 +317,7 @@ class ActiveMachineRecipeTest {
             List<ProcessingComponent> components = (List<ProcessingComponent>) fieldValue(MachineControllerBlockEntity.class, controller, "components");
             components.add(new ProcessingComponent(
                     new MachineComponent(port instanceof ItemOutputBusBlockEntity ? PortKinds.ITEM_OUTPUT : PortKinds.ITEM_INPUT,
-                            port instanceof ItemOutputBusBlockEntity ? cn.howxu.mmcr.util.IOType.OUTPUT : cn.howxu.mmcr.util.IOType.INPUT),
+                            port instanceof ItemOutputBusBlockEntity ? IOType.OUTPUT : IOType.INPUT),
                     port,
                     port.getBlockPos(),
                     BlockPos.ZERO,

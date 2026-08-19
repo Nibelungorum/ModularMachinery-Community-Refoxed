@@ -24,6 +24,8 @@ import net.minecraft.client.renderer.state.gui.GuiRenderState;
 import net.minecraft.client.renderer.state.gui.BlitRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 
+import net.minecraft.world.phys.Vec3;
+
 /**
  * Vanilla PiP target used to render cached preview geometry off-screen.
  *
@@ -130,7 +132,7 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
                 Math.max(1, state.x1() - state.x0()), Math.max(1, state.y1() - state.y0()));
         Minecraft minecraft = Minecraft.getInstance();
         CameraRenderState cameraState = new CameraRenderState();
-        cameraState.pos = new net.minecraft.world.phys.Vec3(camera.eye());
+        cameraState.pos = new Vec3(camera.eye());
         cameraState.projectionMatrix = camera.projection();
         cameraState.viewRotationMatrix = camera.viewRotation();
         PreviewSceneRenderContext context = new PreviewSceneRenderContext(poseStack,

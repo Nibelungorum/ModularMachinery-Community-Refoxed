@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Objects;
 import java.util.List;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class ActiveMachineRecipe {
@@ -48,15 +49,15 @@ public final class ActiveMachineRecipe {
 
         public static InputConsumptionPlan deserialize(CompoundTag tag) {
             if (tag.contains("consumedInputRequirementIndices")) {
-                int maxIndex = java.util.Arrays.stream(tag.getIntArray("consumedInputRequirementIndices")
+                int maxIndex = Arrays.stream(tag.getIntArray("consumedInputRequirementIndices")
                         .orElseGet(() -> new int[0])).max().orElse(-1);
                 int[] batches = new int[maxIndex + 1];
                 for (int index : tag.getIntArray("consumedInputRequirementIndices").orElseGet(() -> new int[0])) {
                     batches[index] = 1;
                 }
-                return new InputConsumptionPlan(java.util.Arrays.stream(batches).boxed().toList());
+                return new InputConsumptionPlan(Arrays.stream(batches).boxed().toList());
             }
-            return new InputConsumptionPlan(java.util.Arrays.stream(tag.getIntArray("consumedInputBatches")
+            return new InputConsumptionPlan(Arrays.stream(tag.getIntArray("consumedInputBatches")
                     .orElseGet(() -> new int[0])).boxed().toList());
         }
     }

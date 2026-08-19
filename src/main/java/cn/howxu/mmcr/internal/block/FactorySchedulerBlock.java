@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.internal.block;
 
 import cn.howxu.mmcr.internal.menu.FactorySchedulerMenu;
+
+import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
@@ -40,7 +42,7 @@ public class FactorySchedulerBlock extends Block implements EntityBlock {
     @Override
     public MenuProvider getMenuProvider(BlockState state, Level level, BlockPos pos) {
         return new SimpleMenuProvider(
-                (containerId, playerInv, player) -> level.getBlockEntity(pos) instanceof cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity scheduler
+                (containerId, playerInv, player) -> level.getBlockEntity(pos) instanceof FactorySchedulerBlockEntity scheduler
                         ? new FactorySchedulerMenu(containerId, playerInv, scheduler)
                         : new FactorySchedulerMenu(containerId, playerInv),
                 Component.translatable("container.mmcr.factory_controller"));

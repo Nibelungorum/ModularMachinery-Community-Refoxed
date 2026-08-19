@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.ArrayList;
 
 public final class RecipeRegistry {
 
@@ -109,7 +110,7 @@ public final class RecipeRegistry {
 
     public static void replaceDataPack(Map<Identifier, MachineRecipe> recipes) {
         Map<Identifier, MachineRecipe> replacement = new LinkedHashMap<>();
-        List<String> warnings = new java.util.ArrayList<>();
+        List<String> warnings = new ArrayList<>();
         for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
             if (STATE.staticRecipes().containsKey(entry.getKey())) {
                 String warning = "data-pack layer recipe " + entry.getKey() + " overrides static layer recipe " + entry.getKey();

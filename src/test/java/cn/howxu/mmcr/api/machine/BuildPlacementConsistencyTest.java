@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import java.util.stream.IntStream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -187,7 +188,7 @@ class BuildPlacementConsistencyTest {
     }
 
     private static Machine stagedFixture(Identifier id, BlockArray... stages) {
-        List<MachineStructureStage> structureStages = java.util.stream.IntStream.range(0, stages.length)
+        List<MachineStructureStage> structureStages = IntStream.range(0, stages.length)
                 .mapToObj(index -> new MachineStructureStage(index + 1, stages[index], PortRequirementSpec.none(),
                         PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY))
                 .toList();

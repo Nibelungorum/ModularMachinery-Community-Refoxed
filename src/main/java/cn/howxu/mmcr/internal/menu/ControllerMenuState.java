@@ -5,6 +5,8 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.inventory.Slot;
 
+import java.util.function.ToIntFunction;
+
 /** Shared synchronized controller fields and player inventory placement. */
 final class ControllerMenuState {
     static final int PLAYER_INVENTORY_Y = 131;
@@ -29,7 +31,7 @@ final class ControllerMenuState {
     }
 
     private static DataSlot add(AbstractMachineMenu menu, MachineControllerBlockEntity owner,
-                                java.util.function.ToIntFunction<MachineControllerBlockEntity> getter) {
+                                ToIntFunction<MachineControllerBlockEntity> getter) {
         return menu.addControllerDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
             @Override public int get() { return getter.applyAsInt(owner); }
             @Override public void set(int value) { }

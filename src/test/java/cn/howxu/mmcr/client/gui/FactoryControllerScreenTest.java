@@ -16,13 +16,15 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import cn.howxu.mmcr.registry.ModUIs;
+import cn.howxu.mmcr.test.TestBootstrap;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class FactoryControllerScreenTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
-        cn.howxu.mmcr.test.TestBootstrap.bootstrap();
-        bind(cn.howxu.mmcr.registry.ModUIs.FACTORY_CONTROLLER,
+        TestBootstrap.bootstrap();
+        bind(ModUIs.FACTORY_CONTROLLER,
                 new MenuType<>(FactoryControllerMenu::clientOpen, FeatureFlags.VANILLA_SET));
     }
 

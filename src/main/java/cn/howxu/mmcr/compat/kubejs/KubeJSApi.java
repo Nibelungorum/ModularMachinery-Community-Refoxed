@@ -12,6 +12,9 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.HolderSet;
@@ -25,6 +28,9 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import net.neoforged.neoforge.fluids.FluidStack;
+
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.JsonOps;
 
@@ -182,7 +188,7 @@ public final class KubeJSApi {
     }
 
     public MachineRequirement itemOutputRequirementWithComponents(String itemId, int count, JsonElement components, float chance) {
-        return new cn.howxu.mmcr.api.recipe.requirement.ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+        return new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                 new ItemStack(requireItem(itemId), count), chance, List.of(),
                 DataComponentPredicateSet.CODEC.parse(JsonOps.INSTANCE, components).getOrThrow(), 1F);
     }
@@ -195,13 +201,13 @@ public final class KubeJSApi {
         return MachineRequirement.fluidOutput(fluidStack(fluidId, amount), chance);
     }
 
-    private static net.minecraft.world.level.block.Block requireBlock(String id) {
+    private static Block requireBlock(String id) {
         Identifier identifier = Identifier.parse(id);
         if (!BuiltInRegistries.BLOCK.containsKey(identifier)) throw new IllegalArgumentException("Unknown block: " + id);
         return BuiltInRegistries.BLOCK.getValue(identifier);
     }
 
-    private static net.minecraft.world.item.Item requireItem(String id) {
+    private static Item requireItem(String id) {
         Identifier identifier = Identifier.parse(id);
         if (!BuiltInRegistries.ITEM.containsKey(identifier)) throw new IllegalArgumentException("Unknown item: " + id);
         return BuiltInRegistries.ITEM.getValue(identifier);
@@ -253,8 +259,8 @@ public final class KubeJSApi {
             default -> throw new IllegalArgumentException("Unknown port category: " + categoryName);
         };
         var io = switch (ioName) {
-            case "input" -> cn.howxu.mmcr.util.IOType.INPUT;
-            case "output" -> cn.howxu.mmcr.util.IOType.OUTPUT;
+            case "input" -> IOType.INPUT;
+            case "output" -> IOType.OUTPUT;
             default -> throw new IllegalArgumentException("Unknown port IO: " + ioName);
         };
         String expectedFamily = category == PortTierRequirementSpec.PortCategory.ITEM ? "bus" : "hatch";

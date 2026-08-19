@@ -10,6 +10,9 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
+
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import org.jetbrains.annotations.Nullable;
@@ -36,11 +39,11 @@ public abstract class RecipeThread {
     protected @Nullable String lastFailureUnloc;
     private boolean startPending;
     private @Nullable RecipeCraftingContext pendingStartContext;
-    private @Nullable cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.ResourceDomain pendingStartDomain;
+    private @Nullable StructureClaimRegistry.ResourceDomain pendingStartDomain;
     private long nextStartToken;
     private long pendingStartToken;
     private boolean tickPending;
-    private @Nullable cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.ResourceDomain pendingTickDomain;
+    private @Nullable StructureClaimRegistry.ResourceDomain pendingTickDomain;
 
     protected RecipeThread(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
         this.controller = controller;
@@ -93,7 +96,7 @@ public abstract class RecipeThread {
         return true;
     }
 
-    private boolean requestStart(ServerLevel level, cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.ResourceDomain domain,
+    private boolean requestStart(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
                                  ActiveMachineRecipe next, RecipeCraftingContext nextContext, long structureVersion) {
         long startToken = ++nextStartToken;
         startPending = true;
@@ -197,7 +200,7 @@ requested -> {
         }
     }
 
-    private void requestTick(ServerLevel level, cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.ResourceDomain domain,
+    private void requestTick(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
                               ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext, long structureVersion) {
         int gameTime = (int) level.getGameTime();
         tickPending = true;
@@ -238,7 +241,7 @@ requested -> {
         ));
     }
 
-    private void requestFinish(ServerLevel level, cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.ResourceDomain domain,
+    private void requestFinish(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
                                 ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext, long structureVersion, int gameTime) {
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.FinishRequest(
                 domain,
@@ -261,7 +264,7 @@ requested -> {
         ));
     }
 
-    private void requestFinishIfReady(ServerLevel level, cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.ResourceDomain domain,
+    private void requestFinishIfReady(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
                                       ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext, long structureVersion) {
         int gameTime = (int) level.getGameTime();
         if (!recipe.shouldRetryFinish(gameTime)) {
@@ -274,7 +277,7 @@ requested -> {
     }
 
     private boolean isActive(ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext,
-                             cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.ResourceDomain domain) {
+                             StructureClaimRegistry.ResourceDomain domain) {
         return activeRecipe == recipe && context == recipeContext && controller != null
                 && domain.equals(controller.resourceDomain());
     }
@@ -316,7 +319,7 @@ requested -> {
     private static boolean missingRetainedInput(ActiveMachineRecipe recipe, RecipeCraftingContext context) {
         var failure = context.getLastRequirementFailure();
         if (failure == null || failure.requirementIndex() < 0) return false;
-        List<cn.howxu.mmcr.api.recipe.requirement.MachineRequirement> requirements = recipe.getRecipe().runtimeRequirements();
+        List<MachineRequirement> requirements = recipe.getRecipe().runtimeRequirements();
         if (failure.requirementIndex() >= requirements.size()) return false;
         return requirements.get(failure.requirementIndex()) instanceof ItemRequirement item
                 && item.io() == RecipeModifier.IOType.INPUT && item.consumeChance() == 0F;
@@ -357,7 +360,7 @@ requested -> {
     public boolean isStartPending() { return startPending; }
     public int usedParallelism() { return activeRecipe == null ? 0 : activeRecipe.getParallelism(); }
 
-    private boolean isCurrentDomain(@Nullable cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry.ResourceDomain domain) {
+    private boolean isCurrentDomain(@Nullable StructureClaimRegistry.ResourceDomain domain) {
         return domain != null && controller != null && domain.equals(controller.resourceDomain());
     }
 }

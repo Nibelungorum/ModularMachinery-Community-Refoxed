@@ -21,6 +21,9 @@ import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.player.Inventory;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -116,10 +119,10 @@ class JeiPluginGuiHandlerTest {
                 });
     }
 
-    private static MachineMenuScreen screenWith(net.minecraft.resources.Identifier machineId) {
-        MachineControllerMenu menu = new MachineControllerMenu(1, new net.minecraft.world.entity.player.Inventory(null, null)) {
+    private static MachineMenuScreen screenWith(Identifier machineId) {
+        MachineControllerMenu menu = new MachineControllerMenu(1, new Inventory(null, null)) {
             @Override
-            public net.minecraft.resources.Identifier machineId() {
+            public Identifier machineId() {
                 return machineId;
             }
         };
@@ -128,7 +131,7 @@ class JeiPluginGuiHandlerTest {
             unsafeField.setAccessible(true);
             sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
             MachineMenuScreen screen = (MachineMenuScreen) unsafe.allocateInstance(MachineMenuScreen.class);
-            java.lang.reflect.Field menuField = net.minecraft.client.gui.screens.inventory.AbstractContainerScreen.class.getDeclaredField("menu");
+            java.lang.reflect.Field menuField = AbstractContainerScreen.class.getDeclaredField("menu");
             menuField.setAccessible(true);
             menuField.set(screen, menu);
             return screen;

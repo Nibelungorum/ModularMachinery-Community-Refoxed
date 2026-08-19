@@ -15,6 +15,9 @@ import com.mojang.datafixers.util.Pair;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 
+import net.minecraft.world.item.crafting.Ingredient;
+import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
+
 import java.util.List;
 
 /**
@@ -85,7 +88,7 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
         if (requirement instanceof ItemRequirement item) {
             if (item.io() == RecipeModifier.IOType.INPUT) {
                 builder = builder
-                        .add("item", item.item(), net.minecraft.world.item.crafting.Ingredient.CODEC)
+                        .add("item", item.item(), Ingredient.CODEC)
                         .add("count", ops.createInt(item.count()));
                 if (!item.components().isEmpty()) builder = builder.add("components", item.components(), DataComponentPredicateSet.CODEC);
                 if (item.consumeChance() != 1F) builder = builder.add("consume_chance", ops.createFloat(item.consumeChance()));
@@ -99,7 +102,7 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
         if (requirement instanceof FluidRequirement fluid) {
             if (fluid.io() == RecipeModifier.IOType.INPUT) {
                 return builder
-                        .add("fluid", fluid.fluid(), net.neoforged.neoforge.fluids.crafting.FluidIngredient.CODEC)
+                        .add("fluid", fluid.fluid(), FluidIngredient.CODEC)
                         .add("amount", ops.createInt(fluid.amount()))
                         .build(prefix);
             }
@@ -163,7 +166,7 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
                         .flatMap(value -> decodeItemOutputStack(ops, value, io, decodeChance(ops, input), tags));
             }
             return ops.get(input, "item")
-                    .flatMap(value -> net.minecraft.world.item.crafting.Ingredient.CODEC.parse(ops, value))
+                    .flatMap(value -> Ingredient.CODEC.parse(ops, value))
                     .flatMap(item -> ops.get(input, "count")
                             .flatMap(ops::getNumberValue)
                             .flatMap(count -> decodeComponents(ops, input).map(components -> new ItemRequirement(io, item,
@@ -180,7 +183,7 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
                         .map(stack -> new FluidRequirement(io, null, 0, stack, decodeChance(ops, input), tags));
             }
             return ops.get(input, "fluid")
-                    .flatMap(value -> net.neoforged.neoforge.fluids.crafting.FluidIngredient.CODEC.parse(ops, value))
+                    .flatMap(value -> FluidIngredient.CODEC.parse(ops, value))
                     .flatMap(fluid -> ops.get(input, "amount")
                             .flatMap(ops::getNumberValue)
                             .map(amount -> new FluidRequirement(io, fluid, amount.intValue(), FluidStack.EMPTY, tags)));

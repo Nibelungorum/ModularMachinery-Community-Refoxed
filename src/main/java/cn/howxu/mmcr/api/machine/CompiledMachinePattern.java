@@ -9,6 +9,7 @@ import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Collections;
 
 /**
  * Immutable per-machine structure data derived from a raw south-facing pattern.
@@ -126,7 +127,7 @@ public record CompiledMachinePattern(
                 for (var positionEntry : entry.getValue().entrySet()) {
                     positionCopy.put(positionEntry.getKey(), List.copyOf(positionEntry.getValue()));
                 }
-                copy.put(entry.getKey(), java.util.Collections.unmodifiableMap(positionCopy));
+                copy.put(entry.getKey(), Collections.unmodifiableMap(positionCopy));
             }
         }
         return Map.copyOf(copy);

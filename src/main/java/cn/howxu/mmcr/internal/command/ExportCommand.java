@@ -5,6 +5,8 @@ import cn.howxu.mmcr.internal.export.MultiblockExportService;
 import cn.howxu.mmcr.internal.item.MultiblockDetectorItem;
 import cn.howxu.mmcr.internal.item.MultiblockDetectorSelection;
 import cn.howxu.mmcr.registry.ModItems;
+
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -112,8 +114,8 @@ public final class ExportCommand {
 
     private static Direction controllerRoll(ServerLevel level, BlockPos controller) {
         BlockState state = level.getBlockState(controller);
-        return state.hasProperty(cn.howxu.mmcr.internal.block.MachineControllerBlock.ROLL_FACING)
-                ? state.getValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.ROLL_FACING)
+        return state.hasProperty(MachineControllerBlock.ROLL_FACING)
+                ? state.getValue(MachineControllerBlock.ROLL_FACING)
                 : Direction.SOUTH;
     }
 

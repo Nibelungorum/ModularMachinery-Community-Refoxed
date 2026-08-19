@@ -29,6 +29,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
@@ -128,7 +129,7 @@ class JeiRuntimeReloaderTest {
 
     private static RuntimeContentSnapshot snapshotWithRecipe(Identifier machineId, Identifier recipeId) {
         return new RuntimeContentSnapshot(
-                Map.of(machineId, new cn.howxu.mmcr.api.machine.MachineStructureDefinition(
+                Map.of(machineId, new MachineStructureDefinition(
                         machineId,
                         new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE))),
                         PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY)),

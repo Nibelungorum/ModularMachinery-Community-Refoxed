@@ -9,6 +9,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.function.Consumer;
 
+import java.util.Objects;
+
 /**
  * Builds and sends server-authoritative runtime content snapshots.
  *
@@ -45,7 +47,7 @@ public final class RuntimeContentSync {
     }
 
     public static void setSenderForTesting(Consumer<MinecraftServer> sender) {
-        RuntimeContentSync.sender = java.util.Objects.requireNonNull(sender);
+        RuntimeContentSync.sender = Objects.requireNonNull(sender);
     }
 
     public static void resetSenderForTesting() {

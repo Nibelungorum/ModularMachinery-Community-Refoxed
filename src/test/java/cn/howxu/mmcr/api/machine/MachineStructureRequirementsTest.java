@@ -18,6 +18,7 @@ import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Map;
 
+import java.util.ArrayList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -113,7 +114,7 @@ class MachineStructureRequirementsTest {
     }
 
     private static List<Type> publicConstructorSignatures(Class<?> type) {
-        java.util.ArrayList<Type> signatures = new java.util.ArrayList<>();
+        ArrayList<Type> signatures = new ArrayList<>();
         for (var constructor : type.getConstructors()) {
             signatures.addAll(List.of(constructor.getGenericParameterTypes()));
         }

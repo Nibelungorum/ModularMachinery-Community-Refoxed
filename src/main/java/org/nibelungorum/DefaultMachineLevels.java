@@ -13,6 +13,8 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
+import net.minecraft.world.item.ItemStack;
+
 /**
  * Built-in machine levels used to exercise the Java level API.
  *
@@ -39,7 +41,7 @@ public final class DefaultMachineLevels {
     private static void register(Identifier id, int priority, Block block, double durationMultiplier) {
         MachineLevelRegistry.registerLevel(new MachineLevel(id, THERMAL_SMELTING_COIL_TYPE, priority,
                 new BlockPredicate.OfBlockState(block.defaultBlockState()),
-                new net.minecraft.world.item.ItemStack(Holder.direct(block.asItem(), DataComponentMap.EMPTY)),
+                new ItemStack(Holder.direct(block.asItem(), DataComponentMap.EMPTY)),
                 new LevelModifier(durationMultiplier, 1D, 1D, 0, 0)));
     }
 }

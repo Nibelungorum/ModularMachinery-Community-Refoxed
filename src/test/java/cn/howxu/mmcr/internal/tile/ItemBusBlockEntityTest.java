@@ -22,6 +22,9 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 
+import java.util.TreeMap;
+
+import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ItemBusBlockEntityTest {
@@ -60,7 +63,7 @@ class ItemBusBlockEntityTest {
             setField(IOPortBlockEntity.class, bus, "autoIOConfig", new AutoIOConfig());
             setField(IOPortBlockEntity.class, bus, "autoIOCacheDirty", true);
             setField(LinkedAppearanceBlockEntity.class, bus, "appearanceBaseTexture", MMCR.id("block/basic_casing"));
-            setField(LinkedAppearanceBlockEntity.class, bus, "linkedControllers", new java.util.TreeMap<>(BlockPos::compareTo));
+            setField(LinkedAppearanceBlockEntity.class, bus, "linkedControllers", new TreeMap<>(BlockPos::compareTo));
             setField(LinkedAppearanceBlockEntity.class, bus, "controllerLinkCheckCounter", 0);
             return bus;
         } catch (ReflectiveOperationException e) {
@@ -70,7 +73,7 @@ class ItemBusBlockEntityTest {
 
     private static void save(ItemBusBlockEntity bus) {
         var output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+                HolderLookup.Provider.create(Stream.empty()));
         bus.saveAdditional(output);
     }
 

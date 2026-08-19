@@ -29,6 +29,7 @@ import java.lang.reflect.Field;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class FactorySchedulerBlockEntityTest {
@@ -81,13 +82,13 @@ class FactorySchedulerBlockEntityTest {
 
         TagValueOutput output = TagValueOutput.createWithContext(
                 ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+                HolderLookup.Provider.create(Stream.empty()));
         scheduler.saveAdditional(output);
 
         FactorySchedulerBlockEntity loaded = createScheduler();
         loaded.loadAdditional(TagValueInput.create(
                 ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(java.util.stream.Stream.empty()),
+                HolderLookup.Provider.create(Stream.empty()),
                 output.buildResult()));
 
         assertThat(loaded.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(7);
@@ -141,12 +142,12 @@ class FactorySchedulerBlockEntityTest {
 
         TagValueOutput output = TagValueOutput.createWithContext(
                 ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+                HolderLookup.Provider.create(Stream.empty()));
         scheduler.saveAdditional(output);
         FactorySchedulerBlockEntity loaded = createScheduler();
         loaded.loadAdditional(TagValueInput.create(
                 ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(java.util.stream.Stream.empty()),
+                HolderLookup.Provider.create(Stream.empty()),
                 output.buildResult()));
 
         assertThat(internalScheduler(loaded).allThreads())

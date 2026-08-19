@@ -22,6 +22,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
+import net.minecraft.world.level.block.Blocks;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MachineSoundManagerTest {
@@ -77,10 +80,10 @@ class MachineSoundManagerTest {
     @Test
     void descriptor_uses_controller_block_machine_id_when_found_machine_is_not_synced() throws Exception {
         Identifier machineId = Identifier.fromNamespaceAndPath("test", "client_synced_descriptor_machine");
-        cn.howxu.mmcr.api.machine.MachineDefinitions.clearForTesting();
-        cn.howxu.mmcr.api.machine.MachineDefinitions.register(
-                cn.howxu.mmcr.api.machine.MachineRegistration.builder(machineId).runningSound(LOOP_SOUND).build());
-        cn.howxu.mmcr.api.machine.MachineDefinitions.freezeRegistryPhase();
+        MachineDefinitions.clearForTesting();
+        MachineDefinitions.register(
+                MachineRegistration.builder(machineId).runningSound(LOOP_SOUND).build());
+        MachineDefinitions.freezeRegistryPhase();
         MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
         setField(BlockEntity.class, controller, "worldPosition", new BlockPos(4, 5, 6));
         MachineControllerBlock controllerBlock = testControllerBlock(machineId);
@@ -147,7 +150,7 @@ class MachineSoundManagerTest {
         MappedRegistry<Block> registry = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
         registry.unfreeze(true);
         try {
-            MachineControllerBlock block = new MachineControllerBlock(machineId, net.minecraft.world.level.block.Blocks.IRON_BLOCK.properties());
+            MachineControllerBlock block = new MachineControllerBlock(machineId, Blocks.IRON_BLOCK.properties());
             Registry.register(BuiltInRegistries.BLOCK, Identifier.fromNamespaceAndPath("test", machineId.getPath() + "_controller"), block);
             return block;
         } finally {

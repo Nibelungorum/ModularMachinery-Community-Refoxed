@@ -7,6 +7,8 @@ import net.minecraft.data.PackOutput;
 import net.minecraft.tags.BlockTags;
 import net.neoforged.neoforge.common.data.BlockTagsProvider;
 
+import net.minecraft.world.level.block.Block;
+
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -21,6 +23,6 @@ public final class ModBlockTags extends BlockTagsProvider {
 
     @Override
     protected void addTags(HolderLookup.Provider provider) {
-        tag(BlockTags.MINEABLE_WITH_PICKAXE).add(ModBlocks.BLOCKS.values().stream().map(holder -> holder.get()).toArray(net.minecraft.world.level.block.Block[]::new));
+        tag(BlockTags.MINEABLE_WITH_PICKAXE).add(ModBlocks.BLOCKS.values().stream().map(holder -> holder.get()).toArray(Block[]::new));
     }
 }

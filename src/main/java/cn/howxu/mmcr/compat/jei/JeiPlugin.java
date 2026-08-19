@@ -19,6 +19,8 @@ import mezz.jei.api.runtime.IJeiRuntime;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
+import net.minecraft.client.renderer.Rect2i;
+
 import java.util.List;
 import java.util.Collection;
 import java.util.Set;
@@ -97,9 +99,9 @@ public final class JeiPlugin implements IModPlugin {
                 if (machineId == null) return List.of();
                 ItemStack controller = new ItemStack(ModBlocks.controllerFor(machineId).get());
                 return List.of(new IGuiClickableArea() {
-                    private final net.minecraft.client.renderer.Rect2i area = new net.minecraft.client.renderer.Rect2i(8, 24, 160, 24);
+                    private final Rect2i area = new Rect2i(8, 24, 160, 24);
 
-                    @Override public net.minecraft.client.renderer.Rect2i getArea() { return area; }
+                    @Override public Rect2i getArea() { return area; }
 
                     @Override
                     public void onClick(mezz.jei.api.recipe.IFocusFactory focusFactory, mezz.jei.api.runtime.IRecipesGui recipesGui) {

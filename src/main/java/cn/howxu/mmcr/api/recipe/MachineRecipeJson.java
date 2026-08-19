@@ -7,13 +7,19 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
+
+import com.mojang.serialization.DynamicOps;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.fluids.FluidStack;
 
+import net.minecraft.world.item.ItemStack;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.math.BigDecimal;
 import java.util.function.Predicate;
 
@@ -49,19 +55,19 @@ public final class MachineRecipeJson {
         int energyPerTick = intField(id, object, "energy_per_tick", false, 0);
         if (energyPerTick < 0) fail(id, "energy_per_tick", "must be >= 0");
         if (energyPerTick > 0) {
-            var withEnergy = new java.util.ArrayList<>(inputs);
+            var withEnergy = new ArrayList<>(inputs);
             withEnergy.add(new MachineIngredient.EnergyIngredient(energyPerTick));
             inputs = List.copyOf(withEnergy);
         }
 
-        List<net.minecraft.world.item.ItemStack> outputs = parseList(id, object, "outputs",
-                net.minecraft.world.item.ItemStack.CODEC, ops);
+        List<ItemStack> outputs = parseList(id, object, "outputs",
+                ItemStack.CODEC, ops);
         List<FluidStack> fluidOutputs = parseList(id, object, "fluid_outputs", FluidStack.CODEC, ops);
         List<RecipeModifier> modifiers = parseList(id, object, "modifiers", RecipeModifier.CODEC, ops);
         List<MachineRequirement> requirements = parseList(id, object, "requirements", MachineRequirement.CODEC, ops);
         if (!object.has("requirements")) requirements = List.of();
         List<LevelRequirement> levels = parseList(id, object, "level_requirements", LevelRequirement.CODEC, ops);
-        Set<Identifier> hosts = new java.util.LinkedHashSet<>(parseList(id, object, "required_host_ids", Identifier.CODEC, ops));
+        Set<Identifier> hosts = new LinkedHashSet<>(parseList(id, object, "required_host_ids", Identifier.CODEC, ops));
         int maxThreads = intField(id, object, "max_threads", false, 1);
         if (maxThreads < 0) fail(id, "max_threads", "must be >= 0");
 
@@ -80,7 +86,7 @@ public final class MachineRecipeJson {
     }
 
     public static MachineRecipe normalize(Identifier id, Identifier machineId, int tickTime,
-                                          List<MachineIngredient> inputs, List<net.minecraft.world.item.ItemStack> outputs,
+                                          List<MachineIngredient> inputs, List<ItemStack> outputs,
                                           List<RecipeModifier> modifiers, int priority, int maxThreads,
                                           boolean cancelIfPerTickFails, List<FluidStack> fluidOutputs,
                                           List<MachineRequirement> requirements, boolean parallelized,
@@ -164,11 +170,11 @@ public final class MachineRecipeJson {
     }
 
     private static <T> List<T> parseList(Identifier id, JsonObject object, String field, Codec<T> codec,
-                                        com.mojang.serialization.DynamicOps<JsonElement> ops) {
+                                        DynamicOps<JsonElement> ops) {
         if (!object.has(field)) return List.of();
         try {
             if (!object.get(field).isJsonArray()) fail(id, field, "must be an array", new IllegalArgumentException("expected array"));
-            var values = new java.util.ArrayList<T>();
+            var values = new ArrayList<T>();
             var array = object.getAsJsonArray(field);
             for (int index = 0; index < array.size(); index++) {
                 int elementIndex = index;

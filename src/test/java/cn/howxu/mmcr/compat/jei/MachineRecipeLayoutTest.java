@@ -17,6 +17,9 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import java.util.Set;
+
+import java.util.stream.IntStream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.groups.Tuple.tuple;
 
@@ -73,7 +76,7 @@ class MachineRecipeLayoutTest {
                 MMCR.id("jei_layout_wrap"),
                 MMCR.id("large_machine"),
                 200,
-                java.util.stream.IntStream.range(0, 22)
+                IntStream.range(0, 22)
                         .<MachineIngredient>mapToObj(index -> new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1))
                         .toList(),
                 java.util.List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)),
@@ -100,7 +103,7 @@ class MachineRecipeLayoutTest {
                 MMCR.id("jei_layout_input_overflow_tooltip"),
                 MMCR.id("large_machine"),
                 200,
-                java.util.stream.IntStream.range(0, 25)
+                IntStream.range(0, 25)
                         .<MachineIngredient>mapToObj(index -> new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1))
                         .toList(),
                 java.util.List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)),
@@ -130,7 +133,7 @@ class MachineRecipeLayoutTest {
                 0,
                 1,
                 true,
-                java.util.stream.IntStream.range(0, 22)
+                IntStream.range(0, 22)
                         .mapToObj(index -> new FluidStack(Fluids.WATER.builtInRegistryHolder(), 125))
                         .toList()
         );
@@ -214,11 +217,11 @@ class MachineRecipeLayoutTest {
     void metadataRowsReserveHostRequirementBeforeDurationAndStayInsideRecipeHeight() {
         MachineRecipe recipe = new MachineRecipe(
                 MMCR.id("jei_host_layout"), MMCR.id("hosted_module"), 100,
-                java.util.stream.IntStream.range(0, 22)
+                IntStream.range(0, 22)
                         .<MachineIngredient>mapToObj(index -> new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1))
                         .toList(),
                 List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)),
-                List.of(), 0, 1, false, List.of(), List.of(), false, List.of(), java.util.Set.of(MMCR.id("host_a")));
+                List.of(), 0, 1, false, List.of(), List.of(), false, List.of(), Set.of(MMCR.id("host_a")));
 
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(MachineRecipeDisplay.from(recipe), 4);
 

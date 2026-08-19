@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import java.util.stream.Collectors;
+
 /**
  * Immutable block-state snapshot used by the client-side structure preview.
  *
@@ -34,7 +36,7 @@ public final class StructurePreviewSchema {
 
     public StructurePreviewSchema(Identifier machineId, Map<BlockPos, BlockState> states,
             Map<BlockPos, Identifier> levelSlots, Map<BlockPos, List<ItemStack>> candidates) {
-        this(machineId, states, levelSlots, candidates.entrySet().stream().collect(java.util.stream.Collectors.toMap(
+        this(machineId, states, levelSlots, candidates.entrySet().stream().collect(Collectors.toMap(
                 Map.Entry::getKey, entry -> entry.getValue().stream().map(stack -> new Candidate(stack, false)).toList(),
                 (left, right) -> left, LinkedHashMap::new)), true);
     }

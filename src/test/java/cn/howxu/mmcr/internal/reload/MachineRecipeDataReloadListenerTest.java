@@ -18,6 +18,11 @@ import java.lang.reflect.Proxy;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import java.io.IOException;
+import java.util.List;
+
+import java.nio.charset.StandardCharsets;
+import net.minecraft.core.HolderLookup;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -26,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class MachineRecipeDataReloadListenerTest {
 
-    private static net.minecraft.core.HolderLookup.Provider registries;
+    private static HolderLookup.Provider registries;
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -70,7 +75,7 @@ class MachineRecipeDataReloadListenerTest {
     void applyingSnapshotPublishesDataPackLayerToRecipeRegistry() {
         var id = Identifier.parse("mmcr_test:published_recipe");
         var recipe = new MachineRecipe(id, Identifier.parse("mmcr:alloy_furnace"), 1,
-                java.util.List.of(), java.util.List.of());
+                List.of(), List.of());
         var listener = new MachineRecipeDataReloadListener(registries);
 
         listener.applySnapshot(Map.of(id, recipe));
@@ -84,7 +89,7 @@ class MachineRecipeDataReloadListenerTest {
     void serverReloadHookAppliesSnapshotAndRunsSyncAfterPublishingDataPackLayer() {
         var id = Identifier.parse("mmcr_test:published_sync_recipe");
         var recipe = new MachineRecipe(id, Identifier.parse("mmcr:alloy_furnace"), 1,
-                java.util.List.of(), java.util.List.of());
+                List.of(), List.of());
         var listener = new MachineRecipeDataReloadListener(registries);
         AtomicBoolean synced = new AtomicBoolean();
 
@@ -130,12 +135,12 @@ class MachineRecipeDataReloadListenerTest {
                 (proxy, method, arguments) -> method.getName().equals("listResources") ? resources : null);
     }
 
-    private static Resource resourceFromTestData() throws java.io.IOException {
+    private static Resource resourceFromTestData() throws IOException {
         InputStream input = MachineRecipeDataReloadListenerTest.class.getClassLoader()
                 .getResourceAsStream("data/mmcr_test/recipes/datapack_machine_recipe.json");
         assertThat(input).isNotNull();
         try (input) {
-            return resource(new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+            return resource(new String(input.readAllBytes(), StandardCharsets.UTF_8));
         }
     }
 
@@ -143,7 +148,7 @@ class MachineRecipeDataReloadListenerTest {
         PackResources pack = (PackResources) Proxy.newProxyInstance(
                 MachineRecipeDataReloadListenerTest.class.getClassLoader(), new Class<?>[]{PackResources.class},
                 (proxy, method, arguments) -> null);
-        return new Resource(pack, () -> new ByteArrayInputStream(json.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        return new Resource(pack, () -> new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8)));
     }
 
     private static String recipeJson() {
@@ -152,6 +157,6 @@ class MachineRecipeDataReloadListenerTest {
 
     private static MachineRecipe recipe() {
         return new MachineRecipe(Identifier.parse("mmcr_test:placeholder"), Identifier.parse("mmcr:alloy_furnace"), 1,
-                java.util.List.of(), java.util.List.of());
+                List.of(), List.of());
     }
 }

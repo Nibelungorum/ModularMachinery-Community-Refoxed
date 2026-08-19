@@ -14,13 +14,21 @@ import net.neoforged.neoforge.network.connection.ConnectionType;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.List;
+
+import cn.howxu.mmcr.registry.ModUIs;
+import cn.howxu.mmcr.test.TestBootstrap;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import net.minecraft.network.FriendlyByteBuf;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class FactoryControllerMenuTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
-        cn.howxu.mmcr.test.TestBootstrap.bootstrap();
-        bind(cn.howxu.mmcr.registry.ModUIs.FACTORY_CONTROLLER,
+        TestBootstrap.bootstrap();
+        bind(ModUIs.FACTORY_CONTROLLER,
                 new MenuType<>(FactoryControllerMenu::clientOpen, FeatureFlags.VANILLA_SET));
     }
 
@@ -47,7 +55,7 @@ class FactoryControllerMenuTest {
     void current_parallelism_uses_the_selected_active_thread() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
         menu.applySnapshot(new FactoryControllerSnapshot(BlockPos.ZERO, true, false, 2, 2, 32, 16,
-                "Factory", 0, java.util.List.of(
+                "Factory", 0, List.of(
                 new FactoryRecipeScheduler.ThreadSnapshot(0, true, false, true, "mmcr:first", 4, 20, 16),
                 new FactoryRecipeScheduler.ThreadSnapshot(1, false, false, true, "mmcr:second", 4, 20, 8))));
 
@@ -61,7 +69,7 @@ class FactoryControllerMenuTest {
     void current_parallelism_is_zero_for_selected_idle_thread() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
         menu.applySnapshot(new FactoryControllerSnapshot(BlockPos.ZERO, true, false, 1, 2, 16, 16,
-                "Factory", 0, java.util.List.of(
+                "Factory", 0, List.of(
                 new FactoryRecipeScheduler.ThreadSnapshot(0, true, false, true, "mmcr:first", 4, 20, 16),
                 new FactoryRecipeScheduler.ThreadSnapshot(1, false, false, false, "", 0, 0, 1))));
 
@@ -75,7 +83,7 @@ class FactoryControllerMenuTest {
     void selected_thread_exposes_only_its_own_recipe_lock() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
         menu.applySnapshot(new FactoryControllerSnapshot(BlockPos.ZERO, true, false, 0, 2, 0, 1,
-                "Factory", 0, java.util.List.of(
+                "Factory", 0, List.of(
                 lockedSnapshot(0, false, "mmcr:first"),
                 lockedSnapshot(1, true, "mmcr:second"))));
 
@@ -101,8 +109,8 @@ class FactoryControllerMenuTest {
     @Test
     void payload_round_trip_preserves_thread_recipe_lock() {
         FactoryControllerSnapshot snapshot = new FactoryControllerSnapshot(BlockPos.ZERO, true, false, 0, 1, 0, 1,
-                "Factory", 0, java.util.List.of(lockedSnapshot(0, true, "mmcr:locked_recipe")));
-        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.buffer(),
+                "Factory", 0, List.of(lockedSnapshot(0, true, "mmcr:locked_recipe")));
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(),
                 RegistryAccess.EMPTY, ConnectionType.NEOFORGE);
 
         PktFactoryControllerStatePayload.STREAM_CODEC.encode(buffer, new PktFactoryControllerStatePayload(snapshot));
@@ -126,7 +134,7 @@ class FactoryControllerMenuTest {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
         menu.applySnapshot(new FactoryControllerSnapshot(BlockPos.ZERO, true, true, 1, 1, 1, 1,
                 "Factory", 0, "gui.mmcr.controller.failure.missing_input",
-                java.util.List.of(new FactoryRecipeScheduler.ThreadSnapshot(0, true, false, true, "mmcr:first", 4, 20, 1))));
+                List.of(new FactoryRecipeScheduler.ThreadSnapshot(0, true, false, true, "mmcr:first", 4, 20, 1))));
 
         assertThat(menu.lastFailureUnloc()).isEqualTo("gui.mmcr.controller.failure.missing_input");
         assertThat(menu.selectedThread().tick()).isEqualTo(4);
@@ -160,7 +168,7 @@ class FactoryControllerMenuTest {
 
     private static FactoryControllerSnapshot snapshot(int... indexes) {
         return new FactoryControllerSnapshot(BlockPos.ZERO, true, false, 0, indexes.length, 0, 1,
-                java.util.Arrays.stream(indexes).mapToObj(index -> new FactoryRecipeScheduler.ThreadSnapshot(
+                Arrays.stream(indexes).mapToObj(index -> new FactoryRecipeScheduler.ThreadSnapshot(
                         index, index == 0, false, false, "", 0, 0, 1)).toList());
     }
 
@@ -169,9 +177,9 @@ class FactoryControllerMenuTest {
                 "", 0, 0, 1, "", locked, locked ? recipeId : "");
     }
 
-    private static net.minecraft.network.FriendlyByteBuf bufferAt(BlockPos pos) {
-        io.netty.buffer.ByteBuf raw = io.netty.buffer.Unpooled.buffer();
-        net.minecraft.network.FriendlyByteBuf buffer = new net.minecraft.network.FriendlyByteBuf(raw);
+    private static FriendlyByteBuf bufferAt(BlockPos pos) {
+        ByteBuf raw = Unpooled.buffer();
+        FriendlyByteBuf buffer = new FriendlyByteBuf(raw);
         buffer.writeBlockPos(pos);
         return buffer;
     }
