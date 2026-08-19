@@ -46,8 +46,13 @@ public final class MachineDefinitions {
     }
 
     public static void freezeRegistryPhase() {
-        MachineRoleValidator.validate(STATIC_REGISTRATIONS.values(), STATIC_REGISTRATIONS::get);
+        validateRegistryPhase();
         registryPhaseOpen = false;
+    }
+
+    /** Validate the current declarations without closing or mutating the phase. */
+    public static void validateRegistryPhase() {
+        MachineRoleValidator.validate(STATIC_REGISTRATIONS.values(), STATIC_REGISTRATIONS::get);
     }
 
     public static boolean isRegistryPhaseOpen() {

@@ -19,6 +19,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -97,6 +99,8 @@ class PublicApiLifecycleTest {
         assertThatThrownBy(PublicApiBootstrap::freezeAndInstall)
                 .isInstanceOf(ApiRegistrationException.class)
                 .hasMessageContaining(unknown.toString());
+        assertThat(MachineApi.isRegistrationOpen()).isTrue();
+        MachineApi.registerMachine(machine("after_validation_failure"));
 
         PublicApiBootstrap.clearForTesting();
         MachineDefinitions.clearForTesting();
@@ -108,6 +112,14 @@ class PublicApiLifecycleTest {
         assertThatThrownBy(() -> RecipeApi.registerRecipe(recipe("after_recipe", unknown)))
                 .isInstanceOf(ApiRegistrationException.class)
                 .hasMessageContaining("after_recipe");
+    }
+
+    @Test
+    void public_api_classes_do_not_embed_internal_bootstrap_dependency() throws IOException {
+        for (Class<?> apiClass : new Class<?>[]{MachineApi.class, RecipeApi.class}) {
+            String bytecode = new String(apiClass.getResourceAsStream(apiClass.getSimpleName() + ".class").readAllBytes());
+            assertThat(bytecode).doesNotContain("cn/howxu/mmcr/internal/api/PublicApiBootstrap");
+        }
     }
 
     private static MachineDefinition machine(String path) {

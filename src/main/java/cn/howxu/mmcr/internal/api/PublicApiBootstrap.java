@@ -1,7 +1,9 @@
 package cn.howxu.mmcr.internal.api;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRoleValidator;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
+import cn.howxu.mmcr.api.publicapi.ApiRuntime;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
@@ -22,7 +24,25 @@ public final class PublicApiBootstrap {
     }
 
     public static synchronized void begin() {
-        if (state == State.BEFORE_BEGIN) state = State.OPEN;
+        if (state == State.BEFORE_BEGIN) {
+            ApiRuntime.install(new ApiRuntime.Hook() {
+                @Override
+                public void registerMachine(MachineDefinition definition) {
+                    PublicApiBootstrap.registerMachine(definition);
+                }
+
+                @Override
+                public void registerRecipe(MachineRecipeDefinition definition) {
+                    PublicApiBootstrap.registerRecipe(definition);
+                }
+
+                @Override
+                public boolean isRegistrationOpen() {
+                    return PublicApiBootstrap.isRegistrationOpen();
+                }
+            });
+            state = State.OPEN;
+        }
     }
 
     public static synchronized boolean isRegistrationOpen() {
@@ -50,18 +70,35 @@ public final class PublicApiBootstrap {
         if (state == State.BEFORE_BEGIN) {
             throw new ApiRegistrationException("Public API freeze rejected: lifecycle is before begin");
         }
-        MachineDefinitions.bootstrapBuiltins();
+        Map<Identifier, cn.howxu.mmcr.api.machine.MachineRegistration> machines = new LinkedHashMap<>();
+        Map<Identifier, cn.howxu.mmcr.api.recipe.MachineRecipe> recipes = new LinkedHashMap<>();
+        for (MachineDefinition machine : MACHINES.values()) {
+            machines.put(machine.id(), PublicMachineAdapter.toRegistration(machine));
+        }
         for (MachineRecipeDefinition recipe : RECIPES.values()) {
             if (!MACHINES.containsKey(recipe.machineId()) && !MachineDefinitions.containsStatic(recipe.machineId())) {
                 throw new ApiRegistrationException("Recipe " + recipe.id()
                         + " refers to unknown machine " + recipe.machineId() + " during freeze");
             }
+            recipes.put(recipe.id(), PublicRecipeAdapter.toRecipe(recipe));
         }
-        for (MachineDefinition machine : MACHINES.values()) {
-            PublicRegistryBridge.registerMachine(PublicMachineAdapter.toRegistration(machine));
+        Map<Identifier, cn.howxu.mmcr.api.machine.MachineRegistration> allMachines = new LinkedHashMap<>();
+        for (var machine : MachineDefinitions.allRegistrations()) {
+            allMachines.put(machine.id(), machine);
         }
-        for (MachineRecipeDefinition recipe : RECIPES.values()) {
-            PublicRegistryBridge.registerRecipe(PublicRecipeAdapter.toRecipe(recipe));
+        allMachines.putAll(machines);
+        MachineRoleValidator.validate(allMachines.values(), allMachines::get);
+        for (Identifier id : machines.keySet()) {
+            if (MachineDefinitions.containsStatic(id)) throw duplicate(id, "machine");
+        }
+        for (Identifier id : recipes.keySet()) {
+            if (RecipeRegistry.containsStatic(id)) throw duplicate(id, "recipe");
+        }
+        for (var machine : machines.values()) {
+            PublicRegistryBridge.registerMachine(machine);
+        }
+        for (var recipe : recipes.values()) {
+            PublicRegistryBridge.registerRecipe(recipe);
         }
         MachineDefinitions.freezeRegistryPhase();
         state = State.FROZEN;
@@ -72,6 +109,7 @@ public final class PublicApiBootstrap {
         MACHINES.clear();
         RECIPES.clear();
         state = State.BEFORE_BEGIN;
+        ApiRuntime.uninstall();
     }
 
     private static void requireOpen(Identifier id) {
