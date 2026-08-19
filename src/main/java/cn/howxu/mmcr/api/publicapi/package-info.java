@@ -3,7 +3,7 @@
  *
  * <p>This package is the future API JAR boundary root. Task 1 intentionally
  * publishes no callable types yet; later tasks must add only the planned public
- * types guarded by {@code PublicApiInventoryTest} and keep the API limited to
+ * types guarded by the inventory regression checks and keep the API limited to
  * startup registration.</p>
  *
  * <h2>Planned ABI allow-list</h2>
