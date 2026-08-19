@@ -18,6 +18,8 @@ import net.minecraft.world.entity.player.Inventory;
 public final class FactorySchedulerScreen extends AbstractContainerScreen<FactorySchedulerMenu> {
     private static final int IMAGE_WIDTH = 176;
     private static final int IMAGE_HEIGHT = 166;
+    private static final int BACKGROUND_TEXTURE_WIDTH = 256;
+    private static final int BACKGROUND_TEXTURE_HEIGHT = 256;
     private static final Identifier BACKGROUND = MMCR.id("textures/gui/guifactorycontroller.png");
 
     public FactorySchedulerScreen(FactorySchedulerMenu menu, Inventory inventory, Component title) {
@@ -30,7 +32,15 @@ public final class FactorySchedulerScreen extends AbstractContainerScreen<Factor
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
         super.extractBackground(graphics, mouseX, mouseY, partialTicks);
         graphics.blit(RenderPipelines.GUI_TEXTURED, BACKGROUND, leftPos, topPos, 0, 0,
-                IMAGE_WIDTH, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_HEIGHT);
+                IMAGE_WIDTH, IMAGE_HEIGHT, BACKGROUND_TEXTURE_WIDTH, BACKGROUND_TEXTURE_HEIGHT);
+    }
+
+    static int backgroundTextureWidth() {
+        return BACKGROUND_TEXTURE_WIDTH;
+    }
+
+    static int backgroundTextureHeight() {
+        return BACKGROUND_TEXTURE_HEIGHT;
     }
 
     @Override

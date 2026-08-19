@@ -67,6 +67,12 @@ class FactoryControllerScreenTest {
         assertThat(FactoryControllerScreen.selectedParallelism(menu)).isEqualTo(8);
     }
 
+    @Test
+    void scheduler_background_uses_the_full_texture_as_its_source_region() {
+        assertThat(FactorySchedulerScreen.backgroundTextureWidth()).isEqualTo(256);
+        assertThat(FactorySchedulerScreen.backgroundTextureHeight()).isEqualTo(256);
+    }
+
     private static void bind(Object deferredHolder, MenuType<FactoryControllerMenu> menuType) throws Exception {
         Class<?> type = deferredHolder.getClass();
         java.lang.reflect.Field holder = null;
