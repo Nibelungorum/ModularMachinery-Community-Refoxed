@@ -227,5 +227,12 @@ public final class PublicMachineAdapter {
         if (definition.failureAction() != cn.howxu.mmcr.api.machine.RecipeFailureActions.getDefaultAction()) {
             throw new IllegalArgumentException("MachineRegistration cannot represent failure action");
         }
+        StructureStage stage = definition.structureStages().getFirst();
+        if (stage.kind() != StructureStage.Kind.FULL
+                || !stage.pattern().equals(definition.pattern())
+                || !stage.portRequirements().equals(definition.portRequirements())
+                || !stage.portTiers().equals(definition.portTiers())) {
+            throw new IllegalArgumentException("MachineRegistration cannot represent a single structure stage");
+        }
     }
 }

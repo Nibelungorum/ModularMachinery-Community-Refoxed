@@ -322,6 +322,32 @@ class PublicMachineBuilderTest {
     }
 
     @Test
+    void registration_rejects_directly_constructed_single_stage_specific_fields() {
+        PatternDefinition basePattern = PatternBuilder.pattern()
+                .layer("F")
+                .where('F', BlockPredicate.block(Blocks.FURNACE))
+                .controller('F')
+                .build();
+        PatternDefinition stagePattern = PatternBuilder.pattern()
+                .layer("C")
+                .where('C', BlockPredicate.machineCoupler())
+                .controller('C')
+                .build();
+        StructureStage stage = new StructureStage(StructureStage.Kind.EXTENSION, stagePattern,
+                cn.howxu.mmcr.api.publicapi.machine.PortRequirements.builder().min("item_input_bus", 1).build(),
+                PortTiers.builder().anyItemInput().build(),
+                cn.howxu.mmcr.api.publicapi.machine.StructureRequirements.EMPTY);
+        MachineDefinition definition = new MachineDefinition(MMCR.id("direct_stage"), null, basePattern,
+                null, null, cn.howxu.mmcr.api.publicapi.machine.PortRequirements.none(), PortTiers.none(),
+                List.of(stage), cn.howxu.mmcr.api.publicapi.machine.StructureRequirements.EMPTY,
+                null, MachineRole.NORMAL, java.util.Set.of(), 1, false, null);
+
+        assertThatThrownBy(() -> PublicMachineAdapter.toRegistration(definition))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("single structure stage");
+    }
+
+    @Test
     void machine_builder_preserves_role_module_semantics_and_rejects_invalid_combinations() {
         Identifier moduleId = MMCR.id("processing_module");
         MachineDefinition host = MachineBuilder.machine(MMCR.id("host"))
