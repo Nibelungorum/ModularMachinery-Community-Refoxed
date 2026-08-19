@@ -15,22 +15,28 @@ import java.util.Optional;
  * @author howxu <dev@howxu.cn>
  */
 public final class BlockPredicate {
+    private final boolean machineCoupler;
     private final Block block;
     private final TagKey<Block> tag;
     private final List<BlockPredicate> alternatives;
 
-    private BlockPredicate(Block block, TagKey<Block> tag, List<BlockPredicate> alternatives) {
+    private BlockPredicate(boolean machineCoupler, Block block, TagKey<Block> tag, List<BlockPredicate> alternatives) {
+        this.machineCoupler = machineCoupler;
         this.block = block;
         this.tag = tag;
         this.alternatives = alternatives;
     }
 
     public static BlockPredicate block(Block block) {
-        return new BlockPredicate(Objects.requireNonNull(block, "block"), null, List.of());
+        return new BlockPredicate(false, Objects.requireNonNull(block, "block"), null, List.of());
     }
 
     public static BlockPredicate tag(TagKey<Block> tag) {
-        return new BlockPredicate(null, Objects.requireNonNull(tag, "tag"), List.of());
+        return new BlockPredicate(false, null, Objects.requireNonNull(tag, "tag"), List.of());
+    }
+
+    public static BlockPredicate machineCoupler() {
+        return new BlockPredicate(true, null, null, List.of());
     }
 
     public static BlockPredicate any(BlockPredicate... predicates) {
@@ -46,7 +52,11 @@ public final class BlockPredicate {
         for (BlockPredicate predicate : predicates) {
             Objects.requireNonNull(predicate, "predicate");
         }
-        return new BlockPredicate(null, null, List.copyOf(predicates));
+        return new BlockPredicate(false, null, null, List.copyOf(predicates));
+    }
+
+    public boolean isMachineCoupler() {
+        return machineCoupler;
     }
 
     public Optional<Block> block() {
@@ -65,13 +75,14 @@ public final class BlockPredicate {
     public boolean equals(Object other) {
         if (this == other) return true;
         if (!(other instanceof BlockPredicate that)) return false;
-        return Objects.equals(block, that.block)
+        return machineCoupler == that.machineCoupler
+                && Objects.equals(block, that.block)
                 && Objects.equals(tag, that.tag)
                 && alternatives.equals(that.alternatives);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(block, tag, alternatives);
+        return Objects.hash(machineCoupler, block, tag, alternatives);
     }
 }

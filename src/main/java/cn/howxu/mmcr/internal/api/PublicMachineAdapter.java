@@ -1,9 +1,31 @@
 package cn.howxu.mmcr.internal.api;
 
+import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
+import cn.howxu.mmcr.api.machine.MachineStructureStage;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
+import cn.howxu.mmcr.api.publicapi.machine.AppearanceSpec;
+import cn.howxu.mmcr.api.publicapi.machine.ControllerSpec;
+import cn.howxu.mmcr.api.publicapi.machine.FactorySpec;
+import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.PatternDefinition;
+import cn.howxu.mmcr.api.publicapi.machine.PortRequirements;
+import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
+import cn.howxu.mmcr.api.publicapi.machine.StructureRequirements;
+import cn.howxu.mmcr.api.publicapi.machine.StructureStage;
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.Identifier;
 
+import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Internal conversion boundary for public startup machine declarations.
@@ -53,8 +75,58 @@ public final class PublicMachineAdapter {
         return new cn.howxu.mmcr.api.machine.BlockArray(entries, java.util.Map.of(), symbolsByPosition);
     }
 
+    public static DynamicMachine toDynamicMachine(MachineDefinition definition) {
+        return new DynamicMachine(
+                definition.id(),
+                definition.displayNameKey(),
+                toBlockArray(definition.pattern()),
+                toControllerSpec(definition.id(), definition.controller()),
+                toAppearanceSpec(definition.appearance()),
+                toPortRequirementSpec(definition.portRequirements()),
+                toPortTierRequirementSpec(definition.portTiers()),
+                List.of(),
+                Map.of(),
+                definition.maxParallelism(),
+                definition.parallelizable(),
+                definition.factory().hasFactory(),
+                definition.factory().threadLimit(),
+                toFactoryThreads(definition.factory()),
+                definition.role(),
+                definition.acceptedModuleIds(),
+                toStructureStages(definition),
+                definition.failureAction());
+    }
+
+    public static MachineRegistration toRegistration(MachineDefinition definition) {
+        MachineRegistration.Builder builder = MachineRegistration.builder(definition.id())
+                .displayNameKey(definition.displayNameKey())
+                .controllerSpec(toControllerSpec(definition.id(), definition.controller()))
+                .appearance(toAppearanceSpec(definition.appearance()))
+                .allowParallelism(definition.parallelizable())
+                .maxParallelAmount(definition.maxParallelism())
+                .pattern(toBlockArray(definition.pattern()));
+        if (definition.role() == cn.howxu.mmcr.api.machine.MachineRole.MODULE) builder.module();
+        if (definition.role() == cn.howxu.mmcr.api.machine.MachineRole.HOST) {
+            definition.acceptedModuleIds().forEach(builder::host);
+        }
+        return builder.build();
+    }
+
+    public static MachineStructureDefinition toStructureDefinition(MachineDefinition definition) {
+        return new MachineStructureDefinition(definition.id(), definition.structureStages().stream()
+                .map(PublicMachineAdapter::toDeclaration)
+                .toList());
+    }
+
+    public static MachineStructureDefinition.Declaration toDeclaration(StructureStage stage) {
+        return new MachineStructureDefinition.Declaration(toDeclarationKind(stage.kind()), toBlockArray(stage.pattern()),
+                toPortRequirementSpec(stage.portRequirements()), toPortTierRequirementSpec(stage.portTiers()),
+                List.of(), toStructureRequirements(stage.requirements()));
+    }
+
     private static cn.howxu.mmcr.api.machine.BlockPredicate toBlockPredicate(
             cn.howxu.mmcr.api.publicapi.machine.BlockPredicate predicate) {
+        if (predicate.isMachineCoupler()) return cn.howxu.mmcr.api.machine.BlockPredicate.machineCoupler();
         return predicate.block()
                 .<cn.howxu.mmcr.api.machine.BlockPredicate>map(cn.howxu.mmcr.api.machine.BlockPredicate.OfBlock::new)
                 .or(() -> predicate.tag().map(cn.howxu.mmcr.api.machine.BlockPredicate.OfTag::new))
@@ -62,5 +134,87 @@ public final class PublicMachineAdapter {
                         predicate.alternatives().stream()
                                 .map(PublicMachineAdapter::toBlockPredicate)
                                 .toList()));
+    }
+
+    private static MachineControllerSpec toControllerSpec(Identifier machineId, ControllerSpec spec) {
+        MachineControllerSpec defaults = MachineControllerSpec.defaultsFor(machineId);
+        Identifier id = spec.id() != null ? spec.id() : defaults.id();
+        Identifier front = spec.frontTexture() != null ? spec.frontTexture() : defaults.frontTexture();
+        Identifier side = spec.sideTexture() != null ? spec.sideTexture() : defaults.sideTexture();
+        Identifier top = spec.topTexture() != null ? spec.topTexture() : defaults.topTexture();
+        Identifier bottom = spec.bottomTexture() != null ? spec.bottomTexture() : defaults.bottomTexture();
+        return new MachineControllerSpec(id, front, side, top, bottom, spec.allowVerticalFacing(),
+                spec.fullyRotationallySymmetric(), spec.requireVerticalFacing(), spec.tooltip());
+    }
+
+    private static MachineAppearanceSpec toAppearanceSpec(AppearanceSpec spec) {
+        MachineAppearanceSpec base = spec.machineBasicBlock() == null
+                ? MachineAppearanceSpec.defaults()
+                : MachineAppearanceSpec.fromBasicBlock(spec.machineBasicBlock());
+        return new MachineAppearanceSpec(
+                base.machineBasicBlock(),
+                spec.controllerBaseTexture() != null ? spec.controllerBaseTexture() : base.controllerBaseTexture(),
+                spec.formedPortBaseTexture() != null ? spec.formedPortBaseTexture() : base.formedPortBaseTexture());
+    }
+
+    private static PortRequirementSpec toPortRequirementSpec(PortRequirements requirements) {
+        if (requirements.requirements().isEmpty()) return PortRequirementSpec.none();
+        PortRequirementSpec.Builder builder = PortRequirementSpec.builder();
+        requirements.requirements().forEach((portId, range) -> {
+            if (range.max().isPresent()) builder.range(portId, range.min(), range.max().getAsInt());
+            else builder.min(portId, range.min());
+        });
+        return builder.build();
+    }
+
+    private static PortTierRequirementSpec toPortTierRequirementSpec(PortTiers requirements) {
+        if (requirements.requirements().isEmpty()) return PortTierRequirementSpec.none();
+        return new PortTierRequirementSpec(requirements.requirements().stream()
+                .map(requirement -> new PortTierRequirementSpec.Requirement(
+                        switch (requirement.category()) {
+                            case ITEM -> PortTierRequirementSpec.PortCategory.ITEM;
+                            case FLUID -> PortTierRequirementSpec.PortCategory.FLUID;
+                            case ENERGY -> PortTierRequirementSpec.PortCategory.ENERGY;
+                        },
+                        requirement.ioType(),
+                        requirement.minTier(),
+                        requirement.minTierId()))
+                .toList());
+    }
+
+    private static MachineStructureRequirements toStructureRequirements(StructureRequirements requirements) {
+        MachineStructureRequirements.Builder builder = MachineStructureRequirements.builder();
+        requirements.levelSlots().forEach(builder::levelSlot);
+        requirements.modifierReplacements().forEach((symbol, replacements) -> replacements.forEach(replacement ->
+                builder.modifier(symbol, new SingleBlockModifierReplacement(replacement.modifierName(),
+                        toBlockPredicate(replacement.replacement()), replacement.modifiers(), replacement.descriptiveStack()))));
+        return builder.build();
+    }
+
+    private static List<FactoryThreadSpec> toFactoryThreads(FactorySpec factory) {
+        return factory.threads().stream()
+                .map(thread -> new FactoryThreadSpec(thread.name(), thread.recipeIds()))
+                .toList();
+    }
+
+    private static List<MachineStructureStage> toStructureStages(MachineDefinition definition) {
+        return definition.structureStages().stream()
+                .map(stage -> MachineStructureStage.withCompiledRequirements(stageNumber(definition, stage),
+                        toDeclarationKind(stage.kind()),
+                        toBlockArray(stage.pattern()),
+                        toPortRequirementSpec(stage.portRequirements()), toPortTierRequirementSpec(stage.portTiers()),
+                        List.of(), toStructureRequirements(stage.requirements()), Map.of(), Map.of()))
+                .toList();
+    }
+
+    private static MachineStructureDefinition.Declaration.Kind toDeclarationKind(StructureStage.Kind kind) {
+        return switch (kind) {
+            case FULL -> MachineStructureDefinition.Declaration.Kind.FULL;
+            case EXTENSION -> MachineStructureDefinition.Declaration.Kind.EXTENSION;
+        };
+    }
+
+    private static int stageNumber(MachineDefinition definition, StructureStage stage) {
+        return definition.structureStages().indexOf(stage) + 1;
     }
 }

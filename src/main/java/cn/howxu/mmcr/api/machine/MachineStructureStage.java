@@ -43,7 +43,7 @@ public final class MachineStructureStage {
                 dynamicPatterns, requirements, modifierReplacements, levelSlots);
     }
 
-    static MachineStructureStage withCompiledRequirements(int number, Declaration.Kind kind, BlockArray pattern,
+    public static MachineStructureStage withCompiledRequirements(int number, Declaration.Kind kind, BlockArray pattern,
             PortRequirementSpec portRequirements, PortTierRequirementSpec portTierRequirements,
             List<DynamicPatternSpec> dynamicPatterns, MachineStructureRequirements requirements,
             Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
