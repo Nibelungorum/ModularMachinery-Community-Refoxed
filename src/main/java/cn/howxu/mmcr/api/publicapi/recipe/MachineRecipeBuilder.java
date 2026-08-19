@@ -2,11 +2,6 @@ package cn.howxu.mmcr.api.publicapi.recipe;
 
 import cn.howxu.mmcr.api.publicapi.machine.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
@@ -38,10 +33,10 @@ public final class MachineRecipeBuilder {
     private final List<ItemOutput> itemOutputs = new ArrayList<>();
     private final List<FluidOutput> fluidOutputs = new ArrayList<>();
     private final List<EnergyInput> energyOutputs = new ArrayList<>();
-    private final List<Object> requirements = new ArrayList<>();
-    private final List<RecipeModifier> modifiers = new ArrayList<>();
+    private final List<RecipeRequirement> requirements = new ArrayList<>();
+    private final List<RecipeModifierValue> modifiers = new ArrayList<>();
     private final List<LevelRequirement> levelRequirements = new ArrayList<>();
-    private final List<Identifier> requiredHostIds = new ArrayList<>();
+    private final List<RequiredHost> requiredHosts = new ArrayList<>();
 
     private MachineRecipeBuilder(Identifier id, Identifier machineId) {
         this.id = id;
@@ -80,35 +75,26 @@ public final class MachineRecipeBuilder {
     public MachineRecipeBuilder outputItem(ItemStack stack) { itemOutputs.add(new ItemOutput(stack)); return this; }
     public MachineRecipeBuilder outputChance(ItemStack stack, float chance) { itemOutputs.add(new ItemOutput(stack, chance)); return this; }
     public MachineRecipeBuilder levelRequirement(Identifier typeId, Identifier levelId) { levelRequirements.add(new LevelRequirement(typeId, levelId)); return this; }
-    public MachineRecipeBuilder requiredHost(Identifier hostId) { if (hostId == null) throw new IllegalArgumentException("hostId null"); requiredHostIds.add(hostId); return this; }
-    public MachineRecipeBuilder requirement(Object requirement) { if (requirement == null) throw new IllegalArgumentException("requirement null"); requirements.add(requirement); return this; }
-    public MachineRecipeBuilder requirement(SmartInterface requirement) { if (requirement == null) throw new IllegalArgumentException("requirement null"); requirements.add(requirement); return this; }
-    public MachineRecipeBuilder modifier(RecipeModifier modifier) { if (modifier == null) throw new IllegalArgumentException("modifier null"); modifiers.add(modifier); return this; }
+    public MachineRecipeBuilder requiredHost(Identifier hostId) { requiredHosts.add(new RequiredHost(hostId)); return this; }
+    public MachineRecipeBuilder requirement(RecipeRequirement requirement) { if (requirement == null) throw new IllegalArgumentException("requirement null"); requirements.add(requirement); return this; }
+    public MachineRecipeBuilder modifier(RecipeModifierValue modifier) { if (modifier == null) throw new IllegalArgumentException("modifier null"); modifiers.add(modifier); return this; }
 
     public MachineRecipeDefinition build() {
-        if (requirements.isEmpty()) {
-            for (ItemInput input : itemInputs) requirements.add(new ItemRequirement(RecipeModifier.IOType.INPUT,
-                    input.ingredient(), input.count(), ItemStack.EMPTY, 1F, List.of(), input.components(), input.consumeChance()));
-            for (FluidInput input : fluidInputs) requirements.add(new FluidRequirement(RecipeModifier.IOType.INPUT,
-                    input.ingredient(), input.amount(), net.neoforged.neoforge.fluids.FluidStack.EMPTY));
-            for (EnergyInput input : energyInputs) requirements.add(new EnergyRequirement(RecipeModifier.IOType.INPUT, (int) input.fePerTick()));
-            for (ItemOutput output : itemOutputs) requirements.add(cn.howxu.mmcr.api.recipe.requirement.MachineRequirement.itemOutput(output.stack(), output.chance()));
-            for (FluidOutput output : fluidOutputs) requirements.add(cn.howxu.mmcr.api.recipe.requirement.MachineRequirement.fluidOutput(output.stack(), output.chance()));
-            for (EnergyInput output : energyOutputs) requirements.add(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, (int) output.fePerTick()));
-        }
+        List<RecipeRequirement> recipeRequirements = requirements.isEmpty() ? derivedRequirements() : requirements;
         return new MachineRecipeDefinition(id, machineId, tickTime, priority, maxThreads,
                 cancelRecipeOnPerTickFailure, parallelized, allowPartialOutputs, itemInputs, fluidInputs,
-                energyInputs, itemOutputs, fluidOutputs, energyOutputs, requirements, modifiers,
-                levelRequirements, Set.copyOf(requiredHostIds));
+                energyInputs, itemOutputs, fluidOutputs, energyOutputs, recipeRequirements, modifiers,
+                levelRequirements, Set.copyOf(requiredHosts));
     }
 
-    /** Public smart-interface requirement value factory.
-     * @author howxu <dev@howxu.cn>
-     */
-    public record SmartInterface(RecipeModifier.IOType io, String interfaceType, float minValue, float maxValue) {
-        public SmartInterface { if (io == null) throw new IllegalArgumentException("io null"); }
-        public static SmartInterface input(String type, float value) { return input(type, value, value); }
-        public static SmartInterface input(String type, float min, float max) { return new SmartInterface(RecipeModifier.IOType.INPUT, type, min, max); }
-        public static SmartInterface output(String type, float value) { return new SmartInterface(RecipeModifier.IOType.OUTPUT, type, value, value); }
+    private List<RecipeRequirement> derivedRequirements() {
+        List<RecipeRequirement> derived = new ArrayList<>();
+        itemInputs.forEach(input -> derived.add(ItemRequirement.input(input)));
+        fluidInputs.forEach(input -> derived.add(FluidRequirement.input(input)));
+        energyInputs.forEach(input -> derived.add(new EnergyRequirement(RecipeIo.INPUT, input.fePerTick())));
+        itemOutputs.forEach(output -> derived.add(ItemRequirement.output(output)));
+        fluidOutputs.forEach(output -> derived.add(FluidRequirement.output(output)));
+        energyOutputs.forEach(output -> derived.add(new EnergyRequirement(RecipeIo.OUTPUT, output.fePerTick())));
+        return derived;
     }
 }

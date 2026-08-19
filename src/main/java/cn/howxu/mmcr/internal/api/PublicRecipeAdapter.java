@@ -3,6 +3,9 @@ package cn.howxu.mmcr.internal.api;
 import cn.howxu.mmcr.api.publicapi.machine.LevelRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.FluidInput;
 import cn.howxu.mmcr.api.publicapi.recipe.FluidOutput;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeModifierValue;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.ItemInput;
 import cn.howxu.mmcr.api.publicapi.recipe.ItemOutput;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
@@ -42,21 +45,40 @@ public final class PublicRecipeAdapter {
         List<ItemStack> outputs = definition.itemOutputs().stream().map(ItemOutput::stack).toList();
         List<FluidStack> fluidOutputs = definition.fluidOutputs().stream().map(FluidOutput::stack).toList();
         List<MachineRequirement> requirements = new ArrayList<>();
-        for (Object value : definition.requirements()) {
+        for (RecipeRequirement value : definition.requirements()) {
             requirements.add(toRequirement(value));
         }
         return new MachineRecipe(definition.id(), definition.machineId(), definition.tickTime(), inputs, outputs,
-                definition.modifiers(), definition.priority(), definition.maxThreads(), definition.cancelRecipeOnPerTickFailure(),
+                definition.modifiers().stream().map(PublicRecipeAdapter::toModifier).toList(), definition.priority(), definition.maxThreads(), definition.cancelRecipeOnPerTickFailure(),
                 fluidOutputs, requirements, definition.parallelized(), definition.levelRequirements().stream()
                         .map(PublicRecipeAdapter::toInternalLevel).toList(), definition.allowPartialOutputs(), definition.requiredHostIds());
     }
 
-    private static MachineRequirement toRequirement(Object value) {
-        if (value instanceof MachineRequirement requirement) return requirement;
-        if (value instanceof MachineRecipeBuilder.SmartInterface smart) {
-            return new SmartInterfaceRequirement(smart.io(), smart.interfaceType(), smart.minValue(), smart.maxValue());
+    private static MachineRequirement toRequirement(RecipeRequirement value) {
+        if (value instanceof cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement item) {
+            return new ItemRequirement(toInternalIo(item.io()), item.ingredient(), item.count(), item.stack(), item.chance(),
+                    List.of(), item.components(), item.consumeChance());
+        }
+        if (value instanceof cn.howxu.mmcr.api.publicapi.recipe.FluidRequirement fluid) {
+            return new FluidRequirement(toInternalIo(fluid.io()), fluid.ingredient(), fluid.amount(), fluid.stack(), fluid.chance(), List.of());
+        }
+        if (value instanceof cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement energy) {
+            return new EnergyRequirement(toInternalIo(energy.io()), (int) energy.fePerTick());
+        }
+        if (value instanceof cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement smart) {
+            return new SmartInterfaceRequirement(toInternalIo(smart.io()), smart.interfaceType(), smart.minValue(), smart.maxValue());
         }
         throw new IllegalArgumentException("Unsupported public recipe requirement: " + value);
+    }
+
+    private static RecipeModifier toModifier(RecipeModifierValue value) {
+        return new RecipeModifier(value.target(), toInternalIo(value.io()), value.value(),
+                value.operation() == RecipeModifierValue.Operation.ADD ? RecipeModifier.Operation.ADD : RecipeModifier.Operation.MULTIPLY,
+                value.affectsChance());
+    }
+
+    private static RecipeModifier.IOType toInternalIo(RecipeIo io) {
+        return io == RecipeIo.INPUT ? RecipeModifier.IOType.INPUT : RecipeModifier.IOType.OUTPUT;
     }
 
     private static cn.howxu.mmcr.api.recipe.LevelRequirement toInternalLevel(LevelRequirement level) {

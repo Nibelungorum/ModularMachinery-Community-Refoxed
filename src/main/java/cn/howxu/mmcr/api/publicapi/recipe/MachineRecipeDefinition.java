@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.api.publicapi.recipe;
 
 import cn.howxu.mmcr.api.publicapi.machine.LevelRequirement;
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.minecraft.resources.Identifier;
 
 import java.util.List;
@@ -25,10 +24,10 @@ public record MachineRecipeDefinition(
         List<ItemOutput> itemOutputs,
         List<FluidOutput> fluidOutputs,
         List<EnergyInput> energyOutputs,
-        List<Object> requirements,
-        List<RecipeModifier> modifiers,
+        List<RecipeRequirement> requirements,
+        List<RecipeModifierValue> modifiers,
         List<LevelRequirement> levelRequirements,
-        Set<Identifier> requiredHostIds) {
+        Set<RequiredHost> requiredHosts) {
     public MachineRecipeDefinition {
         if (id == null || machineId == null) throw new IllegalArgumentException("Recipe ids must not be null");
         if (tickTime < 1) throw new IllegalArgumentException("Recipe tick time must be >= 1");
@@ -43,6 +42,10 @@ public record MachineRecipeDefinition(
         requirements = List.copyOf(requirements == null ? List.of() : requirements);
         modifiers = List.copyOf(modifiers == null ? List.of() : modifiers);
         levelRequirements = List.copyOf(levelRequirements == null ? List.of() : levelRequirements);
-        requiredHostIds = Set.copyOf(requiredHostIds == null ? Set.of() : requiredHostIds);
+        requiredHosts = Set.copyOf(requiredHosts == null ? Set.of() : requiredHosts);
+    }
+
+    public Set<Identifier> requiredHostIds() {
+        return requiredHosts.stream().map(RequiredHost::id).collect(java.util.stream.Collectors.toUnmodifiableSet());
     }
 }
