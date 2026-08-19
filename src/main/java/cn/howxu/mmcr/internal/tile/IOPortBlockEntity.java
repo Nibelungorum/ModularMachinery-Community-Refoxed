@@ -27,6 +27,8 @@ import net.minecraft.world.level.storage.ValueOutput;
 
 import java.util.TreeMap;
 import java.util.EnumSet;
+import java.util.ArrayList;
+import java.util.List;
 
 public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity implements MachineComponentTile {
     private static final String AUTO_IO_KEY = "auto_io";
@@ -216,6 +218,34 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
     protected AutoIOTransferHandler autoIOTransferHandler() {
         return AutoIOTransferHandlers.handlerFor(this).orElse(null);
+    }
+
+    public boolean ejectContents() {
+        if (level == null || level.isClientSide() || ioType() != IOType.INPUT || isUsedByActiveRecipe()) return false;
+        AutoIOTransferHandler handler = autoIOTransferHandler();
+        if (handler == null || !handler.hasTransferableContents(this)) return false;
+        List<Direction> sides = new ArrayList<>(List.of(Direction.values()));
+        for (int index = sides.size() - 1; index > 0; index--) {
+            int swapIndex = level.getRandom().nextInt(index + 1);
+            Direction side = sides.get(index);
+            sides.set(index, sides.get(swapIndex));
+            sides.set(swapIndex, side);
+        }
+        boolean moved = false;
+        for (Direction side : sides) {
+            moved |= handler.eject(this, side);
+            if (!handler.hasTransferableContents(this)) break;
+        }
+        return moved;
+    }
+
+    protected boolean isUsedByActiveRecipe() {
+        if (level == null) return false;
+        for (BlockPos controllerPos : linkedControllerPositions()) {
+            if (level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller
+                    && controller.isPortUsedByActiveRecipe(worldPosition)) return true;
+        }
+        return false;
     }
 
     private void incrementAutoIOSuccess() {

@@ -16,4 +16,8 @@ public interface AutoIOTransferHandler {
     boolean hasAdjacentTarget(IOPortBlockEntity port, Direction side);
 
     boolean transfer(IOPortBlockEntity port, Direction side);
+
+    boolean eject(IOPortBlockEntity port, Direction side);
+
+    boolean hasTransferableContents(IOPortBlockEntity port);
 }

@@ -52,6 +52,19 @@ public final class AutoIOTransferHandlers {
             }
             return ResourceHandlerUtil.move(new ItemHandlerAdapter(internal), adjacent, resource -> true, port.autoIoTransferLimit(), null) > 0;
         }
+        @Override public boolean eject(IOPortBlockEntity port, Direction side) {
+            if (!canWork(port) || !(port instanceof ItemBusBlockEntity itemBus)) return false;
+            ResourceHandler<ItemResource> adjacent = adjacentItemHandler(port, side);
+            return adjacent != null && ResourceHandlerUtil.move(new ItemHandlerAdapter(itemBus.getItemStackHandler(side)), adjacent, resource -> true, port.autoIoTransferLimit(), null) > 0;
+        }
+        @Override public boolean hasTransferableContents(IOPortBlockEntity port) {
+            if (!(port instanceof ItemBusBlockEntity itemBus)) return false;
+            IItemHandler internal = itemBus.getItemStackHandler(null);
+            for (int slot = 0; slot < internal.getSlots(); slot++) {
+                if (!internal.getStackInSlot(slot).isEmpty()) return true;
+            }
+            return false;
+        }
     }
 
     private static final class FluidHandler implements AutoIOTransferHandler {
@@ -68,6 +81,19 @@ public final class AutoIOTransferHandlers {
             }
             return ResourceHandlerUtil.move(internal, adjacent, resource -> true, port.autoIoTransferLimit(), null) > 0;
         }
+        @Override public boolean eject(IOPortBlockEntity port, Direction side) {
+            if (!canWork(port) || !(port instanceof FluidHatchBlockEntity fluidHatch)) return false;
+            ResourceHandler<FluidResource> adjacent = adjacentFluidHandler(port, side);
+            return adjacent != null && ResourceHandlerUtil.move(fluidHatch.getResourceHandler(side), adjacent, resource -> true, port.autoIoTransferLimit(), null) > 0;
+        }
+        @Override public boolean hasTransferableContents(IOPortBlockEntity port) {
+            if (!(port instanceof FluidHatchBlockEntity fluidHatch)) return false;
+            ResourceHandler<FluidResource> internal = fluidHatch.getResourceHandler(null);
+            for (int tank = 0; tank < internal.size(); tank++) {
+                if (internal.getAmountAsLong(tank) > 0) return true;
+            }
+            return false;
+        }
     }
 
     private static final class EnergyHandler implements AutoIOTransferHandler {
@@ -83,6 +109,14 @@ public final class AutoIOTransferHandlers {
                 return EnergyHandlerUtil.move(adjacent, internal, port.autoIoTransferLimit(), null) > 0;
             }
             return EnergyHandlerUtil.move(internal, adjacent, port.autoIoTransferLimit(), null) > 0;
+        }
+        @Override public boolean eject(IOPortBlockEntity port, Direction side) {
+            if (!canWork(port) || !(port instanceof EnergyHatchBlockEntity energyHatch)) return false;
+            net.neoforged.neoforge.transfer.energy.EnergyHandler adjacent = adjacentEnergyHandler(port, side);
+            return adjacent != null && EnergyHandlerUtil.move(energyHatch.getEnergyHandler(side), adjacent, port.autoIoTransferLimit(), null) > 0;
+        }
+        @Override public boolean hasTransferableContents(IOPortBlockEntity port) {
+            return port instanceof EnergyHatchBlockEntity energyHatch && energyHatch.getEnergyHandler(null).getAmountAsLong() > 0;
         }
     }
 

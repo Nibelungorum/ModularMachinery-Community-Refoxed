@@ -366,6 +366,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     public List<ProcessingComponent> getComponents() { return List.copyOf(components); }
 
+    public boolean isPortUsedByActiveRecipe(BlockPos pos) {
+        return active != null && components.stream().anyMatch(component -> component.getPos().equals(pos));
+    }
+
     public void markRecipeDirty() {
         recipeDirty = true;
     }
