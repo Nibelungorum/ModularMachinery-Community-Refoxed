@@ -46,7 +46,6 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
         if (manager.scriptType == ScriptType.STARTUP) {
             MMCREvents.postStartup();
             MachineLevelRegistry.freezeRegistration();
-            freezeStartupRegistryPhase();
         }
     }
 
@@ -56,17 +55,12 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
         MachineDefinitions.beginRegistryPhase();
     }
 
-    private static void freezeStartupRegistryPhase() {
-        if (!MachineDefinitions.isRegistryPhaseOpen()) return;
-        PublicApiBootstrap.freezeAndInstall();
-    }
-
     static void beginStartupRegistryPhaseForTesting() {
         beginStartupRegistryPhase();
     }
 
     static void freezeStartupRegistryPhaseForTesting() {
-        freezeStartupRegistryPhase();
+        PublicApiBootstrap.freezeAndInstall();
     }
 
     private record ServerReload(KubeJSContentReloadTransaction transaction, int errorCount) {

@@ -35,6 +35,7 @@ import cn.howxu.mmcr.registry.ModRecipeTypes;
 
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
+import cn.howxu.mmcr.internal.api.PublicMachineDefinitionProviders;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -71,6 +72,8 @@ public class MMCR {
         registerDevelopmentBuiltins("org.nibelungorum.BuiltinMachines", "register");
         registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineDefinitions");
         MachineDefinitions.bootstrapBuiltins();
+        PublicMachineDefinitionProviders.registerAll();
+        PublicApiBootstrap.freezeAndInstall();
         ModDataComponents.register(modBus);
         ModBlocks.register(modBus);
         ModItems.register(modBus);

@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.publicapi.machine.PatternBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
+import cn.howxu.mmcr.internal.api.PublicMachineDefinitionProviders;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
@@ -73,6 +74,18 @@ class PublicApiLifecycleTest {
         assertThat(RecipeRegistry.getRecipe(recipe.id()).machineId()).isEqualTo(machine.id());
         assertThat(MachineApi.isRegistrationOpen()).isFalse();
         assertThat(RecipeApi.isRegistrationOpen()).isFalse();
+    }
+
+    @Test
+    void service_loaded_providers_register_before_finalization() {
+        PublicApiBootstrap.begin();
+        MachineDefinitions.beginRegistryPhase();
+
+        PublicMachineDefinitionProviders.registerAll();
+        PublicApiBootstrap.freezeAndInstall();
+
+        assertThat(MachineDefinitions.getRegistration(id("service_loaded_machine"))).isNotNull();
+        assertThat(MachineDefinitions.isRegistryPhaseOpen()).isFalse();
     }
 
     @Test
