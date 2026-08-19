@@ -2,15 +2,9 @@ package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.client.gui.MachineControllerScreen;
-import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.registry.ModBlocks;
 import mezz.jei.api.IModPlugin;
-import mezz.jei.api.gui.handlers.IGuiClickableArea;
-import mezz.jei.api.gui.handlers.IGuiContainerHandler;
 import mezz.jei.api.constants.VanillaTypes;
-import mezz.jei.api.recipe.RecipeIngredientRole;
-import mezz.jei.api.registration.IGuiHandlerRegistration;
 import mezz.jei.api.registration.IRecipeCatalystRegistration;
 import mezz.jei.api.registration.IRecipeCategoryRegistration;
 import mezz.jei.api.registration.IRecipeRegistration;
@@ -19,10 +13,7 @@ import mezz.jei.api.runtime.IJeiRuntime;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
-import net.minecraft.client.renderer.Rect2i;
-
 import java.util.List;
-import java.util.Collection;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -89,26 +80,4 @@ public final class JeiPlugin implements IModPlugin {
         });
     }
 
-    @Override
-    public void registerGuiHandlers(IGuiHandlerRegistration registration) {
-        registration.addGuiContainerHandler(MachineControllerScreen.class, new IGuiContainerHandler<>() {
-            @Override
-            public Collection<IGuiClickableArea> getGuiClickableAreas(MachineControllerScreen screen, double mouseX, double mouseY) {
-                MachineControllerMenu menu = screen.getMenu();
-                Identifier machineId = menu.machineId();
-                if (machineId == null) return List.of();
-                ItemStack controller = new ItemStack(ModBlocks.controllerFor(machineId).get());
-                return List.of(new IGuiClickableArea() {
-                    private final Rect2i area = new Rect2i(8, 24, 160, 24);
-
-                    @Override public Rect2i getArea() { return area; }
-
-                    @Override
-                    public void onClick(mezz.jei.api.recipe.IFocusFactory focusFactory, mezz.jei.api.runtime.IRecipesGui recipesGui) {
-                        recipesGui.show(focusFactory.createFocus(RecipeIngredientRole.INPUT, VanillaTypes.ITEM_STACK, controller));
-                    }
-                });
-            }
-        });
-    }
 }
