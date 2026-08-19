@@ -439,7 +439,7 @@ class PluginBindingTest {
     void startup_event_exposes_startup_declaration_api_only() {
         var event = new MMCRStartupEventJS();
 
-        assertThat(event.api()).isInstanceOf(KubeJSApi.class);
+        assertThat(event.getAPI()).isInstanceOf(KubeJSApi.class);
         assertThat(event.createMachine("mmcr:test_machine")).isInstanceOf(MachineBuilderJS.class);
         assertThat(event.createLevelType("mmcr:test_type")).isInstanceOf(LevelTypeBuilderJS.class);
         assertThat(event.createLevel("mmcr:test_level")).isInstanceOf(MachineLevelBuilderJS.class);
@@ -481,10 +481,18 @@ class PluginBindingTest {
     void server_event_exposes_server_declaration_api_only() {
         var event = new MMCRServerEventJS();
 
-        assertThat(event.api()).isInstanceOf(KubeJSApi.class);
+        assertThat(event.getAPI()).isInstanceOf(KubeJSApi.class);
         assertThat(event.createStructure("mmcr:test_structure")).isInstanceOf(MachineStructureBuilderJS.class);
         assertThat(event.getClass().getMethods()).extracting(java.lang.reflect.Method::getName)
                 .doesNotContain("createMachine", "createLevelType", "createLevel", "levelSlot", "createRecipe");
+    }
+
+    @Test
+    void mmcr_exposes_api_and_integer_values() {
+        var mmcr = new MMCRKubeJS();
+        assertThat(mmcr.getAPI()).isInstanceOf(KubeJSApi.class);
+        assertThat(mmcr.getValues().INT_MAX).isEqualTo(Integer.MAX_VALUE);
+        assertThat(mmcr.getValues().INT_MIN).isEqualTo(Integer.MIN_VALUE);
     }
 
     @Test

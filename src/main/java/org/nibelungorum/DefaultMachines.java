@@ -61,6 +61,7 @@ public final class DefaultMachines {
     private static final Identifier ECO_MATRIX_ID = MMCR.id("eco_matrix");
     private static final Identifier SPACE_ELEVATOR_ID = MMCR.id("space_elevator");
     private static final Identifier SPACE_REASSEMBLER_ID = MMCR.id("space_reassembler");
+    private static final Identifier MONSTER_FARM_ID = MMCR.id("monster_farm");
 
     private DefaultMachines() {
     }
@@ -93,7 +94,51 @@ public final class DefaultMachines {
         structures.put(ECO_MATRIX_ID, ecoMatrixStructure());
         structures.put(SPACE_ELEVATOR_ID, spaceElevatorStructure());
         structures.put(SPACE_REASSEMBLER_ID, spaceReassemblerStructure());
+        structures.put(MONSTER_FARM_ID, structureOf(monsterFarm()));
         return Map.copyOf(structures);
+    }
+
+    public static Machine monsterFarm() {
+        Block controller = ModBlocks.controllerFor(MONSTER_FARM_ID).get();
+        BlockPredicate casingOrInterfaceOrEnergy = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(Blocks.OAK_PLANKS),
+                new BlockPredicate.OfBlock(ModBlocks.SMART_INTERFACE.get()),
+                portFamily(IOType.INPUT, PortTierRequirementSpec.PortCategory.ENERGY)));
+
+        BlockArray pattern = BlockArray.builder()
+                .pattern("XXXXX", "XXXXX", "XXXXX", "XXXXX", "XXXXX")
+                .pattern("ABBBA", "B   B", "B   B", "B   B", "ABBBA")
+                .pattern("ABBBA", "B   B", "B   B", "B   B", "ABBBA")
+                .pattern("ABBBA", "B   B", "B   B", "B   B", "ABBBA")
+                .pattern("ABBBA", "B   B", "B   B", "B   B", "ABBBA")
+                .pattern("XXXXX", "XXXXX", "XXDXX", "XXXXX", "XXXXX")
+                .set('X', casingOrInterfaceOrEnergy)
+                .set('A', new BlockPredicate.OfBlock(Blocks.OAK_LOG))
+                .set('B', new BlockPredicate.OfBlock(Blocks.IRON_BARS))
+                .set('D', new BlockPredicate.OfBlock(controller))
+                .controller('D')
+                .build();
+
+        return new DynamicMachine(
+                MONSTER_FARM_ID,
+                "machine.mmcr.monster_farm",
+                pattern,
+                new MachineControllerSpec(
+                        MachineControllerSpec.defaultsFor(MONSTER_FARM_ID).id(),
+                        MachineControllerSpec.defaultsFor(MONSTER_FARM_ID).frontTexture(),
+                        MachineControllerSpec.defaultsFor(MONSTER_FARM_ID).sideTexture(),
+                        MachineControllerSpec.defaultsFor(MONSTER_FARM_ID).topTexture(),
+                        MachineControllerSpec.defaultsFor(MONSTER_FARM_ID).bottomTexture(),
+                        true,
+                        false,
+                        true),
+                MachineAppearanceSpec.defaults(),
+                PortRequirementSpec.none(),
+                PortTierRequirementSpec.builder()
+                        .minEnergyInput(EnergyHatchSize.NORMAL)
+                        .build(),
+                List.of(),
+                Map.of());
     }
 
     private static MachineStructureDefinition structureOf(Machine machine) {

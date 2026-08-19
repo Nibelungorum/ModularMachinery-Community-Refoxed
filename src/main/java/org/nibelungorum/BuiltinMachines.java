@@ -30,6 +30,7 @@ public final class BuiltinMachines {
     private static final Identifier ECO_MATRIX_ID = MMCR.id("eco_matrix");
     private static final Identifier SPACE_ELEVATOR_ID = MMCR.id("space_elevator");
     private static final Identifier SPACE_REASSEMBLER_ID = MMCR.id("space_reassembler");
+    private static final Identifier MONSTER_FARM_ID = MMCR.id("monster_farm");
 
     private BuiltinMachines() {
     }
@@ -176,6 +177,21 @@ public final class BuiltinMachines {
                 .module()
                 .pattern(couplerPattern(1))
                 .build());
+        MachineDefinitions.addBuiltinSupplier(() -> {
+            MachineControllerSpec defaults = MachineControllerSpec.defaultsFor(MONSTER_FARM_ID);
+            MachineControllerSpec controller = new MachineControllerSpec(
+                    defaults.id(),
+                    defaults.frontTexture(),
+                    defaults.sideTexture(),
+                    defaults.topTexture(),
+                    defaults.bottomTexture(),
+                    true,
+                    false,
+                    true);
+            return MachineRegistration.builder(MONSTER_FARM_ID)
+                    .controllerSpec(controller)
+                    .build();
+        });
     }
 
     private static BlockArray couplerPattern(int count) {

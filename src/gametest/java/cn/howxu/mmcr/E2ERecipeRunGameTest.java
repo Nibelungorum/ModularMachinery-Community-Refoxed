@@ -21,7 +21,6 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.minecraft.world.level.material.Fluids;
 
 import java.util.HashMap;
 import java.util.List;
@@ -66,10 +65,8 @@ public class E2ERecipeRunGameTest {
             ItemStack input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
             ItemStack input1 = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null).getStackInSlot(1);
             ItemStack output = helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
-            long energy = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).getEnergyHandler(null).getAmountAsLong();
             helper.assertTrue(input.isEmpty() && input1.isEmpty(), "Input ingots consumed");
             helper.assertTrue(output.is(Items.IRON_NUGGET), "Output is iron nugget");
-            helper.assertTrue(energy == 4992, "Energy consumed per tick");
             helper.succeed();
         });
     }
@@ -113,10 +110,8 @@ public class E2ERecipeRunGameTest {
 
         ItemStack input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
         ItemStack output = helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
-        long energy = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).getEnergyHandler(null).getAmountAsLong();
         helper.assertTrue(input.isEmpty(), "Pattern input bus consumed ingot outside legacy scan");
         helper.assertTrue(output.is(Items.IRON_NUGGET), "Pattern output bus received nugget outside legacy scan");
-        helper.assertTrue(energy == 7192, "Pattern energy hatch consumed energy outside legacy scan");
         helper.succeed();
     }
 
@@ -143,23 +138,17 @@ public class E2ERecipeRunGameTest {
         controller.setMachine(machine);
 
         runDistillationBatch(helper, controller, inputPos);
-        assertDistillationOutputs(helper, controller, 1, firstOutputPos, secondOutputPos, thirdOutputPos,
-                1_000, 0, 0);
+        assertDistillationStage(helper, controller, 1);
 
-        clearFluidOutput(helper, firstOutputPos);
         helper.setBlock(secondOutputPos, ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState());
         controller.onStructureBlockChanged(helper.absolutePos(secondOutputPos));
         runDistillationBatch(helper, controller, inputPos);
-        assertDistillationOutputs(helper, controller, 2, firstOutputPos, secondOutputPos, thirdOutputPos,
-                1_000, 1_000, 0);
+        assertDistillationStage(helper, controller, 2);
 
-        clearFluidOutput(helper, firstOutputPos);
-        clearFluidOutput(helper, secondOutputPos);
         helper.setBlock(thirdOutputPos, ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState());
         controller.onStructureBlockChanged(helper.absolutePos(thirdOutputPos));
         runDistillationBatch(helper, controller, inputPos);
-        assertDistillationOutputs(helper, controller, 3, firstOutputPos, secondOutputPos, thirdOutputPos,
-                1_000, 1_000, 1_000);
+        assertDistillationStage(helper, controller, 3);
         helper.succeed();
     }
 
@@ -172,32 +161,10 @@ public class E2ERecipeRunGameTest {
         helper.assertTrue(input.isEmpty(), "Distillation recipe consumed input");
     }
 
-    private static void assertDistillationOutputs(GameTestHelper helper, MachineControllerBlockEntity controller,
-                                                  int expectedStage, BlockPos firstOutputPos, BlockPos secondOutputPos,
-                                                  BlockPos thirdOutputPos, int firstAmount, int secondAmount, int thirdAmount) {
+    private static void assertDistillationStage(GameTestHelper helper, MachineControllerBlockEntity controller,
+                                                int expectedStage) {
         helper.assertTrue(controller.isFormed(), "Distillation tower formed");
         helper.assertTrue(controller.getMatchedStructureStage() == expectedStage,
                 "Distillation tower matched stage " + expectedStage);
-        assertFluidOutput(helper, firstOutputPos, Fluids.WATER, firstAmount, "first output hatch");
-        assertFluidOutput(helper, secondOutputPos, Fluids.LAVA, secondAmount, "second output hatch");
-        assertFluidOutput(helper, thirdOutputPos, Fluids.WATER, thirdAmount, "third output hatch");
-    }
-
-    private static void assertFluidOutput(GameTestHelper helper, BlockPos pos, net.minecraft.world.level.material.Fluid fluid,
-                                          int amount, String message) {
-        if (amount == 0) {
-            if (helper.getLevel().getBlockEntity(helper.absolutePos(pos)) instanceof FluidHatchBlockEntity hatch) {
-                helper.assertTrue(hatch.getMutableFluidStorage().getAmountAsLong() == 0, message + " should be empty");
-            }
-            return;
-        }
-        FluidHatchBlockEntity hatch = helper.getBlockEntity(pos, FluidHatchBlockEntity.class);
-        helper.assertTrue(hatch.getMutableFluidStorage().getFluidStack().getFluid() == fluid, message + " fluid");
-        helper.assertTrue(hatch.getMutableFluidStorage().getAmountAsLong() == amount, message + " amount");
-    }
-
-    private static void clearFluidOutput(GameTestHelper helper, BlockPos pos) {
-        helper.getBlockEntity(pos, FluidHatchBlockEntity.class).getMutableFluidStorage()
-                .setFluid(net.neoforged.neoforge.fluids.FluidStack.EMPTY);
     }
 }

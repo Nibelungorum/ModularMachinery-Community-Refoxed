@@ -10,7 +10,7 @@ import dev.latvian.mods.kubejs.event.KubeEvent;
 public final class MMCRServerEventJS implements KubeEvent {
     private final KubeJSApi api = new KubeJSApi();
 
-    public KubeJSApi api() {
+    public KubeJSApi getAPI() {
         return api;
     }
 

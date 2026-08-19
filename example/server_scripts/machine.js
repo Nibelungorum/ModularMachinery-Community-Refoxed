@@ -1,6 +1,6 @@
 // KubeJS recreation of the development defaults. It deliberately does not read mmcr:* definitions.
 MMCREvents.server(function(event) {
-  var api = event.api()
+  var api = event.getAPI()
   var LinkedHashMap = Java.loadClass('java.util.LinkedHashMap')
   var MachineStructureRequirements = Java.loadClass('cn.howxu.mmcr.api.machine.MachineStructureRequirements')
   var NS = 'mmcr_kubejs'
@@ -159,7 +159,7 @@ full('space_elevator', pattern([
 })
 
 ServerEvents.recipes(function(event) {
-  var api = mmcrAPI
+  var api = MMCR.getAPI()
   var NS = 'mmcr_kubejs'
   function cloneId(path) { return NS + ':kubejs_' + path }
   function json(value) {

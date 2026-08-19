@@ -13,7 +13,7 @@ import net.minecraft.resources.Identifier;
 public final class MMCRStartupEventJS implements KubeEvent {
     private final KubeJSApi api = new KubeJSApi();
 
-    public KubeJSApi api() {
+    public KubeJSApi getAPI() {
         return api;
     }
 

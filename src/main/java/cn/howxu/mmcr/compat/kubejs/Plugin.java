@@ -130,7 +130,7 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
 
     @Override
     public void registerBindings(BindingRegistry bindings) {
-        bindings.add("mmcrAPI", new KubeJSApi());
+        bindings.add("MMCR", new MMCRKubeJS());
         bindings.add("MMCREvents", new EventGroupWrapper(bindings.type(), MMCREvents.group()));
     }
 

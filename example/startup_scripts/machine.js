@@ -1,6 +1,6 @@
 // KubeJS recreation of the development defaults. It deliberately does not read mmcr:* definitions.
 MMCREvents.startup(function(event) {
-  var api = event.api()
+  var api = event.getAPI()
   var LinkedHashMap = Java.loadClass('java.util.LinkedHashMap')
   var NS = 'mmcr_kubejs'
 
