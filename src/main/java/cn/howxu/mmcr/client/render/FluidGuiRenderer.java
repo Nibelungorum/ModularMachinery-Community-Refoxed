@@ -26,6 +26,9 @@ public final class FluidGuiRenderer {
     record Tile(int x, int y, int width, int height, int maskTop, int maskRight) {
     }
 
+    record TileSource(int x, int y, int textureWidth, int textureHeight) {
+    }
+
     public static int fillHeight(long amount, long capacity, int height) {
         if (amount <= 0 || capacity <= 0 || height <= 0) {
             return 0;
@@ -59,11 +62,18 @@ public final class FluidGuiRenderer {
     public static void drawFluid(GuiGraphicsExtractor graphics, FluidStack fluid, int x, int y, int width, int height) {
         TextureAtlasSprite sprite = stillSprite(fluid);
         int color = fluidColor(fluid);
+        int atlasWidth = Math.round(sprite.contents().width() / (sprite.getU1() - sprite.getU0()));
+        int atlasHeight = Math.round(sprite.contents().height() / (sprite.getV1() - sprite.getV0()));
         for (Tile tile : tiles(x, y, width, height)) {
+            TileSource source = tileSource(sprite.getX(), sprite.getY(), atlasWidth, atlasHeight, tile);
             graphics.blit(RenderPipelines.GUI_TEXTURED, sprite.atlasLocation(),
-                    tile.x(), tile.y() + tile.maskTop, 0, tile.maskTop(),
-                    tile.width(), tile.height(), TILE_SIZE, TILE_SIZE, color);
+                    tile.x(), tile.y() + tile.maskTop(), source.x(), source.y(),
+                    tile.width(), tile.height(), source.textureWidth(), source.textureHeight(), color);
         }
+    }
+
+    static TileSource tileSource(int spriteX, int spriteY, int atlasWidth, int atlasHeight, Tile tile) {
+        return new TileSource(spriteX, spriteY + tile.maskTop(), atlasWidth, atlasHeight);
     }
 
     static List<Tile> tiles(int x, int y, int width, int height) {

@@ -1,8 +1,8 @@
 package cn.howxu.mmcr.client.render;
 
-import org.junit.jupiter.api.Test;
-
 import static org.assertj.core.api.Assertions.assertThat;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * Verifies the pure geometry helpers used by the fluid GUI renderer.
@@ -10,7 +10,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class FluidGuiRendererTest {
-
     @Test
     void fluidFillHeightUsesCeilingAndKeepsNonZeroContentVisible() {
         assertThat(FluidGuiRenderer.fillHeight(1, 8000, 61)).isEqualTo(1);
@@ -33,5 +32,17 @@ class FluidGuiRendererTest {
                 new FluidGuiRenderer.Tile(26, 22, 4, 16, 0, 12),
                 new FluidGuiRenderer.Tile(26, 6, 4, 2, 14, 12)
         );
+    }
+
+    @Test
+    void tile_source_uses_the_fluid_sprite_position_within_its_atlas() {
+        FluidGuiRenderer.Tile fullTile = new FluidGuiRenderer.Tile(0, 0, 16, 16, 0, 0);
+        FluidGuiRenderer.Tile croppedTile = new FluidGuiRenderer.Tile(0, 0, 7, 5, 11, 9);
+
+        FluidGuiRenderer.TileSource fullSource = FluidGuiRenderer.tileSource(128, 64, 1024, 512, fullTile);
+        FluidGuiRenderer.TileSource croppedSource = FluidGuiRenderer.tileSource(128, 64, 1024, 512, croppedTile);
+
+        assertThat(fullSource).isEqualTo(new FluidGuiRenderer.TileSource(128, 64, 1024, 512));
+        assertThat(croppedSource).isEqualTo(new FluidGuiRenderer.TileSource(128, 75, 1024, 512));
     }
 }
