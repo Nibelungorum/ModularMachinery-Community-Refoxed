@@ -7,7 +7,7 @@ This document separates source-derived content included in this repository from 
 | Project | Use in MMCR | License | Source |
 | --- | --- | --- | --- |
 | Modular Machinery Community Edition | Upstream project from which MMCR is derived | GPL-3.0 | [NovaEngineering-Source/ModularMachinery-Community-Edition](https://github.com/NovaEngineering-Source/ModularMachinery-Community-Edition) |
-| LowDragLib2 | Adapted structure-preview source files listed in `NOTICE` | LGPL-3.0-or-later | [Low-Drag-MC/LDLib2](https://github.com/Low-Drag-MC/LDLib2) |
+| LowDragLib2 | Adapted structure-preview and fluid GUI rendering source files listed in `NOTICE` | LGPL-3.0-or-later | [Low-Drag-MC/LDLib2](https://github.com/Low-Drag-MC/LDLib2) |
 | Applied Energistics 2 | Basis for the adapted contribution guide | LGPL-3.0-or-later | [AppliedEnergistics/Applied-Energistics-2](https://github.com/AppliedEnergistics/Applied-Energistics-2) |
 
 `NOTICE` identifies the affected files and provides the corresponding licensing information.

@@ -8,7 +8,7 @@ MMCR is distributed under the GNU General Public License version 3.0. The
 MMCE-derived portions and MMCR modifications are available from:
 https://github.com/Nibelungorum/ModularMachinery-Community-Refoxed
 
-LowDragLib2-derived structure-preview code
+LowDragLib2-derived structure-preview and fluid GUI rendering code
 
 This repository contains source code derived from and adapted from LowDragLib2
 (Low-Drag-MC and contributors):
@@ -18,7 +18,10 @@ The following files retain their GNU Lesser General Public License version 3.0
 or later (LGPL-3.0-or-later) licensing. A copy of that license is available at
 LICENSES/LGPL-3.0.txt. MMCR modified these files for Minecraft 26.1.2 and
 NeoForge 26.1.2.84; corresponding modified source is available at the paths
-below and from the MMCR source repository.
+below and from the MMCR source repository. The fluid GUI tiling and tint logic
+in FluidGuiRenderer.java is adapted from reference/ldlib2 sources
+DrawerHelperClient.java, FluidHelperClient.java, and FluidStackTexture.java,
+and was modified for Minecraft/NeoForge 26.1.2.
 
 src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewRenderTargetScope.java
 src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewSceneCamera.java
@@ -29,6 +32,7 @@ src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewScenePictureInPictureRen
 src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewSceneRenderContext.java
 src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewSceneRenderer.java
 src/main/java/cn/howxu/mmcr/client/preview/scene/PreviewSceneRenderState.java
+src/main/java/cn/howxu/mmcr/client/render/FluidGuiRenderer.java
 src/main/java/cn/howxu/mmcr/mixin/client/preview/GlBufferAccessor.java
 src/main/java/cn/howxu/mmcr/mixin/client/preview/GlCommandEncoderMixin.java
 src/main/java/cn/howxu/mmcr/mixin/client/preview/GuiGraphicsExtractorAccessor.java
