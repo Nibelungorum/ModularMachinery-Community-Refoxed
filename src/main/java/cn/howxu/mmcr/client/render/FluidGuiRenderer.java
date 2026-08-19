@@ -2,10 +2,16 @@ package cn.howxu.mmcr.client.render;
 
 import java.util.Arrays;
 import java.util.List;
+import cn.howxu.mmcr.mixin.client.preview.GuiGraphicsExtractorAccessor;
+import org.joml.Matrix3x2f;
+import com.mojang.blaze3d.textures.GpuSampler;
+import com.mojang.blaze3d.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.render.TextureSetup;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.block.FluidModel;
+import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -26,7 +32,7 @@ public final class FluidGuiRenderer {
     record Tile(int x, int y, int width, int height, int maskTop, int maskRight) {
     }
 
-    record TileSource(int x, int y, int textureWidth, int textureHeight) {
+    record Uv(float u0, float v0, float u1, float v1) {
     }
 
     public static int fillHeight(long amount, long capacity, int height) {
@@ -62,18 +68,28 @@ public final class FluidGuiRenderer {
     public static void drawFluid(GuiGraphicsExtractor graphics, FluidStack fluid, int x, int y, int width, int height) {
         TextureAtlasSprite sprite = stillSprite(fluid);
         int color = fluidColor(fluid);
-        int atlasWidth = Math.round(sprite.contents().width() / (sprite.getU1() - sprite.getU0()));
-        int atlasHeight = Math.round(sprite.contents().height() / (sprite.getV1() - sprite.getV0()));
+        AbstractTexture texture = Minecraft.getInstance().getTextureManager().getTexture(sprite.atlasLocation());
+        GpuTextureView textureView = texture.getTextureView();
+        GpuSampler sampler = texture.getSampler();
         for (Tile tile : tiles(x, y, width, height)) {
-            TileSource source = tileSource(sprite.getX(), sprite.getY(), atlasWidth, atlasHeight, tile);
-            graphics.blit(RenderPipelines.GUI_TEXTURED, sprite.atlasLocation(),
-                    tile.x(), tile.y() + tile.maskTop(), source.x(), source.y(),
-                    tile.width(), tile.height(), source.textureWidth(), source.textureHeight(), color);
+            Uv uv = tileUv(sprite.getU0(), sprite.getV0(), sprite.getU1(), sprite.getV1(), tile);
+            ((GuiGraphicsExtractorAccessor) graphics).mmcr$getGuiRenderState().addGuiElement(new FloatBlitRenderState(
+                    RenderPipelines.GUI_TEXTURED,
+                    TextureSetup.singleTexture(textureView, sampler),
+                    new Matrix3x2f(graphics.pose()),
+                    tile.x(), tile.y() + tile.maskTop(), tile.x() + tile.width(), tile.y() + tile.maskTop() + tile.height(),
+                    uv.u0(), uv.u1(), uv.v0(), uv.v1(), color, null));
         }
     }
 
-    static TileSource tileSource(int spriteX, int spriteY, int atlasWidth, int atlasHeight, Tile tile) {
-        return new TileSource(spriteX, spriteY + tile.maskTop(), atlasWidth, atlasHeight);
+    static Uv tileUv(float u0, float v0, float u1, float v1, Tile tile) {
+        float uSize = u1 - u0;
+        float vSize = v1 - v0;
+        return new Uv(
+                u0,
+                v0 + vSize * tile.maskTop() / TILE_SIZE,
+                u0 + uSize * (TILE_SIZE - tile.maskRight()) / TILE_SIZE,
+                v1);
     }
 
     static List<Tile> tiles(int x, int y, int width, int height) {

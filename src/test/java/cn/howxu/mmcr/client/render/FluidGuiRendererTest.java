@@ -35,14 +35,14 @@ class FluidGuiRendererTest {
     }
 
     @Test
-    void tile_source_uses_the_fluid_sprite_position_within_its_atlas() {
+    void tile_uvs_stay_within_the_fluid_sprite() {
         FluidGuiRenderer.Tile fullTile = new FluidGuiRenderer.Tile(0, 0, 16, 16, 0, 0);
         FluidGuiRenderer.Tile croppedTile = new FluidGuiRenderer.Tile(0, 0, 7, 5, 11, 9);
 
-        FluidGuiRenderer.TileSource fullSource = FluidGuiRenderer.tileSource(128, 64, 1024, 512, fullTile);
-        FluidGuiRenderer.TileSource croppedSource = FluidGuiRenderer.tileSource(128, 64, 1024, 512, croppedTile);
+        FluidGuiRenderer.Uv fullUv = FluidGuiRenderer.tileUv(0.25F, 0.125F, 0.265625F, 0.15625F, fullTile);
+        FluidGuiRenderer.Uv croppedUv = FluidGuiRenderer.tileUv(0.25F, 0.125F, 0.265625F, 0.15625F, croppedTile);
 
-        assertThat(fullSource).isEqualTo(new FluidGuiRenderer.TileSource(128, 64, 1024, 512));
-        assertThat(croppedSource).isEqualTo(new FluidGuiRenderer.TileSource(128, 75, 1024, 512));
+        assertThat(fullUv).isEqualTo(new FluidGuiRenderer.Uv(0.25F, 0.125F, 0.265625F, 0.15625F));
+        assertThat(croppedUv).isEqualTo(new FluidGuiRenderer.Uv(0.25F, 0.14648438F, 0.25683594F, 0.15625F));
     }
 }
