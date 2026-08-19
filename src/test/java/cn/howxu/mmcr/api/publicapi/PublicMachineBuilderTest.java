@@ -82,6 +82,9 @@ class PublicMachineBuilderTest {
                 .controller('F'))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("controller");
+        assertThatThrownBy(() -> PatternBuilder.pattern().controller('F').controller('F'))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("controller");
         assertThatThrownBy(() -> PatternBuilder.pattern().where('C', null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("predicate");

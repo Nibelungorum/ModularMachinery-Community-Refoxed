@@ -68,7 +68,7 @@ public final class PatternBuilder {
         if (symbol == ' ') {
             throw new IllegalArgumentException("Controller symbol must not be empty space");
         }
-        if (controllerSymbol != null && controllerSymbol != symbol) {
+        if (controllerSymbol != null) {
             throw new IllegalStateException("Pattern controller symbol is already set");
         }
         controllerSymbol = symbol;
