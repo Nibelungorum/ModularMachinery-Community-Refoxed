@@ -113,6 +113,21 @@ class PublicMachineBuilderTest {
     }
 
     @Test
+    void pattern_definition_rejects_direct_invalid_construction() {
+        BlockPredicate casing = BlockPredicate.block(Blocks.STONE);
+
+        assertThatThrownBy(() -> new PatternDefinition(List.of(List.of("CC", "C")), Map.of('C', casing), 'C', 2, 2, 1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("width");
+        assertThatThrownBy(() -> new PatternDefinition(List.of(List.of("CX")), Map.of('C', casing), 'C', 2, 1, 1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unbound");
+        assertThatThrownBy(() -> new PatternDefinition(List.of(List.of("CC")), Map.of('C', casing), 'C', 2, 1, 1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("exactly one controller");
+    }
+
+    @Test
     void public_pattern_converts_to_internal_block_array_without_exposing_internal_types() {
         PatternDefinition pattern = PatternBuilder.pattern()
                 .layer("CCC", "C C", "CFC")
