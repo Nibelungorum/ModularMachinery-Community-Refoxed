@@ -21,6 +21,7 @@ import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockPreviewPayload;
 import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
+import cn.howxu.mmcr.internal.network.PktEjectPortContentsPayload;
 import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
 import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
 import cn.howxu.mmcr.internal.network.PktSmartInterfaceUpdatePayload;
@@ -147,6 +148,10 @@ public class MMCR {
                              PktAutoIOConfigPayload.TYPE,
                              PktAutoIOConfigPayload.STREAM_CODEC,
                              PktAutoIOConfigPayload::handle)
+                     .playToServer(
+                             PktEjectPortContentsPayload.TYPE,
+                             PktEjectPortContentsPayload.STREAM_CODEC,
+                             PktEjectPortContentsPayload::handle)
                      .playToServer(
                              PktRecipeLockPayload.TYPE,
                              PktRecipeLockPayload.STREAM_CODEC,
