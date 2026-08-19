@@ -9,6 +9,7 @@
     "block.mmcr.thermal_smelting_furnace_controller": "热能冶炼炉控制器",
     "block.mmcr.space_elevator_controller": "太空电梯控制器",
     "block.mmcr.space_reassembler_controller": "太空重组器控制器",
+    "block.mmcr.monster_farm_controller": "怪物农场控制器",
 
     "item.mmcr.alloy_furnace_controller": "合金炉控制器",
     "item.mmcr.blast_furnace_controller": "高炉控制器",
@@ -20,6 +21,7 @@
     "item.mmcr.thermal_smelting_furnace_controller": "热能冶炼炉控制器",
     "item.mmcr.space_elevator_controller": "太空电梯控制器",
     "item.mmcr.space_reassembler_controller": "太空重组器控制器",
+    "item.mmcr.monster_farm_controller": "怪物农场控制器",
 
     "machine.mmcr.alloy_furnace": "合金炉",
     "machine.mmcr.blast_furnace": "高炉",
@@ -31,6 +33,7 @@
     "machine.mmcr.thermal_smelting_furnace": "热能冶炼炉",
     "machine.mmcr.space_elevator": "太空电梯",
     "machine.mmcr.space_reassembler": "太空重组器",
+    "machine.mmcr.monster_farm": "怪物农场",
 
     "mmcr.smart_interface.type.ConversionRate": "转化率",
     "mmcr.smart_interface.type.ConversionRate.description": "0.0-1.0, 越高耗能和产量越高",

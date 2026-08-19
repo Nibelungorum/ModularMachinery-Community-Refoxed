@@ -9,6 +9,8 @@
     "block.mmcr.thermal_smelting_furnace_controller": "Thermal Smelting Furnace Controller",
     "block.mmcr.space_elevator_controller": "Space Elevator Controller",
     "block.mmcr.space_reassembler_controller": "Space Reassembler Controller",
+    "block.mmcr.monster_farm_controller": "Monster Farm Controller",
+
 
     "item.mmcr.alloy_furnace_controller": "Alloy Furnace Controller",
     "item.mmcr.blast_furnace_controller": "Blast Furnace Controller",
@@ -20,6 +22,7 @@
     "item.mmcr.thermal_smelting_furnace_controller": "Thermal Smelting Furnace Controller",
     "item.mmcr.space_elevator_controller": "Space Elevator Controller",
     "item.mmcr.space_reassembler_controller": "Space Reassembler Controller",
+    "item.mmcr.monster_farm_controller": "Monster Farm Controller",
 
     "machine.mmcr.alloy_furnace": "Alloy Furnace",
     "machine.mmcr.blast_furnace": "Blast Furnace",
@@ -31,6 +34,7 @@
     "machine.mmcr.thermal_smelting_furnace": "Thermal Smelting Furnace",
     "machine.mmcr.space_elevator": "Space Elevator",
     "machine.mmcr.space_reassembler": "Space Reassembler",
+    "machine.mmcr.monster_farm": "Monster Farm",
 
     "mmcr.smart_interface.type.ConversionRate": "Conversion Rate",
     "mmcr.smart_interface.type.ConversionRate.description": "0.0-1.0; higher increases energy use and output",

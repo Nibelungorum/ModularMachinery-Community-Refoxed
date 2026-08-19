@@ -41,9 +41,9 @@ MMCREvents.startup(function(event) {
     return builder
       .appearance('minecraft:end_stone_bricks').allowMultithreading().allowParallelism().maxParallelAmount(4)
       .runningSound('minecraft:block.furnace.fire_crackle').finishSound('minecraft:entity.ender_dragon.growl')
-      .smartInterface('Mode', 1, 3).priority(0).valueType('integer').end()
-      .smartInterface('Temperature', 400, 6800).priority(1).valueType('integer').end()
-      .smartInterface('ConversionRate', 0, 1).priority(2).valueType('float').end()
+      .smartInterface('Mode_KJS', 1, 3).priority(0).valueType('integer').end()
+      .smartInterface('Temperature_KJS', 400, 6800).priority(1).valueType('integer').end()
+      .smartInterface('ConversionRate_KJS', 0, 1).priority(2).valueType('float').end()
   })
   register('distillation_tower', function(builder) {
     return builder.appearance('minecraft:polished_blackstone').allowMultithreading().allowParallelism().maxParallelAmount(4)
