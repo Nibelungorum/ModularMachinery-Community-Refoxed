@@ -73,7 +73,7 @@ public final class PublicApiBootstrap {
         Map<Identifier, cn.howxu.mmcr.api.machine.MachineRegistration> machines = new LinkedHashMap<>();
         Map<Identifier, cn.howxu.mmcr.api.recipe.MachineRecipe> recipes = new LinkedHashMap<>();
         for (MachineDefinition machine : MACHINES.values()) {
-            machines.put(machine.id(), PublicMachineAdapter.toRegistration(machine));
+            machines.put(machine.id(), PublicMachineAdapter.toStartupRegistration(machine));
         }
         for (MachineRecipeDefinition recipe : RECIPES.values()) {
             if (!MACHINES.containsKey(recipe.machineId()) && !MachineDefinitions.containsStatic(recipe.machineId())) {

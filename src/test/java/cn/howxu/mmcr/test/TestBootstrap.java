@@ -39,11 +39,12 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.registries.DeferredHolder;
-import org.nibelungorum.BuiltinMachines;
+import org.nibelungorum.LegacyBuiltinMachines;
+import cn.howxu.mmcr.internal.api.PublicBuiltinRuntime;
 import org.nibelungorum.DefaultMachineLevels;
-import org.nibelungorum.DefaultRecipes;
+import org.nibelungorum.LegacyDefaultRecipes;
 
-import org.nibelungorum.DefaultMachines;
+import org.nibelungorum.LegacyDefaultMachines;
 import org.nibelungorum.TestMachines;
 
 import java.lang.reflect.Field;
@@ -86,7 +87,7 @@ public final class TestBootstrap {
 
         Class.forName("net.minecraft.SharedConstants").getMethod("tryDetectVersion").invoke(null);
         MachineDefinitions.beginRegistryPhase();
-        BuiltinMachines.register();
+        LegacyBuiltinMachines.register();
         addTestMachineSuppliers();
         MachineDefinitions.bootstrapBuiltins();
         Bootstrap.bootStrap();
@@ -125,7 +126,7 @@ public final class TestBootstrap {
 
     public static void restoreMachineDefinitions() {
         MachineDefinitions.clearForTesting();
-        BuiltinMachines.register();
+        LegacyBuiltinMachines.register();
         addTestMachineSuppliers();
         MachineDefinitions.bootstrapBuiltins();
     }
@@ -134,11 +135,12 @@ public final class TestBootstrap {
         restoreMachineDefinitions();
         registerDefaultMachineLevels();
         DynamicContentReloadService.reload(candidate -> {
-            DefaultMachines.structures().values().forEach(candidate::registerStructure);
+            PublicBuiltinRuntime.registerStructures(candidate);
+            LegacyDefaultMachines.structures().values().forEach(candidate::registerStructure);
             registerGameTestMachineStructures(candidate);
         });
-        DefaultRecipes.registerStatic(DefaultRecipes.recipes().values().stream().toList());
-        DefaultRecipes.registerStatic(DefaultRecipes.gameTestRecipes());
+        LegacyDefaultRecipes.registerStatic(LegacyDefaultRecipes.recipes().values().stream().toList());
+        LegacyDefaultRecipes.registerStatic(LegacyDefaultRecipes.gameTestRecipes());
         MachineRegistry.rebuildCompiledCache();
     }
 
@@ -163,6 +165,8 @@ public final class TestBootstrap {
     }
 
     private static void addTestMachineSuppliers() {
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("blast_furnace")).build());
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("alloy_furnace")).expandableStructure().build());
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("test_cube")).localizedName("Test").build());
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("controller_tick")).localizedName("Controller Tick").build());
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("iron_compressor")).localizedName("Iron Compressor").build());

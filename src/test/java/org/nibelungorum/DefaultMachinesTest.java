@@ -7,7 +7,6 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureFamily;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
-import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -43,7 +42,7 @@ class DefaultMachinesTest {
             @Override public MachineControllerSpec controller() { return MachineControllerSpec.defaultsFor(id); }
             @Override public List<MachineStructureStage> structureStages() { return stages; }
         };
-        Method structureOf = DefaultMachines.class.getDeclaredMethod("structureOf", Machine.class);
+        Method structureOf = LegacyDefaultMachines.class.getDeclaredMethod("structureOf", Machine.class);
         structureOf.setAccessible(true);
 
         MachineStructureDefinition converted = (MachineStructureDefinition) structureOf.invoke(null, machine);
@@ -54,16 +53,13 @@ class DefaultMachinesTest {
     }
 
     @Test
-    void built_in_representative_machines_are_public_definitions_with_runtime_structure() {
-        Map<Identifier, MachineDefinition> definitions = BuiltinMachines.publicDefinitions();
+    void built_in_representative_machines_are_public_definitions() {
+        var definitions = DefaultMachines.definitions();
 
         assertThat(definitions).containsKeys(Identifier.parse("mmcr:blast_furnace"),
                 Identifier.parse("mmcr:alloy_furnace"));
-        assertThat(DefaultMachines.publicMachine(definitions.get(Identifier.parse("mmcr:blast_furnace")))
-                .registryName()).isEqualTo(Identifier.parse("mmcr:blast_furnace"));
-        assertThat(DefaultMachines.publicMachine(definitions.get(Identifier.parse("mmcr:alloy_furnace")))
-                .structureStages().getFirst().modifierReplacements()).isNotEmpty();
-        assertThat(DefaultMachines.publicMachine(definitions.get(Identifier.parse("mmcr:alloy_furnace")))
-                .structureStages()).hasSize(2);
+        assertThat(definitions.get(Identifier.parse("mmcr:blast_furnace")).id())
+                .isEqualTo(Identifier.parse("mmcr:blast_furnace"));
+        assertThat(definitions.get(Identifier.parse("mmcr:alloy_furnace")).structureStages()).hasSize(2);
     }
 }

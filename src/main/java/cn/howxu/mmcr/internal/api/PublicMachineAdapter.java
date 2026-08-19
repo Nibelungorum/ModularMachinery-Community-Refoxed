@@ -100,6 +100,10 @@ public final class PublicMachineAdapter {
 
     public static MachineRegistration toRegistration(MachineDefinition definition) {
         validateRegistrationFields(definition);
+        return toStartupRegistration(definition);
+    }
+
+    public static MachineRegistration toStartupRegistration(MachineDefinition definition) {
         MachineRegistration.Builder builder = MachineRegistration.builder(definition.id())
                 .displayNameKey(definition.displayNameKey())
                 .controllerSpec(toControllerSpec(definition.id(), definition.controller()))
@@ -111,6 +115,7 @@ public final class PublicMachineAdapter {
         if (definition.role() == MachineRole.HOST) {
             definition.acceptedModuleIds().forEach(builder::host);
         }
+        if (definition.structureStages().size() > 1) builder.expandableStructure();
         return builder.build();
     }
 

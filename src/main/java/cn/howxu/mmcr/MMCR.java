@@ -36,6 +36,7 @@ import cn.howxu.mmcr.registry.ModRecipeTypes;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.api.PublicMachineDefinitionProviders;
+import cn.howxu.mmcr.internal.api.PublicBuiltinRuntime;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -70,6 +71,7 @@ public class MMCR {
         PublicApiBootstrap.begin();
         MachineDefinitions.beginRegistryPhase();
         registerDevelopmentBuiltins("org.nibelungorum.BuiltinMachines", "register");
+        registerDevelopmentBuiltins("org.nibelungorum.LegacyBuiltinMachines", "register");
         registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineDefinitions");
         MachineDefinitions.bootstrapBuiltins();
         PublicMachineDefinitionProviders.registerAll();
@@ -177,12 +179,14 @@ public class MMCR {
     public static void registerRuntimeBuiltins() {
         registerDefaultMachineLevels();
         DynamicContentReloadService.reload(candidate -> {
-            registerDevelopmentBuiltins("org.nibelungorum.DefaultMachines", "registerStructures",
+            PublicBuiltinRuntime.registerStructures(candidate);
+            registerDevelopmentBuiltins("org.nibelungorum.LegacyDefaultMachines", "registerStructures",
                     new Class<?>[]{DynamicContentReloadService.Candidate.class}, candidate);
             registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineStructures",
                     new Class<?>[]{DynamicContentReloadService.Candidate.class}, candidate);
         });
-        registerDevelopmentBuiltins("org.nibelungorum.DefaultRecipes", "ensureRegistered");
+        registerDevelopmentBuiltins("org.nibelungorum.LegacyDefaultRecipes", "ensureRegistered");
+        PublicBuiltinRuntime.registerRecipes();
         registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerRecipes");
         MachineRegistry.rebuildCompiledCache();
     }
