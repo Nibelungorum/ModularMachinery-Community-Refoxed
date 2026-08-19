@@ -152,6 +152,7 @@
   "gui.mmcr.controller.threads": "多线程: %s / %s",
   "gui.mmcr.controller.unformed": "未成型",
   "gui.mmcr.factory.active_threads": "活动线程: %s / %s",
+  "gui.mmcr.fluid": "流体: %s",
   "gui.mmcr.factory.formed": "已成型: %s",
   "gui.mmcr.factory.no_recipe": "无运行配方",
   "gui.mmcr.factory.parallelism": "并行数: %s / %s",

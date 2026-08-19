@@ -152,6 +152,7 @@
   "gui.mmcr.controller.threads": "Multithreading: %s / %s",
   "gui.mmcr.controller.unformed": "Not Formed",
   "gui.mmcr.factory.active_threads": "Active Threads: %s / %s",
+  "gui.mmcr.fluid": "Fluid: %s",
   "gui.mmcr.factory.formed": "Formed: %s",
   "gui.mmcr.factory.no_recipe": "No Active Recipe",
   "gui.mmcr.factory.parallelism": "Parallelism: %s / %s",

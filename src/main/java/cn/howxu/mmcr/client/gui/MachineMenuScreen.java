@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.client.render.FluidGuiRenderer;
 import cn.howxu.mmcr.internal.autoio.AutoIOAction;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
 import cn.howxu.mmcr.internal.menu.FactorySchedulerMenu;
@@ -25,11 +26,6 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.MenuAccess;
 import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.client.renderer.block.FluidModel;
-import net.minecraft.client.renderer.block.FluidStateModelSet;
-import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import net.minecraft.client.resources.model.ModelManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -41,9 +37,7 @@ import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.material.Fluid;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
-import net.neoforged.neoforge.client.fluid.FluidTintSource;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.neoforged.neoforge.fluids.FluidStack;
 
@@ -86,6 +80,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     private static final float CONTROLLER_DETAIL_SCALE = 0.85F;
     private static final int CONTROLLER_DETAIL_LINE_SPACING = 10;
     static final int STORAGE_TEXT_OFFSET_Y = 12;
+    static final int FLUID_INFO_OFFSET_Y = 10;
     static final int HIDDEN_INVENTORY_LABEL_Y = -1000;
 
     private static final int TANK_X = 15;
@@ -352,6 +347,12 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
                 graphics.text(font, title, titleLabelX, titleLabelY, titleColor(false), false);
             }
         }
+        if (!autoIOPage && menu instanceof FluidHatchMenu fluidHatch) {
+            FluidStack fluid = fluidStack(fluidHatch);
+            if (shouldRenderFluidInfo(fluid)) {
+                graphics.text(font, fluidInfoLine(fluid), titleLabelX, titleLabelY + FLUID_INFO_OFFSET_Y, TITLE_COLOR, false);
+            }
+        }
         if (menu instanceof MachineControllerMenu mc) renderControllerStatus(graphics, mc, 0, 0);
     }
 
@@ -611,13 +612,10 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         long capacity = menu.fluidCapacity();
         if (capacity <= 0) return;
 
-        var storage = menu.storage();
-        FluidStack fluid = storage == null || storage.getResource(0).isEmpty()
-                ? FluidStack.EMPTY
-                : storage.getResource(0).toStack(Math.min(storage.getAmountAsInt(0), Integer.MAX_VALUE));
-        int filled = amount <= 0 ? 0 : Math.max(1, (int) Math.min((long) TANK_H, Math.ceilDiv(amount * TANK_H, capacity)));
-        if (!fluid.isEmpty() && filled > 0) {
-            drawFluid(g, fluid, x + TANK_X, y + TANK_Y, TANK_W, TANK_H, Math.min(filled, TANK_H));
+        FluidStack fluid = fluidStack(menu);
+        int filled = FluidGuiRenderer.fillHeight(amount, capacity, TANK_H);
+        if (shouldRenderFluidInfo(fluid) && filled > 0) {
+            FluidGuiRenderer.drawFluid(g, fluid, x + TANK_X, y + TANK_Y + TANK_H - filled, TANK_W, filled);
         }
         g.blit(RenderPipelines.GUI_TEXTURED, fluidBarOverlayTexture(),
                 x + TANK_X, y + TANK_Y,
@@ -649,31 +647,18 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         return ReadableNumber.format(amount) + " / " + ReadableNumber.format(capacity) + " " + unit;
     }
 
-    private static void drawFluid(GuiGraphicsExtractor g, FluidStack fluid, int x, int y, int width, int height, int filled) {
-        Optional<TextureAtlasSprite> sprite = stillFluidSprite(fluid);
-        if (sprite.isEmpty()) return;
-
-        int color = fluidColor(fluid);
-        int drawY = y + height - filled;
-        g.blitSprite(RenderPipelines.GUI_TEXTURED, sprite.get(), x, drawY, width, filled, color);
+    static boolean shouldRenderFluidInfo(FluidStack fluid) {
+        return fluid != null && !fluid.isEmpty();
     }
 
-    private static Optional<TextureAtlasSprite> stillFluidSprite(FluidStack stack) {
-        Fluid fluid = stack.getFluid();
-        ModelManager modelManager = Minecraft.getInstance().getModelManager();
-        FluidStateModelSet modelSet = modelManager.getFluidStateModelSet();
-        FluidModel model = modelSet.get(fluid.defaultFluidState());
-        TextureAtlasSprite sprite = model.stillMaterial().sprite();
-        return Optional.ofNullable(sprite).filter(s -> s.atlasLocation() != MissingTextureAtlasSprite.getLocation());
+    static Component fluidInfoLine(FluidStack fluid) {
+        return Component.translatable("gui.mmcr.fluid", fluid.getHoverName());
     }
 
-    private static int fluidColor(FluidStack stack) {
-        Fluid fluid = stack.getFluid();
-        ModelManager modelManager = Minecraft.getInstance().getModelManager();
-        FluidStateModelSet modelSet = modelManager.getFluidStateModelSet();
-        FluidModel model = modelSet.get(fluid.defaultFluidState());
-        FluidTintSource tintSource = model.fluidTintSource();
-        return tintSource == null ? 0xFFFFFFFF : tintSource.colorAsStack(stack);
+    private static FluidStack fluidStack(FluidHatchMenu menu) {
+        var storage = menu.storage();
+        if (storage == null || storage.getResource(0).isEmpty()) return FluidStack.EMPTY;
+        return storage.getResource(0).toStack(Math.min(storage.getAmountAsInt(0), Integer.MAX_VALUE));
     }
 
     private void renderControllerStatus(GuiGraphicsExtractor g, MachineControllerMenu menu, int x, int y) {

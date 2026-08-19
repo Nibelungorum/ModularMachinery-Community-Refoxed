@@ -13,12 +13,18 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.resources.language.ClientLanguage;
+import net.minecraft.locale.Language;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.common.NeoForgeMod;
+import net.neoforged.neoforge.fluids.FluidType;
+import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
@@ -26,6 +32,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.Map;
 import java.util.List;
 import java.util.Optional;
 
@@ -36,6 +43,8 @@ class MenuScreenTest {
     @BeforeAll
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
+        bindDeferredHolder(NeoForgeMod.WATER_TYPE, new FluidType(FluidType.Properties.create().descriptionId("block.minecraft.water")));
+        injectTranslations();
         bind(ModUIs.ITEM_BUS, new MenuType<>((containerId, playerInventory) -> new ItemBusMenu(containerId, playerInventory), FeatureFlags.VANILLA_SET));
         bind(ModUIs.MACHINE_CONTROLLER, new MenuType<>(MachineControllerMenu::clientOpen, FeatureFlags.VANILLA_SET));
     }
@@ -57,6 +66,17 @@ class MenuScreenTest {
         assertThat(MachineMenuScreen.isOutputPort(IOType.INPUT, IOType.OUTPUT)).isFalse();
         assertThat(MachineMenuScreen.isOutputPort(null, IOType.OUTPUT)).isTrue();
         assertThat(MachineMenuScreen.isOutputPort(null, null)).isFalse();
+    }
+
+    @Test
+    void fluid_info_hides_empty_fluids_and_localizes_water() {
+        FluidStack water = new FluidStack(Fluids.WATER, 1);
+
+        assertThat(MachineMenuScreen.shouldRenderFluidInfo(null)).isFalse();
+        assertThat(MachineMenuScreen.shouldRenderFluidInfo(FluidStack.EMPTY)).isFalse();
+        assertThat(MachineMenuScreen.shouldRenderFluidInfo(water)).isTrue();
+        assertThat(MachineMenuScreen.fluidInfoLine(water).getContents().toString()).contains("gui.mmcr.fluid");
+        assertThat(MachineMenuScreen.fluidInfoLine(water).getString()).contains("Fluid").contains("Water");
     }
 
     @Test
@@ -179,6 +199,10 @@ class MenuScreenTest {
     }
 
     private static void bind(Object deferredHolder, MenuType<?> menuType) throws Exception {
+        bindDeferredHolder(deferredHolder, menuType);
+    }
+
+    private static void bindDeferredHolder(Object deferredHolder, Object value) throws Exception {
         Class<?> type = deferredHolder.getClass();
         Field holder = null;
         while (type != null && holder == null) {
@@ -190,6 +214,14 @@ class MenuScreenTest {
         }
         if (holder == null) throw new NoSuchFieldException("holder");
         holder.setAccessible(true);
-        holder.set(deferredHolder, Holder.direct(menuType));
+        holder.set(deferredHolder, Holder.direct(value));
+    }
+
+    private static void injectTranslations() throws Exception {
+        var constructor = ClientLanguage.class.getDeclaredConstructor(Map.class, boolean.class);
+        constructor.setAccessible(true);
+        Language.inject(constructor.newInstance(Map.of(
+                "gui.mmcr.fluid", "Fluid: %s",
+                "block.minecraft.water", "Water"), false));
     }
 }

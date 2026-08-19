@@ -26,7 +26,7 @@ public final class FluidGuiRenderer {
     record Tile(int x, int y, int width, int height, int maskTop, int maskRight) {
     }
 
-    static int fillHeight(long amount, long capacity, int height) {
+    public static int fillHeight(long amount, long capacity, int height) {
         if (amount <= 0 || capacity <= 0 || height <= 0) {
             return 0;
         }
