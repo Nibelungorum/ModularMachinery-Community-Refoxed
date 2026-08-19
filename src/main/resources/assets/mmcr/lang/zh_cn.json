@@ -316,6 +316,7 @@
   "mmcr.auto_io.auto_output": "自动输出",
   "mmcr.auto_io.control": "输入/输出控制",
   "mmcr.auto_io.disabled": "已禁用",
+  "mmcr.auto_io.eject_contents": "弹出内容物",
   "mmcr.auto_io.enabled": "已启用",
   "mmcr.auto_io.side": "%s: %s",
   "mmcr.auto_io.state.disabled": "禁用",

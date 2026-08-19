@@ -4,6 +4,7 @@ import cn.howxu.mmcr.internal.autoio.AutoIOAction;
 import cn.howxu.mmcr.internal.menu.AbstractMachineMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
+import cn.howxu.mmcr.internal.network.PktEjectPortContentsPayload;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.ChatFormatting;
@@ -50,6 +51,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     protected boolean autoIOPage;
     private Button autoIOPageButton;
     private Button autoIOToggleButton;
+    private Button ejectButton;
     private final EnumMap<Direction, Button> autoIOSideButtons = new EnumMap<>(Direction.class);
     private final List<HiddenSlotPosition> hiddenSlotPositions = new ArrayList<>();
 
@@ -96,6 +98,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
         autoIOPageButton = addRenderableWidget(Button.builder(Component.literal("⇄"), button -> {
             autoIOPage = !autoIOPage;
             updateAutoIOWidgets();
+            button.setFocused(false);
         }).bounds(leftPos + imageWidth - 16, topPos + 4, 12, 12)
                 .tooltip(Tooltip.create(Component.translatable("mmcr.auto_io.control"))).build());
 
@@ -104,7 +107,14 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
             IOPortBlockEntity port = portEntity();
             boolean enabled = port == null || !port.autoIOConfig().enabled();
             ClientPacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), AutoIOAction.SET_ENABLED, null, enabled));
+            button.setFocused(false);
         }));
+
+        ejectButton = addRenderableWidget(Button.builder(Component.translatable("mmcr.auto_io.eject_contents"), button -> {
+            ClientPacketDistributor.sendToServer(new PktEjectPortContentsPayload(portPos()));
+            button.setFocused(false);
+        }).bounds(leftPos + autoIOSideButtonX(2) + AUTO_IO_SIDE_BUTTON_SIZE + 6,
+                topPos + autoIOSideButtonY(1), AUTO_IO_TOGGLE_BUTTON_WIDTH, AUTO_IO_TOGGLE_BUTTON_HEIGHT).build());
 
         for (int y = 0; y < 3; y++) {
             for (int x = 0; x < 3; x++) {
@@ -113,6 +123,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
                 boolean shiftAllSidesCell = x == 1 && y == 1;
                 Button button = addRenderableWidget(new AutoIOSideButton(leftPos + autoIOSideButtonX(x), topPos + autoIOSideButtonY(y), side,
                         clicked -> {
+                            clicked.setFocused(false);
                             IOPortBlockEntity port = portEntity();
                             if (shiftAllSidesCell && Minecraft.getInstance().hasShiftDown()) {
                                 ClientPacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), AutoIOAction.SET_ALL_SIDES, null, false));
@@ -137,6 +148,11 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
             if (autoIOToggleButton instanceof AutoIOToggleButton toggleButton) {
                 toggleButton.setLines(autoIOToggleTypeLabel(isOutputPort()), autoIOToggleStateLabel(isAutoIOEnabled()));
             }
+        }
+        if (ejectButton != null) {
+            boolean showEject = autoIOPage && !isOutputPort();
+            ejectButton.visible = showEject;
+            ejectButton.active = showEject;
         }
         for (var entry : autoIOSideButtons.entrySet()) {
             Button button = entry.getValue();

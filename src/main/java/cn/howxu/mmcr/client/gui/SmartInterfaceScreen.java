@@ -62,11 +62,20 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
         valueInput = addRenderableWidget(new NumericEditBox(font, leftPos + CONTENT_X, topPos + layout.inputY(), INPUT_WIDTH, INPUT_HEIGHT,
                 Component.translatable("mmcr.smart_interface.input")));
         valueInput.setMaxLength(16);
-        save = addRenderableWidget(Button.builder(Component.translatable("mmcr.smart_interface.save"), button -> sendValue())
+        save = addRenderableWidget(Button.builder(Component.translatable("mmcr.smart_interface.save"), button -> {
+            sendValue();
+            button.setFocused(false);
+        })
                 .bounds(leftPos + SAVE_X, topPos + layout.inputY() - 1, SAVE_WIDTH, SAVE_HEIGHT).build());
-        previous = addRenderableWidget(Button.builder(Component.translatable("mmcr.smart_interface.previous"), button -> select(showing - 1))
+        previous = addRenderableWidget(Button.builder(Component.translatable("mmcr.smart_interface.previous"), button -> {
+            select(showing - 1);
+            button.setFocused(false);
+        })
                 .bounds(leftPos + layout.previousX(), topPos + layout.navigationY(), NAVIGATION_WIDTH, NAVIGATION_HEIGHT).build());
-        next = addRenderableWidget(Button.builder(Component.translatable("mmcr.smart_interface.next"), button -> select(showing + 1))
+        next = addRenderableWidget(Button.builder(Component.translatable("mmcr.smart_interface.next"), button -> {
+            select(showing + 1);
+            button.setFocused(false);
+        })
                 .bounds(leftPos + layout.nextX(), topPos + layout.navigationY(), NAVIGATION_WIDTH, NAVIGATION_HEIGHT).build());
         updateWidgets();
     }
