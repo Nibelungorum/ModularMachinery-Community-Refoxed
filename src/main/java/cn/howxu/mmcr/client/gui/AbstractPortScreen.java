@@ -110,11 +110,11 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
             button.setFocused(false);
         }));
 
-        ejectButton = addRenderableWidget(Button.builder(Component.translatable("mmcr.auto_io.eject_contents"), button -> {
+        ejectButton = addRenderableWidget(new EjectButton(leftPos + autoIOSideButtonX(2) + AUTO_IO_SIDE_BUTTON_SIZE + 6,
+                Component.translatable("mmcr.auto_io.eject_contents"), button -> {
             ClientPacketDistributor.sendToServer(new PktEjectPortContentsPayload(portPos()));
             button.setFocused(false);
-        }).bounds(leftPos + autoIOSideButtonX(2) + AUTO_IO_SIDE_BUTTON_SIZE + 6,
-                topPos + autoIOSideButtonY(1), AUTO_IO_TOGGLE_BUTTON_WIDTH, AUTO_IO_TOGGLE_BUTTON_HEIGHT).build());
+        }, topPos + autoIOSideButtonY(1)));
 
         for (int y = 0; y < 3; y++) {
             for (int x = 0; x < 3; x++) {
@@ -238,12 +238,25 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     private record HiddenSlotPosition(int index, Slot slot) {
     }
 
-    private static class AutoIOToggleButton extends Button {
+    abstract static class AutoIOStyledButton extends Button {
+        AutoIOStyledButton(int x, int y, int width, int height, Component message, OnPress onPress) {
+            super(x, y, width, height, message, onPress, Button.DEFAULT_NARRATION);
+        }
+
+        protected void drawAutoIOBackground(GuiGraphicsExtractor graphics) {
+            int baseColor = active ? 0xFF6B6B6B : 0xFF3F3F3F;
+            int hoverColor = isHoveredOrFocused() ? 0xFFFFFFFF : 0xFFAAAAAA;
+            graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), hoverColor);
+            graphics.fill(getX() + 1, getY() + 1, getX() + getWidth() - 1, getY() + getHeight() - 1, baseColor);
+        }
+    }
+
+    static class AutoIOToggleButton extends AutoIOStyledButton {
         private Component typeLine;
         private Component stateLine;
 
         AutoIOToggleButton(int x, int y, Component message, OnPress onPress) {
-            super(x, y, AUTO_IO_TOGGLE_BUTTON_WIDTH, AUTO_IO_TOGGLE_BUTTON_HEIGHT, message, onPress, Button.DEFAULT_NARRATION);
+            super(x, y, AUTO_IO_TOGGLE_BUTTON_WIDTH, AUTO_IO_TOGGLE_BUTTON_HEIGHT, message, onPress);
             typeLine = message;
             stateLine = Component.empty();
         }
@@ -255,10 +268,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
 
         @Override
         protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            int baseColor = active ? 0xFF6B6B6B : 0xFF3F3F3F;
-            int hoverColor = isHoveredOrFocused() ? 0xFFFFFFFF : 0xFFAAAAAA;
-            graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), hoverColor);
-            graphics.fill(getX() + 1, getY() + 1, getX() + getWidth() - 1, getY() + getHeight() - 1, baseColor);
+            drawAutoIOBackground(graphics);
             Font font = Minecraft.getInstance().font;
             graphics.pose().pushMatrix();
             graphics.pose().scale(AUTO_IO_TOGGLE_TEXT_SCALE, AUTO_IO_TOGGLE_TEXT_SCALE);
@@ -273,13 +283,26 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
         }
     }
 
-    private static class AutoIOSideButton extends Button {
+    static class EjectButton extends AutoIOStyledButton {
+        EjectButton(int x, Component message, OnPress onPress, int y) {
+            super(x, y, AUTO_IO_TOGGLE_BUTTON_WIDTH, AUTO_IO_TOGGLE_BUTTON_HEIGHT, message, onPress);
+        }
+
+        @Override
+        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            drawAutoIOBackground(graphics);
+            Font font = Minecraft.getInstance().font;
+            graphics.text(font, getMessage(), getX() + (getWidth() - font.width(getMessage())) / 2, getY() + 6, 0xFFFFFFFF, false);
+        }
+    }
+
+    static class AutoIOSideButton extends AutoIOStyledButton {
         private final Direction side;
         private final BooleanSupplier selected;
         private final Supplier<IOPortBlockEntity> portSupplier;
 
         AutoIOSideButton(int x, int y, Direction side, OnPress onPress, BooleanSupplier selected, Supplier<IOPortBlockEntity> portSupplier) {
-            super(x, y, AUTO_IO_SIDE_BUTTON_SIZE, AUTO_IO_SIDE_BUTTON_SIZE, Component.empty(), onPress, Button.DEFAULT_NARRATION);
+            super(x, y, AUTO_IO_SIDE_BUTTON_SIZE, AUTO_IO_SIDE_BUTTON_SIZE, Component.empty(), onPress);
             this.side = side;
             this.selected = selected;
             this.portSupplier = portSupplier;
@@ -287,10 +310,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
 
         @Override
         protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            int baseColor = active ? 0xFF6B6B6B : 0xFF3F3F3F;
-            int hoverColor = isHoveredOrFocused() ? 0xFFFFFFFF : 0xFFAAAAAA;
-            graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), hoverColor);
-            graphics.fill(getX() + 1, getY() + 1, getX() + getWidth() - 1, getY() + getHeight() - 1, baseColor);
+            drawAutoIOBackground(graphics);
             if (selected.getAsBoolean()) {
                 graphics.fill(getX() + 3, getY() + 3, getX() + getWidth() - 3, getY() + getHeight() - 3, 0xFF2E7D32);
                 graphics.fill(getX() + 2, getY() + 2, getX() + getWidth() - 2, getY() + 3, 0xFF66BB6A);

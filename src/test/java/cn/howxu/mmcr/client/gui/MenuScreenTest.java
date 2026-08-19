@@ -102,6 +102,14 @@ class MenuScreenTest {
     }
 
     @Test
+    void auto_io_toggle_and_eject_buttons_share_the_same_button_style() {
+        assertThat(AbstractPortScreen.AutoIOToggleButton.class)
+                .isAssignableTo(AbstractPortScreen.AutoIOStyledButton.class);
+        assertThat(AbstractPortScreen.EjectButton.class)
+                .isAssignableTo(AbstractPortScreen.AutoIOStyledButton.class);
+    }
+
+    @Test
     void controller_recipe_lock_state_uses_full_locked_recipe_id_from_menu() {
         MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
         menu.setData(12, 1);
