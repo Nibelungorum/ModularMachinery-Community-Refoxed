@@ -32,4 +32,12 @@ class MachineControllerBlockTest {
         assertThat(MachineControllerBlock.facingForPlacement(Direction.DOWN, Direction.SOUTH, false)).isEqualTo(Direction.SOUTH);
         assertThat(MachineControllerBlock.facingForPlacement(Direction.EAST, Direction.NORTH, false)).isEqualTo(Direction.EAST);
     }
+
+    @Test
+    void required_vertical_controller_never_uses_horizontal_facing() {
+        assertThat(MachineControllerBlock.facingForPlacement(Direction.EAST, 2.0d, 2.0d,
+                Direction.NORTH, true, true).getAxis().isVertical()).isTrue();
+        assertThat(MachineControllerBlock.facingForPlacement(Direction.WEST, 4.0d, 2.0d,
+                Direction.NORTH, true, true).getAxis().isVertical()).isTrue();
+    }
 }

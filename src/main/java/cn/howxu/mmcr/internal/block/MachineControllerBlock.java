@@ -87,7 +87,8 @@ public class MachineControllerBlock extends Block implements EntityBlock {
                 ctx.getClickLocation().y,
                 playerY,
                 horizontalFacing,
-                isVerticalAllowed());
+                isVerticalAllowed(),
+                isVerticalRequired());
         return defaultBlockState()
                 .setValue(FACING, facing)
                 .setValue(ROLL_FACING, rollFacingForPlacement(
@@ -104,6 +105,13 @@ public class MachineControllerBlock extends Block implements EntityBlock {
         if (clickedFace == Direction.DOWN) return Direction.DOWN;
         if (clickedFace == Direction.UP) return clickY < playerY - 1.0d ? Direction.UP : horizontalFallback;
         return clickY > playerY + 1.0d ? Direction.DOWN : clickedFace;
+    }
+
+    static Direction facingForPlacement(Direction clickedFace, double clickY, double playerY,
+                                        Direction horizontalFallback, boolean verticalAllowed, boolean verticalRequired) {
+        if (!verticalRequired) return facingForPlacement(clickedFace, clickY, playerY, horizontalFallback, verticalAllowed);
+        if (clickedFace.getAxis().isVertical()) return clickedFace;
+        return clickY > playerY ? Direction.DOWN : Direction.UP;
     }
 
     static Direction rollFacingForPlacement(Direction facing, double blockCenterX, double blockCenterZ, double playerX, double playerZ, Direction horizontalFallback) {
@@ -128,6 +136,11 @@ public class MachineControllerBlock extends Block implements EntityBlock {
     private boolean isVerticalAllowed() {
         MachineRegistration registration = MachineDefinitions.getRegistration(machineId);
         return registration != null && registration.controllerSpec().allowVerticalFacing();
+    }
+
+    private boolean isVerticalRequired() {
+        MachineRegistration registration = MachineDefinitions.getRegistration(machineId);
+        return registration != null && registration.controllerSpec().requireVerticalFacing();
     }
 
     @Override
