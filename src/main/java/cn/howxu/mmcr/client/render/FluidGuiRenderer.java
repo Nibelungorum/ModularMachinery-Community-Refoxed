@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.render;
 
 import java.util.Arrays;
+import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -20,6 +21,9 @@ public final class FluidGuiRenderer {
     private static final int OPAQUE_WHITE = 0xffffffff;
 
     private FluidGuiRenderer() {
+    }
+
+    record Tile(int x, int y, int width, int height, int maskTop, int maskRight) {
     }
 
     static int fillHeight(long amount, long capacity, int height) {
@@ -55,26 +59,34 @@ public final class FluidGuiRenderer {
     public static void drawFluid(GuiGraphicsExtractor graphics, FluidStack fluid, int x, int y, int width, int height) {
         TextureAtlasSprite sprite = stillSprite(fluid);
         int color = fluidColor(fluid);
-        int yStart = y + height;
+        for (Tile tile : tiles(x, y, width, height)) {
+            float u0 = sprite.getU0();
+            float u1 = sprite.getU1() - tile.maskRight / 16f * (sprite.getU1() - u0);
+            float v0 = sprite.getV0();
+            float v1 = sprite.getV1() - tile.maskTop / 16f * (sprite.getV1() - v0);
+            int sourceWidth = Math.max(1, Math.round((u1 - u0) * 16));
+            int sourceHeight = Math.max(1, Math.round((v1 - v0) * 16));
+            graphics.blit(RenderPipelines.GUI_TEXTURED, sprite.atlasLocation(),
+                    tile.x(), tile.y() + tile.maskTop, u0, v0,
+                    tile.width(), tile.height(), sourceWidth, sourceHeight, 1, 1, color);
+        }
+    }
+
+    static List<Tile> tiles(int x, int y, int width, int height) {
         int[] widths = tileWidths(width);
         int[] heights = tileHeights(height);
+        int yStart = y + height;
+        var result = new java.util.ArrayList<Tile>(widths.length * heights.length);
         for (int xTile = 0, xOffset = 0; xTile < widths.length; xTile++) {
-            for (int yTile = 0, yOffset = 0; yTile < heights.length; yTile++) {
+            for (int yTile = 0; yTile < heights.length; yTile++) {
                 int tileWidth = widths[xTile];
                 int tileHeight = heights[yTile];
-                int tileX = x + xOffset;
-                int tileY = yStart - yOffset - TILE_SIZE;
-                if (tileWidth != TILE_SIZE || tileHeight != TILE_SIZE) {
-                    graphics.enableScissor(tileX, yStart - yOffset - tileHeight, tileX + tileWidth, yStart - yOffset);
-                    graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, tileX, tileY, TILE_SIZE, TILE_SIZE, color);
-                    graphics.disableScissor();
-                } else {
-                    graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, tileX, tileY, TILE_SIZE, TILE_SIZE, color);
-                }
-                yOffset += tileHeight;
+                result.add(new Tile(x + xOffset, yStart - (yTile + 1) * TILE_SIZE, tileWidth, tileHeight,
+                        TILE_SIZE - tileHeight, TILE_SIZE - tileWidth));
             }
             xOffset += widths[xTile];
         }
+        return result;
     }
 
     private static FluidModel model(FluidStack fluid) {
