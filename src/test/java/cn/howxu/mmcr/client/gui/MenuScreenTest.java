@@ -95,6 +95,14 @@ class MenuScreenTest {
     }
 
     @Test
+    void empty_fluid_capacity_text_does_not_reserve_a_name_line() {
+        int titleY = MachineMenuScreen.titleY(6, true);
+
+        assertThat(MachineMenuScreen.fluidStorageTextY(titleY, false))
+                .isEqualTo(MachineMenuScreen.storageTextY(titleY, true));
+    }
+
+    @Test
     void auto_io_page_allows_player_hotbar_slots_with_low_backing_indices() throws Exception {
         MachineMenuScreen screen = screenForMenu(new ItemBusMenu(1, new Inventory(null, null)));
         Field autoIOPage = MachineMenuScreen.class.getDeclaredField("autoIOPage");

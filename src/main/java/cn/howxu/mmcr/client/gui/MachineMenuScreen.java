@@ -287,6 +287,10 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         return fluidInfoTextY(titleY) + 9;
     }
 
+    static int fluidStorageTextY(int titleY, boolean hasFluidName) {
+        return hasFluidName ? fluidStorageTextY(titleY) : storageTextY(titleY, true);
+    }
+
     static int fluidBarOverlaySourceX() {
         return FLUID_BAR_OVERLAY_SOURCE_X;
     }
@@ -629,7 +633,7 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
                 x + TANK_X, y + TANK_Y,
                 fluidBarOverlaySourceX(), 0, TANK_W, TANK_H,
                 GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
-        renderAmountText(g, x, y, amountText(amount, capacity, "mB"), true);
+        renderAmountText(g, x, y, amountText(amount, capacity, "mB"), shouldRenderFluidInfo(fluid));
     }
 
     private void renderEnergyBar(GuiGraphicsExtractor g, EnergyHatchMenu menu, int x, int y) {
@@ -647,8 +651,8 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         renderAmountText(g, x, y, amountText(stored, capacity, "FE"), false);
     }
 
-    private void renderAmountText(GuiGraphicsExtractor g, int x, int y, String text, boolean fluidTank) {
-        int textY = fluidTank ? fluidStorageTextY(titleLabelY) : storageTextY(titleLabelY, true);
+    private void renderAmountText(GuiGraphicsExtractor g, int x, int y, String text, boolean hasFluidName) {
+        int textY = fluidStorageTextY(titleLabelY, hasFluidName);
         g.text(font, Component.literal(text), x + storageTextX(titleLabelX), y + textY, TITLE_COLOR, false);
     }
 
