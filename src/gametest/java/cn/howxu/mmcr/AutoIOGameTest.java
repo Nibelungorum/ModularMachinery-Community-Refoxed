@@ -86,4 +86,183 @@ public class AutoIOGameTest {
             helper.succeed();
         });
     }
+
+    public void itemInputEjectionStopsAfterFirstTarget(GameTestHelper helper) {
+        ItemBusBlockEntity source = placeItemInputPort(helper, new BlockPos(0, 1, 0));
+        ChestBlockEntity firstTarget = placeChest(helper, new BlockPos(1, 1, 0));
+        ChestBlockEntity secondTarget = placeChest(helper, new BlockPos(-1, 1, 0));
+        source.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.COBBLESTONE, 2));
+
+        helper.runAtTickTime(20, () -> {
+            helper.assertTrue(source.ejectContents(), "Item input bus ejects its contents");
+            int firstCount = firstTarget.getItem(0).getCount();
+            int secondCount = secondTarget.getItem(0).getCount();
+            helper.assertTrue(firstCount + secondCount == 2, "Exactly one adjacent item target receives all contents");
+            helper.assertTrue(source.getItemStackHandler(null).getStackInSlot(0).isEmpty(), "Item input bus is empty after a complete first transfer");
+            helper.succeed();
+        });
+    }
+
+    public void itemInputEjectionContinuesAfterPartialTarget(GameTestHelper helper) {
+        ItemBusBlockEntity source = placeItemInputPort(helper, new BlockPos(0, 1, 0));
+        ChestBlockEntity firstTarget = placeChest(helper, new BlockPos(1, 1, 0));
+        ChestBlockEntity secondTarget = placeChest(helper, new BlockPos(-1, 1, 0));
+        source.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.COBBLESTONE, 2));
+        fillChestExceptOne(firstTarget);
+        fillChestExceptOne(secondTarget);
+
+        helper.runAtTickTime(20, () -> {
+            helper.assertTrue(source.ejectContents(), "Item input bus ejects to partially available targets");
+            helper.assertTrue(firstTarget.getItem(0).getCount() == 64,
+                    "First item target receives its remaining capacity: " + firstTarget.getItem(0).getCount());
+            helper.assertTrue(secondTarget.getItem(0).getCount() == 64,
+                    "Second item target receives the remaining item: " + secondTarget.getItem(0).getCount());
+            helper.assertTrue(source.getItemStackHandler(null).getStackInSlot(0).isEmpty(), "Item input bus is empty after both partial transfers");
+            helper.succeed();
+        });
+    }
+
+    public void itemInputEjectionPreservesRemainder(GameTestHelper helper) {
+        ItemBusBlockEntity source = placeItemInputPort(helper, new BlockPos(0, 1, 0));
+        ChestBlockEntity firstTarget = placeChest(helper, new BlockPos(1, 1, 0));
+        ChestBlockEntity secondTarget = placeChest(helper, new BlockPos(-1, 1, 0));
+        source.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.COBBLESTONE, 3));
+        fillChestExceptOne(firstTarget);
+        fillChestExceptOne(secondTarget);
+
+        helper.runAtTickTime(20, () -> {
+            helper.assertTrue(source.ejectContents(), "Item input bus ejects until adjacent capacity is exhausted");
+            helper.assertTrue(firstTarget.getItem(0).getCount() == 64,
+                    "First item target is filled: " + firstTarget.getItem(0).getCount());
+            helper.assertTrue(secondTarget.getItem(0).getCount() == 64,
+                    "Second item target is filled: " + secondTarget.getItem(0).getCount());
+            helper.assertTrue(source.getItemStackHandler(null).getStackInSlot(0).getCount() == 1, "Item input bus preserves the remaining item");
+            helper.succeed();
+        });
+    }
+
+    public void fluidInputEjectionStopsAfterFirstTarget(GameTestHelper helper) {
+        FluidHatchBlockEntity source = placeFluidInputPort(helper, new BlockPos(0, 1, 0));
+        FluidHatchBlockEntity firstTarget = placeFluidInputPort(helper, new BlockPos(1, 1, 0));
+        FluidHatchBlockEntity secondTarget = placeFluidInputPort(helper, new BlockPos(-1, 1, 0));
+        source.getMutableFluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2), false);
+
+        helper.runAtTickTime(20, () -> {
+            helper.assertTrue(source.ejectContents(), "Fluid input hatch ejects its contents");
+            long transferred = firstTarget.getMutableFluidStorage().getAmountAsLong() + secondTarget.getMutableFluidStorage().getAmountAsLong();
+            helper.assertTrue(transferred == 2, "Exactly one adjacent fluid target receives all contents");
+            helper.assertTrue(source.getMutableFluidStorage().isEmpty(), "Fluid input hatch is empty after a complete first transfer");
+            helper.succeed();
+        });
+    }
+
+    public void fluidInputEjectionContinuesAfterPartialTarget(GameTestHelper helper) {
+        FluidHatchBlockEntity source = placeFluidInputPort(helper, new BlockPos(0, 1, 0));
+        FluidHatchBlockEntity firstTarget = placeFluidInputPort(helper, new BlockPos(1, 1, 0));
+        FluidHatchBlockEntity secondTarget = placeFluidInputPort(helper, new BlockPos(-1, 1, 0));
+        source.getMutableFluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2), false);
+        firstTarget.getMutableFluidStorage().forceInsert(new FluidStack(Fluids.WATER, 7999), false);
+        secondTarget.getMutableFluidStorage().forceInsert(new FluidStack(Fluids.WATER, 7999), false);
+
+        helper.runAtTickTime(20, () -> {
+            helper.assertTrue(source.ejectContents(), "Fluid input hatch ejects to partially available targets");
+            helper.assertTrue(firstTarget.getMutableFluidStorage().getAmountAsLong() == 8000, "First fluid target receives its remaining capacity");
+            helper.assertTrue(secondTarget.getMutableFluidStorage().getAmountAsLong() == 8000, "Second fluid target receives the remaining fluid");
+            helper.assertTrue(source.getMutableFluidStorage().isEmpty(), "Fluid input hatch is empty after both partial transfers");
+            helper.succeed();
+        });
+    }
+
+    public void fluidInputEjectionPreservesRemainder(GameTestHelper helper) {
+        FluidHatchBlockEntity source = placeFluidInputPort(helper, new BlockPos(0, 1, 0));
+        FluidHatchBlockEntity firstTarget = placeFluidInputPort(helper, new BlockPos(1, 1, 0));
+        FluidHatchBlockEntity secondTarget = placeFluidInputPort(helper, new BlockPos(-1, 1, 0));
+        source.getMutableFluidStorage().forceInsert(new FluidStack(Fluids.WATER, 3), false);
+        firstTarget.getMutableFluidStorage().forceInsert(new FluidStack(Fluids.WATER, 7999), false);
+        secondTarget.getMutableFluidStorage().forceInsert(new FluidStack(Fluids.WATER, 7999), false);
+
+        helper.runAtTickTime(20, () -> {
+            helper.assertTrue(source.ejectContents(), "Fluid input hatch ejects until adjacent capacity is exhausted");
+            helper.assertTrue(firstTarget.getMutableFluidStorage().getAmountAsLong() == 8000, "First fluid target is filled");
+            helper.assertTrue(secondTarget.getMutableFluidStorage().getAmountAsLong() == 8000, "Second fluid target is filled");
+            helper.assertTrue(source.getMutableFluidStorage().getAmountAsLong() == 1, "Fluid input hatch preserves the remaining fluid");
+            helper.succeed();
+        });
+    }
+
+    public void energyInputEjectionStopsAfterFirstTarget(GameTestHelper helper) {
+        EnergyHatchBlockEntity source = placeEnergyInputPort(helper, new BlockPos(0, 1, 0));
+        EnergyHatchBlockEntity firstTarget = placeEnergyInputPort(helper, new BlockPos(1, 1, 0));
+        EnergyHatchBlockEntity secondTarget = placeEnergyInputPort(helper, new BlockPos(-1, 1, 0));
+        source.getMutableEnergyStorage().forceInsert(2, false);
+
+        helper.runAtTickTime(20, () -> {
+            helper.assertTrue(source.ejectContents(), "Energy input hatch ejects its contents");
+            long transferred = firstTarget.getMutableEnergyStorage().getAmountAsLong() + secondTarget.getMutableEnergyStorage().getAmountAsLong();
+            helper.assertTrue(transferred == 2, "Exactly one adjacent energy target receives all contents");
+            helper.assertTrue(source.getMutableEnergyStorage().getAmountAsLong() == 0, "Energy input hatch is empty after a complete first transfer");
+            helper.succeed();
+        });
+    }
+
+    public void energyInputEjectionContinuesAfterPartialTarget(GameTestHelper helper) {
+        EnergyHatchBlockEntity source = placeEnergyInputPort(helper, new BlockPos(0, 1, 0));
+        EnergyHatchBlockEntity firstTarget = placeEnergyInputPort(helper, new BlockPos(1, 1, 0));
+        EnergyHatchBlockEntity secondTarget = placeEnergyInputPort(helper, new BlockPos(-1, 1, 0));
+        source.getMutableEnergyStorage().forceInsert(2, false);
+        firstTarget.getMutableEnergyStorage().forceInsert(999999, false);
+        secondTarget.getMutableEnergyStorage().forceInsert(999999, false);
+
+        helper.runAtTickTime(20, () -> {
+            helper.assertTrue(source.ejectContents(), "Energy input hatch ejects to partially available targets");
+            helper.assertTrue(firstTarget.getMutableEnergyStorage().getAmountAsLong() == 1000000, "First energy target receives its remaining capacity");
+            helper.assertTrue(secondTarget.getMutableEnergyStorage().getAmountAsLong() == 1000000, "Second energy target receives the remaining FE");
+            helper.assertTrue(source.getMutableEnergyStorage().getAmountAsLong() == 0, "Energy input hatch is empty after both partial transfers");
+            helper.succeed();
+        });
+    }
+
+    public void energyInputEjectionPreservesRemainder(GameTestHelper helper) {
+        EnergyHatchBlockEntity source = placeEnergyInputPort(helper, new BlockPos(0, 1, 0));
+        EnergyHatchBlockEntity firstTarget = placeEnergyInputPort(helper, new BlockPos(1, 1, 0));
+        EnergyHatchBlockEntity secondTarget = placeEnergyInputPort(helper, new BlockPos(-1, 1, 0));
+        source.getMutableEnergyStorage().forceInsert(3, false);
+        firstTarget.getMutableEnergyStorage().forceInsert(999999, false);
+        secondTarget.getMutableEnergyStorage().forceInsert(999999, false);
+
+        helper.runAtTickTime(20, () -> {
+            helper.assertTrue(source.ejectContents(), "Energy input hatch ejects until adjacent capacity is exhausted");
+            helper.assertTrue(firstTarget.getMutableEnergyStorage().getAmountAsLong() == 1000000, "First energy target is filled");
+            helper.assertTrue(secondTarget.getMutableEnergyStorage().getAmountAsLong() == 1000000, "Second energy target is filled");
+            helper.assertTrue(source.getMutableEnergyStorage().getAmountAsLong() == 1, "Energy input hatch preserves the remaining FE");
+            helper.succeed();
+        });
+    }
+
+    private ItemBusBlockEntity placeItemInputPort(GameTestHelper helper, BlockPos pos) {
+        helper.setBlock(pos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+        return helper.getBlockEntity(pos, ItemBusBlockEntity.class);
+    }
+
+    private FluidHatchBlockEntity placeFluidInputPort(GameTestHelper helper, BlockPos pos) {
+        helper.setBlock(pos, ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState());
+        return helper.getBlockEntity(pos, FluidHatchBlockEntity.class);
+    }
+
+    private EnergyHatchBlockEntity placeEnergyInputPort(GameTestHelper helper, BlockPos pos) {
+        helper.setBlock(pos, ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState());
+        return helper.getBlockEntity(pos, EnergyHatchBlockEntity.class);
+    }
+
+    private ChestBlockEntity placeChest(GameTestHelper helper, BlockPos pos) {
+        helper.setBlock(pos, Blocks.CHEST.defaultBlockState());
+        return helper.getBlockEntity(pos, ChestBlockEntity.class);
+    }
+
+    private void fillChestExceptOne(ChestBlockEntity chest) {
+        chest.setItem(0, new ItemStack(Items.COBBLESTONE, 63));
+        for (int slot = 1; slot < chest.getContainerSize(); slot++) {
+            chest.setItem(slot, new ItemStack(Items.COBBLESTONE, 64));
+        }
+    }
 }
