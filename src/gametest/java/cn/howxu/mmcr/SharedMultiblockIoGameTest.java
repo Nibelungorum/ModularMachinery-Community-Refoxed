@@ -104,7 +104,7 @@ public class SharedMultiblockIoGameTest {
             second.serverTick();
             energy.set(helper.getBlockEntity(sharedEnergy, EnergyInputHatchBlockEntity.class));
             domain.set(first.resourceDomain());
-            energy.get().getMutableEnergyStorage(null).receiveEnergy(15, false);
+            energy.get().getMutableEnergyStorage().forceInsert(15, false);
             enqueueTick(coordinator, domain.get(), first, recipe, firstTicks);
             enqueueTick(coordinator, domain.get(), second, recipe, secondTicks);
             coordinator.resolve(domain.get());
@@ -113,7 +113,7 @@ public class SharedMultiblockIoGameTest {
             helper.assertTrue(secondTicks.get() == 0, "second lane cannot receive a second finite energy grant in the same tick");
         });
         helper.runAtTickTime(5, () -> {
-            energy.get().getMutableEnergyStorage(null).receiveEnergy(15, false);
+            energy.get().getMutableEnergyStorage().forceInsert(15, false);
             enqueueTick(coordinator, domain.get(), first, recipe, firstTicks);
             enqueueTick(coordinator, domain.get(), second, recipe, secondTicks);
             coordinator.resolve(domain.get());

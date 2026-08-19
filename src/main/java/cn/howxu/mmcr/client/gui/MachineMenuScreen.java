@@ -16,6 +16,7 @@ import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.util.IOType;
+import cn.howxu.mmcr.util.ReadableNumber;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -606,12 +607,15 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     }
 
     private void renderFluidTank(GuiGraphicsExtractor g, FluidHatchMenu menu, int x, int y) {
-        int amount = menu.fluidAmount();
-        int capacity = menu.fluidCapacity();
+        long amount = menu.fluidAmount();
+        long capacity = menu.fluidCapacity();
         if (capacity <= 0) return;
 
-        FluidStack fluid = menu.tank() == null ? FluidStack.EMPTY : menu.tank().getFluid();
-        int filled = amount <= 0 ? 0 : Math.max(1, (int) Math.ceil((double) amount * TANK_H / capacity));
+        var storage = menu.storage();
+        FluidStack fluid = storage == null || storage.getResource(0).isEmpty()
+                ? FluidStack.EMPTY
+                : storage.getResource(0).toStack(Math.min(storage.getAmountAsInt(0), Integer.MAX_VALUE));
+        int filled = amount <= 0 ? 0 : Math.max(1, (int) Math.min((long) TANK_H, Math.ceilDiv(amount * TANK_H, capacity)));
         if (!fluid.isEmpty() && filled > 0) {
             drawFluid(g, fluid, x + TANK_X, y + TANK_Y, TANK_W, TANK_H, Math.min(filled, TANK_H));
         }
@@ -623,10 +627,10 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
     }
 
     private void renderEnergyBar(GuiGraphicsExtractor g, EnergyHatchMenu menu, int x, int y) {
-        int stored = menu.storedEnergy();
-        int capacity = menu.energyCapacity();
+        long stored = menu.storedEnergy();
+        long capacity = menu.energyCapacity();
         if (capacity <= 0) return;
-        int filled = stored <= 0 ? 0 : Math.min(ENERGY_H, Math.max(1, (int) Math.ceil((double) stored * ENERGY_H / capacity)));
+        int filled = stored <= 0 ? 0 : Math.min(ENERGY_H, Math.max(1, (int) Math.min((long) ENERGY_H, Math.ceilDiv(stored * ENERGY_H, capacity))));
         int drawY = y + ENERGY_Y + (ENERGY_H - filled);
         if (filled > 0) {
             g.blit(RenderPipelines.GUI_TEXTURED, GUI_BAR_TEXTURE,
@@ -641,8 +645,8 @@ public class MachineMenuScreen extends AbstractContainerScreen<AbstractContainer
         g.text(font, Component.literal(text), x + storageTextX(titleLabelX), y + storageTextY(titleLabelY, true), TITLE_COLOR, false);
     }
 
-    private static String amountText(int amount, int capacity, String unit) {
-        return NUMBER_FORMAT.format(amount) + " / " + NUMBER_FORMAT.format(capacity) + " " + unit;
+    private static String amountText(long amount, long capacity, String unit) {
+        return ReadableNumber.format(amount) + " / " + ReadableNumber.format(capacity) + " " + unit;
     }
 
     private static void drawFluid(GuiGraphicsExtractor g, FluidStack fluid, int x, int y, int width, int height, int filled) {

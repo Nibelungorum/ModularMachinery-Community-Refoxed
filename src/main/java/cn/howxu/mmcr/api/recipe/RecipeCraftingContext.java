@@ -24,15 +24,17 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.resources.RegistryOps;
-import net.neoforged.neoforge.energy.IEnergyStorage;
 import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.IItemHandlerModifiable;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.neoforged.neoforge.transfer.ResourceHandler;
+import net.neoforged.neoforge.transfer.energy.EnergyHandler;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -355,11 +357,11 @@ public final class RecipeCraftingContext {
             List<FluidOutputTransfer> transfers = new ArrayList<>(route.transfers().size());
             for (FluidOutputTransfer transfer : route.transfers()) {
                 FluidHatchBlockEntity hatch = fluidHatchAt(transfer.pos(), IOType.OUTPUT);
-                if (hatch == null || transfer.tank() < 0 || transfer.tank() >= hatch.getFluidHandler(null).getTanks()) {
+                if (hatch == null || transfer.tank() != 0) {
                     transfers.clear();
                     break;
                 }
-                transfers.add(new FluidOutputTransfer(hatch.getFluidHandler(null), transfer.pos(), transfer.tank(), transfer.stack()));
+                transfers.add(new FluidOutputTransfer(hatch.getResourceHandler(null), transfer.pos(), transfer.tank(), transfer.stack()));
             }
             rebound.add(new FluidOutputRoute(List.copyOf(transfers)));
         }
@@ -627,8 +629,8 @@ public final class RecipeCraftingContext {
             setFailure(FAILURE_MISSING_INPUT, fluidFailure);
             return false;
         }
-        Map<IEnergyStorage, Integer> reservedEnergyInputs = new IdentityHashMap<>();
-        Map<IEnergyStorage, Integer> reservedEnergyOutputs = new IdentityHashMap<>();
+        Map<EnergyHandler, Integer> reservedEnergyInputs = new IdentityHashMap<>();
+        Map<EnergyHandler, Integer> reservedEnergyOutputs = new IdentityHashMap<>();
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
             if (!(requirement instanceof EnergyRequirement energy)) continue;
@@ -662,13 +664,13 @@ public final class RecipeCraftingContext {
         return true;
     }
 
-    private boolean reserveEnergyInput(int requirementIndex, EnergyRequirement energy, Map<IEnergyStorage, Integer> reservedEnergy) {
+    private boolean reserveEnergyInput(int requirementIndex, EnergyRequirement energy, Map<EnergyHandler, Integer> reservedEnergy) {
         int remaining = energy.fePerTick();
-        for (IEnergyStorage storage : taggedEnergyStorages(energy.tags())) {
+        for (EnergyHandler storage : taggedEnergyStorages(energy.tags())) {
             int reserved = reservedEnergy.getOrDefault(storage, 0);
-            int available = Math.max(0, storage.getEnergyStored() - reserved);
+            int available = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, storage.getAmountAsLong() - reserved));
             int requested = Math.min(remaining, available);
-            if (requested <= 0 || storage.extractEnergy(requested, true) < requested) continue;
+            if (requested <= 0 || simulateExtract(storage, requested) < requested) continue;
             reservedEnergy.put(storage, reserved + requested);
             remaining -= requested;
             if (remaining == 0) return true;
@@ -686,11 +688,11 @@ public final class RecipeCraftingContext {
         return false;
     }
 
-    private boolean reserveEnergyOutput(int requirementIndex, EnergyRequirement energy, Map<IEnergyStorage, Integer> reservedEnergy) {
+    private boolean reserveEnergyOutput(int requirementIndex, EnergyRequirement energy, Map<EnergyHandler, Integer> reservedEnergy) {
         int remaining = energy.fePerTick();
-        for (IEnergyStorage storage : taggedEnergyOutputs(energy.tags())) {
+        for (EnergyHandler storage : taggedEnergyOutputs(energy.tags())) {
             int reserved = reservedEnergy.getOrDefault(storage, 0);
-            int accepted = storage.receiveEnergy(Integer.MAX_VALUE, true);
+            int accepted = simulateInsert(storage, Integer.MAX_VALUE);
             int available = Math.max(0, accepted - reserved);
             int requested = Math.min(remaining, available);
             if (requested <= 0) continue;
@@ -711,15 +713,34 @@ public final class RecipeCraftingContext {
         return false;
     }
 
-    private static void commitEnergyInputs(Map<IEnergyStorage, Integer> reservedEnergy) {
-        for (Map.Entry<IEnergyStorage, Integer> entry : reservedEnergy.entrySet()) {
-            entry.getKey().extractEnergy(entry.getValue(), false);
+    private static int simulateExtract(EnergyHandler storage, int amount) {
+        try (Transaction tx = Transaction.openRoot()) {
+            int extracted = storage.extract(amount, tx);
+            return extracted;
         }
     }
 
-    private static void commitEnergyOutputs(Map<IEnergyStorage, Integer> reservedEnergy) {
-        for (Map.Entry<IEnergyStorage, Integer> entry : reservedEnergy.entrySet()) {
-            entry.getKey().receiveEnergy(entry.getValue(), false);
+    private static int simulateInsert(EnergyHandler storage, int amount) {
+        try (Transaction tx = Transaction.openRoot()) {
+            return storage.insert(amount, tx);
+        }
+    }
+
+    private static void commitEnergyInputs(Map<EnergyHandler, Integer> reservedEnergy) {
+        try (Transaction tx = Transaction.openRoot()) {
+            for (Map.Entry<EnergyHandler, Integer> entry : reservedEnergy.entrySet()) {
+                entry.getKey().extract(entry.getValue(), tx);
+            }
+            tx.commit();
+        }
+    }
+
+    private static void commitEnergyOutputs(Map<EnergyHandler, Integer> reservedEnergy) {
+        try (Transaction tx = Transaction.openRoot()) {
+            for (Map.Entry<EnergyHandler, Integer> entry : reservedEnergy.entrySet()) {
+                entry.getKey().insert(entry.getValue(), tx);
+            }
+            tx.commit();
         }
     }
 
@@ -1414,30 +1435,30 @@ public final class RecipeCraftingContext {
         return liveComponents(EnergyHatchBlockEntity.class, IOType.OUTPUT, List.of());
     }
 
-    private static List<IEnergyStorage> energyStorages(List<EnergyHatchBlockEntity> hatches) {
+    private static List<EnergyHandler> energyStorages(List<EnergyHatchBlockEntity> hatches) {
         return hatches.stream()
-                .map(hatch -> hatch.getEnergyStorage(null))
+                .map(hatch -> hatch.getEnergyHandler(null))
                 .toList();
     }
 
     private static int availableEnergy(List<EnergyHatchBlockEntity> hatches) {
         long available = 0;
         for (EnergyHatchBlockEntity hatch : hatches) {
-            available += hatch.getEnergyStorage(null).getEnergyStored();
+            available += hatch.getEnergyHandler(null).getAmountAsLong();
             if (available >= Integer.MAX_VALUE) return Integer.MAX_VALUE;
         }
         return (int) available;
     }
 
-    public List<IEnergyStorage> energyStorages() {
+    public List<EnergyHandler> energyStorages() {
         return energyStorages(liveEnergyInputs());
     }
 
-    public List<IEnergyStorage> taggedEnergyStorages(List<String> requiredTags) {
+    public List<EnergyHandler> taggedEnergyStorages(List<String> requiredTags) {
         return energyStorages(liveComponents(EnergyHatchBlockEntity.class, IOType.INPUT, requiredTags));
     }
 
-    public List<IEnergyStorage> taggedEnergyOutputs(List<String> requiredTags) {
+    public List<EnergyHandler> taggedEnergyOutputs(List<String> requiredTags) {
         return energyStorages(liveComponents(EnergyHatchBlockEntity.class, IOType.OUTPUT, requiredTags));
     }
 
@@ -1448,8 +1469,8 @@ public final class RecipeCraftingContext {
     public int taggedAvailableOutputEnergy(List<String> requiredTags) {
         long available = 0;
         for (EnergyHatchBlockEntity hatch : liveComponents(EnergyHatchBlockEntity.class, IOType.OUTPUT, requiredTags)) {
-            IEnergyStorage storage = hatch.getEnergyStorage(null);
-            available += (long) storage.getMaxEnergyStored() - storage.getEnergyStored();
+            EnergyHandler storage = hatch.getEnergyHandler(null);
+            available += storage.getCapacityAsLong() - storage.getAmountAsLong();
             if (available >= Integer.MAX_VALUE) return Integer.MAX_VALUE;
         }
         return (int) available;
@@ -1473,7 +1494,7 @@ public final class RecipeCraftingContext {
 
     public String energyComponentSummary() {
         return liveEnergyInputs().stream()
-                .map(hatch -> hatch.getBlockPos() + ":energy_input_hatch=" + hatch.getEnergyStorage(null).getEnergyStored())
+                .map(hatch -> hatch.getBlockPos() + ":energy_input_hatch=" + hatch.getEnergyHandler(null).getAmountAsLong())
                 .toList()
                 .toString();
     }
@@ -1482,9 +1503,9 @@ public final class RecipeCraftingContext {
         return liveEnergyOutputs().stream()
                 .map(hatch -> hatch.getBlockPos()
                         + ":energy_output_hatch=stored/max="
-                        + hatch.getEnergyStorage(null).getEnergyStored()
+                        + hatch.getEnergyHandler(null).getAmountAsLong()
                         + "/"
-                        + hatch.getEnergyStorage(null).getMaxEnergyStored())
+                        + hatch.getEnergyHandler(null).getCapacityAsLong())
                 .toList()
                 .toString();
     }
@@ -1627,7 +1648,7 @@ public final class RecipeCraftingContext {
             int available = 0;
             for (FluidInputTransfer transfer : route.transfers()) {
                 FluidInputState state = fluidInputState(states, transfer);
-                int remaining = state.drain(transfer.stack(), transfer.stack().getAmount(), new ArrayList<>());
+                int remaining = state.drain(FluidResource.of(transfer.stack()), transfer.stack().getAmount(), new ArrayList<>());
                 available += transfer.stack().getAmount() - remaining;
                 if (remaining > 0) {
                     return new RequirementFailure(requirementIndex, RequirementFailure.Kind.MISSING_INPUT, fluid.amount(), available);
@@ -1679,8 +1700,8 @@ public final class RecipeCraftingContext {
         List<FluidInputTransfer> transfers = new ArrayList<>();
         for (PersistedFluidTransfer transfer : persisted) {
             FluidHatchBlockEntity hatch = fluidHatchAt(transfer.pos(), IOType.INPUT);
-            if (hatch == null || transfer.tank() >= hatch.getFluidHandler(null).getTanks()) return;
-            transfers.add(new FluidInputTransfer(hatch.getFluidHandler(null), hatch.getBlockPos(), transfer.tank(), transfer.stack()));
+            if (hatch == null || transfer.tank() != 0) return;
+            transfers.add(new FluidInputTransfer(hatch.getResourceHandler(null), hatch.getBlockPos(), transfer.tank(), transfer.stack()));
         }
         List<FluidInputRoute> routes = new ArrayList<>(fluidInputRoutes);
         while (routes.size() <= requirementIndex) routes.add(null);
@@ -1799,10 +1820,8 @@ public final class RecipeCraftingContext {
     private List<FluidInputState> fluidInputStates(List<String> requiredTags) {
         List<FluidInputState> states = new ArrayList<>();
         for (FluidHatchBlockEntity hatch : liveComponents(FluidHatchBlockEntity.class, IOType.INPUT, requiredTags)) {
-            IFluidHandler handler = hatch.getFluidHandler(null);
-            for (int tank = 0; tank < handler.getTanks(); tank++) {
-                states.add(new FluidInputState(hatch, handler, tank, handler.getFluidInTank(tank).copy()));
-            }
+            ResourceHandler<FluidResource> handler = hatch.getResourceHandler(null);
+            states.add(new FluidInputState(hatch, handler, 0, handler.getResource(0), handler.getAmountAsLong(0)));
         }
         return states;
     }
@@ -1825,10 +1844,9 @@ public final class RecipeCraftingContext {
             if (!matchesIo(hatch, IOType.OUTPUT)) continue;
             BlockEntity live = level.getBlockEntity(component.getPos());
             if (live != hatch) continue;
-            IFluidHandler handler = hatch.getFluidHandler(null);
-            for (int tank = 0; tank < handler.getTanks(); tank++) {
-                states.add(new FluidOutputState(hatch, handler, tank, handler.getFluidInTank(tank).copy(), handler.getTankCapacity(tank), component.tags()));
-            }
+            ResourceHandler<FluidResource> handler = hatch.getResourceHandler(null);
+            states.add(new FluidOutputState(hatch, handler, 0, handler.getResource(0), handler.getAmountAsLong(0),
+                    handler.getCapacityAsLong(0, FluidResource.EMPTY), component.tags()));
         }
         return states;
     }
@@ -1856,14 +1874,17 @@ public final class RecipeCraftingContext {
         List<FluidInputState> states = new ArrayList<>();
         for (FluidInputTransfer transfer : transfers) {
             FluidInputState state = fluidInputState(states, transfer);
-            if (state.drain(transfer.stack(), transfer.stack().getAmount(), new ArrayList<>()) > 0) return false;
+            if (state.drain(FluidResource.of(transfer.stack()), transfer.stack().getAmount(), new ArrayList<>()) > 0) return false;
         }
         return true;
     }
 
     private static void drain(List<FluidInputTransfer> transfers) {
         for (FluidInputTransfer transfer : transfers) {
-            transfer.handler().drain(transfer.stack(), IFluidHandler.FluidAction.EXECUTE);
+            try (Transaction tx = Transaction.openRoot()) {
+                transfer.handler().extract(transfer.tank(), FluidResource.of(transfer.stack()), transfer.stack().getAmount(), tx);
+                tx.commit();
+            }
         }
     }
 
@@ -1878,7 +1899,10 @@ public final class RecipeCraftingContext {
 
     private static void fill(List<FluidOutputTransfer> transfers) {
         for (FluidOutputTransfer transfer : transfers) {
-            transfer.handler().fill(transfer.stack(), IFluidHandler.FluidAction.EXECUTE);
+            try (Transaction tx = Transaction.openRoot()) {
+                transfer.handler().insert(transfer.tank(), FluidResource.of(transfer.stack()), transfer.stack().getAmount(), tx);
+                tx.commit();
+            }
         }
     }
 
@@ -1924,7 +1948,8 @@ public final class RecipeCraftingContext {
         for (FluidInputState state : states) {
             if (state.handler == transfer.handler() && state.tank == transfer.tank()) return state;
         }
-        FluidInputState state = new FluidInputState(null, transfer.handler(), transfer.tank(), transfer.handler().getFluidInTank(transfer.tank()).copy());
+        FluidInputState state = new FluidInputState(null, transfer.handler(), transfer.tank(),
+                transfer.handler().getResource(transfer.tank()), transfer.handler().getAmountAsLong(transfer.tank()));
         states.add(state);
         return state;
     }
@@ -1934,7 +1959,8 @@ public final class RecipeCraftingContext {
             if (state.handler == transfer.handler() && state.tank == transfer.tank()) return state;
         }
         FluidOutputState state = new FluidOutputState(null, transfer.handler(), transfer.tank(),
-                transfer.handler().getFluidInTank(transfer.tank()).copy(), transfer.handler().getTankCapacity(transfer.tank()));
+                transfer.handler().getResource(transfer.tank()), transfer.handler().getAmountAsLong(transfer.tank()),
+                transfer.handler().getCapacityAsLong(transfer.tank(), FluidResource.EMPTY));
         states.add(state);
         return state;
     }
@@ -1952,11 +1978,11 @@ public final class RecipeCraftingContext {
 
     private record ItemOutputTransfer(IItemHandler handler, @Nullable net.minecraft.core.BlockPos pos, int slot, ItemStack stack) {}
 
-    private record FluidInputTransfer(IFluidHandler handler, @Nullable net.minecraft.core.BlockPos pos, int tank, FluidStack stack) {}
+    private record FluidInputTransfer(ResourceHandler<FluidResource> handler, @Nullable net.minecraft.core.BlockPos pos, int tank, FluidStack stack) {}
 
     private record PersistedFluidTransfer(net.minecraft.core.BlockPos pos, int tank, FluidStack stack) {}
 
-    private record FluidOutputTransfer(IFluidHandler handler, @Nullable net.minecraft.core.BlockPos pos, int tank, FluidStack stack) {}
+    private record FluidOutputTransfer(ResourceHandler<FluidResource> handler, @Nullable net.minecraft.core.BlockPos pos, int tank, FluidStack stack) {}
 
     record ItemMatchKey(MachineIngredient.ItemIngredient ingredient, ItemStack stack) { }
 
@@ -2059,29 +2085,31 @@ public final class RecipeCraftingContext {
 
     private static final class FluidInputState {
         private final FluidHatchBlockEntity hatch;
-        private final IFluidHandler handler;
+        private final ResourceHandler<FluidResource> handler;
         private final int tank;
-        private final FluidStack stack;
+        private final FluidResource resource;
+        private long amount;
 
-        private FluidInputState(FluidHatchBlockEntity hatch, IFluidHandler handler, int tank, FluidStack stack) {
+        private FluidInputState(FluidHatchBlockEntity hatch, ResourceHandler<FluidResource> handler, int tank,
+                                FluidResource resource, long amount) {
             this.hatch = hatch;
             this.handler = handler;
             this.tank = tank;
-            this.stack = stack;
+            this.resource = resource;
+            this.amount = amount;
         }
 
         private int drain(MachineIngredient.FluidIngredient ingredient, int remaining, List<FluidInputTransfer> transfers) {
-            return ingredient.fluid().test(stack) ? drain(stack, remaining, transfers) : remaining;
+            return !resource.isEmpty() && ingredient.fluid().test(resource.toStack(1)) ? drain(resource, remaining, transfers) : remaining;
         }
 
-        private int drain(FluidStack match, int remaining, List<FluidInputTransfer> transfers) {
-            if (remaining <= 0 || !FluidStack.isSameFluidSameComponents(stack, match)) return remaining;
-            int drained = Math.min(remaining, stack.getAmount());
+        private int drain(FluidResource match, int remaining, List<FluidInputTransfer> transfers) {
+            if (remaining <= 0 || !resource.equals(match)) return remaining;
+            int drained = (int) Math.min(remaining, amount);
             if (drained <= 0) return remaining;
-            FluidStack transfer = stack.copy();
-            transfer.setAmount(drained);
+            FluidStack transfer = resource.toStack(drained);
             transfers.add(new FluidInputTransfer(handler, hatch == null ? null : hatch.getBlockPos(), tank, transfer));
-            stack.shrink(drained);
+            amount -= drained;
             return remaining - drained;
         }
 
@@ -2092,39 +2120,39 @@ public final class RecipeCraftingContext {
 
     private static final class FluidOutputState {
         private final FluidHatchBlockEntity hatch;
-        private final IFluidHandler handler;
+        private final ResourceHandler<FluidResource> handler;
         private final int tank;
-        private FluidStack stack;
-        private final int capacity;
+        private FluidResource resource;
+        private long amount;
+        private final long capacity;
         private final List<String> tags;
 
-        private FluidOutputState(FluidHatchBlockEntity hatch, IFluidHandler handler, int tank, FluidStack stack, int capacity) {
-            this(hatch, handler, tank, stack, capacity, List.of());
+        private FluidOutputState(FluidHatchBlockEntity hatch, ResourceHandler<FluidResource> handler, int tank,
+                                 FluidResource resource, long amount, long capacity) {
+            this(hatch, handler, tank, resource, amount, capacity, List.of());
         }
 
-        private FluidOutputState(FluidHatchBlockEntity hatch, IFluidHandler handler, int tank, FluidStack stack, int capacity, List<String> tags) {
+        private FluidOutputState(FluidHatchBlockEntity hatch, ResourceHandler<FluidResource> handler, int tank,
+                                 FluidResource resource, long amount, long capacity, List<String> tags) {
             this.hatch = hatch;
             this.handler = handler;
             this.tank = tank;
-            this.stack = stack;
+            this.resource = resource;
+            this.amount = amount;
             this.capacity = capacity;
             this.tags = tags == null ? List.of() : List.copyOf(tags);
         }
 
         private int fill(FluidStack input, int remaining, List<FluidOutputTransfer> transfers) {
             if (remaining <= 0) return remaining;
-            if (!stack.isEmpty() && !FluidStack.isSameFluidSameComponents(stack, input)) return remaining;
-            int room = stack.isEmpty() ? capacity : capacity - stack.getAmount();
-            int filled = Math.min(room, remaining);
+            FluidResource inputResource = FluidResource.of(input);
+            if (!resource.isEmpty() && !resource.equals(inputResource)) return remaining;
+            int filled = (int) Math.min(Math.max(0L, capacity - amount), remaining);
             if (filled <= 0) return remaining;
-            FluidStack transfer = input.copy();
-            transfer.setAmount(filled);
+            FluidStack transfer = inputResource.toStack(filled);
             transfers.add(new FluidOutputTransfer(handler, hatch == null ? null : hatch.getBlockPos(), tank, transfer));
-            if (stack.isEmpty()) {
-                stack = transfer.copy();
-            } else {
-                stack.grow(filled);
-            }
+            if (resource.isEmpty()) resource = inputResource;
+            amount += filled;
             return remaining - filled;
         }
 

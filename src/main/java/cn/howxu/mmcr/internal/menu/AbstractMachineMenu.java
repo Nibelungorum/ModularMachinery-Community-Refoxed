@@ -35,6 +35,12 @@ public abstract class AbstractMachineMenu extends AbstractContainerMenu {
         return addDataSlot(slot);
     }
 
+    protected LongDataSlot addLongDataSlot(LongDataSlot slot) {
+        addDataSlot(slot.low());
+        addDataSlot(slot.high());
+        return slot;
+    }
+
     final void addControllerSlot(Slot slot) {
         addSlot(slot);
     }

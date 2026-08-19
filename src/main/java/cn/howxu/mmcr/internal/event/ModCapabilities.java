@@ -12,10 +12,6 @@ import net.minecraft.core.Direction;
 import net.neoforged.neoforge.capabilities.BlockCapability;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
-import net.neoforged.neoforge.energy.EnergyStorage;
-import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.fluids.capability.IFluidHandler;
-import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
 import net.neoforged.neoforge.items.ItemStackHandler;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.TransferPreconditions;
@@ -87,7 +83,7 @@ public final class ModCapabilities {
                     FLUID_BLOCK,
                     ModBlockEntities.BES.get(kind.id()).get(),
                     (be, side) -> be instanceof FluidHatchBlockEntity fh && fh.isAutoIOSideExposed(side)
-                            ? new LegacyFluidHandlerAdapter(fh.getFluidTank(side), canInsert, true)
+                            ? new DirectionalFluidHandler(fh.getResourceHandler(side), canInsert, !canInsert)
                             : null);
         } else if (kind.energyHatchSize().isPresent()) {
             boolean canInsert = kind.ioType() == IOType.INPUT;
@@ -95,17 +91,17 @@ public final class ModCapabilities {
                     ENERGY_BLOCK,
                     ModBlockEntities.BES.get(kind.id()).get(),
                     (be, side) -> be instanceof EnergyHatchBlockEntity eh && eh.isAutoIOSideExposed(side)
-                            ? new LegacyEnergyHandlerAdapter(eh, canInsert, !canInsert)
+                            ? new DirectionalEnergyHandler(eh.getEnergyHandler(side), canInsert, !canInsert)
                             : null);
         }
     }
 
-    private static final class LegacyFluidHandlerAdapter extends SnapshotJournal<FluidStack> implements ResourceHandler<FluidResource> {
-        private final FluidTank handler;
+    private static final class DirectionalFluidHandler implements ResourceHandler<FluidResource> {
+        private final ResourceHandler<FluidResource> handler;
         private final boolean canInsert;
         private final boolean canExtract;
 
-        LegacyFluidHandlerAdapter(FluidTank handler, boolean canInsert, boolean canExtract) {
+        DirectionalFluidHandler(ResourceHandler<FluidResource> handler, boolean canInsert, boolean canExtract) {
             this.handler = handler;
             this.canInsert = canInsert;
             this.canExtract = canExtract;
@@ -113,33 +109,32 @@ public final class ModCapabilities {
 
         @Override
         public int size() {
-            return handler.getTanks();
+            return handler.size();
         }
 
         @Override
         public FluidResource getResource(int slot) {
             checkSlot(slot);
-            FluidStack stack = handler.getFluidInTank(slot);
-            return stack.isEmpty() ? FluidResource.EMPTY : FluidResource.of(stack);
+            return handler.getResource(slot);
         }
 
         @Override
         public long getAmountAsLong(int slot) {
             checkSlot(slot);
-            return handler.getFluidInTank(slot).getAmount();
+            return handler.getAmountAsLong(slot);
         }
 
         @Override
         public long getCapacityAsLong(int slot, FluidResource resource) {
             checkSlot(slot);
-            return handler.getTankCapacity(slot);
+            return handler.getCapacityAsLong(slot, resource);
         }
 
         @Override
         public boolean isValid(int slot, FluidResource resource) {
             checkSlot(slot);
             TransferPreconditions.checkNonEmpty(resource);
-            return handler.isFluidValid(slot, resource.toStack(1));
+            return handler.isValid(slot, resource);
         }
 
         @Override
@@ -147,8 +142,7 @@ public final class ModCapabilities {
             checkSlot(slot);
             TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
             if (!canInsert) return 0;
-            updateSnapshots(tx);
-            return handler.fill(resource.toStack(amount), IFluidHandler.FluidAction.EXECUTE);
+            return handler.insert(slot, resource, amount, tx);
         }
 
         @Override
@@ -156,87 +150,49 @@ public final class ModCapabilities {
             checkSlot(slot);
             TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
             if (!canExtract) return 0;
-            updateSnapshots(tx);
-            return handler.drain(resource.toStack(amount), IFluidHandler.FluidAction.EXECUTE).getAmount();
+            return handler.extract(slot, resource, amount, tx);
         }
 
         private void checkSlot(int slot) {
-            if (slot < 0 || slot >= handler.getTanks()) {
+            if (slot < 0 || slot >= handler.size()) {
                 throw new IndexOutOfBoundsException(slot);
             }
         }
-
-        @Override
-        protected FluidStack createSnapshot() {
-            return handler.getFluid().copy();
-        }
-
-        @Override
-        protected void revertToSnapshot(FluidStack snapshot) {
-            handler.setFluid(snapshot == null ? FluidStack.EMPTY : snapshot);
-        }
     }
 
-    private static final class LegacyEnergyHandlerAdapter extends SnapshotJournal<Integer> implements EnergyHandler {
-        private final EnergyHatchBlockEntity hatch;
-        private final EnergyStorage storage;
+    private static final class DirectionalEnergyHandler implements EnergyHandler {
+        private final EnergyHandler handler;
         private final boolean canInsert;
         private final boolean canExtract;
 
-        LegacyEnergyHandlerAdapter(EnergyHatchBlockEntity hatch, boolean canInsert, boolean canExtract) {
-            this.hatch = hatch;
-            this.storage = hatch.getMutableEnergyStorage(null);
+        DirectionalEnergyHandler(EnergyHandler handler, boolean canInsert, boolean canExtract) {
+            this.handler = handler;
             this.canInsert = canInsert;
             this.canExtract = canExtract;
         }
 
         @Override
         public long getAmountAsLong() {
-            return storage.getEnergyStored();
+            return handler.getAmountAsLong();
         }
 
         @Override
         public long getCapacityAsLong() {
-            return storage.getMaxEnergyStored();
+            return handler.getCapacityAsLong();
         }
 
         @Override
         public int insert(int amount, TransactionContext tx) {
             TransferPreconditions.checkNonNegative(amount);
             if (!canInsert) return 0;
-            updateSnapshots(tx);
-            return storage.receiveEnergy(amount, false);
+            return handler.insert(amount, tx);
         }
 
         @Override
         public int extract(int amount, TransactionContext tx) {
             TransferPreconditions.checkNonNegative(amount);
             if (!canExtract) return 0;
-            updateSnapshots(tx);
-            return storage.extractEnergy(amount, false);
-        }
-
-        @Override
-        protected Integer createSnapshot() {
-            return storage.getEnergyStored();
-        }
-
-        @Override
-        protected void revertToSnapshot(Integer snapshot) {
-            int target = snapshot == null ? 0 : snapshot;
-            int current = storage.getEnergyStored();
-            if (current > target) {
-                storage.extractEnergy(current - target, false);
-            } else if (current < target) {
-                storage.receiveEnergy(target - current, false);
-            }
-        }
-
-        @Override
-        protected void onRootCommit(Integer originalState) {
-            if (originalState == null || originalState != storage.getEnergyStored()) {
-                hatch.setChanged();
-            }
+            return handler.extract(amount, tx);
         }
     }
 

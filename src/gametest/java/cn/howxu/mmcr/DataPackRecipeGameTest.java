@@ -89,7 +89,7 @@ public class DataPackRecipeGameTest {
         BlockPos energyPos = new BlockPos(2, 2, 1);
         helper.setBlock(energyPos, ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState());
         EnergyInputHatchBlockEntity energy = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class);
-        while (energy.getMutableEnergyStorage(null).receiveEnergy(10000, false) > 0) {}
+        while (energy.getMutableEnergyStorage().forceInsert(10000, false) > 0) {}
 
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(MachineRegistry.getMachine(IRON_COMPRESSOR));

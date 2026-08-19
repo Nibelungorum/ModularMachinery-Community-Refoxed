@@ -6,33 +6,28 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.neoforge.energy.EnergyStorage;
+import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 
 public class EnergyHatchMenu extends AbstractMachineMenu {
 
     private final EnergyHatchBlockEntity owner;
     private final Level level;
     private final BlockPos pos;
-    private final DataSlot stored;
-    private final DataSlot capacity;
+    private final LongDataSlot stored;
+    private final LongDataSlot capacity;
 
     public EnergyHatchMenu(int containerId, Inventory playerInv, EnergyHatchBlockEntity owner) {
         super(ModUIs.ENERGY_HATCH.get(), containerId);
         this.owner = owner;
         this.level = playerInv.player.level();
         this.pos = owner == null ? BlockPos.ZERO : owner.getBlockPos();
-        this.stored = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return owner.getMutableEnergyStorage(null).getEnergyStored(); }
-            @Override public void set(int value) {}
-        });
-        this.capacity = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return owner.getMutableEnergyStorage(null).getMaxEnergyStored(); }
-            @Override public void set(int value) {}
-        });
+        this.stored = addLongDataSlot(owner == null ? LongDataSlot.standalone()
+                : new LongDataSlot(() -> owner.getEnergyHandler(null).getAmountAsLong()));
+        this.capacity = addLongDataSlot(owner == null ? LongDataSlot.standalone()
+                : new LongDataSlot(() -> owner.getEnergyHandler(null).getCapacityAsLong()));
         addPlayerSlots(playerInv);
     }
 
@@ -41,8 +36,8 @@ public class EnergyHatchMenu extends AbstractMachineMenu {
         this.owner = null;
         this.level = playerInv.player.level();
         this.pos = pos;
-        this.stored = addDataSlot(DataSlot.standalone());
-        this.capacity = addDataSlot(DataSlot.standalone());
+        this.stored = addLongDataSlot(LongDataSlot.standalone());
+        this.capacity = addLongDataSlot(LongDataSlot.standalone());
         addPlayerSlots(playerInv);
     }
 
@@ -56,23 +51,23 @@ public class EnergyHatchMenu extends AbstractMachineMenu {
 
     public BlockPos pos() { return pos; }
 
-    public EnergyStorage storage() {
+    public EnergyHandler storage() {
         EnergyHatchBlockEntity hatch = resolvedOwner();
-        return hatch == null ? null : hatch.getMutableEnergyStorage(null);
+        return hatch == null ? null : hatch.getEnergyHandler(null);
     }
 
-    public int storedEnergy() {
-        EnergyStorage storage = storage();
-        return storage == null ? stored.get() : storage.getEnergyStored();
+    public long storedEnergy() {
+        EnergyHandler storage = storage();
+        return storage == null ? stored.value() : storage.getAmountAsLong();
     }
 
-    public int energyCapacity() {
+    public long energyCapacity() {
         EnergyHatchBlockEntity hatch = resolvedOwner();
-        return hatch == null ? capacity.get() : energyCapacity(hatch);
+        return hatch == null ? capacity.value() : energyCapacity(hatch);
     }
 
-    static int energyCapacity(EnergyHatchBlockEntity hatch) {
-        return hatch.getMutableEnergyStorage(null).getMaxEnergyStored();
+    static long energyCapacity(EnergyHatchBlockEntity hatch) {
+        return hatch.getEnergyHandler(null).getCapacityAsLong();
     }
 
     private EnergyHatchBlockEntity resolvedOwner() {

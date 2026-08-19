@@ -42,7 +42,7 @@ public class EnergyHatchCapabilityGameTest {
 
         int movedToInput = EnergyHandlerUtil.move(InfiniteEnergyHandler.INSTANCE, input, 500, null);
         helper.assertTrue(movedToInput == 500, "Input energy capability receives from transfer energy source");
-        helper.assertTrue(inputHatch.getEnergyStorage(null).getEnergyStored() == 500, "Input hatch stores transferred energy");
+        helper.assertTrue(inputHatch.getEnergyHandler(null).getAmountAsLong() == 500, "Input hatch stores transferred energy");
 
         try (Transaction tx = Transaction.openRoot()) {
             int extracted = input.extract(200, tx);
@@ -50,8 +50,8 @@ public class EnergyHatchCapabilityGameTest {
             tx.commit();
         }
 
-        var outputStorage = outputHatch.getMutableEnergyStorage(null);
-        while (outputStorage.receiveEnergy(10000, false) > 0) {}
+        var outputStorage = outputHatch.getMutableEnergyStorage();
+        while (outputStorage.forceInsert(10000, false) > 0) {}
 
         try (Transaction tx = Transaction.openRoot()) {
             int inserted = output.insert(200, tx);

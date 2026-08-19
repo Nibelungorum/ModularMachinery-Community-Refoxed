@@ -12,9 +12,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.material.Fluids;
-import net.neoforged.neoforge.energy.EnergyStorage;
 import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -52,17 +50,17 @@ public class AutoIOGameTest {
 
         FluidHatchBlockEntity outputHatch = helper.getBlockEntity(outputPos, FluidHatchBlockEntity.class);
         FluidHatchBlockEntity receiver = helper.getBlockEntity(receiverPos, FluidHatchBlockEntity.class);
-        outputHatch.getFluidHandler(Direction.EAST).fill(new FluidStack(Fluids.WATER, 1000), IFluidHandler.FluidAction.EXECUTE);
+        outputHatch.getMutableFluidStorage().forceInsert(new FluidStack(Fluids.WATER, 1000), false);
 
         outputHatch.toggleAutoIOEnabled();
         outputHatch.setAllAutoIOSides(false);
         outputHatch.setAutoIOSide(Direction.EAST, true);
         helper.runAtTickTime(60, outputHatch::serverTick);
         helper.runAtTickTime(80, () -> {
-            FluidStack exported = receiver.getFluidHandler(Direction.WEST).getFluidInTank(0);
+            FluidStack exported = receiver.getMutableFluidStorage().getFluidStack();
             helper.assertTrue(exported.getFluid() == Fluids.WATER, "Fluid output hatch exports water east");
             helper.assertTrue(exported.getAmount() > 0, "Fluid output hatch moves water into east receiver");
-            helper.assertTrue(outputHatch.getFluidHandler(Direction.EAST).getFluidInTank(0).getAmount() < 1000, "Fluid output hatch loses water to auto output");
+            helper.assertTrue(outputHatch.getMutableFluidStorage().getAmountAsLong() < 1000, "Fluid output hatch loses water to auto output");
             helper.succeed();
         });
     }
@@ -75,16 +73,16 @@ public class AutoIOGameTest {
 
         EnergyHatchBlockEntity outputHatch = helper.getBlockEntity(outputPos, EnergyHatchBlockEntity.class);
         EnergyHatchBlockEntity receiver = helper.getBlockEntity(receiverPos, EnergyHatchBlockEntity.class);
-        EnergyStorage outputStorage = outputHatch.getMutableEnergyStorage(Direction.EAST);
-        outputStorage.receiveEnergy(700, false);
+        var outputStorage = outputHatch.getMutableEnergyStorage();
+        outputStorage.forceInsert(700, false);
 
         outputHatch.toggleAutoIOEnabled();
         outputHatch.setAllAutoIOSides(false);
         outputHatch.setAutoIOSide(Direction.EAST, true);
         helper.runAtTickTime(60, outputHatch::serverTick);
         helper.runAtTickTime(80, () -> {
-            helper.assertTrue(receiver.getEnergyStorage(Direction.WEST).getEnergyStored() > 0, "Energy output hatch exports FE east");
-            helper.assertTrue(outputStorage.getEnergyStored() < 700, "Energy output hatch loses FE to auto output");
+            helper.assertTrue(receiver.getEnergyHandler(Direction.WEST).getAmountAsLong() > 0, "Energy output hatch exports FE east");
+            helper.assertTrue(outputStorage.getAmountAsLong() < 700, "Energy output hatch loses FE to auto output");
             helper.succeed();
         });
     }

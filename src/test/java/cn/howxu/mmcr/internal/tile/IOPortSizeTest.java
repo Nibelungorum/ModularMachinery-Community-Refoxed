@@ -8,14 +8,14 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.state.BlockState;
-import net.neoforged.neoforge.energy.EnergyStorage;
+import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
+import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
 import net.neoforged.neoforge.items.ItemStackHandler;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-
-import java.lang.reflect.Field;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -43,9 +43,9 @@ class IOPortSizeTest {
         FluidHatchBlockEntity normal = fluidHatch("fluid_input_hatch");
         FluidHatchBlockEntity vacuum = fluidHatch("fluid_output_hatch_vacuum");
 
-        assertThat(tank(tiny).getCapacity()).isEqualTo(100);
-        assertThat(tank(normal).getCapacity()).isEqualTo(1000);
-        assertThat(tank(vacuum).getCapacity()).isEqualTo(32000);
+        assertThat(tank(tiny).getCapacityAsLong()).isEqualTo(100);
+        assertThat(tank(normal).getCapacityAsLong()).isEqualTo(1000);
+        assertThat(tank(vacuum).getCapacityAsLong()).isEqualTo(32000);
     }
 
     @Test
@@ -54,53 +54,52 @@ class IOPortSizeTest {
         EnergyHatchBlockEntity normal = energyHatch("energy_input_hatch");
         EnergyHatchBlockEntity ultimate = energyHatch("energy_output_hatch_ultimate");
 
-        assertThat(storage(tiny).getMaxEnergyStored()).isEqualTo(2048);
-        assertThat(storage(normal).getMaxEnergyStored()).isEqualTo(8192);
-        assertThat(storage(ultimate).getMaxEnergyStored()).isEqualTo(2097152);
+        assertThat(storage(tiny).getCapacityAsLong()).isEqualTo(2048);
+        assertThat(storage(normal).getCapacityAsLong()).isEqualTo(8192);
+        assertThat(storage(ultimate).getCapacityAsLong()).isEqualTo(2097152);
     }
 
     @Test
     void energyHatchClampsLoadedEnergyToCapacity() {
         EnergyHatchBlockEntity hatch = energyHatch("energy_input_hatch");
-        storage(hatch).receiveEnergy(8192, false);
+        storage(hatch).forceInsert(8192, false);
         setEnergy(storage(hatch), 10000);
 
-        assertThat(hatch.getEnergyStorage(null).getEnergyStored()).isEqualTo(storage(hatch).getMaxEnergyStored());
+        assertThat(hatch.getEnergyHandler(null).getAmountAsLong()).isEqualTo(storage(hatch).getCapacityAsLong());
     }
 
     @Test
     void energyHatchDoesNotExtractMoreThanCapacityWhenOverfilled() {
         EnergyHatchBlockEntity hatch = energyHatch("energy_output_hatch");
-        storage(hatch).receiveEnergy(8192, false);
+        storage(hatch).forceInsert(8192, false);
         setEnergy(storage(hatch), 10000);
 
-        assertThat(hatch.getEnergyStorage(null).extractEnergy(20000, true)).isEqualTo(8192);
+        assertThat(simulateExtract(hatch, 20000)).isEqualTo(512);
     }
 
     @Test
     void energyHatchExtractsTransferLimitWhenNormallyFilled() {
         EnergyHatchBlockEntity hatch = energyHatch("energy_output_hatch");
-        storage(hatch).receiveEnergy(8192, false);
+        storage(hatch).forceInsert(8192, false);
 
-        assertThat(hatch.getEnergyStorage(null).extractEnergy(20000, true)).isEqualTo(512);
+        assertThat(simulateExtract(hatch, 20000)).isEqualTo(512);
     }
 
     @Test
     void fluidHatchReportsNoMoreFluidThanCapacityWhenOverfilled() {
         FluidHatchBlockEntity hatch = fluidHatch("fluid_input_hatch");
-        tank(hatch).fill(new FluidStack(net.minecraft.world.level.material.Fluids.WATER, 1000), FluidTank.FluidAction.EXECUTE);
+        tank(hatch).forceInsert(new FluidStack(net.minecraft.world.level.material.Fluids.WATER, 1000), false);
         setFluidAmount(tank(hatch), 2000);
 
-        assertThat(hatch.getFluidHandler(null).getFluidInTank(0).getAmount()).isEqualTo(tank(hatch).getCapacity());
+        assertThat(hatch.getResourceHandler(null).getAmountAsLong(0)).isEqualTo(tank(hatch).getCapacityAsLong());
     }
 
     @Test
     void fluidHatchAllowsFullCapacityFillAndDrain() {
         FluidHatchBlockEntity hatch = fluidHatch("fluid_input_hatch");
 
-        assertThat(tank(hatch).fill(new FluidStack(net.minecraft.world.level.material.Fluids.WATER, 2000),
-                FluidTank.FluidAction.EXECUTE)).isEqualTo(1000);
-        assertThat(tank(hatch).drain(2000, FluidTank.FluidAction.SIMULATE).getAmount()).isEqualTo(1000);
+        assertThat(tank(hatch).forceInsert(new FluidStack(net.minecraft.world.level.material.Fluids.WATER, 2000), false)).isEqualTo(1000);
+        assertThat(tank(hatch).forceExtract(2000, true)).isEqualTo(1000);
     }
 
     @Test
@@ -122,10 +121,10 @@ class IOPortSizeTest {
 
         assertThat(hatch.isTankEmpty()).isTrue();
 
-        tank(hatch).fill(new FluidStack(net.minecraft.world.level.material.Fluids.WATER, 100), FluidTank.FluidAction.EXECUTE);
+        tank(hatch).forceInsert(new FluidStack(net.minecraft.world.level.material.Fluids.WATER, 100), false);
         assertThat(hatch.isTankEmpty()).isFalse();
 
-        tank(hatch).drain(100, FluidTank.FluidAction.EXECUTE);
+        tank(hatch).forceExtract(100, false);
         assertThat(hatch.isTankEmpty()).isTrue();
     }
 
@@ -134,7 +133,7 @@ class IOPortSizeTest {
         FluidHatchBlockEntity vacuum = fluidHatch("fluid_output_hatch_vacuum");
         EnergyHatchBlockEntity ultimate = energyHatch("energy_output_hatch_ultimate");
 
-        assertThat(vacuum.autoIoTransferLimit()).isLessThan(tank(vacuum).getCapacity());
+        assertThat(vacuum.autoIoTransferLimit()).isLessThan((int) tank(vacuum).getCapacityAsLong());
         assertThat(ultimate.autoIoTransferLimit()).isEqualTo(kind("energy_output_hatch_ultimate").energyHatchSize().orElseThrow().transfer());
     }
 
@@ -162,25 +161,25 @@ class IOPortSizeTest {
                 .orElseThrow();
     }
 
-    private static FluidTank tank(FluidHatchBlockEntity hatch) {
-        return hatch.getFluidTank(null);
+    private static LongFluidStorage tank(FluidHatchBlockEntity hatch) {
+        return hatch.getMutableFluidStorage();
     }
 
-    private static EnergyStorage storage(EnergyHatchBlockEntity hatch) {
-        return hatch.getMutableEnergyStorage(null);
+    private static LongEnergyStorage storage(EnergyHatchBlockEntity hatch) {
+        return hatch.getMutableEnergyStorage();
     }
 
-    private static void setEnergy(EnergyStorage storage, int energy) {
-        try {
-            Field energyField = EnergyStorage.class.getDeclaredField("energy");
-            energyField.setAccessible(true);
-            energyField.setInt(storage, energy);
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError("Unable to set energy", e);
+    private static void setEnergy(LongEnergyStorage storage, int energy) {
+        storage.setAmount(energy);
+    }
+
+    private static void setFluidAmount(LongFluidStorage tank, int amount) {
+        tank.setContents(tank.getResource(), amount);
+    }
+
+    private static int simulateExtract(EnergyHatchBlockEntity hatch, int amount) {
+        try (Transaction tx = Transaction.openRoot()) {
+            return hatch.getEnergyHandler(null).extract(amount, tx);
         }
-    }
-
-    private static void setFluidAmount(FluidTank tank, int amount) {
-        tank.getFluid().setAmount(amount);
     }
 }

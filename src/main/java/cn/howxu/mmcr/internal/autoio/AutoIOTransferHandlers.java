@@ -8,9 +8,6 @@ import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.neoforged.neoforge.energy.IEnergyStorage;
-import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.ResourceHandlerUtil;
@@ -63,7 +60,7 @@ public final class AutoIOTransferHandlers {
             if (!canWork(port) || !(port instanceof FluidHatchBlockEntity fluidHatch)) return false;
             ResourceHandler<FluidResource> adjacent = adjacentFluidHandler(port, side);
             if (adjacent == null) return false;
-            ResourceHandler<FluidResource> internal = new FluidHandlerAdapter(fluidHatch.getFluidTank(side));
+            ResourceHandler<FluidResource> internal = fluidHatch.getResourceHandler(side);
             if (port.ioType() == IOType.INPUT) {
                 return ResourceHandlerUtil.move(adjacent, internal, resource -> true, port.autoIoTransferLimit(), null) > 0;
             }
@@ -79,7 +76,7 @@ public final class AutoIOTransferHandlers {
             if (!canWork(port) || !(port instanceof EnergyHatchBlockEntity energyHatch)) return false;
             net.neoforged.neoforge.transfer.energy.EnergyHandler adjacent = adjacentEnergyHandler(port, side);
             if (adjacent == null) return false;
-            net.neoforged.neoforge.transfer.energy.EnergyHandler internal = new EnergyStorageAdapter(energyHatch.getMutableEnergyStorage(side));
+            net.neoforged.neoforge.transfer.energy.EnergyHandler internal = energyHatch.getEnergyHandler(side);
             if (port.ioType() == IOType.INPUT) {
                 return EnergyHandlerUtil.move(adjacent, internal, port.autoIoTransferLimit(), null) > 0;
             }
@@ -159,75 +156,4 @@ public final class AutoIOTransferHandlers {
         }
     }
 
-    private static final class FluidHandlerAdapter extends SnapshotJournal<FluidStack> implements ResourceHandler<FluidResource> {
-        private final IFluidHandler handler;
-
-        private FluidHandlerAdapter(IFluidHandler handler) {
-            this.handler = handler;
-        }
-
-        @Override public int size() { return handler.getTanks(); }
-        @Override public FluidResource getResource(int tank) {
-            FluidStack stack = handler.getFluidInTank(tank);
-            return stack.isEmpty() ? FluidResource.EMPTY : FluidResource.of(stack);
-        }
-        @Override public long getAmountAsLong(int tank) { return handler.getFluidInTank(tank).getAmount(); }
-        @Override public long getCapacityAsLong(int tank, FluidResource resource) { return handler.getTankCapacity(tank); }
-        @Override public boolean isValid(int tank, FluidResource resource) { return handler.isFluidValid(tank, resource.toStack(1)); }
-        @Override public int insert(int tank, FluidResource resource, int amount, TransactionContext tx) {
-            updateSnapshots(tx);
-            return handler.fill(resource.toStack(amount), IFluidHandler.FluidAction.EXECUTE);
-        }
-        @Override public int extract(int tank, FluidResource resource, int amount, TransactionContext tx) {
-            updateSnapshots(tx);
-            return handler.drain(resource.toStack(amount), IFluidHandler.FluidAction.EXECUTE).getAmount();
-        }
-
-        @Override
-        protected FluidStack createSnapshot() {
-            return handler.getFluidInTank(0).copy();
-        }
-
-        @Override
-        protected void revertToSnapshot(FluidStack snapshot) {
-            if (handler instanceof net.neoforged.neoforge.fluids.capability.templates.FluidTank tank) {
-                tank.setFluid(snapshot == null ? FluidStack.EMPTY : snapshot);
-            }
-        }
-    }
-
-    private static final class EnergyStorageAdapter extends SnapshotJournal<Integer> implements net.neoforged.neoforge.transfer.energy.EnergyHandler {
-        private final IEnergyStorage storage;
-
-        private EnergyStorageAdapter(IEnergyStorage storage) {
-            this.storage = storage;
-        }
-
-        @Override public long getAmountAsLong() { return storage.getEnergyStored(); }
-        @Override public long getCapacityAsLong() { return storage.getMaxEnergyStored(); }
-        @Override public int insert(int amount, TransactionContext tx) {
-            updateSnapshots(tx);
-            return storage.receiveEnergy(amount, false);
-        }
-        @Override public int extract(int amount, TransactionContext tx) {
-            updateSnapshots(tx);
-            return storage.extractEnergy(amount, false);
-        }
-
-        @Override
-        protected Integer createSnapshot() {
-            return storage.getEnergyStored();
-        }
-
-        @Override
-        protected void revertToSnapshot(Integer snapshot) {
-            int target = snapshot == null ? 0 : snapshot;
-            int current = storage.getEnergyStored();
-            if (current > target) {
-                storage.extractEnergy(current - target, false);
-            } else if (current < target) {
-                storage.receiveEnergy(target - current, false);
-            }
-        }
-    }
 }

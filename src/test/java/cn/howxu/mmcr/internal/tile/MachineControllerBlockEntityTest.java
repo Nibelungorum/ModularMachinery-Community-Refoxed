@@ -34,6 +34,8 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.client.model.MachineModelDataKeys;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
+import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
+import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -61,9 +63,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
-import net.neoforged.neoforge.energy.EnergyStorage;
 import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
 import net.neoforged.neoforge.items.ItemStackHandler;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -1180,19 +1180,19 @@ class MachineControllerBlockEntityTest {
     void twoEnergyHatchesSumStoredAndCapacity() throws Exception {
         EnergyInputHatchBlockEntity first = energyHatch(new BlockPos(1, 0, 0));
         EnergyInputHatchBlockEntity second = energyHatch(new BlockPos(2, 0, 0));
-        first.getMutableEnergyStorage(null).receiveEnergy(200, false);
-        second.getMutableEnergyStorage(null).receiveEnergy(300, false);
+        first.getMutableEnergyStorage().forceInsert(200, false);
+        second.getMutableEnergyStorage().forceInsert(300, false);
         MachineControllerBlockEntity controller = controllerWithEnergyHatches(first, second);
 
         assertThat(controller.totalStoredEnergy()).isEqualTo(500);
-        assertThat(controller.totalCapacityEnergy()).isEqualTo(first.getMutableEnergyStorage(null).getMaxEnergyStored() * 2L);
+        assertThat(controller.totalCapacityEnergy()).isEqualTo(first.getMutableEnergyStorage().getCapacityAsLong() * 2L);
     }
 
     @Test
     void primaryFluidReturnsFirstNonEmptyInputHatch() throws Exception {
         Fluids.WATER.builtInRegistryHolder().bindComponents(net.minecraft.core.component.DataComponentMap.EMPTY);
         FluidInputHatchBlockEntity input = fluidInputHatch(new BlockPos(1, 0, 0));
-        input.getFluidTank(null).setFluid(new FluidStack(Fluids.WATER, 500));
+        input.getMutableFluidStorage().setFluid(new FluidStack(Fluids.WATER, 500));
         MachineControllerBlockEntity controller = controllerWithFluidHatch(input);
 
         assertThat(controller.primaryFluid().getFluid()).isEqualTo(Fluids.WATER);
@@ -1203,7 +1203,7 @@ class MachineControllerBlockEntityTest {
     void primaryOutputFluidReturnsFirstNonEmptyOutputHatch() throws Exception {
         Fluids.LAVA.builtInRegistryHolder().bindComponents(net.minecraft.core.component.DataComponentMap.EMPTY);
         FluidOutputHatchBlockEntity output = fluidOutputHatch(new BlockPos(1, 0, 0));
-        output.getFluidTank(null).setFluid(new FluidStack(Fluids.LAVA, 250));
+        output.getMutableFluidStorage().setFluid(new FluidStack(Fluids.LAVA, 250));
         MachineControllerBlockEntity controller = controllerWithFluidHatch(output);
 
         assertThat(controller.primaryOutputFluid().getFluid()).isEqualTo(Fluids.LAVA);
@@ -1955,7 +1955,7 @@ class MachineControllerBlockEntityTest {
         });
         input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 1));
         EnergyInputHatchBlockEntity energy = energyHatch(new BlockPos(3, 0, 0));
-        energy.getMutableEnergyStorage(null).receiveEnergy(20, false);
+        energy.getMutableEnergyStorage().forceInsert(20, false);
         MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
         setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
         DynamicMachine stateMachine = new DynamicMachine(MMCR.id("private_controller_state"), "Private Controller State", new BlockArray(Map.of()));
@@ -1983,11 +1983,11 @@ class MachineControllerBlockEntityTest {
 
         assertThat(active.isFinishPending()).isTrue();
         assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
-        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+        assertThat(energy.getMutableEnergyStorage().getAmountAsLong()).isEqualTo(10);
 
         invokeTickActiveRecipe(controller);
         assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
-        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+        assertThat(energy.getMutableEnergyStorage().getAmountAsLong()).isEqualTo(10);
 
         output.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
         setField(ActiveMachineRecipe.class, active, "nextFinishRetryTick", 0);
@@ -1995,7 +1995,7 @@ class MachineControllerBlockEntityTest {
 
         assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "active")).isNull();
         assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
-        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+        assertThat(energy.getMutableEnergyStorage().getAmountAsLong()).isEqualTo(10);
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getItem()).isEqualTo(Items.IRON_INGOT);
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
     }
@@ -2587,7 +2587,7 @@ class MachineControllerBlockEntityTest {
                     .filter(kind -> kind.id().equals(id))
                     .findFirst()
                     .orElseThrow());
-            setField(EnergyHatchBlockEntity.class, hatch, "storage", new EnergyStorage(1000, 1000, 1000));
+            setField(EnergyHatchBlockEntity.class, hatch, "storage", new LongEnergyStorage(1000, 1000, () -> {}));
             initializePortAppearance(hatch);
             return hatch;
         } catch (ReflectiveOperationException e) {
@@ -2640,9 +2640,7 @@ class MachineControllerBlockEntityTest {
             setField(BlockEntity.class, hatch, "worldPosition", pos);
             setField(BlockEntity.class, hatch, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
             setField(FluidInputHatchBlockEntity.class, hatch, "kind", PortKinds.FLUID_INPUT);
-            setField(FluidHatchBlockEntity.class, hatch, "tank", new FluidTank(8000) {
-                @Override protected void onContentsChanged() { }
-            });
+            setField(FluidHatchBlockEntity.class, hatch, "storage", new LongFluidStorage(8000, () -> {}));
             initializePortAppearance(hatch);
             return hatch;
         } catch (ReflectiveOperationException e) {
@@ -2660,9 +2658,7 @@ class MachineControllerBlockEntityTest {
             setField(BlockEntity.class, hatch, "worldPosition", pos);
             setField(BlockEntity.class, hatch, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
             setField(FluidOutputHatchBlockEntity.class, hatch, "kind", PortKinds.FLUID_OUTPUT);
-            setField(FluidHatchBlockEntity.class, hatch, "tank", new FluidTank(8000) {
-                @Override protected void onContentsChanged() { }
-            });
+            setField(FluidHatchBlockEntity.class, hatch, "storage", new LongFluidStorage(8000, () -> {}));
             initializePortAppearance(hatch);
             return hatch;
         } catch (ReflectiveOperationException e) {

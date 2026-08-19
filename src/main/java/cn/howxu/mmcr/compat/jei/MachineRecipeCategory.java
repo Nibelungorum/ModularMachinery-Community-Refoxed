@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.compat.jei.MachineRecipeLayout.OverflowSlotPlan;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.util.ReadableNumber;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.builder.IRecipeSlotBuilder;
 import mezz.jei.api.gui.builder.ITooltipBuilder;
@@ -133,14 +134,14 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         int y = layout.durationTextY() + TEXT_LINE_SPACING;
         for (EnergyIngredient energy : recipe.energyInputs()) {
             guiGraphics.text(Minecraft.getInstance().font,
-                    Component.translatable("jei.mmcr.machine_recipe.energy_in", energy.fePerTick(),
-                            (long) energy.fePerTick() * recipe.durationTicks()),
+                    Component.translatable("jei.mmcr.machine_recipe.energy_in", ReadableNumber.format(energy.fePerTick()),
+                            ReadableNumber.format((long) energy.fePerTick() * recipe.durationTicks())),
                     textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
             y += TEXT_LINE_SPACING;
         }
         for (EnergyIngredient energy : recipe.energyOutputs()) {
             guiGraphics.text(Minecraft.getInstance().font,
-                    Component.translatable("jei.mmcr.machine_recipe.energy_out", energy.fePerTick()),
+                    Component.translatable("jei.mmcr.machine_recipe.energy_out", ReadableNumber.format(energy.fePerTick())),
                     textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
             y += TEXT_LINE_SPACING;
         }
@@ -204,7 +205,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     static Component overflowEntry(int amount, Component displayName) {
-        return Component.translatable("jei.mmcr.machine_recipe.overflow_entry", amount, displayName);
+        return Component.translatable("jei.mmcr.machine_recipe.overflow_entry", ReadableNumber.format(amount), displayName);
     }
 
     static Component outputStackName(ItemStack stack) {

@@ -9,6 +9,7 @@ import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
+import cn.howxu.mmcr.util.ReadableNumber;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -54,8 +55,8 @@ public final class InterfaceTooltips {
 
     public static List<Component> fluidTooltip(FluidHatchSize size) {
         List<Component> lines = new ArrayList<>(2);
-        lines.add(capacityLine(formatAmount(size.capacity(), "mb")));
-        lines.add(rateLine(formatAmount(size.capacity(), "mb/t")));
+        lines.add(capacityLine(formatAmount(size.capacity(), "mB")));
+        lines.add(rateLine(formatAmount(size.capacity(), "mB/t")));
         return lines;
     }
 
@@ -98,20 +99,8 @@ public final class InterfaceTooltips {
         return parallelism + "x";
     }
 
-    private static String formatAmount(int amount, String unit) {
-        if (amount == Integer.MAX_VALUE) return "2.1G" + unit;
-        if (amount >= 1_073_741_824 && amount % 1_073_741_824 == 0) return amount / 1_073_741_824 + "G" + unit;
-        if (amount >= 1_048_576 && amount % 1_048_576 == 0) return amount / 1_048_576 + "M" + unit;
-        if (amount >= 1024 && amount % 1024 == 0) return amount / 1024 + "k" + unit;
-        if (amount >= 1_000_000) return formatCompact(amount, 1_000_000, "M", unit);
-        if (amount >= 1_000) return formatCompact(amount, 1_000, "k", unit);
-        return amount + unit;
-    }
-
-    private static String formatCompact(int amount, int divisor, String suffix, String unit) {
-        int scaled = Math.round(amount * 10.0F / divisor);
-        String value = scaled % 10 == 0 ? Integer.toString(scaled / 10) : scaled / 10 + "." + scaled % 10;
-        return value + suffix + unit;
+    private static String formatAmount(long amount, String unit) {
+        return ReadableNumber.format(amount) + " " + unit;
     }
 
     private InterfaceTooltips() {}

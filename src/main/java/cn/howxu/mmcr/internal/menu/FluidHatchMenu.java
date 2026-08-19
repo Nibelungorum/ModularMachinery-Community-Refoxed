@@ -6,33 +6,29 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
+import net.neoforged.neoforge.transfer.ResourceHandler;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
 
 public class FluidHatchMenu extends AbstractMachineMenu {
 
     private final FluidHatchBlockEntity owner;
     private final Level level;
     private final BlockPos pos;
-    private final DataSlot amount;
-    private final DataSlot capacity;
+    private final LongDataSlot amount;
+    private final LongDataSlot capacity;
 
     public FluidHatchMenu(int containerId, Inventory playerInv, FluidHatchBlockEntity owner) {
         super(ModUIs.FLUID_HATCH.get(), containerId);
         this.owner = owner;
         this.level = playerInv.player.level();
         this.pos = owner == null ? BlockPos.ZERO : owner.getBlockPos();
-        this.amount = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return owner.getFluidTank(null).getFluidAmount(); }
-            @Override public void set(int value) {}
-        });
-        this.capacity = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return owner.getFluidTank(null).getCapacity(); }
-            @Override public void set(int value) {}
-        });
+        this.amount = addLongDataSlot(owner == null ? LongDataSlot.standalone()
+                : new LongDataSlot(() -> owner.getResourceHandler(null).getAmountAsLong(0)));
+        this.capacity = addLongDataSlot(owner == null ? LongDataSlot.standalone()
+                : new LongDataSlot(() -> owner.getResourceHandler(null).getCapacityAsLong(0, FluidResource.EMPTY)));
         addPlayerSlots(playerInv);
     }
 
@@ -41,8 +37,8 @@ public class FluidHatchMenu extends AbstractMachineMenu {
         this.owner = null;
         this.level = playerInv.player.level();
         this.pos = pos;
-        this.amount = addDataSlot(DataSlot.standalone());
-        this.capacity = addDataSlot(DataSlot.standalone());
+        this.amount = addLongDataSlot(LongDataSlot.standalone());
+        this.capacity = addLongDataSlot(LongDataSlot.standalone());
         addPlayerSlots(playerInv);
     }
 
@@ -56,23 +52,23 @@ public class FluidHatchMenu extends AbstractMachineMenu {
 
     public BlockPos pos() { return pos; }
 
-    public FluidTank tank() {
+    public ResourceHandler<FluidResource> storage() {
         FluidHatchBlockEntity hatch = resolvedOwner();
-        return hatch == null ? null : hatch.getFluidTank(null);
+        return hatch == null ? null : hatch.getResourceHandler(null);
     }
 
-    public int fluidAmount() {
-        FluidTank tank = tank();
-        return tank == null ? amount.get() : tank.getFluidAmount();
+    public long fluidAmount() {
+        ResourceHandler<FluidResource> storage = storage();
+        return storage == null ? amount.value() : storage.getAmountAsLong(0);
     }
 
-    public int fluidCapacity() {
+    public long fluidCapacity() {
         FluidHatchBlockEntity hatch = resolvedOwner();
-        return hatch == null ? capacity.get() : fluidCapacity(hatch);
+        return hatch == null ? capacity.value() : fluidCapacity(hatch);
     }
 
-    static int fluidCapacity(FluidHatchBlockEntity hatch) {
-        return hatch.getFluidTank(null).getCapacity();
+    static long fluidCapacity(FluidHatchBlockEntity hatch) {
+        return hatch.getResourceHandler(null).getCapacityAsLong(0, FluidResource.EMPTY);
     }
 
     private FluidHatchBlockEntity resolvedOwner() {

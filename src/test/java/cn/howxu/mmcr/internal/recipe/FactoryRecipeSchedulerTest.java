@@ -22,6 +22,7 @@ import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
+import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
@@ -858,7 +859,7 @@ class FactoryRecipeSchedulerTest {
             @Override protected void onContentsChanged(int slot) { }
         });
         EnergyInputHatchBlockEntity energy = energyInputHatch(new BlockPos(3, 64, 0));
-        energy.getMutableEnergyStorage(null).receiveEnergy(20, false);
+        energy.getMutableEnergyStorage().forceInsert(20, false);
         BlockPos controllerPos = new BlockPos(0, 64, 0);
         MachineControllerBlockEntity controller = controllerWithComponents(MMCR.id("shared_finish_retry"), controllerPos, input, output, energy);
         ServerLevel level = serverLevel(List.of(controller, input, output, energy));
@@ -892,7 +893,7 @@ class FactoryRecipeSchedulerTest {
 
         assertThat(thread.getStatus()).isEqualTo(RecipeThread.Status.WAITING);
         assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
-        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+        assertThat(energy.getMutableEnergyStorage().getAmountAsLong()).isEqualTo(10);
         assertThat(itemCount(output, Items.IRON_INGOT)).isZero();
 
         output.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
@@ -902,7 +903,7 @@ class FactoryRecipeSchedulerTest {
 
         assertThat(thread.isIdle()).isTrue();
         assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
-        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+        assertThat(energy.getMutableEnergyStorage().getAmountAsLong()).isEqualTo(10);
         assertThat(itemCount(output, Items.IRON_INGOT)).isEqualTo(1);
         SharedIoCoordinator.discard(level);
         StructureClaimRegistry.discard(level);
@@ -932,7 +933,7 @@ class FactoryRecipeSchedulerTest {
         });
         input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 2));
         EnergyInputHatchBlockEntity energy = energyInputHatch(new BlockPos(3, 64, 0));
-        energy.getMutableEnergyStorage(null).receiveEnergy(20, false);
+        energy.getMutableEnergyStorage().forceInsert(20, false);
         BlockPos controllerPos = new BlockPos(0, 64, 0);
         MachineControllerBlockEntity controller = controllerWithComponents(MMCR.id("restored_shared_finish"), controllerPos, input, output, energy);
         ServerLevel level = serverLevel(List.of(controller, input, output, energy));
@@ -965,7 +966,7 @@ class FactoryRecipeSchedulerTest {
         SharedIoCoordinator.get(level).resolve(domain);
         assertThat(active.isFinishPending()).isTrue();
         assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
-        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+        assertThat(energy.getMutableEnergyStorage().getAmountAsLong()).isEqualTo(10);
 
         TagValueOutput saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
                 HolderLookup.Provider.create(java.util.stream.Stream.empty()));
@@ -981,7 +982,7 @@ class FactoryRecipeSchedulerTest {
 
         assertThat(restored.isIdle()).isTrue();
         assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
-        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+        assertThat(energy.getMutableEnergyStorage().getAmountAsLong()).isEqualTo(10);
         assertThat(itemCount(output, Items.IRON_INGOT)).isEqualTo(1);
         SharedIoCoordinator.discard(level);
         StructureClaimRegistry.discard(level);
@@ -1000,7 +1001,7 @@ class FactoryRecipeSchedulerTest {
         for (int slot = 0; slot < output.getItemStackHandler(null).getSlots(); slot++) {
             output.getItemStackHandler(null).setStackInSlot(slot, new ItemStack(Items.COBBLESTONE, 64));
         }
-        energy.getMutableEnergyStorage(null).receiveEnergy(20, false);
+        energy.getMutableEnergyStorage().forceInsert(20, false);
         BlockPos controllerPos = new BlockPos(0, 64, 0);
         MachineControllerBlockEntity controller = controllerWithComponents(MMCR.id("shared_final_output_preflight"),
                 controllerPos, input, output, energy);
@@ -1035,7 +1036,7 @@ class FactoryRecipeSchedulerTest {
         assertThat(thread.getActiveRecipe()).isSameAs(active);
         assertThat(active.getTick()).isZero();
         assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
-        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(20);
+        assertThat(energy.getMutableEnergyStorage().getAmountAsLong()).isEqualTo(20);
         assertThat(itemCount(output, Items.IRON_INGOT)).isZero();
 
         output.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
@@ -1044,7 +1045,7 @@ class FactoryRecipeSchedulerTest {
 
         assertThat(thread.isIdle()).isTrue();
         assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
-        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+        assertThat(energy.getMutableEnergyStorage().getAmountAsLong()).isEqualTo(10);
         assertThat(itemCount(output, Items.IRON_INGOT)).isEqualTo(1);
         SharedIoCoordinator.discard(level);
         StructureClaimRegistry.discard(level);
@@ -1074,7 +1075,7 @@ class FactoryRecipeSchedulerTest {
         });
         input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 1));
         EnergyInputHatchBlockEntity energy = energyInputHatch(new BlockPos(3, 64, 0));
-        energy.getMutableEnergyStorage(null).receiveEnergy(20, false);
+        energy.getMutableEnergyStorage().forceInsert(20, false);
         MachineControllerBlockEntity controller = controllerWithComponents(MMCR.id("private_factory_finish_retry"),
                 new BlockPos(0, 64, 0), input, output, energy);
         ServerLevel level = serverLevel(List.of(controller, input, output, energy));
@@ -1095,17 +1096,17 @@ class FactoryRecipeSchedulerTest {
 
         assertThat(active.isFinishPending()).isTrue();
         assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
-        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+        assertThat(energy.getMutableEnergyStorage().getAmountAsLong()).isEqualTo(10);
         assertThat(itemCount(output, Items.IRON_INGOT)).isZero();
 
         assertThat(lane.tick(1)).isFalse();
-        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+        assertThat(energy.getMutableEnergyStorage().getAmountAsLong()).isEqualTo(10);
 
         output.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
 
         assertThat(lane.tick(10)).isTrue();
         assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
-        assertThat(energy.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(10);
+        assertThat(energy.getMutableEnergyStorage().getAmountAsLong()).isEqualTo(10);
         assertThat(itemCount(output, Items.IRON_INGOT)).isEqualTo(1);
     }
 
@@ -1474,7 +1475,7 @@ class FactoryRecipeSchedulerTest {
         setField(BlockEntity.class, hatch, "worldPosition", pos);
         setField(BlockEntity.class, hatch, "blockState", Blocks.CHEST.defaultBlockState());
         setField(cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity.class, hatch, "storage",
-                new net.neoforged.neoforge.energy.EnergyStorage(100, 100, 100));
+                new LongEnergyStorage(100, 100, () -> {}));
         return hatch;
     }
 

@@ -373,9 +373,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         long total = 0;
         for (ProcessingComponent component : components) {
             if (component.getContainer() instanceof EnergyInputHatchBlockEntity hatch) {
-                total += hatch.getEnergyStorage(null).getEnergyStored();
+                total += hatch.getEnergyHandler(null).getAmountAsLong();
             } else if (component.getContainer() instanceof EnergyOutputHatchBlockEntity hatch) {
-                total += hatch.getEnergyStorage(null).getEnergyStored();
+                total += hatch.getEnergyHandler(null).getAmountAsLong();
             }
         }
         return total;
@@ -385,9 +385,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         long total = 0;
         for (ProcessingComponent component : components) {
             if (component.getContainer() instanceof EnergyInputHatchBlockEntity hatch) {
-                total += hatch.getEnergyStorage(null).getMaxEnergyStored();
+                total += hatch.getEnergyHandler(null).getCapacityAsLong();
             } else if (component.getContainer() instanceof EnergyOutputHatchBlockEntity hatch) {
-                total += hatch.getEnergyStorage(null).getMaxEnergyStored();
+                total += hatch.getEnergyHandler(null).getCapacityAsLong();
             }
         }
         return total;
@@ -396,7 +396,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     public FluidStack primaryFluid() {
         for (ProcessingComponent component : components) {
             if (component.getContainer() instanceof FluidInputHatchBlockEntity hatch) {
-                FluidStack stack = hatch.getFluidTank(null).getFluid();
+                FluidStack stack = hatch.getMutableFluidStorage().getFluidStack();
                 if (!stack.isEmpty()) return stack.copy();
             }
         }
@@ -406,7 +406,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     public FluidStack primaryOutputFluid() {
         for (ProcessingComponent component : components) {
             if (component.getContainer() instanceof FluidOutputHatchBlockEntity hatch) {
-                FluidStack stack = hatch.getFluidTank(null).getFluid();
+                FluidStack stack = hatch.getMutableFluidStorage().getFluidStack();
                 if (!stack.isEmpty()) return stack.copy();
             }
         }

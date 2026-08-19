@@ -19,6 +19,8 @@ import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidOutputHatchBlockEntity;
+import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
+import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -404,7 +406,7 @@ class RecipeCraftingContextTest {
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
         assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
-        assertThat(output.getFluidTank(null).getFluidAmount()).isZero();
+        assertThat(output.getMutableFluidStorage().getAmountAsLong()).isZero();
     }
 
     @Test
@@ -412,7 +414,7 @@ class RecipeCraftingContextTest {
         bindFluidComponents(Fluids.WATER);
         bindFluidComponents(Fluids.LAVA);
         FluidOutputHatchBlockEntity output = fluidOutputHatch(new BlockPos(1, 0, 0));
-        output.getFluidTank(null).setFluid(new FluidStack(Fluids.LAVA, output.getFluidTank(null).getCapacity()));
+        output.getMutableFluidStorage().setFluid(new FluidStack(Fluids.LAVA, (int) output.getMutableFluidStorage().getCapacityAsLong()));
         MachineControllerBlockEntity controller = controllerWithComponents(output);
         MachineRecipe recipe = explicitRequirementRecipe(
                 "zero_chance_fluid_output_full_hatch",
@@ -422,7 +424,7 @@ class RecipeCraftingContextTest {
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
         assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
-        assertThat(output.getFluidTank(null).getFluid().getFluid()).isEqualTo(Fluids.LAVA);
+        assertThat(output.getMutableFluidStorage().getFluidStack().getFluid()).isEqualTo(Fluids.LAVA);
     }
 
     @Test
@@ -438,7 +440,7 @@ class RecipeCraftingContextTest {
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
         assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
-        assertThat(output.getFluidTank(null).getFluid()).satisfies(stack -> {
+        assertThat(output.getMutableFluidStorage().getFluidStack()).satisfies(stack -> {
             assertThat(stack.getFluid()).isEqualTo(Fluids.WATER);
             assertThat(stack.getAmount()).isEqualTo(1000);
         });
@@ -524,7 +526,7 @@ class RecipeCraftingContextTest {
         bindFluidComponents(Fluids.LAVA);
         bindItemComponents(Items.IRON_INGOT);
         FluidOutputHatchBlockEntity water = fluidOutputHatch(new BlockPos(1, 0, 0));
-        water.getFluidTank(null).setFluid(new FluidStack(Fluids.WATER, 7400));
+        water.getMutableFluidStorage().setFluid(new FluidStack(Fluids.WATER, 7400));
         ItemOutputBusBlockEntity item = itemOutputBus(new BlockPos(2, 0, 0));
         FluidOutputHatchBlockEntity lava = fluidOutputHatch(new BlockPos(3, 0, 0));
         MachineRecipe recipe = partialRequirementRecipe("partial_fluid_item_fluid", List.of(
@@ -545,9 +547,9 @@ class RecipeCraftingContextTest {
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
         assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
-        assertThat(water.getFluidTank(null).getFluidAmount()).isEqualTo(8000);
+        assertThat(water.getMutableFluidStorage().getAmountAsLong()).isEqualTo(8000);
         assertThat(item.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
-        assertThat(lava.getFluidTank(null).getFluid()).satisfies(stack -> {
+        assertThat(lava.getMutableFluidStorage().getFluidStack()).satisfies(stack -> {
             assertThat(stack.getFluid()).isEqualTo(Fluids.LAVA);
             assertThat(stack.getAmount()).isEqualTo(1000);
         });
@@ -570,8 +572,8 @@ class RecipeCraftingContextTest {
 
         assertThat(context.simulateOutputs(recipe)).isTrue();
         assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
-        assertThat(first.getFluidTank(null).getFluid().getFluid()).isEqualTo(Fluids.WATER);
-        assertThat(second.getFluidTank(null).getFluid().getFluid()).isEqualTo(Fluids.LAVA);
+        assertThat(first.getMutableFluidStorage().getFluidStack().getFluid()).isEqualTo(Fluids.WATER);
+        assertThat(second.getMutableFluidStorage().getFluidStack().getFluid()).isEqualTo(Fluids.LAVA);
         assertThat(item.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
     }
 
@@ -887,7 +889,7 @@ class RecipeCraftingContextTest {
     void explicitFluidInputRequirementRunsWhenLegacyInputsAreEmpty() {
         bindFluidComponents(Fluids.WATER);
         FluidInputHatchBlockEntity input = fluidInputHatch(new BlockPos(1, 0, 0));
-        input.getFluidTank(null).setFluid(new FluidStack(Fluids.WATER, 1000));
+        input.getMutableFluidStorage().setFluid(new FluidStack(Fluids.WATER, 1000));
         MachineControllerBlockEntity controller = controllerWithComponents(input);
         MachineRecipe recipe = explicitRequirementRecipe(
                 "explicit_fluid_input",
@@ -897,7 +899,7 @@ class RecipeCraftingContextTest {
 
         assertThat(context.simulateInputs(recipe)).isTrue();
         assertThat(context.commitInputs(recipe)).isTrue();
-        assertThat(input.getFluidTank(null).getFluidAmount()).isZero();
+        assertThat(input.getMutableFluidStorage().getAmountAsLong()).isZero();
     }
 
     @Test
@@ -905,8 +907,8 @@ class RecipeCraftingContextTest {
         bindFluidComponents(Fluids.WATER);
         FluidInputHatchBlockEntity first = fluidInputHatch(new BlockPos(1, 0, 0));
         FluidInputHatchBlockEntity second = fluidInputHatch(new BlockPos(2, 0, 0));
-        first.getFluidTank(null).setFluid(new FluidStack(Fluids.WATER, 400));
-        second.getFluidTank(null).setFluid(new FluidStack(Fluids.WATER, 600));
+        first.getMutableFluidStorage().setFluid(new FluidStack(Fluids.WATER, 400));
+        second.getMutableFluidStorage().setFluid(new FluidStack(Fluids.WATER, 600));
         MachineControllerBlockEntity controller = controllerWithComponents(first, second);
         MachineRecipe recipe = explicitRequirementRecipe(
                 "fluid_multi_hatch_input",
@@ -916,15 +918,15 @@ class RecipeCraftingContextTest {
 
         assertThat(context.simulateInputs(recipe)).isTrue();
         assertThat(context.commitInputs(recipe)).isTrue();
-        assertThat(first.getFluidTank(null).getFluidAmount()).isZero();
-        assertThat(second.getFluidTank(null).getFluidAmount()).isZero();
+        assertThat(first.getMutableFluidStorage().getAmountAsLong()).isZero();
+        assertThat(second.getMutableFluidStorage().getAmountAsLong()).isZero();
     }
 
     @Test
     void restoredFluidRoutesBindAfterComponentsBecomeAvailable() throws Exception {
         bindFluidComponents(Fluids.WATER);
         FluidInputHatchBlockEntity input = fluidInputHatch(new BlockPos(1, 0, 0));
-        input.getFluidTank(null).setFluid(new FluidStack(Fluids.WATER, 1000));
+        input.getMutableFluidStorage().setFluid(new FluidStack(Fluids.WATER, 1000));
         MachineRecipe recipe = explicitRequirementRecipe(
                 "restored_fluid_route",
                 List.of(new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1000, FluidStack.EMPTY))
@@ -943,7 +945,7 @@ class RecipeCraftingContextTest {
                 input.getBlockPos(), BlockPos.ZERO, (String) null)));
 
         assertThat(restored.commitInputs(recipe)).isTrue();
-        assertThat(input.getFluidTank(null).getFluidAmount()).isZero();
+        assertThat(input.getMutableFluidStorage().getAmountAsLong()).isZero();
     }
 
     @Test
@@ -951,7 +953,7 @@ class RecipeCraftingContextTest {
         bindFluidComponents(Fluids.WATER);
         bindFluidComponents(Fluids.LAVA);
         FluidOutputHatchBlockEntity output = fluidOutputHatch(new BlockPos(1, 0, 0));
-        output.getFluidTank(null).setFluid(new FluidStack(Fluids.LAVA, output.getFluidTank(null).getCapacity()));
+        output.getMutableFluidStorage().setFluid(new FluidStack(Fluids.LAVA, (int) output.getMutableFluidStorage().getCapacityAsLong()));
         MachineControllerBlockEntity controller = controllerWithComponents(output);
         MachineRecipe recipe = explicitRequirementRecipe(
                 "blocked_fluid_output",
@@ -975,7 +977,7 @@ class RecipeCraftingContextTest {
         ItemInputBusBlockEntity input = itemInputBus(new BlockPos(1, 0, 0));
         input.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(1));
         FluidOutputHatchBlockEntity output = fluidOutputHatch(new BlockPos(2, 0, 0));
-        output.getFluidTank(null).setFluid(new FluidStack(Fluids.LAVA, output.getFluidTank(null).getCapacity()));
+        output.getMutableFluidStorage().setFluid(new FluidStack(Fluids.LAVA, (int) output.getMutableFluidStorage().getCapacityAsLong()));
         MachineControllerBlockEntity controller = controllerWithComponents(input, output);
         MachineRecipe recipe = explicitRequirementRecipe(
                 "fluid_output_no_swallow",
@@ -994,7 +996,7 @@ class RecipeCraftingContextTest {
     @Test
     void explicitEnergyRequirementIsConsumedByIoTick() {
         EnergyInputHatchBlockEntity hatch = energyInputHatch(new BlockPos(1, 0, 0));
-        hatch.getMutableEnergyStorage(null).receiveEnergy(100, false);
+        hatch.getMutableEnergyStorage().forceInsert(100, false);
         MachineControllerBlockEntity controller = controllerWithComponents(hatch);
         MachineRecipe recipe = explicitRequirementRecipe(
                 "explicit_energy_tick",
@@ -1003,13 +1005,13 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.ioTick(recipe)).isTrue();
-        assertThat(hatch.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(60);
+        assertThat(hatch.getMutableEnergyStorage().getAmountAsLong()).isEqualTo(60);
     }
 
     @Test
     void commitIoTickConsumesEnergyOnlyAfterItsFullRequirementIsAvailable() {
         EnergyInputHatchBlockEntity hatch = energyInputHatch(new BlockPos(1, 0, 0));
-        hatch.getMutableEnergyStorage(null).receiveEnergy(25, false);
+        hatch.getMutableEnergyStorage().forceInsert(25, false);
         MachineControllerBlockEntity controller = controllerWithComponents(hatch);
         MachineRecipe recipe = explicitRequirementRecipe(
                 "atomic_energy_tick",
@@ -1018,13 +1020,13 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.commitSynchronousIoTick(recipe, 1)).isFalse();
-        assertThat(hatch.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(25);
+        assertThat(hatch.getMutableEnergyStorage().getAmountAsLong()).isEqualTo(25);
     }
 
     @Test
     void commitIoTickDoesNotPartiallyConsumeAcrossEnergyRequirements() {
         EnergyInputHatchBlockEntity hatch = energyInputHatch(new BlockPos(1, 0, 0));
-        hatch.getMutableEnergyStorage(null).receiveEnergy(30, false);
+        hatch.getMutableEnergyStorage().forceInsert(30, false);
         MachineControllerBlockEntity controller = controllerWithComponents(hatch);
         MachineRecipe recipe = explicitRequirementRecipe(
                 "atomic_multiple_energy_tick",
@@ -1036,14 +1038,14 @@ class RecipeCraftingContextTest {
         assertThat(context.commitSynchronousIoTick(recipe, active.getParallelism())).isFalse();
         assertThat(active.applyTickGrant(false, false, 0)).isEqualTo(ActiveMachineRecipe.TickStatus.WAITING);
         assertThat(active.getTick()).isZero();
-        assertThat(hatch.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(30);
+        assertThat(hatch.getMutableEnergyStorage().getAmountAsLong()).isEqualTo(30);
     }
 
     @Test
     void commitIoTickDoesNotPartiallyProduceAcrossEnergyRequirements() throws Exception {
         EnergyOutputHatchBlockEntity hatch = energyOutputHatch(new BlockPos(1, 0, 0));
         setField(cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity.class, hatch, "storage",
-                new net.neoforged.neoforge.energy.EnergyStorage(30, 30, 30));
+                new LongEnergyStorage(30, 30, () -> {}));
         MachineControllerBlockEntity controller = controllerWithComponents(hatch);
         MachineRecipe recipe = explicitRequirementRecipe(
                 "atomic_multiple_energy_outputs",
@@ -1054,7 +1056,7 @@ class RecipeCraftingContextTest {
         );
 
         assertThat(new RecipeCraftingContext(controller).commitSynchronousIoTick(recipe, 1)).isFalse();
-        assertThat(hatch.getMutableEnergyStorage(null).getEnergyStored()).isZero();
+        assertThat(hatch.getMutableEnergyStorage().getAmountAsLong()).isZero();
     }
 
     @Test
@@ -1100,7 +1102,7 @@ class RecipeCraftingContextTest {
     @Test
     void mixedShapeEnergyRuntimeUsesExplicitRequirements() {
         EnergyInputHatchBlockEntity hatch = energyInputHatch(new BlockPos(1, 0, 0));
-        hatch.getMutableEnergyStorage(null).receiveEnergy(100, false);
+        hatch.getMutableEnergyStorage().forceInsert(100, false);
         MachineControllerBlockEntity controller = controllerWithComponents(hatch);
         MachineRecipe recipe = new MachineRecipe(
                 Identifier.fromNamespaceAndPath("mmcr", "mixed_energy_runtime"),
@@ -1118,13 +1120,13 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.ioTick(recipe)).isTrue();
-        assertThat(hatch.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(60);
+        assertThat(hatch.getMutableEnergyStorage().getAmountAsLong()).isEqualTo(60);
     }
 
     @Test
     void missingEnergyRequirementRecordsStructuredFailure() {
         EnergyInputHatchBlockEntity hatch = energyInputHatch(new BlockPos(1, 0, 0));
-        hatch.getMutableEnergyStorage(null).receiveEnergy(25, false);
+        hatch.getMutableEnergyStorage().forceInsert(25, false);
         MachineControllerBlockEntity controller = controllerWithComponents(hatch);
         MachineRecipe recipe = explicitRequirementRecipe(
                 "missing_energy_runtime",
@@ -1220,7 +1222,7 @@ class RecipeCraftingContextTest {
     @Test
     void multipliedEnergyRequirementDrainsPerParallelTick() {
         EnergyInputHatchBlockEntity hatch = energyInputHatch(new BlockPos(1, 0, 0));
-        hatch.getMutableEnergyStorage(null).receiveEnergy(30, false);
+        hatch.getMutableEnergyStorage().forceInsert(30, false);
         MachineControllerBlockEntity controller = controllerWithComponents(hatch);
         MachineRecipe recipe = explicitRequirementRecipe(
                 "multiplied_energy_tick",
@@ -1229,9 +1231,9 @@ class RecipeCraftingContextTest {
         RecipeCraftingContext context = new RecipeCraftingContext(controller);
 
         assertThat(context.ioTick(recipe, 4)).isFalse();
-        assertThat(hatch.getMutableEnergyStorage(null).getEnergyStored()).isEqualTo(30);
+        assertThat(hatch.getMutableEnergyStorage().getAmountAsLong()).isEqualTo(30);
         assertThat(context.ioTick(recipe, 3)).isTrue();
-        assertThat(hatch.getMutableEnergyStorage(null).getEnergyStored()).isZero();
+        assertThat(hatch.getMutableEnergyStorage().getAmountAsLong()).isZero();
     }
 
     @Test
@@ -1354,7 +1356,7 @@ class RecipeCraftingContextTest {
     void fluidRequirementWrongTagRecordsTagMismatchFailure() throws Exception {
         bindFluidComponents(Fluids.WATER);
         FluidInputHatchBlockEntity tagged = fluidInputHatch(new BlockPos(1, 0, 0));
-        tagged.getFluidTank(null).setFluid(new FluidStack(Fluids.WATER, 1000));
+        tagged.getMutableFluidStorage().setFluid(new FluidStack(Fluids.WATER, 1000));
         MachineControllerBlockEntity controller = controllerWithComponents(tagged);
         replaceComponents(controller, List.of(new ProcessingComponent(
                 new MachineComponent(PortKinds.FLUID_INPUT, cn.howxu.mmcr.util.IOType.INPUT),
@@ -1656,16 +1658,12 @@ class RecipeCraftingContextTest {
             setField(BlockEntity.class, entity, "worldPosition", pos);
             setField(BlockEntity.class, entity, "blockState", net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
             if (entity instanceof cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity) {
-                setField(cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity.class, entity, "tank",
-                        new net.neoforged.neoforge.fluids.capability.templates.FluidTank(8000) {
-                            @Override
-                            protected void onContentsChanged() {
-                            }
-                        });
+                setField(cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity.class, entity, "storage",
+                        new LongFluidStorage(8000, () -> {}));
             }
             if (entity instanceof cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity) {
                 setField(cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity.class, entity, "storage",
-                        new net.neoforged.neoforge.energy.EnergyStorage(100000, 100000, 100000));
+                        new LongEnergyStorage(100000, 100000, () -> {}));
             }
             return entity;
         } catch (ReflectiveOperationException e) {
