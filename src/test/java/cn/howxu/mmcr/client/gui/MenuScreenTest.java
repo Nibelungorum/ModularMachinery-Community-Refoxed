@@ -25,6 +25,7 @@ import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.common.NeoForgeMod;
 import net.neoforged.neoforge.fluids.FluidType;
 import net.neoforged.neoforge.fluids.FluidStack;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
@@ -39,6 +40,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MenuScreenTest {
+    private static Language previousLanguage;
 
     @BeforeAll
     static void bootstrap() throws Exception {
@@ -47,6 +49,11 @@ class MenuScreenTest {
         injectTranslations();
         bind(ModUIs.ITEM_BUS, new MenuType<>((containerId, playerInventory) -> new ItemBusMenu(containerId, playerInventory), FeatureFlags.VANILLA_SET));
         bind(ModUIs.MACHINE_CONTROLLER, new MenuType<>(MachineControllerMenu::clientOpen, FeatureFlags.VANILLA_SET));
+    }
+
+    @AfterAll
+    static void restoreLanguage() {
+        Language.inject(previousLanguage);
     }
 
     @Test
@@ -218,6 +225,7 @@ class MenuScreenTest {
     }
 
     private static void injectTranslations() throws Exception {
+        previousLanguage = Language.getInstance();
         var constructor = ClientLanguage.class.getDeclaredConstructor(Map.class, boolean.class);
         constructor.setAccessible(true);
         Language.inject(constructor.newInstance(Map.of(
