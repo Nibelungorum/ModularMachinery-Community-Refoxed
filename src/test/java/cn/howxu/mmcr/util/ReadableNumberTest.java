@@ -11,9 +11,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ReadableNumberTest {
 
     @Test
-    void formats_ints_with_grouping_below_one_billion() {
+    void formats_ints_with_grouping_below_one_million() {
         assertThat(ReadableNumber.format(0)).isEqualTo("0");
         assertThat(ReadableNumber.format(32_000)).isEqualTo("32,000");
+        assertThat(ReadableNumber.format(999_999)).isEqualTo("999,999");
+        assertThat(ReadableNumber.format(1_000_000)).isEqualTo("1.00M");
         assertThat(ReadableNumber.format(Integer.MAX_VALUE - 1)).isEqualTo("2.14G");
     }
 
@@ -26,10 +28,14 @@ class ReadableNumberTest {
 
     @Test
     void formats_big_integer_and_big_decimal_values() {
+        assertThat(ReadableNumber.format(BigInteger.valueOf(999_999))).isEqualTo("999,999");
+        assertThat(ReadableNumber.format(BigInteger.valueOf(1_000_000))).isEqualTo("1.00M");
         assertThat(ReadableNumber.format(BigInteger.valueOf(Long.MAX_VALUE))).isEqualTo("9.22E");
         assertThat(ReadableNumber.format(BigInteger.valueOf(Long.MAX_VALUE).add(BigInteger.ONE))).isEqualTo("9.22E");
         assertThat(ReadableNumber.format(new BigInteger("9".repeat(101)))).isEqualTo("9.99E100");
         assertThat(ReadableNumber.format(BigDecimal.ZERO)).isEqualTo("0");
+        assertThat(ReadableNumber.format(new BigDecimal("999999.99"))).isEqualTo("999,999");
+        assertThat(ReadableNumber.format(new BigDecimal("1000000"))).isEqualTo("1.00M");
         assertThat(ReadableNumber.format(new BigDecimal("2147483647.89"))).isEqualTo("2.14G");
     }
 

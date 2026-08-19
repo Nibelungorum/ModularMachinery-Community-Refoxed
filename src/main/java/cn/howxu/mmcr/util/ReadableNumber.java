@@ -13,8 +13,8 @@ import java.util.Locale;
  */
 public final class ReadableNumber {
 
-    private static final BigInteger ONE_BILLION = BigInteger.valueOf(1_000_000_000L);
-    private static final BigDecimal ONE_BILLION_DECIMAL = BigDecimal.valueOf(1_000_000_000L);
+    private static final BigInteger ONE_MILLION = BigInteger.valueOf(1_000_000L);
+    private static final BigDecimal ONE_MILLION_DECIMAL = BigDecimal.valueOf(1_000_000L);
     private static final BigDecimal THOUSAND_DECIMAL = BigDecimal.valueOf(1_000L);
     private static final String[] SI_PREFIXES = {"", "k", "M", "G", "T", "P", "E", "Z", "Y"};
     private static final NumberFormat INTEGER_FORMAT = NumberFormat.getIntegerInstance(Locale.ROOT);
@@ -29,7 +29,7 @@ public final class ReadableNumber {
         if (value < 0) {
             throw new IllegalArgumentException("value must be non-negative");
         }
-        if (value < 1_000_000_000L) {
+        if (value < 1_000_000L) {
             return INTEGER_FORMAT.format(value);
         }
         return formatBigDecimal(BigDecimal.valueOf(value));
@@ -39,7 +39,7 @@ public final class ReadableNumber {
         if (value.signum() < 0) {
             throw new IllegalArgumentException("value must be non-negative");
         }
-        if (value.compareTo(ONE_BILLION) < 0) {
+        if (value.compareTo(ONE_MILLION) < 0) {
             return INTEGER_FORMAT.format(value);
         }
         return formatBigDecimal(new BigDecimal(value));
@@ -49,7 +49,7 @@ public final class ReadableNumber {
         if (value.signum() < 0) {
             throw new IllegalArgumentException("value must be non-negative");
         }
-        if (value.compareTo(ONE_BILLION_DECIMAL) < 0) {
+        if (value.compareTo(ONE_MILLION_DECIMAL) < 0) {
             return INTEGER_FORMAT.format(value.setScale(0, RoundingMode.DOWN).toBigIntegerExact());
         }
         return formatBigDecimal(value);
