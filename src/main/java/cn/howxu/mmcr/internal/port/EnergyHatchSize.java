@@ -6,14 +6,14 @@ package cn.howxu.mmcr.internal.port;
  * @author howxu <dev@howxu.cn>
  */
 public enum EnergyHatchSize {
-    TINY("tiny", 2048L, 128L),
-    SMALL("small", 4096L, 512L),
-    NORMAL("normal", 8192L, 512L),
-    REINFORCED("reinforced", 16384L, 2048L),
-    BIG("big", 32768L, 8192L),
-    HUGE("huge", 131072L, 32768L),
-    LUDICROUS("ludicrous", 524288L, 131072L),
-    ULTIMATE("ultimate", 2097152L, 131072L);
+    TINY("tiny", 400000L, 500L),
+    SMALL("small", 800000L, 1000L),
+    NORMAL("normal", 1000000L, 2000L),
+    REINFORCED("reinforced", 4000000L, 4000L),
+    BIG("big", 8000000L, 8000L),
+    HUGE("huge", 32000000L, 64000L),
+    LUDICROUS("ludicrous", 128000000L, 256000L),
+    ULTIMATE("ultimate", 256000000L, 512000L);
 
     private final String id;
     private final long capacity;

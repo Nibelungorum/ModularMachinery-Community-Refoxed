@@ -133,7 +133,7 @@ class IOPortSizeTest {
         FluidHatchBlockEntity vacuum = fluidHatch("fluid_output_hatch_vacuum");
         EnergyHatchBlockEntity ultimate = energyHatch("energy_output_hatch_ultimate");
 
-        assertThat(vacuum.autoIoTransferLimit()).isLessThan((int) tank(vacuum).getCapacityAsLong());
+        assertThat(vacuum.autoIoTransferLimit()).isEqualTo(Integer.MAX_VALUE);
         assertThat(ultimate.autoIoTransferLimit()).isEqualTo(kind("energy_output_hatch_ultimate").energyHatchSize().orElseThrow().transfer());
     }
 

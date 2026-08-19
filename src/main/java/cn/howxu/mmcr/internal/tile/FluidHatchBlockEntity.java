@@ -39,7 +39,7 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
 
     @Override
     public int autoIoTransferLimit() {
-        return (int) Math.min(1000L, Math.min(storage.getCapacityAsLong(), Integer.MAX_VALUE));
+        return Integer.MAX_VALUE;
     }
 
     @Override
