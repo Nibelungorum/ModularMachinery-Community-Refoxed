@@ -97,7 +97,8 @@ public class AutoIOGameTest {
             helper.assertTrue(source.ejectContents(), "Item input bus ejects its contents");
             int firstCount = firstTarget.getItem(0).getCount();
             int secondCount = secondTarget.getItem(0).getCount();
-            helper.assertTrue(firstCount + secondCount == 2, "Exactly one adjacent item target receives all contents");
+            helper.assertTrue((firstCount == 2 && secondCount == 0) || (firstCount == 0 && secondCount == 2),
+                    "Exactly one adjacent item target receives all contents");
             helper.assertTrue(source.getItemStackHandler(null).getStackInSlot(0).isEmpty(), "Item input bus is empty after a complete first transfer");
             helper.succeed();
         });
@@ -149,8 +150,10 @@ public class AutoIOGameTest {
 
         helper.runAtTickTime(20, () -> {
             helper.assertTrue(source.ejectContents(), "Fluid input hatch ejects its contents");
-            long transferred = firstTarget.getMutableFluidStorage().getAmountAsLong() + secondTarget.getMutableFluidStorage().getAmountAsLong();
-            helper.assertTrue(transferred == 2, "Exactly one adjacent fluid target receives all contents");
+            long firstAmount = firstTarget.getMutableFluidStorage().getAmountAsLong();
+            long secondAmount = secondTarget.getMutableFluidStorage().getAmountAsLong();
+            helper.assertTrue((firstAmount == 2 && secondAmount == 0) || (firstAmount == 0 && secondAmount == 2),
+                    "Exactly one adjacent fluid target receives all contents");
             helper.assertTrue(source.getMutableFluidStorage().isEmpty(), "Fluid input hatch is empty after a complete first transfer");
             helper.succeed();
         });
@@ -198,8 +201,10 @@ public class AutoIOGameTest {
 
         helper.runAtTickTime(20, () -> {
             helper.assertTrue(source.ejectContents(), "Energy input hatch ejects its contents");
-            long transferred = firstTarget.getMutableEnergyStorage().getAmountAsLong() + secondTarget.getMutableEnergyStorage().getAmountAsLong();
-            helper.assertTrue(transferred == 2, "Exactly one adjacent energy target receives all contents");
+            long firstAmount = firstTarget.getMutableEnergyStorage().getAmountAsLong();
+            long secondAmount = secondTarget.getMutableEnergyStorage().getAmountAsLong();
+            helper.assertTrue((firstAmount == 2 && secondAmount == 0) || (firstAmount == 0 && secondAmount == 2),
+                    "Exactly one adjacent energy target receives all contents");
             helper.assertTrue(source.getMutableEnergyStorage().getAmountAsLong() == 0, "Energy input hatch is empty after a complete first transfer");
             helper.succeed();
         });
