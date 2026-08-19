@@ -70,11 +70,11 @@ class MenuScreenTest {
 
     @Test
     void auto_io_label_uses_resolved_port_io_type_before_owner_fallback() {
-        assertThat(MachineMenuScreen.isOutputPort(IOType.OUTPUT, null)).isTrue();
-        assertThat(MachineMenuScreen.isOutputPort(IOType.OUTPUT, IOType.INPUT)).isTrue();
-        assertThat(MachineMenuScreen.isOutputPort(IOType.INPUT, IOType.OUTPUT)).isFalse();
-        assertThat(MachineMenuScreen.isOutputPort(null, IOType.OUTPUT)).isTrue();
-        assertThat(MachineMenuScreen.isOutputPort(null, null)).isFalse();
+        assertThat(AbstractPortScreen.isOutputPort(IOType.OUTPUT, null)).isTrue();
+        assertThat(AbstractPortScreen.isOutputPort(IOType.OUTPUT, IOType.INPUT)).isTrue();
+        assertThat(AbstractPortScreen.isOutputPort(IOType.INPUT, IOType.OUTPUT)).isFalse();
+        assertThat(AbstractPortScreen.isOutputPort(null, IOType.OUTPUT)).isTrue();
+        assertThat(AbstractPortScreen.isOutputPort(null, null)).isFalse();
     }
 
     @Test
@@ -141,9 +141,9 @@ class MenuScreenTest {
         Slot portSlot = menu.getSlot(0);
         Slot playerSlot = menu.getSlot(menu.playerInventorySlotStart());
 
-        assertThat(MachineMenuScreen.hidesSlotOnAutoIOPage(menu, true, portSlot, 0, menu.busSlotCount())).isTrue();
-        assertThat(MachineMenuScreen.hidesSlotOnAutoIOPage(menu, true, playerSlot, menu.playerInventorySlotStart(), menu.busSlotCount())).isFalse();
-        assertThat(MachineMenuScreen.hidesSlotOnAutoIOPage(menu, false, portSlot, 0, menu.busSlotCount())).isFalse();
+        assertThat(AbstractPortScreen.hidesSlotOnAutoIOPage(menu, true, portSlot, 0)).isTrue();
+        assertThat(AbstractPortScreen.hidesSlotOnAutoIOPage(menu, true, playerSlot, menu.playerInventorySlotStart())).isFalse();
+        assertThat(AbstractPortScreen.hidesSlotOnAutoIOPage(menu, false, portSlot, 0)).isFalse();
     }
 
     @Test
@@ -151,7 +151,7 @@ class MenuScreenTest {
         ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null));
         Slot portSlot = menu.getSlot(0);
 
-        assertThat(MachineMenuScreen.hidesSlotOnAutoIOPage(menu, false, portSlot, 0, menu.busSlotCount())).isFalse();
+        assertThat(AbstractPortScreen.hidesSlotOnAutoIOPage(menu, false, portSlot, 0)).isFalse();
     }
 
     @Test
