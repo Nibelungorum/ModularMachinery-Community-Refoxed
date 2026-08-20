@@ -175,7 +175,8 @@ public class MMCR {
     }
 
     public static void registerRuntimeBuiltins() {
-        registerDefaultMachineLevels();
+        registerPublicApiLifecycle();
+        PublicApiBootstrap.freezeAndInstallMachines();
         DynamicContentReloadService.reload(candidate -> {
             cn.howxu.mmcr.internal.api.PublicBuiltinRuntime.registerStructures(candidate);
         });
@@ -202,12 +203,14 @@ public class MMCR {
         definitions.freeze();
         PublicApiBootstrap.registerDefinitions(definitions);
 
-        RegisterMachineStructuresEvent structures = new RegisterMachineStructuresEvent(definitions.definitions().keySet());
+        RegisterMachineStructuresEvent structures = RegisterMachineStructuresEvent.prepare(definitions.definitions().keySet());
+        registerDefaultMachineLevels(structures);
         registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineStructures",
                 new Class<?>[]{RegisterMachineStructuresEvent.class}, structures);
         NeoForge.EVENT_BUS.post(structures);
         structures.freeze();
         PublicApiBootstrap.composeMachineRegistrations(definitions, structures);
+        MachineLevelRegistry.install(structures.levelTypes().values(), structures.levels().values());
         MachineDefinitions.validateRegistryPhase();
         MachineDefinitions.freezeRegistryPhase();
     }
@@ -221,12 +224,11 @@ public class MMCR {
         recipes.freeze();
     }
 
-    private static void registerDefaultMachineLevels() {
-        if (FMLLoader.getCurrent().isProduction() || MachineLevelRegistry.getType(id("thermal_smelting_coil")) != null) return;
-
-        MachineLevelRegistry.beginRegistration();
-        registerDevelopmentBuiltins("org.nibelungorum.DefaultMachineLevels", "register");
-        MachineLevelRegistry.freezeRegistration();
+    private static void registerDefaultMachineLevels(RegisterMachineStructuresEvent event) {
+        if (FMLLoader.getCurrent().isProduction()
+                || event.levelTypes().containsKey(id("thermal_smelting_coil"))) return;
+        registerDevelopmentBuiltins("org.nibelungorum.DefaultMachineLevels", "register",
+                new Class<?>[]{RegisterMachineStructuresEvent.class}, event);
     }
 
     private static void onCommonSetup(FMLCommonSetupEvent event) {

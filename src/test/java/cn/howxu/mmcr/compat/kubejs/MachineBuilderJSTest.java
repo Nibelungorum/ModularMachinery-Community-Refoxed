@@ -30,6 +30,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
+import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -44,11 +46,14 @@ class MachineBuilderJSTest {
     @BeforeEach
     void beginRegistryPhase() {
         MachineDefinitions.beginRegistryPhase();
+        PublicApiBootstrap.clearForTesting();
+        PublicApiBootstrap.begin();
     }
 
     @AfterEach
     void resetDefinitions() {
         MachineDefinitions.clearForTesting();
+        PublicApiBootstrap.clearForTesting();
         MachineDefinitions.beginRegistryPhase();
     }
 
@@ -370,6 +375,28 @@ class MachineBuilderJSTest {
     }
 
     @Test
+    void sound_identifier_overloads_reject_unknown_ids_immediately() {
+        assertThatThrownBy(() -> new MachineBuilderJS("mmcr:unknown_sound").runningSound("mmcr:not_registered"))
+                .isInstanceOf(ApiRegistrationException.class);
+        assertThatThrownBy(() -> new MachineBuilderJS("mmcr:unknown_sound").finishSound("mmcr:not_registered"))
+                .isInstanceOf(ApiRegistrationException.class);
+    }
+
+    @Test
+    void machine_registration_canonical_constructor_validates_sound_ids() {
+        var registration = new MachineBuilderJS("mmcr:canonical_sound").createObject();
+
+        assertThatThrownBy(() -> new MachineRegistration(registration.id(), registration.displayNameKey(),
+                registration.controllerSpec(), registration.appearance(), registration.recipeFamilyId(),
+                registration.allowModifiers(), registration.allowMultithreading(), registration.allowParallelism(),
+                registration.maxParallelAmount(), registration.expandableStructure(), registration.smartInterfaceTypes(),
+                registration.shareSmartInterfaces(), registration.smartInterfaceModifiers(),
+                Identifier.parse("mmcr:not_registered"), null, registration.role(), registration.acceptedModuleIds(),
+                registration.pattern()))
+                .isInstanceOf(ApiRegistrationException.class);
+    }
+
+    @Test
     void builder_allows_explicit_controller_and_port_base_overrides() {
         var registration = new MachineBuilderJS("mmcr:electric_press")
                 .machineBasicBlock("kubejs:steel_casing")
@@ -387,12 +414,12 @@ class MachineBuilderJSTest {
         var builder = new MachineBuilderJS(MMCR.id("startup_press"));
         builder.registerObject();
 
-        assertThat(MachineDefinitions.getRegistration(MMCR.id("startup_press"))).isNotNull();
+        assertThat(PublicApiBootstrap.isRegistrationOpen()).isTrue();
 
-        MachineDefinitions.freezeRegistryPhase();
+        PublicApiBootstrap.freezeAndInstallMachines();
         assertThatThrownBy(builder::registerObject)
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("registry phase");
+                .isInstanceOf(ApiRegistrationException.class)
+                .hasMessageContaining("lifecycle");
     }
 
     @SuppressWarnings("unchecked")

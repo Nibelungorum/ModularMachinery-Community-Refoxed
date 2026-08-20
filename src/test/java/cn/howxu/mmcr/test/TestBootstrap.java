@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
@@ -105,9 +106,7 @@ public final class TestBootstrap {
         bindSmartInterface();
         bindModuleBridge();
         bind(ModItems.THREAD_DISPERSER, registerItem(ModItems.THREAD_DISPERSER));
-        MachineLevelRegistry.beginRegistration();
-        DefaultMachineLevels.register();
-        MachineLevelRegistry.freezeRegistration();
+        registerDefaultMachineLevels();
         restoreMachineDefinitions();
         registerRuntimeBuiltins();
         initialized = true;
@@ -134,9 +133,10 @@ public final class TestBootstrap {
     private static void registerDefaultMachineLevels() {
         if (MachineLevelRegistry.getType(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE) != null) return;
 
-        MachineLevelRegistry.beginRegistration();
-        DefaultMachineLevels.register();
-        MachineLevelRegistry.freezeRegistration();
+        RegisterMachineStructuresEvent.resetCollector();
+        RegisterMachineStructuresEvent event = RegisterMachineStructuresEvent.prepare(java.util.Set.of());
+        DefaultMachineLevels.register(event);
+        MachineLevelRegistry.install(event.levelTypes().values(), event.levels().values());
     }
 
     private static void addTestMachineSuppliers() {

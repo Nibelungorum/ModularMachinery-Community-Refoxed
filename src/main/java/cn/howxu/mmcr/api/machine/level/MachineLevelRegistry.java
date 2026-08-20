@@ -38,6 +38,13 @@ public final class MachineLevelRegistry {
         registrationOpen = false;
     }
 
+    public static void install(Collection<LevelType> types, Collection<MachineLevel> levels) {
+        beginRegistration();
+        types.forEach(MachineLevelRegistry::registerType);
+        levels.forEach(MachineLevelRegistry::registerLevel);
+        freezeRegistration();
+    }
+
     public static void registerType(LevelType type) {
         requireRegistrationOpen();
         Objects.requireNonNull(type, "type");

@@ -453,6 +453,7 @@ class PluginBindingTest {
     @Test
     void startup_scripts_run_inside_machine_registry_phase() {
         MachineDefinitions.clearForTesting();
+        PublicApiBootstrap.clearForTesting();
 
         try {
             Plugin.beginStartupRegistryPhaseForTesting();
@@ -505,6 +506,7 @@ class PluginBindingTest {
     @Test
     void kubejs_startup_after_mmcr_freezes_empty_machine_registry_without_reopening_it() {
         MachineDefinitions.clearForTesting();
+        PublicApiBootstrap.clearForTesting();
         try {
             PublicApiBootstrap.begin();
             PublicApiBootstrap.freezeAndInstallMachines();

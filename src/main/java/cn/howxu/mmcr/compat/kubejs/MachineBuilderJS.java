@@ -144,6 +144,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
 
     @HideFromJS
     public MachineBuilderJS runningSound(Identifier soundId) {
+        MachineRegistration.validateSound(soundId);
         this.runningSoundId = soundId;
         return this;
     }
@@ -154,6 +155,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
 
     @HideFromJS
     public MachineBuilderJS finishSound(Identifier soundId) {
+        MachineRegistration.validateSound(soundId);
         this.finishSoundId = soundId;
         return this;
     }

@@ -51,6 +51,8 @@ public record MachineRegistration(
         maxParallelAmount = Math.max(1, maxParallelAmount);
         smartInterfaceTypes = Collections.unmodifiableMap(new LinkedHashMap<>(smartInterfaceTypes));
         smartInterfaceModifiers = smartInterfaceModifiers == null ? List.of() : List.copyOf(smartInterfaceModifiers);
+        if (runningSoundId != null) validateSound(runningSoundId);
+        if (finishSoundId != null) validateSound(finishSoundId);
         role = role == null ? MachineRole.NORMAL : role;
         acceptedModuleIds = copyAcceptedModuleIds(acceptedModuleIds);
         if (role != MachineRole.HOST && !acceptedModuleIds.isEmpty()) {
@@ -199,7 +201,7 @@ public record MachineRegistration(
         }
 
         public Builder runningSound(Identifier id) {
-            if (id != null) validateSound(id);
+            if (id != null) MachineRegistration.validateSound(id);
             this.runningSoundId = id;
             return this;
         }
@@ -209,7 +211,7 @@ public record MachineRegistration(
         }
 
         public Builder finishSound(Identifier id) {
-            if (id != null) validateSound(id);
+            if (id != null) MachineRegistration.validateSound(id);
             this.finishSoundId = id;
             return this;
         }
@@ -255,10 +257,11 @@ public record MachineRegistration(
             return id;
         }
 
-        private static void validateSound(Identifier id) {
-            if (id == null || !BuiltInRegistries.SOUND_EVENT.containsKey(id)) {
-                throw new ApiRegistrationException("Unknown sound event " + id);
-            }
+    }
+
+    public static void validateSound(Identifier id) {
+        if (id == null || !BuiltInRegistries.SOUND_EVENT.containsKey(id)) {
+            throw new ApiRegistrationException("Unknown sound event " + id);
         }
     }
 }

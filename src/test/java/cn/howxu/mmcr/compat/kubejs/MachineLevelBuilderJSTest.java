@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
@@ -23,7 +24,8 @@ class MachineLevelBuilderJSTest {
 
     @BeforeEach
     void beginRegistration() {
-        MachineLevelRegistry.beginRegistration();
+        RegisterMachineStructuresEvent.resetCollector();
+        RegisterMachineStructuresEvent.prepare(java.util.Set.of());
     }
 
     @Test
@@ -37,6 +39,8 @@ class MachineLevelBuilderJSTest {
                 .modifier(Map.of("energyMultiplier", 0.75D, "parallelismBonus", 2))
                 .registerObject();
 
+        var event = RegisterMachineStructuresEvent.current();
+        MachineLevelRegistry.install(event.levelTypes().values(), event.levels().values());
         var level = MachineLevelRegistry.getLevel(Identifier.parse("test:copper_coil"));
         assertThat(level.typeId()).isEqualTo(Identifier.parse("test:coil"));
         assertThat(level.priority()).isEqualTo(2);

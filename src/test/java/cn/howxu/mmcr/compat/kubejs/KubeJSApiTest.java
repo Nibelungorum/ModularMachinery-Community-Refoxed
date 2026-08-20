@@ -43,9 +43,10 @@ class KubeJSApiTest {
 
     @AfterEach
     void restoreMachineLevels() {
-        MachineLevelRegistry.beginRegistration();
-        DefaultMachineLevels.register();
-        MachineLevelRegistry.freezeRegistration();
+        cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent.resetCollector();
+        var event = cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent.prepare(java.util.Set.of());
+        DefaultMachineLevels.register(event);
+        MachineLevelRegistry.install(event.levelTypes().values(), event.levels().values());
     }
 
     @Test

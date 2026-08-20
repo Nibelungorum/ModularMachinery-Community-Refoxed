@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MachineSoundManagerTest {
     private static final ResourceKey<Level> OVERWORLD = ResourceKey.create(Registries.DIMENSION,
             Identifier.fromNamespaceAndPath("test", "overworld"));
-    private static final Identifier LOOP_SOUND = Identifier.fromNamespaceAndPath("test", "machine.loop");
+    private static final Identifier LOOP_SOUND = Identifier.fromNamespaceAndPath("minecraft", "block.furnace.fire_crackle");
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {

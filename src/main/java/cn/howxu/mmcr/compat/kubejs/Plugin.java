@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.compat.kubejs;
 
-import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.internal.network.RuntimeContentServerBridge;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
@@ -32,7 +31,6 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
         }
         if (manager.scriptType == ScriptType.STARTUP) {
             beginStartupRegistryPhase();
-            MachineLevelRegistry.beginRegistration();
             registerDevelopmentMachineLevels();
         }
     }
@@ -45,10 +43,6 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
         }
         if (manager.scriptType == ScriptType.STARTUP) {
             MMCREvents.postStartup();
-            MachineLevelRegistry.freezeRegistration();
-            if (MachineDefinitions.isRegistryPhaseOpen()) {
-                PublicApiBootstrap.freezeAndInstallMachines();
-            }
         }
     }
 
@@ -62,6 +56,9 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
 
     static void freezeStartupRegistryPhaseForTesting() {
         PublicApiBootstrap.freezeAndInstallMachines();
+        if (MachineDefinitions.isRegistryPhaseOpen()) {
+            MachineDefinitions.freezeRegistryPhase();
+        }
     }
 
     static void registerStartupMachine(MachineDefinition definition) {

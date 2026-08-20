@@ -42,9 +42,10 @@ class BlockPredicateTest {
 
     @AfterEach
     void clearMachineLevels() {
-        MachineLevelRegistry.beginRegistration();
-        DefaultMachineLevels.register();
-        MachineLevelRegistry.freezeRegistration();
+        cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent.resetCollector();
+        var event = cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent.prepare(Set.of());
+        DefaultMachineLevels.register(event);
+        MachineLevelRegistry.install(event.levelTypes().values(), event.levels().values());
     }
 
     @Test void air_matches_only_air() {
