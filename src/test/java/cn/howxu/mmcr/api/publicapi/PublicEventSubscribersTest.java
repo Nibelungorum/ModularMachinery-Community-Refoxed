@@ -15,12 +15,14 @@ import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.fml.loading.FMLLoader;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.nibelungorum.builtin.PublicBuiltinLevelDefinitions;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -79,7 +81,7 @@ class PublicEventSubscribersTest {
     void builtin_level_subscriber_registers_the_complete_development_declaration() {
         var event = new MMCRMachineStructuresEvent(Set.of());
 
-        NeoForge.EVENT_BUS.post(event);
+        PublicBuiltinLevelDefinitions.register(event);
 
         assertThat(event.levelTypes()).containsOnlyKeys(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE);
         assertThat(event.levels()).containsOnlyKeys(
@@ -99,7 +101,7 @@ class PublicEventSubscribersTest {
         event.registerLevelType(new LevelType(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE,
                 net.minecraft.network.chat.Component.literal("existing")));
 
-        NeoForge.EVENT_BUS.post(event);
+        PublicBuiltinLevelDefinitions.register(event);
 
         assertThat(event.levelTypes()).containsOnlyKeys(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE);
         assertThat(event.levels()).isEmpty();
@@ -109,9 +111,10 @@ class PublicEventSubscribersTest {
     void builtin_level_subscriber_skips_development_levels_in_production() throws Exception {
         installFmlLoader(true);
         try {
+            assertThat(FMLLoader.getCurrent().isProduction()).isTrue();
             var event = new MMCRMachineStructuresEvent(Set.of());
 
-            NeoForge.EVENT_BUS.post(event);
+            PublicBuiltinLevelDefinitions.register(event);
 
             assertThat(event.levelTypes()).isEmpty();
             assertThat(event.levels()).isEmpty();
@@ -120,10 +123,21 @@ class PublicEventSubscribersTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private static void installFmlLoader(boolean production) throws Exception {
         Class<?> fmlLoaderClass = Class.forName("net.neoforged.fml.loading.FMLLoader");
         Class<?> distClass = Class.forName("net.neoforged.api.distmarker.Dist");
         Class<?> loadingModListClass = Class.forName("net.neoforged.fml.loading.LoadingModList");
+        for (Field field : fmlLoaderClass.getDeclaredFields()) {
+            if (Modifier.isStatic(field.getModifiers()) && field.getType() == fmlLoaderClass) {
+                field.setAccessible(true);
+                field.set(null, null);
+            }
+            if (Modifier.isStatic(field.getModifiers()) && field.getType() == java.util.concurrent.atomic.AtomicReference.class) {
+                field.setAccessible(true);
+                ((java.util.concurrent.atomic.AtomicReference<Object>) field.get(null)).set(null);
+            }
+        }
         Constructor<?> fmlConstructor = fmlLoaderClass.getDeclaredConstructor(
                 ClassLoader.class, String[].class, distClass, boolean.class, Path.class);
         fmlConstructor.setAccessible(true);
