@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.reload;
 
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.resources.Identifier;
@@ -9,6 +10,7 @@ import net.minecraft.server.packs.PackResources;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
@@ -36,6 +38,11 @@ class MachineRecipeDataReloadListenerTest {
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
         registries = VanillaRegistries.createLookup();
+    }
+
+    @BeforeEach
+    void clearRecipeLayers() {
+        RecipeRegistry.clearForTesting();
     }
 
     @Test
@@ -77,6 +84,25 @@ class MachineRecipeDataReloadListenerTest {
         assertThat(RecipeRegistry.getRecipe(id)).isSameAs(recipe);
         assertThat(RecipeRegistry.dataPackSnapshot()).containsEntry(id, recipe);
         RecipeRegistry.replaceDataPack(Map.of());
+    }
+
+    @Test
+    void coordinatorDataPackReplacementPreservesStaticAndDynamicLayers() {
+        var staticId = Identifier.parse("mmcr_test:static_layer_recipe");
+        var dynamicId = Identifier.parse("mmcr_test:dynamic_layer_recipe");
+        var dataPackId = Identifier.parse("mmcr_test:datapack_layer_recipe");
+        var staticRecipe = new MachineRecipe(staticId, Identifier.parse("mmcr:alloy_furnace"), 1, List.of(), List.of());
+        var dynamicRecipe = new MachineRecipe(dynamicId, Identifier.parse("mmcr:alloy_furnace"), 2, List.of(), List.of());
+        var dataPackRecipe = new MachineRecipe(dataPackId, Identifier.parse("mmcr:alloy_furnace"), 3, List.of(), List.of());
+        RecipeRegistry.registerStatic(staticRecipe);
+        RecipeRegistry.replaceDynamic(Map.of(dynamicId, dynamicRecipe));
+
+        RuntimeContentCoordinator.replaceDataPackRecipes(Map.of(dataPackId, dataPackRecipe));
+
+        assertThat(RecipeRegistry.staticSnapshot()).containsEntry(staticId, staticRecipe);
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsEntry(dynamicId, dynamicRecipe);
+        assertThat(RecipeRegistry.dataPackSnapshot()).containsEntry(dataPackId, dataPackRecipe);
+        assertThat(RecipeRegistry.effectiveSnapshot()).containsKeys(staticId, dynamicId, dataPackId);
     }
 
     @Test

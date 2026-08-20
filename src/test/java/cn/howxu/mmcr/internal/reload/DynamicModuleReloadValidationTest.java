@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
@@ -129,6 +130,26 @@ class DynamicModuleReloadValidationTest {
 
         assertThat(MachineStructureRegistry.dynamicSnapshot()).containsOnlyKeys(oldMachineId);
         assertThat(RecipeRegistry.dynamicSnapshot()).containsEntry(oldRecipeId, oldRecipe);
+    }
+
+    @Test
+    void candidate_recipe_map_key_must_match_recipe_id_before_commit() {
+        Identifier machineId = MMCR.id("key_machine");
+        Identifier oldRecipeId = MMCR.id("old_recipe");
+        Identifier mismatchedKey = MMCR.id("mismatched_key");
+        MachineDefinitions.register(MachineRegistration.builder(machineId).build());
+        DynamicContentReloadService.reload(candidate -> {
+            candidate.registerStructure(structure(machineId, 0));
+            candidate.registerRecipe(recipe(oldRecipeId, machineId));
+        });
+
+        assertThatThrownBy(() -> RuntimeContentCoordinator.commitDynamic(
+                Map.of(machineId, structure(machineId, 0)),
+                Map.of(mismatchedKey, recipe(oldRecipeId, machineId))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Recipe key does not match recipe id");
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsOnlyKeys(machineId);
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsOnlyKeys(oldRecipeId);
     }
 
     private static MachineStructureDefinition structure(Identifier id, int couplers) {

@@ -23,7 +23,7 @@ public final class RuntimeContentCoordinator {
     private RuntimeContentCoordinator() {
     }
 
-    public static DynamicContentReloadService.ReloadResult commitDynamic(
+    public static synchronized DynamicContentReloadService.ReloadResult commitDynamic(
             Map<Identifier, MachineStructureDefinition> structures,
             Map<Identifier, MachineRecipe> recipes) {
         Map<Identifier, MachineStructureDefinition> oldStructures = MachineStructureRegistry.dynamicSnapshot();
@@ -32,9 +32,19 @@ public final class RuntimeContentCoordinator {
         Map<Identifier, MachineRecipe> recipeReplacement = Map.copyOf(new LinkedHashMap<>(recipes));
 
         validate(structureReplacement, recipeReplacement);
-        MachineStructureRegistry.replaceDynamic(structureReplacement);
-        RecipeRegistry.replaceDynamic(recipeReplacement);
-        RecipeCraftingContextPool.onGlobalReload();
+        try {
+            MachineStructureRegistry.replaceDynamic(structureReplacement);
+            RecipeRegistry.replaceDynamic(recipeReplacement);
+            RecipeCraftingContextPool.onGlobalReload();
+        } catch (RuntimeException | Error failure) {
+            try {
+                MachineStructureRegistry.replaceDynamic(oldStructures);
+                RecipeRegistry.replaceDynamic(oldRecipes);
+            } catch (RuntimeException | Error rollbackFailure) {
+                failure.addSuppressed(rollbackFailure);
+            }
+            throw failure;
+        }
         return DynamicContentReloadService.ReloadResult.fromSnapshots(
                 oldStructures, structureReplacement, oldRecipes, recipeReplacement);
     }
@@ -59,7 +69,13 @@ public final class RuntimeContentCoordinator {
             registrations.put(id, registration.withPattern(structure.pattern()));
         }
         MachineRoleValidator.validate(registrations.values(), null);
-        for (MachineRecipe recipe : recipes.values()) {
+        for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
+            Identifier recipeId = entry.getKey();
+            MachineRecipe recipe = entry.getValue();
+            if (!recipeId.equals(recipe.id())) {
+                throw new IllegalStateException("Recipe key does not match recipe id: "
+                        + recipeId + " != " + recipe.id());
+            }
             if (RecipeRegistry.containsStatic(recipe.id())) {
                 throw new IllegalStateException("Dynamic recipe conflicts with static recipe: " + recipe.id());
             }
