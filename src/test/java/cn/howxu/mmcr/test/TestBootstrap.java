@@ -5,8 +5,6 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
-import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
@@ -16,8 +14,8 @@ import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
-import cn.howxu.mmcr.internal.api.PublicMachineAdapter;
 import cn.howxu.mmcr.internal.api.PublicBuiltinRuntime;
+import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
@@ -28,9 +26,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.PortKinds;
-import org.nibelungorum.builtin.PublicBuiltinMachineDefinitions;
 
-import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
@@ -47,8 +43,8 @@ import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import org.nibelungorum.DefaultMachineLevels;
+import org.nibelungorum.builtin.PublicBuiltinDefinitions;
 
-import org.nibelungorum.TestMachines;
 
 import java.lang.reflect.Field;
 import java.util.List;
@@ -130,7 +126,6 @@ public final class TestBootstrap {
         registerDefaultMachineLevels();
         DynamicContentReloadService.reload(candidate -> {
             PublicBuiltinRuntime.registerStructures(candidate);
-            registerGameTestMachineStructures(candidate);
         });
         PublicBuiltinRuntime.registerRecipes();
         MachineRegistry.rebuildCompiledCache();
@@ -142,18 +137,6 @@ public final class TestBootstrap {
         MachineLevelRegistry.beginRegistration();
         DefaultMachineLevels.register();
         MachineLevelRegistry.freezeRegistration();
-    }
-
-    private static void registerGameTestMachineStructures(DynamicContentReloadService.Candidate candidate) {
-        candidate.registerStructure(new MachineStructureDefinition(id("test_cube"), TestMachines.casingCubePattern(),
-                PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY));
-        candidate.registerStructure(new MachineStructureDefinition(id("controller_tick"), TestMachines.casingCubePattern(),
-                PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY));
-        candidate.registerStructure(new MachineStructureDefinition(id("iron_compressor"), TestMachines.ironCompressorPattern(),
-                PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY));
-        candidate.registerStructure(new MachineStructureDefinition(id("distillation_tower_test"), TestMachines.distillationTowerDeclarations()));
-        candidate.registerStructure(new MachineStructureDefinition(id("expandable_structure_stages"), TestMachines.expandableStageDeclarations()));
-        candidate.registerStructure(new MachineStructureDefinition(id("expandable_structure_vertical_roll"), TestMachines.expandableStageDeclarations()));
     }
 
     private static void addTestMachineSuppliers() {
@@ -181,14 +164,20 @@ public final class TestBootstrap {
     }
 
     private static void registerPublicBuiltinEvents() {
+        PublicApiBootstrap.clearForTesting();
+        PublicApiBootstrap.begin();
         RegisterMachineDefinationsEvent definitions = new RegisterMachineDefinationsEvent();
-        PublicBuiltinMachineDefinitions.registerDefinitions(definitions);
+        PublicBuiltinDefinitions.machineDefinitions().values().forEach(definitions::registerMachine);
+        NeoForge.EVENT_BUS.post(definitions);
         definitions.freeze();
+        PublicApiBootstrap.registerDefinitions(definitions);
         RegisterMachineStructuresEvent structures = new RegisterMachineStructuresEvent(definitions.definitions().keySet());
-        PublicBuiltinMachineDefinitions.registerStructures(structures);
+        PublicBuiltinDefinitions.structureDefinitions().values().forEach(structures::registerStructure);
+        NeoForge.EVENT_BUS.post(structures);
         structures.freeze();
-        definitions.definitions().values().forEach(definition -> MachineDefinitions.register(
-                PublicMachineAdapter.toStartupRegistration(definition, structures.structures().get(definition.id()))));
+        PublicApiBootstrap.composeMachineRegistrations(definitions, structures);
+        MachineDefinitions.validateRegistryPhase();
+        MachineDefinitions.freezeRegistryPhase();
     }
 
 

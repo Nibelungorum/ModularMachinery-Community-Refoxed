@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.kubejs;
 
-import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
+import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.BlockArray;
@@ -481,7 +482,34 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     }
 
     public void registerObject() {
-        MachineDefinitions.register(createObject());
+        MachineRegistration registration = createObject();
+        MachineBuilder builder = MachineBuilder.machine(id)
+                .displayNameKey(registration.displayNameKey())
+                .controller(controller -> controller
+                        .id(registration.controllerSpec().id())
+                        .frontTexture(registration.controllerSpec().frontTexture())
+                        .sideTexture(registration.controllerSpec().sideTexture())
+                        .topTexture(registration.controllerSpec().topTexture())
+                        .bottomTexture(registration.controllerSpec().bottomTexture())
+                        .allowVerticalFacing(registration.controllerSpec().allowVerticalFacing())
+                        .fullyRotationallySymmetric(registration.controllerSpec().fullyRotationallySymmetric())
+                        .requireVerticalFacing(registration.controllerSpec().requireVerticalFacing())
+                        .tooltip(registration.controllerSpec().tooltip().toArray(String[]::new)))
+                .appearance(appearance -> appearance
+                        .machineBasicBlock(registration.appearance().machineBasicBlock())
+                        .controllerBaseTexture(registration.appearance().controllerBaseTexture())
+                        .formedPortBaseTexture(registration.appearance().formedPortBaseTexture()))
+                .factory(factory -> factory
+                        .hasFactory(registration.maxParallelAmount() > 1)
+                        .threadLimit(registration.maxParallelAmount()))
+                .role(registration.role())
+                .maxParallelism(registration.maxParallelAmount())
+                .parallelizable(registration.allowParallelism())
+                .failureAction(cn.howxu.mmcr.api.machine.RecipeFailureActions.getDefaultAction());
+        registration.acceptedModuleIds().forEach(builder::acceptedModule);
+        if (registration.role() == MachineRole.MODULE) builder.role(MachineRole.MODULE);
+        MachineDefinition definition = builder.build();
+        Plugin.registerStartupMachine(definition);
     }
 
     public MachineBuilderJS register() {

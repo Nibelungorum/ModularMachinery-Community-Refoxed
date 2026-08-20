@@ -1,9 +1,7 @@
 package cn.howxu.mmcr.api.publicapi;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
-import net.minecraft.world.level.block.Blocks;
+import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
 
 /**
  * Service-loaded test provider for the startup lifecycle.
@@ -12,7 +10,8 @@ import net.minecraft.world.level.block.Blocks;
  */
 public final class TestMachineDefinitionProvider implements MachineDefinitionProvider {
     @Override
-    public void register() {
-        MachineApi.registerMachine(MachineBuilder.machine(MMCR.id("service_loaded_machine")).build());
+    public void register(RegisterMachineDefinationsEvent event) {
+        event.registerMachine(MMCR.id("service_loaded_machine"), builder -> builder
+                .displayNameKey("machine.mmcr.service_loaded_machine"));
     }
 }

@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.internal.network.RuntimeContentServerBridge;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
+import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import dev.latvian.mods.kubejs.event.EventGroupWrapper;
 import dev.latvian.mods.kubejs.recipe.component.RecipeComponentTypeRegistry;
 import dev.latvian.mods.kubejs.recipe.schema.RecipeFactoryRegistry;
@@ -61,6 +62,10 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
 
     static void freezeStartupRegistryPhaseForTesting() {
         PublicApiBootstrap.freezeAndInstallMachines();
+    }
+
+    static void registerStartupMachine(MachineDefinition definition) {
+        PublicApiBootstrap.registerMachine(definition);
     }
 
     private record ServerReload(KubeJSContentReloadTransaction transaction, int errorCount) {

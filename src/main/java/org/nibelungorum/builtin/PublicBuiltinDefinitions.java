@@ -1,7 +1,5 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.api.publicapi.MachineApi;
-import cn.howxu.mmcr.api.publicapi.RecipeApi;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
@@ -32,14 +30,6 @@ public final class PublicBuiltinDefinitions {
     private static final Identifier PURPUR_FURNACE = id("purpur_furnace");
 
     private PublicBuiltinDefinitions() {
-    }
-
-    public static void register() {
-        machineDefinitions().values().forEach(MachineApi::registerMachine);
-    }
-
-    public static void registerRecipes() {
-        recipeDefinitions().values().forEach(RecipeApi::registerRecipe);
     }
 
     public static Map<Identifier, MachineDefinition> machineDefinitions() {

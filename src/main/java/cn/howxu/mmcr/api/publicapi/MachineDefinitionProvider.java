@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.publicapi;
 
+import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
+
 /**
  * Startup extension point for declaring public machine and recipe definitions.
  *
@@ -12,5 +14,5 @@ public interface MachineDefinitionProvider {
      * @throws ApiRegistrationException if startup registration has not begun, has been finalized,
      *                                   or a declaration is invalid or duplicated
      */
-    void register();
+    void register(RegisterMachineDefinationsEvent event);
 }
