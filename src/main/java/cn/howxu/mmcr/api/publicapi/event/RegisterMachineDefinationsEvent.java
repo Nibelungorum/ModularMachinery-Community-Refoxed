@@ -28,6 +28,14 @@ public final class RegisterMachineDefinationsEvent extends Event {
         definitions.put(id, definition);
     }
 
+    public void registerMachine(MachineDefinition definition) {
+        if (frozen) throw new IllegalStateException("Machine definitions are frozen");
+        Objects.requireNonNull(definition, "definition");
+        if (definitions.putIfAbsent(definition.id(), definition) != null) {
+            throw new IllegalStateException("Duplicate machine: " + definition.id());
+        }
+    }
+
     public Map<Identifier, MachineDefinition> definitions() {
         return Collections.unmodifiableMap(new LinkedHashMap<>(definitions));
     }

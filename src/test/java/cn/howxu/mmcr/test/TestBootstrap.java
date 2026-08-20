@@ -16,8 +16,10 @@ import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
-import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
+import cn.howxu.mmcr.internal.api.PublicMachineAdapter;
 import cn.howxu.mmcr.internal.api.PublicBuiltinRuntime;
+import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
+import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
@@ -92,7 +94,7 @@ public final class TestBootstrap {
         addTestMachineSuppliers();
         Bootstrap.bootStrap();
         MachineDefinitions.bootstrapBuiltins();
-        PublicBuiltinMachineDefinitions.registerDefaults();
+        registerPublicBuiltinEvents();
         bindAllVanillaItemComponents();
         bindController(id("test_cube"));
         bindController(id("controller_tick"));
@@ -120,7 +122,7 @@ public final class TestBootstrap {
         MachineDefinitions.beginRegistryPhase();
         addTestMachineSuppliers();
         MachineDefinitions.bootstrapBuiltins();
-        PublicBuiltinMachineDefinitions.registerDefaults();
+        registerPublicBuiltinEvents();
     }
 
     public static void registerRuntimeBuiltins() {
@@ -176,6 +178,17 @@ public final class TestBootstrap {
                     .expandableStructure()
                     .build();
         });
+    }
+
+    private static void registerPublicBuiltinEvents() {
+        RegisterMachineDefinationsEvent definitions = new RegisterMachineDefinationsEvent();
+        PublicBuiltinMachineDefinitions.registerDefinitions(definitions);
+        definitions.freeze();
+        RegisterMachineStructuresEvent structures = new RegisterMachineStructuresEvent(definitions.definitions().keySet());
+        PublicBuiltinMachineDefinitions.registerStructures(structures);
+        structures.freeze();
+        definitions.definitions().values().forEach(definition -> MachineDefinitions.register(
+                PublicMachineAdapter.toStartupRegistration(definition, structures.structures().get(definition.id()))));
     }
 
 

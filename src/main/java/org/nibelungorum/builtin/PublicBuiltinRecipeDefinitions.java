@@ -3,8 +3,8 @@ package org.nibelungorum.builtin;
 import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.MMCR;
-import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
 
 /** Public built-in recipe subscriber.
  * @author howxu <dev@howxu.cn>

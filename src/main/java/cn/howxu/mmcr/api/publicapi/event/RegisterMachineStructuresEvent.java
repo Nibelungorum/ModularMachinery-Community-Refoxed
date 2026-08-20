@@ -39,6 +39,17 @@ public final class RegisterMachineStructuresEvent extends Event {
         structures.put(machineId, Objects.requireNonNull(builder, "consumer result").build(machineId));
     }
 
+    public void registerStructure(MachineStructureDefinition structure) {
+        if (frozen) throw new IllegalStateException("Machine structures are frozen");
+        Objects.requireNonNull(structure, "structure");
+        if (!machineIds.contains(structure.machineId())) {
+            throw new IllegalArgumentException("Unknown machine definition: " + structure.machineId());
+        }
+        if (structures.putIfAbsent(structure.machineId(), structure) != null) {
+            throw new IllegalStateException("Duplicate machine structure: " + structure.machineId());
+        }
+    }
+
     public Map<Identifier, MachineStructureDefinition> structures() {
         return Collections.unmodifiableMap(new LinkedHashMap<>(structures));
     }

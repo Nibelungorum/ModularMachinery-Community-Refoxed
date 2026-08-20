@@ -1,13 +1,17 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.api.machine.MachineDefinitions;
-import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterMachinesEvent;
+import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
+import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
-import cn.howxu.mmcr.internal.api.PublicMachineAdapter;
+import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.MMCR;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
 
 /** Public built-in machine definitions.
  * @author howxu <dev@howxu.cn>
  */
+@EventBusSubscriber(modid = MMCR.MODID)
 public final class PublicBuiltinMachineDefinitions {
     private PublicBuiltinMachineDefinitions() {
     }
@@ -16,14 +20,16 @@ public final class PublicBuiltinMachineDefinitions {
         return PublicBuiltinDefinitions.machineDefinitions();
     }
 
-    public static void registerDefaults() {
-        machineDefinitions().values().forEach(definition ->
-                MachineDefinitions.register(PublicMachineAdapter.toStartupRegistration(definition,
-                        PublicBuiltinDefinitions.structureDefinitions().get(definition.id()))));
+    @SubscribeEvent
+    public static void registerDefinitions(RegisterMachineDefinationsEvent event) {
+        machineDefinitions().values().forEach(event::registerMachine);
     }
 
-    public static void register(MMCRRegisterMachinesEvent event) {
-        machineDefinitions().values().forEach(event::registerMachine);
+    @SubscribeEvent
+    public static void registerStructures(RegisterMachineStructuresEvent event) {
+        java.util.Map<net.minecraft.resources.Identifier, MachineStructureDefinition> structures =
+                PublicBuiltinDefinitions.structureDefinitions();
+        structures.values().forEach(event::registerStructure);
     }
 
 }

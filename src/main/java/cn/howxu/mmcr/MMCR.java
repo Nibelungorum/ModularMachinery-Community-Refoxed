@@ -36,7 +36,8 @@ import cn.howxu.mmcr.registry.ModRecipeTypes;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.api.PublicMachineDefinitionProviders;
-import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterMachinesEvent;
+import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
+import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
 import org.nibelungorum.builtin.PublicBuiltinMachineDefinitions;
 import net.minecraft.core.registries.Registries;
@@ -73,11 +74,10 @@ public class MMCR {
     public MMCR(IEventBus modBus, ModContainer modContainer) {
         PublicApiBootstrap.begin();
         MachineDefinitions.beginRegistryPhase();
-        PublicBuiltinMachineDefinitions.registerDefaults();
-        NeoForge.EVENT_BUS.post(new MMCRRegisterMachinesEvent());
         registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineDefinitions");
         MachineDefinitions.bootstrapBuiltins();
         PublicMachineDefinitionProviders.registerAll();
+        registerPublicApiLifecycle();
         PublicApiBootstrap.freezeAndInstallMachines();
         ModDataComponents.register(modBus);
         ModBlocks.register(modBus);
@@ -191,10 +191,36 @@ public class MMCR {
     }
 
     private static void registerRuntimeRecipes() {
-        NeoForge.EVENT_BUS.post(new MMCRRegisterRecipesEvent());
+        MMCRRegisterRecipesEvent recipes = new MMCRRegisterRecipesEvent();
+        NeoForge.EVENT_BUS.post(recipes);
+        recipes.freeze();
+        PublicApiBootstrap.registerRecipes(recipes);
         PublicApiBootstrap.installRecipes();
-        cn.howxu.mmcr.internal.api.PublicBuiltinRuntime.registerRecipes();
         registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerRecipes");
+    }
+
+    private static void registerPublicApiLifecycle() {
+        PublicApiBootstrap.begin();
+        RegisterMachineDefinationsEvent definitions = new RegisterMachineDefinationsEvent();
+        PublicBuiltinMachineDefinitions.registerDefinitions(definitions);
+        NeoForge.EVENT_BUS.post(definitions);
+        definitions.freeze();
+        PublicApiBootstrap.registerDefinitions(definitions);
+
+        RegisterMachineStructuresEvent structures = new RegisterMachineStructuresEvent(definitions.definitions().keySet());
+        PublicBuiltinMachineDefinitions.registerStructures(structures);
+        NeoForge.EVENT_BUS.post(structures);
+        structures.freeze();
+        PublicApiBootstrap.composeMachineRegistrations(definitions, structures);
+        MachineDefinitions.validateRegistryPhase();
+        MachineDefinitions.freezeRegistryPhase();
+    }
+
+    public static void registerPublicApiLifecycleForTesting() {
+        registerPublicApiLifecycle();
+        MMCRRegisterRecipesEvent recipes = new MMCRRegisterRecipesEvent();
+        NeoForge.EVENT_BUS.post(recipes);
+        recipes.freeze();
     }
 
     private static void registerDefaultMachineLevels() {

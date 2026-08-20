@@ -15,12 +15,15 @@ import cn.howxu.mmcr.internal.api.PublicMachineDefinitionProviders;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
+import net.neoforged.neoforge.common.NeoForge;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -139,6 +142,52 @@ class PublicApiLifecycleTest {
         assertThatThrownBy(() -> RecipeApi.registerRecipe(recipe("after_recipe", unknown)))
                 .isInstanceOf(ApiRegistrationException.class)
                 .hasMessageContaining("after_recipe");
+    }
+
+    @Test
+    void lifecycle_events_are_ordered_and_each_phase_freezes_before_the_next() {
+        List<String> observedEvents = new ArrayList<>();
+        Identifier machineId = id("ordered_machine");
+        boolean[] active = {true};
+        var definitions = new java.util.concurrent.atomic.AtomicReference<cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent>();
+        var structures = new java.util.concurrent.atomic.AtomicReference<cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent>();
+        var recipes = new java.util.concurrent.atomic.AtomicReference<cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent>();
+        NeoForge.EVENT_BUS.addListener(cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent.class,
+                event -> {
+                    if (!active[0]) return;
+                    observedEvents.add("RegisterMachineDefinationsEvent");
+                    event.registerMachine(machineId, builder -> builder.displayNameKey("machine.mmcr.ordered_machine"));
+                    definitions.set(event);
+                });
+        NeoForge.EVENT_BUS.addListener(cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent.class,
+                event -> {
+                    if (!active[0]) return;
+                    observedEvents.add("RegisterMachineStructuresEvent");
+                    event.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage.pattern(pattern -> pattern
+                            .layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))));
+                    structures.set(event);
+                });
+        NeoForge.EVENT_BUS.addListener(cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent.class,
+                event -> {
+                    if (!active[0]) return;
+                    observedEvents.add("MMCRRegisterRecipesEvent");
+                    recipes.set(event);
+                });
+
+        MMCR.registerPublicApiLifecycleForTesting();
+        active[0] = false;
+
+        assertThatThrownBy(() -> definitions.get().registerMachine(id("late_definition"), builder -> builder))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> structures.get().registerStructure(machineId, builder -> builder))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> recipes.get().registerRecipe(recipe("late_recipe", machineId)))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(observedEvents).containsExactly(
+                "RegisterMachineDefinationsEvent",
+                "RegisterMachineStructuresEvent",
+                "MMCRRegisterRecipesEvent");
     }
 
     @Test

@@ -6,6 +6,9 @@ import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.publicapi.ApiRuntime;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
+import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
+import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
+import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import net.minecraft.resources.Identifier;
 
@@ -47,6 +50,33 @@ public final class PublicApiBootstrap {
 
     public static synchronized boolean isRegistrationOpen() {
         return state == State.OPEN;
+    }
+
+    public static synchronized void registerDefinitions(RegisterMachineDefinationsEvent event) {
+        event.definitions().values().forEach(PublicApiBootstrap::registerMachine);
+    }
+
+    public static synchronized void composeMachineRegistrations(RegisterMachineDefinationsEvent definitions,
+            RegisterMachineStructuresEvent structures) {
+        if (state == State.MACHINES_FROZEN || state == State.FROZEN) return;
+        if (state != State.OPEN) {
+            throw new ApiRegistrationException("Public API machine composition rejected: lifecycle is " + state);
+        }
+        Map<Identifier, cn.howxu.mmcr.api.machine.MachineRegistration> machines = new LinkedHashMap<>();
+        for (MachineDefinition definition : MACHINES.values()) {
+            machines.put(definition.id(), PublicMachineAdapter.toStartupRegistration(definition,
+                    structures.structures().get(definition.id())));
+        }
+        Map<Identifier, cn.howxu.mmcr.api.machine.MachineRegistration> allMachines = new LinkedHashMap<>();
+        for (var machine : MachineDefinitions.allRegistrations()) allMachines.put(machine.id(), machine);
+        allMachines.putAll(machines);
+        MachineRoleValidator.validate(allMachines.values(), allMachines::get);
+        machines.values().forEach(PublicRegistryBridge::registerMachine);
+        state = State.MACHINES_FROZEN;
+    }
+
+    public static synchronized void registerRecipes(MMCRRegisterRecipesEvent event) {
+        event.recipes().values().forEach(PublicApiBootstrap::registerRecipe);
     }
 
     public static synchronized void registerMachine(MachineDefinition definition) {
