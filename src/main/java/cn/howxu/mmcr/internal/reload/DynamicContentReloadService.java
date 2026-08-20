@@ -29,6 +29,12 @@ public final class DynamicContentReloadService {
         return RuntimeContentCoordinator.commitDynamic(candidate.structures, candidate.recipes);
     }
 
+    public static RuntimeContentCoordinator.CommitResult reloadWithSnapshot(Consumer<Candidate> producer) {
+        Candidate candidate = begin();
+        producer.accept(candidate);
+        return RuntimeContentCoordinator.commitDynamicAndSnapshot(candidate.structures, candidate.recipes);
+    }
+
     public static final class Candidate {
 
         private final Map<Identifier, MachineStructureDefinition> structures = new LinkedHashMap<>();

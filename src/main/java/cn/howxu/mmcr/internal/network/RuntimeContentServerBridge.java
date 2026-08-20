@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.network;
 
 import net.minecraft.server.MinecraftServer;
+import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 
@@ -17,6 +18,7 @@ public final class RuntimeContentServerBridge {
 
     public static void onServerAboutToStart(ServerAboutToStartEvent event) {
         currentServer = event.getServer();
+        RuntimeContentSync.sendToAll(currentServer);
     }
 
     public static void onServerStopped(ServerStoppedEvent event) {
@@ -27,6 +29,13 @@ public final class RuntimeContentServerBridge {
         MinecraftServer server = currentServer;
         if (server == null) return false;
         RuntimeContentSync.sendToAll(server);
+        return true;
+    }
+
+    public static boolean sendToCurrentServer(RuntimeContentSnapshot snapshot) {
+        MinecraftServer server = currentServer;
+        if (server == null) return false;
+        RuntimeContentSync.sendToAll(server, snapshot);
         return true;
     }
 

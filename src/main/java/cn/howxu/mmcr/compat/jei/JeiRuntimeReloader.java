@@ -25,6 +25,7 @@ public final class JeiRuntimeReloader {
     private static volatile Map<Identifier, List<MachineRecipeDisplay>> visibleDisplaysByMachine = Map.of();
     private static volatile boolean categoriesCaptured;
     private static volatile IJeiRuntime runtime;
+    private static volatile long lastReloadedVersion = Long.MIN_VALUE;
 
     private JeiRuntimeReloader() {
     }
@@ -38,6 +39,7 @@ public final class JeiRuntimeReloader {
     public static void setRuntime(IJeiRuntime runtime) {
         JeiRuntimeReloader.runtime = runtime;
         visibleDisplaysByMachine = Map.of();
+        lastReloadedVersion = Long.MIN_VALUE;
     }
 
     public static void clearRuntimeForTesting() {
@@ -45,11 +47,14 @@ public final class JeiRuntimeReloader {
         visibleDisplaysByMachine = Map.of();
         REGISTERED_MACHINE_CATEGORIES.clear();
         categoriesCaptured = false;
+        lastReloadedVersion = Long.MIN_VALUE;
     }
 
     public static void reloadIfAvailable(RuntimeContentSnapshot snapshot) {
         IJeiRuntime current = runtime;
         if (current == null) return;
+        if (snapshot.contentVersion() == lastReloadedVersion) return;
+        lastReloadedVersion = snapshot.contentVersion();
         Runnable reload = () -> {
             Map<Identifier, List<MachineRecipeDisplay>> displaysByMachine = MachineRecipeDisplays.byMachine(snapshot);
             Map<Identifier, List<MachineRecipeDisplay>> previousVisible = visibleDisplaysByMachine;

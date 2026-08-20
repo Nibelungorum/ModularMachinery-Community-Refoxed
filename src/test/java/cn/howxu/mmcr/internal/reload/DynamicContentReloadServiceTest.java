@@ -112,6 +112,20 @@ class DynamicContentReloadServiceTest {
         assertThat(RecipeRegistry.getRecipe(Identifier.parse("mmcr:static_recipe"))).isNotNull();
     }
 
+    @Test
+    void reloadWithSnapshotReturnsTheCommittedEffectiveContent() {
+        String machineId = "mmcr:alloy_furnace";
+
+        var commit = DynamicContentReloadService.reloadWithSnapshot(candidate ->
+                candidate.registerStructure(structure(machineId)));
+
+        assertThat(commit.result()).isNotNull();
+        assertThat(commit.snapshot().structures()).containsKey(Identifier.parse(machineId));
+        assertThat(commit.snapshot().contentVersion()).isGreaterThan(0L);
+        assertThat(commit.snapshot().structures()).isEqualTo(MachineStructureRegistry.effectiveSnapshot());
+        assertThat(commit.snapshot().recipes()).isEqualTo(RecipeRegistry.effectiveSnapshot());
+    }
+
     private static void register(String id) {
         Identifier identifier = Identifier.parse(id);
         MachineDefinitions.register(MachineRegistration.builder(identifier).localizedName(id).build());

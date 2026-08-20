@@ -77,6 +77,22 @@ class JeiRuntimeReloaderTest {
     }
 
     @Test
+    void reloadDoesNotRefreshTheSameCommittedVersionTwice() {
+        FakeRecipeManager manager = new FakeRecipeManager();
+        Identifier machineId = MMCR.id("alloy_furnace");
+        JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
+        JeiRuntimeReloader.setRuntime(runtime(manager));
+        RuntimeContentSnapshot snapshot = snapshotWithRecipe(machineId, MMCR.id("jei_same_version_recipe"));
+
+        JeiRuntimeReloader.reloadIfAvailable(snapshot);
+        manager.clearRecordedCalls();
+        JeiRuntimeReloader.reloadIfAvailable(snapshot);
+
+        assertThat(manager.addedTypes()).isEmpty();
+        assertThat(manager.hiddenTypes()).isEmpty();
+    }
+
+    @Test
     void reloadSkipsMachinesWithoutRegisteredJeiCategory() {
         FakeRecipeManager manager = new FakeRecipeManager();
         Identifier machineId = MMCR.id("runtime_only_machine");

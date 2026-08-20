@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.internal.command;
 
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
-
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSourceStack;
@@ -20,8 +19,9 @@ public final class ReloadCommand {
                 .then(Commands.literal("reload")
                         .requires(src -> src.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
                         .executes(ctx -> {
-                            var result = DynamicContentReloadService.reload(candidate -> {});
-                            RuntimeContentSync.sendToAll(ctx.getSource().getServer());
+                            var commit = DynamicContentReloadService.reloadWithSnapshot(candidate -> {});
+                            var result = commit.result();
+                            RuntimeContentSync.sendToAll(ctx.getSource().getServer(), commit.snapshot());
                             ctx.getSource().sendSuccess(() -> Component.translatable("command.mmcr.reload.success",
                                     result.addedStructures().size(), result.updatedStructures().size(),
                                     result.removedStructures().size(), result.addedRecipes(),

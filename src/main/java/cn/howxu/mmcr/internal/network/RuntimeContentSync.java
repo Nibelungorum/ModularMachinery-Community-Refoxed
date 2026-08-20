@@ -17,6 +17,7 @@ import java.util.Objects;
  */
 public final class RuntimeContentSync {
     private static Consumer<MinecraftServer> sender = RuntimeContentSync::sendToAllPlayers;
+    private static boolean senderIsDefault = true;
 
     private RuntimeContentSync() {
     }
@@ -26,25 +27,48 @@ public final class RuntimeContentSync {
     }
 
     public static void sendTo(ServerPlayer player) {
-        PacketDistributor.sendToPlayer(player, new PktRuntimeContentPayload(createSnapshot()));
+        sendTo(player, createSnapshot());
+    }
+
+    public static void sendTo(ServerPlayer player, RuntimeContentSnapshot snapshot) {
+        PacketDistributor.sendToPlayer(player, new PktRuntimeContentPayload(snapshot));
     }
 
     public static void sendToAll(MinecraftServer server) {
-        sender.accept(server);
+        if (!senderIsDefault) {
+            sender.accept(server);
+            return;
+        }
+        sendToAllPlayers(server, createSnapshot());
+    }
+
+    public static void sendToAll(MinecraftServer server, RuntimeContentSnapshot snapshot) {
+        if (senderIsDefault) {
+            sendToAllPlayers(server, snapshot);
+        } else {
+            sender.accept(server);
+        }
     }
 
     private static void sendToAllPlayers(MinecraftServer server) {
         if (server == null) return;
+        sendToAllPlayers(server, createSnapshot());
+    }
+
+    private static void sendToAllPlayers(MinecraftServer server, RuntimeContentSnapshot snapshot) {
+        if (server == null) return;
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            sendTo(player);
+            sendTo(player, snapshot);
         }
     }
 
     public static void setSenderForTesting(Consumer<MinecraftServer> sender) {
         RuntimeContentSync.sender = Objects.requireNonNull(sender);
+        senderIsDefault = false;
     }
 
     public static void resetSenderForTesting() {
         sender = RuntimeContentSync::sendToAllPlayers;
+        senderIsDefault = true;
     }
 }

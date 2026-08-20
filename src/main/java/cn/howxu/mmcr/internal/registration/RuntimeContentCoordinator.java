@@ -54,10 +54,23 @@ public final class RuntimeContentCoordinator {
         }
     }
 
+    public static CommitResult commitDynamicAndSnapshot(
+            Map<Identifier, MachineStructureDefinition> structures,
+            Map<Identifier, MachineRecipe> recipes) {
+        DynamicContentReloadService.ReloadResult result = commitDynamic(structures, recipes);
+        return new CommitResult(result, createSnapshot());
+    }
+
     public static void replaceDataPackRecipes(Map<Identifier, MachineRecipe> recipes) {
         synchronized (RuntimeContentVersion.lock()) {
             RecipeRegistry.replaceDataPack(recipes);
         }
+    }
+
+    public static RuntimeContentSnapshot replaceDataPackRecipesAndSnapshot(
+            Map<Identifier, MachineRecipe> recipes) {
+        replaceDataPackRecipes(recipes);
+        return createSnapshot();
     }
 
     public static RuntimeContentSnapshot createSnapshot() {
@@ -107,5 +120,9 @@ public final class RuntimeContentCoordinator {
                 throw new IllegalStateException("Machine not found for dynamic recipe: " + recipe.machineId());
             }
         }
+    }
+
+    public record CommitResult(DynamicContentReloadService.ReloadResult result,
+                               RuntimeContentSnapshot snapshot) {
     }
 }

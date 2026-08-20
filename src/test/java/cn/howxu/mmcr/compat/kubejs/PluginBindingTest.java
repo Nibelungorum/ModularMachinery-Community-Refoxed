@@ -186,7 +186,7 @@ class PluginBindingTest {
         RuntimeContentServerBridge.onServerStopped(new ServerStoppedEvent(server));
 
         assertThat(RuntimeContentServerBridge.sendToCurrentServer()).isFalse();
-        assertThat(sends).hasValue(0);
+        assertThat(sends).hasValue(1);
     }
 
     @Test

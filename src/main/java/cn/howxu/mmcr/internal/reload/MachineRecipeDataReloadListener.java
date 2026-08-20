@@ -18,6 +18,7 @@ import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 import java.io.Reader;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * Loads machine recipes supplied by server data packs.
@@ -81,8 +82,14 @@ public final class MachineRecipeDataReloadListener extends SimplePreparableReloa
      * Applies the data-pack layer for a reload hook that can close over MinecraftServer and run runtime sync.
      */
     void applySnapshotFromServerReloadHook(Map<Identifier, MachineRecipe> recipes, Runnable sync) {
-        publishSnapshot(recipes);
-        sync.run();
+        applySnapshotFromServerReloadHook(recipes, snapshot -> sync.run());
+    }
+
+    void applySnapshotFromServerReloadHook(Map<Identifier, MachineRecipe> recipes,
+                                           Consumer<cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot> sync) {
+        var committed = RuntimeContentCoordinator.replaceDataPackRecipesAndSnapshot(recipes);
+        snapshot = Map.copyOf(recipes);
+        sync.accept(committed);
     }
 
     private void publishSnapshot(Map<Identifier, MachineRecipe> recipes) {
