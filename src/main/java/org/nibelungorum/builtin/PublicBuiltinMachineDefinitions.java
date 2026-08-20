@@ -1,7 +1,7 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.MMCR;
@@ -21,12 +21,12 @@ public final class PublicBuiltinMachineDefinitions {
     }
 
     @SubscribeEvent
-    public static void registerDefinitions(RegisterMachineDefinationsEvent event) {
+    public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
         machineDefinitions().values().forEach(event::registerMachine);
     }
 
     @SubscribeEvent
-    public static void registerStructures(RegisterMachineStructuresEvent event) {
+    public static void registerStructures(MMCRMachineStructuresEvent event) {
         java.util.Map<net.minecraft.resources.Identifier, MachineStructureDefinition> structures =
                 PublicBuiltinDefinitions.structureDefinitions();
         structures.values().forEach(event::registerStructure);

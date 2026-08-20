@@ -34,9 +34,9 @@ import cn.howxu.mmcr.registry.ModRecipeTypes;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.api.PublicMachineDefinitionProviders;
-import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
+ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
+ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
+ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -183,10 +183,10 @@ public class MMCR {
     }
 
     private static void registerRuntimeRecipes() {
-        MMCRRegisterRecipesEvent recipes = new MMCRRegisterRecipesEvent();
+        MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
         NeoForge.EVENT_BUS.post(recipes);
         registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerRecipes",
-                new Class<?>[]{MMCRRegisterRecipesEvent.class}, recipes);
+                new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
         recipes.freeze();
         PublicApiBootstrap.registerRecipes(recipes);
         PublicApiBootstrap.installRecipes();
@@ -194,18 +194,18 @@ public class MMCR {
 
     private static void registerPublicApiLifecycle() {
         PublicApiBootstrap.begin();
-        RegisterMachineDefinationsEvent definitions = new RegisterMachineDefinationsEvent();
+        MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
         PublicMachineDefinitionProviders.registerAll(definitions);
         registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineDefinitions",
-                new Class<?>[]{RegisterMachineDefinationsEvent.class}, definitions);
+                new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions);
         NeoForge.EVENT_BUS.post(definitions);
         definitions.freeze();
         PublicApiBootstrap.registerDefinitions(definitions);
 
-        RegisterMachineStructuresEvent structures = RegisterMachineStructuresEvent.prepare(definitions.definitions().keySet());
+        MMCRMachineStructuresEvent structures = MMCRMachineStructuresEvent.prepare(definitions.definitions().keySet());
         registerDefaultMachineLevels(structures);
         registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineStructures",
-                new Class<?>[]{RegisterMachineStructuresEvent.class}, structures);
+                new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
         NeoForge.EVENT_BUS.post(structures);
         structures.freeze();
         PublicApiBootstrap.composeMachineRegistrations(definitions, structures);
@@ -215,18 +215,18 @@ public class MMCR {
 
     public static void registerPublicApiLifecycleForTesting() {
         registerPublicApiLifecycle();
-        MMCRRegisterRecipesEvent recipes = new MMCRRegisterRecipesEvent();
+        MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
         NeoForge.EVENT_BUS.post(recipes);
         registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerRecipes",
-                new Class<?>[]{MMCRRegisterRecipesEvent.class}, recipes);
+                new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
         recipes.freeze();
     }
 
-    private static void registerDefaultMachineLevels(RegisterMachineStructuresEvent event) {
+    private static void registerDefaultMachineLevels(MMCRMachineStructuresEvent event) {
         if (FMLLoader.getCurrent().isProduction()
                 || event.levelTypes().containsKey(id("thermal_smelting_coil"))) return;
         registerDevelopmentBuiltins("org.nibelungorum.DefaultMachineLevels", "register",
-                new Class<?>[]{RegisterMachineStructuresEvent.class}, event);
+                new Class<?>[]{MMCRMachineStructuresEvent.class}, event);
     }
 
     private static void onCommonSetup(FMLCommonSetupEvent event) {

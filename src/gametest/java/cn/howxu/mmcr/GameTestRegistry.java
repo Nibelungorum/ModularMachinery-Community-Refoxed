@@ -1,8 +1,8 @@
 package cn.howxu.mmcr;
 
-import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
@@ -93,7 +93,7 @@ public final class GameTestRegistry {
         register(event, "module_connection_interface_conflict", 100, helper -> new ModuleConnectionGameTest().sharedInterfaceInvalidatesHost(helper));
     }
 
-    public static void registerMachineDefinitions(RegisterMachineDefinationsEvent event) {
+    public static void registerMachineDefinitions(MMCRMachineDefinationsEvent event) {
         for (String name : List.of("test_cube", "controller_tick", "iron_compressor",
                 "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll")) {
             Identifier id = MMCR.id(name);
@@ -101,7 +101,7 @@ public final class GameTestRegistry {
         }
     }
 
-    public static void registerMachineStructures(RegisterMachineStructuresEvent event) {
+    public static void registerMachineStructures(MMCRMachineStructuresEvent event) {
         for (String name : List.of("test_cube", "controller_tick", "iron_compressor",
                 "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll")) {
             Identifier id = MMCR.id(name);
@@ -123,7 +123,7 @@ public final class GameTestRegistry {
         }
     }
 
-    public static void registerRecipes(MMCRRegisterRecipesEvent event) {
+    public static void registerRecipes(MMCRMachineRecipesEvent event) {
         Identifier id = Identifier.parse("mmcr_test:datapack_static_override");
         event.registerRecipe(MachineRecipeBuilder.recipe(id, MMCR.id("iron_compressor")).duration(20)
                 .inputItem(Items.COAL, 1).outputItem(Items.CHARCOAL, 1).build());

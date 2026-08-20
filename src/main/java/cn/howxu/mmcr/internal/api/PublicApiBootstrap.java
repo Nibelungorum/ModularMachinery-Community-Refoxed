@@ -6,9 +6,9 @@ import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.publicapi.ApiRuntime;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
-import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistryBridge;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
@@ -23,8 +23,8 @@ import java.util.Map;
 public final class PublicApiBootstrap {
     private static final Map<Identifier, MachineDefinition> MACHINES = new LinkedHashMap<>();
     private static final Map<Identifier, MachineRecipeDefinition> RECIPES = new LinkedHashMap<>();
-    private static RegisterMachineStructuresEvent.Snapshot STRUCTURE_SNAPSHOT =
-            new RegisterMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of());
+    private static MMCRMachineStructuresEvent.Snapshot STRUCTURE_SNAPSHOT =
+            new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of());
     private static State state = State.BEFORE_BEGIN;
 
     private PublicApiBootstrap() {
@@ -46,7 +46,7 @@ public final class PublicApiBootstrap {
         return state == State.OPEN;
     }
 
-    public static synchronized void registerDefinitions(RegisterMachineDefinationsEvent event) {
+    public static synchronized void registerDefinitions(MMCRMachineDefinationsEvent event) {
         event.definitions().values().forEach(definition -> {
             if (MachineDefinitions.containsStatic(definition.id())) {
                 MACHINES.put(definition.id(), definition);
@@ -56,8 +56,8 @@ public final class PublicApiBootstrap {
         });
     }
 
-    public static synchronized void composeMachineRegistrations(RegisterMachineDefinationsEvent definitions,
-            RegisterMachineStructuresEvent structures) {
+    public static synchronized void composeMachineRegistrations(MMCRMachineDefinationsEvent definitions,
+            MMCRMachineStructuresEvent structures) {
         if (state == State.MACHINES_FROZEN || state == State.FROZEN) return;
         if (state != State.OPEN) {
             throw new ApiRegistrationException("Public API machine composition rejected: lifecycle is " + state);
@@ -84,7 +84,7 @@ public final class PublicApiBootstrap {
         state = State.MACHINES_FROZEN;
     }
 
-    public static synchronized void registerRecipes(MMCRRegisterRecipesEvent event) {
+    public static synchronized void registerRecipes(MMCRMachineRecipesEvent event) {
         event.recipes().values().forEach(PublicApiBootstrap::registerRecipe);
     }
 
@@ -156,7 +156,7 @@ public final class PublicApiBootstrap {
     public static synchronized void clearForTesting() {
         MACHINES.clear();
         RECIPES.clear();
-        STRUCTURE_SNAPSHOT = new RegisterMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of());
+        STRUCTURE_SNAPSHOT = new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of());
         ModifierRegistryBridge.install(Map.of());
         state = State.BEFORE_BEGIN;
         ApiRuntime.uninstall();

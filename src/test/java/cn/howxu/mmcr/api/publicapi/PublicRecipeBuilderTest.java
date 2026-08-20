@@ -45,8 +45,8 @@ class PublicRecipeBuilderTest {
 
     @BeforeEach
     void restoreDefaultMachineLevels() {
-        cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent.resetCollector();
-        var event = cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent.prepare(java.util.Set.of());
+        cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.resetCollector();
+        var event = cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.prepare(java.util.Set.of());
         DefaultMachineLevels.register(event);
         MachineLevelRegistryBridge.install(event.levelTypes().values(), event.levels().values());
     }

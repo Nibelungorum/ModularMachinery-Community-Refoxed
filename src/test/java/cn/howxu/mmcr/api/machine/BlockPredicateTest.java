@@ -43,8 +43,8 @@ class BlockPredicateTest {
 
     @AfterEach
     void clearMachineLevels() {
-        cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent.resetCollector();
-        var event = cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent.prepare(Set.of());
+        cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.resetCollector();
+        var event = cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.prepare(Set.of());
         DefaultMachineLevels.register(event);
         MachineLevelRegistryBridge.install(event.levelTypes().values(), event.levels().values());
     }

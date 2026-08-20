@@ -7,7 +7,8 @@ import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
-import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
@@ -18,8 +19,6 @@ import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.internal.api.PublicBuiltinRuntime;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
-import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
@@ -134,8 +133,8 @@ public final class TestBootstrap {
     private static void registerDefaultMachineLevels() {
         if (MachineLevelRegistry.getType(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE) != null) return;
 
-        RegisterMachineStructuresEvent.resetCollector();
-        RegisterMachineStructuresEvent event = RegisterMachineStructuresEvent.prepare(java.util.Set.of());
+        MMCRMachineStructuresEvent.resetCollector();
+        MMCRMachineStructuresEvent event = MMCRMachineStructuresEvent.prepare(java.util.Set.of());
         DefaultMachineLevels.register(event);
         MachineLevelRegistryBridge.install(event.levelTypes().values(), event.levels().values());
     }
@@ -167,12 +166,12 @@ public final class TestBootstrap {
     private static void registerPublicBuiltinEvents() {
         PublicApiBootstrap.clearForTesting();
         PublicApiBootstrap.begin();
-        RegisterMachineDefinationsEvent definitions = new RegisterMachineDefinationsEvent();
+        MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
         PublicBuiltinDefinitions.machineDefinitions().values().forEach(definitions::registerMachine);
         NeoForge.EVENT_BUS.post(definitions);
         definitions.freeze();
         PublicApiBootstrap.registerDefinitions(definitions);
-        RegisterMachineStructuresEvent structures = new RegisterMachineStructuresEvent(definitions.definitions().keySet());
+        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(definitions.definitions().keySet());
         PublicBuiltinDefinitions.structureDefinitions().values().forEach(structures::registerStructure);
         NeoForge.EVENT_BUS.post(structures);
         structures.freeze();

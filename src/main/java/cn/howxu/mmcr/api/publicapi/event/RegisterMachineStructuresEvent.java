@@ -20,13 +20,17 @@ import java.util.function.UnaryOperator;
 /** Event used to collect structures for already registered machine definitions.
  * @author howxu <dev@howxu.cn>
  */
-public final class RegisterMachineStructuresEvent extends Event {
-    private static RegisterMachineStructuresEvent current;
-    private Set<Identifier> machineIds;
-    private final Map<Identifier, MachineStructureDefinition> structures = new LinkedHashMap<>();
-    private final Map<Identifier, LevelType> levelTypes = new LinkedHashMap<>();
-    private final Map<Identifier, MachineLevel> levels = new LinkedHashMap<>();
-    private final Map<Identifier, ModifierDefinition> modifiers = new LinkedHashMap<>();
+/**
+ * @deprecated use {@link MMCRMachineStructuresEvent}.
+ */
+@Deprecated(forRemoval = true)
+public class RegisterMachineStructuresEvent extends Event {
+    protected static RegisterMachineStructuresEvent current;
+    protected Set<Identifier> machineIds;
+    protected final Map<Identifier, MachineStructureDefinition> structures = new LinkedHashMap<>();
+    protected final Map<Identifier, LevelType> levelTypes = new LinkedHashMap<>();
+    protected final Map<Identifier, MachineLevel> levels = new LinkedHashMap<>();
+    protected final Map<Identifier, ModifierDefinition> modifiers = new LinkedHashMap<>();
     private boolean frozen;
     private Snapshot snapshot;
 

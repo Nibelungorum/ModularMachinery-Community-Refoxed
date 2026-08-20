@@ -11,9 +11,9 @@ import cn.howxu.mmcr.api.publicapi.machine.PatternBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
-import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.api.PublicMachineDefinitionProviders;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -60,7 +60,7 @@ class PublicApiLifecycleTest {
     @Test
     void registration_before_begin_is_rejected() {
         MachineDefinition definition = machine("before");
-        RegisterMachineDefinationsEvent event = new RegisterMachineDefinationsEvent();
+        MMCRMachineDefinationsEvent event = new MMCRMachineDefinationsEvent();
         event.registerMachine(definition);
         event.freeze();
         assertThatThrownBy(() -> PublicApiBootstrap.registerDefinitions(event))
@@ -117,14 +117,14 @@ class PublicApiLifecycleTest {
     void duplicate_machine_and_recipe_ids_are_rejected() {
         PublicApiBootstrap.begin();
         MachineDefinition machine = machine("duplicate_machine");
-        RegisterMachineDefinationsEvent definitions = new RegisterMachineDefinationsEvent();
+        MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
         definitions.registerMachine(machine.id(), builder -> builder);
         assertThatThrownBy(() -> definitions.registerMachine(machine.id(), builder -> builder))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining(machine.id().toString());
 
         MachineRecipeDefinition recipe = recipe("duplicate_recipe", machine.id());
-        MMCRRegisterRecipesEvent recipes = new MMCRRegisterRecipesEvent();
+        MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
         recipes.registerRecipe(recipe);
         assertThatThrownBy(() -> recipes.registerRecipe(recipe))
                 .isInstanceOf(IllegalStateException.class)
@@ -146,11 +146,11 @@ class PublicApiLifecycleTest {
         PublicApiBootstrap.begin();
         installMachines();
         PublicApiBootstrap.installRecipes();
-        RegisterMachineDefinationsEvent lateDefinitions = new RegisterMachineDefinationsEvent();
+        MMCRMachineDefinationsEvent lateDefinitions = new MMCRMachineDefinationsEvent();
         lateDefinitions.freeze();
         assertThatThrownBy(() -> lateDefinitions.registerMachine(id("after"), builder -> builder))
                 .isInstanceOf(IllegalStateException.class);
-        MMCRRegisterRecipesEvent lateRecipes = new MMCRRegisterRecipesEvent();
+        MMCRMachineRecipesEvent lateRecipes = new MMCRMachineRecipesEvent();
         lateRecipes.freeze();
         assertThatThrownBy(() -> lateRecipes.registerRecipe(recipe("after_recipe", unknown)))
                 .isInstanceOf(IllegalStateException.class);
@@ -161,28 +161,28 @@ class PublicApiLifecycleTest {
         List<String> observedEvents = new ArrayList<>();
         Identifier machineId = id("ordered_machine");
         boolean[] active = {true};
-        var definitions = new java.util.concurrent.atomic.AtomicReference<cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent>();
-        var structures = new java.util.concurrent.atomic.AtomicReference<cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent>();
-        var recipes = new java.util.concurrent.atomic.AtomicReference<cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent>();
-        NeoForge.EVENT_BUS.addListener(cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent.class,
+        var definitions = new java.util.concurrent.atomic.AtomicReference<MMCRMachineDefinationsEvent>();
+        var structures = new java.util.concurrent.atomic.AtomicReference<MMCRMachineStructuresEvent>();
+        var recipes = new java.util.concurrent.atomic.AtomicReference<MMCRMachineRecipesEvent>();
+        NeoForge.EVENT_BUS.addListener(MMCRMachineDefinationsEvent.class,
                 event -> {
                     if (!active[0]) return;
-                    observedEvents.add("RegisterMachineDefinationsEvent");
+                    observedEvents.add("MMCRMachineDefinationsEvent");
                     event.registerMachine(machineId, builder -> builder.displayNameKey("machine.mmcr.ordered_machine"));
                     definitions.set(event);
                 });
-        NeoForge.EVENT_BUS.addListener(cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent.class,
+        NeoForge.EVENT_BUS.addListener(MMCRMachineStructuresEvent.class,
                 event -> {
                     if (!active[0]) return;
-                    observedEvents.add("RegisterMachineStructuresEvent");
+                    observedEvents.add("MMCRMachineStructuresEvent");
                     event.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage.pattern(pattern -> pattern
                             .layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))));
                     structures.set(event);
                 });
-        NeoForge.EVENT_BUS.addListener(cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent.class,
+        NeoForge.EVENT_BUS.addListener(MMCRMachineRecipesEvent.class,
                 event -> {
                     if (!active[0]) return;
-                    observedEvents.add("MMCRRegisterRecipesEvent");
+                    observedEvents.add("MMCRMachineRecipesEvent");
                     recipes.set(event);
                 });
 
@@ -197,9 +197,9 @@ class PublicApiLifecycleTest {
                 .isInstanceOf(IllegalStateException.class);
 
         assertThat(observedEvents).containsExactly(
-                "RegisterMachineDefinationsEvent",
-                "RegisterMachineStructuresEvent",
-                "MMCRRegisterRecipesEvent");
+                "MMCRMachineDefinationsEvent",
+                "MMCRMachineStructuresEvent",
+                "MMCRMachineRecipesEvent");
     }
 
     @Test
@@ -208,7 +208,7 @@ class PublicApiLifecycleTest {
         Identifier typeId = id("snapshot_type");
         Identifier levelId = id("snapshot_level");
         Identifier modifierId = id("snapshot_modifier");
-        RegisterMachineStructuresEvent event = new RegisterMachineStructuresEvent(List.of(machineId));
+        MMCRMachineStructuresEvent event = new MMCRMachineStructuresEvent(List.of(machineId));
         event.registerLevelType(new cn.howxu.mmcr.api.machine.level.LevelType(typeId,
                 net.minecraft.network.chat.Component.literal("Snapshot")));
         event.registerLevel(new cn.howxu.mmcr.api.machine.level.MachineLevel(levelId, typeId, 1,
@@ -233,7 +233,7 @@ class PublicApiLifecycleTest {
     @Test
     void structure_event_rejects_unknown_references_at_freeze() {
         Identifier machineId = id("invalid_snapshot_machine");
-        RegisterMachineStructuresEvent event = new RegisterMachineStructuresEvent(List.of(machineId));
+        MMCRMachineStructuresEvent event = new MMCRMachineStructuresEvent(List.of(machineId));
         event.registerModifier(id("known_modifier"), new ModifierDefinition(List.of()));
         event.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage
                 .pattern(pattern -> pattern.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))
@@ -257,27 +257,27 @@ class PublicApiLifecycleTest {
     }
 
     private static void registerMachine(MachineDefinition definition) {
-        RegisterMachineDefinationsEvent event = new RegisterMachineDefinationsEvent();
+        MMCRMachineDefinationsEvent event = new MMCRMachineDefinationsEvent();
         event.registerMachine(definition);
         event.freeze();
         PublicApiBootstrap.registerDefinitions(event);
     }
 
     private static void registerRecipe(MachineRecipeDefinition definition) {
-        MMCRRegisterRecipesEvent event = new MMCRRegisterRecipesEvent();
+        MMCRMachineRecipesEvent event = new MMCRMachineRecipesEvent();
         event.registerRecipe(definition);
         event.freeze();
         PublicApiBootstrap.registerRecipes(event);
     }
 
     private static void installMachines(MachineDefinition... definitions) {
-        RegisterMachineStructuresEvent structures = new RegisterMachineStructuresEvent(
+        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(
                 java.util.Arrays.stream(definitions).map(MachineDefinition::id).toList());
         for (MachineDefinition definition : definitions) {
             structures.registerStructure(definition.id(), PublicApiLifecycleTest::patternStructure);
         }
         structures.freeze();
-        PublicApiBootstrap.composeMachineRegistrations(new RegisterMachineDefinationsEvent(), structures);
+        PublicApiBootstrap.composeMachineRegistrations(new MMCRMachineDefinationsEvent(), structures);
         MachineDefinitions.freezeRegistryPhase();
     }
 

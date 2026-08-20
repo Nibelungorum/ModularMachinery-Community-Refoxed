@@ -11,7 +11,11 @@ import java.util.Objects;
 /** Event used to register public recipe definitions during startup.
  * @author howxu <dev@howxu.cn>
  */
-public final class MMCRRegisterRecipesEvent extends Event {
+/**
+ * @deprecated use {@link MMCRMachineRecipesEvent}.
+ */
+@Deprecated(forRemoval = true)
+public class MMCRRegisterRecipesEvent extends Event {
     private boolean frozen;
     private final Map<net.minecraft.resources.Identifier, MachineRecipeDefinition> recipes = new LinkedHashMap<>();
 

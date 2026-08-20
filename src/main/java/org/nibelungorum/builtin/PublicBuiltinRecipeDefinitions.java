@@ -1,6 +1,6 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.MMCR;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -19,7 +19,7 @@ public final class PublicBuiltinRecipeDefinitions {
     }
 
     @SubscribeEvent
-    public static void register(MMCRRegisterRecipesEvent event) {
+    public static void register(MMCRMachineRecipesEvent event) {
         recipeDefinitions().values().forEach(event::registerRecipe);
     }
 

@@ -14,7 +14,11 @@ import java.util.function.UnaryOperator;
 /** Event used to collect public machine definitions before structures are registered.
  * @author howxu <dev@howxu.cn>
  */
-public final class RegisterMachineDefinationsEvent extends Event {
+/**
+ * @deprecated use {@link MMCRMachineDefinationsEvent}.
+ */
+@Deprecated(forRemoval = true)
+public class RegisterMachineDefinationsEvent extends Event {
     private final Map<Identifier, MachineDefinition> definitions = new LinkedHashMap<>();
     private boolean frozen;
 

@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.internal.api;
 
 import cn.howxu.mmcr.api.publicapi.MachineDefinitionProvider;
-import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 
 import java.util.ServiceLoader;
 
@@ -12,12 +12,12 @@ public final class PublicMachineDefinitionProviders {
     private PublicMachineDefinitionProviders() {
     }
 
-    public static void registerAll(RegisterMachineDefinationsEvent event) {
+    public static void registerAll(MMCRMachineDefinationsEvent event) {
         ServiceLoader.load(MachineDefinitionProvider.class).forEach(provider -> provider.register(event));
     }
 
     public static void registerAll() {
-        RegisterMachineDefinationsEvent event = new RegisterMachineDefinationsEvent();
+        MMCRMachineDefinationsEvent event = new MMCRMachineDefinationsEvent();
         registerAll(event);
         event.freeze();
         PublicApiBootstrap.registerDefinitions(event);

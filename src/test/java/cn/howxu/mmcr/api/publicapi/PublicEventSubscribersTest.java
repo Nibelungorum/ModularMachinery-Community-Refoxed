@@ -1,9 +1,9 @@
 package cn.howxu.mmcr.api.publicapi;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
@@ -34,29 +34,29 @@ class PublicEventSubscribersTest {
         var definitionReceives = new AtomicInteger();
         var structureReceives = new AtomicInteger();
         var recipeReceives = new AtomicInteger();
-        var definitions = new AtomicReference<RegisterMachineDefinationsEvent>();
-        var structures = new AtomicReference<RegisterMachineStructuresEvent>();
-        var recipes = new AtomicReference<MMCRRegisterRecipesEvent>();
-        NeoForge.EVENT_BUS.addListener(RegisterMachineDefinationsEvent.class, event -> {
+        var definitions = new AtomicReference<MMCRMachineDefinationsEvent>();
+        var structures = new AtomicReference<MMCRMachineStructuresEvent>();
+        var recipes = new AtomicReference<MMCRMachineRecipesEvent>();
+        NeoForge.EVENT_BUS.addListener(MMCRMachineDefinationsEvent.class, event -> {
             definitionReceives.incrementAndGet();
             event.registerMachine(machineId, builder -> builder.displayNameKey("machine.mmcr.event_machine"));
             definitions.set(event);
         });
-        NeoForge.EVENT_BUS.addListener(RegisterMachineStructuresEvent.class, event -> {
+        NeoForge.EVENT_BUS.addListener(MMCRMachineStructuresEvent.class, event -> {
             structureReceives.incrementAndGet();
             event.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage.pattern(pattern -> pattern
                     .layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))));
             structures.set(event);
         });
-        NeoForge.EVENT_BUS.addListener(MMCRRegisterRecipesEvent.class, event -> {
+        NeoForge.EVENT_BUS.addListener(MMCRMachineRecipesEvent.class, event -> {
             recipeReceives.incrementAndGet();
             event.registerRecipe(MachineRecipeBuilder.recipe(recipeId, machineId).duration(1).build());
             recipes.set(event);
         });
 
-        NeoForge.EVENT_BUS.post(new RegisterMachineDefinationsEvent());
-        NeoForge.EVENT_BUS.post(new RegisterMachineStructuresEvent(Set.of(machineId)));
-        NeoForge.EVENT_BUS.post(new MMCRRegisterRecipesEvent());
+        NeoForge.EVENT_BUS.post(new MMCRMachineDefinationsEvent());
+        NeoForge.EVENT_BUS.post(new MMCRMachineStructuresEvent(Set.of(machineId)));
+        NeoForge.EVENT_BUS.post(new MMCRMachineRecipesEvent());
 
         assertThat(definitionReceives).hasValue(1);
         assertThat(structureReceives).hasValue(1);
@@ -69,7 +69,7 @@ class PublicEventSubscribersTest {
     @Test
     void structure_registration_rejects_unknown_machine_duplicate_null_and_missing_main() {
         var machineId = MMCR.id("known_machine");
-        var event = new RegisterMachineStructuresEvent(Set.of(machineId));
+        var event = new MMCRMachineStructuresEvent(Set.of(machineId));
         assertThatThrownBy(() -> event.registerStructure(MMCR.id("unknown"), builder -> builder))
                 .isInstanceOf(ApiRegistrationException.class);
         assertThatThrownBy(() -> event.registerStructure(machineId, null))
@@ -96,7 +96,7 @@ class PublicEventSubscribersTest {
     @Test
     void all_events_reject_null_duplicate_and_writes_after_freeze() {
         var machineId = MMCR.id("frozen_machine");
-        var definitions = new RegisterMachineDefinationsEvent();
+        var definitions = new MMCRMachineDefinationsEvent();
         assertThatThrownBy(() -> definitions.registerMachine(machineId, null)).isInstanceOf(NullPointerException.class);
         definitions.registerMachine(machineId, builder -> builder);
         assertThatThrownBy(() -> definitions.registerMachine(machineId, builder -> builder))
@@ -105,12 +105,12 @@ class PublicEventSubscribersTest {
         assertThatThrownBy(() -> definitions.registerMachine(MMCR.id("later"), builder -> builder))
                 .isInstanceOf(IllegalStateException.class);
 
-        var structures = new RegisterMachineStructuresEvent(Set.of(machineId));
+        var structures = new MMCRMachineStructuresEvent(Set.of(machineId));
         structures.freeze();
         assertThatThrownBy(() -> structures.registerStructure(machineId, builder -> builder))
                 .isInstanceOf(IllegalStateException.class);
 
-        var recipes = new MMCRRegisterRecipesEvent();
+        var recipes = new MMCRMachineRecipesEvent();
         var recipe = MachineRecipeBuilder.recipe(MMCR.id("frozen_recipe"), machineId).build();
         recipes.registerRecipe(recipe);
         assertThatThrownBy(() -> recipes.registerRecipe(recipe)).isInstanceOf(IllegalStateException.class);
