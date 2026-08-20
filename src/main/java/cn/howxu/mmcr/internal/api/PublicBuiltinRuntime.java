@@ -2,9 +2,9 @@ package cn.howxu.mmcr.internal.api;
 
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import org.nibelungorum.builtin.PublicBuiltinDefinitions;
-import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 
-/** Installs public built-in structure declarations into the reloadable runtime registry.
+/** Installs public built-in declarations into the internal runtime models.
+ *
  * @author howxu <dev@howxu.cn>
  */
 public final class PublicBuiltinRuntime {
@@ -12,13 +12,15 @@ public final class PublicBuiltinRuntime {
     }
 
     public static void registerStructures(DynamicContentReloadService.Candidate candidate) {
-        // Migrated structure declarations are installed here; legacy runtime structures remain explicit.
+        PublicBuiltinDefinitions.machineDefinitions().values().stream()
+                .map(PublicMachineAdapter::toStructureDefinition)
+                .forEach(candidate::registerStructure);
     }
 
     public static void registerRecipes() {
         PublicBuiltinDefinitions.recipeDefinitions().values().stream()
                 .map(PublicRecipeAdapter::toRecipe)
-                .filter(recipe -> RecipeRegistry.getRecipe(recipe.id()) == null)
-                .forEach(RecipeRegistry::register);
+                .filter(recipe -> !cn.howxu.mmcr.api.recipe.RecipeRegistry.containsStatic(recipe.id()))
+                .forEach(cn.howxu.mmcr.api.recipe.RecipeRegistry::register);
     }
 }

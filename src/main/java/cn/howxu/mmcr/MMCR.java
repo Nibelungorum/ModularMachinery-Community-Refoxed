@@ -36,7 +36,8 @@ import cn.howxu.mmcr.registry.ModRecipeTypes;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.api.PublicMachineDefinitionProviders;
-import cn.howxu.mmcr.internal.api.PublicBuiltinRuntime;
+import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterMachinesEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -70,8 +71,8 @@ public class MMCR {
     public MMCR(IEventBus modBus, ModContainer modContainer) {
         PublicApiBootstrap.begin();
         MachineDefinitions.beginRegistryPhase();
-        registerDevelopmentBuiltins("org.nibelungorum.BuiltinMachines", "register");
-        registerDevelopmentBuiltins("org.nibelungorum.LegacyBuiltinMachines", "register");
+        NeoForge.EVENT_BUS.post(new MMCRRegisterMachinesEvent());
+        NeoForge.EVENT_BUS.post(new MMCRRegisterRecipesEvent());
         registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineDefinitions");
         MachineDefinitions.bootstrapBuiltins();
         PublicMachineDefinitionProviders.registerAll();
@@ -179,14 +180,11 @@ public class MMCR {
     public static void registerRuntimeBuiltins() {
         registerDefaultMachineLevels();
         DynamicContentReloadService.reload(candidate -> {
-            PublicBuiltinRuntime.registerStructures(candidate);
-            registerDevelopmentBuiltins("org.nibelungorum.LegacyDefaultMachines", "registerStructures",
-                    new Class<?>[]{DynamicContentReloadService.Candidate.class}, candidate);
+            cn.howxu.mmcr.internal.api.PublicBuiltinRuntime.registerStructures(candidate);
             registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineStructures",
                     new Class<?>[]{DynamicContentReloadService.Candidate.class}, candidate);
         });
-        registerDevelopmentBuiltins("org.nibelungorum.LegacyDefaultRecipes", "ensureRegistered");
-        PublicBuiltinRuntime.registerRecipes();
+        cn.howxu.mmcr.internal.api.PublicBuiltinRuntime.registerRecipes();
         registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerRecipes");
         MachineRegistry.rebuildCompiledCache();
     }

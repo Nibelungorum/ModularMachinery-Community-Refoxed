@@ -16,6 +16,11 @@ import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
+import cn.howxu.mmcr.api.publicapi.event.MMCRInstallMachineStructuresEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRInstallRecipesEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterMachinesEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
+import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
@@ -39,12 +44,11 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.registries.DeferredHolder;
-import org.nibelungorum.LegacyBuiltinMachines;
-import cn.howxu.mmcr.internal.api.PublicBuiltinRuntime;
 import org.nibelungorum.DefaultMachineLevels;
-import org.nibelungorum.LegacyDefaultRecipes;
+import org.nibelungorum.builtin.PublicBuiltinMachineDefinitions;
+import org.nibelungorum.builtin.PublicBuiltinRecipeDefinitions;
+import net.neoforged.neoforge.common.NeoForge;
 
-import org.nibelungorum.LegacyDefaultMachines;
 import org.nibelungorum.TestMachines;
 
 import java.lang.reflect.Field;
@@ -87,22 +91,17 @@ public final class TestBootstrap {
 
         Class.forName("net.minecraft.SharedConstants").getMethod("tryDetectVersion").invoke(null);
         MachineDefinitions.beginRegistryPhase();
-        LegacyBuiltinMachines.register();
+        NeoForge.EVENT_BUS.addListener((MMCRRegisterMachinesEvent event) -> PublicBuiltinMachineDefinitions.register(event));
+        NeoForge.EVENT_BUS.addListener((MMCRInstallMachineStructuresEvent event) -> PublicBuiltinMachineDefinitions.install(event));
+        NeoForge.EVENT_BUS.addListener((MMCRRegisterRecipesEvent event) -> PublicBuiltinRecipeDefinitions.register(event));
+        NeoForge.EVENT_BUS.addListener((MMCRInstallRecipesEvent event) -> PublicBuiltinRecipeDefinitions.install(event));
         addTestMachineSuppliers();
-        MachineDefinitions.bootstrapBuiltins();
         Bootstrap.bootStrap();
+        MachineDefinitions.bootstrapBuiltins();
         bindAllVanillaItemComponents();
         bindController(MMCR.id("blast_furnace"));
         bindController(id("alloy_furnace"));
         bindController(id("cracker"));
-        bindController(id("reactor"));
-        bindController(id("thermal_smelting_furnace"));
-        bindController(id("purpur_furnace"));
-        bindController(id("distillation_tower"));
-        bindController(id("eco_matrix"));
-        bindController(id("space_elevator"));
-        bindController(id("space_reassembler"));
-        bindController(id("monster_farm"));
         bindController(id("test_cube"));
         bindController(id("controller_tick"));
         bindController(id("iron_compressor"));
@@ -126,7 +125,7 @@ public final class TestBootstrap {
 
     public static void restoreMachineDefinitions() {
         MachineDefinitions.clearForTesting();
-        LegacyBuiltinMachines.register();
+        MachineDefinitions.beginRegistryPhase();
         addTestMachineSuppliers();
         MachineDefinitions.bootstrapBuiltins();
     }
@@ -135,12 +134,10 @@ public final class TestBootstrap {
         restoreMachineDefinitions();
         registerDefaultMachineLevels();
         DynamicContentReloadService.reload(candidate -> {
-            PublicBuiltinRuntime.registerStructures(candidate);
-            LegacyDefaultMachines.structures().values().forEach(candidate::registerStructure);
+            NeoForge.EVENT_BUS.post(new MMCRInstallMachineStructuresEvent(candidate));
             registerGameTestMachineStructures(candidate);
         });
-        LegacyDefaultRecipes.registerStatic(LegacyDefaultRecipes.recipes().values().stream().toList());
-        LegacyDefaultRecipes.registerStatic(LegacyDefaultRecipes.gameTestRecipes());
+        NeoForge.EVENT_BUS.post(new MMCRInstallRecipesEvent());
         MachineRegistry.rebuildCompiledCache();
     }
 
@@ -167,6 +164,7 @@ public final class TestBootstrap {
     private static void addTestMachineSuppliers() {
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("blast_furnace")).build());
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("alloy_furnace")).expandableStructure().build());
+        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("cracker")).build());
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("test_cube")).localizedName("Test").build());
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("controller_tick")).localizedName("Controller Tick").build());
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("iron_compressor")).localizedName("Iron Compressor").build());

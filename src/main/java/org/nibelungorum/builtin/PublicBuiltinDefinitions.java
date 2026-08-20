@@ -26,6 +26,7 @@ import java.util.Map;
 public final class PublicBuiltinDefinitions {
     private static final Identifier BLAST_FURNACE = id("blast_furnace");
     private static final Identifier ALLOY_FURNACE = id("alloy_furnace");
+    private static final Identifier CRACKER = id("cracker");
 
     private PublicBuiltinDefinitions() {
     }
@@ -60,6 +61,12 @@ public final class PublicBuiltinDefinitions {
                         .where('X', BlockPredicate.block(Blocks.BRICKS))
                         .where('M', BlockPredicate.block(Blocks.BLAST_FURNACE))
                         .where('C', BlockPredicate.block(Blocks.FURNACE)).controller('C'))).build());
+        definitions.put(CRACKER, MachineBuilder.machine(CRACKER)
+                .displayNameKey("machine.mmcr.cracker")
+                .pattern(pattern -> pattern.layer("XXX", "XCX", "XXX")
+                        .where('X', BlockPredicate.block(Blocks.POLISHED_DIORITE))
+                        .where('C', BlockPredicate.block(Blocks.FURNACE)).controller('C'))
+                .build());
         return Map.copyOf(definitions);
     }
 
@@ -68,7 +75,7 @@ public final class PublicBuiltinDefinitions {
         definitions.put(id("blast_furnace_iron_to_nugget"), MachineRecipeBuilder.recipe(
                 id("blast_furnace_iron_to_nugget"), BLAST_FURNACE).duration(200)
                 .inputItem(Items.IRON_INGOT, 1).inputEnergy(1).outputItem(Items.IRON_NUGGET, 1).build());
-        definitions.put(id("cracker_coal_lapis"), MachineRecipeBuilder.recipe(id("cracker_coal_lapis"), BLAST_FURNACE)
+        definitions.put(id("cracker_coal_lapis"), MachineRecipeBuilder.recipe(id("cracker_coal_lapis"), id("cracker"))
                 .duration(160).inputItem(Items.COAL, 8).inputItem(Items.LAPIS_LAZULI, 1).inputEnergy(100)
                 .outputItem(Items.REDSTONE, 4).outputFluid(Fluids.WATER, 500).build());
         return Map.copyOf(definitions);

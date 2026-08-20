@@ -14,7 +14,6 @@ import dev.latvian.mods.kubejs.script.BindingRegistry;
 import dev.latvian.mods.kubejs.script.ScriptManager;
 import dev.latvian.mods.kubejs.script.ScriptType;
 import net.minecraft.server.MinecraftServer;
-import net.neoforged.fml.loading.FMLLoader;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
@@ -144,14 +143,6 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     }
 
     private static void registerDevelopmentMachineLevels() {
-        if (FMLLoader.getCurrent().isProduction()) return;
-        try {
-            Class.forName("org.nibelungorum.DefaultMachineLevels").getMethod("register").invoke(null);
-        } catch (ClassNotFoundException ignored) {
-            // Development machine levels are absent from the production JAR.
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("Unable to register default machine levels", e);
-        }
     }
 
     @Override

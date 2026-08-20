@@ -68,7 +68,6 @@ import net.neoforged.neoforge.items.ItemStackHandler;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.nibelungorum.DefaultMachines;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;

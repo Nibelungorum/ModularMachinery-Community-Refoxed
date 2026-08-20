@@ -1,15 +1,26 @@
 package org.nibelungorum;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
+import cn.howxu.mmcr.api.publicapi.event.MMCRInstallMachineStructuresEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRInstallRecipesEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterMachinesEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
+import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.resources.Identifier;
+import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.common.NeoForge;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.nibelungorum.builtin.PublicBuiltinDefinitions;
+import org.nibelungorum.builtin.PublicBuiltinMachineDefinitions;
+import org.nibelungorum.builtin.PublicBuiltinRecipeDefinitions;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -35,6 +46,8 @@ class PublicBuiltinDefinitionsTest {
         PublicApiBootstrap.clearForTesting();
         MachineDefinitions.clearForTesting();
         RecipeRegistry.clearForTesting();
+        MachineStructureRegistry.clearForTesting();
+        Fluids.WATER.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
     }
 
     @AfterEach
@@ -42,6 +55,7 @@ class PublicBuiltinDefinitionsTest {
         PublicApiBootstrap.clearForTesting();
         MachineDefinitions.clearForTesting();
         RecipeRegistry.clearForTesting();
+        MachineStructureRegistry.clearForTesting();
     }
 
     @Test
@@ -50,7 +64,6 @@ class PublicBuiltinDefinitionsTest {
         MachineDefinitions.beginRegistryPhase();
 
         registerPublicBuiltins();
-        PublicBuiltinDefinitions.registerRecipes();
         PublicApiBootstrap.freezeAndInstall();
 
         assertThat(MachineDefinitions.getRegistration(id("blast_furnace"))).isNotNull();
@@ -58,6 +71,54 @@ class PublicBuiltinDefinitionsTest {
         assertThat(RecipeRegistry.getRecipe(id("blast_furnace_iron_to_nugget"))).isNotNull();
         assertThat(RecipeRegistry.getRecipe(id("cracker_coal_lapis")).requirements())
                 .anyMatch(requirement -> requirement instanceof cn.howxu.mmcr.api.recipe.requirement.FluidRequirement);
+        assertThat(RecipeRegistry.getRecipe(id("cracker_coal_lapis")).machineId()).isEqualTo(id("cracker"));
+    }
+
+    @Test
+    void public_structure_definitions_are_installed_from_public_declarations() throws Exception {
+        PublicApiBootstrap.begin();
+        MachineDefinitions.beginRegistryPhase();
+        registerPublicBuiltins();
+        PublicApiBootstrap.freezeAndInstall();
+
+        DynamicContentReloadService.reload(candidate -> NeoForge.EVENT_BUS.post(
+                new MMCRInstallMachineStructuresEvent(candidate)));
+
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsOnlyKeys(
+                PublicBuiltinDefinitions.machineDefinitions().keySet());
+        assertThat(MachineStructureRegistry.dynamicSnapshot().get(id("blast_furnace")).pattern())
+                .isEqualTo(cn.howxu.mmcr.internal.api.PublicMachineAdapter
+                        .toStructureDefinition(PublicBuiltinDefinitions.machineDefinitions().get(id("blast_furnace"))).pattern());
+    }
+
+    @Test
+    void public_runtime_registration_is_repeatable() throws Exception {
+        PublicApiBootstrap.begin();
+        MachineDefinitions.beginRegistryPhase();
+        registerPublicBuiltins();
+        NeoForge.EVENT_BUS.post(new MMCRInstallRecipesEvent());
+        PublicApiBootstrap.freezeAndInstall();
+
+        NeoForge.EVENT_BUS.post(new MMCRInstallRecipesEvent());
+        int recipeCount = RecipeRegistry.registeredRecipeCount();
+        DynamicContentReloadService.reload(candidate -> NeoForge.EVENT_BUS.post(
+                new MMCRInstallMachineStructuresEvent(candidate)));
+        DynamicContentReloadService.reload(candidate -> NeoForge.EVENT_BUS.post(
+                new MMCRInstallMachineStructuresEvent(candidate)));
+
+        assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(recipeCount);
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsOnlyKeys(
+                PublicBuiltinDefinitions.machineDefinitions().keySet());
+    }
+
+    @Test
+    void mod_startup_does_not_reference_legacy_builtin_registration() throws Exception {
+        Class<?> entrypoint = Class.forName("cn.howxu.mmcr.MMCR");
+        String bytecode = new String(entrypoint.getResourceAsStream("MMCR.class").readAllBytes(),
+                StandardCharsets.ISO_8859_1);
+
+        assertThat(bytecode).doesNotContain("LegacyBuiltinMachines");
+        assertThat(bytecode).doesNotContain("LegacyDefaultRecipes");
     }
 
     @Test
@@ -71,9 +132,12 @@ class PublicBuiltinDefinitionsTest {
     }
 
     private static void registerPublicBuiltins() throws Exception {
-        Class<?> entrypoint = Class.forName(ENTRYPOINT);
-        Method register = entrypoint.getMethod("register");
-        register.invoke(null);
+        NeoForge.EVENT_BUS.addListener((MMCRRegisterMachinesEvent event) -> PublicBuiltinMachineDefinitions.register(event));
+        NeoForge.EVENT_BUS.addListener((MMCRInstallMachineStructuresEvent event) -> PublicBuiltinMachineDefinitions.install(event));
+        NeoForge.EVENT_BUS.addListener((MMCRRegisterRecipesEvent event) -> PublicBuiltinRecipeDefinitions.register(event));
+        NeoForge.EVENT_BUS.addListener((MMCRInstallRecipesEvent event) -> PublicBuiltinRecipeDefinitions.install(event));
+        NeoForge.EVENT_BUS.post(new MMCRRegisterMachinesEvent());
+        NeoForge.EVENT_BUS.post(new MMCRRegisterRecipesEvent());
     }
 
     private static Identifier id(String path) {

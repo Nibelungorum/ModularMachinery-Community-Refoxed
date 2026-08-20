@@ -24,7 +24,6 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Rotation;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
-import org.nibelungorum.DefaultRecipes;
 import org.nibelungorum.TestMachines;
 
 import java.util.function.Consumer;
@@ -117,7 +116,6 @@ public final class GameTestRegistry {
     }
 
     public static void registerRecipes() {
-        DefaultRecipes.registerStatic(DefaultRecipes.gameTestRecipes());
         Identifier id = Identifier.parse("mmcr_test:datapack_static_override");
         if (RecipeRegistry.getRecipe(id) == null) {
             RecipeRegistry.register(new MachineRecipe(id, MMCR.id("iron_compressor"), 20,

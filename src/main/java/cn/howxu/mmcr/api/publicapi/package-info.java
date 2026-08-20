@@ -33,7 +33,6 @@
  *     <li>{@code cn.howxu.mmcr.api.publicapi.recipe.FluidOutput}</li>
  * </ul>
  *
- * <h2>DefaultMachines capability mapping</h2>
  * <ul>
  *     <li>Pattern layers and symbol bindings map to {@code PatternBuilder.layer(...)} and
  *     {@code PatternBuilder.where(...)}.</li>
@@ -57,7 +56,6 @@
  *     accepted-module methods on {@code MachineBuilder}.</li>
  * </ul>
  *
- * <h2>DefaultRecipes capability mapping</h2>
  * <ul>
  *     <li>Recipe and machine ids map to {@code MachineRecipeBuilder.recipe(...)}.</li>
  *     <li>Tick duration, priority, max threads, cancellation, parallelized execution, and
