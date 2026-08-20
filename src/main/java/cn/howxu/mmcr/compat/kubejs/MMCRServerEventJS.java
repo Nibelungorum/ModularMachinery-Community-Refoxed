@@ -3,7 +3,8 @@ package cn.howxu.mmcr.compat.kubejs;
 import dev.latvian.mods.kubejs.event.KubeEvent;
 
 /**
- * Server-script MMCR declarations collected during reload.
+ * Server-script MMCR declarations collected during resource reload.
+ * The API is available as {@code event.getAPI()} in KubeJS.
  *
  * @author howxu <dev@howxu.cn>
  */

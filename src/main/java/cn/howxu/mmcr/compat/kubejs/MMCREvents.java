@@ -7,7 +7,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * KubeJS event group for MMCR declaration scripts.
+ * KubeJS event group for MMCR declaration scripts. Use {@code mmcr.startup} for startup declarations
+ * and {@code mmcr.server} for server-resource-reload declarations; both payloads expose {@code getAPI()}.
  *
  * @author howxu <dev@howxu.cn>
  */

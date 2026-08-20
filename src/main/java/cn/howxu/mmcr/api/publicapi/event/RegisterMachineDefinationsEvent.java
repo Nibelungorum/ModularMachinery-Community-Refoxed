@@ -11,11 +11,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.UnaryOperator;
 
-/** Event used to collect public machine definitions before structures are registered.
- * @author howxu <dev@howxu.cn>
- */
 /**
- * @deprecated use {@link MMCRMachineDefinationsEvent}.
+ * Deprecated compatibility base for providers compiled against the original machine definition event.
+ * New code should use {@link MMCRMachineDefinationsEvent}.
+ *
+ * @author howxu <dev@howxu.cn>
  */
 @Deprecated(forRemoval = true)
 public class RegisterMachineDefinationsEvent extends Event {

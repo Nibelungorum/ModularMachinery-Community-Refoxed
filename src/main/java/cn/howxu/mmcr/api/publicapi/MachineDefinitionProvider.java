@@ -17,7 +17,10 @@ public interface MachineDefinitionProvider {
      */
     void register(RegisterMachineDefinationsEvent event);
 
-    /** Canonical bridge retaining compatibility with older providers. */
+    /**
+     * Canonical entrypoint used by MMCR's startup collection path. Older providers that only override
+     * {@link #register(RegisterMachineDefinationsEvent)} continue to work through this bridge.
+     */
     default void register(MMCRMachineDefinationsEvent event) {
         register((RegisterMachineDefinationsEvent) event);
     }

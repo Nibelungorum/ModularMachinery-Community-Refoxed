@@ -17,11 +17,11 @@ import java.util.Set;
 import java.util.Objects;
 import java.util.function.UnaryOperator;
 
-/** Event used to collect structures for already registered machine definitions.
- * @author howxu <dev@howxu.cn>
- */
 /**
- * @deprecated use {@link MMCRMachineStructuresEvent}.
+ * Deprecated compatibility base for integrations compiled against the original structure event.
+ * New code should use {@link MMCRMachineStructuresEvent}.
+ *
+ * @author howxu <dev@howxu.cn>
  */
 @Deprecated(forRemoval = true)
 public class RegisterMachineStructuresEvent extends Event {

@@ -8,11 +8,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
-/** Event used to register public recipe definitions during startup.
- * @author howxu <dev@howxu.cn>
- */
 /**
- * @deprecated use {@link MMCRMachineRecipesEvent}.
+ * Deprecated compatibility base for integrations compiled against the original recipe event.
+ * New code should use {@link MMCRMachineRecipesEvent}.
+ *
+ * @author howxu <dev@howxu.cn>
  */
 @Deprecated(forRemoval = true)
 public class MMCRRegisterRecipesEvent extends Event {

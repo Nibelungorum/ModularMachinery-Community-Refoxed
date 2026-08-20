@@ -4,6 +4,9 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
+import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
+import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
@@ -117,5 +120,12 @@ class PublicEventSubscribersTest {
         recipes.freeze();
         assertThatThrownBy(() -> recipes.registerRecipe(MachineRecipeBuilder.recipe(MMCR.id("later_recipe"), machineId).build()))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void canonical_events_keep_deprecated_external_assignability() {
+        assertThat(new MMCRMachineDefinationsEvent()).isInstanceOf(RegisterMachineDefinationsEvent.class);
+        assertThat(new MMCRMachineStructuresEvent(Set.of())).isInstanceOf(RegisterMachineStructuresEvent.class);
+        assertThat(new MMCRMachineRecipesEvent()).isInstanceOf(MMCRRegisterRecipesEvent.class);
     }
 }

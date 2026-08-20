@@ -6,7 +6,8 @@ import dev.latvian.mods.kubejs.event.KubeEvent;
 import net.minecraft.resources.Identifier;
 
 /**
- * Startup-script MMCR declarations.
+ * Startup-script MMCR declarations exposed by {@code MMCREvents.startup}.
+ * The API is available as {@code event.getAPI()} in KubeJS.
  *
  * @author howxu <dev@howxu.cn>
  */
