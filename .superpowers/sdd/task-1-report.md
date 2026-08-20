@@ -30,22 +30,24 @@
 - `NeoForge.EVENT_BUS` is constructed without being started. The removed default-content subscribers had previously caused the test bus to be initialized indirectly; after Task 1/2 removed them, listeners added by `PublicEventSubscribersTest` were not dispatched.
 - The two blast furnace positive-formation tests depended on the default `blast_furnace` controller binding removed by Task 1/2. Their fixture constructed a synthetic controller block with the default machine's structure, so they no longer verified a supported isolated test fixture.
 
-### Changes
+### Review Follow-up
 
-- Started `NeoForge.EVENT_BUS` in `TestBootstrap.bootstrap()` without restoring any default-content listener.
-- Scoped each `PublicEventSubscribersTest` listener with an activation flag so the shared event bus cannot affect later tests; the tests still post self-created machine/recipe events and retain all assertions.
-- Removed the two obsolete default blast furnace positive-formation tests. The remaining negative port-validation coverage is retained.
+#### Changes
 
-### Commands And Results
+- Kept the single `NeoForge.EVENT_BUS.start()` call in `TestBootstrap.bootstrap()`; no default-content listener or default blast furnace controller binding was restored.
+- Restored the two positive formation paths using a self-created `test_cube` declaration with the required input, output, ludicrous energy, and factory semantics. Its controller is the test-bootstrap-bound `test_cube` controller, so the tests do not depend on default content.
+- Wrapped every persistent `PublicEventSubscribersTest` listener activation in `try`/`finally`, ensuring it is disabled even when an assertion throws. The Javadoc now describes only the self-created machine/recipe event contract.
 
+#### Commands And Results
+
+- `./gradlew compileTestJava --no-daemon`: passed. `BUILD SUCCESSFUL in 9s`.
 - `./gradlew test --tests cn.howxu.mmcr.api.publicapi.PublicEventSubscribersTest --no-daemon`: passed. `BUILD SUCCESSFUL in 11s`.
-- `./gradlew test --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest --no-daemon`: passed. `BUILD SUCCESSFUL in 11s`.
-- `./gradlew compileTestJava --no-daemon`: passed. `BUILD SUCCESSFUL in 6s`.
+- `./gradlew test --tests cn.howxu.mmcr.api.machine.MachineStructureFamilyTest --tests cn.howxu.mmcr.internal.tile.MachinePortAppearanceTest --tests cn.howxu.mmcr.client.preview.StructurePreviewSchemaFactoryTest --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest --no-daemon`: passed. `BUILD SUCCESSFUL in 11s`.
 
-### Commit
+#### Commit
 
-- `9d4fb6e test: isolate public event subscribers`.
+- `PENDING` (replace with the follow-up commit ID after committing).
 
-### Concerns
+#### Concerns
 
-- No remaining concerns for the requested scope. The existing compilation warnings are unrelated deprecation and unsafe-API warnings.
+- Prior revision removed the two positive blast furnace coverage paths. This follow-up restores their behavior against a self-created `test_cube` fixture rather than reintroducing default-content coupling.

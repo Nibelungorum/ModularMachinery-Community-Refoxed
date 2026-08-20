@@ -34,6 +34,7 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.client.model.MachineModelDataKeys;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
+import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
@@ -1731,6 +1732,44 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void built_in_blast_furnace_forms_with_required_ports() throws Exception {
+        DynamicMachine machine = requiredPortTestCube();
+        MachineRegistry.register(machine);
+        BlockPos controllerPos = new BlockPos(20, 4, 20);
+        MachineControllerBlockEntity controller = controllerForRequiredPortTestCube(
+                machine,
+                controllerPos,
+                itemInputBus(controllerPos.offset(0, 0, -2)),
+                itemOutputBus(controllerPos.offset(-1, 0, -1)),
+                energyHatch(controllerPos.offset(1, 0, -1), "energy_input_hatch_ludicrous"));
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
+
+        assertThat(formed).isTrue();
+        assertThat(controller.getLastFormationFailure()).isNull();
+    }
+
+    @Test
+    void built_in_blast_furnace_forms_when_top_factory_slot_is_casing() throws Exception {
+        DynamicMachine machine = requiredPortTestCube();
+        MachineRegistry.register(machine);
+        BlockPos controllerPos = new BlockPos(20, 4, 20);
+        MachineControllerBlockEntity controller = controllerForRequiredPortTestCube(
+                machine,
+                controllerPos,
+                itemInputBus(controllerPos.offset(0, 0, -2)),
+                itemOutputBus(controllerPos.offset(-1, 0, -1)),
+                energyHatch(controllerPos.offset(1, 0, -1), "energy_input_hatch_ludicrous"));
+        Level level = levelOf(controller);
+        level.setBlock(controllerPos.offset(0, 1, -1), ModBlocks.CASING.get().defaultBlockState(), 3);
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
+
+        assertThat(formed).isTrue();
+        assertThat(controller.getLastFormationFailure()).isNull();
+    }
+
+    @Test
     void server_tick_keeps_formation_failure_observable_after_rejection() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         BlockArray pattern = onePortPattern(ModBlocks.BLOCKS.get("item_input_bus").get());
@@ -3042,6 +3081,20 @@ class MachineControllerBlockEntityTest {
                 Map.of());
     }
 
+    private static DynamicMachine requiredPortTestCube() {
+        Identifier id = MMCR.id("test_cube");
+        BlockArray pattern = new BlockArray(Map.of(
+                BlockPos.ZERO, new BlockPredicate.OfBlock(ModBlocks.controllerFor(id).get()),
+                new BlockPos(0, 0, -2), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()),
+                new BlockPos(-1, 0, -1), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_output_bus").get()),
+                new BlockPos(1, 0, -1), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("energy_input_hatch_ludicrous").get()),
+                new BlockPos(0, 1, -1), new BlockPredicate.OfBlock(ModBlocks.CASING.get())));
+        return new DynamicMachine(id, "Required Port Test Cube", pattern, MachineControllerSpec.defaultsFor(id),
+                MachineAppearanceSpec.defaults(), PortRequirementSpec.none(), PortTierRequirementSpec.builder()
+                        .minEnergyInput(EnergyHatchSize.LUDICROUS).minItemInput(ItemBusSize.NORMAL).anyItemOutput().build(),
+                List.of(), Map.of(), Integer.MAX_VALUE, true, true, 4, List.of());
+    }
+
     private static MachineControllerBlockEntity controllerFor(DynamicMachine machine) throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         return controllerForFormation(machine, controllerPos, itemInputBus(controllerPos.offset(8, 0, 0)));
@@ -3507,6 +3560,24 @@ class MachineControllerBlockEntityTest {
         setField(BlockEntity.class, first, "level", level);
         setField(BlockEntity.class, second, "level", level);
         setField(BlockEntity.class, third, "level", level);
+        return controller;
+    }
+
+    private static MachineControllerBlockEntity controllerForRequiredPortTestCube(
+            DynamicMachine machine,
+            BlockPos controllerPos,
+            IOPortBlockEntity first,
+            IOPortBlockEntity second,
+            IOPortBlockEntity third) throws Exception {
+        MachineControllerBlockEntity controller = controllerForDefaultBlastFurnace(
+                machine, controllerPos, first, second, third);
+        var controllerBlock = ModBlocks.controllerFor(MMCR.id("test_cube")).get();
+        BlockState controllerState = controllerBlock.defaultBlockState()
+                .setValue(MachineControllerBlock.FORMED, false)
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH)
+                .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH);
+        setField(BlockEntity.class, controller, "blockState", controllerState);
+        levelOf(controller).setBlock(controllerPos, controllerState, 3);
         return controller;
     }
 

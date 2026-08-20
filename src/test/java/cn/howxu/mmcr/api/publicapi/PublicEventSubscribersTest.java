@@ -28,8 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the NeoForge event bus accepts public startup registration events and that
- * default built-in subscribers can register through them.
+ * Verifies the NeoForge event bus delivers self-created public machine and recipe registration events.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -62,11 +61,13 @@ class PublicEventSubscribersTest {
         NeoForge.EVENT_BUS.addListener((MMCRRegisterMachinesEvent event) -> {
             if (active.get()) callCount.incrementAndGet();
         });
+        try {
+            NeoForge.EVENT_BUS.post(new MMCRRegisterMachinesEvent());
 
-        NeoForge.EVENT_BUS.post(new MMCRRegisterMachinesEvent());
-
-        assertThat(callCount.get()).isEqualTo(1);
-        active.set(false);
+            assertThat(callCount.get()).isEqualTo(1);
+        } finally {
+            active.set(false);
+        }
     }
 
     @Test
@@ -82,12 +83,15 @@ class PublicEventSubscribersTest {
             }
         });
 
-        NeoForge.EVENT_BUS.post(new MMCRRegisterMachinesEvent());
+        try {
+            NeoForge.EVENT_BUS.post(new MMCRRegisterMachinesEvent());
 
-        assertThat(captured.get())
-                .isInstanceOf(ApiRegistrationException.class)
-                .hasMessageContaining("outside_window");
-        active.set(false);
+            assertThat(captured.get())
+                    .isInstanceOf(ApiRegistrationException.class)
+                    .hasMessageContaining("outside_window");
+        } finally {
+            active.set(false);
+        }
     }
 
     @Test
@@ -101,12 +105,15 @@ class PublicEventSubscribersTest {
             event.registerMachine(machine("repeat_id"));
         });
 
-        NeoForge.EVENT_BUS.post(new MMCRRegisterMachinesEvent());
+        try {
+            NeoForge.EVENT_BUS.post(new MMCRRegisterMachinesEvent());
 
-        assertThatThrownBy(() -> NeoForge.EVENT_BUS.post(new MMCRRegisterMachinesEvent()))
-                .isInstanceOf(ApiRegistrationException.class)
-                .hasMessageContaining("repeat_id");
-        active.set(false);
+            assertThatThrownBy(() -> NeoForge.EVENT_BUS.post(new MMCRRegisterMachinesEvent()))
+                    .isInstanceOf(ApiRegistrationException.class)
+                    .hasMessageContaining("repeat_id");
+        } finally {
+            active.set(false);
+        }
     }
 
     @Test
@@ -120,12 +127,15 @@ class PublicEventSubscribersTest {
             event.registerRecipe(recipe("repeat_recipe", machine("recipe_target").id()));
         });
 
-        NeoForge.EVENT_BUS.post(new MMCRRegisterRecipesEvent());
+        try {
+            NeoForge.EVENT_BUS.post(new MMCRRegisterRecipesEvent());
 
-        assertThatThrownBy(() -> NeoForge.EVENT_BUS.post(new MMCRRegisterRecipesEvent()))
-                .isInstanceOf(ApiRegistrationException.class)
-                .hasMessageContaining("repeat_recipe");
-        active.set(false);
+            assertThatThrownBy(() -> NeoForge.EVENT_BUS.post(new MMCRRegisterRecipesEvent()))
+                    .isInstanceOf(ApiRegistrationException.class)
+                    .hasMessageContaining("repeat_recipe");
+        } finally {
+            active.set(false);
+        }
     }
 
     private static MachineDefinition machine(String path) {
