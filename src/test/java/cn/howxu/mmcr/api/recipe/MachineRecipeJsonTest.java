@@ -4,7 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import org.nibelungorum.DefaultMachineLevels;
+import org.nibelungorum.builtin.PublicBuiltinLevelDefinitions;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -123,8 +123,8 @@ class MachineRecipeJsonTest {
         assertThat(recipe.allowPartialOutputs()).isTrue();
         assertThat(recipe.requiredHostIds()).containsExactly(Identifier.parse("mmcr:factory_controller"));
         assertThat(recipe.levelRequirements()).singleElement().satisfies(level -> {
-            assertThat(level.typeId()).isEqualTo(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE);
-            assertThat(level.levelId()).isEqualTo(DefaultMachineLevels.COPPER_COIL);
+            assertThat(level.typeId()).isEqualTo(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE);
+            assertThat(level.levelId()).isEqualTo(PublicBuiltinLevelDefinitions.COPPER_COIL);
         });
         assertThat(recipe.requirements()).anyMatch(ItemRequirement.class::isInstance);
         assertThat(recipe.requirements().stream().filter(ItemRequirement.class::isInstance).findFirst().orElseThrow())
@@ -245,8 +245,8 @@ class MachineRecipeJsonTest {
 
     private static JsonObject levelRequirement() {
         var level = new JsonObject();
-        level.addProperty("type", DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE.toString());
-        level.addProperty("level", DefaultMachineLevels.COPPER_COIL.toString());
+        level.addProperty("type", PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE.toString());
+        level.addProperty("level", PublicBuiltinLevelDefinitions.COPPER_COIL.toString());
         return level;
     }
 

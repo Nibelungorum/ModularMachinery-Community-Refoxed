@@ -52,7 +52,6 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
-import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
@@ -287,7 +286,6 @@ public class MMCR {
         ContentRegistrationCoordinator.collectMachines(definitions);
 
         MMCRMachineStructuresEvent structures = MMCRMachineStructuresEvent.prepare(definitions.definitions().keySet());
-        registerDefaultMachineLevels(structures);
         structuresSource.accept(structures);
         NeoForge.EVENT_BUS.post(structures);
         structures.freeze();
@@ -340,26 +338,10 @@ public class MMCR {
         }
     }
 
-    private static void registerDefaultMachineLevels(MMCRMachineStructuresEvent event) {
-        if (FMLLoader.getCurrent().isProduction()
-                || event.levelTypes().containsKey(id("thermal_smelting_coil"))) return;
-        registerDevelopmentBuiltins("org.nibelungorum.DefaultMachineLevels", "register",
-                new Class<?>[]{MMCRMachineStructuresEvent.class}, event);
-    }
-
     private static void onDefaultDataComponentsBound(DefaultDataComponentsBoundEvent event) {
         if (event.shouldUpdateStaticData()) {
             registerRuntimeRecipes();
         }
-    }
-
-    private static void registerDevelopmentBuiltins(String className, String methodName) {
-        registerDevelopmentBuiltins(className, methodName, new Class<?>[0]);
-    }
-
-    private static void registerDevelopmentBuiltins(String className, String methodName, Class<?>[] parameterTypes, Object... arguments) {
-        if (FMLLoader.getCurrent().isProduction()) return;
-        invokeOptionalSource(className, methodName, parameterTypes, arguments);
     }
 
     static void invokeOptionalSourceForTesting(String className, String methodName, Class<?>[] parameterTypes,

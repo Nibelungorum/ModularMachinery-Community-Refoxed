@@ -39,7 +39,7 @@ import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.nibelungorum.DefaultMachineLevels;
+import org.nibelungorum.builtin.PublicBuiltinLevelDefinitions;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -146,7 +146,7 @@ class RuntimeContentSnapshotTest {
                 List.of(new ItemStack(Items.GOLD_INGOT, 4)),
                 List.of(new RecipeModifier("input_bus", RecipeModifier.IOType.INPUT, 2F, RecipeModifier.Operation.MULTIPLY, false)),
                 5, 3, true, List.of(), List.of(), true,
-                List.of(new LevelRequirement(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE, DefaultMachineLevels.IRON_COIL)),
+                List.of(new LevelRequirement(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE, PublicBuiltinLevelDefinitions.IRON_COIL)),
                 true, Set.of(MMCR.id("runtime_host")));
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
 

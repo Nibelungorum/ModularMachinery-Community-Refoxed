@@ -14,7 +14,7 @@ import cn.howxu.mmcr.internal.api.PublicRecipeAdapter;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.JsonOps;
-import org.nibelungorum.DefaultMachineLevels;
+import org.nibelungorum.builtin.PublicBuiltinLevelDefinitions;
 import net.minecraft.resources.Identifier;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
@@ -47,7 +47,7 @@ class PublicRecipeBuilderTest {
     void restoreDefaultMachineLevels() {
         cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.resetCollector();
         var event = cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.prepare(java.util.Set.of());
-        DefaultMachineLevels.register(event);
+        PublicBuiltinLevelDefinitions.register(event);
         MachineLevelRegistry.installSnapshot(event.levelTypes().values(), event.levels().values());
     }
 
@@ -97,7 +97,7 @@ class PublicRecipeBuilderTest {
         MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("explicit"), id("machine"))
                 .requirement(explicit).requirement(smart)
                 .modifier(id("snapshot_modifier"))
-                .levelRequirement(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE, DefaultMachineLevels.COPPER_COIL)
+                .levelRequirement(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE, PublicBuiltinLevelDefinitions.COPPER_COIL)
                 .requiredHost(id("host"))
                 .build();
 
@@ -118,14 +118,14 @@ class PublicRecipeBuilderTest {
                 .outputChance(itemOutput, 0.4F)
                 .outputFluid(net.minecraft.world.level.material.Fluids.WATER, 250)
                 .outputEnergy(10)
-                .levelRequirement(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE, DefaultMachineLevels.COPPER_COIL)
+                .levelRequirement(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE, PublicBuiltinLevelDefinitions.COPPER_COIL)
                 .requiredHost(id("host"))
                 .modifier(id("snapshot_modifier"))
                 .build();
         var recipe = PublicRecipeAdapter.toRecipe(definition, new MMCRMachineStructuresEvent.Snapshot(
                 Map.of(),
                 Map.of(),
-                Map.of(DefaultMachineLevels.COPPER_COIL, MachineLevelRegistry.getLevel(DefaultMachineLevels.COPPER_COIL)),
+                Map.of(PublicBuiltinLevelDefinitions.COPPER_COIL, MachineLevelRegistry.getLevel(PublicBuiltinLevelDefinitions.COPPER_COIL)),
                 Map.of(id("snapshot_modifier"), new ModifierDefinition(List.of(new cn.howxu.mmcr.api.recipe.modifier.RecipeModifier(
                         "item", cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.OUTPUT, 2F,
                         cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.Operation.MULTIPLY, true))))));
@@ -159,8 +159,8 @@ class PublicRecipeBuilderTest {
             assertThat(modifier.affectsChance()).isTrue();
         });
         assertThat(recipe.levelRequirements()).singleElement().satisfies(level -> {
-            assertThat(level.typeId()).isEqualTo(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE);
-            assertThat(level.levelId()).isEqualTo(DefaultMachineLevels.COPPER_COIL);
+            assertThat(level.typeId()).isEqualTo(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE);
+            assertThat(level.levelId()).isEqualTo(PublicBuiltinLevelDefinitions.COPPER_COIL);
         });
         assertThat(recipe.requiredHostIds()).containsExactly(id("host"));
     }

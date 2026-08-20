@@ -25,7 +25,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.network.chat.Component;
-import org.nibelungorum.DefaultMachineLevels;
+import org.nibelungorum.builtin.PublicBuiltinLevelDefinitions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -55,7 +55,7 @@ class StructurePreviewSchemaFactoryTest {
     void restoreDefaultLevels() {
         cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.resetCollector();
         var event = cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.prepare(java.util.Set.of());
-        DefaultMachineLevels.register(event);
+        PublicBuiltinLevelDefinitions.register(event);
         MachineLevelRegistry.installSnapshot(event.levelTypes().values(), event.levels().values());
     }
 

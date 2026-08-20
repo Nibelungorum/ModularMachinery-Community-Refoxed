@@ -20,7 +20,7 @@ import dev.latvian.mods.rhino.ContextFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.nibelungorum.DefaultMachineLevels;
+import org.nibelungorum.builtin.PublicBuiltinLevelDefinitions;
 
 import java.util.List;
 import java.util.Map;
@@ -45,7 +45,7 @@ class KubeJSApiTest {
     void restoreMachineLevels() {
         cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.resetCollector();
         var event = cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.prepare(java.util.Set.of());
-        DefaultMachineLevels.register(event);
+        PublicBuiltinLevelDefinitions.register(event);
         MachineLevelRegistry.installSnapshot(event.levelTypes().values(), event.levels().values());
     }
 
@@ -107,7 +107,7 @@ class KubeJSApiTest {
                 new BlockPredicate.OfBlockState(Blocks.EMERALD_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
         TestBootstrap.freezeRegistration();
 
-        assertThatThrownBy(() -> api.levelRequirement(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE.toString(), "mmcr:api_other_level"))
+        assertThatThrownBy(() -> api.levelRequirement(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE.toString(), "mmcr:api_other_level"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

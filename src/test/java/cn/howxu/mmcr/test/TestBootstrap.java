@@ -48,6 +48,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.registries.DeferredHolder;
+import org.nibelungorum.builtin.PublicBuiltinLevelDefinitions;
 import org.nibelungorum.builtin.PublicBuiltinMachineDefinitions;
 import org.nibelungorum.builtin.PublicBuiltinRecipeDefinitions;
 
@@ -157,6 +158,7 @@ public final class TestBootstrap {
     }
 
     public static void registerAllMachineStructures(MMCRMachineStructuresEvent event) {
+        PublicBuiltinLevelDefinitions.register(event);
         PublicBuiltinMachineDefinitions.registerStructures(event);
         registerTestMachineStructures(event);
     }
