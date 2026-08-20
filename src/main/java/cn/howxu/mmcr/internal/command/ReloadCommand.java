@@ -19,7 +19,7 @@ public final class ReloadCommand {
                 .then(Commands.literal("reload")
                         .requires(src -> src.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
                         .executes(ctx -> {
-                            var commit = DynamicContentReloadService.reloadWithSnapshot(candidate -> {});
+                            var commit = DynamicContentReloadService.reloadCurrentWithSnapshot();
                             var result = commit.result();
                             RuntimeContentSync.sendToAll(ctx.getSource().getServer(), commit.snapshot());
                             ctx.getSource().sendSuccess(() -> Component.translatable("command.mmcr.reload.success",

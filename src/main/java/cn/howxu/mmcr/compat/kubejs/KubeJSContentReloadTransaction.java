@@ -58,7 +58,7 @@ final class KubeJSContentReloadTransaction {
         return structures.isEmpty() && recipes.isEmpty();
     }
 
-    void commit() {
+    RuntimeContentCoordinator.CommitResult commit() {
         Map<Identifier, MachineStructureDefinition> mergedStructures = new LinkedHashMap<>(
                 MachineStructureRegistry.dynamicSnapshot());
         removePublishedStructures(mergedStructures);
@@ -66,9 +66,11 @@ final class KubeJSContentReloadTransaction {
         Map<Identifier, MachineRecipe> mergedRecipes = new LinkedHashMap<>(RecipeRegistry.dynamicSnapshot());
         removePublishedRecipes(mergedRecipes);
         mergedRecipes.putAll(recipes);
-        RuntimeContentCoordinator.commitDynamic(mergedStructures, mergedRecipes);
+        RuntimeContentCoordinator.CommitResult committed =
+                RuntimeContentCoordinator.commitDynamicAndSnapshot(mergedStructures, mergedRecipes);
         publishedStructures = Map.copyOf(structures);
         publishedRecipes = Map.copyOf(recipes);
+        return committed;
     }
 
     private static void removePublishedStructures(Map<Identifier, MachineStructureDefinition> mergedStructures) {

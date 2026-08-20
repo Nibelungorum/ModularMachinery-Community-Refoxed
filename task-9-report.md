@@ -2,24 +2,20 @@
 
 ## Changes
 
-- Added a coordinator commit result containing the reload result and committed effective runtime snapshot.
-- Routed `/mmcr reload` through `DynamicContentReloadService.reloadWithSnapshot` and synchronized that committed snapshot.
-- Made default server broadcast create one snapshot per broadcast, then reuse it for every player.
-- Added server-start synchronization after the current server is installed and a snapshot-aware server bridge overload.
-- Added a snapshot-aware data-pack reload hook while preserving the existing Runnable API.
-- Made JEI runtime refresh use the committed content version as its duplicate-invalidation boundary.
-- Added focused coverage for committed snapshots and duplicate JEI refresh suppression.
+- Routed `/mmcr reload` through a source-aware current dynamic commit, so an empty command reload no longer clears dynamic content.
+- Made dynamic and data-pack commit-plus-snapshot operations execute under one content lock and return immutable effective results.
+- Changed KubeJS reload completion and data-pack reload hooks to send only after commit and cache installation, using the returned snapshot.
+- Made RuntimeContentSync preserve explicit snapshots through snapshot-aware senders.
+- Deferred JEI reload version advancement until the asynchronous reload has applied successfully, while suppressing duplicate queued versions.
+- Added focused command, empty/failure, snapshot ordering, sender, and JEI reload coverage without weakening existing tests.
 
 ## Verification
 
 - `./gradlew compileJava --no-daemon`: passed.
-- `./gradlew test --no-daemon --tests 'cn.howxu.mmcr.internal.reload.DynamicContentReloadServiceTest.reloadWithSnapshotReturnsTheCommittedEffectiveContent'`: passed.
-- `./gradlew test --no-daemon --tests 'cn.howxu.mmcr.compat.jei.JeiRuntimeReloaderTest'`: passed.
-- `./gradlew test --no-daemon --tests 'cn.howxu.mmcr.internal.network.RuntimeContentSyncTest'`: passed.
-- Requested focused command failed because existing registry-state tests throw `IllegalStateException` while registering test content; tests were retained and not weakened.
-- `./gradlew test --no-daemon`: failed with 63 existing/state-sensitive test failures across bootstrap, KubeJS, reload, snapshot, and controller tests.
-- `./gradlew runGameTestServer --no-daemon`: failed during the task; no test was disabled or removed.
+- Focused new sender/JEI/data-pack tests: passed.
+- `./gradlew test --no-daemon`: failed with 98 existing/state-sensitive failures; the first independent failures are bootstrap/registry initialization failures.
+- `./gradlew runGameTestServer --no-daemon`: failed during mod startup on the pre-existing `MachineStructureFamily` conflicting predicate error.
 
 ## Residual Risk
 
-The full focused reload pattern still has pre-existing state-sensitive failures in command, dynamic reload, and data-pack listener tests. A full `test` and GameTest run should be used by the integration environment for final acceptance.
+Residual risk is limited to the existing test/bootstrap state contamination and GameTest startup conflict; neither failure reached the changed runtime synchronization paths.

@@ -26,6 +26,7 @@ public final class JeiRuntimeReloader {
     private static volatile boolean categoriesCaptured;
     private static volatile IJeiRuntime runtime;
     private static volatile long lastReloadedVersion = Long.MIN_VALUE;
+    private static volatile long scheduledReloadVersion = Long.MIN_VALUE;
 
     private JeiRuntimeReloader() {
     }
@@ -40,6 +41,7 @@ public final class JeiRuntimeReloader {
         JeiRuntimeReloader.runtime = runtime;
         visibleDisplaysByMachine = Map.of();
         lastReloadedVersion = Long.MIN_VALUE;
+        scheduledReloadVersion = Long.MIN_VALUE;
     }
 
     public static void clearRuntimeForTesting() {
@@ -48,32 +50,39 @@ public final class JeiRuntimeReloader {
         REGISTERED_MACHINE_CATEGORIES.clear();
         categoriesCaptured = false;
         lastReloadedVersion = Long.MIN_VALUE;
+        scheduledReloadVersion = Long.MIN_VALUE;
     }
 
     public static void reloadIfAvailable(RuntimeContentSnapshot snapshot) {
         IJeiRuntime current = runtime;
         if (current == null) return;
-        if (snapshot.contentVersion() == lastReloadedVersion) return;
-        lastReloadedVersion = snapshot.contentVersion();
+        if (snapshot.contentVersion() == lastReloadedVersion
+                || snapshot.contentVersion() == scheduledReloadVersion) return;
+        scheduledReloadVersion = snapshot.contentVersion();
         Runnable reload = () -> {
-            Map<Identifier, List<MachineRecipeDisplay>> displaysByMachine = MachineRecipeDisplays.byMachine(snapshot);
-            Map<Identifier, List<MachineRecipeDisplay>> previousVisible = visibleDisplaysByMachine;
-            Map<Identifier, List<MachineRecipeDisplay>> updatedVisible = new LinkedHashMap<>();
-            Set<Identifier> refreshedMachineIds = new LinkedHashSet<>(previousVisible.keySet());
-            refreshedMachineIds.addAll(snapshot.structures().keySet());
-            for (Identifier machineId : refreshedMachineIds) {
-                if (categoriesCaptured && !REGISTERED_MACHINE_CATEGORIES.contains(machineId)) {
-                    MMCR.LOG.warn("JEI category for synced machine {} was not registered; restart or reload JEI to view it", machineId);
-                    continue;
+            try {
+                Map<Identifier, List<MachineRecipeDisplay>> displaysByMachine = MachineRecipeDisplays.byMachine(snapshot);
+                Map<Identifier, List<MachineRecipeDisplay>> previousVisible = visibleDisplaysByMachine;
+                Map<Identifier, List<MachineRecipeDisplay>> updatedVisible = new LinkedHashMap<>();
+                Set<Identifier> refreshedMachineIds = new LinkedHashSet<>(previousVisible.keySet());
+                refreshedMachineIds.addAll(snapshot.structures().keySet());
+                for (Identifier machineId : refreshedMachineIds) {
+                    if (categoriesCaptured && !REGISTERED_MACHINE_CATEGORIES.contains(machineId)) {
+                        MMCR.LOG.warn("JEI category for synced machine {} was not registered; restart or reload JEI to view it", machineId);
+                        continue;
+                    }
+                    var type = JeiMachineRecipeTypes.forMachine(machineId);
+                    current.getRecipeManager().hideRecipes(type, previousVisible.getOrDefault(machineId, List.of()));
+                    if (!snapshot.structures().containsKey(machineId)) continue;
+                    List<MachineRecipeDisplay> displays = displaysByMachine.getOrDefault(machineId, List.of());
+                    current.getRecipeManager().addRecipes(type, displays);
+                    updatedVisible.put(machineId, displays);
                 }
-                var type = JeiMachineRecipeTypes.forMachine(machineId);
-                current.getRecipeManager().hideRecipes(type, previousVisible.getOrDefault(machineId, List.of()));
-                if (!snapshot.structures().containsKey(machineId)) continue;
-                List<MachineRecipeDisplay> displays = displaysByMachine.getOrDefault(machineId, List.of());
-                current.getRecipeManager().addRecipes(type, displays);
-                updatedVisible.put(machineId, displays);
+                visibleDisplaysByMachine = Map.copyOf(updatedVisible);
+                lastReloadedVersion = snapshot.contentVersion();
+            } finally {
+                scheduledReloadVersion = Long.MIN_VALUE;
             }
-            visibleDisplaysByMachine = Map.copyOf(updatedVisible);
         };
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft == null) reload.run();

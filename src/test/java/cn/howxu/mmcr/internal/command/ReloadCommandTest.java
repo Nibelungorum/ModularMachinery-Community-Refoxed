@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
+import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSource;
@@ -49,7 +50,7 @@ class ReloadCommandTest {
     }
 
     @Test
-    void reloadCommandClearsDynamicStructures() throws Exception {
+    void reloadCommandPreservesDynamicStructuresAndSynchronizesEffectiveSnapshot() throws Exception {
         Identifier removed = Identifier.parse("mmcr:removed");
         MachineDefinitions.register(MachineRegistration.builder(removed).localizedName("Removed").build());
         DynamicContentReloadService.reload(candidate -> candidate.registerStructure(structure(removed)));
@@ -57,9 +58,11 @@ class ReloadCommandTest {
         ReloadCommand.register(dispatcher);
         AtomicBoolean syncCalled = new AtomicBoolean();
         AtomicReference<MinecraftServer> syncedServer = new AtomicReference<>();
-        RuntimeContentSync.setSenderForTesting(server -> {
+        AtomicReference<RuntimeContentSnapshot> syncedSnapshot = new AtomicReference<>();
+        RuntimeContentSync.setSenderForTesting((server, snapshot) -> {
             syncCalled.set(true);
             syncedServer.set(server);
+            syncedSnapshot.set(snapshot);
         });
 
         int result = dispatcher.execute("mmcr reload", source());
@@ -67,6 +70,8 @@ class ReloadCommandTest {
         assertThat(result).isEqualTo(1);
         assertThat(syncCalled).isTrue();
         assertThat(syncedServer).hasValue(null);
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsKey(removed);
+        assertThat(syncedSnapshot.get().structures()).containsKey(removed);
     }
 
     private CommandSourceStack source() {

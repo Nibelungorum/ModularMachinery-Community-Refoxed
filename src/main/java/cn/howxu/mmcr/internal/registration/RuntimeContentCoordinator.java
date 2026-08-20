@@ -30,6 +30,19 @@ public final class RuntimeContentCoordinator {
             Map<Identifier, MachineStructureDefinition> structures,
             Map<Identifier, MachineRecipe> recipes) {
         synchronized (RuntimeContentVersion.lock()) {
+            return commitDynamicLocked(structures, recipes).result();
+        }
+    }
+
+    public static CommitResult commitCurrentDynamicAndSnapshot() {
+        synchronized (RuntimeContentVersion.lock()) {
+            return commitDynamicLocked(MachineStructureRegistry.dynamicSnapshot(), RecipeRegistry.dynamicSnapshot());
+        }
+    }
+
+    private static CommitResult commitDynamicLocked(
+            Map<Identifier, MachineStructureDefinition> structures,
+            Map<Identifier, MachineRecipe> recipes) {
         Map<Identifier, MachineStructureDefinition> oldStructures = MachineStructureRegistry.dynamicSnapshot();
         Map<Identifier, MachineRecipe> oldRecipes = RecipeRegistry.dynamicSnapshot();
         Map<Identifier, MachineStructureDefinition> structureReplacement = Map.copyOf(new LinkedHashMap<>(structures));
@@ -49,39 +62,50 @@ public final class RuntimeContentCoordinator {
             }
             throw failure;
         }
-        return DynamicContentReloadService.ReloadResult.fromSnapshots(
+        DynamicContentReloadService.ReloadResult result = DynamicContentReloadService.ReloadResult.fromSnapshots(
                 oldStructures, structureReplacement, oldRecipes, recipeReplacement);
-        }
+        return new CommitResult(result, snapshotLocked());
     }
 
     public static CommitResult commitDynamicAndSnapshot(
             Map<Identifier, MachineStructureDefinition> structures,
             Map<Identifier, MachineRecipe> recipes) {
-        DynamicContentReloadService.ReloadResult result = commitDynamic(structures, recipes);
-        return new CommitResult(result, createSnapshot());
+        synchronized (RuntimeContentVersion.lock()) {
+            return commitDynamicLocked(structures, recipes);
+        }
     }
 
     public static void replaceDataPackRecipes(Map<Identifier, MachineRecipe> recipes) {
         synchronized (RuntimeContentVersion.lock()) {
-            RecipeRegistry.replaceDataPack(recipes);
+            replaceDataPackLocked(recipes);
         }
     }
 
     public static RuntimeContentSnapshot replaceDataPackRecipesAndSnapshot(
             Map<Identifier, MachineRecipe> recipes) {
-        replaceDataPackRecipes(recipes);
-        return createSnapshot();
+        synchronized (RuntimeContentVersion.lock()) {
+            replaceDataPackLocked(recipes);
+            return snapshotLocked();
+        }
     }
 
     public static RuntimeContentSnapshot createSnapshot() {
         synchronized (RuntimeContentVersion.lock()) {
-            return new RuntimeContentSnapshot(
+            return snapshotLocked();
+        }
+    }
+
+    private static RuntimeContentSnapshot snapshotLocked() {
+        return new RuntimeContentSnapshot(
                 MachineStructureRegistry.effectiveSnapshot(),
                 RecipeRegistry.effectiveSnapshot(),
                 ControllerSpecSync.createSnapshot(),
                 ControllerSpecSync.createAppearanceSnapshot(),
                 RuntimeContentVersion.current());
-        }
+    }
+
+    private static void replaceDataPackLocked(Map<Identifier, MachineRecipe> recipes) {
+        RecipeRegistry.replaceDataPack(recipes);
     }
 
     private static void validate(Map<Identifier, MachineStructureDefinition> structures,

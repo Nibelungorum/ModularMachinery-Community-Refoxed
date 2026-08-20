@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -74,6 +75,18 @@ class RuntimeContentSyncTest {
         assertThat(snapshot.structures()).containsOnlyKeys(machineId);
         assertThat(snapshot.recipes()).containsOnlyKeys(staticRecipeId, dataPackRecipeId, dynamicRecipeId);
         assertThat(snapshot.contentVersion()).isGreaterThan(0L);
+    }
+
+    @Test
+    void snapshotAwareSenderReceivesTheCommittedSnapshotWithoutRebuildingIt() {
+        AtomicReference<RuntimeContentSnapshot> sent = new AtomicReference<>();
+        RuntimeContentSnapshot snapshot = RuntimeContentSnapshot.empty();
+        RuntimeContentSync.setSenderForTesting((server, received) -> sent.set(received));
+
+        RuntimeContentSync.sendToAll(null, snapshot);
+
+        assertThat(sent.get()).isSameAs(snapshot);
+        RuntimeContentSync.resetSenderForTesting();
     }
 
     private static MachineStructureDefinition structure(Identifier id) {

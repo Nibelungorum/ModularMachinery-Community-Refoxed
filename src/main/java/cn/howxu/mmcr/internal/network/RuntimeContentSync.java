@@ -6,6 +6,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.PacketDistributor;
 
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import java.util.Objects;
@@ -16,7 +17,7 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public final class RuntimeContentSync {
-    private static Consumer<MinecraftServer> sender = RuntimeContentSync::sendToAllPlayers;
+    private static BiConsumer<MinecraftServer, RuntimeContentSnapshot> sender = RuntimeContentSync::sendToAllPlayers;
     private static boolean senderIsDefault = true;
 
     private RuntimeContentSync() {
@@ -36,7 +37,7 @@ public final class RuntimeContentSync {
 
     public static void sendToAll(MinecraftServer server) {
         if (!senderIsDefault) {
-            sender.accept(server);
+            sender.accept(server, createSnapshot());
             return;
         }
         sendToAllPlayers(server, createSnapshot());
@@ -46,7 +47,7 @@ public final class RuntimeContentSync {
         if (senderIsDefault) {
             sendToAllPlayers(server, snapshot);
         } else {
-            sender.accept(server);
+            sender.accept(server, snapshot);
         }
     }
 
@@ -63,6 +64,11 @@ public final class RuntimeContentSync {
     }
 
     public static void setSenderForTesting(Consumer<MinecraftServer> sender) {
+        RuntimeContentSync.sender = (server, ignored) -> sender.accept(server);
+        senderIsDefault = false;
+    }
+
+    public static void setSenderForTesting(BiConsumer<MinecraftServer, RuntimeContentSnapshot> sender) {
         RuntimeContentSync.sender = Objects.requireNonNull(sender);
         senderIsDefault = false;
     }

@@ -113,8 +113,9 @@ class MachineRecipeDataReloadListenerTest {
         var listener = new MachineRecipeDataReloadListener(registries);
         AtomicBoolean synced = new AtomicBoolean();
 
-        listener.applySnapshotFromServerReloadHook(Map.of(id, recipe), () -> {
+        listener.applySnapshotFromServerReloadHook(Map.of(id, recipe), committed -> {
             assertThat(RecipeRegistry.getRecipe(id)).isSameAs(recipe);
+            assertThat(committed.recipes()).containsEntry(id, recipe);
             synced.set(true);
         });
 

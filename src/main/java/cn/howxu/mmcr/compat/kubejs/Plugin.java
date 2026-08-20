@@ -19,10 +19,12 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.LinkedHashMap;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 
 public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     private static final Map<Object, ServerReload> SERVER_RELOADS = new IdentityHashMap<>();
-    private static BooleanSupplier currentServerSync = RuntimeContentServerBridge::sendToCurrentServer;
+    private static Consumer<cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot> currentServerSync =
+            RuntimeContentServerBridge::sendToCurrentServer;
 
     @Override
     public void beforeScriptsLoaded(ScriptManager manager) {
@@ -79,8 +81,8 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     }
 
     static void completeServerReload(Object manager, int errorCount, MinecraftServer server) {
-        completeServerReload(manager, errorCount, () -> {
-            if (server != null) RuntimeContentSync.sendToAll(server);
+        completeServerReload(manager, errorCount, snapshot -> {
+            if (server != null) RuntimeContentSync.sendToAll(server, snapshot);
         });
     }
 
@@ -94,11 +96,15 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     }
 
     private static void completeServerReload(Object manager, int errorCount, Runnable afterCommit) {
+        completeServerReload(manager, errorCount, snapshot -> afterCommit.run());
+    }
+
+    private static void completeServerReload(Object manager, int errorCount,
+                                              Consumer<cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot> afterCommit) {
         ServerReload reload = SERVER_RELOADS.remove(manager);
         try {
             if (reload != null && errorCount == reload.errorCount()) {
-                reload.transaction().commit();
-                afterCommit.run();
+                afterCommit.accept(reload.transaction().commit().snapshot());
             }
         } finally {
             KubeJSContentReloadTransaction.deactivate();
@@ -111,10 +117,9 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     }
 
     static void setCurrentServerForTesting(MinecraftServer server) {
-        currentServerSync = () -> {
-            if (server == null) return false;
-            RuntimeContentSync.sendToAll(server);
-            return true;
+        currentServerSync = snapshot -> {
+            if (server == null) return;
+            RuntimeContentSync.sendToAll(server, snapshot);
         };
     }
 
@@ -123,7 +128,7 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     }
 
     static void setCurrentServerSyncForTesting(BooleanSupplier sync) {
-        currentServerSync = sync;
+        currentServerSync = ignored -> sync.getAsBoolean();
     }
 
     @Override
