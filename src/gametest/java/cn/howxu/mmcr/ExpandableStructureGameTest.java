@@ -57,6 +57,7 @@ public class ExpandableStructureGameTest {
         MachineControllerBlockEntity controller = placeController(helper, controllerPos, Direction.UP, rollFacing, machine);
 
         for (BlockPos pos : machine.structureStages().get(2).pattern().pattern().keySet()) {
+            if (pos.equals(BlockPos.ZERO)) continue;
             helper.setBlock(controllerPos.offset(BlockRotator.rotateSouthTo(pos, Direction.UP, rollFacing)),
                     ModBlocks.CASING.get().defaultBlockState());
         }

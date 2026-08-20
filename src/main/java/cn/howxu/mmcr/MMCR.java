@@ -202,7 +202,6 @@ public class MMCR {
                 },
                 structures -> {
                     org.nibelungorum.builtin.PublicBuiltinMachineDefinitions.registerStructures(structures);
-                    registerDefaultMachineLevels(structures);
                     registerGameTestBuiltins("registerMachineStructures",
                             new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
                 },

@@ -19,6 +19,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -35,6 +36,14 @@ class DynamicContentReloadServiceTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @BeforeEach
+    void restoreStartupDefinitions() {
+        TestBootstrap.restoreMachineDefinitions();
+        MachineRegistry.clearForTesting();
+        MachineStructureRegistry.clearForTesting();
+        RecipeRegistry.clearForTesting();
     }
 
     @AfterEach
@@ -128,7 +137,10 @@ class DynamicContentReloadServiceTest {
 
     private static void register(String id) {
         Identifier identifier = Identifier.parse(id);
-        MachineDefinitions.register(MachineRegistration.builder(identifier).localizedName(id).build());
+        if (MachineDefinitions.getRegistration(identifier) == null) {
+            MachineDefinitions.beginRegistryPhase();
+            MachineDefinitions.register(MachineRegistration.builder(identifier).localizedName(id).build());
+        }
     }
 
     private static MachineRecipe recipe(String id, String machineId) {

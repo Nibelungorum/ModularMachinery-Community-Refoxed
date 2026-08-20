@@ -107,4 +107,9 @@ public final class MachineRegistry {
         COMPILED = Map.of();
         BlockArrayCache.clearForTesting();
     }
+
+    /** Restores compiled startup machines after a test that intentionally clears the registry. */
+    public static void restoreStartupForTesting() {
+        installStructures(MachineStructureRegistry.startupSnapshot());
+    }
 }

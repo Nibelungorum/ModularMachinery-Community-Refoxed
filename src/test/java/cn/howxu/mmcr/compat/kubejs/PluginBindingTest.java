@@ -514,6 +514,7 @@ class PluginBindingTest {
         try {
             PublicApiBootstrap.begin();
             MachineDefinitions.freezeRegistryPhase();
+            Plugin.freezeStartupRegistryPhaseForTesting();
 
             assertThat(MachineDefinitions.isRegistryPhaseOpen()).isFalse();
 

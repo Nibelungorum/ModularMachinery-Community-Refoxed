@@ -43,6 +43,8 @@ class MachineRecipeDataReloadListenerTest {
     @BeforeEach
     void clearRecipeLayers() {
         RecipeRegistry.clearForTesting();
+        TestBootstrap.registerRuntimeBuiltins();
+        RecipeRegistry.clearForTesting();
     }
 
     @Test

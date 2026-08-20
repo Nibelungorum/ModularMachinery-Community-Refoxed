@@ -217,7 +217,7 @@ class MachineBuilderJSTest {
                 .finishSound("minecraft:entity.ender_dragon.growl")
                 .registerObject();
 
-        MachineDefinitions.freezeRegistryPhase();
+        Plugin.freezeStartupRegistryPhaseForTesting();
         MachineRegistration registration = MachineDefinitions.getRegistration(id);
         assertThat(registration.allowModifiers()).isTrue();
         assertThat(registration.allowMultithreading()).isTrue();
@@ -444,7 +444,7 @@ class MachineBuilderJSTest {
 
         assertThat(PublicApiBootstrap.isRegistrationOpen()).isTrue();
 
-        MachineDefinitions.freezeRegistryPhase();
+        Plugin.freezeStartupRegistryPhaseForTesting();
         assertThatThrownBy(builder::registerObject)
                 .isInstanceOf(ApiRegistrationException.class)
                 .hasMessageContaining("lifecycle");

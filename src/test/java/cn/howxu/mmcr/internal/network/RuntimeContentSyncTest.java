@@ -34,7 +34,10 @@ class RuntimeContentSyncTest {
 
     @BeforeEach
     void restoreRuntimeContent() {
-        TestBootstrap.registerRuntimeBuiltins();
+        TestBootstrap.restoreMachineDefinitions();
+        MachineRegistry.clearForTesting();
+        MachineStructureRegistry.clearForTesting();
+        RecipeRegistry.clearForTesting();
     }
 
     @AfterEach

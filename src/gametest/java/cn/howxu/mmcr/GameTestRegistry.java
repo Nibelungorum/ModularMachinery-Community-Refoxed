@@ -17,6 +17,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.block.Rotation;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 
@@ -89,7 +90,13 @@ public final class GameTestRegistry {
         for (String name : List.of("test_cube", "controller_tick", "iron_compressor",
                 "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll")) {
             Identifier id = MMCR.id(name);
-            event.registerMachine(id, builder -> builder.displayNameKey("machine.mmcr_test." + name));
+            event.registerMachine(id, builder -> {
+                builder.displayNameKey("machine.mmcr_test." + name);
+                if (name.equals("expandable_structure_vertical_roll")) {
+                    builder.controller(controller -> controller.allowVerticalFacing());
+                }
+                return builder;
+            });
         }
     }
 
@@ -100,19 +107,72 @@ public final class GameTestRegistry {
             event.registerStructure(id, structure -> {
                 BlockPredicate casing = BlockPredicate.deferredBlock(() -> ModBlocks.CASING.get());
                 BlockPredicate controller = BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(id).get());
+                if (name.contains("expandable")) {
+                    structure.fullStructure(stage -> stage.pattern(pattern -> pattern
+                            .layer("CX")
+                            .where('C', controller)
+                            .where('X', casing)
+                            .controller('C')));
+                    structure.extension(stage -> stage.pattern(pattern -> pattern
+                            .layer("C ", " X")
+                            .where('C', controller)
+                            .where('X', casing)
+                            .controller('C')));
+                    structure.extension(stage -> stage.pattern(pattern -> pattern
+                            .layer("C X")
+                            .where('C', controller)
+                            .where('X', casing)
+                            .controller('C')));
+                    return structure;
+                }
+                if (name.contains("distillation")) {
+                    structure.fullStructure(stage -> stage.pattern(pattern -> pattern
+                            .layer("I ")
+                            .layer("CE")
+                            .layer("O ")
+                            .where('I', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("item_input_bus").get()))
+                            .where('C', controller)
+                            .where('E', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("energy_input_hatch").get()))
+                            .where('O', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("fluid_output_hatch").get()))
+                            .controller('C')));
+                    structure.extension(stage -> stage.pattern(pattern -> pattern
+                            .layer("OC")
+                            .where('O', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("fluid_output_hatch").get()))
+                            .where('C', controller)
+                            .controller('C')));
+                    structure.extension(stage -> stage.pattern(pattern -> pattern
+                            .layer("C", "O")
+                            .where('O', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("fluid_output_hatch").get()))
+                            .where('C', controller)
+                            .controller('C')));
+                    return structure;
+                }
+                if (name.equals("iron_compressor")) {
+                    structure.fullStructure(stage -> stage.pattern(pattern -> pattern
+                            .layer("XXX", " I ")
+                            .layer("XCX", "  E")
+                            .layer("XXX", " O ")
+                            .where('X', casing)
+                            .where('C', controller)
+                            .where('I', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("item_input_bus").get()))
+                            .where('O', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("item_output_bus").get()))
+                            .where('E', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("energy_input_hatch").get()))
+                            .controller('C')));
+                    return structure;
+                }
                 structure.fullStructure(stage -> stage.pattern(pattern -> pattern
-                        .layer("XXX", "XCX", "XXX")
+                        .layer("XXX").layer("XCX").layer("XXX")
                         .where('X', casing)
                         .where('C', controller)
                         .controller('C')));
                 if (name.contains("expandable") || name.contains("distillation")) {
                     structure.extension(stage -> stage.pattern(pattern -> pattern
-                            .layer("XXX", "XCX", "XXX")
+                            .layer("XXX").layer("XCX").layer("XXX")
                             .where('X', casing)
                             .where('C', controller)
                             .controller('C')));
                     structure.extension(stage -> stage.pattern(pattern -> pattern
-                            .layer("XXX", "XCX", "XXX")
+                            .layer("XXX").layer("XCX").layer("XXX")
                             .where('X', casing)
                             .where('C', controller)
                             .controller('C')));
@@ -126,6 +186,9 @@ public final class GameTestRegistry {
         Identifier id = Identifier.parse("mmcr_test:datapack_static_override");
         event.registerRecipe(MachineRecipeBuilder.recipe(id, MMCR.id("iron_compressor")).duration(20)
                 .inputItem(Items.COAL, 1).outputItem(Items.CHARCOAL, 1).build());
+        event.registerRecipe(MachineRecipeBuilder.recipe(MMCR.id("distillation_test_recipe"),
+                        MMCR.id("distillation_tower_test"))
+                .duration(20).inputItem(Items.COAL, 1).outputFluid(Fluids.WATER, 1).build());
     }
 
     private static void register(RegisterGameTestsEvent event, String name, int maxTicks, Consumer<GameTestHelper> test) {

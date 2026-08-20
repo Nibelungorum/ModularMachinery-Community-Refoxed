@@ -23,6 +23,7 @@ import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -38,6 +39,12 @@ class ReloadCommandTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @BeforeEach
+    void restoreStartupDefinitions() {
+        TestBootstrap.restoreMachineDefinitions();
+        MachineDefinitions.beginRegistryPhase();
     }
 
     @AfterEach

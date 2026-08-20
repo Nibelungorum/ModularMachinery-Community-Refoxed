@@ -49,6 +49,9 @@ class DynamicModuleReloadValidationTest {
     @BeforeEach
     void openMachineDefinitionRegistry() {
         MachineDefinitions.clearForTesting();
+        MachineRegistry.clearForTesting();
+        MachineStructureRegistry.clearForTesting();
+        RecipeRegistry.clearForTesting();
     }
 
     @Test

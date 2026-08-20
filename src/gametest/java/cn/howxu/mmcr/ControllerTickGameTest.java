@@ -80,6 +80,7 @@ public class ControllerTickGameTest {
             helper.succeed();
         } finally {
             MMCR.registerRuntimeBuiltins();
+            MachineRegistry.restoreStartupForTesting();
         }
     }
 

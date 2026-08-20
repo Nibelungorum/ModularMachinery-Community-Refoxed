@@ -184,18 +184,18 @@ public final class TestBootstrap {
             Identifier machineId = id(name);
             event.registerStructure(machineId, structure -> {
                 structure.fullStructure(stage -> stage.pattern(pattern -> pattern
-                        .layer("XXX", "XCX", "XXX")
+                        .layer("XXX").layer("XCX").layer("XXX")
                         .where('X', BlockPredicate.block(ModBlocks.CASING.get()))
                         .where('C', BlockPredicate.block(ModBlocks.controllerFor(machineId).get()))
                         .controller('C')));
                 if (name.contains("expandable") || name.contains("distillation")) {
                     structure.extension(stage -> stage.pattern(pattern -> pattern
-                            .layer("XXX", "XCX", "XXX")
+                            .layer("XXX").layer("XCX").layer("XXX")
                             .where('X', BlockPredicate.block(ModBlocks.CASING.get()))
                             .where('C', BlockPredicate.block(ModBlocks.controllerFor(machineId).get()))
                             .controller('C')));
                     structure.extension(stage -> stage.pattern(pattern -> pattern
-                            .layer("XXX", "XCX", "XXX")
+                            .layer("XXX").layer("XCX").layer("XXX")
                             .where('X', BlockPredicate.block(ModBlocks.CASING.get()))
                             .where('C', BlockPredicate.block(ModBlocks.controllerFor(machineId).get()))
                             .controller('C')));

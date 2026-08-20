@@ -184,6 +184,7 @@ public final class MultiblockAssemblyService {
         switch (predicate) {
             case BlockPredicate.OfBlockState ofState -> states.add(ofState.state());
             case BlockPredicate.OfBlock ofBlock -> states.add(ofBlock.block().defaultBlockState());
+            case BlockPredicate.DeferredBlock deferredBlock -> states.add(deferredBlock.supplier().get().defaultBlockState());
             case BlockPredicate.AnyOf anyOf -> anyOf.children().forEach(child -> collectCandidateStates(child, states));
             default -> {}
         }

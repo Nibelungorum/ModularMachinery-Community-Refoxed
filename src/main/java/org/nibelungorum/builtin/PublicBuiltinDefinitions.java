@@ -64,10 +64,10 @@ public final class PublicBuiltinDefinitions {
                         .minItemInput(cn.howxu.mmcr.api.publicapi.machine.PortTiers.ItemTier.NORMAL).anyItemOutput()))
                 .build(BLAST_FURNACE));
         structures.put(ALLOY_FURNACE, MachineStructureBuilder.structure()
-                .fullStructure(stage -> stage.pattern(pattern -> pattern.layer("XXX", "XMX", "XCX")
+                 .fullStructure(stage -> stage.pattern(pattern -> pattern.layer("XXX", "XMX", "XCX")
                         .where('X', BlockPredicate.block(Blocks.BRICKS)).where('M', BlockPredicate.block(Blocks.BLAST_FURNACE))
                         .where('C', BlockPredicate.block(Blocks.FURNACE)).controller('C')))
-                .extension(stage -> stage.pattern(pattern -> pattern.layer("XXX", "XMX", "XCX")
+                 .extension(stage -> stage.pattern(pattern -> pattern.layer("XXX", "XMX", "XCX")
                         .where('X', BlockPredicate.block(Blocks.BRICKS)).where('M', BlockPredicate.block(Blocks.BLAST_FURNACE))
                         .where('C', BlockPredicate.block(Blocks.FURNACE)).controller('C'))).build(ALLOY_FURNACE));
         structures.put(CRACKER, MachineStructureBuilder.structure().fullStructure(stage -> stage.pattern(pattern -> pattern
