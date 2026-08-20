@@ -10,6 +10,9 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.PatternBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
+import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
+import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
+import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.api.PublicMachineDefinitionProviders;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -55,10 +58,14 @@ class PublicApiLifecycleTest {
 
     @Test
     void registration_before_begin_is_rejected() {
-        assertThatThrownBy(() -> MachineApi.registerMachine(machine("before")))
+        MachineDefinition definition = machine("before");
+        RegisterMachineDefinationsEvent event = new RegisterMachineDefinationsEvent();
+        event.registerMachine(definition);
+        event.freeze();
+        assertThatThrownBy(() -> PublicApiBootstrap.registerDefinitions(event))
                 .isInstanceOf(ApiRegistrationException.class)
                 .hasMessageContaining("before")
-                .hasMessageContaining("before begin");
+                 .hasMessageContaining("before begin");
     }
 
     @Test
@@ -67,9 +74,9 @@ class PublicApiLifecycleTest {
         MachineDefinition machine = machine("press");
         MachineRecipeDefinition recipe = recipe("press_recipe", machine.id());
 
-        MachineApi.registerMachine(machine);
-        RecipeApi.registerRecipe(recipe);
-        PublicApiBootstrap.freezeAndInstallMachines();
+        registerMachine(machine);
+        registerRecipe(recipe);
+        installMachines(machine);
         PublicApiBootstrap.freezeAndInstallMachines();
 
         assertThat(MachineDefinitions.getRegistration(machine.id())).isNotNull();
@@ -109,15 +116,17 @@ class PublicApiLifecycleTest {
     void duplicate_machine_and_recipe_ids_are_rejected() {
         PublicApiBootstrap.begin();
         MachineDefinition machine = machine("duplicate_machine");
-        MachineApi.registerMachine(machine);
-        assertThatThrownBy(() -> MachineApi.registerMachine(machine))
-                .isInstanceOf(ApiRegistrationException.class)
+        RegisterMachineDefinationsEvent definitions = new RegisterMachineDefinationsEvent();
+        definitions.registerMachine(machine.id(), builder -> builder);
+        assertThatThrownBy(() -> definitions.registerMachine(machine.id(), builder -> builder))
+                .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining(machine.id().toString());
 
         MachineRecipeDefinition recipe = recipe("duplicate_recipe", machine.id());
-        RecipeApi.registerRecipe(recipe);
-        assertThatThrownBy(() -> RecipeApi.registerRecipe(recipe))
-                .isInstanceOf(ApiRegistrationException.class)
+        MMCRRegisterRecipesEvent recipes = new MMCRRegisterRecipesEvent();
+        recipes.registerRecipe(recipe);
+        assertThatThrownBy(() -> recipes.registerRecipe(recipe))
+                .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining(recipe.id().toString());
     }
 
@@ -125,8 +134,8 @@ class PublicApiLifecycleTest {
     void unknown_recipe_machine_and_after_freeze_registration_are_rejected() {
         PublicApiBootstrap.begin();
         Identifier unknown = id("unknown_machine");
-        RecipeApi.registerRecipe(recipe("unknown_recipe", unknown));
-        PublicApiBootstrap.freezeAndInstallMachines();
+        registerRecipe(recipe("unknown_recipe", unknown));
+        installMachines();
         assertThatThrownBy(PublicApiBootstrap::installRecipes)
                 .isInstanceOf(ApiRegistrationException.class)
                 .hasMessageContaining(unknown.toString());
@@ -134,14 +143,16 @@ class PublicApiLifecycleTest {
         PublicApiBootstrap.clearForTesting();
         MachineDefinitions.clearForTesting();
         PublicApiBootstrap.begin();
-        PublicApiBootstrap.freezeAndInstallMachines();
+        installMachines();
         PublicApiBootstrap.installRecipes();
-        assertThatThrownBy(() -> MachineApi.registerMachine(machine("after")))
-                .isInstanceOf(ApiRegistrationException.class)
-                .hasMessageContaining("after");
-        assertThatThrownBy(() -> RecipeApi.registerRecipe(recipe("after_recipe", unknown)))
-                .isInstanceOf(ApiRegistrationException.class)
-                .hasMessageContaining("after_recipe");
+        RegisterMachineDefinationsEvent lateDefinitions = new RegisterMachineDefinationsEvent();
+        lateDefinitions.freeze();
+        assertThatThrownBy(() -> lateDefinitions.registerMachine(id("after"), builder -> builder))
+                .isInstanceOf(IllegalStateException.class);
+        MMCRRegisterRecipesEvent lateRecipes = new MMCRRegisterRecipesEvent();
+        lateRecipes.freeze();
+        assertThatThrownBy(() -> lateRecipes.registerRecipe(recipe("after_recipe", unknown)))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
@@ -200,6 +211,36 @@ class PublicApiLifecycleTest {
 
     private static MachineDefinition machine(String path) {
         return MachineBuilder.machine(id(path)).build();
+    }
+
+    private static void registerMachine(MachineDefinition definition) {
+        RegisterMachineDefinationsEvent event = new RegisterMachineDefinationsEvent();
+        event.registerMachine(definition);
+        event.freeze();
+        PublicApiBootstrap.registerDefinitions(event);
+    }
+
+    private static void registerRecipe(MachineRecipeDefinition definition) {
+        MMCRRegisterRecipesEvent event = new MMCRRegisterRecipesEvent();
+        event.registerRecipe(definition);
+        event.freeze();
+        PublicApiBootstrap.registerRecipes(event);
+    }
+
+    private static void installMachines(MachineDefinition... definitions) {
+        RegisterMachineStructuresEvent structures = new RegisterMachineStructuresEvent(
+                java.util.Arrays.stream(definitions).map(MachineDefinition::id).toList());
+        for (MachineDefinition definition : definitions) {
+            structures.registerStructure(definition.id(), PublicApiLifecycleTest::patternStructure);
+        }
+        structures.freeze();
+        PublicApiBootstrap.composeMachineRegistrations(new RegisterMachineDefinationsEvent(), structures);
+        MachineDefinitions.freezeRegistryPhase();
+    }
+
+    private static cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder patternStructure(
+            cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder builder) {
+        return builder.fullStructure(stage -> stage.pattern(PublicApiLifecycleTest::pattern));
     }
 
     private static cn.howxu.mmcr.api.publicapi.machine.PatternBuilder pattern(

@@ -22,6 +22,9 @@ class PublicApiInventoryTest {
             "cn.howxu.mmcr.api.publicapi.MachineApi",
             "cn.howxu.mmcr.api.publicapi.RecipeApi",
             "cn.howxu.mmcr.api.publicapi.ApiRegistrationException",
+            "cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent",
+            "cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent",
+            "cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent",
             "cn.howxu.mmcr.api.publicapi.machine.MachineDefinition",
             "cn.howxu.mmcr.api.publicapi.machine.MachineBuilder",
             "cn.howxu.mmcr.api.publicapi.machine.PatternBuilder",
@@ -44,9 +47,12 @@ class PublicApiInventoryTest {
             "cn.howxu.mmcr.api.publicapi.recipe.FluidOutput");
 
     private static final Map<String, String> PUBLIC_JAVADOC_ROLES = Map.ofEntries(
-            Map.entry("cn.howxu.mmcr.api.publicapi.MachineApi", "Startup machine registration entry point."),
-            Map.entry("cn.howxu.mmcr.api.publicapi.RecipeApi", "Startup recipe registration entry point."),
+            Map.entry("cn.howxu.mmcr.api.publicapi.MachineApi", "Startup machine lifecycle status API."),
+            Map.entry("cn.howxu.mmcr.api.publicapi.RecipeApi", "Startup recipe lifecycle status API."),
             Map.entry("cn.howxu.mmcr.api.publicapi.ApiRegistrationException", "Public registration validation failure."),
+            Map.entry("cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent", "Machine definition registration event."),
+            Map.entry("cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent", "Machine structure registration event."),
+            Map.entry("cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent", "Machine recipe registration event."),
             Map.entry("cn.howxu.mmcr.api.publicapi.machine.MachineDefinition", "Immutable machine declaration."),
             Map.entry("cn.howxu.mmcr.api.publicapi.machine.MachineBuilder", "Fluent machine declaration builder."),
             Map.entry("cn.howxu.mmcr.api.publicapi.machine.PatternBuilder", "Layered structure pattern builder."),
@@ -81,6 +87,17 @@ class PublicApiInventoryTest {
     void public_api_package_root_exists() {
         Path packageInfo = Path.of("src/main/java", PUBLIC_API_PACKAGE.replace('.', '/'), "package-info.java");
         assertThat(Files.isRegularFile(packageInfo)).isTrue();
+    }
+
+    @Test
+    void public_api_uses_phase_specific_events_without_combined_machine_event() throws ClassNotFoundException {
+        assertThat(Class.forName("cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent")).isNotNull();
+        assertThat(Class.forName("cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent")).isNotNull();
+        assertThat(Class.forName("cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent")).isNotNull();
+        assertThat(Path.of("src/main/java/cn/howxu/mmcr/api/publicapi/event/MMCRRegisterMachinesEvent.java"))
+                .doesNotExist();
+        assertThat(MachineApi.class.getDeclaredMethods()).noneMatch(method -> method.getName().equals("registerMachine"));
+        assertThat(RecipeApi.class.getDeclaredMethods()).noneMatch(method -> method.getName().equals("registerRecipe"));
     }
 
     @Test

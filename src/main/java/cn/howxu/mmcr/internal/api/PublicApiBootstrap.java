@@ -30,16 +30,6 @@ public final class PublicApiBootstrap {
         if (state == State.BEFORE_BEGIN) {
             ApiRuntime.install(new ApiRuntime.Hook() {
                 @Override
-                public void registerMachine(MachineDefinition definition) {
-                    PublicApiBootstrap.registerMachine(definition);
-                }
-
-                @Override
-                public void registerRecipe(MachineRecipeDefinition definition) {
-                    PublicApiBootstrap.registerRecipe(definition);
-                }
-
-                @Override
                 public boolean isRegistrationOpen() {
                     return PublicApiBootstrap.isRegistrationOpen();
                 }
