@@ -46,7 +46,7 @@
 
 #### Commit
 
-- `PENDING` (replace with the follow-up commit ID after committing).
+- `1d8b2c0 test: restore isolated formation coverage`.
 
 #### Concerns
 
