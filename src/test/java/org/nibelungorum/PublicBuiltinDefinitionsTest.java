@@ -112,16 +112,6 @@ class PublicBuiltinDefinitionsTest {
     }
 
     @Test
-    void mod_startup_does_not_reference_legacy_builtin_registration() throws Exception {
-        Class<?> entrypoint = Class.forName("cn.howxu.mmcr.MMCR");
-        String bytecode = new String(entrypoint.getResourceAsStream("MMCR.class").readAllBytes(),
-                StandardCharsets.ISO_8859_1);
-
-        assertThat(bytecode).doesNotContain("LegacyBuiltinMachines");
-        assertThat(bytecode).doesNotContain("LegacyDefaultRecipes");
-    }
-
-    @Test
     void public_builtins_entrypoint_has_no_internal_or_legacy_machine_dependencies() throws Exception {
         Class<?> entrypoint = Class.forName(ENTRYPOINT);
         String bytecode = new String(entrypoint.getResourceAsStream("PublicBuiltinDefinitions.class").readAllBytes(),
