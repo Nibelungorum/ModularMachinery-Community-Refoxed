@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.machine;
 
+import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
 import net.minecraft.resources.Identifier;
 
 import java.util.Collections;
@@ -32,7 +33,9 @@ public final class MachineRegistry {
     }
 
     public static Map<Identifier, Machine> getAll() {
-        return Collections.unmodifiableMap(mergedMachines());
+        synchronized (RuntimeContentVersion.lock()) {
+            return Collections.unmodifiableMap(mergedMachines());
+        }
     }
 
     public static Map<Identifier, Machine> effectiveSnapshot() {

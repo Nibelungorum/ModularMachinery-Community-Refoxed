@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -90,6 +91,21 @@ class JeiRuntimeReloaderTest {
 
         assertThat(manager.addedTypes()).isEmpty();
         assertThat(manager.hiddenTypes()).isEmpty();
+    }
+
+    @Test
+    void failedAsyncReloadDoesNotClaimVersionBeforeRetrySucceeds() {
+        FakeRecipeManager manager = new FakeRecipeManager();
+        Identifier machineId = MMCR.id("alloy_furnace");
+        JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
+        JeiRuntimeReloader.setRuntime(runtime(manager));
+        RuntimeContentSnapshot snapshot = snapshotWithRecipe(machineId, MMCR.id("jei_retry_recipe"));
+        manager.failNextAdd();
+
+        assertThatCode(() -> JeiRuntimeReloader.reloadIfAvailable(snapshot)).isInstanceOf(RuntimeException.class);
+        JeiRuntimeReloader.reloadIfAvailable(snapshot);
+
+        assertThat(manager.addedRecipeIds()).containsExactly(MMCR.id("jei_retry_recipe"));
     }
 
     @Test
@@ -172,6 +188,7 @@ class JeiRuntimeReloaderTest {
         private final List<Identifier> addedRecipeIds = new ArrayList<>();
         private final List<IRecipeType<?>> hiddenTypes = new ArrayList<>();
         private final List<Identifier> hiddenRecipeIds = new ArrayList<>();
+        private final AtomicBoolean failNextAdd = new AtomicBoolean();
 
         IRecipeManager proxy() {
             return (IRecipeManager) Proxy.newProxyInstance(
@@ -179,6 +196,9 @@ class JeiRuntimeReloaderTest {
                     new Class<?>[]{IRecipeManager.class},
                     (proxy, method, args) -> {
                         if (method.getName().equals("addRecipes")) {
+                            if (failNextAdd.compareAndSet(true, false)) {
+                                throw new IllegalStateException("synthetic JEI reload failure");
+                            }
                             addedTypes.add((IRecipeType<?>) args[0]);
                             ((List<?>) args[1]).stream()
                                     .map(MachineRecipeDisplay.class::cast)
@@ -224,6 +244,10 @@ class JeiRuntimeReloaderTest {
             addedRecipeIds.clear();
             hiddenTypes.clear();
             hiddenRecipeIds.clear();
+        }
+
+        void failNextAdd() {
+            failNextAdd.set(true);
         }
     }
 }

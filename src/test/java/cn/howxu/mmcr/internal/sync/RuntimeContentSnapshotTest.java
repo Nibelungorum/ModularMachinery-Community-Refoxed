@@ -48,6 +48,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import java.util.Collections;
 
@@ -330,6 +332,25 @@ class RuntimeContentSnapshotTest {
 
         assertThatThrownBy(invalid::applyClient).isInstanceOf(IllegalArgumentException.class);
         assertThat(MachineStructureRegistry.effectiveSnapshot()).isEqualTo(before);
+    }
+
+    @Test
+    void effectiveReadsWaitForCoordinatorCommitBoundary() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        Thread reader;
+        synchronized (RuntimeContentVersion.lock()) {
+            reader = new Thread(() -> {
+                started.countDown();
+                MachineStructureRegistry.effectiveSnapshot();
+                RecipeRegistry.effectiveSnapshot();
+                MachineRegistry.effectiveSnapshot();
+            });
+            reader.start();
+            assertThat(started.await(1, TimeUnit.SECONDS)).isTrue();
+            assertThat(reader.isAlive()).isTrue();
+        }
+        reader.join(1_000);
+        assertThat(reader.isAlive()).isFalse();
     }
 
     @Test

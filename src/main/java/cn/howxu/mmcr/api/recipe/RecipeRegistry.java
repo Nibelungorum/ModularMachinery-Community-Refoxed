@@ -79,7 +79,9 @@ public final class RecipeRegistry {
     }
 
     public static Map<Identifier, MachineRecipe> effectiveSnapshot() {
-        return STATE.effective();
+        synchronized (RuntimeContentVersion.lock()) {
+            return STATE.effective();
+        }
     }
 
     public static int registeredRecipeCount() {

@@ -72,7 +72,9 @@ public final class MachineStructureRegistry {
     }
 
     public static Map<Identifier, MachineStructureDefinition> effectiveSnapshot() {
-        return effective(STARTUP_STRUCTURES, DYNAMIC_STRUCTURES);
+        synchronized (RuntimeContentVersion.lock()) {
+            return effective(STARTUP_STRUCTURES, DYNAMIC_STRUCTURES);
+        }
     }
 
     public static void replaceClientSnapshot(Map<Identifier, MachineStructureDefinition> structures) {

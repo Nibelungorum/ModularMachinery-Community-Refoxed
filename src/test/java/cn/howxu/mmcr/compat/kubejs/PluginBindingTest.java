@@ -77,10 +77,12 @@ class PluginBindingTest {
         var transaction = new KubeJSContentReloadTransaction();
         transaction.registerStructure(structure(machineId));
         transaction.registerRecipe(new MachineRecipe(recipeId, machineId, 1, List.of(), List.of()));
-        transaction.commit();
+        var committed = transaction.commit();
 
         assertThat(MachineStructureRegistry.dynamicSnapshot()).containsKey(machineId);
         assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(recipeId);
+        assertThat(committed.snapshot().structures()).isEqualTo(MachineStructureRegistry.effectiveSnapshot());
+        assertThat(committed.snapshot().recipes()).isEqualTo(RecipeRegistry.effectiveSnapshot());
     }
 
     @Test
@@ -108,6 +110,7 @@ class PluginBindingTest {
         previous.commit();
         var previousStructures = MachineStructureRegistry.dynamicSnapshot();
         var previousRecipes = RecipeRegistry.dynamicSnapshot();
+        long previousVersion = cn.howxu.mmcr.internal.sync.RuntimeContentVersion.current();
 
         var invalid = new KubeJSContentReloadTransaction();
         invalid.registerRecipe(new MachineRecipe(MMCR.id("invalid_kubejs_transaction_recipe"), MMCR.id("missing_machine"), 1, List.of(), List.of()));
@@ -115,6 +118,7 @@ class PluginBindingTest {
         assertThatThrownBy(invalid::commit).isInstanceOf(IllegalStateException.class);
         assertThat(MachineStructureRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousStructures);
         assertThat(RecipeRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousRecipes);
+        assertThat(cn.howxu.mmcr.internal.sync.RuntimeContentVersion.current()).isEqualTo(previousVersion);
     }
 
     @Test
