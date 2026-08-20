@@ -115,7 +115,6 @@ public final class PublicMachineAdapter {
                 .appearance(toAppearanceSpec(definition.appearance()))
                 .allowParallelism(definition.parallelizable())
                 .maxParallelAmount(definition.maxParallelism());
-        if (definition.expandableStructure()) builder.expandableStructure();
         if (structure != null) {
             builder.pattern(toBlockArray(structure.stages().getFirst().pattern()));
             if (structure.stages().size() > 1) builder.expandableStructure();

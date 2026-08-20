@@ -25,7 +25,6 @@ public record MachineDefinition(
         Set<Identifier> acceptedModuleIds,
         int maxParallelism,
         boolean parallelizable,
-        boolean expandableStructure,
         RecipeFailureActions failureAction) {
 
     public MachineDefinition {

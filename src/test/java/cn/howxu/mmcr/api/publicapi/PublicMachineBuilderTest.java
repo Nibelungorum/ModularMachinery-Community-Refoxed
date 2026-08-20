@@ -6,10 +6,14 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.publicapi.machine.PatternBuilder;
+import cn.howxu.mmcr.internal.api.PublicMachineAdapter;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -57,5 +61,50 @@ class PublicMachineBuilderTest {
                 .build(MMCR.id("missing_main")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Main machine structure");
+    }
+
+    @Test
+    void structure_builder_rejects_multiple_main_structures() {
+        assertThatThrownBy(() -> MachineStructureBuilder.structure()
+                .fullStructure(stage -> stage.pattern(pattern -> pattern.layer("F")
+                        .where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F')))
+                .fullStructure(stage -> stage.pattern(pattern -> pattern.layer("C")
+                        .where('C', BlockPredicate.block(Blocks.STONE)).controller('C')))
+                .build(MMCR.id("multiple_main")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Only one main machine structure");
+    }
+
+    @Test
+    void pattern_builder_preserves_immutable_structure_values_and_rejects_invalid_bindings() {
+        BlockPredicate casing = BlockPredicate.block(Blocks.STONE);
+        BlockPredicate controller = BlockPredicate.block(Blocks.FURNACE);
+        var pattern = PatternBuilder.pattern().layer("CCC", "C C", "CFC")
+                .where('C', casing).where('F', controller).controller('F').build();
+
+        assertThat(pattern.layers()).containsExactly(List.of("CCC", "C C", "CFC"));
+        assertThatThrownBy(() -> pattern.layers().add(List.of("X")))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> PatternBuilder.pattern().layer("CC", "CCC"))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("same width");
+        assertThatThrownBy(() -> PatternBuilder.pattern().layer("CF")
+                .where('C', casing).controller('F').build())
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("Unbound");
+    }
+
+    @Test
+    void structure_builder_preserves_full_then_extension_conversion() {
+        var machineId = MMCR.id("structure_conversion");
+        var structure = MachineStructureBuilder.structure()
+                .fullStructure(stage -> stage.pattern(pattern -> pattern.layer("F")
+                        .where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F')))
+                .extension(stage -> stage.pattern(pattern -> pattern.layer("C")
+                        .where('C', BlockPredicate.machineCoupler()).controller('C')))
+                .build(machineId);
+
+        assertThat(PublicMachineAdapter.toStructureDefinition(structure).declarations())
+                .extracting(cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration::kind)
+                .containsExactly(cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration.Kind.FULL,
+                        cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration.Kind.EXTENSION);
     }
 }

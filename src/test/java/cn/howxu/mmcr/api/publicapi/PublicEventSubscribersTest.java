@@ -9,9 +9,12 @@ import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.world.level.block.Blocks;
+import net.neoforged.neoforge.common.NeoForge;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,19 +31,39 @@ class PublicEventSubscribersTest {
     void events_register_real_definition_structure_and_recipe_ids() {
         var machineId = MMCR.id("event_machine");
         var recipeId = MMCR.id("event_recipe");
-        var definitions = new RegisterMachineDefinationsEvent();
-        definitions.registerMachine(machineId, builder -> builder.displayNameKey("machine.mmcr.event_machine"));
+        var definitionReceives = new AtomicInteger();
+        var structureReceives = new AtomicInteger();
+        var recipeReceives = new AtomicInteger();
+        var definitions = new AtomicReference<RegisterMachineDefinationsEvent>();
+        var structures = new AtomicReference<RegisterMachineStructuresEvent>();
+        var recipes = new AtomicReference<MMCRRegisterRecipesEvent>();
+        NeoForge.EVENT_BUS.addListener(RegisterMachineDefinationsEvent.class, event -> {
+            definitionReceives.incrementAndGet();
+            event.registerMachine(machineId, builder -> builder.displayNameKey("machine.mmcr.event_machine"));
+            definitions.set(event);
+        });
+        NeoForge.EVENT_BUS.addListener(RegisterMachineStructuresEvent.class, event -> {
+            structureReceives.incrementAndGet();
+            event.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage.pattern(pattern -> pattern
+                    .layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))));
+            structures.set(event);
+        });
+        NeoForge.EVENT_BUS.addListener(MMCRRegisterRecipesEvent.class, event -> {
+            recipeReceives.incrementAndGet();
+            event.registerRecipe(MachineRecipeBuilder.recipe(recipeId, machineId).duration(1).build());
+            recipes.set(event);
+        });
 
-        var structures = new RegisterMachineStructuresEvent(definitions.definitions().keySet());
-        structures.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage.pattern(pattern -> pattern
-                .layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))));
+        NeoForge.EVENT_BUS.post(new RegisterMachineDefinationsEvent());
+        NeoForge.EVENT_BUS.post(new RegisterMachineStructuresEvent(Set.of(machineId)));
+        NeoForge.EVENT_BUS.post(new MMCRRegisterRecipesEvent());
 
-        var recipes = new MMCRRegisterRecipesEvent();
-        recipes.registerRecipe(MachineRecipeBuilder.recipe(recipeId, machineId).duration(1).build());
-
-        assertThat(definitions.definitions()).containsOnlyKeys(machineId);
-        assertThat(structures.structures()).containsOnlyKeys(machineId);
-        assertThat(recipes.recipes()).containsOnlyKeys(recipeId);
+        assertThat(definitionReceives).hasValue(1);
+        assertThat(structureReceives).hasValue(1);
+        assertThat(recipeReceives).hasValue(1);
+        assertThat(definitions.get().definitions()).containsOnlyKeys(machineId);
+        assertThat(structures.get().structures()).containsOnlyKeys(machineId);
+        assertThat(recipes.get().recipes()).containsOnlyKeys(recipeId);
     }
 
     @Test

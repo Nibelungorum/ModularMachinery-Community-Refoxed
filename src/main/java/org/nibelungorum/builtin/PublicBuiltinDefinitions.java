@@ -51,7 +51,6 @@ public final class PublicBuiltinDefinitions {
         definitions.put(ALLOY_FURNACE, MachineBuilder.machine(ALLOY_FURNACE)
                 .displayNameKey("machine.mmcr.alloy_furnace")
                 .appearance(appearance -> appearance.machineBasicBlock(Identifier.withDefaultNamespace("bricks")))
-                .expandableStructure()
                 .build());
         definitions.put(CRACKER, MachineBuilder.machine(CRACKER)
                 .displayNameKey("machine.mmcr.cracker")

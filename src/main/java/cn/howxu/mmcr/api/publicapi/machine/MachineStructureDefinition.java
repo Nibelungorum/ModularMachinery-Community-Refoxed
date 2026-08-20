@@ -15,5 +15,8 @@ public record MachineStructureDefinition(Identifier machineId, List<StructureSta
         if (stages.isEmpty() || stages.getFirst().kind() != StructureStage.Kind.FULL) {
             throw new IllegalArgumentException("Main machine structure is required");
         }
+        if (stages.stream().filter(stage -> stage.kind() == StructureStage.Kind.FULL).count() != 1) {
+            throw new IllegalArgumentException("Only one main machine structure is allowed");
+        }
     }
 }

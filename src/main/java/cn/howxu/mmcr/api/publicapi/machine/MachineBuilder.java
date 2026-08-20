@@ -24,7 +24,6 @@ public final class MachineBuilder {
     private final Set<Identifier> acceptedModuleIds = new LinkedHashSet<>();
     private int maxParallelism = 1;
     private boolean parallelizable;
-    private boolean expandableStructure;
     private RecipeFailureActions failureAction = RecipeFailureActions.getDefaultAction();
 
     private MachineBuilder(Identifier id) {
@@ -75,11 +74,6 @@ public final class MachineBuilder {
         return this;
     }
 
-    public MachineBuilder expandableStructure() {
-        expandableStructure = true;
-        return this;
-    }
-
     public MachineBuilder failureAction(RecipeFailureActions failureAction) {
         this.failureAction = Objects.requireNonNull(failureAction, "failureAction");
         return this;
@@ -87,6 +81,6 @@ public final class MachineBuilder {
 
     public MachineDefinition build() {
         return new MachineDefinition(id, displayNameKey, controller, appearance, factory, role,
-                acceptedModuleIds, maxParallelism, parallelizable, expandableStructure, failureAction);
+                acceptedModuleIds, maxParallelism, parallelizable, failureAction);
     }
 }

@@ -41,3 +41,45 @@ STATUS: FIXED_WITH_GAMETEST_CONCERNS
 
 concerns:
 - GameTest 的 4 个失败仍存在，表现为结构在 tick 0 形成、静态配方未被覆盖、蒸馏配方在 tick 0 消耗输入；本修复未改动 MMCR/PublicApiBootstrap 生命周期，Task 3 仍需处理发布接入。
+
+---
+
+STATUS: FIXED_WITH_EXISTING_TEST_CONCERNS
+
+本次二次审查修复:
+- `PublicEventSubscribersTest` 通过 `NeoForge.EVENT_BUS` 发布并接收定义、结构、配方三个精确事件，分别验证接收一次及注册 ID。
+- 从公共 `MachineBuilder`、`MachineDefinition` 和 `PublicMachineAdapter` 移除 `expandableStructure`；扩展能力仅由结构声明决定。
+- 公共 `MachineStructureDefinition` 拒绝多个 `FULL` 主结构，只允许一个 `FULL` 加后续扩展阶段。
+- 恢复公共 pattern 不可变性、非法绑定和结构转换覆盖。
+
+测试命令及结果:
+- `./gradlew test --no-daemon --tests cn.howxu.mmcr.api.publicapi.PublicEventSubscribersTest --tests cn.howxu.mmcr.api.publicapi.PublicMachineBuilderTest --tests cn.howxu.mmcr.api.publicapi.PublicApiAdapterTest`: PASS。
+- `./gradlew test --no-daemon`: FAIL，1039 tests completed，1 failed；`PublicRecipeBuilderTest.adapts_public_recipe_values_to_internal_recipe_semantics()`，既有问题。
+- `./gradlew runGameTestServer --no-daemon`: FAIL，46 tests completed，4 required tests failed；均为 Task 3 生命周期接入 concerns：`mmcr:block_array_match`、`mmcr:controller_tick`、`mmcr:datapack_recipe_override`、`mmcr:e2e_distillation_tower_partial_outputs`。
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.2.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Reusing configuration cache.
+> Task :processTestResources UP-TO-DATE
+> Task :cacheVersionManifest26.1.2 UP-TO-DATE
+> Task :cacheVersionExecutableServer26.1.2 UP-TO-DATE
+> Task :cacheVersionExecutableClient26.1.2 UP-TO-DATE
+> Task :neoFormSetup UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :neoFormListTransformLibraries UP-TO-DATE
+> Task :neoFormListLibraries UP-TO-DATE
+> Task :neoFormDecompile UP-TO-DATE
+> Task :neoFormPatch UP-TO-DATE
+> Task :neoFormPatchUserDev UP-TO-DATE
+> Task :neoFormTransformSource UP-TO-DATE
+> Task :neoFormRecompile UP-TO-DATE
+> Task :supplyRawJarForneoFormJoined26.1.2-1 UP-TO-DATE
+> Task :selectRawArtifactNg_dummy_ng.net.neoforged_neoforge_26.1.2.84 UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileTestJava UP-TO-DATE
+> Task :testClasses UP-TO-DATE
+> Task :test UP-TO-DATE
+
+BUILD SUCCESSFUL in 7s
+18 actionable tasks: 18 up-to-date
+Configuration cache entry reused.
