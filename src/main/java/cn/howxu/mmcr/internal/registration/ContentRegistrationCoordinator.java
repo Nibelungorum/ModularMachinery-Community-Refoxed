@@ -14,8 +14,8 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
-import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
-import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistryBridge;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.internal.api.PublicMachineAdapter;
 import cn.howxu.mmcr.internal.api.PublicRecipeAdapter;
 import net.minecraft.resources.Identifier;
@@ -77,6 +77,9 @@ public final class ContentRegistrationCoordinator {
         Map<Identifier, MachineRecipe> recipes = validateAndConvertRecipes();
         validateDuplicates(registrations, structures, recipes);
 
+        // These snapshot installs validate into temporary maps before replacing either registry.
+        MachineLevelRegistry.installSnapshot(STRUCTURE_SNAPSHOT.levelTypes().values(), STRUCTURE_SNAPSHOT.levels().values());
+        ModifierRegistry.installSnapshot(STRUCTURE_SNAPSHOT.modifiers());
         registrations.values().forEach(registration -> {
             if (MachineDefinitions.containsStatic(registration.id())) {
                 MachineDefinitions.replace(registration);
@@ -84,9 +87,7 @@ public final class ContentRegistrationCoordinator {
                 MachineDefinitions.register(registration);
             }
         });
-        MachineLevelRegistryBridge.install(STRUCTURE_SNAPSHOT.levelTypes().values(), STRUCTURE_SNAPSHOT.levels().values());
-        ModifierRegistryBridge.install(STRUCTURE_SNAPSHOT.modifiers());
-        if (!structures.isEmpty()) MachineRegistry.installStructures(structures);
+        MachineStructureRegistry.replaceStartup(structures);
         recipes.values().forEach(RecipeRegistry::register);
         MachineDefinitions.freezeRegistryPhase();
         state = State.COMMITTED;

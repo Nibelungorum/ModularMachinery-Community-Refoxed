@@ -13,6 +13,6 @@ public final class ModifierRegistryBridge {
     }
 
     public static void install(Map<Identifier, ModifierDefinition> definitions) {
-        ModifierRegistry.install(definitions);
+        ModifierRegistry.installSnapshot(definitions);
     }
 }

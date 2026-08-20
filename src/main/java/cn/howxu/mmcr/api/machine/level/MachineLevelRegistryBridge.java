@@ -18,7 +18,7 @@ public final class MachineLevelRegistryBridge {
     }
 
     public static void install(Collection<LevelType> types, Collection<MachineLevel> levels) {
-        MachineLevelRegistry.install(types, levels);
+        MachineLevelRegistry.installSnapshot(types, levels);
     }
 
     public static void registerType(LevelType type) {

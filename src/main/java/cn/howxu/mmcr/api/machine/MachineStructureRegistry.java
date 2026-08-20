@@ -12,12 +12,27 @@ import java.util.Map;
  * @author howxu <dev@howxu.cn>
  */
 public final class MachineStructureRegistry {
+    private static volatile Map<Identifier, MachineStructureDefinition> STARTUP_STRUCTURES = Map.of();
     private static volatile Map<Identifier, MachineStructureDefinition> DYNAMIC_STRUCTURES = Map.of();
 
     private MachineStructureRegistry() {
     }
 
+    public static void replaceStartup(Map<Identifier, MachineStructureDefinition> structures) {
+        Map<Identifier, MachineStructureDefinition> replacement = validate(structures);
+        MachineRegistry.installStructures(effective(replacement, DYNAMIC_STRUCTURES));
+        STARTUP_STRUCTURES = replacement;
+    }
+
     public static void replaceDynamic(Map<Identifier, MachineStructureDefinition> structures) {
+        Map<Identifier, MachineStructureDefinition> replacement = validate(structures);
+        validateDynamicRoles(replacement);
+        MachineRegistry.installStructures(effective(STARTUP_STRUCTURES, replacement));
+        DYNAMIC_STRUCTURES = replacement;
+    }
+
+    private static Map<Identifier, MachineStructureDefinition> validate(
+            Map<Identifier, MachineStructureDefinition> structures) {
         Map<Identifier, MachineStructureDefinition> replacement = new LinkedHashMap<>();
         for (var entry : structures.entrySet()) {
             Identifier id = entry.getKey();
@@ -30,14 +45,27 @@ public final class MachineStructureRegistry {
             }
             replacement.put(id, structure);
         }
-        validateDynamicRoles(replacement);
-        Map<Identifier, MachineStructureDefinition> snapshot = Map.copyOf(replacement);
-        MachineRegistry.installStructures(snapshot);
-        DYNAMIC_STRUCTURES = snapshot;
+        return Map.copyOf(replacement);
+    }
+
+    private static Map<Identifier, MachineStructureDefinition> effective(
+            Map<Identifier, MachineStructureDefinition> startup,
+            Map<Identifier, MachineStructureDefinition> dynamic) {
+        Map<Identifier, MachineStructureDefinition> effective = new LinkedHashMap<>(startup);
+        effective.putAll(dynamic);
+        return Map.copyOf(effective);
     }
 
     public static Map<Identifier, MachineStructureDefinition> dynamicSnapshot() {
         return Map.copyOf(DYNAMIC_STRUCTURES);
+    }
+
+    public static Map<Identifier, MachineStructureDefinition> startupSnapshot() {
+        return Map.copyOf(STARTUP_STRUCTURES);
+    }
+
+    public static Map<Identifier, MachineStructureDefinition> effectiveSnapshot() {
+        return effective(STARTUP_STRUCTURES, DYNAMIC_STRUCTURES);
     }
 
     public static Machine toRuntimeMachine(MachineRegistration registration, MachineStructureDefinition structure) {
@@ -84,6 +112,7 @@ public final class MachineStructureRegistry {
     }
 
     public static void clearForTesting() {
+        STARTUP_STRUCTURES = Map.of();
         DYNAMIC_STRUCTURES = Map.of();
     }
 }

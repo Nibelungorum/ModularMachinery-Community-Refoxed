@@ -96,6 +96,22 @@ class PublicApiAdapterTest {
     }
 
     @Test
+    void adapter_preserves_extension_stages() {
+        var machineId = MMCR.id("extension_machine");
+        var structure = MachineStructureBuilder.structure()
+                .fullStructure(stage -> stage.pattern(pattern -> pattern.layer("F")
+                        .where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F')))
+                .extension(stage -> stage.pattern(pattern -> pattern.layer("S")
+                        .where('S', BlockPredicate.block(Blocks.STONE)).controller('S')))
+                .build(machineId);
+
+        assertThat(PublicMachineAdapter.toStructureDefinition(structure).declarations())
+                .extracting(cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration::kind)
+                .containsExactly(cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration.Kind.FULL,
+                        cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration.Kind.EXTENSION);
+    }
+
+    @Test
     void dynamic_machine_adapter_rejects_structure_for_another_machine() {
         var definition = MachineBuilder.machine(MMCR.id("adapter_definition")).build();
         var structure = structureFor(MMCR.id("other_machine"));

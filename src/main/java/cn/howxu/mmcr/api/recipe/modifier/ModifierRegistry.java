@@ -36,6 +36,10 @@ public final class ModifierRegistry {
     }
 
     static void install(Map<Identifier, ModifierDefinition> definitions) {
+        installSnapshot(definitions);
+    }
+
+    public static void installSnapshot(Map<Identifier, ModifierDefinition> definitions) {
         DEFINITIONS = Map.copyOf(definitions == null ? Map.of() : definitions);
     }
 

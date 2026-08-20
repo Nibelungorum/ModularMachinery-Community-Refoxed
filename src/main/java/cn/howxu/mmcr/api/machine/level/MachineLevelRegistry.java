@@ -39,10 +39,28 @@ public final class MachineLevelRegistry {
     }
 
     static void install(Collection<LevelType> types, Collection<MachineLevel> levels) {
-        beginRegistration();
-        types.forEach(MachineLevelRegistry::registerType);
-        levels.forEach(MachineLevelRegistry::registerLevel);
-        freezeRegistration();
+        installSnapshot(types, levels);
+    }
+
+    public static void installSnapshot(Collection<LevelType> types, Collection<MachineLevel> levels) {
+        Map<Identifier, LevelType> nextTypes = new LinkedHashMap<>();
+        Map<Identifier, MachineLevel> nextLevels = new LinkedHashMap<>();
+        Map<Identifier, List<MachineLevel>> nextByType = new LinkedHashMap<>();
+        types.forEach(type -> {
+            Objects.requireNonNull(type, "type");
+            if (nextTypes.putIfAbsent(type.id(), type) != null) {
+                throw new IllegalStateException("Machine level type already registered: " + type.id());
+            }
+            nextByType.put(type.id(), new ArrayList<>());
+        });
+        levels.forEach(level -> validateAndAdd(level, nextTypes, nextLevels, nextByType));
+        TYPES.clear();
+        TYPES.putAll(nextTypes);
+        LEVELS.clear();
+        LEVELS.putAll(nextLevels);
+        LEVELS_BY_TYPE.clear();
+        nextByType.forEach((id, values) -> LEVELS_BY_TYPE.put(id, new ArrayList<>(values)));
+        registrationOpen = false;
     }
 
     static void registerType(LevelType type) {
@@ -56,31 +74,36 @@ public final class MachineLevelRegistry {
 
     static void registerLevel(MachineLevel level) {
         requireRegistrationOpen();
+        validateAndAdd(level, TYPES, LEVELS, LEVELS_BY_TYPE);
+    }
+
+    private static void validateAndAdd(MachineLevel level, Map<Identifier, LevelType> types,
+            Map<Identifier, MachineLevel> levels, Map<Identifier, List<MachineLevel>> levelsByType) {
         Objects.requireNonNull(level, "level");
-        if (!TYPES.containsKey(level.typeId())) {
+        if (!types.containsKey(level.typeId())) {
             throw new IllegalStateException("Unknown machine level type: " + level.typeId());
         }
-        if (LEVELS.containsKey(level.id())) {
+        if (levels.containsKey(level.id())) {
             throw new IllegalStateException("Machine level already registered: " + level.id());
         }
         if (!(level.statePredicate() instanceof BlockPredicate.OfBlockState statePredicate)) {
             throw new IllegalArgumentException("Machine levels require an exact block state predicate");
         }
 
-        List<MachineLevel> levelsForType = LEVELS_BY_TYPE.get(level.typeId());
+        List<MachineLevel> levelsForType = levelsByType.get(level.typeId());
         for (MachineLevel registered : levelsForType) {
             if (registered.priority() == level.priority()) {
                 throw new IllegalStateException("Machine level priority already registered for type: " + level.typeId());
             }
         }
-        for (MachineLevel registered : LEVELS.values()) {
+        for (MachineLevel registered : levels.values()) {
             BlockPredicate.OfBlockState registeredPredicate = (BlockPredicate.OfBlockState) registered.statePredicate();
             if (registeredPredicate.matches(statePredicate.state())) {
                 throw new IllegalStateException("Machine level state already registered: " + level.id());
             }
         }
 
-        LEVELS.put(level.id(), level);
+        levels.put(level.id(), level);
         levelsForType.add(level);
     }
 
