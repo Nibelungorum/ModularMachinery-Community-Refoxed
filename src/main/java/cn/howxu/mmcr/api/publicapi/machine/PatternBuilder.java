@@ -56,6 +56,10 @@ public final class PatternBuilder {
         return this;
     }
 
+    public PatternBuilder pattern(String... rows) {
+        return layer(rows);
+    }
+
     public PatternBuilder where(char symbol, BlockPredicate predicate) {
         if (symbol == ' ') {
             throw new IllegalArgumentException("Space is reserved for empty pattern cells");

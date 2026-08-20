@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.google.gson.JsonElement;
@@ -35,7 +36,8 @@ public final class MachineRecipeJson {
     }
 
     public static MachineRecipe parse(Identifier id, JsonElement json, HolderLookup.Provider registries) {
-        return parse(id, json, registries, machineId -> MachineRegistry.getMachine(machineId) != null);
+        return parse(id, json, registries, machineId -> MachineRegistry.getMachine(machineId) != null
+                || MachineDefinitions.containsStatic(machineId));
     }
 
     public static MachineRecipe parse(Identifier id, JsonElement json, HolderLookup.Provider registries,

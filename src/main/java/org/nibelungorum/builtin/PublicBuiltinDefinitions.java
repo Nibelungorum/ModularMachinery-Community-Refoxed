@@ -27,6 +27,8 @@ public final class PublicBuiltinDefinitions {
     private static final Identifier BLAST_FURNACE = id("blast_furnace");
     private static final Identifier ALLOY_FURNACE = id("alloy_furnace");
     private static final Identifier CRACKER = id("cracker");
+    private static final Identifier REACTOR = id("reactor");
+    private static final Identifier PURPUR_FURNACE = id("purpur_furnace");
 
     private PublicBuiltinDefinitions() {
     }
@@ -65,6 +67,28 @@ public final class PublicBuiltinDefinitions {
                 .displayNameKey("machine.mmcr.cracker")
                 .pattern(pattern -> pattern.layer("XXX", "XCX", "XXX")
                         .where('X', BlockPredicate.block(Blocks.POLISHED_DIORITE))
+                .where('C', BlockPredicate.block(Blocks.FURNACE)).controller('C'))
+                .build());
+        definitions.put(REACTOR, MachineBuilder.machine(REACTOR)
+                .displayNameKey("machine.mmcr.reactor")
+                .appearance(appearance -> appearance.machineBasicBlock(Identifier.withDefaultNamespace("blue_ice")))
+                .pattern(pattern -> 
+                 pattern.pattern("AAAAA", "AXXXA", "AXXXA", "AXXXA", "AAAAA")
+                        .pattern("AAAAA", "AXXXA", "AXXXA", "AXXXA", "AAAAA")
+                        .pattern("AAAAA", "AXXXA", "AXCXA", "AXXXA", "AAAAA")
+                        .where('A', BlockPredicate.block(Blocks.DEEPSLATE_BRICK_STAIRS))
+                        .where('X', BlockPredicate.block(Blocks.BLUE_ICE))
+                        .where('C', BlockPredicate.block(Blocks.FURNACE)).controller('C'))
+                .build());
+        definitions.put(PURPUR_FURNACE, MachineBuilder.machine(PURPUR_FURNACE)
+                .displayNameKey("machine.mmcr.purpur_furnace")
+                .appearance(appearance -> appearance.machineBasicBlock(Identifier.withDefaultNamespace("end_stone_bricks")))
+                .pattern(pattern -> 
+                         pattern.pattern("AAAAA", "AXXXA", "AXXXA", "AXXXA", "AAAAA")
+                        .pattern("AAAAA", "AXXXA", "AXXXA", "AXXXA", "AAAAA")
+                        .pattern("AAAAA", "AXXXA", "AXCXA", "AXXXA", "AAAAA")
+                        .where('A', BlockPredicate.block(Blocks.END_STONE_BRICK_STAIRS))
+                        .where('X', BlockPredicate.block(Blocks.END_STONE_BRICKS))
                         .where('C', BlockPredicate.block(Blocks.FURNACE)).controller('C'))
                 .build());
         return Map.copyOf(definitions);

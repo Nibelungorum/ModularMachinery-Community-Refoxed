@@ -26,6 +26,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.PortKinds;
+import org.nibelungorum.builtin.PublicBuiltinMachineDefinitions;
 
 import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import net.minecraft.core.Holder;
@@ -91,6 +92,7 @@ public final class TestBootstrap {
         addTestMachineSuppliers();
         Bootstrap.bootStrap();
         MachineDefinitions.bootstrapBuiltins();
+        PublicBuiltinMachineDefinitions.registerDefaults();
         bindAllVanillaItemComponents();
         bindController(id("test_cube"));
         bindController(id("controller_tick"));
@@ -118,6 +120,7 @@ public final class TestBootstrap {
         MachineDefinitions.beginRegistryPhase();
         addTestMachineSuppliers();
         MachineDefinitions.bootstrapBuiltins();
+        PublicBuiltinMachineDefinitions.registerDefaults();
     }
 
     public static void registerRuntimeBuiltins() {
@@ -152,9 +155,6 @@ public final class TestBootstrap {
     }
 
     private static void addTestMachineSuppliers() {
-        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("blast_furnace")).build());
-        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("alloy_furnace")).expandableStructure().build());
-        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("cracker")).build());
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("test_cube")).localizedName("Test").build());
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("controller_tick")).localizedName("Controller Tick").build());
         MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("iron_compressor")).localizedName("Iron Compressor").build());

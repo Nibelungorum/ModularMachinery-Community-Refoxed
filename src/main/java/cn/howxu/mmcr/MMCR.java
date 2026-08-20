@@ -38,6 +38,7 @@ import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.api.PublicMachineDefinitionProviders;
 import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterMachinesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
+import org.nibelungorum.builtin.PublicBuiltinMachineDefinitions;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -72,6 +73,7 @@ public class MMCR {
     public MMCR(IEventBus modBus, ModContainer modContainer) {
         PublicApiBootstrap.begin();
         MachineDefinitions.beginRegistryPhase();
+        PublicBuiltinMachineDefinitions.registerDefaults();
         NeoForge.EVENT_BUS.post(new MMCRRegisterMachinesEvent());
         registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineDefinitions");
         MachineDefinitions.bootstrapBuiltins();
