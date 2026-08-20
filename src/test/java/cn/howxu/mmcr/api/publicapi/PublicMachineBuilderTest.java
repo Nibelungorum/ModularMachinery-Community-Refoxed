@@ -1,7 +1,11 @@
 package cn.howxu.mmcr.api.publicapi;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.MachineRole;
+import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
@@ -10,6 +14,7 @@ import cn.howxu.mmcr.api.publicapi.machine.PatternBuilder;
 import cn.howxu.mmcr.internal.api.PublicMachineAdapter;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.item.ItemStack;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -39,6 +44,56 @@ class PublicMachineBuilderTest {
     }
 
     @Test
+    void machine_definition_builder_preserves_metadata_factory_and_role_semantics() {
+        var moduleId = MMCR.id("processing_module");
+        var definition = MachineBuilder.machine(MMCR.id("arc_furnace"))
+                .displayNameKey("machine.mmcr.arc_furnace")
+                .controller(controller -> controller
+                        .textures(MMCR.id("block/arc_front"), MMCR.id("block/arc_side"))
+                        .allowVerticalFacing()
+                        .tooltip("tooltip.mmcr.arc_furnace.0"))
+                .appearance(appearance -> appearance
+                        .machineBasicBlock(MMCR.id("steel_casing"))
+                        .controllerBaseTexture(MMCR.id("block/steel_controller"))
+                        .formedPortBaseTexture(MMCR.id("block/steel_port")))
+                .factory(factory -> factory.hasFactory(true).threadLimit(4)
+                        .thread("smelting", MMCR.id("arc_recipe")))
+                .role(MachineRole.HOST)
+                .acceptedModule(moduleId)
+                .maxParallelism(8)
+                .parallelizable(true)
+                .failureAction(RecipeFailureActions.RESET)
+                .build();
+
+        assertThat(definition.controller().tooltip()).containsExactly("tooltip.mmcr.arc_furnace.0");
+        assertThat(definition.controller().allowVerticalFacing()).isTrue();
+        assertThat(definition.appearance().machineBasicBlock()).isEqualTo(MMCR.id("steel_casing"));
+        assertThat(definition.factory().hasFactory()).isTrue();
+        assertThat(definition.factory().threadLimit()).isEqualTo(4);
+        assertThat(definition.factory().threads()).hasSize(1);
+        assertThat(definition.role()).isEqualTo(MachineRole.HOST);
+        assertThat(definition.acceptedModuleIds()).containsExactly(moduleId);
+        assertThat(definition.maxParallelism()).isEqualTo(8);
+        assertThat(definition.parallelizable()).isTrue();
+        assertThat(definition.failureAction()).isEqualTo(RecipeFailureActions.RESET);
+    }
+
+    @Test
+    void machine_definition_builder_enforces_role_and_factory_values() {
+        var moduleId = MMCR.id("processing_module");
+
+        assertThatThrownBy(() -> MachineBuilder.machine(MMCR.id("invalid_host"))
+                .role(MachineRole.HOST).build())
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("accept");
+        assertThatThrownBy(() -> MachineBuilder.machine(MMCR.id("invalid_normal"))
+                .acceptedModule(moduleId).build())
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("HOST");
+        assertThatThrownBy(() -> MachineBuilder.machine(MMCR.id("bad_factory"))
+                .factory(factory -> factory.threadLimit(0)).build())
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("threadLimit");
+    }
+
+    @Test
     void structure_builder_owns_main_structure_and_extensions() {
         MachineStructureDefinition structure = MachineStructureBuilder.structure()
                 .fullStructure(stage -> stage.pattern(pattern -> pattern.layer("F")
@@ -51,6 +106,34 @@ class PublicMachineBuilderTest {
         assertThat(structure.stages()).extracting("kind")
                 .containsExactly(cn.howxu.mmcr.api.publicapi.machine.StructureStage.Kind.FULL,
                         cn.howxu.mmcr.api.publicapi.machine.StructureStage.Kind.EXTENSION);
+    }
+
+    @Test
+    void structure_builder_preserves_ports_tiers_and_requirements() {
+        var machineId = MMCR.id("structured_machine");
+        var modifier = new RecipeModifier("duration", RecipeModifier.IOType.INPUT, 0.5F,
+                RecipeModifier.Operation.MULTIPLY, false);
+        var structure = MachineStructureBuilder.structure()
+                .fullStructure(stage -> stage
+                        .pattern(pattern -> pattern.layer("CFC")
+                                .where('C', BlockPredicate.block(Blocks.STONE))
+                                .where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))
+                        .ports(ports -> ports.min("item_input_bus", 1).range("energy_input_hatch", 1, 2))
+                        .portTiers(tiers -> tiers.minItemInput(PortTiers.ItemTier.NORMAL)
+                                .minFluidOutput(PortTiers.FluidTier.BIG)
+                                .minEnergyInput(PortTiers.EnergyTier.NORMAL))
+                        .requirements(requirements -> requirements
+                                .levelSlot('C', MMCR.id("coil"))
+                                .modifier('C', BlockPredicate.block(Blocks.GOLD_BLOCK), List.of(modifier),
+                                        new ItemStack(Blocks.GOLD_BLOCK))))
+                .build(machineId);
+
+        var stage = structure.stages().getFirst();
+        assertThat(stage.portRequirements().requirements()).containsKeys("item_input_bus", "energy_input_hatch");
+        assertThat(stage.portTiers().requirements()).extracting("minTierId")
+                .containsExactly("normal", "big", "normal");
+        assertThat(stage.requirements().levelSlots()).containsEntry('C', MMCR.id("coil"));
+        assertThat(stage.requirements().modifierReplacements()).containsKey('C');
     }
 
     @Test

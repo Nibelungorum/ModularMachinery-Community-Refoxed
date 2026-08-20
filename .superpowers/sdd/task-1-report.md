@@ -83,3 +83,23 @@ Reusing configuration cache.
 BUILD SUCCESSFUL in 7s
 18 actionable tasks: 18 up-to-date
 Configuration cache entry reused.
+
+---
+
+STATUS: FIXED_WITH_TASK_3_CONCERNS
+
+本次测试覆盖回退修复:
+- `PublicMachineBuilderTest` 恢复机器定义 Builder 的控制器、外观、工厂线程、并行、失败动作及角色/模块语义断言。
+- `PublicMachineBuilderTest` 将端口需求、端口等级、等级槽和 modifier replacement 断言迁移到 `MachineStructureBuilder`。
+- `PublicApiAdapterTest` 验证完整定义和结构转换后的最终 `DynamicMachine`，并验证带结构的最终 `MachineRegistration`。
+- 未恢复结构字段到 `MachineBuilder`，未增加旧 API 兼容层，未修改 Task 3 生命周期。
+
+测试命令及结果:
+- `./gradlew test --no-daemon --tests cn.howxu.mmcr.api.publicapi.PublicMachineBuilderTest --tests cn.howxu.mmcr.api.publicapi.PublicApiAdapterTest --tests cn.howxu.mmcr.api.publicapi.PublicEventSubscribersTest`: PASS，18 actionable tasks，2 executed，16 up-to-date。
+- 中间一次编译失败为测试断言误用内部 `levelSlots` 的 `BlockPos` 键，已改为验证最终位置映射包含等级槽 ID；修复后同一命令通过。
+
+提交:
+- 待提交（本报告随测试覆盖修复一并提交）。
+
+concerns:
+- Task 3 生命周期接入及既有 GameTest 失败未触碰，沿用前序报告中的 concerns。
