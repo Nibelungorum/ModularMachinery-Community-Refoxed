@@ -1718,7 +1718,7 @@ class MachineControllerBlockEntityTest {
         TestBootstrap.registerRuntimeBuiltins();
         DynamicMachine machine = (DynamicMachine) MachineRegistry.getMachine(MMCR.id("blast_furnace"));
         BlockPos controllerPos = new BlockPos(20, 4, 20);
-        MachineControllerBlockEntity controller = controllerForDefaultBlastFurnace(
+        MachineControllerBlockEntity controller = controllerForPattern(
                 machine,
                 controllerPos,
                 itemInputBus(controllerPos.offset(0, 0, -2)),
@@ -1732,7 +1732,7 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
-    void built_in_blast_furnace_forms_with_required_ports() throws Exception {
+    void test_cube_forms_with_required_ports() throws Exception {
         DynamicMachine machine = requiredPortTestCube();
         MachineRegistry.register(machine);
         BlockPos controllerPos = new BlockPos(20, 4, 20);
@@ -1750,7 +1750,7 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
-    void built_in_blast_furnace_forms_when_top_factory_slot_is_casing() throws Exception {
+    void test_cube_forms_when_top_factory_slot_is_casing() throws Exception {
         DynamicMachine machine = requiredPortTestCube();
         MachineRegistry.register(machine);
         BlockPos controllerPos = new BlockPos(20, 4, 20);
@@ -3527,7 +3527,7 @@ class MachineControllerBlockEntityTest {
         return controller;
     }
 
-    private static MachineControllerBlockEntity controllerForDefaultBlastFurnace(
+    private static MachineControllerBlockEntity controllerForPattern(
             DynamicMachine machine,
             BlockPos controllerPos,
             IOPortBlockEntity first,
@@ -3569,7 +3569,7 @@ class MachineControllerBlockEntityTest {
             IOPortBlockEntity first,
             IOPortBlockEntity second,
             IOPortBlockEntity third) throws Exception {
-        MachineControllerBlockEntity controller = controllerForDefaultBlastFurnace(
+        MachineControllerBlockEntity controller = controllerForPattern(
                 machine, controllerPos, first, second, third);
         var controllerBlock = ModBlocks.controllerFor(MMCR.id("test_cube")).get();
         BlockState controllerState = controllerBlock.defaultBlockState()

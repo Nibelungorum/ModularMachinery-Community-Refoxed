@@ -7,6 +7,7 @@
 - Updated `src/test/java/cn/howxu/mmcr/api/machine/MachineStructureFamilyTest.java` to use the `test_cube` controller.
 - Updated `src/test/java/cn/howxu/mmcr/internal/tile/MachinePortAppearanceTest.java` to use the `test_cube` controller.
 - Updated `src/test/java/cn/howxu/mmcr/client/preview/StructurePreviewSchemaFactoryTest.java` to use the `test_cube` controller.
+- Updated `src/test/java/cn/howxu/mmcr/internal/tile/MachineControllerBlockEntityTest.java` to restore the two required-port formation tests against `test_cube` and align their test/helper names with the actual fixture.
 
 ## Commands and Results
 
@@ -14,9 +15,11 @@
 - `./gradlew test --tests cn.howxu.mmcr.api.machine.MachineStructureFamilyTest --tests cn.howxu.mmcr.internal.tile.MachinePortAppearanceTest --tests cn.howxu.mmcr.client.preview.StructurePreviewSchemaFactoryTest --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest --no-daemon`: failed. 141 tests completed, 139 passed, 2 failed. The failures are `built_in_blast_furnace_forms_with_required_ports` at line 1747 and `built_in_blast_furnace_forms_when_top_factory_slot_is_casing` at line 1767.
 - `./gradlew test --tests cn.howxu.mmcr.api.publicapi.PublicEventSubscribersTest --no-daemon`: failed. 4 tests completed, 4 failed. The tests expect the removed `TestBootstrap` NeoForge subscriber registrations.
 
-## Commit
+## Commit Chain
 
-- `4c48011 test: bootstrap public builtin runtime`.
+- `5cb18030 test: bootstrap public builtin runtime`.
+- `1d8b2c02 test: restore isolated formation coverage`.
+- `b425df49 docs: record formation coverage follow-up`.
 
 ## Concerns
 
@@ -37,17 +40,20 @@
 - Kept the single `NeoForge.EVENT_BUS.start()` call in `TestBootstrap.bootstrap()`; no default-content listener or default blast furnace controller binding was restored.
 - Restored the two positive formation paths using a self-created `test_cube` declaration with the required input, output, ludicrous energy, and factory semantics. Its controller is the test-bootstrap-bound `test_cube` controller, so the tests do not depend on default content.
 - Wrapped every persistent `PublicEventSubscribersTest` listener activation in `try`/`finally`, ensuring it is disabled even when an assertion throws. The Javadoc now describes only the self-created machine/recipe event contract.
+- Renamed the two migrated formation tests to `test_cube_forms_with_required_ports` and `test_cube_forms_when_top_factory_slot_is_casing`; renamed their shared structure helper to `controllerForPattern` without changing the separate default blast furnace rejection test.
 
 #### Commands And Results
 
 - `./gradlew compileTestJava --no-daemon`: passed. `BUILD SUCCESSFUL in 9s`.
+- `./gradlew test --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest --no-daemon`: passed. `BUILD SUCCESSFUL in 16s`.
 - `./gradlew test --tests cn.howxu.mmcr.api.publicapi.PublicEventSubscribersTest --no-daemon`: passed. `BUILD SUCCESSFUL in 11s`.
-- `./gradlew test --tests cn.howxu.mmcr.api.machine.MachineStructureFamilyTest --tests cn.howxu.mmcr.internal.tile.MachinePortAppearanceTest --tests cn.howxu.mmcr.client.preview.StructurePreviewSchemaFactoryTest --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest --no-daemon`: passed. `BUILD SUCCESSFUL in 11s`.
 
 #### Commit
 
-- `1d8b2c0 test: restore isolated formation coverage`.
+- `b425df49 docs: record formation coverage follow-up`.
 
 #### Concerns
 
 - Prior revision removed the two positive blast furnace coverage paths. This follow-up restores their behavior against a self-created `test_cube` fixture rather than reintroducing default-content coupling.
+- The test compilation still reports existing deprecation/removal warnings for `localizedName` and `ItemStackHandler`; they were not part of this documentation/test-naming fix.
+- Only the requested targeted tests were run in this follow-up; no claim is made about unrelated test classes or the full test suite.
