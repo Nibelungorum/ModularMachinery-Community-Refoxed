@@ -213,17 +213,14 @@ public class MMCR {
     private static void registerPublicApiLifecycle() {
         registerStartupContent(
                 definitions -> {
-                    org.nibelungorum.builtin.PublicBuiltinMachineDefinitions.registerDefinitions(definitions);
                     registerGameTestBuiltins("registerMachineDefinitions",
                             new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions);
                 },
                 structures -> {
-                    org.nibelungorum.builtin.PublicBuiltinMachineDefinitions.registerStructures(structures);
                     registerGameTestBuiltins("registerMachineStructures",
                             new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
                 },
                 recipes -> {
-                    org.nibelungorum.builtin.PublicBuiltinRecipeDefinitions.register(recipes);
                     registerGameTestBuiltins("registerRecipes",
                             new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
                 });
