@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.api;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.MachineRoleValidator;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.publicapi.ApiRuntime;
@@ -10,8 +11,6 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
-import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistryBridge;
-import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import net.minecraft.resources.Identifier;
 
@@ -80,8 +79,6 @@ public final class PublicApiBootstrap {
         }
         Map<Identifier, cn.howxu.mmcr.api.machine.MachineRegistration> machines = new LinkedHashMap<>();
         STRUCTURE_SNAPSHOT = structures.freeze();
-        MachineLevelRegistryBridge.install(STRUCTURE_SNAPSHOT.levelTypes().values(), STRUCTURE_SNAPSHOT.levels().values());
-        ModifierRegistryBridge.install(STRUCTURE_SNAPSHOT.modifiers());
         for (MachineDefinition definition : MACHINES.values()) {
             machines.put(definition.id(), PublicMachineAdapter.toStartupRegistration(definition,
                     structures.structures().get(definition.id())));
@@ -172,10 +169,10 @@ public final class PublicApiBootstrap {
     /** Test-only reset hook; not part of the public API surface. */
     public static synchronized void clearForTesting() {
         ContentRegistrationCoordinator.clearForTesting();
+        MachineStructureRegistry.clearForTesting();
         MACHINES.clear();
         RECIPES.clear();
         STRUCTURE_SNAPSHOT = new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of());
-        ModifierRegistryBridge.install(Map.of());
         state = State.BEFORE_BEGIN;
         ApiRuntime.uninstall();
     }
