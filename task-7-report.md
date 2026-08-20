@@ -47,3 +47,16 @@
 
 - `./gradlew compileJava compileTestJava --no-daemon`: passed.
 - `./gradlew test --no-daemon --tests '*RuntimeContentSnapshotTest' --tests '*RuntimeContentSyncTest' --tests '*JeiRuntimeReloaderTest'`: passed.
+
+## Final Important Fixes
+
+- Structure and recipe mutations and coordinator snapshot creation now share `RuntimeContentVersion.lock()`, making the effective snapshot read and commit transaction use the same lock boundary.
+- FluidStack output amounts are bounded on both recipe codec encode and decode paths.
+- Client connection reset now clears effective structures, recipes, controller and appearance caches, preview/model caches, and crafting context state before accepting the next server snapshot.
+- Controller spec validation now checks the machine map key against the canonical controller spec ID for that machine.
+- Startup commit, dynamic commit, data-pack replacement, and snapshot reads now share the same content lock; no snapshot can observe the interval between structure and recipe installation.
+
+## Final Verification
+
+- `./gradlew compileJava compileTestJava --no-daemon`: passed.
+- `./gradlew test --no-daemon --tests '*RuntimeContentSnapshotTest' --tests '*RuntimeContentSyncTest' --tests '*JeiRuntimeReloaderTest'`: passed.

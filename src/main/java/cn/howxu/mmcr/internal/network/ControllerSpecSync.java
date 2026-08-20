@@ -23,7 +23,9 @@ public final class ControllerSpecSync {
         Map<Identifier, MachineControllerSpec> snapshot = new LinkedHashMap<>();
         MachineRegistry.getAll().forEach((id, machine) -> {
             if (ModBlocks.hasControllerFor(id)) {
-                snapshot.put(id, machine.controller());
+                MachineControllerSpec spec = machine.controller();
+                validate(id, spec);
+                snapshot.put(id, spec);
             }
         });
         return Map.copyOf(snapshot);
@@ -37,6 +39,12 @@ public final class ControllerSpecSync {
             }
         });
         return Map.copyOf(snapshot);
+    }
+
+    private static void validate(Identifier machineId, MachineControllerSpec spec) {
+        if (spec == null || !MachineControllerSpec.defaultsFor(machineId).id().equals(spec.id())) {
+            throw new IllegalStateException("Controller spec key does not match spec id: " + machineId);
+        }
     }
 
     public static void sendTo(ServerPlayer player) {

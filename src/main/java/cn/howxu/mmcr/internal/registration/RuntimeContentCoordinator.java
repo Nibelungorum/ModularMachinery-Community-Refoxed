@@ -26,9 +26,10 @@ public final class RuntimeContentCoordinator {
     private RuntimeContentCoordinator() {
     }
 
-    public static synchronized DynamicContentReloadService.ReloadResult commitDynamic(
+    public static DynamicContentReloadService.ReloadResult commitDynamic(
             Map<Identifier, MachineStructureDefinition> structures,
             Map<Identifier, MachineRecipe> recipes) {
+        synchronized (RuntimeContentVersion.lock()) {
         Map<Identifier, MachineStructureDefinition> oldStructures = MachineStructureRegistry.dynamicSnapshot();
         Map<Identifier, MachineRecipe> oldRecipes = RecipeRegistry.dynamicSnapshot();
         Map<Identifier, MachineStructureDefinition> structureReplacement = Map.copyOf(new LinkedHashMap<>(structures));
@@ -50,19 +51,24 @@ public final class RuntimeContentCoordinator {
         }
         return DynamicContentReloadService.ReloadResult.fromSnapshots(
                 oldStructures, structureReplacement, oldRecipes, recipeReplacement);
+        }
     }
 
-    public static synchronized void replaceDataPackRecipes(Map<Identifier, MachineRecipe> recipes) {
-        RecipeRegistry.replaceDataPack(recipes);
+    public static void replaceDataPackRecipes(Map<Identifier, MachineRecipe> recipes) {
+        synchronized (RuntimeContentVersion.lock()) {
+            RecipeRegistry.replaceDataPack(recipes);
+        }
     }
 
-    public static synchronized RuntimeContentSnapshot createSnapshot() {
-        return new RuntimeContentSnapshot(
+    public static RuntimeContentSnapshot createSnapshot() {
+        synchronized (RuntimeContentVersion.lock()) {
+            return new RuntimeContentSnapshot(
                 MachineStructureRegistry.effectiveSnapshot(),
                 RecipeRegistry.effectiveSnapshot(),
                 ControllerSpecSync.createSnapshot(),
                 ControllerSpecSync.createAppearanceSnapshot(),
                 RuntimeContentVersion.current());
+        }
     }
 
     private static void validate(Map<Identifier, MachineStructureDefinition> structures,

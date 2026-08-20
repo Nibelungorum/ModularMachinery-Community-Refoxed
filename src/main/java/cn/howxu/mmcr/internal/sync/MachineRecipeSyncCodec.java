@@ -107,11 +107,14 @@ public final class MachineRecipeSyncCodec {
                 if (item.io() == RecipeModifier.IOType.INPUT) {
                     writeJson(buf, Ingredient.CODEC.encodeStart(buf.registryAccess().createSerializationContext(JsonOps.INSTANCE),
                             item.item()).getOrThrow());
+                    checkRange(item.count(), 1, MAX_ITEM_COUNT, "item count");
                     buf.writeVarInt(item.count());
                     writeJsonWithRegistryCodec(buf, DataComponentPredicateSet.CODEC, item.components());
                     buf.writeFloat(item.consumeChance());
                 } else {
-                    writeJsonWithRegistryCodec(buf, ItemStack.CODEC, item.stack(buf.registryAccess().createSerializationContext(JsonOps.INSTANCE)));
+                    ItemStack stack = item.stack(buf.registryAccess().createSerializationContext(JsonOps.INSTANCE));
+                    checkStackCount(stack);
+                    writeJsonWithRegistryCodec(buf, ItemStack.CODEC, stack);
                     buf.writeFloat(item.chance());
                 }
             }
@@ -121,8 +124,10 @@ public final class MachineRecipeSyncCodec {
                 writeStringList(buf, fluid.tags());
                 if (fluid.io() == RecipeModifier.IOType.INPUT) {
                     writeJsonWithRegistryCodec(buf, FluidIngredient.CODEC, fluid.fluid());
+                    checkRange(fluid.amount(), 1, MAX_FLUID_AMOUNT, "fluid amount");
                     buf.writeVarInt(fluid.amount());
                 } else {
+                    checkFluidAmount(fluid.stack());
                     writeJsonWithRegistryCodec(buf, FluidStack.CODEC, fluid.stack());
                     buf.writeFloat(fluid.chance());
                 }
@@ -131,6 +136,7 @@ public final class MachineRecipeSyncCodec {
                 buf.writeEnum(RequirementKind.ENERGY);
                 buf.writeEnum(energy.io());
                 writeStringList(buf, energy.tags());
+                checkRange(energy.fePerTick(), 1, MAX_ENERGY_PER_TICK, "energy rate");
                 buf.writeVarInt(energy.fePerTick());
             }
             case SmartInterfaceRequirement smartInterface -> {
@@ -169,7 +175,9 @@ public final class MachineRecipeSyncCodec {
                     checkRange(amount, 1, MAX_FLUID_AMOUNT, "fluid amount");
                     yield new FluidRequirement(io, ingredient, amount, FluidStack.EMPTY, tags);
                 }
-                yield new FluidRequirement(io, null, 0, readJsonWithRegistryCodec(buf, FluidStack.CODEC), buf.readFloat(), tags);
+                FluidStack stack = readJsonWithRegistryCodec(buf, FluidStack.CODEC);
+                checkFluidAmount(stack);
+                yield new FluidRequirement(io, null, 0, stack, buf.readFloat(), tags);
             }
             case ENERGY -> {
                 RecipeModifier.IOType io = buf.readEnum(RecipeModifier.IOType.class);
@@ -280,6 +288,12 @@ public final class MachineRecipeSyncCodec {
     private static void checkStackCount(ItemStack stack) {
         if (stack.getCount() <= 0 || stack.getCount() > MAX_STACK_COUNT) {
             throw new IllegalArgumentException("Invalid item stack count: " + stack.getCount());
+        }
+    }
+
+    private static void checkFluidAmount(FluidStack stack) {
+        if (stack.getAmount() <= 0 || stack.getAmount() > MAX_FLUID_AMOUNT) {
+            throw new IllegalArgumentException("Invalid fluid amount: " + stack.getAmount());
         }
     }
 

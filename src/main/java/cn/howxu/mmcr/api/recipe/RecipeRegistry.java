@@ -32,6 +32,7 @@ public final class RecipeRegistry {
     }
 
     public static void registerStatic(MachineRecipe recipe) {
+        synchronized (RuntimeContentVersion.lock()) {
         if (recipe == null) {
             throw new IllegalArgumentException("Recipe must not be null");
         }
@@ -45,6 +46,7 @@ public final class RecipeRegistry {
         publish(STATIC_RECIPES, STATE.dataPack(), STATE.dynamic());
         registryVersion++;
         RuntimeContentVersion.advance();
+        }
     }
 
     /**
@@ -97,6 +99,7 @@ public final class RecipeRegistry {
     }
 
     public static void replaceDynamic(Map<Identifier, MachineRecipe> recipes) {
+        synchronized (RuntimeContentVersion.lock()) {
         Map<Identifier, MachineRecipe> replacement = new LinkedHashMap<>();
         for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
             Identifier id = entry.getKey();
@@ -112,6 +115,7 @@ public final class RecipeRegistry {
         reloadVersion++;
         registryVersion++;
         RuntimeContentVersion.advance();
+        }
     }
 
     public static Map<Identifier, MachineRecipe> dynamicSnapshot() {
@@ -127,10 +131,12 @@ public final class RecipeRegistry {
     }
 
     public static void replaceClientSnapshot(Map<Identifier, MachineRecipe> recipes) {
+        synchronized (RuntimeContentVersion.lock()) {
         validateClientSnapshot(recipes);
         publish(Map.of(), Map.of(), recipes);
         reloadVersion++;
         registryVersion++;
+        }
     }
 
     public static void validateClientSnapshot(Map<Identifier, MachineRecipe> recipes) {
@@ -148,6 +154,7 @@ public final class RecipeRegistry {
     }
 
     public static void replaceDataPack(Map<Identifier, MachineRecipe> recipes) {
+        synchronized (RuntimeContentVersion.lock()) {
         Map<Identifier, MachineRecipe> replacement = new LinkedHashMap<>();
         List<String> warnings = new ArrayList<>();
         for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
@@ -162,6 +169,7 @@ public final class RecipeRegistry {
         reloadVersion++;
         registryVersion++;
         RuntimeContentVersion.advance();
+        }
     }
 
     private static void publish(Map<Identifier, MachineRecipe> staticRecipes,
@@ -195,11 +203,13 @@ public final class RecipeRegistry {
     }
 
     public static void clearAll() {
+        synchronized (RuntimeContentVersion.lock()) {
         STATIC_RECIPES.clear();
         STATE = State.empty();
         reloadVersion++;
         registryVersion++;
         RuntimeContentVersion.advance();
+        }
     }
 
     public static void clearForTesting() {

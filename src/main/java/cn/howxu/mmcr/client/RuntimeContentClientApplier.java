@@ -36,6 +36,7 @@ public final class RuntimeContentClientApplier {
         }
         controllerSpecs.forEach((id, spec) -> {
             if (id == null || spec == null || spec.id() == null
+                    || !MachineControllerSpec.defaultsFor(id).id().equals(spec.id())
                     || spec.frontTexture() == null || spec.sideTexture() == null
                     || spec.topTexture() == null || spec.bottomTexture() == null) {
                 throw new IllegalArgumentException("Invalid controller spec entry: " + id);
@@ -46,5 +47,12 @@ public final class RuntimeContentClientApplier {
                 throw new IllegalArgumentException("Invalid appearance entry: " + id);
             }
         });
+    }
+
+    public static void reset() {
+        ControllerSpecCache.replaceSnapshot(Map.of());
+        MachineAppearanceCache.replaceSnapshot(Map.of());
+        StructurePreviewCompilationCache.instance().clear();
+        RuntimeMachineModelRegistry.invalidate();
     }
 }

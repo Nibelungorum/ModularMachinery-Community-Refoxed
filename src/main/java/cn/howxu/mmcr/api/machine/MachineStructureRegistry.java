@@ -20,18 +20,22 @@ public final class MachineStructureRegistry {
     }
 
     public static void replaceStartup(Map<Identifier, MachineStructureDefinition> structures) {
-        Map<Identifier, MachineStructureDefinition> replacement = validate(structures);
-        MachineRegistry.installStructures(effective(replacement, DYNAMIC_STRUCTURES));
-        STARTUP_STRUCTURES = replacement;
-        RuntimeContentVersion.advance();
+        synchronized (RuntimeContentVersion.lock()) {
+            Map<Identifier, MachineStructureDefinition> replacement = validate(structures);
+            MachineRegistry.installStructures(effective(replacement, DYNAMIC_STRUCTURES));
+            STARTUP_STRUCTURES = replacement;
+            RuntimeContentVersion.advance();
+        }
     }
 
     public static void replaceDynamic(Map<Identifier, MachineStructureDefinition> structures) {
-        Map<Identifier, MachineStructureDefinition> replacement = validate(structures);
-        validateDynamicRoles(replacement);
-        MachineRegistry.installStructures(effective(STARTUP_STRUCTURES, replacement));
-        DYNAMIC_STRUCTURES = replacement;
-        RuntimeContentVersion.advance();
+        synchronized (RuntimeContentVersion.lock()) {
+            Map<Identifier, MachineStructureDefinition> replacement = validate(structures);
+            validateDynamicRoles(replacement);
+            MachineRegistry.installStructures(effective(STARTUP_STRUCTURES, replacement));
+            DYNAMIC_STRUCTURES = replacement;
+            RuntimeContentVersion.advance();
+        }
     }
 
     private static Map<Identifier, MachineStructureDefinition> validate(
@@ -72,10 +76,12 @@ public final class MachineStructureRegistry {
     }
 
     public static void replaceClientSnapshot(Map<Identifier, MachineStructureDefinition> structures) {
-        Map<Identifier, MachineStructureDefinition> replacement = validateClientSnapshot(structures);
-        MachineRegistry.installStructures(replacement);
-        STARTUP_STRUCTURES = replacement;
-        DYNAMIC_STRUCTURES = Map.of();
+        synchronized (RuntimeContentVersion.lock()) {
+            Map<Identifier, MachineStructureDefinition> replacement = validateClientSnapshot(structures);
+            MachineRegistry.installStructures(replacement);
+            STARTUP_STRUCTURES = replacement;
+            DYNAMIC_STRUCTURES = Map.of();
+        }
     }
 
     public static Map<Identifier, MachineStructureDefinition> validateClientSnapshot(
@@ -127,7 +133,9 @@ public final class MachineStructureRegistry {
     }
 
     public static void clearForTesting() {
-        STARTUP_STRUCTURES = Map.of();
-        DYNAMIC_STRUCTURES = Map.of();
+        synchronized (RuntimeContentVersion.lock()) {
+            STARTUP_STRUCTURES = Map.of();
+            DYNAMIC_STRUCTURES = Map.of();
+        }
     }
 }

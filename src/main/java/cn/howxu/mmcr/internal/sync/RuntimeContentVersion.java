@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class RuntimeContentVersion {
     private static final AtomicLong CURRENT = new AtomicLong();
+    private static final Object LOCK = new Object();
 
     private RuntimeContentVersion() {
     }
@@ -19,5 +20,9 @@ public final class RuntimeContentVersion {
 
     public static long advance() {
         return CURRENT.incrementAndGet();
+    }
+
+    public static Object lock() {
+        return LOCK;
     }
 }

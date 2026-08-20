@@ -19,6 +19,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
 import cn.howxu.mmcr.test.TestBootstrap;
 import io.netty.buffer.Unpooled;
@@ -34,6 +35,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -70,8 +72,8 @@ class RuntimeContentSnapshotTest {
 
     @BeforeEach
     void restoreDefaultRuntimeState() {
-        TestBootstrap.registerRuntimeBuiltins();
         ClientRuntimeSnapshotBridge.resetForTesting();
+        TestBootstrap.registerRuntimeBuiltins();
     }
 
     @Test
@@ -353,6 +355,49 @@ class RuntimeContentSnapshotTest {
 
         assertThat(new RuntimeContentSnapshot(Map.of(machineId, structure(machineId)), Map.of(), Map.of(), Map.of(), 1L)
                 .applyClient()).isTrue();
+    }
+
+    @Test
+    void newClientConnectionClearsPreviousRuntimeContent() {
+        Identifier machineId = MMCR.id("alloy_furnace");
+        registerMachineIfMissing(machineId);
+        new RuntimeContentSnapshot(Map.of(machineId, structure(machineId)), Map.of(),
+                Map.of(machineId, MachineControllerSpec.defaultsFor(machineId)),
+                Map.of(machineId, MachineAppearanceSpec.defaults()), 90L).applyClient();
+
+        ClientRuntimeSnapshotBridge.resetForConnection();
+
+        assertThat(MachineStructureRegistry.effectiveSnapshot()).isEmpty();
+        assertThat(RecipeRegistry.effectiveSnapshot()).isEmpty();
+        assertThat(cn.howxu.mmcr.client.controller.ControllerSpecCache.snapshot()).isEmpty();
+        assertThat(cn.howxu.mmcr.client.model.MachineAppearanceCache.snapshot()).isEmpty();
+    }
+
+    @Test
+    void clientRejectsControllerSpecForAnotherMachine() {
+        Identifier machineId = MMCR.id("alloy_furnace");
+        registerMachineIfMissing(machineId);
+        RuntimeContentSnapshot invalid = new RuntimeContentSnapshot(
+                Map.of(machineId, structure(machineId)), Map.of(),
+                Map.of(machineId, MachineControllerSpec.defaultsFor(MMCR.id("cracker"))), Map.of(), 92L);
+
+        assertThatThrownBy(invalid::applyClient)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Controller spec key does not match spec id");
+    }
+
+    @Test
+    void recipeCodecRejectsOversizedFluidOutput() {
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("oversized_fluid_recipe"), MMCR.id("alloy_furnace"), 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                        new net.neoforged.neoforge.fluids.FluidStack(Fluids.WATER, 10_000_001))));
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+
+        assertThatThrownBy(() -> MachineRecipeSyncCodec.encode(buf, recipe))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid fluid amount");
     }
 
     @Test

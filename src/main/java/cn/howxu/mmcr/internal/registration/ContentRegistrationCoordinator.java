@@ -19,6 +19,7 @@ import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.internal.api.PublicMachineAdapter;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.api.PublicRecipeAdapter;
+import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
 import net.minecraft.resources.Identifier;
 
 import java.util.LinkedHashMap;
@@ -71,6 +72,7 @@ public final class ContentRegistrationCoordinator {
     }
 
     public static synchronized void commitStartup() {
+        synchronized (RuntimeContentVersion.lock()) {
         if (state == State.COMMITTED) {
             return;
         }
@@ -98,6 +100,7 @@ public final class ContentRegistrationCoordinator {
         testCommitCount++;
         lastStartupSnapshot = new StartupSnapshotForTesting(
                 Set.copyOf(MACHINES.keySet()), Set.copyOf(STRUCTURES.keySet()), Set.copyOf(RECIPES.keySet()));
+        }
     }
 
     /** Test-only counter for verifying that bootstrap paths share this coordinator. */

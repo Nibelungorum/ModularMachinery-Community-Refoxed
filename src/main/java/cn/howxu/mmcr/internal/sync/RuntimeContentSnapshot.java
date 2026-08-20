@@ -53,8 +53,9 @@ public record RuntimeContentSnapshot(
         MachineStructureRegistry.validateClientSnapshot(structures);
         RecipeRegistry.validateClientSnapshot(recipes);
         controllerSpecs.forEach((id, spec) -> {
-            if (id == null || spec == null || spec.id() == null) {
-                throw new IllegalArgumentException("Invalid controller spec entry: " + id);
+            if (id == null || spec == null || spec.id() == null
+                    || !MachineControllerSpec.defaultsFor(id).id().equals(spec.id())) {
+                throw new IllegalArgumentException("Controller spec key does not match spec id: " + id);
             }
         });
         appearances.forEach((id, appearance) -> {
