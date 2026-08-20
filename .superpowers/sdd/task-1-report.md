@@ -1,0 +1,43 @@
+STATUS: DONE_WITH_CONCERNS
+
+修改文件:
+- src/main/java/cn/howxu/mmcr/api/publicapi/event/RegisterMachineDefinationsEvent.java
+- src/main/java/cn/howxu/mmcr/api/publicapi/event/RegisterMachineStructuresEvent.java
+- src/main/java/cn/howxu/mmcr/api/publicapi/event/MMCRRegisterRecipesEvent.java
+- src/main/java/cn/howxu/mmcr/api/publicapi/machine/MachineStructureBuilder.java
+- src/main/java/cn/howxu/mmcr/api/publicapi/package-info.java
+- src/test/java/cn/howxu/mmcr/api/publicapi/PublicEventSubscribersTest.java
+
+提交 hash: 37b52dc
+
+测试命令及结果:
+- `./gradlew test --no-daemon --tests cn.howxu.mmcr.api.publicapi.PublicEventSubscribersTest`: PASS
+- `./gradlew test --no-daemon`: FAIL，1052 tests completed，1 failed；既有失败为 `PublicRecipeBuilderTest.adapts_public_recipe_values_to_internal_recipe_semantics()`，位置 `src/test/java/cn/howxu/mmcr/api/publicapi/PublicRecipeBuilderTest.java:103`。
+- `./gradlew runGameTestServer --no-daemon`: FAIL，46 个 GameTest 中 4 个 required tests 失败：`mmcr:block_array_match`、`mmcr:controller_tick`、`mmcr:datapack_recipe_override`、`mmcr:e2e_distillation_tower_partial_outputs`。
+
+遗留疑问:
+- 本 Task 的精确结构事件签名要求 `MachineStructureBuilder`，但基线中不存在该类型，因此新增了最小结构阶段 Builder；后续 Builder 解耦与消费者迁移未实现。
+- 新事件已提供冻结和不可变快照契约，但现有 `MMCR`/`PublicApiBootstrap` 消费链仍使用旧机器事件，待后续 Task 迁移。
+- 全量单测与 GameTest 的既有失败未在本 Task 中修复。
+
+---
+
+STATUS: FIXED_WITH_GAMETEST_CONCERNS
+
+修复提交 hash: `962c9e9`
+
+修复内容:
+- `MachineBuilder` 仅构建机器基础属性，移除 pattern/stage/结构要求入口。
+- `MachineStructureBuilder` 独立构建主结构、extension、端口和结构要求。
+- 新增 public `MachineStructureDefinition`，公共事件不再暴露 `cn.howxu.mmcr.api.machine` 结构类型；内部转换集中在 `PublicMachineAdapter`。
+- 配方事件增加收集快照、重复 ID、null、freeze 后写入契约。
+- 补齐定义、结构、配方的真实注册及 ID、未知机器、重复 ID、null consumer、缺少主结构、freeze 后写入测试。
+- 未修改 `MMCR`/`PublicApiBootstrap` 实际发布顺序。
+
+测试命令及完整结果:
+- `./gradlew test --no-daemon --tests cn.howxu.mmcr.api.publicapi.PublicEventSubscribersTest --tests cn.howxu.mmcr.api.publicapi.PublicMachineBuilderTest --tests cn.howxu.mmcr.api.publicapi.PublicApiAdapterTest`: PASS，18 actionable tasks，3 executed，15 up-to-date。
+- `./gradlew test --no-daemon`: PASS，18 actionable tasks，17 up-to-date。
+- `./gradlew runGameTestServer --no-daemon`: FAIL，46 tests completed，4 required tests failed：`mmcr:block_array_match`、`mmcr:controller_tick`、`mmcr:datapack_recipe_override`、`mmcr:e2e_distillation_tower_partial_outputs`。
+
+concerns:
+- GameTest 的 4 个失败仍存在，表现为结构在 tick 0 形成、静态配方未被覆盖、蒸馏配方在 tick 0 消耗输入；本修复未改动 MMCR/PublicApiBootstrap 生命周期，Task 3 仍需处理发布接入。
