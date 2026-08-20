@@ -42,6 +42,9 @@ public final class MachineRecipeSyncCodec {
     private static final int MAX_REQUIRED_HOSTS = 1024;
     private static final int MAX_TAGS = 1024;
     private static final int MAX_STACK_COUNT = 65536;
+    private static final int MAX_ITEM_COUNT = 1_000_000;
+    private static final int MAX_FLUID_AMOUNT = 10_000_000;
+    private static final int MAX_ENERGY_PER_TICK = 10_000_000;
 
     private MachineRecipeSyncCodec() {
     }
@@ -149,6 +152,7 @@ public final class MachineRecipeSyncCodec {
                     Ingredient ingredient = Ingredient.CODEC.parse(buf.registryAccess().createSerializationContext(JsonOps.INSTANCE),
                             normalizeIngredient(readJson(buf))).getOrThrow();
                     int count = buf.readVarInt();
+                    checkRange(count, 1, MAX_ITEM_COUNT, "item count");
                     DataComponentPredicateSet components = readJsonWithRegistryCodec(buf, DataComponentPredicateSet.CODEC);
                     yield new ItemRequirement(io, ingredient, count, ItemStack.EMPTY, 1F, tags, components, buf.readFloat());
                 }
@@ -161,14 +165,18 @@ public final class MachineRecipeSyncCodec {
                 List<String> tags = readStringList(buf, MAX_TAGS, "tag");
                 if (io == RecipeModifier.IOType.INPUT) {
                     FluidIngredient ingredient = readJsonWithRegistryCodec(buf, FluidIngredient.CODEC);
-                    yield new FluidRequirement(io, ingredient, buf.readVarInt(), FluidStack.EMPTY, tags);
+                    int amount = buf.readVarInt();
+                    checkRange(amount, 1, MAX_FLUID_AMOUNT, "fluid amount");
+                    yield new FluidRequirement(io, ingredient, amount, FluidStack.EMPTY, tags);
                 }
                 yield new FluidRequirement(io, null, 0, readJsonWithRegistryCodec(buf, FluidStack.CODEC), buf.readFloat(), tags);
             }
             case ENERGY -> {
                 RecipeModifier.IOType io = buf.readEnum(RecipeModifier.IOType.class);
                 List<String> tags = readStringList(buf, MAX_TAGS, "tag");
-                yield new EnergyRequirement(io, buf.readVarInt(), tags);
+                int fePerTick = buf.readVarInt();
+                checkRange(fePerTick, 1, MAX_ENERGY_PER_TICK, "energy rate");
+                yield new EnergyRequirement(io, fePerTick, tags);
             }
             case SMART_INTERFACE -> new SmartInterfaceRequirement(buf.readEnum(RecipeModifier.IOType.class),
                     ByteBufCodecs.STRING_UTF8.decode(buf), buf.readFloat(), buf.readFloat());
@@ -272,6 +280,12 @@ public final class MachineRecipeSyncCodec {
     private static void checkStackCount(ItemStack stack) {
         if (stack.getCount() <= 0 || stack.getCount() > MAX_STACK_COUNT) {
             throw new IllegalArgumentException("Invalid item stack count: " + stack.getCount());
+        }
+    }
+
+    private static void checkRange(int value, int minimum, int maximum, String label) {
+        if (value < minimum || value > maximum) {
+            throw new IllegalArgumentException("Invalid " + label + ": " + value);
         }
     }
 

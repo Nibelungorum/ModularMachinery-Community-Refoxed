@@ -10,6 +10,9 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
+import cn.howxu.mmcr.internal.network.ControllerSpecSync;
+import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
+import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
 import net.minecraft.resources.Identifier;
 
 import java.util.LinkedHashMap;
@@ -49,8 +52,17 @@ public final class RuntimeContentCoordinator {
                 oldStructures, structureReplacement, oldRecipes, recipeReplacement);
     }
 
-    public static void replaceDataPackRecipes(Map<Identifier, MachineRecipe> recipes) {
+    public static synchronized void replaceDataPackRecipes(Map<Identifier, MachineRecipe> recipes) {
         RecipeRegistry.replaceDataPack(recipes);
+    }
+
+    public static synchronized RuntimeContentSnapshot createSnapshot() {
+        return new RuntimeContentSnapshot(
+                MachineStructureRegistry.effectiveSnapshot(),
+                RecipeRegistry.effectiveSnapshot(),
+                ControllerSpecSync.createSnapshot(),
+                ControllerSpecSync.createAppearanceSnapshot(),
+                RuntimeContentVersion.current());
     }
 
     private static void validate(Map<Identifier, MachineStructureDefinition> structures,

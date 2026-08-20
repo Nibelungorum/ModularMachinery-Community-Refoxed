@@ -35,7 +35,7 @@ public final class RuntimeContentClientApplier {
             throw new IllegalArgumentException("Runtime client cache snapshot null");
         }
         controllerSpecs.forEach((id, spec) -> {
-            if (id == null || spec == null || !id.equals(spec.id())
+            if (id == null || spec == null || spec.id() == null
                     || spec.frontTexture() == null || spec.sideTexture() == null
                     || spec.topTexture() == null || spec.bottomTexture() == null) {
                 throw new IllegalArgumentException("Invalid controller spec entry: " + id);

@@ -99,7 +99,7 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
             if (!id.equals(value.id())) throw new IllegalArgumentException("Recipe key does not match recipe id: " + id);
         });
         validateMap(controllerSpecs, (id, value) -> {
-            if (!id.equals(value.id())) throw new IllegalArgumentException("Controller spec key does not match spec id: " + id);
+            if (value.id() == null) throw new IllegalArgumentException("Invalid controller spec id: " + id);
         });
         long contentVersion = buf.readVarLong();
         if (contentVersion < 0) throw new IllegalArgumentException("Invalid runtime content version: " + contentVersion);

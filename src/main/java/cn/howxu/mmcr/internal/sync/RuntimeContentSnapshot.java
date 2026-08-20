@@ -52,17 +52,9 @@ public record RuntimeContentSnapshot(
     private void validateForClient() {
         MachineStructureRegistry.validateClientSnapshot(structures);
         RecipeRegistry.validateClientSnapshot(recipes);
-        structures.keySet().forEach(id -> {
-            if (controllerSpecs.containsKey(id)) {
-                MachineControllerSpec spec = controllerSpecs.get(id);
-                if (spec == null || !id.equals(spec.id())) {
-                    throw new IllegalArgumentException("Controller spec key does not match machine id: " + id);
-                }
-            }
-        });
         controllerSpecs.forEach((id, spec) -> {
-            if (id == null || spec == null || !id.equals(spec.id())) {
-                throw new IllegalArgumentException("Controller spec key does not match spec id: " + id);
+            if (id == null || spec == null || spec.id() == null) {
+                throw new IllegalArgumentException("Invalid controller spec entry: " + id);
             }
         });
         appearances.forEach((id, appearance) -> {

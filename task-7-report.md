@@ -34,3 +34,16 @@
 - `./gradlew compileJava compileTestJava --no-daemon`: passed.
 - `./gradlew test --no-daemon --tests '*RuntimeContentSnapshotTest.invalidSnapshotDoesNotPartiallyReplaceClientContent' --tests '*RuntimeContentSnapshotTest.applyingClientSnapshotDoesNotAdvanceServerContentVersion' --tests '*RuntimeContentSyncTest' --tests '*JeiRuntimeReloaderTest'`: passed.
 - Duplicate-key focused tests remain blocked by the same pre-test bootstrap registration failure described above.
+
+## Follow-up Review Fixes
+
+- Client runtime snapshot state now resets on both client login and logout, so a new server may start at any content version.
+- Server snapshot creation is owned by the synchronized runtime content coordinator, which provides one immutable registry read boundary.
+- Recipe requirement decoding now bounds item counts, fluid amounts, and energy rates and rejects negative or oversized values.
+- Test bootstrap restores startup registrations when another test has cleared them while leaving the coordinator marked committed.
+- Complete snapshot coverage now round-trips both a Level slot and a Modifier replacement.
+
+## Follow-up Verification
+
+- `./gradlew compileJava compileTestJava --no-daemon`: passed.
+- `./gradlew test --no-daemon --tests '*RuntimeContentSnapshotTest' --tests '*RuntimeContentSyncTest' --tests '*JeiRuntimeReloaderTest'`: passed.

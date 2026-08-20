@@ -1,9 +1,7 @@
 package cn.howxu.mmcr.internal.network;
 
-import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
-import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
-import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
+import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -24,16 +22,7 @@ public final class RuntimeContentSync {
     }
 
     public static RuntimeContentSnapshot createSnapshot() {
-        for (;;) {
-            long version = RuntimeContentVersion.current();
-            var structures = MachineStructureRegistry.effectiveSnapshot();
-            var recipes = RecipeRegistry.effectiveSnapshot();
-            var controllerSpecs = ControllerSpecSync.createSnapshot();
-            var appearances = ControllerSpecSync.createAppearanceSnapshot();
-            if (version == RuntimeContentVersion.current()) {
-                return new RuntimeContentSnapshot(structures, recipes, controllerSpecs, appearances, version);
-            }
-        }
+        return RuntimeContentCoordinator.createSnapshot();
     }
 
     public static void sendTo(ServerPlayer player) {

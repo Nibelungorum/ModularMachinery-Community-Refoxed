@@ -8,7 +8,7 @@ import java.util.Map;
  *
  * @author howxu <dev@howxu.cn>
  */
-final class ClientRuntimeSnapshotBridge {
+public final class ClientRuntimeSnapshotBridge {
     private static long lastAppliedVersion = -1L;
 
     private ClientRuntimeSnapshotBridge() {
@@ -22,8 +22,12 @@ final class ClientRuntimeSnapshotBridge {
         lastAppliedVersion = version;
     }
 
-    static synchronized void resetForTesting() {
+    public static synchronized void resetForConnection() {
         lastAppliedVersion = -1L;
+    }
+
+    static synchronized void resetForTesting() {
+        resetForConnection();
     }
 
     static void apply(RuntimeContentSnapshot snapshot) {

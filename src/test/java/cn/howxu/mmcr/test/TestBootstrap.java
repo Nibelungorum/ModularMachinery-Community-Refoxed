@@ -109,6 +109,10 @@ public final class TestBootstrap {
     }
 
     public static void registerRuntimeBuiltins() {
+        if (!ContentRegistrationCoordinator.isCommitted()
+                || MachineDefinitions.getRegistration(MMCR.id("blast_furnace")) == null) {
+            restoreMachineDefinitions();
+        }
         DynamicContentReloadService.reload(candidate -> {
             PublicBuiltinRuntime.registerStructures(candidate);
         });

@@ -200,7 +200,7 @@ class RuntimeContentSnapshotTest {
     void runtimeContentPayloadRoundTripsCompleteSnapshot() {
         Identifier machineId = MMCR.id("alloy_furnace");
         RuntimeContentSnapshot snapshot = new RuntimeContentSnapshot(
-                Map.of(machineId, structure(machineId)),
+                Map.of(machineId, structureWithLevelAndModifier(machineId)),
                 Map.of(MMCR.id("sync_recipe"), recipe(MMCR.id("sync_recipe"), machineId)),
                 Map.of(machineId, MachineControllerSpec.defaultsFor(machineId)),
                 Map.of(machineId, MachineAppearanceSpec.defaults()),
@@ -214,6 +214,9 @@ class RuntimeContentSnapshotTest {
         assertThat(decoded.snapshot().structures()).containsOnlyKeys(machineId);
         assertThat(decoded.snapshot().recipes()).containsOnlyKeys(MMCR.id("sync_recipe"));
         assertThat(decoded.snapshot().contentVersion()).isEqualTo(11L);
+        MachineStructureDefinition decodedStructure = decoded.snapshot().structures().get(machineId);
+        assertThat(decodedStructure.requirements().levelSlots()).containsEntry('L', MMCR.id("coil"));
+        assertThat(decodedStructure.requirements().modifierReplacements()).containsKey('M');
     }
 
     @Test
@@ -281,7 +284,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void applyClientRemovesDynamicContentOmittedFromSnapshot() {
-        Identifier removedMachine = MMCR.id("old_runtime_machine");
+        Identifier removedMachine = MMCR.id("alloy_furnace");
         Identifier removedRecipe = MMCR.id("removed_synced_recipe");
         registerMachineIfMissing(removedMachine);
         MachineStructureRegistry.replaceDynamic(Map.of(removedMachine, structure(removedMachine)));
@@ -340,6 +343,19 @@ class RuntimeContentSnapshotTest {
     }
 
     @Test
+    void newClientConnectionAcceptsLowerVersionFromAnotherServer() {
+        Identifier machineId = MMCR.id("alloy_furnace");
+        registerMachineIfMissing(machineId);
+        new RuntimeContentSnapshot(Map.of(machineId, structure(machineId)), Map.of(), Map.of(), Map.of(), 90L)
+                .applyClient();
+
+        ClientRuntimeSnapshotBridge.resetForConnection();
+
+        assertThat(new RuntimeContentSnapshot(Map.of(machineId, structure(machineId)), Map.of(), Map.of(), Map.of(), 1L)
+                .applyClient()).isTrue();
+    }
+
+    @Test
     void structureSyncCodecRejectsOversizedDeclarationCountOnEncode() {
         List<MachineStructureDefinition.Declaration> declarations = Collections.nCopies(1025,
                 structure(MMCR.id("alloy_furnace")).declarations().getFirst());
@@ -374,6 +390,25 @@ class RuntimeContentSnapshotTest {
         return new MachineStructureDefinition(id, blockArray, portRequirements,
                 PortTierRequirementSpec.none(), List.of(),
                 MachineStructureRequirements.builder().levelSlot('L', MMCR.id("coil")).build(blockArray));
+    }
+
+    private static MachineStructureDefinition structureWithLevelAndModifier(Identifier id) {
+        Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
+        pattern.put(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE));
+        pattern.put(BlockPos.ZERO.east(), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK));
+        pattern.put(BlockPos.ZERO.north(), new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK));
+        BlockArray blockArray = new BlockArray(pattern, Map.of(), Map.of(
+                BlockPos.ZERO.east(), 'L', BlockPos.ZERO.north(), 'M'));
+        MachineStructureRequirements requirements = MachineStructureRequirements.builder()
+                .levelSlot('L', MMCR.id("coil"))
+                .modifier('M', new SingleBlockModifierReplacement(
+                        "speed", new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK),
+                        List.of(new RecipeModifier("input_bus", RecipeModifier.IOType.INPUT, 2F,
+                                RecipeModifier.Operation.MULTIPLY, false)),
+                        new ItemStack(Items.DIAMOND_BLOCK)))
+                .build(blockArray);
+        return new MachineStructureDefinition(id, blockArray, PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), requirements);
     }
 
     private static MachineRecipe recipe(Identifier id, Identifier machineId) {
