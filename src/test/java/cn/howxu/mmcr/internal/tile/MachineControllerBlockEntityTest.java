@@ -1731,44 +1731,6 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
-    void built_in_blast_furnace_forms_with_required_ports() throws Exception {
-        TestBootstrap.registerRuntimeBuiltins();
-        DynamicMachine machine = (DynamicMachine) MachineRegistry.getMachine(MMCR.id("blast_furnace"));
-        BlockPos controllerPos = new BlockPos(20, 4, 20);
-        MachineControllerBlockEntity controller = controllerForDefaultBlastFurnace(
-                machine,
-                controllerPos,
-                itemInputBus(controllerPos.offset(0, 0, -2)),
-                itemOutputBus(controllerPos.offset(-1, 0, -1)),
-                energyHatch(controllerPos.offset(1, 0, -1), "energy_input_hatch_ludicrous"));
-
-        boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
-
-        assertThat(formed).isTrue();
-        assertThat(controller.getLastFormationFailure()).isNull();
-    }
-
-    @Test
-    void built_in_blast_furnace_forms_when_top_factory_slot_is_casing() throws Exception {
-        TestBootstrap.registerRuntimeBuiltins();
-        DynamicMachine machine = (DynamicMachine) MachineRegistry.getMachine(MMCR.id("blast_furnace"));
-        BlockPos controllerPos = new BlockPos(20, 4, 20);
-        MachineControllerBlockEntity controller = controllerForDefaultBlastFurnace(
-                machine,
-                controllerPos,
-                itemInputBus(controllerPos.offset(0, 0, -2)),
-                itemOutputBus(controllerPos.offset(-1, 0, -1)),
-                energyHatch(controllerPos.offset(1, 0, -1), "energy_input_hatch_ludicrous"));
-        Level level = levelOf(controller);
-        level.setBlock(controllerPos.offset(0, 1, -1), ModBlocks.CASING.get().defaultBlockState(), 3);
-
-        boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
-
-        assertThat(formed).isTrue();
-        assertThat(controller.getLastFormationFailure()).isNull();
-    }
-
-    @Test
     void server_tick_keeps_formation_failure_observable_after_rejection() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         BlockArray pattern = onePortPattern(ModBlocks.BLOCKS.get("item_input_bus").get());

@@ -41,6 +41,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import org.nibelungorum.DefaultMachineLevels;
 
@@ -85,6 +86,7 @@ public final class TestBootstrap {
         loadingModListField.set(fmlLoader, emptyLoadingModList);
 
         Class.forName("net.minecraft.SharedConstants").getMethod("tryDetectVersion").invoke(null);
+        NeoForge.EVENT_BUS.start();
         MachineDefinitions.beginRegistryPhase();
         addTestMachineSuppliers();
         Bootstrap.bootStrap();

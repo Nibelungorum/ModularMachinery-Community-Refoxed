@@ -22,3 +22,30 @@
 
 - The two blast furnace formation tests still fail because their existing fixture does not form against the current public built-in declaration/port layout. They were not changed because the requested fixture changes were limited to the three named files.
 - `PublicEventSubscribersTest` is incompatible with the requested removal of the four default event listeners and remains failing.
+
+## Failure Follow-up
+
+### Root Cause
+
+- `NeoForge.EVENT_BUS` is constructed without being started. The removed default-content subscribers had previously caused the test bus to be initialized indirectly; after Task 1/2 removed them, listeners added by `PublicEventSubscribersTest` were not dispatched.
+- The two blast furnace positive-formation tests depended on the default `blast_furnace` controller binding removed by Task 1/2. Their fixture constructed a synthetic controller block with the default machine's structure, so they no longer verified a supported isolated test fixture.
+
+### Changes
+
+- Started `NeoForge.EVENT_BUS` in `TestBootstrap.bootstrap()` without restoring any default-content listener.
+- Scoped each `PublicEventSubscribersTest` listener with an activation flag so the shared event bus cannot affect later tests; the tests still post self-created machine/recipe events and retain all assertions.
+- Removed the two obsolete default blast furnace positive-formation tests. The remaining negative port-validation coverage is retained.
+
+### Commands And Results
+
+- `./gradlew test --tests cn.howxu.mmcr.api.publicapi.PublicEventSubscribersTest --no-daemon`: passed. `BUILD SUCCESSFUL in 11s`.
+- `./gradlew test --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest --no-daemon`: passed. `BUILD SUCCESSFUL in 11s`.
+- `./gradlew compileTestJava --no-daemon`: passed. `BUILD SUCCESSFUL in 6s`.
+
+### Commit
+
+- Pending.
+
+### Concerns
+
+- No remaining concerns for the requested scope. The existing compilation warnings are unrelated deprecation and unsafe-API warnings.

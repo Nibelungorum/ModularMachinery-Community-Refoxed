@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -57,17 +58,23 @@ class PublicEventSubscribersTest {
     @Test
     void subscriber_receives_register_event_on_neoforge_event_bus() {
         AtomicInteger callCount = new AtomicInteger();
-        NeoForge.EVENT_BUS.addListener((MMCRRegisterMachinesEvent event) -> callCount.incrementAndGet());
+        AtomicBoolean active = new AtomicBoolean(true);
+        NeoForge.EVENT_BUS.addListener((MMCRRegisterMachinesEvent event) -> {
+            if (active.get()) callCount.incrementAndGet();
+        });
 
         NeoForge.EVENT_BUS.post(new MMCRRegisterMachinesEvent());
 
         assertThat(callCount.get()).isEqualTo(1);
+        active.set(false);
     }
 
     @Test
     void registering_machine_via_event_outside_window_throws() {
         AtomicReference<Throwable> captured = new AtomicReference<>();
+        AtomicBoolean active = new AtomicBoolean(true);
         NeoForge.EVENT_BUS.addListener((MMCRRegisterMachinesEvent event) -> {
+            if (!active.get()) return;
             try {
                 event.registerMachine(machine("outside_window"));
             } catch (Throwable t) {
@@ -80,13 +87,16 @@ class PublicEventSubscribersTest {
         assertThat(captured.get())
                 .isInstanceOf(ApiRegistrationException.class)
                 .hasMessageContaining("outside_window");
+        active.set(false);
     }
 
     @Test
     void repeat_post_with_same_machine_id_throws_duplicate() {
         PublicApiBootstrap.begin();
         AtomicInteger attempt = new AtomicInteger();
+        AtomicBoolean active = new AtomicBoolean(true);
         NeoForge.EVENT_BUS.addListener((MMCRRegisterMachinesEvent event) -> {
+            if (!active.get()) return;
             attempt.incrementAndGet();
             event.registerMachine(machine("repeat_id"));
         });
@@ -96,13 +106,16 @@ class PublicEventSubscribersTest {
         assertThatThrownBy(() -> NeoForge.EVENT_BUS.post(new MMCRRegisterMachinesEvent()))
                 .isInstanceOf(ApiRegistrationException.class)
                 .hasMessageContaining("repeat_id");
+        active.set(false);
     }
 
     @Test
     void repeat_post_with_same_recipe_id_throws_duplicate() {
         PublicApiBootstrap.begin();
         AtomicInteger attempt = new AtomicInteger();
+        AtomicBoolean active = new AtomicBoolean(true);
         NeoForge.EVENT_BUS.addListener((MMCRRegisterRecipesEvent event) -> {
+            if (!active.get()) return;
             attempt.incrementAndGet();
             event.registerRecipe(recipe("repeat_recipe", machine("recipe_target").id()));
         });
@@ -112,6 +125,7 @@ class PublicEventSubscribersTest {
         assertThatThrownBy(() -> NeoForge.EVENT_BUS.post(new MMCRRegisterRecipesEvent()))
                 .isInstanceOf(ApiRegistrationException.class)
                 .hasMessageContaining("repeat_recipe");
+        active.set(false);
     }
 
     private static MachineDefinition machine(String path) {
