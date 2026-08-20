@@ -1,7 +1,5 @@
 # Task 8 Report
 
-# Task 8 Report
-
 ## Completed
 
 - Client preview compilation entries now include the effective content version in their cache key.
@@ -23,13 +21,19 @@
 - The same applied version returns the same lazy compilation instance.
 - Applying a new version rebuilds the compilation.
 - A staged machine preview uses the highest effective complete stage.
+- A staged machine preview falls back when the highest stage has no preview state.
+- A staged machine preview falls back when the highest stage cannot form at its current positions.
+- A staged machine preview selects a valid highest stage over lower stages.
 
 ## Verification
 
 - `./gradlew compileJava --no-daemon`: passed.
 - Focused tests: passed.
-  - `./gradlew test --no-daemon --tests cn.howxu.mmcr.client.preview.StructurePreviewCompilationCacheTest --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest`
-- Full unit tests: failed in the existing global registration/test-isolation suite, 58 failures out of 1089 tests. Representative failures include duplicate machine levels, empty recipe snapshots, and startup registration state leakage.
+  - `./gradlew test --no-daemon --tests '*StructurePreviewCompilationCacheTest'`
+  - `./gradlew test --no-daemon --tests '*MachineAppearanceCacheTest'`
+  - `./gradlew test --no-daemon --tests '*ControllerSpecCacheTest'`
+  - `./gradlew test --no-daemon --tests '*MachineControllerBlockEntityTest'`
+- Full unit tests: failed in the existing global registration/test-isolation suite, 61 failures out of 1092 tests. Representative failures include duplicate machine levels, empty recipe snapshots, and startup registration state leakage.
   - `./gradlew test --no-daemon`
 - GameTest server: failed during mod startup before tests ran because existing startup data contains a conflicting stage predicate at `-1, -1, 0`.
   - `./gradlew runGameTestServer --no-daemon`

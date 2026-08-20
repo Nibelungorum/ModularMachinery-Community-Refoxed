@@ -174,6 +174,55 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void preview_falls_back_when_highest_stage_has_no_preview_state() throws Exception {
+        TestBootstrap.registerRuntimeBuiltins();
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray invalidHighStage = new BlockArray(Map.of(
+                new BlockPos(1, 0, 0), new BlockPredicate.Any()));
+        DynamicMachine machine = stagedMachine(MMCR.id("preview_invalid_high_stage_machine"),
+                onePortPattern(Blocks.IRON_BLOCK), invalidHighStage);
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, Blocks.AIR);
+
+        MultiblockPreviewSnapshot snapshot = controller.createStructurePreviewSnapshot(16).orElseThrow();
+
+        assertThat(snapshot.entries()).extracting(MultiblockPreviewSnapshot.Entry::state)
+                .containsExactly(Blocks.IRON_BLOCK.defaultBlockState());
+    }
+
+    @Test
+    void preview_falls_back_when_highest_stage_cannot_form_at_the_current_positions() throws Exception {
+        TestBootstrap.registerRuntimeBuiltins();
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray lowerStage = new BlockArray(Map.of(
+                new BlockPos(2, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+        DynamicMachine machine = stagedMachine(MMCR.id("preview_unformable_high_stage_machine"),
+                lowerStage, onePortPattern(Blocks.GOLD_BLOCK));
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, Blocks.STONE);
+
+        MultiblockPreviewSnapshot snapshot = controller.createStructurePreviewSnapshot(16).orElseThrow();
+
+        assertThat(snapshot.entries()).extracting(MultiblockPreviewSnapshot.Entry::state)
+                .containsExactly(Blocks.IRON_BLOCK.defaultBlockState());
+    }
+
+    @Test
+    void preview_selects_a_valid_highest_stage_over_a_lower_stage() throws Exception {
+        TestBootstrap.registerRuntimeBuiltins();
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        DynamicMachine machine = stagedMachine(MMCR.id("preview_valid_high_stage_machine"),
+                onePortPattern(Blocks.IRON_BLOCK), onePortPattern(Blocks.DIAMOND_BLOCK));
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, Blocks.AIR);
+
+        MultiblockPreviewSnapshot snapshot = controller.createStructurePreviewSnapshot(16).orElseThrow();
+
+        assertThat(snapshot.entries()).extracting(MultiblockPreviewSnapshot.Entry::state)
+                .containsExactly(Blocks.DIAMOND_BLOCK.defaultBlockState());
+    }
+
+    @Test
     void matched_stage_is_persisted_and_invalid_saved_stage_is_dirty() throws Exception {
         MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
         setField(MachineControllerBlockEntity.class, controller, "matchedStructureStage", 2);
