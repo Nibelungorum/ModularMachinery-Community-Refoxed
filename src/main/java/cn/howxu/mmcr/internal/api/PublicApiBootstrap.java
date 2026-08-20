@@ -43,7 +43,13 @@ public final class PublicApiBootstrap {
     }
 
     public static synchronized void registerDefinitions(RegisterMachineDefinationsEvent event) {
-        event.definitions().values().forEach(PublicApiBootstrap::registerMachine);
+        event.definitions().values().forEach(definition -> {
+            if (MachineDefinitions.containsStatic(definition.id())) {
+                MACHINES.put(definition.id(), definition);
+            } else {
+                registerMachine(definition);
+            }
+        });
     }
 
     public static synchronized void composeMachineRegistrations(RegisterMachineDefinationsEvent definitions,
@@ -61,7 +67,13 @@ public final class PublicApiBootstrap {
         for (var machine : MachineDefinitions.allRegistrations()) allMachines.put(machine.id(), machine);
         allMachines.putAll(machines);
         MachineRoleValidator.validate(allMachines.values(), allMachines::get);
-        machines.values().forEach(PublicRegistryBridge::registerMachine);
+        machines.values().forEach(machine -> {
+            if (MachineDefinitions.containsStatic(machine.id())) {
+                MachineDefinitions.replace(machine);
+            } else {
+                PublicRegistryBridge.registerMachine(machine);
+            }
+        });
         state = State.MACHINES_FROZEN;
     }
 

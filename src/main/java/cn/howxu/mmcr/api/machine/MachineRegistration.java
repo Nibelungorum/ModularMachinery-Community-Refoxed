@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.machine;
 
-import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
+import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -199,6 +199,7 @@ public record MachineRegistration(
         }
 
         public Builder runningSound(Identifier id) {
+            if (id != null) validateSound(id);
             this.runningSoundId = id;
             return this;
         }
@@ -208,6 +209,7 @@ public record MachineRegistration(
         }
 
         public Builder finishSound(Identifier id) {
+            if (id != null) validateSound(id);
             this.finishSoundId = id;
             return this;
         }
@@ -237,16 +239,6 @@ public record MachineRegistration(
             return this;
         }
 
-        public Builder registerRunningSound(Identifier id) {
-            MachineSoundRegistry.requestRegistration(id);
-            return runningSound(id);
-        }
-
-        public Builder registerFinishSound(Identifier id) {
-            MachineSoundRegistry.requestRegistration(id);
-            return finishSound(id);
-        }
-
         public MachineRegistration build() {
             if (host && module) {
                 throw new IllegalArgumentException("Machine roles are mutually exclusive");
@@ -259,8 +251,14 @@ public record MachineRegistration(
 
         private static Identifier soundId(SoundEvent sound) {
             Identifier id = BuiltInRegistries.SOUND_EVENT.getKey(sound);
-            if (id == null) throw new IllegalArgumentException("Unregistered sound event " + sound);
+            if (id == null) throw new ApiRegistrationException("Unregistered sound event " + sound);
             return id;
+        }
+
+        private static void validateSound(Identifier id) {
+            if (id == null || !BuiltInRegistries.SOUND_EVENT.containsKey(id)) {
+                throw new ApiRegistrationException("Unknown sound event " + id);
+            }
         }
     }
 }

@@ -4,6 +4,8 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.registry.ModBlocks;
 import com.mojang.serialization.MapCodec;
@@ -26,6 +28,20 @@ import java.util.List;
 
 public final class GameTestRegistry {
     private GameTestRegistry() {
+    }
+
+    public static void registerMachineSuppliers() {
+        for (String name : List.of("test_cube", "controller_tick", "iron_compressor",
+                "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll")) {
+            Identifier id = MMCR.id(name);
+            if (name.contains("expandable") || name.contains("distillation")) {
+                MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id)
+                        .displayNameKey("machine.mmcr_test." + name).expandableStructure().build());
+            } else {
+                MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id)
+                        .displayNameKey("machine.mmcr_test." + name).build());
+            }
+        }
     }
 
     public static void registerAll(RegisterGameTestsEvent event) {

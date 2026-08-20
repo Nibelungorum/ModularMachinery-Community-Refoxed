@@ -41,6 +41,16 @@ public final class MachineDefinitions {
         STATIC_REGISTRATIONS.put(registration.id(), registration);
     }
 
+    public static void replace(MachineRegistration registration) {
+        if (!registryPhaseOpen) {
+            throw new IllegalStateException("Machine replacement rejected: registry phase is closed");
+        }
+        if (!STATIC_REGISTRATIONS.containsKey(registration.id())) {
+            throw new IllegalStateException("Machine replacement not registered: " + registration.id());
+        }
+        STATIC_REGISTRATIONS.put(registration.id(), registration);
+    }
+
     public static void beginRegistryPhase() {
         registryPhaseOpen = true;
     }

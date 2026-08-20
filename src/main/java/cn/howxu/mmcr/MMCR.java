@@ -3,7 +3,6 @@ package cn.howxu.mmcr;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.command.BuildCommand;
 import cn.howxu.mmcr.internal.command.ExportCommand;
@@ -73,16 +72,14 @@ public class MMCR {
     public MMCR(IEventBus modBus, ModContainer modContainer) {
         PublicApiBootstrap.begin();
         MachineDefinitions.beginRegistryPhase();
+        registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineSuppliers");
         MachineDefinitions.bootstrapBuiltins();
-        registerPublicApiLifecycle();
-        PublicApiBootstrap.freezeAndInstallMachines();
         ModDataComponents.register(modBus);
         ModBlocks.register(modBus);
         ModItems.register(modBus);
         ModBlockEntities.register(modBus);
         ModUIs.register(modBus);
         ModRecipeTypes.register(modBus);
-        modBus.addListener(MachineSoundRegistry::onRegister);
         modBus.addListener(MMCR::onCommonSetup);
         CREATIVE_TABS.register(modBus);
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
@@ -233,6 +230,10 @@ public class MMCR {
     }
 
     private static void onCommonSetup(FMLCommonSetupEvent event) {
+        event.enqueueWork(() -> {
+            registerPublicApiLifecycle();
+            PublicApiBootstrap.freezeAndInstallMachines();
+        });
     }
 
     private static void onDefaultDataComponentsBound(DefaultDataComponentsBoundEvent event) {

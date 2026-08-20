@@ -10,7 +10,6 @@ import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
 import dev.latvian.mods.rhino.util.HideFromJS;
 import net.minecraft.resources.Identifier;
@@ -187,28 +186,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
 
     public MachineBuilderJS pattern(BlockArray pattern) {
         this.pattern = pattern;
-        return this;
-    }
-
-    public MachineBuilderJS registerRunningSound(String soundId) {
-        return registerRunningSound(Identifier.parse(soundId));
-    }
-
-    @HideFromJS
-    public MachineBuilderJS registerRunningSound(Identifier soundId) {
-        this.runningSoundId = soundId;
-        MachineSoundRegistry.requestRegistration(soundId);
-        return this;
-    }
-
-    public MachineBuilderJS registerFinishSound(String soundId) {
-        return registerFinishSound(Identifier.parse(soundId));
-    }
-
-    @HideFromJS
-    public MachineBuilderJS registerFinishSound(Identifier soundId) {
-        this.finishSoundId = soundId;
-        MachineSoundRegistry.requestRegistration(soundId);
         return this;
     }
 
