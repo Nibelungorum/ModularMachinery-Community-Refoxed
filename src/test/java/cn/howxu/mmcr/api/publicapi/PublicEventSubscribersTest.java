@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
@@ -16,7 +17,11 @@ import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.common.NeoForge;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.nibelungorum.builtin.PublicBuiltinLevelDefinitions;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Set;
@@ -68,6 +73,72 @@ class PublicEventSubscribersTest {
         assertThat(definitions.get().definitions()).containsOnlyKeys(machineId);
         assertThat(structures.get().structures()).containsOnlyKeys(machineId);
         assertThat(recipes.get().recipes()).containsOnlyKeys(recipeId);
+    }
+
+    @Test
+    void builtin_level_subscriber_registers_the_complete_development_declaration() {
+        var event = new MMCRMachineStructuresEvent(Set.of());
+
+        NeoForge.EVENT_BUS.post(event);
+
+        assertThat(event.levelTypes()).containsOnlyKeys(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE);
+        assertThat(event.levels()).containsOnlyKeys(
+                PublicBuiltinLevelDefinitions.COPPER_COIL,
+                PublicBuiltinLevelDefinitions.IRON_COIL,
+                PublicBuiltinLevelDefinitions.GOLD_COIL,
+                PublicBuiltinLevelDefinitions.DIAMOND_COIL);
+        assertThat(event.levels().values()).allSatisfy(level -> {
+            assertThat(level.typeId()).isEqualTo(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE);
+            assertThat(level.modifier()).isNotNull();
+        });
+    }
+
+    @Test
+    void builtin_level_subscriber_does_not_duplicate_an_existing_type() {
+        var event = new MMCRMachineStructuresEvent(Set.of());
+        event.registerLevelType(new LevelType(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE,
+                net.minecraft.network.chat.Component.literal("existing")));
+
+        NeoForge.EVENT_BUS.post(event);
+
+        assertThat(event.levelTypes()).containsOnlyKeys(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE);
+        assertThat(event.levels()).isEmpty();
+    }
+
+    @Test
+    void builtin_level_subscriber_skips_development_levels_in_production() throws Exception {
+        installFmlLoader(true);
+        try {
+            var event = new MMCRMachineStructuresEvent(Set.of());
+
+            NeoForge.EVENT_BUS.post(event);
+
+            assertThat(event.levelTypes()).isEmpty();
+            assertThat(event.levels()).isEmpty();
+        } finally {
+            installFmlLoader(false);
+        }
+    }
+
+    private static void installFmlLoader(boolean production) throws Exception {
+        Class<?> fmlLoaderClass = Class.forName("net.neoforged.fml.loading.FMLLoader");
+        Class<?> distClass = Class.forName("net.neoforged.api.distmarker.Dist");
+        Class<?> loadingModListClass = Class.forName("net.neoforged.fml.loading.LoadingModList");
+        Constructor<?> fmlConstructor = fmlLoaderClass.getDeclaredConstructor(
+                ClassLoader.class, String[].class, distClass, boolean.class, Path.class);
+        fmlConstructor.setAccessible(true);
+        fmlConstructor.newInstance(
+                Thread.currentThread().getContextClassLoader(), new String[0],
+                distClass.getField("CLIENT").get(null), production, Path.of("."));
+
+        Constructor<?> loadingModListConstructor = loadingModListClass.getDeclaredConstructor(
+                java.util.List.class, java.util.List.class, java.util.List.class, java.util.List.class, java.util.Map.class);
+        loadingModListConstructor.setAccessible(true);
+        Object emptyLoadingModList = loadingModListConstructor.newInstance(
+                java.util.List.of(), java.util.List.of(), java.util.List.of(), java.util.List.of(), java.util.Map.of());
+        Field loadingModListField = fmlLoaderClass.getDeclaredField("loadingModList");
+        loadingModListField.setAccessible(true);
+        loadingModListField.set(fmlLoaderClass.getMethod("getCurrent").invoke(null), emptyLoadingModList);
     }
 
     @Test
