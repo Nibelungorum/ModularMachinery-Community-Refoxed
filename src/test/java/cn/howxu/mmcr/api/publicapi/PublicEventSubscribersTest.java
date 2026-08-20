@@ -4,6 +4,8 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterMachinesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
+import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
+import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
@@ -23,6 +25,9 @@ import org.junit.jupiter.api.Test;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -68,6 +73,59 @@ class PublicEventSubscribersTest {
         } finally {
             active.set(false);
         }
+    }
+
+    @Test
+    void public_lifecycle_uses_separate_definition_structure_and_recipe_events() {
+        Identifier machineId = id("lifecycle_machine");
+        Identifier recipeId = id("lifecycle_recipe");
+        List<Class<?>> received = new ArrayList<>();
+        NeoForge.EVENT_BUS.addListener((RegisterMachineDefinationsEvent event) -> received.add(event.getClass()));
+        NeoForge.EVENT_BUS.addListener((RegisterMachineStructuresEvent event) -> received.add(event.getClass()));
+        NeoForge.EVENT_BUS.addListener((MMCRRegisterRecipesEvent event) -> received.add(event.getClass()));
+
+        NeoForge.EVENT_BUS.post(new RegisterMachineDefinationsEvent());
+        NeoForge.EVENT_BUS.post(new RegisterMachineStructuresEvent(Set.of(machineId)));
+        NeoForge.EVENT_BUS.post(new MMCRRegisterRecipesEvent());
+
+        assertThat(received).containsExactly(
+                RegisterMachineDefinationsEvent.class,
+                RegisterMachineStructuresEvent.class,
+                MMCRRegisterRecipesEvent.class);
+    }
+
+    @Test
+    void definition_event_exposes_ordered_immutable_snapshot_and_freezes() {
+        Identifier machineId = id("definition_machine");
+        RegisterMachineDefinationsEvent event = new RegisterMachineDefinationsEvent();
+
+        event.registerMachine(machineId, builder -> builder.pattern(pattern -> pattern
+                .layer("F")
+                .where('F', BlockPredicate.block(Blocks.FURNACE))
+                .controller('F')));
+        event.freeze();
+
+        assertThat(event.definitions()).containsOnlyKeys(machineId);
+        assertThatThrownBy(() -> event.definitions().clear()).isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> event.registerMachine(id("frozen"), builder -> builder))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void structure_registration_rejects_unknown_machine_id() {
+        RegisterMachineStructuresEvent event = new RegisterMachineStructuresEvent(Set.of());
+
+        assertThatThrownBy(() -> event.registerStructure(id("unknown"), structure -> structure))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void recipe_event_rejects_registration_after_freeze() {
+        MMCRRegisterRecipesEvent event = new MMCRRegisterRecipesEvent();
+        event.freeze();
+
+        assertThatThrownBy(() -> event.registerRecipe(recipe("frozen_recipe", id("machine"))))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test

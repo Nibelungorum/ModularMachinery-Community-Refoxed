@@ -1,0 +1,38 @@
+package cn.howxu.mmcr.api.publicapi.event;
+
+import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
+import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
+import net.minecraft.resources.Identifier;
+import net.neoforged.bus.api.Event;
+
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.UnaryOperator;
+
+/** Event used to collect public machine definitions before structures are registered.
+ * @author howxu <dev@howxu.cn>
+ */
+public final class RegisterMachineDefinationsEvent extends Event {
+    private final Map<Identifier, MachineDefinition> definitions = new LinkedHashMap<>();
+    private boolean frozen;
+
+    public void registerMachine(Identifier id, UnaryOperator<MachineBuilder> consumer) {
+        if (frozen) throw new IllegalStateException("Machine definitions are frozen");
+        Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(consumer, "consumer");
+        if (definitions.containsKey(id)) throw new IllegalStateException("Duplicate machine: " + id);
+        MachineDefinition definition = Objects.requireNonNull(consumer.apply(MachineBuilder.machine(id)),
+                "consumer result").build();
+        definitions.put(id, definition);
+    }
+
+    public Map<Identifier, MachineDefinition> definitions() {
+        return Collections.unmodifiableMap(new LinkedHashMap<>(definitions));
+    }
+
+    public void freeze() {
+        frozen = true;
+    }
+}

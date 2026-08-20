@@ -1,18 +1,21 @@
 /**
  * Public startup-registration API inventory for MMCR integrations.
  *
- * <p>This package is the future API JAR boundary root. Task 1 intentionally
- * publishes no callable types yet; later tasks must add only the planned public
- * types guarded by the inventory regression checks and keep the API limited to
- * startup registration.</p>
+ * <p>This package is the API JAR boundary root. Public machine startup follows
+ * three ordered phases: definitions, structures, and recipes. Each event owns
+ * its registration window and exposes immutable results after freezing.</p>
  *
  * <h2>Planned ABI allow-list</h2>
  * <ul>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.MachineApi}</li>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.RecipeApi}</li>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.ApiRegistrationException}</li>
+ *     <li>{@code cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent}</li>
+ *     <li>{@code cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent}</li>
+ *     <li>{@code cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent}</li>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.machine.MachineDefinition}</li>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.machine.MachineBuilder}</li>
+ *     <li>{@code cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder}</li>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.machine.PatternBuilder}</li>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.machine.PatternDefinition}</li>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.machine.BlockPredicate}</li>
