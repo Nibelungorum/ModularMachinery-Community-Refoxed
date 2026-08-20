@@ -208,6 +208,26 @@ public class MMCR {
                         new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes));
     }
 
+    public static void registerProductionApiLifecycleForTesting() {
+        registerStartupContent(
+                definitions -> {
+                    org.nibelungorum.builtin.PublicBuiltinMachineDefinitions.registerDefinitions(definitions);
+                    registerGameTestBuiltins("registerMachineDefinitions",
+                            new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions);
+                },
+                structures -> {
+                    org.nibelungorum.builtin.PublicBuiltinMachineDefinitions.registerStructures(structures);
+                    registerDefaultMachineLevels(structures);
+                    registerGameTestBuiltins("registerMachineStructures",
+                            new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
+                },
+                recipes -> {
+                    org.nibelungorum.builtin.PublicBuiltinRecipeDefinitions.register(recipes);
+                    registerGameTestBuiltins("registerRecipes",
+                            new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
+                });
+    }
+
     private static void registerStartupDefinitions() {
         PublicApiBootstrap.begin();
         ContentRegistrationCoordinator.beginStartup();
@@ -310,6 +330,16 @@ public class MMCR {
             // GameTest classes are only present on the GameTest classpath.
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Unable to register development builtins from " + className, e);
+        }
+    }
+
+    private static void registerGameTestBuiltins(String methodName, Class<?>[] parameterTypes, Object... arguments) {
+        try {
+            Class.forName("cn.howxu.mmcr.GameTestRegistry").getMethod(methodName, parameterTypes).invoke(null, arguments);
+        } catch (ClassNotFoundException ignored) {
+            // GameTest classes are only present on the GameTest classpath.
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Unable to register GameTest builtins", e);
         }
     }
 

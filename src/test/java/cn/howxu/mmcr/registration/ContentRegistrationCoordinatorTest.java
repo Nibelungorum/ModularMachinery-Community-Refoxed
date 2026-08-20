@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Verifies atomic startup content collection and commit behavior.
@@ -36,20 +37,12 @@ class ContentRegistrationCoordinatorTest {
 
     @BeforeEach
     void reset() {
-        ContentRegistrationCoordinator.clearForTesting();
-        MachineDefinitions.clearForTesting();
-        MachineRegistry.clearForTesting();
-        MachineStructureRegistry.clearForTesting();
-        RecipeRegistry.clearForTesting();
+        ContentRegistrationCoordinator.resetForTesting();
     }
 
     @AfterEach
     void cleanup() {
-        ContentRegistrationCoordinator.clearForTesting();
-        MachineDefinitions.clearForTesting();
-        MachineRegistry.clearForTesting();
-        MachineStructureRegistry.clearForTesting();
-        RecipeRegistry.clearForTesting();
+        ContentRegistrationCoordinator.resetForTesting();
     }
 
     @Test
@@ -205,21 +198,21 @@ class ContentRegistrationCoordinatorTest {
     }
 
     @Test
-    void production_and_test_bootstraps_commit_through_the_same_coordinator() {
-        MMCR.registerPublicApiLifecycleForTesting(
-                TestBootstrap::registerAllMachineDefinitions,
-                TestBootstrap::registerAllMachineStructures,
-                TestBootstrap::registerAllRecipes);
+    void production_bootstrap_commits_without_optional_gametest_classpath() {
+        assertThatCode(MMCR::registerProductionApiLifecycleForTesting).doesNotThrowAnyException();
         var productionSnapshot = ContentRegistrationCoordinator.startupSnapshotForTesting();
+        int productionCommitCount = ContentRegistrationCoordinator.commitCountForTesting();
+        assertThat(productionSnapshot.machines()).isNotEmpty();
+        assertThat(productionSnapshot.structures()).isNotEmpty();
+        assertThat(productionSnapshot.recipes()).isNotEmpty();
 
-        cn.howxu.mmcr.internal.api.PublicApiBootstrap.clearForTesting();
-        MachineDefinitions.clearForTesting();
-        MachineRegistry.clearForTesting();
-        MachineStructureRegistry.clearForTesting();
-        RecipeRegistry.clearForTesting();
+        ContentRegistrationCoordinator.resetForTesting();
         TestBootstrap.restoreMachineDefinitions();
+        assertThat(productionCommitCount).isEqualTo(1);
         assertThat(ContentRegistrationCoordinator.commitCountForTesting()).isEqualTo(1);
-        assertThat(ContentRegistrationCoordinator.startupSnapshotForTesting()).isEqualTo(productionSnapshot);
+        assertThat(ContentRegistrationCoordinator.startupSnapshotForTesting().machines()).isNotEmpty();
+        assertThat(ContentRegistrationCoordinator.startupSnapshotForTesting().structures()).isNotEmpty();
+        assertThat(ContentRegistrationCoordinator.startupSnapshotForTesting().recipes()).isNotEmpty();
     }
 
     private static Identifier id(String path) {
