@@ -34,7 +34,7 @@ public final class MachineRecipeBuilder {
     private final List<FluidOutput> fluidOutputs = new ArrayList<>();
     private final List<EnergyInput> energyOutputs = new ArrayList<>();
     private final List<RecipeRequirement> requirements = new ArrayList<>();
-    private final List<RecipeModifierValue> modifiers = new ArrayList<>();
+    private final List<Identifier> modifierIds = new ArrayList<>();
     private final List<LevelRequirement> levelRequirements = new ArrayList<>();
     private final List<RequiredHost> requiredHosts = new ArrayList<>();
 
@@ -77,13 +77,13 @@ public final class MachineRecipeBuilder {
     public MachineRecipeBuilder levelRequirement(Identifier typeId, Identifier levelId) { levelRequirements.add(new LevelRequirement(typeId, levelId)); return this; }
     public MachineRecipeBuilder requiredHost(Identifier hostId) { requiredHosts.add(new RequiredHost(hostId)); return this; }
     public MachineRecipeBuilder requirement(RecipeRequirement requirement) { if (requirement == null) throw new IllegalArgumentException("requirement null"); requirements.add(requirement); return this; }
-    public MachineRecipeBuilder modifier(RecipeModifierValue modifier) { if (modifier == null) throw new IllegalArgumentException("modifier null"); modifiers.add(modifier); return this; }
+    public MachineRecipeBuilder modifier(Identifier modifierId) { if (modifierId == null) throw new IllegalArgumentException("modifier id null"); modifierIds.add(modifierId); return this; }
 
     public MachineRecipeDefinition build() {
         List<RecipeRequirement> recipeRequirements = requirements.isEmpty() ? derivedRequirements() : requirements;
         return new MachineRecipeDefinition(id, machineId, tickTime, priority, maxThreads,
                 cancelRecipeOnPerTickFailure, parallelized, allowPartialOutputs, itemInputs, fluidInputs,
-                energyInputs, itemOutputs, fluidOutputs, energyOutputs, recipeRequirements, modifiers,
+                energyInputs, itemOutputs, fluidOutputs, energyOutputs, recipeRequirements, modifierIds,
                 levelRequirements, Set.copyOf(requiredHosts));
     }
 

@@ -1,10 +1,11 @@
 package cn.howxu.mmcr.internal.api;
 
 import cn.howxu.mmcr.api.publicapi.machine.LevelRequirement;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
+import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.publicapi.recipe.FluidInput;
 import cn.howxu.mmcr.api.publicapi.recipe.FluidOutput;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeModifierValue;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.ItemInput;
 import cn.howxu.mmcr.api.publicapi.recipe.ItemOutput;
@@ -23,6 +24,8 @@ import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import net.minecraft.resources.Identifier;
 
 /** Internal conversion boundary for public recipe declarations.
  * @author howxu <dev@howxu.cn>
@@ -32,6 +35,12 @@ public final class PublicRecipeAdapter {
     }
 
     public static MachineRecipe toRecipe(MachineRecipeDefinition definition) {
+        return toRecipe(definition, Map.of(), Map.of());
+    }
+
+    public static MachineRecipe toRecipe(MachineRecipeDefinition definition,
+            Map<Identifier, ModifierDefinition> modifiers,
+            Map<Identifier, cn.howxu.mmcr.api.machine.level.MachineLevel> levels) {
         List<MachineIngredient> inputs = new ArrayList<>();
         for (ItemInput input : definition.itemInputs()) {
             inputs.add(new MachineIngredient.ItemIngredient(input.ingredient(), input.count(), input.components(), input.consumeChance()));
@@ -48,8 +57,18 @@ public final class PublicRecipeAdapter {
         for (RecipeRequirement value : definition.requirements()) {
             requirements.add(toRequirement(value));
         }
+        List<RecipeModifier> recipeModifiers = definition.modifierIds().stream().map(id -> {
+            ModifierDefinition modifier = modifiers.get(id);
+            if (modifier == null) throw new ApiRegistrationException("Recipe " + definition.id()
+                    + " refers to unknown machine modifier " + id);
+            return modifier.modifiers();
+        }).flatMap(List::stream).toList();
+        definition.levelRequirements().forEach(level -> {
+            if (!levels.containsKey(level.levelId())) throw new ApiRegistrationException("Recipe " + definition.id()
+                    + " refers to unknown machine level " + level.levelId());
+        });
         return new MachineRecipe(definition.id(), definition.machineId(), definition.tickTime(), inputs, outputs,
-                definition.modifiers().stream().map(PublicRecipeAdapter::toModifier).toList(), definition.priority(), definition.maxThreads(), definition.cancelRecipeOnPerTickFailure(),
+                recipeModifiers, definition.priority(), definition.maxThreads(), definition.cancelRecipeOnPerTickFailure(),
                 fluidOutputs, requirements, definition.parallelized(), definition.levelRequirements().stream()
                         .map(PublicRecipeAdapter::toInternalLevel).toList(), definition.allowPartialOutputs(), definition.requiredHostIds());
     }
@@ -69,12 +88,6 @@ public final class PublicRecipeAdapter {
             return new SmartInterfaceRequirement(toInternalIo(smart.io()), smart.interfaceType(), smart.minValue(), smart.maxValue());
         }
         throw new IllegalArgumentException("Unsupported public recipe requirement: " + value);
-    }
-
-    private static RecipeModifier toModifier(RecipeModifierValue value) {
-        return new RecipeModifier(value.target(), toInternalIo(value.io()), value.value(),
-                value.operation() == RecipeModifierValue.Operation.ADD ? RecipeModifier.Operation.ADD : RecipeModifier.Operation.MULTIPLY,
-                value.affectsChance());
     }
 
     private static RecipeModifier.IOType toInternalIo(RecipeIo io) {

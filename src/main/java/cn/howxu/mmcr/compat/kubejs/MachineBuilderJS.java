@@ -487,7 +487,12 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .failureAction(cn.howxu.mmcr.api.machine.RecipeFailureActions.getDefaultAction());
         registration.acceptedModuleIds().forEach(builder::acceptedModule);
         if (registration.role() == MachineRole.MODULE) builder.role(MachineRole.MODULE);
-        MachineDefinition definition = builder.build();
+        MachineDefinition base = builder.build();
+        MachineDefinition definition = new MachineDefinition(base.id(), base.displayNameKey(), base.controller(), base.appearance(),
+                base.factory(), base.role(), base.acceptedModuleIds(), base.maxParallelism(), base.parallelizable(), base.failureAction(),
+                registration.allowModifiers(), registration.allowMultithreading(), registration.maxParallelAmount(),
+                registration.expandableStructure(), registration.smartInterfaceTypes(), registration.shareSmartInterfaces(),
+                registration.smartInterfaceModifiers(), registration.runningSoundId(), registration.finishSoundId(), registration.pattern());
         Plugin.registerStartupMachine(definition);
     }
 

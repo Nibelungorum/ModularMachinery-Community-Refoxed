@@ -203,6 +203,34 @@ class MachineBuilderJSTest {
     }
 
     @Test
+    void registered_machine_keeps_runtime_capabilities_and_sounds() {
+        Identifier id = MMCR.id("registered_capabilities");
+        new MachineBuilderJS(id)
+                .allowModifiers()
+                .allowMultithreading()
+                .allowParallelism()
+                .maxParallelAmount(6)
+                .expandableStructure(true)
+                .shareSmartInterface()
+                .smartInterface("speed", 1F, 4F).end()
+                .runningSound("minecraft:block.furnace.fire_crackle")
+                .finishSound("minecraft:entity.ender_dragon.growl")
+                .registerObject();
+
+        PublicApiBootstrap.freezeAndInstallMachines();
+        MachineRegistration registration = MachineDefinitions.getRegistration(id);
+        assertThat(registration.allowModifiers()).isTrue();
+        assertThat(registration.allowMultithreading()).isTrue();
+        assertThat(registration.allowParallelism()).isTrue();
+        assertThat(registration.maxParallelAmount()).isEqualTo(6);
+        assertThat(registration.expandableStructure()).isTrue();
+        assertThat(registration.shareSmartInterfaces()).isTrue();
+        assertThat(registration.smartInterfaceTypes()).containsKey("speed");
+        assertThat(registration.runningSoundId()).isEqualTo(Identifier.parse("minecraft:block.furnace.fire_crackle"));
+        assertThat(registration.finishSoundId()).isEqualTo(Identifier.parse("minecraft:entity.ender_dragon.growl"));
+    }
+
+    @Test
     void builder_maps_direct_registration_settings() {
         MachineControllerSpec controllerSpec = new MachineControllerSpec(
                 Identifier.parse("mmcr_kubejs:explicit_controller"),

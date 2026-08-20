@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import net.minecraft.resources.Identifier;
 
 import java.util.LinkedHashMap;
@@ -21,6 +22,8 @@ import java.util.Map;
 public final class PublicApiBootstrap {
     private static final Map<Identifier, MachineDefinition> MACHINES = new LinkedHashMap<>();
     private static final Map<Identifier, MachineRecipeDefinition> RECIPES = new LinkedHashMap<>();
+    private static RegisterMachineStructuresEvent.Snapshot STRUCTURE_SNAPSHOT =
+            new RegisterMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of());
     private static State state = State.BEFORE_BEGIN;
 
     private PublicApiBootstrap() {
@@ -59,6 +62,8 @@ public final class PublicApiBootstrap {
             throw new ApiRegistrationException("Public API machine composition rejected: lifecycle is " + state);
         }
         Map<Identifier, cn.howxu.mmcr.api.machine.MachineRegistration> machines = new LinkedHashMap<>();
+        STRUCTURE_SNAPSHOT = structures.freeze();
+        ModifierRegistry.install(STRUCTURE_SNAPSHOT.modifiers());
         for (MachineDefinition definition : MACHINES.values()) {
             machines.put(definition.id(), PublicMachineAdapter.toStartupRegistration(definition,
                     structures.structures().get(definition.id())));
@@ -133,7 +138,8 @@ public final class PublicApiBootstrap {
                 throw new ApiRegistrationException("Recipe " + recipe.id()
                         + " refers to unknown machine " + recipe.machineId() + " during installation");
             }
-            recipes.put(recipe.id(), PublicRecipeAdapter.toRecipe(recipe));
+            recipes.put(recipe.id(), PublicRecipeAdapter.toRecipe(recipe,
+                    STRUCTURE_SNAPSHOT.modifiers(), STRUCTURE_SNAPSHOT.levels()));
         }
         for (Identifier id : recipes.keySet()) {
             if (RecipeRegistry.containsStatic(id)) throw duplicate(id, "recipe");
@@ -148,6 +154,8 @@ public final class PublicApiBootstrap {
     public static synchronized void clearForTesting() {
         MACHINES.clear();
         RECIPES.clear();
+        STRUCTURE_SNAPSHOT = new RegisterMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of());
+        ModifierRegistry.install(Map.of());
         state = State.BEFORE_BEGIN;
         ApiRuntime.uninstall();
     }

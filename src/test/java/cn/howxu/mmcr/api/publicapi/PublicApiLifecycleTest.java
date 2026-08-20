@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.PatternBuilder;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
@@ -199,6 +200,48 @@ class PublicApiLifecycleTest {
                 "RegisterMachineDefinationsEvent",
                 "RegisterMachineStructuresEvent",
                 "MMCRRegisterRecipesEvent");
+    }
+
+    @Test
+    void structure_event_freeze_validates_modifier_and_level_references_and_returns_snapshot() {
+        Identifier machineId = id("snapshot_machine");
+        Identifier typeId = id("snapshot_type");
+        Identifier levelId = id("snapshot_level");
+        Identifier modifierId = id("snapshot_modifier");
+        RegisterMachineStructuresEvent event = new RegisterMachineStructuresEvent(List.of(machineId));
+        event.registerLevelType(new cn.howxu.mmcr.api.machine.level.LevelType(typeId,
+                net.minecraft.network.chat.Component.literal("Snapshot")));
+        event.registerLevel(new cn.howxu.mmcr.api.machine.level.MachineLevel(levelId, typeId, 1,
+                new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlock(Blocks.FURNACE),
+                net.minecraft.world.item.ItemStack.EMPTY,
+                cn.howxu.mmcr.api.machine.level.LevelModifier.IDENTITY));
+        event.registerModifier(modifierId, new ModifierDefinition(List.of()));
+        event.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage
+                .pattern(pattern -> pattern.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))
+                .requirements(requirements -> requirements.levelSlot('F', typeId).modifier('F', modifierId))));
+
+        var snapshot = event.freeze();
+
+        assertThat(snapshot.levelTypes()).containsKey(typeId);
+        assertThat(snapshot.levels()).containsKey(levelId);
+        assertThat(snapshot.modifiers()).containsKey(modifierId);
+        assertThatThrownBy(() -> snapshot.structures().clear()).isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> event.registerModifier(id("late"), new ModifierDefinition(List.of())))
+                .isInstanceOf(ApiRegistrationException.class);
+    }
+
+    @Test
+    void structure_event_rejects_unknown_references_at_freeze() {
+        Identifier machineId = id("invalid_snapshot_machine");
+        RegisterMachineStructuresEvent event = new RegisterMachineStructuresEvent(List.of(machineId));
+        event.registerModifier(id("known_modifier"), new ModifierDefinition(List.of()));
+        event.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage
+                .pattern(pattern -> pattern.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))
+                .requirements(requirements -> requirements.modifier('F', id("unknown_modifier")))));
+
+        assertThatThrownBy(event::freeze)
+                .isInstanceOf(ApiRegistrationException.class)
+                .hasMessageContaining("unknown_modifier");
     }
 
     @Test

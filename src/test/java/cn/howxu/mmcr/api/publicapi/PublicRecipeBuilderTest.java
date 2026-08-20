@@ -3,12 +3,12 @@ package cn.howxu.mmcr.api.publicapi;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeModifierValue;
 import cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.internal.api.PublicRecipeAdapter;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.Dynamic;
@@ -22,6 +22,7 @@ import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.Map;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -68,7 +69,7 @@ class PublicRecipeBuilderTest {
         assertThat(recipe.requirements()).hasSize(6);
         assertThat(recipe.requirements()).allSatisfy(requirement -> assertThat(requirement).isNotNull());
         assertThat(recipe.requirements()).isUnmodifiable();
-        assertThat(recipe.modifiers()).isUnmodifiable();
+        assertThat(recipe.modifierIds()).isUnmodifiable();
     }
 
     @Test
@@ -94,8 +95,7 @@ class PublicRecipeBuilderTest {
         SmartInterfaceRequirement smart = SmartInterfaceRequirement.input("Mode", 1F);
         MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("explicit"), id("machine"))
                 .requirement(explicit).requirement(smart)
-                .modifier(new RecipeModifierValue("", RecipeIo.INPUT, 2F,
-                        RecipeModifierValue.Operation.MULTIPLY, false))
+                .modifier(id("snapshot_modifier"))
                 .levelRequirement(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE, DefaultMachineLevels.COPPER_COIL)
                 .requiredHost(id("host"))
                 .build();
@@ -103,14 +103,14 @@ class PublicRecipeBuilderTest {
         assertThat(recipe.requirements()).containsExactly(explicit, smart);
         assertThat(recipe.levelRequirements()).hasSize(1);
         assertThat(recipe.requiredHostIds()).containsExactly(id("host"));
-        assertThat(recipe.modifiers()).hasSize(1);
+        assertThat(recipe.modifierIds()).hasSize(1);
     }
 
     @Test
     void adapts_public_recipe_values_to_internal_recipe_semantics() {
         ItemStack itemOutput = new ItemStack(Items.GOLD_INGOT, 2);
         FluidStack fluidOutput = new FluidStack(net.minecraft.world.level.material.Fluids.WATER, 250);
-        var recipe = PublicRecipeAdapter.toRecipe(MachineRecipeBuilder.recipe(id("adapter"), id("machine"))
+        var definition = MachineRecipeBuilder.recipe(id("adapter"), id("machine"))
                 .inputItem(Ingredient.of(Items.IRON_INGOT), 2, components(), 0.25F)
                 .inputFluid(net.minecraft.world.level.material.Fluids.WATER, 1000)
                 .inputEnergy(40)
@@ -119,9 +119,13 @@ class PublicRecipeBuilderTest {
                 .outputEnergy(10)
                 .levelRequirement(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE, DefaultMachineLevels.COPPER_COIL)
                 .requiredHost(id("host"))
-                .modifier(new RecipeModifierValue("item", RecipeIo.OUTPUT, 2F,
-                        RecipeModifierValue.Operation.MULTIPLY, true))
-                .build());
+                .modifier(id("snapshot_modifier"))
+                .build();
+        var recipe = PublicRecipeAdapter.toRecipe(definition,
+                Map.of(id("snapshot_modifier"), new ModifierDefinition(List.of(new cn.howxu.mmcr.api.recipe.modifier.RecipeModifier(
+                        "item", cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.OUTPUT, 2F,
+                        cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.Operation.MULTIPLY, true)))),
+                Map.of(DefaultMachineLevels.COPPER_COIL, MachineLevelRegistry.getLevel(DefaultMachineLevels.COPPER_COIL)));
 
         assertThat(recipe.requirements()).hasSize(6);
         assertThat(recipe.requirements()).anySatisfy(requirement -> {

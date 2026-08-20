@@ -2,6 +2,8 @@ package cn.howxu.mmcr.api.publicapi.event;
 
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
+import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import net.minecraft.resources.Identifier;
@@ -24,7 +26,9 @@ public final class RegisterMachineStructuresEvent extends Event {
     private final Map<Identifier, MachineStructureDefinition> structures = new LinkedHashMap<>();
     private final Map<Identifier, LevelType> levelTypes = new LinkedHashMap<>();
     private final Map<Identifier, MachineLevel> levels = new LinkedHashMap<>();
+    private final Map<Identifier, ModifierDefinition> modifiers = new LinkedHashMap<>();
     private boolean frozen;
+    private Snapshot snapshot;
 
     public RegisterMachineStructuresEvent(Collection<Identifier> machineIds) {
         this.machineIds = Set.copyOf(Objects.requireNonNull(machineIds, "machineIds"));
@@ -35,6 +39,7 @@ public final class RegisterMachineStructuresEvent extends Event {
         if (current != null) {
             prepared.levelTypes.putAll(current.levelTypes);
             prepared.levels.putAll(current.levels);
+            prepared.modifiers.putAll(current.modifiers);
         }
         current = prepared;
         return current;
@@ -50,62 +55,120 @@ public final class RegisterMachineStructuresEvent extends Event {
     }
 
     public void registerStructure(Identifier machineId, UnaryOperator<MachineStructureBuilder> consumer) {
-        if (frozen) throw new IllegalStateException("Machine structures are frozen");
-        Objects.requireNonNull(machineId, "machineId");
+        requireOpen();
+        require(machineId, "machine id");
         if (!machineIds.contains(machineId)) {
-            throw new IllegalArgumentException("Unknown machine definition: " + machineId);
+            throw new ApiRegistrationException("Unknown machine definition: " + machineId);
         }
         if (structures.containsKey(machineId)) {
-            throw new IllegalStateException("Duplicate machine structure: " + machineId);
+            throw new ApiRegistrationException("Duplicate machine structure: " + machineId);
         }
         MachineStructureBuilder builder = Objects.requireNonNull(consumer, "consumer")
                 .apply(MachineStructureBuilder.structure());
-        structures.put(machineId, Objects.requireNonNull(builder, "consumer result").build(machineId));
+        try {
+            structures.put(machineId, Objects.requireNonNull(builder, "consumer result").build(machineId));
+        } catch (ApiRegistrationException exception) {
+            throw exception;
+        } catch (IllegalArgumentException exception) {
+            throw new ApiRegistrationException("Invalid machine structure " + machineId + ": " + exception.getMessage());
+        }
     }
 
     public void registerStructure(MachineStructureDefinition structure) {
-        if (frozen) throw new IllegalStateException("Machine structures are frozen");
-        Objects.requireNonNull(structure, "structure");
+        requireOpen();
+        require(structure, "structure");
         if (!machineIds.contains(structure.machineId())) {
-            throw new IllegalArgumentException("Unknown machine definition: " + structure.machineId());
+            throw new ApiRegistrationException("Unknown machine definition: " + structure.machineId());
         }
         if (structures.putIfAbsent(structure.machineId(), structure) != null) {
-            throw new IllegalStateException("Duplicate machine structure: " + structure.machineId());
+            throw new ApiRegistrationException("Duplicate machine structure: " + structure.machineId());
         }
     }
 
     public void registerLevelType(LevelType type) {
-        if (frozen) throw new IllegalStateException("Machine structures are frozen");
-        Objects.requireNonNull(type, "type");
+        requireOpen();
+        require(type, "level type");
         if (levelTypes.putIfAbsent(type.id(), type) != null) {
-            throw new IllegalStateException("Duplicate machine level type: " + type.id());
+            throw new ApiRegistrationException("Duplicate machine level type: " + type.id());
         }
     }
 
     public void registerLevel(MachineLevel level) {
-        if (frozen) throw new IllegalStateException("Machine structures are frozen");
-        Objects.requireNonNull(level, "level");
+        requireOpen();
+        require(level, "level");
         if (!levelTypes.containsKey(level.typeId())) {
-            throw new IllegalStateException("Unknown machine level type: " + level.typeId());
+            throw new ApiRegistrationException("Unknown machine level type: " + level.typeId());
         }
         if (levels.putIfAbsent(level.id(), level) != null) {
-            throw new IllegalStateException("Duplicate machine level: " + level.id());
+            throw new ApiRegistrationException("Duplicate machine level: " + level.id());
+        }
+    }
+
+    public void registerModifier(Identifier id, ModifierDefinition definition) {
+        requireOpen();
+        require(id, "modifier id");
+        require(definition, "modifier definition");
+        if (modifiers.putIfAbsent(id, definition) != null) {
+            throw new ApiRegistrationException("Duplicate machine modifier: " + id);
         }
     }
 
     public Map<Identifier, MachineStructureDefinition> structures() {
-        return Collections.unmodifiableMap(new LinkedHashMap<>(structures));
+        return snapshot == null ? immutable(structures) : snapshot.structures();
     }
 
     public Map<Identifier, LevelType> levelTypes() {
-        return Collections.unmodifiableMap(new LinkedHashMap<>(levelTypes));
+        return snapshot == null ? immutable(levelTypes) : snapshot.levelTypes();
     }
 
     public Map<Identifier, MachineLevel> levels() {
-        return Collections.unmodifiableMap(new LinkedHashMap<>(levels));
+        return snapshot == null ? immutable(levels) : snapshot.levels();
     }
 
-    public void freeze() {
+    public Map<Identifier, ModifierDefinition> modifiers() {
+        return snapshot == null ? immutable(modifiers) : snapshot.modifiers();
+    }
+
+    public Snapshot freeze() {
+        if (frozen) return snapshot;
+        structures.values().forEach(structure -> structure.stages().forEach(stage -> {
+            stage.requirements().levelSlots().values().forEach(typeId -> {
+                if (!levelTypes.containsKey(typeId)) throw new ApiRegistrationException(
+                        "Structure " + structure.machineId() + " refers to unknown machine level type " + typeId);
+            });
+            stage.requirements().modifierReplacements().values().stream().flatMap(Collection::stream)
+                    .forEach(replacement -> {
+                        if (!modifiers.containsKey(replacement.modifierId())) throw new ApiRegistrationException(
+                                "Structure " + structure.machineId() + " refers to unknown machine modifier "
+                                        + replacement.modifierId());
+                    });
+        }));
         frozen = true;
+        snapshot = new Snapshot(structures, levelTypes, levels, modifiers);
+        return snapshot;
+    }
+
+    private void requireOpen() {
+        if (frozen) throw new ApiRegistrationException("Machine structures are frozen");
+    }
+
+    private static <T> T require(T value, String name) {
+        if (value == null) throw new ApiRegistrationException(name + " must not be null");
+        return value;
+    }
+
+    private static <K, V> Map<K, V> immutable(Map<K, V> source) {
+        return Collections.unmodifiableMap(new LinkedHashMap<>(source));
+    }
+
+    public record Snapshot(Map<Identifier, MachineStructureDefinition> structures,
+            Map<Identifier, LevelType> levelTypes, Map<Identifier, MachineLevel> levels,
+            Map<Identifier, ModifierDefinition> modifiers) {
+        public Snapshot {
+            structures = immutable(structures);
+            levelTypes = immutable(levelTypes);
+            levels = immutable(levels);
+            modifiers = immutable(modifiers);
+        }
     }
 }

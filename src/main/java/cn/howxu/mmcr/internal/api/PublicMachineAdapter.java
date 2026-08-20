@@ -19,6 +19,7 @@ import cn.howxu.mmcr.api.publicapi.machine.PatternDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.PortRequirements;
 import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
 import cn.howxu.mmcr.api.publicapi.machine.StructureRequirements;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.StructureStage;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
@@ -117,10 +118,19 @@ public final class PublicMachineAdapter {
                 .controllerSpec(toControllerSpec(definition.id(), definition.controller()))
                 .appearance(toAppearanceSpec(definition.appearance()))
                 .allowParallelism(definition.parallelizable())
-                .maxParallelAmount(definition.maxParallelism());
+                .maxParallelAmount(definition.maxParallelAmount())
+                .allowModifiers(definition.allowModifiers())
+                .allowMultithreading(definition.allowMultithreading())
+                .shareSmartInterfaces(definition.shareSmartInterfaces());
+        definition.smartInterfaceTypes().values().forEach(builder::smartInterfaceType);
+        definition.smartInterfaceModifiers().forEach(builder::smartInterfaceModifier);
+        builder.runningSound(definition.runningSoundId()).finishSound(definition.finishSoundId());
         if (structure != null) {
             builder.pattern(toBlockArray(structure.stages().getFirst().pattern()));
             if (structure.stages().size() > 1) builder.expandableStructure();
+        } else {
+            builder.pattern(definition.pattern());
+            if (definition.expandableStructure()) builder.expandableStructure();
         }
         if (definition.role() == MachineRole.MODULE) builder.module();
         if (definition.role() == MachineRole.HOST) {
@@ -130,14 +140,25 @@ public final class PublicMachineAdapter {
     }
 
     public static MachineStructureDefinition toStructureDefinition(cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure) {
+        return toStructureDefinition(structure, Map.of());
+    }
+
+    public static MachineStructureDefinition toStructureDefinition(
+            cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure,
+            Map<Identifier, ModifierDefinition> modifiers) {
         return new MachineStructureDefinition(structure.machineId(), structure.stages().stream()
-                .map(PublicMachineAdapter::toDeclaration).toList());
+                .map(stage -> toDeclaration(stage, modifiers)).toList());
     }
 
     public static MachineStructureDefinition.Declaration toDeclaration(StructureStage stage) {
+        return toDeclaration(stage, Map.of());
+    }
+
+    private static MachineStructureDefinition.Declaration toDeclaration(StructureStage stage,
+            Map<Identifier, ModifierDefinition> modifiers) {
         return new MachineStructureDefinition.Declaration(toDeclarationKind(stage.kind()), toBlockArray(stage.pattern()),
                 toPortRequirementSpec(stage.portRequirements()), toPortTierRequirementSpec(stage.portTiers()),
-                List.of(), toStructureRequirements(stage.requirements()));
+                List.of(), toStructureRequirements(stage.requirements(), modifiers));
     }
 
     private static cn.howxu.mmcr.api.machine.BlockPredicate toBlockPredicate(
@@ -198,12 +219,16 @@ public final class PublicMachineAdapter {
                 .toList());
     }
 
-    private static MachineStructureRequirements toStructureRequirements(StructureRequirements requirements) {
+    private static MachineStructureRequirements toStructureRequirements(StructureRequirements requirements,
+            Map<Identifier, ModifierDefinition> modifiers) {
         MachineStructureRequirements.Builder builder = MachineStructureRequirements.builder();
         requirements.levelSlots().forEach(builder::levelSlot);
-        requirements.modifierReplacements().forEach((symbol, replacements) -> replacements.forEach(replacement ->
-                builder.modifier(symbol, new SingleBlockModifierReplacement(replacement.modifierName(),
-                        toBlockPredicate(replacement.replacement()), replacement.modifiers(), replacement.descriptiveStack()))));
+        requirements.modifierReplacements().forEach((symbol, replacements) -> replacements.forEach(replacement -> {
+            ModifierDefinition definition = modifiers.get(replacement.modifierId());
+            if (definition == null) throw new ApiRegistrationException("Unknown machine modifier " + replacement.modifierId());
+            builder.modifier(symbol, new SingleBlockModifierReplacement(replacement.modifierId().toString(),
+                    toBlockPredicate(replacement.replacement()), definition.modifiers(), replacement.descriptiveStack()));
+        }));
         return builder.build();
     }
 

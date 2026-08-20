@@ -3,6 +3,8 @@ package cn.howxu.mmcr.api.publicapi.machine;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
+import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
+import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import net.minecraft.resources.Identifier;
 
 import java.util.Collections;
@@ -25,7 +27,26 @@ public record MachineDefinition(
         Set<Identifier> acceptedModuleIds,
         int maxParallelism,
         boolean parallelizable,
-        RecipeFailureActions failureAction) {
+        RecipeFailureActions failureAction,
+        boolean allowModifiers,
+        boolean allowMultithreading,
+        int maxParallelAmount,
+        boolean expandableStructure,
+        java.util.Map<String, SmartInterfaceType> smartInterfaceTypes,
+        boolean shareSmartInterfaces,
+        List<SmartInterfaceModifier> smartInterfaceModifiers,
+        Identifier runningSoundId,
+        Identifier finishSoundId,
+        cn.howxu.mmcr.api.machine.BlockArray pattern) {
+
+    public MachineDefinition(Identifier id, String displayNameKey, ControllerSpec controller,
+            AppearanceSpec appearance, FactorySpec factory, MachineRole role,
+            Set<Identifier> acceptedModuleIds, int maxParallelism, boolean parallelizable,
+            RecipeFailureActions failureAction) {
+        this(id, displayNameKey, controller, appearance, factory, role, acceptedModuleIds,
+                maxParallelism, parallelizable, failureAction, false, false, 1, false,
+                java.util.Map.of(), false, List.of(), null, null, new cn.howxu.mmcr.api.machine.BlockArray(java.util.Map.of()));
+    }
 
     public MachineDefinition {
         if (id == null) throw new IllegalArgumentException("id null");
@@ -39,6 +60,9 @@ public record MachineDefinition(
         role = role == null ? MachineRole.NORMAL : role;
         acceptedModuleIds = copyAcceptedModuleIds(acceptedModuleIds);
         if (maxParallelism < 1) throw new IllegalArgumentException("maxParallelism must be positive");
+        if (maxParallelAmount < 1) throw new IllegalArgumentException("maxParallelAmount must be positive");
+        smartInterfaceTypes = java.util.Map.copyOf(smartInterfaceTypes == null ? java.util.Map.of() : smartInterfaceTypes);
+        smartInterfaceModifiers = List.copyOf(smartInterfaceModifiers == null ? List.of() : smartInterfaceModifiers);
         failureAction = failureAction == null ? RecipeFailureActions.getDefaultAction() : failureAction;
         if (role != MachineRole.HOST && !acceptedModuleIds.isEmpty()) {
             throw new IllegalStateException("Only HOST machines may accept modules");

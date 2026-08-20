@@ -71,14 +71,14 @@ class PublicEventSubscribersTest {
         var machineId = MMCR.id("known_machine");
         var event = new RegisterMachineStructuresEvent(Set.of(machineId));
         assertThatThrownBy(() -> event.registerStructure(MMCR.id("unknown"), builder -> builder))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(ApiRegistrationException.class);
         assertThatThrownBy(() -> event.registerStructure(machineId, null)).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> event.registerStructure(machineId, builder -> builder))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(ApiRegistrationException.class);
         event.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage.pattern(pattern -> pattern
                 .layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))));
         assertThatThrownBy(() -> event.registerStructure(machineId, builder -> builder))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(ApiRegistrationException.class);
     }
 
     @Test

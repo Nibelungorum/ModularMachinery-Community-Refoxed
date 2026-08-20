@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.recipe.modifier;
 
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.Collections;
@@ -10,11 +12,12 @@ import java.util.Map;
 public final class ModifierRegistry {
 
     private static final Map<String, AbstractModifierReplacement> REPLACEMENTS = new HashMap<>();
+    private static Map<Identifier, ModifierDefinition> DEFINITIONS = Map.of();
 
     private ModifierRegistry() {
     }
 
-    public static void register(AbstractModifierReplacement replacement) {
+    static void register(AbstractModifierReplacement replacement) {
         if (replacement == null) return;
         REPLACEMENTS.put(replacement.getModifierName(), replacement);
     }
@@ -27,7 +30,20 @@ public final class ModifierRegistry {
         return List.copyOf(REPLACEMENTS.values());
     }
 
-    public static void clear() {
+    static void clear() {
         REPLACEMENTS.clear();
+        DEFINITIONS = Map.of();
+    }
+
+    public static void install(Map<Identifier, ModifierDefinition> definitions) {
+        DEFINITIONS = Map.copyOf(definitions == null ? Map.of() : definitions);
+    }
+
+    public static ModifierDefinition get(Identifier id) {
+        return DEFINITIONS.get(id);
+    }
+
+    public static Map<Identifier, ModifierDefinition> definitions() {
+        return DEFINITIONS;
     }
 }

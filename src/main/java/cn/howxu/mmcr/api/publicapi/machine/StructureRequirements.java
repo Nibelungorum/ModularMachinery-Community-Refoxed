@@ -1,8 +1,8 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Blocks;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -36,14 +36,13 @@ public record StructureRequirements(
     }
 
     public record ModifierReplacement(
-            String modifierName,
+            Identifier modifierId,
             BlockPredicate replacement,
-            List<RecipeModifier> modifiers,
             ItemStack descriptiveStack) {
 
         public ModifierReplacement {
+            Objects.requireNonNull(modifierId, "modifierId");
             Objects.requireNonNull(replacement, "replacement");
-            modifiers = List.copyOf(modifiers == null ? List.of() : modifiers);
             descriptiveStack = descriptiveStack == null ? ItemStack.EMPTY : descriptiveStack.copy();
         }
 
@@ -62,14 +61,13 @@ public record StructureRequirements(
         private final Map<Character, List<ModifierReplacement>> modifiers = new LinkedHashMap<>();
         private final Map<Character, Identifier> levelSlots = new LinkedHashMap<>();
 
-        public Builder modifier(char symbol, BlockPredicate replacement, List<RecipeModifier> modifiers, ItemStack descriptiveStack) {
-            return modifier(symbol, null, replacement, modifiers, descriptiveStack);
+        public Builder modifier(char symbol, Identifier modifierId) {
+            return modifier(symbol, modifierId, BlockPredicate.block(Blocks.AIR), ItemStack.EMPTY);
         }
 
-        public Builder modifier(char symbol, String modifierName, BlockPredicate replacement,
-                List<RecipeModifier> modifiers, ItemStack descriptiveStack) {
+        public Builder modifier(char symbol, Identifier modifierId, BlockPredicate replacement, ItemStack descriptiveStack) {
             this.modifiers.computeIfAbsent(symbol, ignored -> new ArrayList<>())
-                    .add(new ModifierReplacement(modifierName, replacement, modifiers, descriptiveStack));
+                    .add(new ModifierReplacement(modifierId, replacement, descriptiveStack));
             return this;
         }
 

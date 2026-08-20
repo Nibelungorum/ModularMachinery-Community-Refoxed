@@ -112,8 +112,6 @@ class PublicMachineBuilderTest {
     @Test
     void structure_builder_preserves_ports_tiers_and_requirements() {
         var machineId = MMCR.id("structured_machine");
-        var modifier = new RecipeModifier("duration", RecipeModifier.IOType.INPUT, 0.5F,
-                RecipeModifier.Operation.MULTIPLY, false);
         var structure = MachineStructureBuilder.structure()
                 .fullStructure(stage -> stage
                         .pattern(pattern -> pattern.layer("CFC")
@@ -125,8 +123,8 @@ class PublicMachineBuilderTest {
                                 .minEnergyInput(PortTiers.EnergyTier.NORMAL))
                         .requirements(requirements -> requirements
                                 .levelSlot('C', MMCR.id("coil"))
-                                .modifier('C', BlockPredicate.block(Blocks.GOLD_BLOCK), List.of(modifier),
-                                        new ItemStack(Blocks.GOLD_BLOCK))))
+                                 .modifier('C', MMCR.id("gold_modifier"), BlockPredicate.block(Blocks.GOLD_BLOCK),
+                                         new ItemStack(Blocks.GOLD_BLOCK))))
                 .build(machineId);
 
         var stage = structure.stages().getFirst();

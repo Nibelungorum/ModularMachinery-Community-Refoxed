@@ -25,7 +25,7 @@ public record MachineRecipeDefinition(
         List<FluidOutput> fluidOutputs,
         List<EnergyInput> energyOutputs,
         List<RecipeRequirement> requirements,
-        List<RecipeModifierValue> modifiers,
+        List<Identifier> modifierIds,
         List<LevelRequirement> levelRequirements,
         Set<RequiredHost> requiredHosts) {
     public MachineRecipeDefinition {
@@ -40,7 +40,7 @@ public record MachineRecipeDefinition(
         fluidOutputs = List.copyOf(fluidOutputs == null ? List.of() : fluidOutputs);
         energyOutputs = List.copyOf(energyOutputs == null ? List.of() : energyOutputs);
         requirements = List.copyOf(requirements == null ? List.of() : requirements);
-        modifiers = List.copyOf(modifiers == null ? List.of() : modifiers);
+        modifierIds = List.copyOf(modifierIds == null ? List.of() : modifierIds);
         levelRequirements = List.copyOf(levelRequirements == null ? List.of() : levelRequirements);
         requiredHosts = Set.copyOf(requiredHosts == null ? Set.of() : requiredHosts);
     }
