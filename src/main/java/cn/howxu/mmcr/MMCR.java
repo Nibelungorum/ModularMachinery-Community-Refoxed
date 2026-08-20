@@ -76,17 +76,14 @@ public class MMCR {
     public static final DeferredRegister<CreativeModeTab> CREATIVE_TABS =
             DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
 
+    private static StartupPhase startupPhase = StartupPhase.NOT_STARTED;
+
     public MMCR(IEventBus modBus, ModContainer modContainer) {
         PublicApiBootstrap.begin();
         MachineDefinitions.beginRegistryPhase();
         MachineDefinitions.bootstrapBuiltins();
-        ModDataComponents.register(modBus);
-        ModBlocks.register(modBus);
-        ModItems.register(modBus);
-        ModBlockEntities.register(modBus);
-        ModUIs.register(modBus);
-        ModRecipeTypes.register(modBus);
         registerPublicApiLifecycle();
+        registerDeferredRegisters(modBus);
         CREATIVE_TABS.register(modBus);
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
         modBus.addListener(ModCapabilities::register);
@@ -235,6 +232,7 @@ public class MMCR {
             Consumer<MMCRMachineDefinationsEvent> definitionsSource,
             Consumer<MMCRMachineStructuresEvent> structuresSource,
             Consumer<MMCRMachineRecipesEvent> recipesSource) {
+        startupPhase = StartupPhase.COLLECTING;
         PublicApiBootstrap.begin();
         ContentRegistrationCoordinator.beginStartup();
         MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
@@ -259,6 +257,24 @@ public class MMCR {
         recipes.freeze();
         PublicApiBootstrap.collectRecipes(recipes);
         ContentRegistrationCoordinator.commitStartup();
+        startupPhase = StartupPhase.COMMITTED;
+    }
+
+    private static void registerDeferredRegisters(IEventBus modBus) {
+        if (!ContentRegistrationCoordinator.isCommitted()) {
+            throw new IllegalStateException("DeferredRegisters cannot be attached before startup commit");
+        }
+        ModDataComponents.register(modBus);
+        ModBlocks.register(modBus);
+        ModItems.register(modBus);
+        ModBlockEntities.register(modBus);
+        ModUIs.register(modBus);
+        ModRecipeTypes.register(modBus);
+        startupPhase = StartupPhase.REGISTERS_ATTACHED;
+    }
+
+    public static String startupPhaseForTesting() {
+        return startupPhase.name();
     }
 
     private static void registerDynamicControllers(java.util.Set<Identifier> machineIds) {
@@ -323,6 +339,10 @@ public class MMCR {
 
     private static void registerGameTestBuiltins(String methodName, Class<?>[] parameterTypes, Object... arguments) {
         invokeOptionalSource("cn.howxu.mmcr.GameTestRegistry", methodName, parameterTypes, arguments);
+    }
+
+    private enum StartupPhase {
+        NOT_STARTED, COLLECTING, COMMITTED, REGISTERS_ATTACHED
     }
 
     private static void registerGameTests(RegisterGameTestsEvent event) {

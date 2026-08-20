@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.registry.ModBlocks;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.Holder;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.GameTestInstance;
 import net.minecraft.gametest.framework.TestData;
@@ -28,6 +29,14 @@ public final class GameTestRegistry {
     }
 
     public static void registerAll(RegisterGameTestsEvent event) {
+        register(event, "registry_reflection_helper", 20, helper -> {
+            boolean registered = helper.getLevel().registryAccess()
+                    .lookupOrThrow(Registries.TEST_INSTANCE)
+                    .get(MMCR.id("registry_reflection_helper"))
+                    .isPresent();
+            helper.assertTrue(registered, "GameTestRegistry reflection helper registers the canonical test ID");
+            helper.succeed();
+        });
         register(event, "block_array_match", 100, helper -> new BlockArrayMatchGameTest().structureForms3x3Casing(helper));
         register(event, "controller_tick", 100, helper -> new ControllerTickGameTest().structureForms3x3Casing(helper));
         register(event, "controller_tick_scan_registry", 100, helper -> new ControllerTickGameTest().scansRegisteredMachineWhenDefaultBindingIsEmpty(helper));

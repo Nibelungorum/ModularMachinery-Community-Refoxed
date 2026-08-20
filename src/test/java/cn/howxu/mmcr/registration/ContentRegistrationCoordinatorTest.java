@@ -216,6 +216,14 @@ class ContentRegistrationCoordinatorTest {
     }
 
     @Test
+    void production_startup_seam_commits_before_register_attachment() {
+        MMCR.registerProductionApiLifecycleForTesting();
+
+        assertThat(ContentRegistrationCoordinator.isCommitted()).isTrue();
+        assertThat(MMCR.startupPhaseForTesting()).isEqualTo("COMMITTED");
+    }
+
+    @Test
     void production_bootstrap_projects_structures_into_effective_registry() {
         assertThatCode(MMCR::registerProductionApiLifecycleForTesting).doesNotThrowAnyException();
         assertThat(MachineStructureRegistry.startupSnapshot()).isNotEmpty()
