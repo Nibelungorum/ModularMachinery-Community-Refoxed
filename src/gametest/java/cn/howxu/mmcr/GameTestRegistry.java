@@ -100,6 +100,11 @@ public final class GameTestRegistry {
                             .where('X', BlockPredicate.block(ModBlocks.CASING.get()))
                             .where('C', BlockPredicate.block(ModBlocks.controllerFor(id).get()))
                             .controller('C')));
+                    structure.extension(stage -> stage.pattern(pattern -> pattern
+                            .layer("XXX", "XCX", "XXX")
+                            .where('X', BlockPredicate.block(ModBlocks.CASING.get()))
+                            .where('C', BlockPredicate.block(ModBlocks.controllerFor(id).get()))
+                            .controller('C')));
                 }
                 return structure;
             });

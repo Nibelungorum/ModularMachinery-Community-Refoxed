@@ -168,6 +168,11 @@ public final class PublicApiBootstrap {
     /** Test-only reset hook; not part of the public API surface. */
     public static synchronized void clearForTesting() {
         ContentRegistrationCoordinator.clearForTesting();
+        resetStateForTesting();
+    }
+
+    /** Resets the public API lifecycle without recursively resetting the coordinator. */
+    public static synchronized void resetStateForTesting() {
         MachineStructureRegistry.clearForTesting();
         MACHINES.clear();
         RECIPES.clear();

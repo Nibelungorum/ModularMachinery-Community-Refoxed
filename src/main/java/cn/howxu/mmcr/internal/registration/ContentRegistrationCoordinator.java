@@ -17,6 +17,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.internal.api.PublicMachineAdapter;
+import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.api.PublicRecipeAdapter;
 import net.minecraft.resources.Identifier;
 
@@ -124,6 +125,16 @@ public final class ContentRegistrationCoordinator {
         state = State.BEFORE_BEGIN;
         testCommitCount = 0;
         lastStartupSnapshot = new StartupSnapshotForTesting(Set.of(), Set.of(), Set.of());
+    }
+
+    /** Resets the complete startup test seam, including public API lifecycle state. */
+    public static synchronized void resetForTesting() {
+        clearForTesting();
+        PublicApiBootstrap.resetStateForTesting();
+        MachineDefinitions.clearForTesting();
+        MachineRegistry.clearForTesting();
+        MachineStructureRegistry.clearForTesting();
+        RecipeRegistry.clearForTesting();
     }
 
     private static Map<Identifier, MachineRegistration> validateAndConvertMachines() {

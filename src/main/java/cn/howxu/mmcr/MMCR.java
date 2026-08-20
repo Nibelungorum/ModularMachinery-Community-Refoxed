@@ -34,11 +34,11 @@ import cn.howxu.mmcr.registry.ModRecipeTypes;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.api.PublicMachineDefinitionProviders;
- import cn.howxu.mmcr.internal.api.PublicBuiltinRuntime;
+import cn.howxu.mmcr.internal.api.PublicBuiltinRuntime;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
- import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
- import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
- import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
@@ -53,7 +53,6 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.loading.FMLLoader;
-import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
@@ -87,8 +86,7 @@ public class MMCR {
         ModBlockEntities.register(modBus);
         ModUIs.register(modBus);
         ModRecipeTypes.register(modBus);
-        registerStartupDefinitions();
-        modBus.addListener(MMCR::onCommonSetup);
+        registerPublicApiLifecycle();
         CREATIVE_TABS.register(modBus);
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
         modBus.addListener(ModCapabilities::register);
@@ -200,16 +198,6 @@ public class MMCR {
 
     private static void registerPublicApiLifecycle() {
         registerStartupContent(
-                definitions -> registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineDefinitions",
-                        new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions),
-                structures -> registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineStructures",
-                        new Class<?>[]{MMCRMachineStructuresEvent.class}, structures),
-                recipes -> registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerRecipes",
-                        new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes));
-    }
-
-    public static void registerProductionApiLifecycleForTesting() {
-        registerStartupContent(
                 definitions -> {
                     org.nibelungorum.builtin.PublicBuiltinMachineDefinitions.registerDefinitions(definitions);
                     registerGameTestBuiltins("registerMachineDefinitions",
@@ -228,19 +216,8 @@ public class MMCR {
                 });
     }
 
-    private static void registerStartupDefinitions() {
-        PublicApiBootstrap.begin();
-        ContentRegistrationCoordinator.beginStartup();
-        MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
-        PublicMachineDefinitionProviders.registerAll(definitions);
-        registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineDefinitions",
-                new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions);
-        ModBlocks.registerMachineControllers(definitions.definitions().keySet());
-        ModBlockEntities.registerMachineControllers(definitions.definitions().keySet());
-        ModItems.registerMachineControllerItems(definitions.definitions().keySet());
-        NeoForge.EVENT_BUS.post(definitions);
-        definitions.freeze();
-        PublicApiBootstrap.collectMachines(definitions);
+    public static void registerProductionApiLifecycleForTesting() {
+        registerPublicApiLifecycle();
     }
 
     public static void registerPublicApiLifecycleForTesting() {
@@ -252,10 +229,6 @@ public class MMCR {
             Consumer<MMCRMachineStructuresEvent> structuresSource,
             Consumer<MMCRMachineRecipesEvent> recipesSource) {
         registerStartupContent(definitionsSource, structuresSource, recipesSource);
-    }
-
-    private static void onCommonSetup(FMLCommonSetupEvent event) {
-        event.enqueueWork(MMCR::registerPublicApiLifecycle);
     }
 
     private static void registerStartupContent(

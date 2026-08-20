@@ -27,15 +27,24 @@ import java.util.Map;
 public class ControllerTickGameTest {
 
     public void structureForms3x3Casing(GameTestHelper helper) {
+        Identifier machineId = MMCR.id("controller_tick");
+        helper.assertTrue(MachineRegistry.getMachine(machineId) != null,
+                "GameTest startup installs the machine registry entry");
+        helper.assertTrue(cn.howxu.mmcr.api.machine.MachineStructureRegistry.effectiveSnapshot().containsKey(machineId),
+                "GameTest startup installs the effective structure");
+        helper.assertTrue(!MachineRegistry.getCompiledStages(machineId).isEmpty(),
+                "GameTest startup compiles the effective structure");
+
         for (int x = 0; x < 3; x++) for (int z = 0; z < 3; z++)
             helper.setBlock(new BlockPos(x, 1, z), ModBlocks.CASING.get().defaultBlockState());
 
         BlockPos controllerPos = new BlockPos(1, 1, 1);
-        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("controller_tick")).get().defaultBlockState());
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(machineId).get().defaultBlockState());
 
-        var machine = MachineRegistry.getMachine(MMCR.id("controller_tick"));
         var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
-        controller.setMachine(machine);
+        controller.serverTick();
+        helper.assertTrue(controller.boundMachine().isPresent(), "Controller binds the startup machine");
+        controller.setMachine(MachineRegistry.getMachine(machineId));
         controller.serverTick();
         helper.assertTrue(controller.isFormed(), "Structure formed");
         helper.succeed();

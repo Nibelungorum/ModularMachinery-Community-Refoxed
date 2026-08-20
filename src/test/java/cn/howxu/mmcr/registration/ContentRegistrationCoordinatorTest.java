@@ -215,6 +215,17 @@ class ContentRegistrationCoordinatorTest {
         assertThat(ContentRegistrationCoordinator.startupSnapshotForTesting().recipes()).isNotEmpty();
     }
 
+    @Test
+    void production_bootstrap_projects_structures_into_effective_registry() {
+        assertThatCode(MMCR::registerProductionApiLifecycleForTesting).doesNotThrowAnyException();
+        assertThat(MachineStructureRegistry.startupSnapshot()).isNotEmpty()
+                .allSatisfy((machineId, structure) -> {
+                    assertThat(MachineStructureRegistry.effectiveSnapshot()).containsKey(machineId);
+                    assertThat(MachineRegistry.getMachine(machineId)).isNotNull();
+                    assertThat(MachineRegistry.getCompiledStages(machineId)).isNotEmpty();
+                });
+    }
+
     private static Identifier id(String path) {
         return MMCR.id(path);
     }

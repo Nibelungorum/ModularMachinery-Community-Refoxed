@@ -4,8 +4,6 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
@@ -21,7 +19,7 @@ import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.internal.api.PublicBuiltinRuntime;
-import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
+import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
@@ -47,7 +45,6 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.registries.DeferredHolder;
-import org.nibelungorum.DefaultMachineLevels;
 import org.nibelungorum.builtin.PublicBuiltinMachineDefinitions;
 import org.nibelungorum.builtin.PublicBuiltinRecipeDefinitions;
 
@@ -107,42 +104,24 @@ public final class TestBootstrap {
     }
 
     public static void restoreMachineDefinitions() {
-        MachineDefinitions.clearForTesting();
-        RecipeRegistry.clearForTesting();
+        ContentRegistrationCoordinator.resetForTesting();
         MachineDefinitions.beginRegistryPhase();
         registerPublicBuiltinEvents();
     }
 
     public static void registerRuntimeBuiltins() {
         restoreMachineDefinitions();
-        registerDefaultMachineLevels();
         DynamicContentReloadService.reload(candidate -> {
             PublicBuiltinRuntime.registerStructures(candidate);
         });
         MachineRegistry.rebuildCompiledCache();
     }
 
-    private static void registerDefaultMachineLevels() {
-        if (MachineLevelRegistry.getType(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE) != null) return;
-
-        MMCRMachineStructuresEvent.resetCollector();
-        MMCRMachineStructuresEvent event = MMCRMachineStructuresEvent.prepare(java.util.Set.of());
-        DefaultMachineLevels.register(event);
-        MachineLevelRegistryBridge.install(event.levelTypes().values(), event.levels().values());
-    }
-
     private static void registerPublicBuiltinEvents() {
-        PublicApiBootstrap.clearForTesting();
         MMCR.registerPublicApiLifecycleForTesting(
-                event -> {
-                    registerAllMachineDefinitions(event);
-                },
-                event -> {
-                    registerAllMachineStructures(event);
-                },
-                event -> {
-                    registerAllRecipes(event);
-                });
+                TestBootstrap::registerAllMachineDefinitions,
+                TestBootstrap::registerAllMachineStructures,
+                TestBootstrap::registerAllRecipes);
     }
 
     public static void registerAllMachineDefinitions(MMCRMachineDefinationsEvent event) {
@@ -183,6 +162,11 @@ public final class TestBootstrap {
                         .where('C', BlockPredicate.block(ModBlocks.controllerFor(machineId).get()))
                         .controller('C')));
                 if (name.contains("expandable") || name.contains("distillation")) {
+                    structure.extension(stage -> stage.pattern(pattern -> pattern
+                            .layer("XXX", "XCX", "XXX")
+                            .where('X', BlockPredicate.block(ModBlocks.CASING.get()))
+                            .where('C', BlockPredicate.block(ModBlocks.controllerFor(machineId).get()))
+                            .controller('C')));
                     structure.extension(stage -> stage.pattern(pattern -> pattern
                             .layer("XXX", "XCX", "XXX")
                             .where('X', BlockPredicate.block(ModBlocks.CASING.get()))
