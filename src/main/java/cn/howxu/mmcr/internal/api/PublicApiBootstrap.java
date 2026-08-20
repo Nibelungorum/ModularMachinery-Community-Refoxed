@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistryBridge;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
+import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import net.minecraft.resources.Identifier;
 
 import java.util.LinkedHashMap;
@@ -32,6 +33,7 @@ public final class PublicApiBootstrap {
 
     public static synchronized void begin() {
         if (state == State.BEFORE_BEGIN) {
+            ContentRegistrationCoordinator.beginStartup();
             ApiRuntime.install(new ApiRuntime.Hook() {
                 @Override
                 public boolean isRegistrationOpen() {
@@ -46,7 +48,20 @@ public final class PublicApiBootstrap {
         return state == State.OPEN;
     }
 
+    public static synchronized void collectMachines(MMCRMachineDefinationsEvent event) {
+        ContentRegistrationCoordinator.collectMachines(event);
+    }
+
+    public static synchronized void collectStructures(MMCRMachineStructuresEvent event) {
+        ContentRegistrationCoordinator.collectStructures(event);
+    }
+
+    public static synchronized void collectRecipes(MMCRMachineRecipesEvent event) {
+        ContentRegistrationCoordinator.collectRecipes(event);
+    }
+
     public static synchronized void registerDefinitions(MMCRMachineDefinationsEvent event) {
+        if (state == State.OPEN) ContentRegistrationCoordinator.collectMachines(event);
         event.definitions().values().forEach(definition -> {
             if (MachineDefinitions.containsStatic(definition.id())) {
                 MACHINES.put(definition.id(), definition);
@@ -58,6 +73,7 @@ public final class PublicApiBootstrap {
 
     public static synchronized void composeMachineRegistrations(MMCRMachineDefinationsEvent definitions,
             MMCRMachineStructuresEvent structures) {
+        if (state == State.OPEN) ContentRegistrationCoordinator.collectStructures(structures);
         if (state == State.MACHINES_FROZEN || state == State.FROZEN) return;
         if (state != State.OPEN) {
             throw new ApiRegistrationException("Public API machine composition rejected: lifecycle is " + state);
@@ -85,6 +101,7 @@ public final class PublicApiBootstrap {
     }
 
     public static synchronized void registerRecipes(MMCRMachineRecipesEvent event) {
+        if (state == State.OPEN || state == State.MACHINES_FROZEN) ContentRegistrationCoordinator.collectRecipes(event);
         event.recipes().values().forEach(PublicApiBootstrap::registerRecipe);
     }
 
@@ -154,6 +171,7 @@ public final class PublicApiBootstrap {
 
     /** Test-only reset hook; not part of the public API surface. */
     public static synchronized void clearForTesting() {
+        ContentRegistrationCoordinator.clearForTesting();
         MACHINES.clear();
         RECIPES.clear();
         STRUCTURE_SNAPSHOT = new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of());

@@ -34,6 +34,7 @@ import cn.howxu.mmcr.registry.ModRecipeTypes;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.api.PublicMachineDefinitionProviders;
+import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
  import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
  import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
  import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
@@ -174,8 +175,10 @@ public class MMCR {
     }
 
     public static void registerRuntimeBuiltins() {
-        registerPublicApiLifecycle();
-        PublicApiBootstrap.freezeAndInstallMachines();
+        if (!ContentRegistrationCoordinator.isCommitted()) {
+            registerPublicApiLifecycle();
+            registerPublicApiRecipes();
+        }
         DynamicContentReloadService.reload(candidate -> {
             cn.howxu.mmcr.internal.api.PublicBuiltinRuntime.registerStructures(candidate);
         });
@@ -183,24 +186,19 @@ public class MMCR {
     }
 
     private static void registerRuntimeRecipes() {
-        MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
-        NeoForge.EVENT_BUS.post(recipes);
-        registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerRecipes",
-                new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
-        recipes.freeze();
-        PublicApiBootstrap.registerRecipes(recipes);
-        PublicApiBootstrap.installRecipes();
+        registerPublicApiRecipes();
     }
 
     private static void registerPublicApiLifecycle() {
         PublicApiBootstrap.begin();
+        ContentRegistrationCoordinator.beginStartup();
         MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
         PublicMachineDefinitionProviders.registerAll(definitions);
         registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineDefinitions",
                 new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions);
         NeoForge.EVENT_BUS.post(definitions);
         definitions.freeze();
-        PublicApiBootstrap.registerDefinitions(definitions);
+        PublicApiBootstrap.collectMachines(definitions);
 
         MMCRMachineStructuresEvent structures = MMCRMachineStructuresEvent.prepare(definitions.definitions().keySet());
         registerDefaultMachineLevels(structures);
@@ -208,18 +206,23 @@ public class MMCR {
                 new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
         NeoForge.EVENT_BUS.post(structures);
         structures.freeze();
-        PublicApiBootstrap.composeMachineRegistrations(definitions, structures);
-        MachineDefinitions.validateRegistryPhase();
-        MachineDefinitions.freezeRegistryPhase();
+        PublicApiBootstrap.collectStructures(structures);
+
     }
 
     public static void registerPublicApiLifecycleForTesting() {
         registerPublicApiLifecycle();
+        registerPublicApiRecipes();
+    }
+
+    private static void registerPublicApiRecipes() {
         MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
         NeoForge.EVENT_BUS.post(recipes);
         registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerRecipes",
                 new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
         recipes.freeze();
+        PublicApiBootstrap.collectRecipes(recipes);
+        ContentRegistrationCoordinator.commitStartup();
     }
 
     private static void registerDefaultMachineLevels(MMCRMachineStructuresEvent event) {
@@ -232,7 +235,6 @@ public class MMCR {
     private static void onCommonSetup(FMLCommonSetupEvent event) {
         event.enqueueWork(() -> {
             registerPublicApiLifecycle();
-            PublicApiBootstrap.freezeAndInstallMachines();
         });
     }
 
