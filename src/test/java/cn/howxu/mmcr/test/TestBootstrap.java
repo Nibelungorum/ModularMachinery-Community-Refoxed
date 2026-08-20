@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
 import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
@@ -136,7 +137,7 @@ public final class TestBootstrap {
         RegisterMachineStructuresEvent.resetCollector();
         RegisterMachineStructuresEvent event = RegisterMachineStructuresEvent.prepare(java.util.Set.of());
         DefaultMachineLevels.register(event);
-        MachineLevelRegistry.install(event.levelTypes().values(), event.levels().values());
+        MachineLevelRegistryBridge.install(event.levelTypes().values(), event.levels().values());
     }
 
     private static void addTestMachineSuppliers() {

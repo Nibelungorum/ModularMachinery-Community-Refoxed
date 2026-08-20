@@ -14,6 +14,7 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -56,7 +57,7 @@ class StructurePreviewSchemaFactoryTest {
         cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent.resetCollector();
         var event = cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent.prepare(java.util.Set.of());
         DefaultMachineLevels.register(event);
-        MachineLevelRegistry.install(event.levelTypes().values(), event.levels().values());
+        MachineLevelRegistryBridge.install(event.levelTypes().values(), event.levels().values());
     }
 
     @Test
@@ -325,18 +326,18 @@ class StructurePreviewSchemaFactoryTest {
     }
 
     private static void registerLevels(Map<Identifier, List<Block>> levelsByType) {
-        MachineLevelRegistry.beginRegistration();
+        MachineLevelRegistryBridge.beginRegistration();
         for (Identifier type : levelsByType.keySet()) {
-            MachineLevelRegistry.registerType(new LevelType(type, Component.literal(type.toString())));
+            MachineLevelRegistryBridge.registerType(new LevelType(type, Component.literal(type.toString())));
         }
         for (var entry : levelsByType.entrySet()) {
             for (int index = 0; index < entry.getValue().size(); index++) {
                 var block = entry.getValue().get(index);
-                MachineLevelRegistry.registerLevel(new MachineLevel(MMCR.id(entry.getKey().getPath() + "_" + index), entry.getKey(), index,
+                MachineLevelRegistryBridge.registerLevel(new MachineLevel(MMCR.id(entry.getKey().getPath() + "_" + index), entry.getKey(), index,
                         new BlockPredicate.OfBlockState(block.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
             }
         }
-        MachineLevelRegistry.freezeRegistration();
+        MachineLevelRegistryBridge.freezeRegistration();
     }
 
     private static Machine machineWithStages(BlockArray pattern, List<MachineStructureStage> stages) {

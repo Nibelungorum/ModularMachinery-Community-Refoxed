@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
@@ -530,13 +531,13 @@ class MachineRecipeDisplayTest {
         var ironId = MMCR.id("iron");
         var goldId = MMCR.id("gold");
         var diamondId = MMCR.id("diamond");
-        MachineLevelRegistry.beginRegistration();
-        MachineLevelRegistry.registerType(new LevelType(typeId, Component.literal("Coils")));
+        MachineLevelRegistryBridge.beginRegistration();
+        MachineLevelRegistryBridge.registerType(new LevelType(typeId, Component.literal("Coils")));
         registerLevel(copperId, typeId, 0, Blocks.COPPER_BLOCK);
         registerLevel(ironId, typeId, 1, Blocks.IRON_BLOCK);
         registerLevel(goldId, typeId, 2, Blocks.GOLD_BLOCK);
         registerLevel(diamondId, typeId, 3, Blocks.DIAMOND_BLOCK);
-        MachineLevelRegistry.freezeRegistration();
+        MachineLevelRegistryBridge.freezeRegistration();
         LevelRequirement requirement = new LevelRequirement(typeId, ironId);
 
         assertThat(MachineRecipeCategory.levelRequirement(requirement, 0).getString())
@@ -583,7 +584,7 @@ class MachineRecipeDisplayTest {
 
     private static void registerLevel(Identifier id, Identifier typeId,
                                       int priority, Block block) {
-        MachineLevelRegistry.registerLevel(new MachineLevel(id, typeId, priority,
+        MachineLevelRegistryBridge.registerLevel(new MachineLevel(id, typeId, priority,
                 new BlockPredicate.OfBlockState(block.defaultBlockState()),
                 new ItemStack(Holder.direct(block.asItem(), DataComponentMap.EMPTY)), LevelModifier.IDENTITY));
     }

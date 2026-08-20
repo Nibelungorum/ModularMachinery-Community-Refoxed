@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
@@ -140,10 +141,10 @@ class MachineRecipeSchemaTest {
     void builder_rejects_level_outside_declared_type() {
         var coilType = Identifier.parse("test:coil");
         var laserType = Identifier.parse("test:laser");
-        MachineLevelRegistry.beginRegistration();
-        MachineLevelRegistry.registerType(new LevelType(coilType, Component.literal("Coils")));
-        MachineLevelRegistry.registerType(new LevelType(laserType, Component.literal("Lasers")));
-        MachineLevelRegistry.registerLevel(new MachineLevel(Identifier.parse("test:laser"), laserType, 1,
+        MachineLevelRegistryBridge.beginRegistration();
+        MachineLevelRegistryBridge.registerType(new LevelType(coilType, Component.literal("Coils")));
+        MachineLevelRegistryBridge.registerType(new LevelType(laserType, Component.literal("Lasers")));
+        MachineLevelRegistryBridge.registerLevel(new MachineLevel(Identifier.parse("test:laser"), laserType, 1,
                 new BlockPredicate.OfBlockState(Blocks.GOLD_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
 
         assertThatIllegalArgumentException().isThrownBy(

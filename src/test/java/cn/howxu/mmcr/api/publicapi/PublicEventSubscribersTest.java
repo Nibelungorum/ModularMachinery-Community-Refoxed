@@ -72,7 +72,18 @@ class PublicEventSubscribersTest {
         var event = new RegisterMachineStructuresEvent(Set.of(machineId));
         assertThatThrownBy(() -> event.registerStructure(MMCR.id("unknown"), builder -> builder))
                 .isInstanceOf(ApiRegistrationException.class);
-        assertThatThrownBy(() -> event.registerStructure(machineId, null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> event.registerStructure(machineId, null))
+                .isInstanceOf(ApiRegistrationException.class)
+                .hasMessageContaining(machineId.toString());
+        assertThatThrownBy(() -> event.registerStructure(machineId, builder -> {
+            throw new IllegalArgumentException("invalid declaration");
+        }))
+                .isInstanceOf(ApiRegistrationException.class)
+                .hasMessageContaining(machineId.toString());
+        ApiRegistrationException declared = new ApiRegistrationException("declared failure");
+        assertThatThrownBy(() -> event.registerStructure(machineId, builder -> {
+            throw declared;
+        })).isSameAs(declared);
         assertThatThrownBy(() -> event.registerStructure(machineId, builder -> builder))
                 .isInstanceOf(ApiRegistrationException.class);
         event.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage.pattern(pattern -> pattern

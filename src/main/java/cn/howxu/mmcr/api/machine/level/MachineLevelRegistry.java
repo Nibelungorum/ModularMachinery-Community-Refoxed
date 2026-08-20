@@ -27,25 +27,25 @@ public final class MachineLevelRegistry {
     private MachineLevelRegistry() {
     }
 
-    public static void beginRegistration() {
+    static void beginRegistration() {
         TYPES.clear();
         LEVELS.clear();
         LEVELS_BY_TYPE.clear();
         registrationOpen = true;
     }
 
-    public static void freezeRegistration() {
+    static void freezeRegistration() {
         registrationOpen = false;
     }
 
-    public static void install(Collection<LevelType> types, Collection<MachineLevel> levels) {
+    static void install(Collection<LevelType> types, Collection<MachineLevel> levels) {
         beginRegistration();
         types.forEach(MachineLevelRegistry::registerType);
         levels.forEach(MachineLevelRegistry::registerLevel);
         freezeRegistration();
     }
 
-    public static void registerType(LevelType type) {
+    static void registerType(LevelType type) {
         requireRegistrationOpen();
         Objects.requireNonNull(type, "type");
         if (TYPES.putIfAbsent(type.id(), type) != null) {
@@ -54,7 +54,7 @@ public final class MachineLevelRegistry {
         LEVELS_BY_TYPE.put(type.id(), new ArrayList<>());
     }
 
-    public static void registerLevel(MachineLevel level) {
+    static void registerLevel(MachineLevel level) {
         requireRegistrationOpen();
         Objects.requireNonNull(level, "level");
         if (!TYPES.containsKey(level.typeId())) {

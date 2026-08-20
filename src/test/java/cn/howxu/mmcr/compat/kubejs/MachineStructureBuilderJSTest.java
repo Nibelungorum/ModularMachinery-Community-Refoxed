@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
@@ -58,9 +59,9 @@ class MachineStructureBuilderJSTest {
     @Test
     void pattern_retains_level_slot_coordinates_and_uses_the_type_predicate() {
         Identifier coilType = Identifier.parse("test:coil");
-        MachineLevelRegistry.beginRegistration();
-        MachineLevelRegistry.registerType(new LevelType(coilType, Component.literal("Coils")));
-        MachineLevelRegistry.registerLevel(new MachineLevel(
+        MachineLevelRegistryBridge.beginRegistration();
+        MachineLevelRegistryBridge.registerType(new LevelType(coilType, Component.literal("Coils")));
+        MachineLevelRegistryBridge.registerLevel(new MachineLevel(
                 Identifier.parse("test:copper_coil"), coilType, 1,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
                 ItemStack.EMPTY, LevelModifier.IDENTITY));
@@ -114,9 +115,9 @@ class MachineStructureBuilderJSTest {
     @Test
     void pattern_expands_repeated_level_slot_entries_to_every_matching_key() {
         Identifier coilType = Identifier.parse("test:coil");
-        MachineLevelRegistry.beginRegistration();
-        MachineLevelRegistry.registerType(new LevelType(coilType, Component.literal("Coils")));
-        MachineLevelRegistry.registerLevel(new MachineLevel(
+        MachineLevelRegistryBridge.beginRegistration();
+        MachineLevelRegistryBridge.registerType(new LevelType(coilType, Component.literal("Coils")));
+        MachineLevelRegistryBridge.registerLevel(new MachineLevel(
                 Identifier.parse("test:copper_coil"), coilType, 1,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
                 ItemStack.EMPTY, LevelModifier.IDENTITY));
@@ -160,8 +161,8 @@ class MachineStructureBuilderJSTest {
     @Test
     void builder_retains_complete_metadata_for_each_structure_declaration() {
         Identifier coilType = Identifier.parse("test:coil");
-        MachineLevelRegistry.beginRegistration();
-        MachineLevelRegistry.registerType(new LevelType(coilType, Component.literal("Coils")));
+        MachineLevelRegistryBridge.beginRegistration();
+        MachineLevelRegistryBridge.registerType(new LevelType(coilType, Component.literal("Coils")));
         BlockPos modifierPosition = new BlockPos(1, 0, 0);
         BlockArray full = BlockArray.builder()
                 .pattern("CM")
@@ -201,8 +202,8 @@ class MachineStructureBuilderJSTest {
     @Test
     void full_structure_rejects_absent_character_level_slot() {
         Identifier coilType = Identifier.parse("test:coil");
-        MachineLevelRegistry.beginRegistration();
-        MachineLevelRegistry.registerType(new LevelType(coilType, Component.literal("Coils")));
+        MachineLevelRegistryBridge.beginRegistration();
+        MachineLevelRegistryBridge.registerType(new LevelType(coilType, Component.literal("Coils")));
         BlockArray full = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)),
                 Map.of(), Map.of(BlockPos.ZERO, 'C'));
 
@@ -218,8 +219,8 @@ class MachineStructureBuilderJSTest {
     @Test
     void builder_applies_declaration_metadata_to_compatible_pattern() {
         Identifier coilType = Identifier.parse("test:coil");
-        MachineLevelRegistry.beginRegistration();
-        MachineLevelRegistry.registerType(new LevelType(coilType, Component.literal("Coils")));
+        MachineLevelRegistryBridge.beginRegistration();
+        MachineLevelRegistryBridge.registerType(new LevelType(coilType, Component.literal("Coils")));
         DynamicPatternSpec dynamic = new DynamicPatternSpec("length", new BlockArray(Map.of()), null,
                 1, 3, BlockPos.ZERO, new BlockPos(0, 0, 1), null);
 
@@ -239,8 +240,8 @@ class MachineStructureBuilderJSTest {
     @Test
     void builder_applies_class_metadata_set_after_full_structure() {
         Identifier coilType = Identifier.parse("test:coil");
-        MachineLevelRegistry.beginRegistration();
-        MachineLevelRegistry.registerType(new LevelType(coilType, Component.literal("Coils")));
+        MachineLevelRegistryBridge.beginRegistration();
+        MachineLevelRegistryBridge.registerType(new LevelType(coilType, Component.literal("Coils")));
         BlockArray full = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
         DynamicPatternSpec dynamic = new DynamicPatternSpec("length", new BlockArray(Map.of()), null,
                 1, 3, BlockPos.ZERO, new BlockPos(0, 0, 1), null);

@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -188,11 +189,11 @@ class RecipeSearchTaskTest {
         Identifier typeId = Identifier.fromNamespaceAndPath("test", "coil");
         MachineLevel copper = level("task5:copper", typeId, 1, Blocks.COPPER_BLOCK);
         MachineLevel kanthal = level("task5:kanthal", typeId, 2, Blocks.IRON_BLOCK);
-        MachineLevelRegistry.beginRegistration();
-        MachineLevelRegistry.registerType(new LevelType(typeId, Component.literal("Coils")));
-        MachineLevelRegistry.registerLevel(copper);
-        MachineLevelRegistry.registerLevel(kanthal);
-        MachineLevelRegistry.freezeRegistration();
+        MachineLevelRegistryBridge.beginRegistration();
+        MachineLevelRegistryBridge.registerType(new LevelType(typeId, Component.literal("Coils")));
+        MachineLevelRegistryBridge.registerLevel(copper);
+        MachineLevelRegistryBridge.registerLevel(kanthal);
+        MachineLevelRegistryBridge.freezeRegistration();
 
         ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
         bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance());

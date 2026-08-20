@@ -16,6 +16,7 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -63,8 +64,8 @@ class MachineControllerLevelTest {
         MachineDefinitions.clearForTesting();
         MachineRegistry.clearForTesting();
         MachineStructureRegistry.clearForTesting();
-        MachineLevelRegistry.beginRegistration();
-        MachineLevelRegistry.freezeRegistration();
+        MachineLevelRegistryBridge.beginRegistration();
+        MachineLevelRegistryBridge.freezeRegistration();
     }
 
     @Test
@@ -180,13 +181,13 @@ class MachineControllerLevelTest {
     private MachineControllerBlockEntity controllerWithSlots(Block first, Block second) throws Exception {
         MachineDefinitions.clearForTesting();
         MachineDefinitions.register(MachineRegistration.builder(MACHINE_ID).localizedName("Level Machine").build());
-        MachineLevelRegistry.beginRegistration();
-        MachineLevelRegistry.registerType(new LevelType(COIL_TYPE, Component.literal("Coils")));
+        MachineLevelRegistryBridge.beginRegistration();
+        MachineLevelRegistryBridge.registerType(new LevelType(COIL_TYPE, Component.literal("Coils")));
         copper = level("test:copper", 1, Blocks.COPPER_BLOCK);
         kanthal = level("test:kanthal", 2, Blocks.IRON_BLOCK);
-        MachineLevelRegistry.registerLevel(copper);
-        MachineLevelRegistry.registerLevel(kanthal);
-        MachineLevelRegistry.freezeRegistration();
+        MachineLevelRegistryBridge.registerLevel(copper);
+        MachineLevelRegistryBridge.registerLevel(kanthal);
+        MachineLevelRegistryBridge.freezeRegistration();
 
         Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
         BlockPos firstSlot = new BlockPos(1, 0, 0);

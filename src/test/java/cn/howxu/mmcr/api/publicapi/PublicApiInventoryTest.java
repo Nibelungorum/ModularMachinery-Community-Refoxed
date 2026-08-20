@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.api.publicapi;
 
 import org.junit.jupiter.api.Test;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -98,6 +100,16 @@ class PublicApiInventoryTest {
                 .doesNotExist();
         assertThat(MachineApi.class.getDeclaredMethods()).noneMatch(method -> method.getName().equals("registerMachine"));
         assertThat(RecipeApi.class.getDeclaredMethods()).noneMatch(method -> method.getName().equals("registerRecipe"));
+    }
+
+    @Test
+    void registry_lifecycle_mutators_are_not_public() throws NoSuchMethodException {
+        assertThat(MachineLevelRegistry.class.getDeclaredMethods())
+                .filteredOn(method -> Set.of("beginRegistration", "freezeRegistration", "install",
+                        "registerType", "registerLevel").contains(method.getName()))
+                .allSatisfy(method -> assertThat(java.lang.reflect.Modifier.isPublic(method.getModifiers())).isFalse());
+        assertThat(ModifierRegistry.class.getDeclaredMethod("install", Map.class).getModifiers())
+                .satisfies(modifiers -> assertThat(java.lang.reflect.Modifier.isPublic(modifiers)).isFalse());
     }
 
     @Test

@@ -63,13 +63,16 @@ public final class RegisterMachineStructuresEvent extends Event {
         if (structures.containsKey(machineId)) {
             throw new ApiRegistrationException("Duplicate machine structure: " + machineId);
         }
-        MachineStructureBuilder builder = Objects.requireNonNull(consumer, "consumer")
-                .apply(MachineStructureBuilder.structure());
         try {
+            if (consumer == null) {
+                throw new ApiRegistrationException("Consumer for machine " + machineId + " must not be null");
+            }
+            MachineStructureBuilder builder = consumer
+                    .apply(MachineStructureBuilder.structure());
             structures.put(machineId, Objects.requireNonNull(builder, "consumer result").build(machineId));
         } catch (ApiRegistrationException exception) {
             throw exception;
-        } catch (IllegalArgumentException exception) {
+        } catch (RuntimeException exception) {
             throw new ApiRegistrationException("Invalid machine structure " + machineId + ": " + exception.getMessage());
         }
     }

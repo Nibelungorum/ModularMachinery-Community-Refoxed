@@ -10,7 +10,8 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
-import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
+import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistryBridge;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
 import net.minecraft.resources.Identifier;
 
 import java.util.LinkedHashMap;
@@ -63,7 +64,8 @@ public final class PublicApiBootstrap {
         }
         Map<Identifier, cn.howxu.mmcr.api.machine.MachineRegistration> machines = new LinkedHashMap<>();
         STRUCTURE_SNAPSHOT = structures.freeze();
-        ModifierRegistry.install(STRUCTURE_SNAPSHOT.modifiers());
+        MachineLevelRegistryBridge.install(STRUCTURE_SNAPSHOT.levelTypes().values(), STRUCTURE_SNAPSHOT.levels().values());
+        ModifierRegistryBridge.install(STRUCTURE_SNAPSHOT.modifiers());
         for (MachineDefinition definition : MACHINES.values()) {
             machines.put(definition.id(), PublicMachineAdapter.toStartupRegistration(definition,
                     structures.structures().get(definition.id())));
@@ -155,7 +157,7 @@ public final class PublicApiBootstrap {
         MACHINES.clear();
         RECIPES.clear();
         STRUCTURE_SNAPSHOT = new RegisterMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of());
-        ModifierRegistry.install(Map.of());
+        ModifierRegistryBridge.install(Map.of());
         state = State.BEFORE_BEGIN;
         ApiRuntime.uninstall();
     }

@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -46,7 +47,7 @@ class KubeJSApiTest {
         cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent.resetCollector();
         var event = cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent.prepare(java.util.Set.of());
         DefaultMachineLevels.register(event);
-        MachineLevelRegistry.install(event.levelTypes().values(), event.levels().values());
+        MachineLevelRegistryBridge.install(event.levelTypes().values(), event.levels().values());
     }
 
     @Test
@@ -101,11 +102,11 @@ class KubeJSApiTest {
     @Test
     void level_requirement_rejects_a_level_from_another_type() {
         var otherType = MMCR.id("api_other_type");
-        MachineLevelRegistry.beginRegistration();
-        MachineLevelRegistry.registerType(new LevelType(otherType, Component.literal("Other")));
-        MachineLevelRegistry.registerLevel(new MachineLevel(MMCR.id("api_other_level"), otherType, 0,
+        MachineLevelRegistryBridge.beginRegistration();
+        MachineLevelRegistryBridge.registerType(new LevelType(otherType, Component.literal("Other")));
+        MachineLevelRegistryBridge.registerLevel(new MachineLevel(MMCR.id("api_other_level"), otherType, 0,
                 new BlockPredicate.OfBlockState(Blocks.EMERALD_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
-        MachineLevelRegistry.freezeRegistration();
+        MachineLevelRegistryBridge.freezeRegistration();
 
         assertThatThrownBy(() -> api.levelRequirement(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE.toString(), "mmcr:api_other_level"))
                 .isInstanceOf(IllegalArgumentException.class);
