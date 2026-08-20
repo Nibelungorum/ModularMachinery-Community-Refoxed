@@ -71,7 +71,11 @@ public final class RegisterMachineStructuresEvent extends Event {
                     .apply(MachineStructureBuilder.structure());
             structures.put(machineId, Objects.requireNonNull(builder, "consumer result").build(machineId));
         } catch (ApiRegistrationException exception) {
-            throw exception;
+            String message = exception.getMessage();
+            if (message != null && message.contains(machineId.toString())) {
+                throw exception;
+            }
+            throw new ApiRegistrationException("Invalid machine structure " + machineId + ": " + message);
         } catch (RuntimeException exception) {
             throw new ApiRegistrationException("Invalid machine structure " + machineId + ": " + exception.getMessage());
         }

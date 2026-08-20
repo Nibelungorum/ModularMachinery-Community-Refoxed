@@ -83,7 +83,8 @@ class PublicEventSubscribersTest {
         ApiRegistrationException declared = new ApiRegistrationException("declared failure");
         assertThatThrownBy(() -> event.registerStructure(machineId, builder -> {
             throw declared;
-        })).isSameAs(declared);
+        })).isInstanceOf(ApiRegistrationException.class)
+                .hasMessageContaining(machineId.toString());
         assertThatThrownBy(() -> event.registerStructure(machineId, builder -> builder))
                 .isInstanceOf(ApiRegistrationException.class);
         event.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage.pattern(pattern -> pattern
