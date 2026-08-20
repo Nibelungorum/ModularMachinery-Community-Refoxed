@@ -250,7 +250,7 @@ class StructurePreviewSchemaFactoryTest {
 
     @Test
     void factory_orients_controller_face_away_from_the_structure() {
-        BlockState controller = ModBlocks.controllerFor(MMCR.id("blast_furnace")).get().defaultBlockState();
+        BlockState controller = ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState();
         MachineStructureStage stage = new MachineStructureStage(1, new BlockArray(Map.of(
                 BlockPos.ZERO, new BlockPredicate.OfBlock(controller.getBlock()),
                 new BlockPos(0, 0, -1), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))),

@@ -16,11 +16,8 @@ import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
-import cn.howxu.mmcr.api.publicapi.event.MMCRInstallMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRInstallRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterMachinesEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
+import cn.howxu.mmcr.internal.api.PublicBuiltinRuntime;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
@@ -43,11 +40,9 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import org.nibelungorum.DefaultMachineLevels;
-import org.nibelungorum.builtin.PublicBuiltinMachineDefinitions;
-import org.nibelungorum.builtin.PublicBuiltinRecipeDefinitions;
-import net.neoforged.neoforge.common.NeoForge;
 
 import org.nibelungorum.TestMachines;
 
@@ -91,17 +86,10 @@ public final class TestBootstrap {
 
         Class.forName("net.minecraft.SharedConstants").getMethod("tryDetectVersion").invoke(null);
         MachineDefinitions.beginRegistryPhase();
-        NeoForge.EVENT_BUS.addListener((MMCRRegisterMachinesEvent event) -> PublicBuiltinMachineDefinitions.register(event));
-        NeoForge.EVENT_BUS.addListener((MMCRInstallMachineStructuresEvent event) -> PublicBuiltinMachineDefinitions.install(event));
-        NeoForge.EVENT_BUS.addListener((MMCRRegisterRecipesEvent event) -> PublicBuiltinRecipeDefinitions.register(event));
-        NeoForge.EVENT_BUS.addListener((MMCRInstallRecipesEvent event) -> PublicBuiltinRecipeDefinitions.install(event));
         addTestMachineSuppliers();
         Bootstrap.bootStrap();
         MachineDefinitions.bootstrapBuiltins();
         bindAllVanillaItemComponents();
-        bindController(MMCR.id("blast_furnace"));
-        bindController(id("alloy_furnace"));
-        bindController(id("cracker"));
         bindController(id("test_cube"));
         bindController(id("controller_tick"));
         bindController(id("iron_compressor"));
@@ -134,10 +122,10 @@ public final class TestBootstrap {
         restoreMachineDefinitions();
         registerDefaultMachineLevels();
         DynamicContentReloadService.reload(candidate -> {
-            NeoForge.EVENT_BUS.post(new MMCRInstallMachineStructuresEvent(candidate));
+            PublicBuiltinRuntime.registerStructures(candidate);
             registerGameTestMachineStructures(candidate);
         });
-        NeoForge.EVENT_BUS.post(new MMCRInstallRecipesEvent());
+        PublicBuiltinRuntime.registerRecipes();
         MachineRegistry.rebuildCompiledCache();
     }
 
@@ -336,6 +324,7 @@ public final class TestBootstrap {
     }
 
     private static void bindAllVanillaItemComponents() {
+        Fluids.WATER.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         for (Item item : BuiltInRegistries.ITEM) {
             Holder.Reference<Item> holder = item.builtInRegistryHolder();
             try {

@@ -194,7 +194,7 @@ class MachinePortAppearanceTest {
         MachineControllerBlockEntity controller = (MachineControllerBlockEntity) ((sun.misc.Unsafe) unsafeField.get(null))
                 .allocateInstance(MachineControllerBlockEntity.class);
         setField(BlockEntity.class, controller, "worldPosition", pos);
-        setField(BlockEntity.class, controller, "blockState", ModBlocks.controllerFor(MMCR.id("blast_furnace")).get().defaultBlockState()
+        setField(BlockEntity.class, controller, "blockState", ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
                 .setValue(MachineControllerBlock.FORMED, formed));
         setField(MachineControllerBlockEntity.class, controller, "linkedPortPositions", linkedPorts);
         return controller;
