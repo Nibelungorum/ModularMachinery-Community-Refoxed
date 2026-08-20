@@ -3,7 +3,6 @@ package cn.howxu.mmcr.internal.network;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -22,8 +21,8 @@ public final class ControllerSpecSync {
     public static Map<Identifier, MachineControllerSpec> createSnapshot() {
         Map<Identifier, MachineControllerSpec> snapshot = new LinkedHashMap<>();
         MachineRegistry.effectiveSnapshot().forEach((id, machine) -> {
-            if (ModBlocks.hasControllerFor(id)) {
-                MachineControllerSpec spec = machine.controller();
+            MachineControllerSpec spec = machine.controller();
+            if (spec != null) {
                 validate(id, spec);
                 snapshot.put(id, spec);
             }
@@ -34,7 +33,7 @@ public final class ControllerSpecSync {
     public static Map<Identifier, MachineAppearanceSpec> createAppearanceSnapshot() {
         Map<Identifier, MachineAppearanceSpec> snapshot = new LinkedHashMap<>();
         MachineRegistry.effectiveSnapshot().forEach((id, machine) -> {
-            if (ModBlocks.hasControllerFor(id)) {
+            if (machine.controller() != null) {
                 snapshot.put(id, machine.appearance());
             }
         });

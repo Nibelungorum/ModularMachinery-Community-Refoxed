@@ -23,6 +23,7 @@ import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
 import net.minecraft.resources.Identifier;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -142,6 +143,7 @@ public final class ContentRegistrationCoordinator {
         MachineDefinitions.clearForTesting();
         MachineRegistry.clearForTesting();
         MachineStructureRegistry.clearForTesting();
+        MachineLevelRegistry.installSnapshot(List.of(), List.of());
         RecipeRegistry.clearForTesting();
     }
 

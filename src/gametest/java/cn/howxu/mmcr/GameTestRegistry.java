@@ -98,21 +98,23 @@ public final class GameTestRegistry {
                 "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll")) {
             Identifier id = MMCR.id(name);
             event.registerStructure(id, structure -> {
+                BlockPredicate casing = BlockPredicate.deferredBlock(() -> ModBlocks.CASING.get());
+                BlockPredicate controller = BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(id).get());
                 structure.fullStructure(stage -> stage.pattern(pattern -> pattern
                         .layer("XXX", "XCX", "XXX")
-                        .where('X', BlockPredicate.deferredBlock(() -> ModBlocks.CASING.get()))
-                        .where('C', BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(id).get()))
+                        .where('X', casing)
+                        .where('C', controller)
                         .controller('C')));
                 if (name.contains("expandable") || name.contains("distillation")) {
                     structure.extension(stage -> stage.pattern(pattern -> pattern
                             .layer("XXX", "XCX", "XXX")
-                            .where('X', BlockPredicate.deferredBlock(() -> ModBlocks.CASING.get()))
-                            .where('C', BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(id).get()))
+                            .where('X', casing)
+                            .where('C', controller)
                             .controller('C')));
                     structure.extension(stage -> stage.pattern(pattern -> pattern
                             .layer("XXX", "XCX", "XXX")
-                            .where('X', BlockPredicate.deferredBlock(() -> ModBlocks.CASING.get()))
-                            .where('C', BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(id).get()))
+                            .where('X', casing)
+                            .where('C', controller)
                             .controller('C')));
                 }
                 return structure;

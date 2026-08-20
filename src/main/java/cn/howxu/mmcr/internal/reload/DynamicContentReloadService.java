@@ -46,6 +46,9 @@ public final class DynamicContentReloadService {
 
         public void registerStructure(MachineStructureDefinition structure) {
             Identifier id = structure.machineId();
+            if (!cn.howxu.mmcr.api.machine.MachineDefinitions.containsStatic(id)) {
+                throw new IllegalStateException("No startup machine registration for structure: " + id);
+            }
             if (structures.containsKey(id)) {
                 throw new IllegalStateException("Dynamic structure already registered: " + id);
             }

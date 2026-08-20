@@ -71,6 +71,7 @@ public final class TestBootstrap {
     public static void beginRegistration() {
         TEST_LEVEL_TYPES.clear();
         TEST_LEVELS.clear();
+        MachineLevelRegistry.installSnapshot(List.of(), List.of());
     }
 
     public static void freezeRegistration() {
@@ -83,6 +84,7 @@ public final class TestBootstrap {
 
     public static void registerLevel(MachineLevel level) {
         TEST_LEVELS.put(level.id(), level);
+        MachineLevelRegistry.installSnapshot(TEST_LEVEL_TYPES.values(), TEST_LEVELS.values());
     }
 
     public static synchronized void bootstrap() throws Exception {

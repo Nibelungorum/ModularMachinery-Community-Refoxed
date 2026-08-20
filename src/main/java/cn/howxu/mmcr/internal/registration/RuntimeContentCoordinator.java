@@ -137,7 +137,8 @@ public final class RuntimeContentCoordinator {
             if (RecipeRegistry.dataPackSnapshot().containsKey(recipe.id())) {
                 throw new IllegalStateException("Dynamic recipe conflicts with data-pack recipe: " + recipe.id());
             }
-            if (MachineDefinitions.getRegistration(recipe.machineId()) == null) {
+            if (MachineDefinitions.getRegistration(recipe.machineId()) == null
+                    && !MachineRegistry.containsStatic(recipe.machineId())) {
                 throw new IllegalStateException("No startup machine registration for recipe: " + recipe.machineId());
             }
             if (!structures.containsKey(recipe.machineId()) && !MachineRegistry.containsStatic(recipe.machineId())) {

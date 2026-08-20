@@ -58,7 +58,9 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     }
 
     static void freezeStartupRegistryPhaseForTesting() {
-        if (MachineDefinitions.isRegistryPhaseOpen()) {
+        if (!ContentRegistrationCoordinator.isCommitted()) {
+            ContentRegistrationCoordinator.commitStartup();
+        } else if (MachineDefinitions.isRegistryPhaseOpen()) {
             MachineDefinitions.freezeRegistryPhase();
         }
     }
