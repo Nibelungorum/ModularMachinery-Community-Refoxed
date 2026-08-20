@@ -9,7 +9,6 @@ import net.minecraft.server.packs.PackResources;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
@@ -37,11 +36,6 @@ class MachineRecipeDataReloadListenerTest {
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
         registries = VanillaRegistries.createLookup();
-    }
-
-    @BeforeEach
-    void restoreMachineDefinitions() {
-        TestBootstrap.registerRuntimeBuiltins();
     }
 
     @Test

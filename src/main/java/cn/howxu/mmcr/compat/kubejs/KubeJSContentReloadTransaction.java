@@ -1,11 +1,10 @@
 package cn.howxu.mmcr.compat.kubejs;
 
-import cn.howxu.mmcr.api.machine.MachineDefinitions;
-import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
-import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
 import net.minecraft.resources.Identifier;
 
 import java.util.LinkedHashMap;
@@ -67,9 +66,7 @@ final class KubeJSContentReloadTransaction {
         Map<Identifier, MachineRecipe> mergedRecipes = new LinkedHashMap<>(RecipeRegistry.dynamicSnapshot());
         removePublishedRecipes(mergedRecipes);
         mergedRecipes.putAll(recipes);
-        validate(mergedStructures, mergedRecipes);
-        MachineStructureRegistry.replaceDynamic(mergedStructures);
-        RecipeRegistry.replaceDynamic(mergedRecipes);
+        RuntimeContentCoordinator.commitDynamic(mergedStructures, mergedRecipes);
         publishedStructures = Map.copyOf(structures);
         publishedRecipes = Map.copyOf(recipes);
     }
@@ -84,21 +81,4 @@ final class KubeJSContentReloadTransaction {
                 (ignored, current) -> current.equals(recipe) ? null : current));
     }
 
-    private void validate(Map<Identifier, MachineStructureDefinition> structures,
-                          Map<Identifier, MachineRecipe> recipes) {
-        for (MachineRecipe recipe : recipes.values()) {
-            if (RecipeRegistry.containsStatic(recipe.id())) {
-                throw new IllegalStateException("Dynamic recipe conflicts with static recipe: " + recipe.id());
-            }
-            if (RecipeRegistry.dataPackSnapshot().containsKey(recipe.id())) {
-                throw new IllegalStateException("Dynamic recipe conflicts with data-pack recipe: " + recipe.id());
-            }
-            if (MachineDefinitions.getRegistration(recipe.machineId()) == null) {
-                throw new IllegalStateException("No startup machine registration for recipe: " + recipe.machineId());
-            }
-            if (!structures.containsKey(recipe.machineId()) && !MachineRegistry.containsStatic(recipe.machineId())) {
-                throw new IllegalStateException("Machine not found for dynamic recipe: " + recipe.machineId());
-            }
-        }
-    }
 }

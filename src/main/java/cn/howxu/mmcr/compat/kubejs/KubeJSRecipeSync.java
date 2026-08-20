@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.crafting.RecipeHolder;
 
@@ -17,13 +17,13 @@ public final class KubeJSRecipeSync {
     private KubeJSRecipeSync() {
     }
 
-    public static void replaceDynamicRecipes(Iterable<RecipeHolder<?>> holders) {
+    public static void replaceDataPackRecipes(Iterable<RecipeHolder<?>> holders) {
         Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>();
         for (RecipeHolder<?> holder : holders) {
             if (holder.value() instanceof MachineRecipe machineRecipe) {
                 recipes.put(holder.id().identifier(), machineRecipe.withId(holder.id().identifier()));
             }
         }
-        RecipeRegistry.replaceDynamic(recipes);
+        RuntimeContentCoordinator.replaceDataPackRecipes(recipes);
     }
 }

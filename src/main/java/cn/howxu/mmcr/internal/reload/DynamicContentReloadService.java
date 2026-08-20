@@ -1,14 +1,8 @@
 package cn.howxu.mmcr.internal.reload;
 
-import cn.howxu.mmcr.api.machine.MachineDefinitions;
-import cn.howxu.mmcr.api.machine.MachineRegistration;
-import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.api.machine.MachineRoleValidator;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
-import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
-import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
 import net.minecraft.resources.Identifier;
 
 import java.util.LinkedHashMap;
@@ -32,31 +26,7 @@ public final class DynamicContentReloadService {
     public static ReloadResult reload(Consumer<Candidate> producer) {
         Candidate candidate = begin();
         producer.accept(candidate);
-        Map<Identifier, MachineStructureDefinition> oldStructures = MachineStructureRegistry.dynamicSnapshot();
-        Map<Identifier, MachineRecipe> oldRecipes = RecipeRegistry.dynamicSnapshot();
-        validateCandidate(candidate);
-        MachineStructureRegistry.replaceDynamic(candidate.structures);
-        RecipeRegistry.replaceDynamic(candidate.recipes);
-        RecipeCraftingContextPool.onGlobalReload();
-        return ReloadResult.from(oldStructures, candidate.structures, oldRecipes, candidate.recipes);
-    }
-
-    private static void validateCandidate(Candidate candidate) {
-        Map<Identifier, MachineRegistration> registrations = new LinkedHashMap<>();
-        for (Map.Entry<Identifier, MachineStructureDefinition> entry : candidate.structures.entrySet()) {
-            Identifier id = entry.getKey();
-            MachineRegistration registration = MachineDefinitions.getRegistration(id);
-            if (registration == null) {
-                throw new IllegalStateException("No startup machine registration for structure: " + id);
-            }
-            registrations.put(id, registration.withPattern(entry.getValue().pattern()));
-        }
-        MachineRoleValidator.validate(registrations.values(), null);
-        for (MachineRecipe recipe : candidate.recipes.values()) {
-            if (!candidate.structures.containsKey(recipe.machineId()) && !MachineRegistry.containsStatic(recipe.machineId())) {
-                throw new IllegalStateException("Machine not found for dynamic recipe: " + recipe.machineId());
-            }
-        }
+        return RuntimeContentCoordinator.commitDynamic(candidate.structures, candidate.recipes);
     }
 
     public static final class Candidate {
@@ -69,9 +39,6 @@ public final class DynamicContentReloadService {
             if (structures.containsKey(id)) {
                 throw new IllegalStateException("Dynamic structure already registered: " + id);
             }
-            if (MachineDefinitions.getRegistration(id) == null) {
-                throw new IllegalStateException("No startup machine registration for structure: " + id);
-            }
             structures.put(id, structure);
         }
 
@@ -79,9 +46,6 @@ public final class DynamicContentReloadService {
             Identifier id = recipe.id();
             if (recipes.containsKey(id)) {
                 throw new IllegalStateException("Dynamic recipe already registered: " + id);
-            }
-            if (RecipeRegistry.containsStatic(id)) {
-                throw new IllegalStateException("Dynamic recipe conflicts with static recipe: " + id);
             }
             recipes.put(id, recipe);
         }
@@ -95,7 +59,7 @@ public final class DynamicContentReloadService {
             int updatedRecipes,
             int removedRecipes) {
 
-        private static ReloadResult from(Map<Identifier, MachineStructureDefinition> oldStructures,
+        public static ReloadResult fromSnapshots(Map<Identifier, MachineStructureDefinition> oldStructures,
                                          Map<Identifier, MachineStructureDefinition> newStructures,
                                          Map<Identifier, MachineRecipe> oldRecipes,
                                          Map<Identifier, MachineRecipe> newRecipes) {

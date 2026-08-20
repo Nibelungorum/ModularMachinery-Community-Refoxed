@@ -36,7 +36,7 @@ class KubeJSRecipeSyncTest {
         var holderId = ResourceKey.create(Registries.RECIPE, MMCR.id("from_recipe_event"));
         var generated = new MachineRecipe(MMCR.id("generated_recipe"), MMCR.id("machine"), 1, List.of(), List.of());
 
-        KubeJSRecipeSync.replaceDynamicRecipes(List.of(new RecipeHolder<Recipe<?>>(holderId, generated)));
+        KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(holderId, generated)));
 
         assertThat(RecipeRegistry.getRecipe(MMCR.id("from_recipe_event"))).isNotNull();
         assertThat(RecipeRegistry.getRecipe(MMCR.id("from_recipe_event")).id()).isEqualTo(MMCR.id("from_recipe_event"));
@@ -50,8 +50,8 @@ class KubeJSRecipeSyncTest {
         var first = new MachineRecipe(MMCR.id("generated_recipe"), MMCR.id("machine"), 1, List.of(), List.of());
         var second = new MachineRecipe(MMCR.id("generated_recipe"), MMCR.id("machine"), 1, List.of(), List.of());
 
-        KubeJSRecipeSync.replaceDynamicRecipes(List.of(new RecipeHolder<Recipe<?>>(firstId, first)));
-        KubeJSRecipeSync.replaceDynamicRecipes(List.of(new RecipeHolder<Recipe<?>>(secondId, second)));
+        KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(firstId, first)));
+        KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(secondId, second)));
 
         assertThat(RecipeRegistry.getRecipe(MMCR.id("first"))).isNull();
         assertThat(RecipeRegistry.getRecipe(MMCR.id("second"))).isNotNull();

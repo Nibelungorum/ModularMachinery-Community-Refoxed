@@ -17,6 +17,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -42,6 +43,11 @@ class DynamicModuleReloadValidationTest {
         MachineRegistry.clearForTesting();
         MachineStructureRegistry.clearForTesting();
         RecipeRegistry.clearForTesting();
+    }
+
+    @BeforeEach
+    void openMachineDefinitionRegistry() {
+        MachineDefinitions.clearForTesting();
     }
 
     @Test
@@ -100,6 +106,29 @@ class DynamicModuleReloadValidationTest {
                 .containsOnlyKeys(oldMachineId);
         assertThat(RecipeRegistry.dynamicSnapshot())
                 .containsEntry(oldRecipeId, oldRecipe);
+    }
+
+    @Test
+    void invalid_recipe_does_not_commit_valid_structure_in_same_transaction() {
+        Identifier oldMachineId = MMCR.id("old_machine");
+        Identifier replacementMachineId = MMCR.id("replacement_machine");
+        Identifier oldRecipeId = MMCR.id("old_recipe");
+        MachineDefinitions.register(MachineRegistration.builder(oldMachineId).build());
+        MachineDefinitions.register(MachineRegistration.builder(replacementMachineId).build());
+        MachineRecipe oldRecipe = recipe(oldRecipeId, oldMachineId);
+        DynamicContentReloadService.reload(candidate -> {
+            candidate.registerStructure(structure(oldMachineId, 0));
+            candidate.registerRecipe(oldRecipe);
+        });
+
+        assertThatThrownBy(() -> DynamicContentReloadService.reload(candidate -> {
+            candidate.registerStructure(structure(replacementMachineId, 0));
+            candidate.registerRecipe(recipe(MMCR.id("invalid_recipe"), MMCR.id("missing_machine")));
+        })).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("missing_machine");
+
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsOnlyKeys(oldMachineId);
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsEntry(oldRecipeId, oldRecipe);
     }
 
     private static MachineStructureDefinition structure(Identifier id, int couplers) {

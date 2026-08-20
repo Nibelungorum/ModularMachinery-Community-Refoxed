@@ -19,6 +19,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class RecipeManagerMixin {
     @Inject(method = "apply(Lnet/minecraft/world/item/crafting/RecipeMap;Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/util/profiling/ProfilerFiller;)V", at = @At("TAIL"))
     private void mmcr$syncKubeJSRecipes(RecipeMap recipeMap, ResourceManager resourceManager, ProfilerFiller profiler, CallbackInfo ci) {
-        KubeJSRecipeSync.replaceDynamicRecipes(recipeMap.values());
+        KubeJSRecipeSync.replaceDataPackRecipes(recipeMap.values());
     }
 }

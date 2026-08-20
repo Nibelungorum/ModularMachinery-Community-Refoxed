@@ -3,7 +3,7 @@ package cn.howxu.mmcr.internal.reload;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeJson;
-import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -87,7 +87,7 @@ public final class MachineRecipeDataReloadListener extends SimplePreparableReloa
 
     private void publishSnapshot(Map<Identifier, MachineRecipe> recipes) {
         Map<Identifier, MachineRecipe> replacement = Map.copyOf(recipes);
-        RecipeRegistry.replaceDataPack(replacement);
+        RuntimeContentCoordinator.replaceDataPackRecipes(replacement);
         snapshot = replacement;
     }
 }
