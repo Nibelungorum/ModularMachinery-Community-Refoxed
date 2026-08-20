@@ -20,6 +20,7 @@ import cn.howxu.mmcr.api.publicapi.machine.PortRequirements;
 import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
 import cn.howxu.mmcr.api.publicapi.machine.StructureRequirements;
 import cn.howxu.mmcr.api.publicapi.machine.StructureStage;
+import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
@@ -77,6 +78,7 @@ public final class PublicMachineAdapter {
     }
 
     public static DynamicMachine toDynamicMachine(MachineDefinition definition, cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure) {
+        validateDefinitionStructureIds(definition, structure);
         return new DynamicMachine(
                 definition.id(),
                 definition.displayNameKey(),
@@ -109,6 +111,7 @@ public final class PublicMachineAdapter {
 
     public static MachineRegistration toStartupRegistration(MachineDefinition definition,
             cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure) {
+        if (structure != null) validateDefinitionStructureIds(definition, structure);
         MachineRegistration.Builder builder = MachineRegistration.builder(definition.id())
                 .displayNameKey(definition.displayNameKey())
                 .controllerSpec(toControllerSpec(definition.id(), definition.controller()))
@@ -228,6 +231,14 @@ public final class PublicMachineAdapter {
         }
         if (definition.failureAction() != cn.howxu.mmcr.api.machine.RecipeFailureActions.getDefaultAction()) {
             throw new IllegalArgumentException("MachineRegistration cannot represent failure action");
+        }
+    }
+
+    private static void validateDefinitionStructureIds(MachineDefinition definition,
+            cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure) {
+        if (!definition.id().equals(structure.machineId())) {
+            throw new ApiRegistrationException("Machine definition id " + definition.id()
+                    + " does not match structure machine id " + structure.machineId());
         }
     }
 }

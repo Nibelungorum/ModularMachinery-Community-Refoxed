@@ -103,3 +103,23 @@ STATUS: FIXED_WITH_TASK_3_CONCERNS
 
 concerns:
 - Task 3 生命周期接入及既有 GameTest 失败未触碰，沿用前序报告中的 concerns。
+
+---
+
+STATUS: FIXED
+
+最终审查修复:
+- `PublicMachineAdapter.toDynamicMachine(definition, structure)` 和带结构的 `toStartupRegistration(definition, structure)` 现在校验定义 ID 与结构 machine ID；不一致时抛出 `ApiRegistrationException`。
+- `PublicApiAdapterTest` 增加两个不匹配 ID 的行为测试，分别覆盖 DynamicMachine 与 MachineRegistration 转换入口。
+- `PublicRecipeBuilderTest` 在每个测试前恢复默认机器等级，隔离其他测试对全局 `MachineLevelRegistry` 的污染；保留原有适配语义断言。根因是全量执行时先前测试重置了等级注册表，适配器正确转换等级后被 `MachineRecipe` 的等级校验拒绝。
+- 未修改 Task 3 生命周期接入。
+
+测试命令及结果:
+- `./gradlew test --no-daemon --tests cn.howxu.mmcr.api.publicapi.PublicRecipeBuilderTest --tests cn.howxu.mmcr.api.publicapi.PublicApiAdapterTest --tests cn.howxu.mmcr.api.publicapi.PublicMachineBuilderTest --tests cn.howxu.mmcr.api.publicapi.PublicEventSubscribersTest`: PASS。
+- `./gradlew test --no-daemon`: PASS，1046 tests completed。
+
+提交:
+- 待提交。
+
+concerns:
+- 本次未运行 `runGameTestServer`；Task 3 生命周期相关 concerns 保持不变。

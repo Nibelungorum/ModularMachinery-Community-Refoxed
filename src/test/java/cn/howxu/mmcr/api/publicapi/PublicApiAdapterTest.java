@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.publicapi;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
+import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Verifies the internal adapter is the only public-to-runtime structure bridge.
  * @author howxu <dev@howxu.cn>
@@ -91,5 +93,34 @@ class PublicApiAdapterTest {
         assertThat(registration.id()).isEqualTo(machineId);
         assertThat(registration.displayNameKey()).isEqualTo("machine.registered");
         assertThat(registration.pattern().get(net.minecraft.core.BlockPos.ZERO)).isNotNull();
+    }
+
+    @Test
+    void dynamic_machine_adapter_rejects_structure_for_another_machine() {
+        var definition = MachineBuilder.machine(MMCR.id("adapter_definition")).build();
+        var structure = structureFor(MMCR.id("other_machine"));
+
+        assertThatThrownBy(() -> PublicMachineAdapter.toDynamicMachine(definition, structure))
+                .isInstanceOf(ApiRegistrationException.class)
+                .hasMessageContaining("adapter_definition")
+                .hasMessageContaining("other_machine");
+    }
+
+    @Test
+    void startup_registration_adapter_rejects_structure_for_another_machine() {
+        var definition = MachineBuilder.machine(MMCR.id("registration_definition")).build();
+        var structure = structureFor(MMCR.id("other_machine"));
+
+        assertThatThrownBy(() -> PublicMachineAdapter.toStartupRegistration(definition, structure))
+                .isInstanceOf(ApiRegistrationException.class)
+                .hasMessageContaining("registration_definition")
+                .hasMessageContaining("other_machine");
+    }
+
+    private static MachineStructureDefinition structureFor(net.minecraft.resources.Identifier machineId) {
+        return MachineStructureBuilder.structure()
+                .fullStructure(stage -> stage.pattern(pattern -> pattern.layer("F")
+                        .where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F')))
+                .build(machineId);
     }
 }

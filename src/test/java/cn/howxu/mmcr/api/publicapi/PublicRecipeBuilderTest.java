@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeModifierValue;
 import cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.internal.api.PublicRecipeAdapter;
@@ -23,6 +24,7 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import java.util.Map;
 
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,6 +39,13 @@ class PublicRecipeBuilderTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @BeforeEach
+    void restoreDefaultMachineLevels() {
+        MachineLevelRegistry.beginRegistration();
+        DefaultMachineLevels.register();
+        MachineLevelRegistry.freezeRegistration();
     }
 
     @Test
