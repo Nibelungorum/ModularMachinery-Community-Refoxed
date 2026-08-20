@@ -34,12 +34,16 @@ public final class ControllerSpecCache {
     }
 
     public static boolean replaceSnapshot(Map<Identifier, MachineControllerSpec> replacement) {
+        return replaceSnapshot(replacement, revision + 1);
+    }
+
+    public static boolean replaceSnapshot(Map<Identifier, MachineControllerSpec> replacement, long contentVersion) {
         if (replacement == null || !isValid(replacement)) {
             return false;
         }
 
         snapshot = Map.copyOf(replacement);
-        revision++;
+        revision = contentVersion;
         for (Runnable listener : INVALIDATION_LISTENERS) {
             try {
                 listener.run();

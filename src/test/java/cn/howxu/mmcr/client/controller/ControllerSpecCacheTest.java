@@ -44,6 +44,14 @@ class ControllerSpecCacheTest {
     }
 
     @Test
+    void synchronized_replacement_uses_content_version() {
+        Identifier id = Identifier.parse("mmcr:versioned_controller");
+
+        assertThat(ControllerSpecCache.replaceSnapshot(Map.of(id, testSpec(id)), 42L)).isTrue();
+        assertThat(ControllerSpecCache.revision()).isEqualTo(42L);
+    }
+
+    @Test
     void modelKeyChangesWhenAcceptedSnapshotChanges() {
         Identifier id = Identifier.parse("mmcr:model");
         ControllerModelCache.clear();

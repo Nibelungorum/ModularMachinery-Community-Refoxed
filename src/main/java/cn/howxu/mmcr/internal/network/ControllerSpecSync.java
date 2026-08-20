@@ -21,7 +21,7 @@ public final class ControllerSpecSync {
 
     public static Map<Identifier, MachineControllerSpec> createSnapshot() {
         Map<Identifier, MachineControllerSpec> snapshot = new LinkedHashMap<>();
-        MachineRegistry.getAll().forEach((id, machine) -> {
+        MachineRegistry.effectiveSnapshot().forEach((id, machine) -> {
             if (ModBlocks.hasControllerFor(id)) {
                 MachineControllerSpec spec = machine.controller();
                 validate(id, spec);
@@ -33,7 +33,7 @@ public final class ControllerSpecSync {
 
     public static Map<Identifier, MachineAppearanceSpec> createAppearanceSnapshot() {
         Map<Identifier, MachineAppearanceSpec> snapshot = new LinkedHashMap<>();
-        MachineRegistry.getAll().forEach((id, machine) -> {
+        MachineRegistry.effectiveSnapshot().forEach((id, machine) -> {
             if (ModBlocks.hasControllerFor(id)) {
                 snapshot.put(id, machine.appearance());
             }

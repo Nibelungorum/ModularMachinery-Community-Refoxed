@@ -52,8 +52,8 @@ public final class ClientRuntimeSnapshotBridge {
     static void apply(RuntimeContentSnapshot snapshot) {
         try {
             Class<?> applierClass = Class.forName("cn.howxu.mmcr.client.RuntimeContentClientApplier");
-            Method apply = applierClass.getMethod("apply", Map.class, Map.class);
-            apply.invoke(null, snapshot.controllerSpecs(), snapshot.appearances());
+            Method apply = applierClass.getMethod("apply", Map.class, Map.class, long.class);
+            apply.invoke(null, snapshot.controllerSpecs(), snapshot.appearances(), snapshot.contentVersion());
         } catch (ClassNotFoundException ignored) {
             // Dedicated server/common test environments do not load client cache classes.
         } catch (ReflectiveOperationException exception) {

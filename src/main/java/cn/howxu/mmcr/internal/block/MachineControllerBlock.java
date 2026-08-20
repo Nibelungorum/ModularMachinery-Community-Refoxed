@@ -136,12 +136,12 @@ public class MachineControllerBlock extends Block implements EntityBlock {
     }
 
     private boolean isVerticalAllowed() {
-        MachineRegistration registration = MachineDefinitions.getRegistration(machineId);
+        MachineRegistration registration = MachineDefinitions.effectiveSnapshot().get(machineId);
         return registration != null && registration.controllerSpec().allowVerticalFacing();
     }
 
     private boolean isVerticalRequired() {
-        MachineRegistration registration = MachineDefinitions.getRegistration(machineId);
+        MachineRegistration registration = MachineDefinitions.effectiveSnapshot().get(machineId);
         return registration != null && registration.controllerSpec().requireVerticalFacing();
     }
 
@@ -169,7 +169,7 @@ public class MachineControllerBlock extends Block implements EntityBlock {
     }
 
     static Component titleFor(Identifier machineId) {
-        MachineRegistration registration = MachineDefinitions.getRegistration(machineId);
+        MachineRegistration registration = MachineDefinitions.effectiveSnapshot().get(machineId);
         return registration == null
                 ? Component.translatable("container.mmcr.machine_controller")
                 : registration.displayName();

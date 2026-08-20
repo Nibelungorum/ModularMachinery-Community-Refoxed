@@ -46,4 +46,17 @@ class StructurePreviewCompilationCacheTest {
         assertThat(compilation.progressPercent()).isEqualTo(100);
         assertThat(compilation.schema().states()).hasSize(1);
     }
+
+    @Test
+    void acquireRebuildsWhenContentVersionChanges() {
+        StructurePreviewCompilationCache cache = new StructurePreviewCompilationCache(
+                new StructurePreviewSchemaFactory(), Runnable::run);
+        DynamicMachine machine = new DynamicMachine(MMCR.id("versioned_preview"), "machine.versioned_preview",
+                new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))));
+
+        StructurePreviewCompilation first = cache.acquire(machine, 1L);
+        StructurePreviewCompilation second = cache.acquire(machine, 2L);
+
+        assertThat(second).isNotSameAs(first);
+    }
 }

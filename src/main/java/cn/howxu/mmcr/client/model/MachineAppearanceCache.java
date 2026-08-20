@@ -42,7 +42,7 @@ public final class MachineAppearanceCache {
         if (spec != null) {
             return spec;
         }
-        var registration = MachineDefinitions.getRegistration(machineId);
+        var registration = MachineDefinitions.effectiveSnapshot().get(machineId);
         return registration != null ? registration.appearance() : MachineAppearanceSpec.defaults();
     }
 
@@ -51,7 +51,11 @@ public final class MachineAppearanceCache {
     }
 
     public static boolean replaceSnapshot(Map<Identifier, MachineAppearanceSpec> replacement) {
-        return replaceSnapshot(replacement, true);
+        return replaceSnapshot(replacement, revision() + 1, true);
+    }
+
+    public static boolean replaceSnapshot(Map<Identifier, MachineAppearanceSpec> replacement, long contentVersion) {
+        return replaceSnapshot(replacement, contentVersion, true);
     }
 
     public static void addInvalidationListener(Runnable listener) {
@@ -102,7 +106,7 @@ public final class MachineAppearanceCache {
             }
         }
 
-        replaceSnapshot(replacement, false);
+        replaceSnapshot(replacement, revision() + 1, false);
     }
 
     public static void savePersistedSnapshot(Path path) {
@@ -129,7 +133,8 @@ public final class MachineAppearanceCache {
         }
     }
 
-    private static boolean replaceSnapshot(Map<Identifier, MachineAppearanceSpec> replacement, boolean persist) {
+    private static boolean replaceSnapshot(Map<Identifier, MachineAppearanceSpec> replacement,
+                                           long contentVersion, boolean persist) {
         if (replacement == null) {
             return false;
         }
@@ -143,7 +148,7 @@ public final class MachineAppearanceCache {
         }
 
         snapshot = Map.copyOf(copy);
-        REVISION.incrementAndGet();
+        REVISION.set(contentVersion);
         notifyListeners();
         if (persist) {
             savePersistedSnapshot();

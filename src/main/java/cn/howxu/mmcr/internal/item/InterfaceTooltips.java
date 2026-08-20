@@ -33,7 +33,7 @@ public final class InterfaceTooltips {
                     .orElse(List.of());
         }
         if (block instanceof MachineControllerBlock controller) {
-            var registration = MachineDefinitions.getRegistration(controller.machineId());
+            var registration = MachineDefinitions.effectiveSnapshot().get(controller.machineId());
             if (registration == null) return List.of();
             return registration.controllerSpec().tooltip().stream()
                     .map(Component::translatable)

@@ -105,6 +105,10 @@ public final class MachineDefinitions {
         return Collections.unmodifiableCollection(STATIC_REGISTRATIONS.values());
     }
 
+    public static Map<Identifier, MachineRegistration> effectiveSnapshot() {
+        return Collections.unmodifiableMap(new LinkedHashMap<>(STATIC_REGISTRATIONS));
+    }
+
     public static boolean containsStatic(Identifier id) {
         return STATIC_REGISTRATIONS.containsKey(id);
     }

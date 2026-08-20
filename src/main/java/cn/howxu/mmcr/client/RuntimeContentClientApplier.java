@@ -20,9 +20,10 @@ public final class RuntimeContentClientApplier {
     }
 
     public static void apply(Map<Identifier, MachineControllerSpec> controllerSpecs,
-                             Map<Identifier, MachineAppearanceSpec> appearances) {
-        if (!ControllerSpecCache.replaceSnapshot(controllerSpecs)
-                || !MachineAppearanceCache.replaceSnapshot(appearances)) {
+                             Map<Identifier, MachineAppearanceSpec> appearances,
+                             long contentVersion) {
+        if (!ControllerSpecCache.replaceSnapshot(controllerSpecs, contentVersion)
+                || !MachineAppearanceCache.replaceSnapshot(appearances, contentVersion)) {
             throw new IllegalArgumentException("Invalid runtime client cache snapshot");
         }
         StructurePreviewCompilationCache.instance().clear();

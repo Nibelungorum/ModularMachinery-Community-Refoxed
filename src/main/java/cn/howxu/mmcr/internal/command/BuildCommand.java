@@ -32,7 +32,7 @@ public final class BuildCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         SuggestionProvider<CommandSourceStack> machineSuggestions = (ctx, builder) ->
                 SharedSuggestionProvider.suggest(
-                        MachineRegistry.getAll().keySet().stream().map(Identifier::toString),
+                        MachineRegistry.effectiveSnapshot().keySet().stream().map(Identifier::toString),
                         builder);
 
         dispatcher.register(Commands.literal("mmcr")
@@ -55,7 +55,7 @@ public final class BuildCommand {
     private static int run(CommandContext<CommandSourceStack> ctx, Identifier requested) throws CommandSyntaxException {
         ServerPlayer player = ctx.getSource().getPlayerOrException();
         ServerLevel level = player.level();
-        MachineSelector.Result selection = MachineSelector.select(requested, MachineRegistry.getAll());
+        MachineSelector.Result selection = MachineSelector.select(requested, MachineRegistry.effectiveSnapshot());
         if (selection.machine() == null) {
             ctx.getSource().sendFailure(Component.translatable(
                     "command.mmcr.build.no_machine",

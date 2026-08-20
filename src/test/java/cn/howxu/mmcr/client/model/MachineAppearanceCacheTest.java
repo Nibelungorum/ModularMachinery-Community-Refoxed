@@ -51,6 +51,15 @@ class MachineAppearanceCacheTest {
     }
 
     @Test
+    void synchronized_replacement_uses_content_version() {
+        Identifier id = MMCR.id("versioned_press");
+        MachineAppearanceSpec spec = MachineAppearanceSpec.defaults();
+
+        assertThat(MachineAppearanceCache.replaceSnapshot(Map.of(id, spec), 42L)).isTrue();
+        assertThat(MachineAppearanceCache.revision()).isEqualTo(42L);
+    }
+
+    @Test
     void persisted_snapshot_round_trips_complete_appearance_specs() {
         Identifier id = MMCR.id("press");
         MachineAppearanceSpec spec = new MachineAppearanceSpec(

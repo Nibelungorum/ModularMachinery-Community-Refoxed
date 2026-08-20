@@ -46,6 +46,7 @@ import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewPredicates;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
 import cn.howxu.mmcr.internal.recipe.RecipeStartDelay;
+import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -721,7 +722,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private void checkAllPatterns(Direction facing) {
-        for (Machine candidate : MachineRegistry.getAll().values()) {
+        for (Machine candidate : MachineRegistry.effectiveSnapshot().values()) {
             if (candidate == machine) continue;
             if (tryFormMachine(candidate, facing)) {
                 return;
@@ -1132,7 +1133,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private StructureMatcher.LevelResolution resolveLevels(Machine candidate, Direction facing, Direction rollFacing) {
-        MachineStructureDefinition definition = MachineStructureRegistry.dynamicSnapshot().get(candidate.registryName());
+        MachineStructureDefinition definition = MachineStructureRegistry.effectiveSnapshot().get(candidate.registryName());
         if (definition == null || definition.levelSlots().isEmpty()) {
             return new StructureMatcher.LevelResolution(Map.of(), null);
         }
@@ -1242,7 +1243,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 smartInterfaces.add(smartInterface);
             }
         }
-        var registration = MachineDefinitions.getRegistration(foundMachine.registryName());
+        var registration = MachineDefinitions.effectiveSnapshot().get(foundMachine.registryName());
         if (registration != null) {
             new SmartInterfaceBindingCoordinator(Map.of()).unbindAll(this, previousSmartInterfaces.stream()
                     .filter(smartInterface -> !smartInterfaces.contains(smartInterface))
@@ -1708,9 +1709,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private boolean shouldSearchRecipe() {
-        long registryVersion = RecipeRegistry.registryVersion();
-        if (lastRecipeSearchRegistryVersion != registryVersion) {
-            lastRecipeSearchRegistryVersion = registryVersion;
+        long contentVersion = RuntimeContentVersion.current();
+        if (lastRecipeSearchRegistryVersion != contentVersion) {
+            lastRecipeSearchRegistryVersion = contentVersion;
             recipeSearchRetryCounter = 0;
             return true;
         }
@@ -2118,7 +2119,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     void playFinishSound() {
         if (!(level instanceof ServerLevel serverLevel) || foundMachine == null) return;
-        MachineRegistration registration = MachineDefinitions.getRegistration(foundMachine.registryName());
+        MachineRegistration registration = MachineDefinitions.effectiveSnapshot().get(foundMachine.registryName());
         SoundEvent sound = registration == null ? null : MachineSoundRegistry.get(registration.finishSoundId());
         if (sound != null) {
             serverLevel.playSound(null, worldPosition, sound, SoundSource.BLOCKS, 1.0F, 1.0F);
@@ -2147,9 +2148,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     void bindDefaultMachine(Identifier machineId) {
-        Machine resolved = MachineRegistry.getMachine(machineId);
+        Machine resolved = MachineRegistry.effectiveSnapshot().get(machineId);
         if (resolved == null) {
-            for (Machine candidate : MachineRegistry.getAll().values()) {
+            for (Machine candidate : MachineRegistry.effectiveSnapshot().values()) {
                 if (candidate.controller().id().equals(machineId)) {
                     resolved = candidate;
                     break;
@@ -2163,9 +2164,9 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         Identifier machineId = machine == null ? null : machine.registryName();
         if (machineId == null) return List.of();
         int datapackCount = datapackRecipeCount();
-        long registryVersion = RecipeRegistry.registryVersion();
+        long contentVersion = RuntimeContentVersion.current();
         if (machineId.equals(cachedCandidatesMachineId)
-                && cachedCandidatesReloadVersion == registryVersion
+                && cachedCandidatesReloadVersion == contentVersion
                 && cachedDatapackRecipeCount == datapackCount) {
             return cachedCandidates;
         }
@@ -2182,7 +2183,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             }
         }
         cachedCandidatesMachineId = machineId;
-        cachedCandidatesReloadVersion = registryVersion;
+        cachedCandidatesReloadVersion = contentVersion;
         cachedDatapackRecipeCount = datapackCount;
         cachedCandidates = List.copyOf(recipes.values());
         cachedCandidateIndex = RecipeCandidateIndex.build(cachedCandidates);

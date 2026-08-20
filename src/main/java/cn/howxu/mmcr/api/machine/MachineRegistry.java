@@ -35,6 +35,10 @@ public final class MachineRegistry {
         return Collections.unmodifiableMap(mergedMachines());
     }
 
+    public static Map<Identifier, Machine> effectiveSnapshot() {
+        return getAll();
+    }
+
     public static CompiledMachinePattern getCompiled(Identifier id) {
         return getCompiledStages(id).isEmpty() ? null : getCompiledStages(id).getFirst();
     }

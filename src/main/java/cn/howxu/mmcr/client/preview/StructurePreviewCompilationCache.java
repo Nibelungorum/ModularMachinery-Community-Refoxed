@@ -14,7 +14,7 @@ import net.minecraft.resources.Identifier;
  */
 public final class StructurePreviewCompilationCache implements AutoCloseable {
     private static final StructurePreviewCompilationCache INSTANCE = new StructurePreviewCompilationCache();
-    private final Map<Identifier, StructurePreviewCompilation> entries = new ConcurrentHashMap<>();
+    private final Map<CacheKey, StructurePreviewCompilation> entries = new ConcurrentHashMap<>();
     private final StructurePreviewSchemaFactory factory;
     private final Executor executor;
 
@@ -25,9 +25,14 @@ public final class StructurePreviewCompilationCache implements AutoCloseable {
         this.executor = executor;
     }
     public StructurePreviewCompilation acquire(Machine machine) {
-        return entries.computeIfAbsent(machine.registryName(), ignored -> create(machine));
+        return acquire(machine, cn.howxu.mmcr.internal.sync.RuntimeContentVersion.current());
     }
-    public boolean has(Identifier machineId) { return entries.containsKey(machineId); }
+    public StructurePreviewCompilation acquire(Machine machine, long contentVersion) {
+        return entries.computeIfAbsent(new CacheKey(machine.registryName(), contentVersion), ignored -> create(machine));
+    }
+    public boolean has(Identifier machineId) {
+        return entries.keySet().stream().anyMatch(key -> key.machineId().equals(machineId));
+    }
     public void clear() { entries.clear(); }
     @Override public void close() { clear(); }
 
@@ -41,5 +46,8 @@ public final class StructurePreviewCompilationCache implements AutoCloseable {
             }
         }));
         return reference[0];
+    }
+
+    private record CacheKey(Identifier machineId, long contentVersion) {
     }
 }
