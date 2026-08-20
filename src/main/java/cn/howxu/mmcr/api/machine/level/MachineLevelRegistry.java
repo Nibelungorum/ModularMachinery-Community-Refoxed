@@ -38,10 +38,6 @@ public final class MachineLevelRegistry {
         registrationOpen = false;
     }
 
-    static void install(Collection<LevelType> types, Collection<MachineLevel> levels) {
-        installSnapshot(types, levels);
-    }
-
     public static void installSnapshot(Collection<LevelType> types, Collection<MachineLevel> levels) {
         Map<Identifier, LevelType> nextTypes = new LinkedHashMap<>();
         Map<Identifier, MachineLevel> nextLevels = new LinkedHashMap<>();

@@ -4,7 +4,9 @@ import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.publicapi.ApiRuntime;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 
-/** Coordinates immutable public machine and recipe startup declarations.
+/**
+ * Coordinates installation of immutable public machine and recipe startup declarations.
+ *
  * @author howxu <dev@howxu.cn>
  */
 public final class PublicApiBootstrap {

@@ -2,11 +2,18 @@ package cn.howxu.mmcr.api.publicapi;
 
 import org.junit.jupiter.api.Test;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
+import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
+import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistryBridge;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
+import net.minecraft.resources.Identifier;
+import net.minecraft.network.chat.Component;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -105,11 +112,27 @@ class PublicApiInventoryTest {
     @Test
     void registry_lifecycle_mutators_are_not_public() throws NoSuchMethodException {
         assertThat(MachineLevelRegistry.class.getDeclaredMethods())
-                .filteredOn(method -> Set.of("beginRegistration", "freezeRegistration", "install",
+                .filteredOn(method -> Set.of("beginRegistration", "freezeRegistration",
                         "registerType", "registerLevel").contains(method.getName()))
                 .allSatisfy(method -> assertThat(java.lang.reflect.Modifier.isPublic(method.getModifiers())).isFalse());
-        assertThat(ModifierRegistry.class.getDeclaredMethod("install", Map.class).getModifiers())
-                .satisfies(modifiers -> assertThat(java.lang.reflect.Modifier.isPublic(modifiers)).isFalse());
+        assertThat(ModifierRegistry.class.getDeclaredMethods())
+                .noneMatch(method -> method.getName().equals("install"));
+    }
+
+    @Test
+    void deprecated_registry_bridges_remain_public_compatibility_entries() throws Exception {
+        assertThat(MachineLevelRegistryBridge.class.isAnnotationPresent(Deprecated.class)).isTrue();
+        assertThat(ModifierRegistryBridge.class.isAnnotationPresent(Deprecated.class)).isTrue();
+
+        Identifier typeId = Identifier.fromNamespaceAndPath("mmcr_test", "compat_type");
+        LevelType type = new LevelType(typeId, Component.literal("Compatibility"));
+        MachineLevelRegistryBridge.install(List.of(type), List.of());
+        assertThat(MachineLevelRegistry.getType(typeId)).isSameAs(type);
+
+        Identifier modifierId = Identifier.fromNamespaceAndPath("mmcr_test", "compat_modifier");
+        ModifierDefinition definition = new ModifierDefinition(List.of());
+        ModifierRegistryBridge.install(Map.of(modifierId, definition));
+        assertThat(ModifierRegistry.get(modifierId)).isSameAs(definition);
     }
 
     @Test
