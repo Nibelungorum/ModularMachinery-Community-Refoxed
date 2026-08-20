@@ -16,6 +16,7 @@
  *     <li>{@code cn.howxu.mmcr.api.publicapi.machine.MachineDefinition}</li>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.machine.MachineBuilder}</li>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder}</li>
+ *     <li>{@code cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition}</li>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.machine.PatternBuilder}</li>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.machine.PatternDefinition}</li>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.machine.BlockPredicate}</li>
@@ -41,17 +42,14 @@
  *     {@code PatternBuilder.where(...)}.</li>
  *     <li>Block, tag, any-of, port-family, controller, and machine-coupler predicates map to
  *     {@code BlockPredicate} factory methods.</li>
- *     <li>Single pattern and multi-stage structures map to {@code MachineBuilder.pattern(...)}
- *     and {@code MachineBuilder.stage(...)} with {@code StructureStage} values.</li>
+ *     <li>Single pattern and multi-stage structures map to
+ *     {@code MachineStructureBuilder} with {@code StructureStage} values.</li>
  *     <li>Controller face flags and textures map to {@code MachineBuilder.controller(...)} and
  *     {@code ControllerSpec}.</li>
  *     <li>Basic-block appearance overrides map to {@code MachineBuilder.appearance(...)} and
  *     {@code AppearanceSpec}.</li>
- *     <li>Basic port requirements map to {@code MachineBuilder.ports(...)} and
- *     {@code PortRequirements}; item, fluid, and energy tier/category rules map to
- *     {@code MachineBuilder.portTiers(...)} and {@code PortTiers}.</li>
- *     <li>Level slots and single-block modifier replacements map to
- *     {@code MachineBuilder.requirements(...)} and {@code StructureRequirements}.</li>
+ *     <li>Basic port requirements, tier/category rules, level slots, and single-block modifier
+ *     replacements belong to {@code MachineStructureBuilder} and {@code StructureStage}.</li>
  *     <li>Parallelism, factory flags, thread limits, and thread values map to
  *     {@code MachineBuilder.maxParallelism(...)}, {@code MachineBuilder.parallelizable(...)},
  *     and {@code MachineBuilder.factory(...)} with {@code FactorySpec}.</li>

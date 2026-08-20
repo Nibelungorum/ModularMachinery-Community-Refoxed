@@ -18,7 +18,8 @@ public final class PublicBuiltinMachineDefinitions {
 
     public static void registerDefaults() {
         machineDefinitions().values().forEach(definition ->
-                MachineDefinitions.register(PublicMachineAdapter.toStartupRegistration(definition)));
+                MachineDefinitions.register(PublicMachineAdapter.toStartupRegistration(definition,
+                        PublicBuiltinDefinitions.structureDefinitions().get(definition.id()))));
     }
 
     public static void register(MMCRRegisterMachinesEvent event) {

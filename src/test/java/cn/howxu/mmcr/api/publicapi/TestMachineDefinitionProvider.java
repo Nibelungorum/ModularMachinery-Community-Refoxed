@@ -13,8 +13,6 @@ import net.minecraft.world.level.block.Blocks;
 public final class TestMachineDefinitionProvider implements MachineDefinitionProvider {
     @Override
     public void register() {
-        MachineApi.registerMachine(MachineBuilder.machine(MMCR.id("service_loaded_machine"))
-                .pattern(builder -> builder.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))
-                .build());
+        MachineApi.registerMachine(MachineBuilder.machine(MMCR.id("service_loaded_machine")).build());
     }
 }

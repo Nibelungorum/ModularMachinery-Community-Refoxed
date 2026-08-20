@@ -12,7 +12,7 @@ public final class PublicBuiltinRuntime {
     }
 
     public static void registerStructures(DynamicContentReloadService.Candidate candidate) {
-        PublicBuiltinDefinitions.machineDefinitions().values().stream()
+        PublicBuiltinDefinitions.structureDefinitions().values().stream()
                 .map(PublicMachineAdapter::toStructureDefinition)
                 .forEach(candidate::registerStructure);
     }

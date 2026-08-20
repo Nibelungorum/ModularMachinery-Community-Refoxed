@@ -150,7 +150,7 @@ class PublicApiLifecycleTest {
     }
 
     private static MachineDefinition machine(String path) {
-        return MachineBuilder.machine(id(path)).pattern(PublicApiLifecycleTest::pattern).build();
+        return MachineBuilder.machine(id(path)).build();
     }
 
     private static cn.howxu.mmcr.api.publicapi.machine.PatternBuilder pattern(

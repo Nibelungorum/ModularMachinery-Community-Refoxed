@@ -1,17 +1,15 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
-import cn.howxu.mmcr.api.machine.BlockArray;
-import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.UnaryOperator;
 
 /** Builder for the structure phase of a public machine declaration.
  * @author howxu <dev@howxu.cn>
  */
 public final class MachineStructureBuilder {
-    private final List<MachineStructureDefinition.Declaration> declarations = new ArrayList<>();
+    private final List<StructureStage> stages = new ArrayList<>();
 
     private MachineStructureBuilder() {
     }
@@ -20,21 +18,17 @@ public final class MachineStructureBuilder {
         return new MachineStructureBuilder();
     }
 
-    public MachineStructureBuilder fullStructure(BlockArray pattern) {
-        declarations.add(MachineStructureDefinition.Declaration.full(Objects.requireNonNull(pattern, "pattern")));
+    public MachineStructureBuilder fullStructure(UnaryOperator<StructureStage.Builder> consumer) {
+        stages.add(Objects.requireNonNull(consumer, "consumer").apply(StructureStage.builder().full()).build());
         return this;
     }
 
-    public MachineStructureBuilder extension(BlockArray pattern) {
-        declarations.add(MachineStructureDefinition.Declaration.extension(Objects.requireNonNull(pattern, "pattern")));
+    public MachineStructureBuilder extension(UnaryOperator<StructureStage.Builder> consumer) {
+        stages.add(Objects.requireNonNull(consumer, "consumer").apply(StructureStage.builder().extension()).build());
         return this;
     }
 
     public MachineStructureDefinition build(net.minecraft.resources.Identifier machineId) {
-        if (declarations.isEmpty()) throw new IllegalStateException("Main machine structure is required");
-        if (declarations.getFirst().kind() != MachineStructureDefinition.Declaration.Kind.FULL) {
-            throw new IllegalStateException("Main machine structure is required");
-        }
-        return new MachineStructureDefinition(machineId, declarations);
+        return new MachineStructureDefinition(machineId, stages);
     }
 }

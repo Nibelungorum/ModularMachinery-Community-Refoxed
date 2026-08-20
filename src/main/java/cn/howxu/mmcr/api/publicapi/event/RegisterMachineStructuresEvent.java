@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.publicapi.event;
 
-import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import net.minecraft.resources.Identifier;
 import net.neoforged.bus.api.Event;

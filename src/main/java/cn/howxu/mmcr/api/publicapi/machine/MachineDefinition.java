@@ -18,35 +18,24 @@ import java.util.Set;
 public record MachineDefinition(
         Identifier id,
         String displayNameKey,
-        PatternDefinition pattern,
         ControllerSpec controller,
         AppearanceSpec appearance,
-        PortRequirements portRequirements,
-        PortTiers portTiers,
-        List<StructureStage> structureStages,
-        StructureRequirements requirements,
         FactorySpec factory,
         MachineRole role,
         Set<Identifier> acceptedModuleIds,
         int maxParallelism,
         boolean parallelizable,
+        boolean expandableStructure,
         RecipeFailureActions failureAction) {
 
     public MachineDefinition {
         if (id == null) throw new IllegalArgumentException("id null");
-        if (pattern == null) throw new IllegalArgumentException("pattern null");
         if (displayNameKey != null && displayNameKey.isBlank()) {
             throw new IllegalArgumentException("displayNameKey blank");
         }
         displayNameKey = MachineRegistration.defaultDisplayNameKey(id, displayNameKey);
         controller = controller == null ? ControllerSpec.builder().build() : controller;
         appearance = appearance == null ? AppearanceSpec.builder().build() : appearance;
-        portRequirements = portRequirements == null ? PortRequirements.none() : portRequirements;
-        portTiers = portTiers == null ? PortTiers.none() : portTiers;
-        requirements = requirements == null ? StructureRequirements.EMPTY : requirements;
-        structureStages = List.copyOf(structureStages == null || structureStages.isEmpty()
-                ? List.of(new StructureStage(StructureStage.Kind.FULL, pattern, portRequirements, portTiers, requirements))
-                : structureStages);
         factory = factory == null ? FactorySpec.builder().build() : factory;
         role = role == null ? MachineRole.NORMAL : role;
         acceptedModuleIds = copyAcceptedModuleIds(acceptedModuleIds);

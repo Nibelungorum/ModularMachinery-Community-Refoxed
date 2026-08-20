@@ -76,15 +76,15 @@ public final class PublicMachineAdapter {
         return new cn.howxu.mmcr.api.machine.BlockArray(entries, java.util.Map.of(), symbolsByPosition);
     }
 
-    public static DynamicMachine toDynamicMachine(MachineDefinition definition) {
+    public static DynamicMachine toDynamicMachine(MachineDefinition definition, cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure) {
         return new DynamicMachine(
                 definition.id(),
                 definition.displayNameKey(),
-                toBlockArray(definition.pattern()),
+                toBlockArray(structure.stages().getFirst().pattern()),
                 toControllerSpec(definition.id(), definition.controller()),
                 toAppearanceSpec(definition.appearance()),
-                toPortRequirementSpec(definition.portRequirements()),
-                toPortTierRequirementSpec(definition.portTiers()),
+                toPortRequirementSpec(structure.stages().getFirst().portRequirements()),
+                toPortTierRequirementSpec(structure.stages().getFirst().portTiers()),
                 List.of(),
                 Map.of(),
                 definition.maxParallelism(),
@@ -94,7 +94,7 @@ public final class PublicMachineAdapter {
                 toFactoryThreads(definition.factory()),
                 definition.role(),
                 definition.acceptedModuleIds(),
-                toStructureStages(definition),
+                toStructureStages(structure),
                 definition.failureAction());
     }
 
@@ -104,25 +104,32 @@ public final class PublicMachineAdapter {
     }
 
     public static MachineRegistration toStartupRegistration(MachineDefinition definition) {
+        return toStartupRegistration(definition, null);
+    }
+
+    public static MachineRegistration toStartupRegistration(MachineDefinition definition,
+            cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure) {
         MachineRegistration.Builder builder = MachineRegistration.builder(definition.id())
                 .displayNameKey(definition.displayNameKey())
                 .controllerSpec(toControllerSpec(definition.id(), definition.controller()))
                 .appearance(toAppearanceSpec(definition.appearance()))
                 .allowParallelism(definition.parallelizable())
-                .maxParallelAmount(definition.maxParallelism())
-                .pattern(toBlockArray(definition.pattern()));
+                .maxParallelAmount(definition.maxParallelism());
+        if (definition.expandableStructure()) builder.expandableStructure();
+        if (structure != null) {
+            builder.pattern(toBlockArray(structure.stages().getFirst().pattern()));
+            if (structure.stages().size() > 1) builder.expandableStructure();
+        }
         if (definition.role() == MachineRole.MODULE) builder.module();
         if (definition.role() == MachineRole.HOST) {
             definition.acceptedModuleIds().forEach(builder::host);
         }
-        if (definition.structureStages().size() > 1) builder.expandableStructure();
         return builder.build();
     }
 
-    public static MachineStructureDefinition toStructureDefinition(MachineDefinition definition) {
-        return new MachineStructureDefinition(definition.id(), definition.structureStages().stream()
-                .map(PublicMachineAdapter::toDeclaration)
-                .toList());
+    public static MachineStructureDefinition toStructureDefinition(cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure) {
+        return new MachineStructureDefinition(structure.machineId(), structure.stages().stream()
+                .map(PublicMachineAdapter::toDeclaration).toList());
     }
 
     public static MachineStructureDefinition.Declaration toDeclaration(StructureStage stage) {
@@ -204,8 +211,8 @@ public final class PublicMachineAdapter {
                 .toList();
     }
 
-    private static List<MachineStructureStage> toStructureStages(MachineDefinition definition) {
-        return cn.howxu.mmcr.api.machine.MachineStructureFamily.of(toStructureDefinition(definition)).stages();
+    private static List<MachineStructureStage> toStructureStages(cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure) {
+        return cn.howxu.mmcr.api.machine.MachineStructureFamily.of(toStructureDefinition(structure)).stages();
     }
 
     private static MachineStructureDefinition.Declaration.Kind toDeclarationKind(StructureStage.Kind kind) {
@@ -216,28 +223,12 @@ public final class PublicMachineAdapter {
     }
 
     private static void validateRegistrationFields(MachineDefinition definition) {
-        if (!definition.portRequirements().requirements().isEmpty()
-                || !definition.portTiers().requirements().isEmpty()) {
-            throw new IllegalArgumentException("MachineRegistration cannot represent port requirements");
-        }
-        if (definition.structureStages().size() != 1
-                || !definition.requirements().equals(StructureRequirements.EMPTY)
-                || !definition.structureStages().getFirst().requirements().equals(StructureRequirements.EMPTY)) {
-            throw new IllegalArgumentException("MachineRegistration cannot represent structure stages or requirements");
-        }
         if (definition.factory().hasFactory() || definition.factory().threadLimit() != 1
                 || !definition.factory().threads().isEmpty()) {
             throw new IllegalArgumentException("MachineRegistration cannot represent factory settings");
         }
         if (definition.failureAction() != cn.howxu.mmcr.api.machine.RecipeFailureActions.getDefaultAction()) {
             throw new IllegalArgumentException("MachineRegistration cannot represent failure action");
-        }
-        StructureStage stage = definition.structureStages().getFirst();
-        if (stage.kind() != StructureStage.Kind.FULL
-                || !stage.pattern().equals(definition.pattern())
-                || !stage.portRequirements().equals(definition.portRequirements())
-                || !stage.portTiers().equals(definition.portTiers())) {
-            throw new IllegalArgumentException("MachineRegistration cannot represent a single structure stage");
         }
     }
 }
