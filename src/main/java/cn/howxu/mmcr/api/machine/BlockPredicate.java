@@ -45,6 +45,7 @@ public sealed interface BlockPredicate {
         switch (predicate) {
             case OfBlockState ofState -> states.add(ofState.state());
             case OfBlock ofBlock -> states.add(ofBlock.block().defaultBlockState());
+            case DeferredBlock deferredBlock -> states.add(deferredBlock.supplier().get().defaultBlockState());
             case AnyOf anyOf -> anyOf.children().forEach(child -> collectCandidateStates(child, states));
             default -> {}
         }
@@ -70,6 +71,10 @@ public sealed interface BlockPredicate {
 
     record OfBlock(Block block) implements BlockPredicate {
         @Override public boolean matches(BlockState state) { return state.getBlock() == block; }
+    }
+
+    record DeferredBlock(java.util.function.Supplier<? extends Block> supplier) implements BlockPredicate {
+        @Override public boolean matches(BlockState state) { return state.getBlock() == supplier.get(); }
     }
 
     record OfBlockState(BlockState state) implements BlockPredicate {

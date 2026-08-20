@@ -64,7 +64,6 @@ public final class TestBootstrap {
 
     public static synchronized void bootstrap() throws Exception {
         if (initialized) {
-            restoreMachineDefinitions();
             return;
         }
 
@@ -110,7 +109,6 @@ public final class TestBootstrap {
     }
 
     public static void registerRuntimeBuiltins() {
-        restoreMachineDefinitions();
         DynamicContentReloadService.reload(candidate -> {
             PublicBuiltinRuntime.registerStructures(candidate);
         });

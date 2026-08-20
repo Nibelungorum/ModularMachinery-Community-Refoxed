@@ -146,6 +146,10 @@ public final class MachineStructureSyncCodec {
                 buf.writeEnum(PredicateKind.BLOCK);
                 Identifier.STREAM_CODEC.encode(buf, BuiltInRegistries.BLOCK.getKey(ofBlock.block()));
             }
+            case BlockPredicate.DeferredBlock deferredBlock -> {
+                buf.writeEnum(PredicateKind.BLOCK);
+                Identifier.STREAM_CODEC.encode(buf, BuiltInRegistries.BLOCK.getKey(deferredBlock.supplier().get()));
+            }
             case BlockPredicate.OfBlockState ofState -> {
                 buf.writeEnum(PredicateKind.BLOCK_STATE);
                 writeBlockState(buf, ofState.state());

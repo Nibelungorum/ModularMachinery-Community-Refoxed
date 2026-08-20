@@ -91,19 +91,19 @@ public final class GameTestRegistry {
             event.registerStructure(id, structure -> {
                 structure.fullStructure(stage -> stage.pattern(pattern -> pattern
                         .layer("XXX", "XCX", "XXX")
-                        .where('X', BlockPredicate.block(ModBlocks.CASING.get()))
-                        .where('C', BlockPredicate.block(ModBlocks.controllerFor(id).get()))
+                        .where('X', BlockPredicate.deferredBlock(() -> ModBlocks.CASING.get()))
+                        .where('C', BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(id).get()))
                         .controller('C')));
                 if (name.contains("expandable") || name.contains("distillation")) {
                     structure.extension(stage -> stage.pattern(pattern -> pattern
                             .layer("XXX", "XCX", "XXX")
-                            .where('X', BlockPredicate.block(ModBlocks.CASING.get()))
-                            .where('C', BlockPredicate.block(ModBlocks.controllerFor(id).get()))
+                            .where('X', BlockPredicate.deferredBlock(() -> ModBlocks.CASING.get()))
+                            .where('C', BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(id).get()))
                             .controller('C')));
                     structure.extension(stage -> stage.pattern(pattern -> pattern
                             .layer("XXX", "XCX", "XXX")
-                            .where('X', BlockPredicate.block(ModBlocks.CASING.get()))
-                            .where('C', BlockPredicate.block(ModBlocks.controllerFor(id).get()))
+                            .where('X', BlockPredicate.deferredBlock(() -> ModBlocks.CASING.get()))
+                            .where('C', BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(id).get()))
                             .controller('C')));
                 }
                 return structure;

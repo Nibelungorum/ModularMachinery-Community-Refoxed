@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * Public block matching predicate value.
@@ -17,26 +18,33 @@ import java.util.Optional;
 public final class BlockPredicate {
     private final boolean machineCoupler;
     private final Block block;
+    private final Supplier<? extends Block> blockSupplier;
     private final TagKey<Block> tag;
     private final List<BlockPredicate> alternatives;
 
-    private BlockPredicate(boolean machineCoupler, Block block, TagKey<Block> tag, List<BlockPredicate> alternatives) {
+    private BlockPredicate(boolean machineCoupler, Block block, Supplier<? extends Block> blockSupplier,
+            TagKey<Block> tag, List<BlockPredicate> alternatives) {
         this.machineCoupler = machineCoupler;
         this.block = block;
+        this.blockSupplier = blockSupplier;
         this.tag = tag;
         this.alternatives = alternatives;
     }
 
     public static BlockPredicate block(Block block) {
-        return new BlockPredicate(false, Objects.requireNonNull(block, "block"), null, List.of());
+        return new BlockPredicate(false, Objects.requireNonNull(block, "block"), null, null, List.of());
+    }
+
+    public static BlockPredicate deferredBlock(Supplier<? extends Block> blockSupplier) {
+        return new BlockPredicate(false, null, Objects.requireNonNull(blockSupplier, "blockSupplier"), null, List.of());
     }
 
     public static BlockPredicate tag(TagKey<Block> tag) {
-        return new BlockPredicate(false, null, Objects.requireNonNull(tag, "tag"), List.of());
+        return new BlockPredicate(false, null, null, Objects.requireNonNull(tag, "tag"), List.of());
     }
 
     public static BlockPredicate machineCoupler() {
-        return new BlockPredicate(true, null, null, List.of());
+        return new BlockPredicate(true, null, null, null, List.of());
     }
 
     public static BlockPredicate any(BlockPredicate... predicates) {
@@ -52,7 +60,7 @@ public final class BlockPredicate {
         for (BlockPredicate predicate : predicates) {
             Objects.requireNonNull(predicate, "predicate");
         }
-        return new BlockPredicate(false, null, null, List.copyOf(predicates));
+        return new BlockPredicate(false, null, null, null, List.copyOf(predicates));
     }
 
     public boolean isMachineCoupler() {
@@ -61,6 +69,10 @@ public final class BlockPredicate {
 
     public Optional<Block> block() {
         return Optional.ofNullable(block);
+    }
+
+    public Optional<Supplier<? extends Block>> blockSupplier() {
+        return Optional.ofNullable(blockSupplier);
     }
 
     public Optional<TagKey<Block>> tag() {

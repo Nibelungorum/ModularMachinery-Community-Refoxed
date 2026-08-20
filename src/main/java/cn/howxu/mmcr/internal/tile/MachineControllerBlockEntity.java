@@ -928,6 +928,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private static Component rawExpectedDescription(BlockPredicate expected) {
         return switch (expected) {
             case BlockPredicate.OfBlock ofBlock -> ofBlock.block().getName();
+            case BlockPredicate.DeferredBlock deferredBlock -> deferredBlock.supplier().get().getName();
             case BlockPredicate.OfBlockState ofState -> ofState.state().getBlock().getName();
             case BlockPredicate.OfTag ofTag -> Component.literal("#" + ofTag.tag().location());
             case BlockPredicate.AnyOf anyOf -> anyOf.children().isEmpty()

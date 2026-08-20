@@ -15,6 +15,8 @@ import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -37,6 +39,26 @@ class PublicApiAdapterTest {
         assertThat(PublicMachineAdapter.toRegistration(definition).id()).isEqualTo(machineId);
         assertThat(PublicMachineAdapter.toStructureDefinition(structure).machineId()).isEqualTo(machineId);
         assertThat(PublicMachineAdapter.toDynamicMachine(definition, structure).registryName()).isEqualTo(machineId);
+    }
+
+    @Test
+    void deferred_block_predicate_resolves_only_when_runtime_structure_is_used() {
+        AtomicBoolean resolved = new AtomicBoolean();
+        var predicate = BlockPredicate.deferredBlock(() -> {
+            resolved.set(true);
+            return Blocks.FURNACE;
+        });
+        var structure = MachineStructureBuilder.structure()
+                .fullStructure(stage -> stage.pattern(pattern -> pattern.layer("F")
+                        .where('F', predicate).controller('F')))
+                .build(MMCR.id("deferred_predicate_machine"));
+
+        var converted = PublicMachineAdapter.toStructureDefinition(structure);
+
+        assertThat(resolved).isFalse();
+        assertThat(converted.declarations().getFirst().pattern().get(net.minecraft.core.BlockPos.ZERO)
+                .matches(Blocks.FURNACE.defaultBlockState())).isTrue();
+        assertThat(resolved).isTrue();
     }
 
     @Test

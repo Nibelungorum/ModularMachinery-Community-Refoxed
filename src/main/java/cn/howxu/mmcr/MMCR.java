@@ -240,9 +240,8 @@ public class MMCR {
         MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
         PublicMachineDefinitionProviders.registerAll(definitions);
         definitionsSource.accept(definitions);
-        ModBlocks.registerMachineControllers(definitions.definitions().keySet());
-        ModBlockEntities.registerMachineControllers(definitions.definitions().keySet());
-        ModItems.registerMachineControllerItems(definitions.definitions().keySet());
+        // Dynamic controller holders must be declared before any startup content is committed.
+        registerDynamicControllers(definitions.definitions().keySet());
         NeoForge.EVENT_BUS.post(definitions);
         definitions.freeze();
         PublicApiBootstrap.collectMachines(definitions);
@@ -260,6 +259,12 @@ public class MMCR {
         recipes.freeze();
         PublicApiBootstrap.collectRecipes(recipes);
         ContentRegistrationCoordinator.commitStartup();
+    }
+
+    private static void registerDynamicControllers(java.util.Set<Identifier> machineIds) {
+        ModBlocks.registerMachineControllers(machineIds);
+        ModBlockEntities.registerMachineControllers(machineIds);
+        ModItems.registerMachineControllerItems(machineIds);
     }
 
     private static void bindVanillaItemComponents() {
@@ -297,6 +302,16 @@ public class MMCR {
 
     private static void registerDevelopmentBuiltins(String className, String methodName, Class<?>[] parameterTypes, Object... arguments) {
         if (FMLLoader.getCurrent().isProduction()) return;
+        invokeOptionalSource(className, methodName, parameterTypes, arguments);
+    }
+
+    static void invokeOptionalSourceForTesting(String className, String methodName, Class<?>[] parameterTypes,
+            Object... arguments) {
+        invokeOptionalSource(className, methodName, parameterTypes, arguments);
+    }
+
+    private static void invokeOptionalSource(String className, String methodName, Class<?>[] parameterTypes,
+            Object... arguments) {
         try {
             Class.forName(className).getMethod(methodName, parameterTypes).invoke(null, arguments);
         } catch (ClassNotFoundException ignored) {
@@ -307,13 +322,7 @@ public class MMCR {
     }
 
     private static void registerGameTestBuiltins(String methodName, Class<?>[] parameterTypes, Object... arguments) {
-        try {
-            Class.forName("cn.howxu.mmcr.GameTestRegistry").getMethod(methodName, parameterTypes).invoke(null, arguments);
-        } catch (ClassNotFoundException ignored) {
-            // GameTest classes are only present on the GameTest classpath.
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("Unable to register GameTest builtins", e);
-        }
+        invokeOptionalSource("cn.howxu.mmcr.GameTestRegistry", methodName, parameterTypes, arguments);
     }
 
     private static void registerGameTests(RegisterGameTestsEvent event) {

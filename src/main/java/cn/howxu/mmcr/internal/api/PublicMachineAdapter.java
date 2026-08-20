@@ -166,6 +166,8 @@ public final class PublicMachineAdapter {
         if (predicate.isMachineCoupler()) return cn.howxu.mmcr.api.machine.BlockPredicate.machineCoupler();
         return predicate.block()
                 .<cn.howxu.mmcr.api.machine.BlockPredicate>map(cn.howxu.mmcr.api.machine.BlockPredicate.OfBlock::new)
+                .or(() -> predicate.blockSupplier()
+                        .map(cn.howxu.mmcr.api.machine.BlockPredicate.DeferredBlock::new))
                 .or(() -> predicate.tag().map(cn.howxu.mmcr.api.machine.BlockPredicate.OfTag::new))
                 .orElseGet(() -> new cn.howxu.mmcr.api.machine.BlockPredicate.AnyOf(
                         predicate.alternatives().stream()
