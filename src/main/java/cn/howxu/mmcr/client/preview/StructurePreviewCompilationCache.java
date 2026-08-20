@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.preview;
 
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.client.RuntimeContentClientApplier;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
@@ -25,13 +26,15 @@ public final class StructurePreviewCompilationCache implements AutoCloseable {
         this.executor = executor;
     }
     public StructurePreviewCompilation acquire(Machine machine) {
-        return acquire(machine, cn.howxu.mmcr.internal.sync.RuntimeContentVersion.current());
+        return acquire(machine, RuntimeContentClientApplier.appliedContentVersion());
     }
     public StructurePreviewCompilation acquire(Machine machine, long contentVersion) {
         return entries.computeIfAbsent(new CacheKey(machine.registryName(), contentVersion), ignored -> create(machine));
     }
     public boolean has(Identifier machineId) {
-        return entries.keySet().stream().anyMatch(key -> key.machineId().equals(machineId));
+        long currentVersion = RuntimeContentClientApplier.appliedContentVersion();
+        return entries.keySet().stream().anyMatch(key -> key.machineId().equals(machineId)
+                && key.contentVersion() == currentVersion);
     }
     public void clear() { entries.clear(); }
     @Override public void close() { clear(); }

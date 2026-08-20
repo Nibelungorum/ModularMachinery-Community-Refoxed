@@ -746,8 +746,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (machine == null) return false;
 
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
-        for (CandidatePattern candidatePattern : candidatePatterns(machine, facing).stream()
-                .filter(pattern -> pattern.stageNumber() == 1).toList()) {
+        for (CandidatePattern candidatePattern : candidatePatterns(machine, facing)) {
             BlockArray rotatedPattern = candidatePattern.pattern();
             CompiledMachinePattern compiled = compiledFor(machine, rotatedPattern, facing);
             Machine validationMachine = compiled == null ? machine : compiled.machine();
@@ -771,8 +770,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         if (machine == null) return Optional.empty();
 
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
-        for (CandidatePattern candidatePattern : candidatePatterns(machine, facing).stream()
-                .filter(pattern -> pattern.stageNumber() == 1).toList()) {
+        for (CandidatePattern candidatePattern : candidatePatterns(machine, facing)) {
             MultiblockPreviewSnapshot snapshot = MultiblockPreviewBuilder.build(level, getBlockPos(), candidatePattern.pattern(), maxEntries);
             if (!snapshot.isEmpty()) return Optional.of(snapshot);
         }

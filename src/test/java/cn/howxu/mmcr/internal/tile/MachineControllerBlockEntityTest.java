@@ -38,6 +38,7 @@ import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
+import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
@@ -155,6 +156,21 @@ class MachineControllerBlockEntityTest {
 
         assertThat(controller.getMatchedStructureStage()).isZero();
         assertThat(controller.assemblyPattern(machine)).isSameAs(MachineRegistry.getCompiledStages(machine.registryName()).getFirst().rotatedPattern(Direction.SOUTH));
+    }
+
+    @Test
+    void preview_uses_the_highest_effective_complete_stage() throws Exception {
+        TestBootstrap.registerRuntimeBuiltins();
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        DynamicMachine machine = stagedMachine(MMCR.id("preview_complete_stage_machine"),
+                onePortPattern(Blocks.IRON_BLOCK), onePortPattern(Blocks.GOLD_BLOCK));
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, Blocks.AIR);
+
+        MultiblockPreviewSnapshot snapshot = controller.createStructurePreviewSnapshot(16).orElseThrow();
+
+        assertThat(snapshot.entries()).extracting(MultiblockPreviewSnapshot.Entry::state)
+                .containsExactly(Blocks.GOLD_BLOCK.defaultBlockState());
     }
 
     @Test

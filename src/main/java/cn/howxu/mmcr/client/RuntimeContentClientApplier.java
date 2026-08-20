@@ -16,6 +16,8 @@ import java.util.Map;
  * @author howxu <dev@howxu.cn>
  */
 public final class RuntimeContentClientApplier {
+    private static volatile long appliedContentVersion;
+
     private RuntimeContentClientApplier() {
     }
 
@@ -27,7 +29,12 @@ public final class RuntimeContentClientApplier {
             throw new IllegalArgumentException("Invalid runtime client cache snapshot");
         }
         StructurePreviewCompilationCache.instance().clear();
+        appliedContentVersion = contentVersion;
         RuntimeMachineModelRegistry.invalidate();
+    }
+
+    public static long appliedContentVersion() {
+        return appliedContentVersion;
     }
 
     public static void validate(Map<Identifier, MachineControllerSpec> controllerSpecs,
@@ -54,6 +61,7 @@ public final class RuntimeContentClientApplier {
         ControllerSpecCache.replaceSnapshot(Map.of());
         MachineAppearanceCache.replaceSnapshot(Map.of());
         StructurePreviewCompilationCache.instance().clear();
+        appliedContentVersion = 0L;
         RuntimeMachineModelRegistry.invalidate();
     }
 }

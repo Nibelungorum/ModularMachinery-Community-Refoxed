@@ -1,5 +1,7 @@
 # Task 8 Report
 
+# Task 8 Report
+
 ## Completed
 
 - Client preview compilation entries now include the effective content version in their cache key.
@@ -9,11 +11,29 @@
 - Controller recipe candidate invalidation now follows `RuntimeContentVersion` instead of the recipe-only registry counter.
 - Added focused cache invalidation coverage for version changes.
 
+## Changes
+
+- `StructurePreviewCompilationCache` now uses the client server-applied `contentVersion` for default acquisition and `has(machineId)` queries.
+- Applying a runtime snapshot records its version and clears preview compilations, so historical entries cannot be returned after a version change.
+- Machine-controller preview and mismatch diagnosis now iterate all effective compiled candidate stages instead of only stage 1.
+
+## Regression Coverage
+
+- Old-version entries are not reported by `has(machineId)`.
+- The same applied version returns the same lazy compilation instance.
+- Applying a new version rebuilds the compilation.
+- A staged machine preview uses the highest effective complete stage.
+
 ## Verification
 
-- `./gradlew compileJava compileTestJava --no-daemon`: passed.
-- `./gradlew test --no-daemon --tests '*StructurePreviewCompilationCacheTest' --tests '*MachineAppearanceCacheTest' --tests '*ControllerSpecCacheTest' --tests '*MachineControllerBlockEntityTest'`: passed.
-- `./gradlew test --no-daemon`: failed with 57 failures across existing bootstrap/lifecycle-sensitive tests, including `PluginBindingTest`, `RuntimeContentSnapshotTest`, and `MachineControllerBlockEntityTest`.
-- `./gradlew runGameTestServer --no-daemon`: failed during mod loading before GameTests ran because `stage 2 has conflicting predicate at -1, -1, 0`.
+- `./gradlew compileJava --no-daemon`: passed.
+- Focused tests: passed.
+  - `./gradlew test --no-daemon --tests cn.howxu.mmcr.client.preview.StructurePreviewCompilationCacheTest --tests cn.howxu.mmcr.internal.tile.MachineControllerBlockEntityTest`
+- Full unit tests: failed in the existing global registration/test-isolation suite, 58 failures out of 1089 tests. Representative failures include duplicate machine levels, empty recipe snapshots, and startup registration state leakage.
+  - `./gradlew test --no-daemon`
+- GameTest server: failed during mod startup before tests ran because existing startup data contains a conflicting stage predicate at `-1, -1, 0`.
+  - `./gradlew runGameTestServer --no-daemon`
+
+No `docs` files, dependencies, or `runClient` were changed.
 
 The focused Task 8 tests pass; the full-suite and GameTest failures are recorded without weakening or disabling tests.
