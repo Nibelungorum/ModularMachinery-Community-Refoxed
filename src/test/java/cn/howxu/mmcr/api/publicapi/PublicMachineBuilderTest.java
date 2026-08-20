@@ -40,7 +40,8 @@ class PublicMachineBuilderTest {
         assertThat(definition.id()).isEqualTo(MMCR.id("base_machine"));
         assertThat(definition.displayNameKey()).isEqualTo("machine.mmcr.base_machine");
         assertThat(MachineBuilder.class.getDeclaredMethods()).noneMatch(method ->
-                method.getName().equals("pattern") || method.getName().equals("stage"));
+                method.getName().equals("pattern") || method.getName().equals("stage")
+                        || method.getName().equals("expandableStructure"));
     }
 
     @Test
