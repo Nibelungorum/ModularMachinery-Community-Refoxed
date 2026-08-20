@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.publicapi;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
@@ -127,5 +128,31 @@ class PublicEventSubscribersTest {
         assertThat(new MMCRMachineDefinationsEvent()).isInstanceOf(RegisterMachineDefinationsEvent.class);
         assertThat(new MMCRMachineStructuresEvent(Set.of())).isInstanceOf(RegisterMachineStructuresEvent.class);
         assertThat(new MMCRMachineRecipesEvent()).isInstanceOf(MMCRRegisterRecipesEvent.class);
+    }
+
+    @Test
+    void provider_can_implement_only_the_canonical_definition_signature() {
+        var event = new MMCRMachineDefinationsEvent();
+        MachineDefinitionProvider provider = new MachineDefinitionProvider() {
+            @Override
+            public void register(MMCRMachineDefinationsEvent event) {
+                event.registerMachine(MMCR.id("canonical_provider_machine"), builder -> builder);
+            }
+        };
+
+        provider.register(event);
+
+        assertThat(event.definitions()).containsKey(MMCR.id("canonical_provider_machine"));
+    }
+
+    @Test
+    void deprecated_definition_listener_receives_the_canonical_event_instance() {
+        var observed = new AtomicReference<RegisterMachineDefinationsEvent>();
+        NeoForge.EVENT_BUS.addListener(RegisterMachineDefinationsEvent.class, observed::set);
+        var event = new MMCRMachineDefinationsEvent();
+
+        NeoForge.EVENT_BUS.post(event);
+
+        assertThat(observed.get()).isSameAs(event);
     }
 }
