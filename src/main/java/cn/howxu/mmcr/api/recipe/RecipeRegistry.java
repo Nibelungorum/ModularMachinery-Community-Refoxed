@@ -13,6 +13,13 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.ArrayList;
 
+/** Stores static, data-pack, and direct-runtime recipes and publishes one effective view.
+ *
+ * <p>Precedence is {@code data-pack > static > dynamic}. A lower-priority recipe remains
+ * in its source layer when it is shadowed by a higher-priority layer.</p>
+ *
+ * @author howxu <dev@howxu.cn>
+ */
 public final class RecipeRegistry {
 
     private static final Map<Identifier, MachineRecipe> STATIC_RECIPES = new LinkedHashMap<>();
@@ -23,7 +30,7 @@ public final class RecipeRegistry {
     private RecipeRegistry() {
     }
 
-    public static void register(MachineRecipe recipe) {
+    public static void registerStatic(MachineRecipe recipe) {
         if (recipe == null) {
             throw new IllegalArgumentException("Recipe must not be null");
         }
@@ -36,6 +43,14 @@ public final class RecipeRegistry {
         STATIC_RECIPES.put(recipe.id(), recipe);
         publish(STATIC_RECIPES, STATE.dataPack(), STATE.dynamic());
         registryVersion++;
+    }
+
+    /**
+     * @deprecated use {@link #registerStatic(MachineRecipe)} for startup recipes
+     */
+    @Deprecated(forRemoval = true)
+    public static void register(MachineRecipe recipe) {
+        registerStatic(recipe);
     }
 
     public static MachineRecipe getRecipe(Identifier id) {
@@ -57,6 +72,10 @@ public final class RecipeRegistry {
 
     public static List<MachineRecipe> recipes() {
         return STATE.effectiveValues();
+    }
+
+    public static Map<Identifier, MachineRecipe> effectiveSnapshot() {
+        return STATE.effective();
     }
 
     public static int registeredRecipeCount() {

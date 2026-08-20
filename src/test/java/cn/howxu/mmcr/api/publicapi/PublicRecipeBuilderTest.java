@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.internal.api.PublicRecipeAdapter;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -122,11 +123,13 @@ class PublicRecipeBuilderTest {
                 .requiredHost(id("host"))
                 .modifier(id("snapshot_modifier"))
                 .build();
-        var recipe = PublicRecipeAdapter.toRecipe(definition,
+        var recipe = PublicRecipeAdapter.toRecipe(definition, new MMCRMachineStructuresEvent.Snapshot(
+                Map.of(),
+                Map.of(),
+                Map.of(DefaultMachineLevels.COPPER_COIL, MachineLevelRegistry.getLevel(DefaultMachineLevels.COPPER_COIL)),
                 Map.of(id("snapshot_modifier"), new ModifierDefinition(List.of(new cn.howxu.mmcr.api.recipe.modifier.RecipeModifier(
                         "item", cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.OUTPUT, 2F,
-                        cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.Operation.MULTIPLY, true)))),
-                Map.of(DefaultMachineLevels.COPPER_COIL, MachineLevelRegistry.getLevel(DefaultMachineLevels.COPPER_COIL)));
+                        cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.Operation.MULTIPLY, true))))));
 
         assertThat(recipe.requirements()).hasSize(6);
         assertThat(recipe.requirements()).anySatisfy(requirement -> {
@@ -138,7 +141,8 @@ class PublicRecipeBuilderTest {
             assertThat(item.components()).isEqualTo(components());
         });
         var smartRecipe = PublicRecipeAdapter.toRecipe(MachineRecipeBuilder.recipe(id("adapter_smart"), id("machine"))
-                .requirement(SmartInterfaceRequirement.input("Mode", 1F, 2F)).build());
+                .requirement(SmartInterfaceRequirement.input("Mode", 1F, 2F)).build(),
+                new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
         assertThat(smartRecipe.requirements()).singleElement().satisfies(requirement -> {
             assertThat(requirement).isInstanceOf(cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.class);
             var smart = (cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement) requirement;

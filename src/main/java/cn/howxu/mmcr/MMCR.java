@@ -34,6 +34,7 @@ import cn.howxu.mmcr.registry.ModRecipeTypes;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.api.PublicMachineDefinitionProviders;
+ import cn.howxu.mmcr.internal.api.PublicBuiltinRuntime;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
  import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
  import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
@@ -217,6 +218,7 @@ public class MMCR {
 
     private static void registerPublicApiRecipes() {
         MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
+        PublicBuiltinRuntime.registerRecipes(recipes);
         NeoForge.EVENT_BUS.post(recipes);
         registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerRecipes",
                 new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);

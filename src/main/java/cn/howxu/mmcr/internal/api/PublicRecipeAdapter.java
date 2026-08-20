@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.publicapi.recipe.ItemInput;
 import cn.howxu.mmcr.api.publicapi.recipe.ItemOutput;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -34,13 +35,10 @@ public final class PublicRecipeAdapter {
     private PublicRecipeAdapter() {
     }
 
-    public static MachineRecipe toRecipe(MachineRecipeDefinition definition) {
-        return toRecipe(definition, Map.of(), Map.of());
-    }
-
     public static MachineRecipe toRecipe(MachineRecipeDefinition definition,
-            Map<Identifier, ModifierDefinition> modifiers,
-            Map<Identifier, cn.howxu.mmcr.api.machine.level.MachineLevel> levels) {
+            MMCRMachineStructuresEvent.Snapshot snapshot) {
+        Map<Identifier, ModifierDefinition> modifiers = snapshot.modifiers();
+        Map<Identifier, cn.howxu.mmcr.api.machine.level.MachineLevel> levels = snapshot.levels();
         List<MachineIngredient> inputs = new ArrayList<>();
         for (ItemInput input : definition.itemInputs()) {
             inputs.add(new MachineIngredient.ItemIngredient(input.ingredient(), input.count(), input.components(), input.consumeChance()));

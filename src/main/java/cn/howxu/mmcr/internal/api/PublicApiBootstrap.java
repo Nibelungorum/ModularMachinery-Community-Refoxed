@@ -154,14 +154,13 @@ public final class PublicApiBootstrap {
                 throw new ApiRegistrationException("Recipe " + recipe.id()
                         + " refers to unknown machine " + recipe.machineId() + " during installation");
             }
-            recipes.put(recipe.id(), PublicRecipeAdapter.toRecipe(recipe,
-                    STRUCTURE_SNAPSHOT.modifiers(), STRUCTURE_SNAPSHOT.levels()));
+            recipes.put(recipe.id(), PublicRecipeAdapter.toRecipe(recipe, STRUCTURE_SNAPSHOT));
         }
         for (Identifier id : recipes.keySet()) {
             if (RecipeRegistry.containsStatic(id)) throw duplicate(id, "recipe");
         }
         for (var recipe : recipes.values()) {
-            PublicRegistryBridge.registerRecipe(recipe);
+            RecipeRegistry.registerStatic(recipe);
         }
         state = State.FROZEN;
     }

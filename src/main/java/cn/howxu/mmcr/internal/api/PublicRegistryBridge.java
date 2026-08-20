@@ -17,6 +17,6 @@ public final class PublicRegistryBridge {
     }
 
     public static void registerRecipe(MachineRecipe recipe) {
-        RecipeRegistry.register(recipe);
+        RecipeRegistry.registerStatic(recipe);
     }
 }

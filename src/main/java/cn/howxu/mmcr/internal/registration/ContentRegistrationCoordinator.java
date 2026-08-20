@@ -88,7 +88,7 @@ public final class ContentRegistrationCoordinator {
             }
         });
         MachineStructureRegistry.replaceStartup(structures);
-        recipes.values().forEach(RecipeRegistry::register);
+        recipes.values().forEach(RecipeRegistry::registerStatic);
         MachineDefinitions.freezeRegistryPhase();
         state = State.COMMITTED;
     }
@@ -139,7 +139,7 @@ public final class ContentRegistrationCoordinator {
                 throw new ApiRegistrationException("Recipe " + id + " refers to unknown machine "
                         + definition.machineId());
             }
-            recipes.put(id, PublicRecipeAdapter.toRecipe(definition, snapshot.modifiers(), snapshot.levels()));
+            recipes.put(id, PublicRecipeAdapter.toRecipe(definition, snapshot));
         });
         return recipes;
     }

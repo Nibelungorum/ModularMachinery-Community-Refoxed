@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
@@ -123,10 +124,14 @@ public final class TestBootstrap {
     public static void registerRuntimeBuiltins() {
         restoreMachineDefinitions();
         registerDefaultMachineLevels();
+        MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
+        PublicBuiltinRuntime.registerRecipes(recipes);
+        recipes.freeze();
+        PublicApiBootstrap.registerRecipes(recipes);
+        PublicApiBootstrap.installRecipes();
         DynamicContentReloadService.reload(candidate -> {
             PublicBuiltinRuntime.registerStructures(candidate);
         });
-        PublicBuiltinRuntime.registerRecipes();
         MachineRegistry.rebuildCompiledCache();
     }
 
