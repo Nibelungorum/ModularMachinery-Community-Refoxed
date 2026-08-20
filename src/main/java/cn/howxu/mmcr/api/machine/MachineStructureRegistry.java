@@ -72,11 +72,15 @@ public final class MachineStructureRegistry {
     }
 
     public static void replaceClientSnapshot(Map<Identifier, MachineStructureDefinition> structures) {
-        Map<Identifier, MachineStructureDefinition> replacement = validate(structures);
+        Map<Identifier, MachineStructureDefinition> replacement = validateClientSnapshot(structures);
         MachineRegistry.installStructures(replacement);
         STARTUP_STRUCTURES = replacement;
         DYNAMIC_STRUCTURES = Map.of();
-        RuntimeContentVersion.advance();
+    }
+
+    public static Map<Identifier, MachineStructureDefinition> validateClientSnapshot(
+            Map<Identifier, MachineStructureDefinition> structures) {
+        return validate(structures);
     }
 
     public static Machine toRuntimeMachine(MachineRegistration registration, MachineStructureDefinition structure) {

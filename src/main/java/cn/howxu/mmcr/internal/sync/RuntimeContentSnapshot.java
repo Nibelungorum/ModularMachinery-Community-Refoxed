@@ -35,12 +35,40 @@ public record RuntimeContentSnapshot(
         return new RuntimeContentSnapshot(Map.of(), Map.of(), Map.of(), Map.of(), 0L);
     }
 
-    public void applyClient() {
-        if (!ClientRuntimeSnapshotBridge.canApply(contentVersion)) return;
-        MachineStructureRegistry.replaceClientSnapshot(structures);
-        RecipeRegistry.replaceClientSnapshot(recipes);
-        RecipeCraftingContextPool.onGlobalReload();
-        ClientRuntimeSnapshotBridge.markApplied(contentVersion);
-        ClientRuntimeSnapshotBridge.apply(this);
+    public boolean applyClient() {
+        synchronized (ClientRuntimeSnapshotBridge.class) {
+            if (!ClientRuntimeSnapshotBridge.canApply(contentVersion)) return false;
+            validateForClient();
+            ClientRuntimeSnapshotBridge.validate(this);
+            MachineStructureRegistry.replaceClientSnapshot(structures);
+            RecipeRegistry.replaceClientSnapshot(recipes);
+            RecipeCraftingContextPool.onGlobalReload();
+            ClientRuntimeSnapshotBridge.apply(this);
+            ClientRuntimeSnapshotBridge.markApplied(contentVersion);
+            return true;
+        }
+    }
+
+    private void validateForClient() {
+        MachineStructureRegistry.validateClientSnapshot(structures);
+        RecipeRegistry.validateClientSnapshot(recipes);
+        structures.keySet().forEach(id -> {
+            if (controllerSpecs.containsKey(id)) {
+                MachineControllerSpec spec = controllerSpecs.get(id);
+                if (spec == null || !id.equals(spec.id())) {
+                    throw new IllegalArgumentException("Controller spec key does not match machine id: " + id);
+                }
+            }
+        });
+        controllerSpecs.forEach((id, spec) -> {
+            if (id == null || spec == null || !id.equals(spec.id())) {
+                throw new IllegalArgumentException("Controller spec key does not match spec id: " + id);
+            }
+        });
+        appearances.forEach((id, appearance) -> {
+            if (id == null || appearance == null) {
+                throw new IllegalArgumentException("Invalid machine appearance entry: " + id);
+            }
+        });
     }
 }

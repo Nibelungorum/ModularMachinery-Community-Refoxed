@@ -224,6 +224,39 @@ class RuntimeContentSnapshotTest {
     }
 
     @Test
+    void runtimeContentPayloadRejectsDuplicateStructureKeys() {
+        Identifier machineId = MMCR.id("alloy_furnace");
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+        buf.writeVarInt(2);
+        Identifier.STREAM_CODEC.encode(buf, machineId);
+        MachineStructureSyncCodec.encode(buf, structure(machineId));
+        Identifier.STREAM_CODEC.encode(buf, machineId);
+        MachineStructureSyncCodec.encode(buf, structure(machineId));
+
+        assertThatThrownBy(() -> PktRuntimeContentPayload.STREAM_CODEC.decode(buf))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Duplicate runtime content key");
+    }
+
+    @Test
+    void runtimeContentPayloadRejectsStructureKeyIdMismatch() {
+        Identifier key = MMCR.id("alloy_furnace");
+        Identifier structureId = MMCR.id("cracker");
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+        buf.writeVarInt(1);
+        Identifier.STREAM_CODEC.encode(buf, key);
+        MachineStructureSyncCodec.encode(buf, structure(structureId));
+        buf.writeVarInt(0);
+        buf.writeVarInt(0);
+        buf.writeVarInt(0);
+        buf.writeVarLong(1L);
+
+        assertThatThrownBy(() -> PktRuntimeContentPayload.STREAM_CODEC.decode(buf))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Structure key does not match machine id");
+    }
+
+    @Test
     void applyClientReplacesOldDynamicStructuresAndRecipes() {
         Identifier oldMachine = MMCR.id("alloy_furnace");
         Identifier newMachine = MMCR.id("cracker");
@@ -273,6 +306,37 @@ class RuntimeContentSnapshotTest {
         new RuntimeContentSnapshot(Map.of(), Map.of(), Map.of(), Map.of(), 19L).applyClient();
 
         assertThat(MachineStructureRegistry.effectiveSnapshot()).containsOnlyKeys(machineId);
+    }
+
+    @Test
+    void invalidSnapshotDoesNotPartiallyReplaceClientContent() {
+        Identifier oldMachine = MMCR.id("alloy_furnace");
+        Identifier newMachine = MMCR.id("cracker");
+        registerMachineIfMissing(oldMachine);
+        registerMachineIfMissing(newMachine);
+        MachineStructureRegistry.replaceDynamic(Map.of(oldMachine, structure(oldMachine)));
+        Map<Identifier, MachineStructureDefinition> before = MachineStructureRegistry.effectiveSnapshot();
+
+        MachineRecipe invalidRecipe = recipe(MMCR.id("actual_recipe"), newMachine);
+        RuntimeContentSnapshot invalid = new RuntimeContentSnapshot(
+                Map.of(newMachine, structure(newMachine)),
+                Map.of(MMCR.id("wrong_recipe_key"), invalidRecipe),
+                Map.of(), Map.of(), 30L);
+
+        assertThatThrownBy(invalid::applyClient).isInstanceOf(IllegalArgumentException.class);
+        assertThat(MachineStructureRegistry.effectiveSnapshot()).isEqualTo(before);
+    }
+
+    @Test
+    void applyingClientSnapshotDoesNotAdvanceServerContentVersion() {
+        long before = RuntimeContentVersion.current();
+        Identifier machineId = MMCR.id("alloy_furnace");
+        registerMachineIfMissing(machineId);
+
+        new RuntimeContentSnapshot(Map.of(machineId, structure(machineId)), Map.of(), Map.of(), Map.of(), 31L)
+                .applyClient();
+
+        assertThat(RuntimeContentVersion.current()).isEqualTo(before);
     }
 
     @Test

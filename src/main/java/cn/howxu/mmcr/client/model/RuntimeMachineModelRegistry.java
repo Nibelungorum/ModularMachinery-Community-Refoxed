@@ -36,6 +36,10 @@ public final class RuntimeMachineModelRegistry {
     private RuntimeMachineModelRegistry() {
     }
 
+    public static synchronized void invalidate() {
+        definitions = null;
+    }
+
     public static void registerBlockStateModels(RegisterBlockStateModels event) {
         event.registerModel(DynamicOverlayModelLoader.CONTROLLER_ID, DynamicOverlayModelLoader.CONTROLLER_CODEC);
         event.registerModel(DynamicOverlayModelLoader.PORT_ID, DynamicOverlayModelLoader.PORT_CODEC);

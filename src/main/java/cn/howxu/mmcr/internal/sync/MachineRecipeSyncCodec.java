@@ -41,6 +41,7 @@ public final class MachineRecipeSyncCodec {
     private static final int MAX_LEVEL_REQUIREMENTS = 1024;
     private static final int MAX_REQUIRED_HOSTS = 1024;
     private static final int MAX_TAGS = 1024;
+    private static final int MAX_STACK_COUNT = 65536;
 
     private MachineRecipeSyncCodec() {
     }
@@ -151,7 +152,9 @@ public final class MachineRecipeSyncCodec {
                     DataComponentPredicateSet components = readJsonWithRegistryCodec(buf, DataComponentPredicateSet.CODEC);
                     yield new ItemRequirement(io, ingredient, count, ItemStack.EMPTY, 1F, tags, components, buf.readFloat());
                 }
-                yield new ItemRequirement(io, null, 0, readJsonWithRegistryCodec(buf, ItemStack.CODEC), buf.readFloat(), tags);
+                    ItemStack stack = readJsonWithRegistryCodec(buf, ItemStack.CODEC);
+                    checkStackCount(stack);
+                    yield new ItemRequirement(io, null, 0, stack, buf.readFloat(), tags);
             }
             case FLUID -> {
                 RecipeModifier.IOType io = buf.readEnum(RecipeModifier.IOType.class);
@@ -264,6 +267,12 @@ public final class MachineRecipeSyncCodec {
 
     private static JsonElement normalizeIngredient(JsonElement value) {
         return value;
+    }
+
+    private static void checkStackCount(ItemStack stack) {
+        if (stack.getCount() <= 0 || stack.getCount() > MAX_STACK_COUNT) {
+            throw new IllegalArgumentException("Invalid item stack count: " + stack.getCount());
+        }
     }
 
     private enum RequirementKind {

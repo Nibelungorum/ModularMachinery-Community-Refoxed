@@ -24,12 +24,16 @@ public final class RuntimeContentSync {
     }
 
     public static RuntimeContentSnapshot createSnapshot() {
-        return new RuntimeContentSnapshot(
-                MachineStructureRegistry.effectiveSnapshot(),
-                RecipeRegistry.effectiveSnapshot(),
-                ControllerSpecSync.createSnapshot(),
-                ControllerSpecSync.createAppearanceSnapshot(),
-                RuntimeContentVersion.current());
+        for (;;) {
+            long version = RuntimeContentVersion.current();
+            var structures = MachineStructureRegistry.effectiveSnapshot();
+            var recipes = RecipeRegistry.effectiveSnapshot();
+            var controllerSpecs = ControllerSpecSync.createSnapshot();
+            var appearances = ControllerSpecSync.createAppearanceSnapshot();
+            if (version == RuntimeContentVersion.current()) {
+                return new RuntimeContentSnapshot(structures, recipes, controllerSpecs, appearances, version);
+            }
+        }
     }
 
     public static void sendTo(ServerPlayer player) {

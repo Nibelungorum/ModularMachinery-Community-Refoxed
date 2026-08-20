@@ -37,4 +37,16 @@ final class ClientRuntimeSnapshotBridge {
             throw new IllegalStateException("Failed to apply runtime snapshot to client caches", exception);
         }
     }
+
+    static void validate(RuntimeContentSnapshot snapshot) {
+        try {
+            Class<?> applierClass = Class.forName("cn.howxu.mmcr.client.RuntimeContentClientApplier");
+            Method validate = applierClass.getMethod("validate", Map.class, Map.class);
+            validate.invoke(null, snapshot.controllerSpecs(), snapshot.appearances());
+        } catch (ClassNotFoundException ignored) {
+            // Dedicated server/common test environments do not load client cache classes.
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("Failed to validate runtime snapshot client caches", exception);
+        }
+    }
 }

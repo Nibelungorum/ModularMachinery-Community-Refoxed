@@ -127,10 +127,20 @@ public final class RecipeRegistry {
     }
 
     public static void replaceClientSnapshot(Map<Identifier, MachineRecipe> recipes) {
+        validateClientSnapshot(recipes);
         publish(Map.of(), Map.of(), recipes);
         reloadVersion++;
         registryVersion++;
-        RuntimeContentVersion.advance();
+    }
+
+    public static void validateClientSnapshot(Map<Identifier, MachineRecipe> recipes) {
+        if (recipes == null) throw new IllegalArgumentException("recipes null");
+        for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
+            if (entry.getKey() == null || entry.getValue() == null
+                    || !entry.getKey().equals(entry.getValue().id())) {
+                throw new IllegalArgumentException("Recipe key does not match recipe id: " + entry.getKey());
+            }
+        }
     }
 
     public static List<String> lastDataPackWarnings() {

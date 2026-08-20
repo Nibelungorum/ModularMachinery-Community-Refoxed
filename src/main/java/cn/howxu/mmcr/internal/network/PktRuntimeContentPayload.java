@@ -18,7 +18,9 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 
 /**
  * Clientbound runtime content snapshot payload.
@@ -29,6 +31,11 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
     private static final int MAX_STRUCTURES = 4096;
     private static final int MAX_RECIPES = 16384;
     private static final int MAX_SPECS = 4096;
+    private static final int MAX_TOOLTIP_LINES = 1024;
+
+    private static final StreamCodec<RegistryFriendlyByteBuf, List<String>> TOOLTIP_CODEC = StreamCodec.of(
+            PktRuntimeContentPayload::writeTooltip,
+            PktRuntimeContentPayload::readTooltip);
 
     private static final StreamCodec<RegistryFriendlyByteBuf, MachineControllerSpec> CONTROLLER_SPEC_CODEC = StreamCodec.composite(
             Identifier.STREAM_CODEC, MachineControllerSpec::id,
@@ -39,7 +46,7 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
             ByteBufCodecs.BOOL, MachineControllerSpec::allowVerticalFacing,
             ByteBufCodecs.BOOL, MachineControllerSpec::fullyRotationallySymmetric,
             ByteBufCodecs.BOOL, MachineControllerSpec::requireVerticalFacing,
-            ByteBufCodecs.collection(ArrayList::new, ByteBufCodecs.STRING_UTF8), MachineControllerSpec::tooltip,
+             TOOLTIP_CODEC, MachineControllerSpec::tooltip,
             MachineControllerSpec::new);
     private static final StreamCodec<RegistryFriendlyByteBuf, MachineAppearanceSpec> APPEARANCE_SPEC_CODEC = StreamCodec.composite(
             Identifier.STREAM_CODEC, MachineAppearanceSpec::machineBasicBlock,
@@ -65,8 +72,9 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
 
     public void handle(IPayloadContext context) {
         context.enqueueWork(() -> {
-            snapshot.applyClient();
-            JeiRuntimeReloadBridge.reloadIfAvailable(snapshot);
+            if (snapshot.applyClient()) {
+                JeiRuntimeReloadBridge.reloadIfAvailable(snapshot);
+            }
         });
     }
 
@@ -84,6 +92,15 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
         Map<Identifier, MachineRecipe> recipes = readMap(buf, MAX_RECIPES, MachineRecipeSyncCodec::decode);
         Map<Identifier, MachineControllerSpec> controllerSpecs = readMap(buf, MAX_SPECS, CONTROLLER_SPEC_CODEC::decode);
         Map<Identifier, MachineAppearanceSpec> appearances = readMap(buf, MAX_SPECS, APPEARANCE_SPEC_CODEC::decode);
+        validateMap(structures, (id, value) -> {
+            if (!id.equals(value.machineId())) throw new IllegalArgumentException("Structure key does not match machine id: " + id);
+        });
+        validateMap(recipes, (id, value) -> {
+            if (!id.equals(value.id())) throw new IllegalArgumentException("Recipe key does not match recipe id: " + id);
+        });
+        validateMap(controllerSpecs, (id, value) -> {
+            if (!id.equals(value.id())) throw new IllegalArgumentException("Controller spec key does not match spec id: " + id);
+        });
         long contentVersion = buf.readVarLong();
         if (contentVersion < 0) throw new IllegalArgumentException("Invalid runtime content version: " + contentVersion);
         return new PktRuntimeContentPayload(new RuntimeContentSnapshot(
@@ -105,9 +122,29 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
         checkSize(count, max, "runtime content");
         Map<Identifier, T> values = new LinkedHashMap<>();
         for (int i = 0; i < count; i++) {
-            values.put(Identifier.STREAM_CODEC.decode(buf), reader.read(buf));
+            Identifier id = Identifier.STREAM_CODEC.decode(buf);
+            if (values.containsKey(id)) throw new IllegalArgumentException("Duplicate runtime content key: " + id);
+            values.put(id, reader.read(buf));
         }
         return Map.copyOf(values);
+    }
+
+    private static void writeTooltip(RegistryFriendlyByteBuf buf, List<String> values) {
+        checkSize(values.size(), MAX_TOOLTIP_LINES, "tooltip line");
+        buf.writeVarInt(values.size());
+        for (String value : values) ByteBufCodecs.STRING_UTF8.encode(buf, value);
+    }
+
+    private static List<String> readTooltip(RegistryFriendlyByteBuf buf) {
+        int count = buf.readVarInt();
+        checkSize(count, MAX_TOOLTIP_LINES, "tooltip line");
+        List<String> values = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) values.add(ByteBufCodecs.STRING_UTF8.decode(buf));
+        return List.copyOf(values);
+    }
+
+    private static <T> void validateMap(Map<Identifier, T> values, BiConsumer<Identifier, T> validator) {
+        values.forEach(validator);
     }
 
     private static void checkSize(int size, int max, String label) {

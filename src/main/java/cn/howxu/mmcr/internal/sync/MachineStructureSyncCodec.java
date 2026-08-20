@@ -49,6 +49,7 @@ public final class MachineStructureSyncCodec {
     private static final int MAX_CHILD_PREDICATES = 1024;
     private static final int MAX_MODIFIERS = 1024;
     private static final int MAX_FACES = Direction.values().length;
+    private static final int MAX_STACK_COUNT = 65536;
 
     private MachineStructureSyncCodec() {
     }
@@ -377,7 +378,10 @@ public final class MachineStructureSyncCodec {
 
     private static ItemStack readItemStack(RegistryFriendlyByteBuf buf) {
         int count = buf.readVarInt();
-        if (count <= 0) return ItemStack.EMPTY;
+        if (count < 0 || count > MAX_STACK_COUNT) {
+            throw new IllegalArgumentException("Invalid item stack count: " + count);
+        }
+        if (count == 0) return ItemStack.EMPTY;
         var item = BuiltInRegistries.ITEM.getValue(Identifier.STREAM_CODEC.decode(buf));
         return new ItemStack(item.builtInRegistryHolder(), count, DataComponentPatch.STREAM_CODEC.decode(buf));
     }
