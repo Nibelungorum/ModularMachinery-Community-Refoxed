@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
@@ -45,7 +46,8 @@ import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import org.nibelungorum.DefaultMachineLevels;
-import org.nibelungorum.builtin.PublicBuiltinDefinitions;
+import org.nibelungorum.builtin.PublicBuiltinMachineDefinitions;
+import org.nibelungorum.builtin.PublicBuiltinRecipeDefinitions;
 
 
 import java.lang.reflect.Field;
@@ -115,6 +117,7 @@ public final class TestBootstrap {
 
     public static void restoreMachineDefinitions() {
         MachineDefinitions.clearForTesting();
+        RecipeRegistry.clearForTesting();
         MachineDefinitions.beginRegistryPhase();
         addTestMachineSuppliers();
         MachineDefinitions.bootstrapBuiltins();
@@ -124,11 +127,6 @@ public final class TestBootstrap {
     public static void registerRuntimeBuiltins() {
         restoreMachineDefinitions();
         registerDefaultMachineLevels();
-        MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
-        PublicBuiltinRuntime.registerRecipes(recipes);
-        recipes.freeze();
-        PublicApiBootstrap.registerRecipes(recipes);
-        PublicApiBootstrap.installRecipes();
         DynamicContentReloadService.reload(candidate -> {
             PublicBuiltinRuntime.registerStructures(candidate);
         });
@@ -170,19 +168,16 @@ public final class TestBootstrap {
 
     private static void registerPublicBuiltinEvents() {
         PublicApiBootstrap.clearForTesting();
-        PublicApiBootstrap.begin();
-        MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
-        PublicBuiltinDefinitions.machineDefinitions().values().forEach(definitions::registerMachine);
-        NeoForge.EVENT_BUS.post(definitions);
-        definitions.freeze();
-        PublicApiBootstrap.registerDefinitions(definitions);
-        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(definitions.definitions().keySet());
-        PublicBuiltinDefinitions.structureDefinitions().values().forEach(structures::registerStructure);
-        NeoForge.EVENT_BUS.post(structures);
-        structures.freeze();
-        PublicApiBootstrap.composeMachineRegistrations(definitions, structures);
-        MachineDefinitions.validateRegistryPhase();
-        MachineDefinitions.freezeRegistryPhase();
+        MMCR.registerPublicApiLifecycleForTesting(
+                event -> {
+                    PublicBuiltinMachineDefinitions.registerDefinitions(event);
+                },
+                event -> {
+                    PublicBuiltinMachineDefinitions.registerStructures(event);
+                },
+                event -> {
+                    PublicBuiltinRecipeDefinitions.register(event);
+                });
     }
 
 

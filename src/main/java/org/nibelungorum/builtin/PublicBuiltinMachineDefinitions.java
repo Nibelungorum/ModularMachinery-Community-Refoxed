@@ -22,14 +22,18 @@ public final class PublicBuiltinMachineDefinitions {
 
     @SubscribeEvent
     public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
-        machineDefinitions().values().forEach(event::registerMachine);
+        machineDefinitions().forEach((id, definition) -> {
+            if (!event.definitions().containsKey(id)) event.registerMachine(definition);
+        });
     }
 
     @SubscribeEvent
     public static void registerStructures(MMCRMachineStructuresEvent event) {
         java.util.Map<net.minecraft.resources.Identifier, MachineStructureDefinition> structures =
                 PublicBuiltinDefinitions.structureDefinitions();
-        structures.values().forEach(event::registerStructure);
+        structures.forEach((id, structure) -> {
+            if (!event.structures().containsKey(id)) event.registerStructure(structure);
+        });
     }
 
 }

@@ -20,7 +20,9 @@ public final class PublicBuiltinRecipeDefinitions {
 
     @SubscribeEvent
     public static void register(MMCRMachineRecipesEvent event) {
-        recipeDefinitions().values().forEach(event::registerRecipe);
+        recipeDefinitions().forEach((id, recipe) -> {
+            if (!event.recipes().containsKey(id)) event.registerRecipe(recipe);
+        });
     }
 
 }

@@ -33,6 +33,7 @@ public final class ContentRegistrationCoordinator {
     private static final Map<Identifier, MachineRecipeDefinition> RECIPES = new LinkedHashMap<>();
     private static MMCRMachineStructuresEvent.Snapshot STRUCTURE_SNAPSHOT = emptyStructureSnapshot();
     private static State state = State.BEFORE_BEGIN;
+    private static int testCommitCount;
 
     private ContentRegistrationCoordinator() {
     }
@@ -91,6 +92,12 @@ public final class ContentRegistrationCoordinator {
         recipes.values().forEach(RecipeRegistry::registerStatic);
         MachineDefinitions.freezeRegistryPhase();
         state = State.COMMITTED;
+        testCommitCount++;
+    }
+
+    /** Test-only counter for verifying that bootstrap paths share this coordinator. */
+    public static synchronized int commitCountForTesting() {
+        return testCommitCount;
     }
 
     /** Test-only reset hook; resets coordinator-owned collection state only. */
@@ -100,6 +107,7 @@ public final class ContentRegistrationCoordinator {
         RECIPES.clear();
         STRUCTURE_SNAPSHOT = emptyStructureSnapshot();
         state = State.BEFORE_BEGIN;
+        testCommitCount = 0;
     }
 
     private static Map<Identifier, MachineRegistration> validateAndConvertMachines() {

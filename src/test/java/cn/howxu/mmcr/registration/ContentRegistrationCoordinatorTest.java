@@ -204,6 +204,20 @@ class ContentRegistrationCoordinatorTest {
         assertThat(cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry.definitions()).isEmpty();
     }
 
+    @Test
+    void production_and_test_bootstraps_commit_through_the_same_coordinator() {
+        MMCR.registerPublicApiLifecycleForTesting();
+        assertThat(ContentRegistrationCoordinator.commitCountForTesting()).isEqualTo(1);
+
+        cn.howxu.mmcr.internal.api.PublicApiBootstrap.clearForTesting();
+        MachineDefinitions.clearForTesting();
+        MachineRegistry.clearForTesting();
+        MachineStructureRegistry.clearForTesting();
+        RecipeRegistry.clearForTesting();
+        TestBootstrap.restoreMachineDefinitions();
+        assertThat(ContentRegistrationCoordinator.commitCountForTesting()).isEqualTo(1);
+    }
+
     private static Identifier id(String path) {
         return MMCR.id(path);
     }

@@ -40,9 +40,14 @@ import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
  import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
  import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.material.Fluids;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
@@ -57,6 +62,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
+
+import java.util.function.Consumer;
 
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
@@ -178,7 +185,6 @@ public class MMCR {
     public static void registerRuntimeBuiltins() {
         if (!ContentRegistrationCoordinator.isCommitted()) {
             registerPublicApiLifecycle();
-            registerPublicApiRecipes();
         }
         DynamicContentReloadService.reload(candidate -> {
             cn.howxu.mmcr.internal.api.PublicBuiltinRuntime.registerStructures(candidate);
@@ -187,44 +193,74 @@ public class MMCR {
     }
 
     private static void registerRuntimeRecipes() {
-        registerPublicApiRecipes();
+        if (!ContentRegistrationCoordinator.isCommitted()) {
+            registerPublicApiLifecycle();
+        }
     }
 
     private static void registerPublicApiLifecycle() {
+        registerStartupContent(
+                definitions -> registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineDefinitions",
+                        new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions),
+                structures -> registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineStructures",
+                        new Class<?>[]{MMCRMachineStructuresEvent.class}, structures),
+                recipes -> registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerRecipes",
+                        new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes));
+    }
+
+    public static void registerPublicApiLifecycleForTesting() {
+        registerStartupContent(event -> { }, event -> { }, event -> { });
+    }
+
+    public static void registerPublicApiLifecycleForTesting(
+            Consumer<MMCRMachineDefinationsEvent> definitionsSource,
+            Consumer<MMCRMachineStructuresEvent> structuresSource,
+            Consumer<MMCRMachineRecipesEvent> recipesSource) {
+        registerStartupContent(definitionsSource, structuresSource, recipesSource);
+    }
+
+    private static void registerStartupContent(
+            Consumer<MMCRMachineDefinationsEvent> definitionsSource,
+            Consumer<MMCRMachineStructuresEvent> structuresSource,
+            Consumer<MMCRMachineRecipesEvent> recipesSource) {
         PublicApiBootstrap.begin();
         ContentRegistrationCoordinator.beginStartup();
         MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
         PublicMachineDefinitionProviders.registerAll(definitions);
-        registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineDefinitions",
-                new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions);
+        definitionsSource.accept(definitions);
         NeoForge.EVENT_BUS.post(definitions);
         definitions.freeze();
         PublicApiBootstrap.collectMachines(definitions);
 
         MMCRMachineStructuresEvent structures = MMCRMachineStructuresEvent.prepare(definitions.definitions().keySet());
         registerDefaultMachineLevels(structures);
-        registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineStructures",
-                new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
+        structuresSource.accept(structures);
         NeoForge.EVENT_BUS.post(structures);
         structures.freeze();
         PublicApiBootstrap.collectStructures(structures);
-
-    }
-
-    public static void registerPublicApiLifecycleForTesting() {
-        registerPublicApiLifecycle();
-        registerPublicApiRecipes();
-    }
-
-    private static void registerPublicApiRecipes() {
+        bindVanillaItemComponents();
         MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
-        PublicBuiltinRuntime.registerRecipes(recipes);
+        recipesSource.accept(recipes);
         NeoForge.EVENT_BUS.post(recipes);
-        registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerRecipes",
-                new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
         recipes.freeze();
         PublicApiBootstrap.collectRecipes(recipes);
         ContentRegistrationCoordinator.commitStartup();
+    }
+
+    private static void bindVanillaItemComponents() {
+        try {
+            Fluids.WATER.builtInRegistryHolder().components();
+        } catch (NullPointerException ignored) {
+            Fluids.WATER.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+        }
+        for (Item item : BuiltInRegistries.ITEM) {
+            Holder.Reference<Item> holder = item.builtInRegistryHolder();
+            try {
+                holder.components();
+            } catch (NullPointerException ignored) {
+                holder.bindComponents(DataComponentMap.EMPTY);
+            }
+        }
     }
 
     private static void registerDefaultMachineLevels(MMCRMachineStructuresEvent event) {
