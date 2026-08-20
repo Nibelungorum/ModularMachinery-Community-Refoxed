@@ -89,6 +89,9 @@ public final class ContentRegistrationCoordinator {
         Map<Identifier, MachineRecipe> recipes = validateAndConvertRecipes();
         validateDuplicates(registrations, structures, recipes);
 
+        // Prepare and publish recipes before any other registry is changed. The batch validates the
+        // complete candidate first, so a recipe failure leaves startup registries untouched.
+        RecipeRegistry.registerStaticBatch(recipes.values());
         // These snapshot installs validate into temporary maps before replacing either registry.
         MachineLevelRegistry.installSnapshot(STRUCTURE_SNAPSHOT.levelTypes().values(), STRUCTURE_SNAPSHOT.levels().values());
         ModifierRegistry.installSnapshot(STRUCTURE_SNAPSHOT.modifiers());
@@ -100,7 +103,6 @@ public final class ContentRegistrationCoordinator {
             }
         });
         MachineStructureRegistry.replaceStartup(structures);
-        recipes.values().forEach(RecipeRegistry::registerStatic);
         MachineDefinitions.freezeRegistryPhase();
         state = State.COMMITTED;
         testCommitCount++;

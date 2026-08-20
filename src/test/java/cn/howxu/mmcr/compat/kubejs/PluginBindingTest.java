@@ -472,6 +472,26 @@ class PluginBindingTest {
     }
 
     @Test
+    void startup_machine_declared_before_scripts_loaded_is_committed_after_startup_scripts() {
+        MachineDefinitions.clearForTesting();
+        PublicApiBootstrap.clearForTesting();
+        try {
+            Plugin.beginStartupRegistryPhaseForTesting();
+            new MMCRStartupEventJS().createMachine("mmcr:kubejs_startup_window_press").register();
+
+            assertThat(MachineDefinitions.getRegistration(MMCR.id("kubejs_startup_window_press"))).isNull();
+            MMCR.completeKubeJSStartup();
+
+            assertThat(MachineDefinitions.getRegistration(MMCR.id("kubejs_startup_window_press"))).isNotNull();
+            assertThat(MachineDefinitions.isRegistryPhaseOpen()).isFalse();
+        } finally {
+            PublicApiBootstrap.clearForTesting();
+            TestBootstrap.restoreMachineDefinitions();
+            MachineDefinitions.freezeRegistryPhase();
+        }
+    }
+
+    @Test
     void repeated_startup_completion_preserves_declared_machine() {
         PublicApiBootstrap.clearForTesting();
         MachineDefinitions.clearForTesting();

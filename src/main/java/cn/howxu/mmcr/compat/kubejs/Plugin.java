@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.network.RuntimeContentServerBridge;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
@@ -23,6 +24,7 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
+    private static boolean startupScriptsLoaded;
     private static final Map<Object, ServerReload> SERVER_RELOADS = new IdentityHashMap<>();
     private static Consumer<cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot> currentServerSync =
             RuntimeContentServerBridge::sendToCurrentServer;
@@ -46,7 +48,13 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
         }
         if (manager.scriptType == ScriptType.STARTUP) {
             MMCREvents.postStartup();
+            startupScriptsLoaded = true;
+            MMCR.completeKubeJSStartupIfReady();
         }
+    }
+
+    public static boolean startupScriptsLoaded() {
+        return startupScriptsLoaded;
     }
 
     private static void beginStartupRegistryPhase() {

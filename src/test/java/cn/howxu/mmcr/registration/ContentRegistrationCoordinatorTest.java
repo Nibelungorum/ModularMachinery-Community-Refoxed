@@ -198,6 +198,46 @@ class ContentRegistrationCoordinatorTest {
     }
 
     @Test
+    void recipe_failure_does_not_install_any_startup_registry_state() {
+        Identifier existingMachineId = id("atomic_existing_machine");
+        Identifier existingRecipeId = id("atomic_existing_recipe");
+        MachineDefinition existingMachine = MachineBuilder.machine(existingMachineId).build();
+        MachineDefinitions.register(cn.howxu.mmcr.internal.api.PublicMachineAdapter.toStartupRegistration(
+                existingMachine, null));
+        RecipeRegistry.registerStatic(cn.howxu.mmcr.internal.api.PublicRecipeAdapter.toRecipe(
+                MachineRecipeBuilder.recipe(existingRecipeId, existingMachineId).duration(1).build(),
+                new MMCRMachineStructuresEvent.Snapshot(java.util.Map.of(), java.util.Map.of(),
+                        java.util.Map.of(), java.util.Map.of())));
+        ContentRegistrationCoordinator.beginStartup();
+
+        Identifier newMachineId = id("atomic_new_machine");
+        MMCRMachineDefinationsEvent newDefinitions = new MMCRMachineDefinationsEvent();
+        newDefinitions.registerMachine(MachineBuilder.machine(newMachineId).build());
+        newDefinitions.freeze();
+        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(java.util.List.of(newMachineId));
+        structures.registerStructure(newMachineId, builder -> builder.fullStructure(stage -> stage
+                .pattern(pattern -> pattern.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))));
+        structures.freeze();
+        ContentRegistrationCoordinator.beginStartup();
+        ContentRegistrationCoordinator.collectMachines(newDefinitions);
+        ContentRegistrationCoordinator.collectStructures(structures);
+        ContentRegistrationCoordinator.collectRecipes(recipeEvent(
+                MachineRecipeBuilder.recipe(existingRecipeId, newMachineId).duration(1).build()));
+
+        assertThatThrownBy(ContentRegistrationCoordinator::commitStartup).isInstanceOf(RuntimeException.class);
+        assertThat(MachineDefinitions.getRegistration(newMachineId)).isNull();
+        assertThat(MachineStructureRegistry.startupSnapshot()).doesNotContainKey(newMachineId);
+        assertThat(RecipeRegistry.getRecipe(existingRecipeId).machineId()).isEqualTo(existingMachineId);
+    }
+
+    private static MMCRMachineRecipesEvent recipeEvent(MachineRecipeDefinition recipe) {
+        MMCRMachineRecipesEvent event = new MMCRMachineRecipesEvent();
+        event.registerRecipe(recipe);
+        event.freeze();
+        return event;
+    }
+
+    @Test
     void production_bootstrap_commits_without_optional_gametest_classpath() {
         assertThatCode(MMCR::registerProductionApiLifecycleForTesting).doesNotThrowAnyException();
         var productionSnapshot = ContentRegistrationCoordinator.startupSnapshotForTesting();

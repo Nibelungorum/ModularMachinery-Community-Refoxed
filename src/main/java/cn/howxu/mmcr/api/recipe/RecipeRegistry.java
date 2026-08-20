@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.ArrayList;
+import java.util.Collection;
 
 /** Stores static, data-pack, and direct-runtime recipes and publishes one effective view.
  *
@@ -32,18 +33,26 @@ public final class RecipeRegistry {
     }
 
     public static void registerStatic(MachineRecipe recipe) {
+        registerStaticBatch(List.of(recipe));
+    }
+
+    public static void registerStaticBatch(Collection<MachineRecipe> recipes) {
         synchronized (RuntimeContentVersion.lock()) {
-        if (recipe == null) {
-            throw new IllegalArgumentException("Recipe must not be null");
+        Map<Identifier, MachineRecipe> candidate = new LinkedHashMap<>(STATIC_RECIPES);
+        for (MachineRecipe recipe : recipes) {
+            if (recipe == null) {
+                throw new IllegalArgumentException("Recipe must not be null");
+            }
+            if (recipe.id() == null) {
+                throw new IllegalArgumentException("Recipe id null");
+            }
+            if (candidate.putIfAbsent(recipe.id(), recipe) != null) {
+                throw new IllegalStateException("Recipe already registered: " + recipe.id());
+            }
         }
-        if (recipe.id() == null) {
-            throw new IllegalArgumentException("Recipe id null");
-        }
-        if (STATIC_RECIPES.containsKey(recipe.id())) {
-            throw new IllegalStateException("Recipe already registered: " + recipe.id());
-        }
-        STATIC_RECIPES.put(recipe.id(), recipe);
-        publish(STATIC_RECIPES, STATE.dataPack(), STATE.dynamic());
+        publish(candidate, STATE.dataPack(), STATE.dynamic());
+        STATIC_RECIPES.clear();
+        STATIC_RECIPES.putAll(candidate);
         registryVersion++;
         RuntimeContentVersion.advance();
         }

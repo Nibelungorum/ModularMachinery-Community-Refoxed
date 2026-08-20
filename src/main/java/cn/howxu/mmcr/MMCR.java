@@ -61,6 +61,7 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
+import net.neoforged.fml.ModList;
 
 import java.util.function.Consumer;
 
@@ -82,7 +83,23 @@ public class MMCR {
         PublicApiBootstrap.begin();
         MachineDefinitions.beginRegistryPhase();
         MachineDefinitions.bootstrapBuiltins();
-        registerPublicApiLifecycle();
+        registerStartupContent(
+                definitions -> {
+                    org.nibelungorum.builtin.PublicBuiltinMachineDefinitions.registerDefinitions(definitions);
+                    registerGameTestBuiltins("registerMachineDefinitions",
+                            new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions);
+                },
+                structures -> {
+                    org.nibelungorum.builtin.PublicBuiltinMachineDefinitions.registerStructures(structures);
+                    registerGameTestBuiltins("registerMachineStructures",
+                            new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
+                },
+                recipes -> {
+                    org.nibelungorum.builtin.PublicBuiltinRecipeDefinitions.register(recipes);
+                    registerGameTestBuiltins("registerRecipes",
+                            new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
+                }, false, !ModList.get().isLoaded("kubejs")
+                        || cn.howxu.mmcr.compat.kubejs.Plugin.startupScriptsLoaded());
         registerDeferredRegisters(modBus);
         CREATIVE_TABS.register(modBus);
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
@@ -216,6 +233,18 @@ public class MMCR {
         registerPublicApiLifecycle();
     }
 
+    public static void completeKubeJSStartup() {
+        if (ContentRegistrationCoordinator.isCommitted()) return;
+        ContentRegistrationCoordinator.commitStartup();
+        registerDynamicControllers(MachineDefinitions.effectiveSnapshot().keySet());
+        startupPhase = StartupPhase.COMMITTED;
+    }
+
+    public static void completeKubeJSStartupIfReady() {
+        if (ContentRegistrationCoordinator.isCommitted()) return;
+        if (startupPhase == StartupPhase.COLLECTING) completeKubeJSStartup();
+    }
+
     public static void registerPublicApiLifecycleForTesting() {
         registerStartupContent(event -> { }, event -> { }, event -> { });
     }
@@ -231,9 +260,26 @@ public class MMCR {
             Consumer<MMCRMachineDefinationsEvent> definitionsSource,
             Consumer<MMCRMachineStructuresEvent> structuresSource,
             Consumer<MMCRMachineRecipesEvent> recipesSource) {
+        registerStartupContent(definitionsSource, structuresSource, recipesSource, true, true);
+    }
+
+    private static void registerStartupContent(
+            Consumer<MMCRMachineDefinationsEvent> definitionsSource,
+            Consumer<MMCRMachineStructuresEvent> structuresSource,
+            Consumer<MMCRMachineRecipesEvent> recipesSource,
+            boolean commit) {
+        registerStartupContent(definitionsSource, structuresSource, recipesSource, true, commit);
+    }
+
+    private static void registerStartupContent(
+            Consumer<MMCRMachineDefinationsEvent> definitionsSource,
+            Consumer<MMCRMachineStructuresEvent> structuresSource,
+            Consumer<MMCRMachineRecipesEvent> recipesSource,
+            boolean begin,
+            boolean commit) {
         startupPhase = StartupPhase.COLLECTING;
         PublicApiBootstrap.begin();
-        ContentRegistrationCoordinator.beginStartup();
+        if (begin) ContentRegistrationCoordinator.beginStartup();
         MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
         PublicMachineDefinitionProviders.registerAll(definitions);
         definitionsSource.accept(definitions);
@@ -255,14 +301,13 @@ public class MMCR {
         NeoForge.EVENT_BUS.post(recipes);
         recipes.freeze();
         ContentRegistrationCoordinator.collectRecipes(recipes);
-        ContentRegistrationCoordinator.commitStartup();
-        startupPhase = StartupPhase.COMMITTED;
+        if (commit) {
+            ContentRegistrationCoordinator.commitStartup();
+            startupPhase = StartupPhase.COMMITTED;
+        }
     }
 
     private static void registerDeferredRegisters(IEventBus modBus) {
-        if (!ContentRegistrationCoordinator.isCommitted()) {
-            throw new IllegalStateException("DeferredRegisters cannot be attached before startup commit");
-        }
         ModDataComponents.register(modBus);
         ModBlocks.register(modBus);
         ModItems.register(modBus);
