@@ -206,8 +206,11 @@ class ContentRegistrationCoordinatorTest {
 
     @Test
     void production_and_test_bootstraps_commit_through_the_same_coordinator() {
-        MMCR.registerPublicApiLifecycleForTesting();
-        assertThat(ContentRegistrationCoordinator.commitCountForTesting()).isEqualTo(1);
+        MMCR.registerPublicApiLifecycleForTesting(
+                TestBootstrap::registerAllMachineDefinitions,
+                TestBootstrap::registerAllMachineStructures,
+                TestBootstrap::registerAllRecipes);
+        var productionSnapshot = ContentRegistrationCoordinator.startupSnapshotForTesting();
 
         cn.howxu.mmcr.internal.api.PublicApiBootstrap.clearForTesting();
         MachineDefinitions.clearForTesting();
@@ -216,6 +219,7 @@ class ContentRegistrationCoordinatorTest {
         RecipeRegistry.clearForTesting();
         TestBootstrap.restoreMachineDefinitions();
         assertThat(ContentRegistrationCoordinator.commitCountForTesting()).isEqualTo(1);
+        assertThat(ContentRegistrationCoordinator.startupSnapshotForTesting()).isEqualTo(productionSnapshot);
     }
 
     private static Identifier id(String path) {

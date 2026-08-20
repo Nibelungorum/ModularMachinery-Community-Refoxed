@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.registry;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.internal.item.InterfaceBlockItem;
 import cn.howxu.mmcr.internal.item.MultiblockDetectorItem;
 import cn.howxu.mmcr.internal.item.TerminalItem;
@@ -14,6 +15,7 @@ import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 import java.util.LinkedHashMap;
+import java.util.Collection;
 import java.util.Map;
 
 public final class ModItems {
@@ -61,6 +63,17 @@ public final class ModItems {
 
     public static Identifier machineIdForControllerItem(Item item) {
         return controllerMachineIds.get(item);
+    }
+
+    public static void registerMachineControllerItems(Collection<Identifier> machineIds) {
+        machineIds.forEach(machineId -> {
+            String name = MachineControllerSpec.defaultsFor(machineId).id().getPath();
+            if (ITEMS.containsKey(name)) return;
+            DeferredHolder<Item, Item> itemHolder = REGISTER.register(name, () ->
+                    new InterfaceBlockItem(ModBlocks.controllerFor(machineId).get(),
+                            new Item.Properties().setId(ResourceKey.create(Registries.ITEM, MMCR.id(name)))));
+            ITEMS.put(name, itemHolder);
+        });
     }
 
     public static void register(IEventBus bus) {

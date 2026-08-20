@@ -2,7 +2,6 @@ package cn.howxu.mmcr.registry;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
-import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -17,6 +16,7 @@ import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 import java.util.LinkedHashMap;
+import java.util.Collection;
 import java.util.function.Supplier;
 
 public final class ModBlockEntities {
@@ -28,7 +28,6 @@ public final class ModBlockEntities {
             new LinkedHashMap<>();
 
     static {
-        MachineDefinitions.allRegistrations().forEach(registration -> registerMachineController(registration.id()));
         PortKinds.all().forEach(kind -> {
             String name = kind.id();
             BES.put(name, register(name, () -> new BlockEntityType<>(
@@ -46,8 +45,13 @@ public final class ModBlockEntities {
 
     private static void registerMachineController(Identifier machineId) {
         String name = MachineControllerSpec.defaultsFor(machineId).id().getPath();
+        if (BES.containsKey(name)) return;
         BES.put(name, register(name, () -> new BlockEntityType<>(
                 MachineControllerBlockEntity::new, ModBlocks.controllerFor(machineId).get())));
+    }
+
+    public static void registerMachineControllers(Collection<Identifier> machineIds) {
+        machineIds.forEach(ModBlockEntities::registerMachineController);
     }
 
     private static void registerParallelController(ParallelTier tier) {

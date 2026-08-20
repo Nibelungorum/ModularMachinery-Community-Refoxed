@@ -3,13 +3,14 @@ package cn.howxu.mmcr.test;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
-import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
+import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
+import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
@@ -39,6 +40,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.Blocks;
@@ -91,26 +93,15 @@ public final class TestBootstrap {
         Class.forName("net.minecraft.SharedConstants").getMethod("tryDetectVersion").invoke(null);
         NeoForge.EVENT_BUS.start();
         MachineDefinitions.beginRegistryPhase();
-        addTestMachineSuppliers();
         Bootstrap.bootStrap();
-        MachineDefinitions.bootstrapBuiltins();
-        registerPublicBuiltinEvents();
         bindAllVanillaItemComponents();
-        bindController(id("test_cube"));
-        bindController(id("controller_tick"));
-        bindController(id("iron_compressor"));
-        bindController(id("distillation_tower_test"));
-        bindController(id("expandable_structure_stages"));
-        bindController(id("expandable_structure_vertical_roll"));
-        bind(ModBlocks.CASING, Blocks.STONE);
         bindPortBlocks();
         for (ParallelTier tier : ParallelTier.values()) bindParallelController(tier);
         bindFactoryController();
         bindSmartInterface();
         bindModuleBridge();
         bind(ModItems.THREAD_DISPERSER, registerItem(ModItems.THREAD_DISPERSER));
-        registerDefaultMachineLevels();
-        restoreMachineDefinitions();
+        registerPublicBuiltinEvents();
         registerRuntimeBuiltins();
         initialized = true;
     }
@@ -119,8 +110,6 @@ public final class TestBootstrap {
         MachineDefinitions.clearForTesting();
         RecipeRegistry.clearForTesting();
         MachineDefinitions.beginRegistryPhase();
-        addTestMachineSuppliers();
-        MachineDefinitions.bootstrapBuiltins();
         registerPublicBuiltinEvents();
     }
 
@@ -142,42 +131,78 @@ public final class TestBootstrap {
         MachineLevelRegistryBridge.install(event.levelTypes().values(), event.levels().values());
     }
 
-    private static void addTestMachineSuppliers() {
-        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("test_cube")).localizedName("Test").build());
-        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("controller_tick")).localizedName("Controller Tick").build());
-        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("iron_compressor")).localizedName("Iron Compressor").build());
-        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("distillation_tower_test"))
-                .localizedName("Distillation Tower Test")
-                .expandableStructure()
-                .build());
-        MachineDefinitions.addBuiltinSupplier(() -> MachineRegistration.builder(id("expandable_structure_stages"))
-                .localizedName("Expandable Structure Stages")
-                .expandableStructure()
-                .build());
-        MachineDefinitions.addBuiltinSupplier(() -> {
-            Identifier machineId = id("expandable_structure_vertical_roll");
-            MachineControllerSpec defaults = MachineControllerSpec.defaultsFor(machineId);
-            return MachineRegistration.builder(machineId)
-                    .localizedName("Expandable Structure Vertical Roll")
-                    .controllerSpec(new MachineControllerSpec(defaults.id(), defaults.frontTexture(), defaults.sideTexture(),
-                            defaults.topTexture(), defaults.bottomTexture(), true, false))
-                    .expandableStructure()
-                    .build();
-        });
-    }
-
     private static void registerPublicBuiltinEvents() {
         PublicApiBootstrap.clearForTesting();
         MMCR.registerPublicApiLifecycleForTesting(
                 event -> {
-                    PublicBuiltinMachineDefinitions.registerDefinitions(event);
+                    registerAllMachineDefinitions(event);
                 },
                 event -> {
-                    PublicBuiltinMachineDefinitions.registerStructures(event);
+                    registerAllMachineStructures(event);
                 },
                 event -> {
-                    PublicBuiltinRecipeDefinitions.register(event);
+                    registerAllRecipes(event);
                 });
+    }
+
+    public static void registerAllMachineDefinitions(MMCRMachineDefinationsEvent event) {
+        PublicBuiltinMachineDefinitions.registerDefinitions(event);
+        registerTestMachineDefinitions(event);
+    }
+
+    public static void registerAllMachineStructures(MMCRMachineStructuresEvent event) {
+        PublicBuiltinMachineDefinitions.registerStructures(event);
+        registerTestMachineStructures(event);
+    }
+
+    public static void registerAllRecipes(MMCRMachineRecipesEvent event) {
+        PublicBuiltinRecipeDefinitions.register(event);
+        registerTestRecipes(event);
+    }
+
+    public static void registerTestMachineDefinitions(MMCRMachineDefinationsEvent event) {
+        for (String name : testMachineNames()) {
+            Identifier id = id(name);
+            event.registerMachine(id, builder -> builder.displayNameKey("machine.mmcr_test." + name));
+        }
+    }
+
+    public static void registerTestMachineStructures(MMCRMachineStructuresEvent event) {
+        try {
+            for (String name : testMachineNames()) bindController(id(name));
+            bind(ModBlocks.CASING, Blocks.STONE);
+        } catch (Exception exception) {
+            throw new IllegalStateException("Unable to bind GameTest machine blocks", exception);
+        }
+        for (String name : testMachineNames()) {
+            Identifier machineId = id(name);
+            event.registerStructure(machineId, structure -> {
+                structure.fullStructure(stage -> stage.pattern(pattern -> pattern
+                        .layer("XXX", "XCX", "XXX")
+                        .where('X', BlockPredicate.block(ModBlocks.CASING.get()))
+                        .where('C', BlockPredicate.block(ModBlocks.controllerFor(machineId).get()))
+                        .controller('C')));
+                if (name.contains("expandable") || name.contains("distillation")) {
+                    structure.extension(stage -> stage.pattern(pattern -> pattern
+                            .layer("XXX", "XCX", "XXX")
+                            .where('X', BlockPredicate.block(ModBlocks.CASING.get()))
+                            .where('C', BlockPredicate.block(ModBlocks.controllerFor(machineId).get()))
+                            .controller('C')));
+                }
+                return structure;
+            });
+        }
+    }
+
+    public static void registerTestRecipes(MMCRMachineRecipesEvent event) {
+        event.registerRecipe(MachineRecipeBuilder.recipe(
+                Identifier.parse("mmcr_test:datapack_static_override"), id("iron_compressor"))
+                .duration(20).inputItem(Items.COAL, 1).outputItem(Items.CHARCOAL, 1).build());
+    }
+
+    private static List<String> testMachineNames() {
+        return List.of("test_cube", "controller_tick", "iron_compressor", "distillation_tower_test",
+                "expandable_structure_stages", "expandable_structure_vertical_roll");
     }
 
 
@@ -197,9 +222,13 @@ public final class TestBootstrap {
 
     private static MachineControllerBlock controllerBlock(Identifier machineId) {
         MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
+        Identifier id = MachineControllerSpec.defaultsFor(machineId).id();
+        if (BuiltInRegistries.BLOCK.containsKey(id)) {
+            return (MachineControllerBlock) BuiltInRegistries.BLOCK.getValue(id);
+        }
         blocks.unfreeze(true);
         MachineControllerBlock block = new MachineControllerBlock(machineId, Blocks.IRON_BLOCK.properties());
-        Registry.register(BuiltInRegistries.BLOCK, MachineControllerSpec.defaultsFor(machineId).id(), block);
+        Registry.register(BuiltInRegistries.BLOCK, id, block);
         blocks.freeze();
         return block;
     }
@@ -217,12 +246,16 @@ public final class TestBootstrap {
 
     private static ParallelControllerBlock parallelControllerBlock(ParallelTier tier) {
         MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
+        Identifier id = MMCR.id(tier.idSuffix());
+        if (BuiltInRegistries.BLOCK.containsKey(id)) {
+            return (ParallelControllerBlock) BuiltInRegistries.BLOCK.getValue(id);
+        }
         blocks.unfreeze(true);
         ParallelControllerBlock block = new ParallelControllerBlock(
                 tier,
                 () -> ModBlockEntities.BES.get(tier.idSuffix()).get(),
                 Blocks.IRON_BLOCK.properties());
-        Registry.register(BuiltInRegistries.BLOCK, MMCR.id(tier.idSuffix()), block);
+        Registry.register(BuiltInRegistries.BLOCK, id, block);
         blocks.freeze();
         return block;
     }
@@ -350,6 +383,9 @@ public final class TestBootstrap {
 
     private static Item registerItem(DeferredHolder<Item, Item> itemHolder) throws Exception {
         MappedRegistry<Item> items = (MappedRegistry<Item>) BuiltInRegistries.ITEM;
+        if (BuiltInRegistries.ITEM.containsKey(itemHolder.getId())) {
+            return BuiltInRegistries.ITEM.getValue(itemHolder.getId());
+        }
         items.unfreeze(true);
         Item item = registeredItemSupplier(itemHolder).get();
         Registry.register(BuiltInRegistries.ITEM, itemHolder.getId(), item);

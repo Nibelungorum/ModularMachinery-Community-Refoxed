@@ -52,8 +52,8 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
-import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.fml.loading.FMLLoader;
+import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
@@ -80,7 +80,6 @@ public class MMCR {
     public MMCR(IEventBus modBus, ModContainer modContainer) {
         PublicApiBootstrap.begin();
         MachineDefinitions.beginRegistryPhase();
-        registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineSuppliers");
         MachineDefinitions.bootstrapBuiltins();
         ModDataComponents.register(modBus);
         ModBlocks.register(modBus);
@@ -88,6 +87,7 @@ public class MMCR {
         ModBlockEntities.register(modBus);
         ModUIs.register(modBus);
         ModRecipeTypes.register(modBus);
+        registerStartupDefinitions();
         modBus.addListener(MMCR::onCommonSetup);
         CREATIVE_TABS.register(modBus);
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
@@ -208,6 +208,21 @@ public class MMCR {
                         new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes));
     }
 
+    private static void registerStartupDefinitions() {
+        PublicApiBootstrap.begin();
+        ContentRegistrationCoordinator.beginStartup();
+        MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
+        PublicMachineDefinitionProviders.registerAll(definitions);
+        registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineDefinitions",
+                new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions);
+        ModBlocks.registerMachineControllers(definitions.definitions().keySet());
+        ModBlockEntities.registerMachineControllers(definitions.definitions().keySet());
+        ModItems.registerMachineControllerItems(definitions.definitions().keySet());
+        NeoForge.EVENT_BUS.post(definitions);
+        definitions.freeze();
+        PublicApiBootstrap.collectMachines(definitions);
+    }
+
     public static void registerPublicApiLifecycleForTesting() {
         registerStartupContent(event -> { }, event -> { }, event -> { });
     }
@@ -219,6 +234,10 @@ public class MMCR {
         registerStartupContent(definitionsSource, structuresSource, recipesSource);
     }
 
+    private static void onCommonSetup(FMLCommonSetupEvent event) {
+        event.enqueueWork(MMCR::registerPublicApiLifecycle);
+    }
+
     private static void registerStartupContent(
             Consumer<MMCRMachineDefinationsEvent> definitionsSource,
             Consumer<MMCRMachineStructuresEvent> structuresSource,
@@ -228,6 +247,9 @@ public class MMCR {
         MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
         PublicMachineDefinitionProviders.registerAll(definitions);
         definitionsSource.accept(definitions);
+        ModBlocks.registerMachineControllers(definitions.definitions().keySet());
+        ModBlockEntities.registerMachineControllers(definitions.definitions().keySet());
+        ModItems.registerMachineControllerItems(definitions.definitions().keySet());
         NeoForge.EVENT_BUS.post(definitions);
         definitions.freeze();
         PublicApiBootstrap.collectMachines(definitions);
@@ -268,12 +290,6 @@ public class MMCR {
                 || event.levelTypes().containsKey(id("thermal_smelting_coil"))) return;
         registerDevelopmentBuiltins("org.nibelungorum.DefaultMachineLevels", "register",
                 new Class<?>[]{MMCRMachineStructuresEvent.class}, event);
-    }
-
-    private static void onCommonSetup(FMLCommonSetupEvent event) {
-        event.enqueueWork(() -> {
-            registerPublicApiLifecycle();
-        });
     }
 
     private static void onDefaultDataComponentsBound(DefaultDataComponentsBoundEvent event) {

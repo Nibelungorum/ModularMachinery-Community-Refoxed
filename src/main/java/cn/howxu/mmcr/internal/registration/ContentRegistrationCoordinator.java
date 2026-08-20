@@ -22,6 +22,7 @@ import net.minecraft.resources.Identifier;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 /** Owns the atomic startup collection and commit of public content declarations.
  * @author howxu <dev@howxu.cn>
@@ -34,6 +35,7 @@ public final class ContentRegistrationCoordinator {
     private static MMCRMachineStructuresEvent.Snapshot STRUCTURE_SNAPSHOT = emptyStructureSnapshot();
     private static State state = State.BEFORE_BEGIN;
     private static int testCommitCount;
+    private static StartupSnapshotForTesting lastStartupSnapshot = new StartupSnapshotForTesting(Set.of(), Set.of(), Set.of());
 
     private ContentRegistrationCoordinator() {
     }
@@ -93,11 +95,24 @@ public final class ContentRegistrationCoordinator {
         MachineDefinitions.freezeRegistryPhase();
         state = State.COMMITTED;
         testCommitCount++;
+        lastStartupSnapshot = new StartupSnapshotForTesting(
+                Set.copyOf(MACHINES.keySet()), Set.copyOf(STRUCTURES.keySet()), Set.copyOf(RECIPES.keySet()));
     }
 
     /** Test-only counter for verifying that bootstrap paths share this coordinator. */
     public static synchronized int commitCountForTesting() {
         return testCommitCount;
+    }
+
+    /** Test-only declaration snapshot for comparing complete bootstrap paths.
+     * @author howxu <dev@howxu.cn>
+     */
+    public record StartupSnapshotForTesting(Set<Identifier> machines, Set<Identifier> structures,
+            Set<Identifier> recipes) {
+    }
+
+    public static synchronized StartupSnapshotForTesting startupSnapshotForTesting() {
+        return lastStartupSnapshot;
     }
 
     /** Test-only reset hook; resets coordinator-owned collection state only. */
@@ -108,6 +123,7 @@ public final class ContentRegistrationCoordinator {
         STRUCTURE_SNAPSHOT = emptyStructureSnapshot();
         state = State.BEFORE_BEGIN;
         testCommitCount = 0;
+        lastStartupSnapshot = new StartupSnapshotForTesting(Set.of(), Set.of(), Set.of());
     }
 
     private static Map<Identifier, MachineRegistration> validateAndConvertMachines() {
