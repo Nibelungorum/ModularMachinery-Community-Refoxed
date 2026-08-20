@@ -44,7 +44,7 @@
 
 ### Commit
 
-- Pending.
+- `9d4fb6e test: isolate public event subscribers`.
 
 ### Concerns
 
