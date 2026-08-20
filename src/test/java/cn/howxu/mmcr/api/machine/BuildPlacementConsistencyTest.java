@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class BuildPlacementConsistencyTest {
 
-    private static final Identifier MACHINE_ID = Identifier.fromNamespaceAndPath("mmcr", "blast_furnace");
+    private static final Identifier MACHINE_ID = Identifier.fromNamespaceAndPath("mmcr", "test_cube");
 
     @BeforeAll
     static void setup() throws Exception {
@@ -178,7 +178,7 @@ class BuildPlacementConsistencyTest {
                 .build();
         return new DynamicMachine(
                 MACHINE_ID,
-                "machine.mmcr.blast_furnace",
+                "machine.mmcr.test_cube",
                 pattern,
                 MachineControllerSpec.defaultsFor(MACHINE_ID),
                 PortRequirementSpec.none(),

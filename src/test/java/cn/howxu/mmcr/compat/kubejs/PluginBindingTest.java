@@ -467,6 +467,27 @@ class PluginBindingTest {
     }
 
     @Test
+    void repeated_startup_completion_preserves_declared_machine() {
+        PublicApiBootstrap.clearForTesting();
+        MachineDefinitions.clearForTesting();
+
+        try {
+            Plugin.beginStartupRegistryPhaseForTesting();
+            new MMCRStartupEventJS().createMachine("mmcr:repeated_lifecycle_press").register();
+            Plugin.beginStartupRegistryPhaseForTesting();
+            Plugin.freezeStartupRegistryPhaseForTesting();
+            Plugin.freezeStartupRegistryPhaseForTesting();
+
+            assertThat(MachineDefinitions.getRegistration(MMCR.id("repeated_lifecycle_press"))).isNotNull();
+            assertThat(MachineDefinitions.isRegistryPhaseOpen()).isFalse();
+        } finally {
+            PublicApiBootstrap.clearForTesting();
+            TestBootstrap.restoreMachineDefinitions();
+            MachineDefinitions.freezeRegistryPhase();
+        }
+    }
+
+    @Test
     void startup_hot_reload_does_not_reopen_frozen_machine_registrations() {
         MachineDefinitions.clearForTesting();
         MachineDefinitions.register(new MMCRStartupEventJS().createMachine("mmcr:frozen_lifecycle_press").createObject());
@@ -478,6 +499,7 @@ class PluginBindingTest {
         assertThat(MachineDefinitions.isRegistryPhaseOpen()).isFalse();
 
         TestBootstrap.restoreMachineDefinitions();
+        MachineDefinitions.freezeRegistryPhase();
     }
 
     @Test
@@ -485,7 +507,7 @@ class PluginBindingTest {
         MachineDefinitions.clearForTesting();
         try {
             PublicApiBootstrap.begin();
-            PublicApiBootstrap.freezeAndInstall();
+            PublicApiBootstrap.freezeAndInstallMachines();
 
             assertThat(MachineDefinitions.isRegistryPhaseOpen()).isFalse();
 
@@ -496,6 +518,7 @@ class PluginBindingTest {
         } finally {
             PublicApiBootstrap.clearForTesting();
             TestBootstrap.restoreMachineDefinitions();
+            MachineDefinitions.freezeRegistryPhase();
         }
     }
 

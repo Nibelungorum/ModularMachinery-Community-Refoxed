@@ -59,21 +59,35 @@ class PublicApiLifecycleTest {
     }
 
     @Test
-    void open_phase_installs_machine_before_recipe_and_freeze_is_idempotent() {
+    void machine_installation_precedes_recipe_installation_and_is_idempotent() {
         PublicApiBootstrap.begin();
         MachineDefinition machine = machine("press");
         MachineRecipeDefinition recipe = recipe("press_recipe", machine.id());
 
         MachineApi.registerMachine(machine);
         RecipeApi.registerRecipe(recipe);
-        PublicApiBootstrap.freezeAndInstall();
-        PublicApiBootstrap.freezeAndInstall();
+        PublicApiBootstrap.freezeAndInstallMachines();
+        PublicApiBootstrap.freezeAndInstallMachines();
 
         assertThat(MachineDefinitions.getRegistration(machine.id())).isNotNull();
+        assertThat(RecipeRegistry.getRecipe(recipe.id())).isNull();
+
+        PublicApiBootstrap.installRecipes();
+        PublicApiBootstrap.installRecipes();
+
         assertThat(RecipeRegistry.getRecipe(recipe.id())).isNotNull();
         assertThat(RecipeRegistry.getRecipe(recipe.id()).machineId()).isEqualTo(machine.id());
         assertThat(MachineApi.isRegistrationOpen()).isFalse();
         assertThat(RecipeApi.isRegistrationOpen()).isFalse();
+    }
+
+    @Test
+    void recipe_installation_requires_machine_installation() {
+        PublicApiBootstrap.begin();
+
+        assertThatThrownBy(PublicApiBootstrap::installRecipes)
+                .isInstanceOf(ApiRegistrationException.class)
+                .hasMessageContaining("machines must be installed first");
     }
 
     @Test
@@ -82,7 +96,7 @@ class PublicApiLifecycleTest {
         MachineDefinitions.beginRegistryPhase();
 
         PublicMachineDefinitionProviders.registerAll();
-        PublicApiBootstrap.freezeAndInstall();
+        PublicApiBootstrap.freezeAndInstallMachines();
 
         assertThat(MachineDefinitions.getRegistration(id("service_loaded_machine"))).isNotNull();
         assertThat(MachineDefinitions.isRegistryPhaseOpen()).isFalse();
@@ -109,16 +123,16 @@ class PublicApiLifecycleTest {
         PublicApiBootstrap.begin();
         Identifier unknown = id("unknown_machine");
         RecipeApi.registerRecipe(recipe("unknown_recipe", unknown));
-        assertThatThrownBy(PublicApiBootstrap::freezeAndInstall)
+        PublicApiBootstrap.freezeAndInstallMachines();
+        assertThatThrownBy(PublicApiBootstrap::installRecipes)
                 .isInstanceOf(ApiRegistrationException.class)
                 .hasMessageContaining(unknown.toString());
-        assertThat(MachineApi.isRegistrationOpen()).isTrue();
-        MachineApi.registerMachine(machine("after_validation_failure"));
 
         PublicApiBootstrap.clearForTesting();
         MachineDefinitions.clearForTesting();
         PublicApiBootstrap.begin();
-        PublicApiBootstrap.freezeAndInstall();
+        PublicApiBootstrap.freezeAndInstallMachines();
+        PublicApiBootstrap.installRecipes();
         assertThatThrownBy(() -> MachineApi.registerMachine(machine("after")))
                 .isInstanceOf(ApiRegistrationException.class)
                 .hasMessageContaining("after");

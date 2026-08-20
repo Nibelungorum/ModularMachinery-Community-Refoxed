@@ -51,6 +51,7 @@ import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
+import net.neoforged.neoforge.event.DefaultDataComponentsBoundEvent;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
@@ -72,11 +73,10 @@ public class MMCR {
         PublicApiBootstrap.begin();
         MachineDefinitions.beginRegistryPhase();
         NeoForge.EVENT_BUS.post(new MMCRRegisterMachinesEvent());
-        NeoForge.EVENT_BUS.post(new MMCRRegisterRecipesEvent());
         registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineDefinitions");
         MachineDefinitions.bootstrapBuiltins();
         PublicMachineDefinitionProviders.registerAll();
-        PublicApiBootstrap.freezeAndInstall();
+        PublicApiBootstrap.freezeAndInstallMachines();
         ModDataComponents.register(modBus);
         ModBlocks.register(modBus);
         ModItems.register(modBus);
@@ -98,6 +98,7 @@ public class MMCR {
         NeoForge.EVENT_BUS.addListener(SharedIoEvents::onLevelUnload);
         NeoForge.EVENT_BUS.addListener(RuntimeContentServerBridge::onServerAboutToStart);
         NeoForge.EVENT_BUS.addListener(RuntimeContentServerBridge::onServerStopped);
+        NeoForge.EVENT_BUS.addListener(MMCR::onDefaultDataComponentsBound);
         NeoForge.EVENT_BUS.addListener((AddServerReloadListenersEvent event) -> MachineRecipeDataReloadListener.register(event));
         NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedInEvent event) -> {
             if (event.getEntity() instanceof ServerPlayer player) {
@@ -184,9 +185,14 @@ public class MMCR {
             registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerMachineStructures",
                     new Class<?>[]{DynamicContentReloadService.Candidate.class}, candidate);
         });
+        MachineRegistry.rebuildCompiledCache();
+    }
+
+    private static void registerRuntimeRecipes() {
+        NeoForge.EVENT_BUS.post(new MMCRRegisterRecipesEvent());
+        PublicApiBootstrap.installRecipes();
         cn.howxu.mmcr.internal.api.PublicBuiltinRuntime.registerRecipes();
         registerDevelopmentBuiltins("cn.howxu.mmcr.GameTestRegistry", "registerRecipes");
-        MachineRegistry.rebuildCompiledCache();
     }
 
     private static void registerDefaultMachineLevels() {
@@ -198,7 +204,12 @@ public class MMCR {
     }
 
     private static void onCommonSetup(FMLCommonSetupEvent event) {
-        event.enqueueWork(MMCR::registerRuntimeBuiltins);
+    }
+
+    private static void onDefaultDataComponentsBound(DefaultDataComponentsBoundEvent event) {
+        if (event.shouldUpdateStaticData()) {
+            registerRuntimeRecipes();
+        }
     }
 
     private static void registerDevelopmentBuiltins(String className, String methodName) {

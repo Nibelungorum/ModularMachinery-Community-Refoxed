@@ -2,13 +2,14 @@ package org.nibelungorum.builtin;
 
 import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterMachinesEvent;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
+import cn.howxu.mmcr.MMCR;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.bus.api.SubscribeEvent;
 
 /** Public built-in machine subscriber.
  * @author howxu <dev@howxu.cn>
  */
-@EventBusSubscriber
+@EventBusSubscriber(modid = MMCR.MODID)
 public final class PublicBuiltinMachineDefinitions {
     private PublicBuiltinMachineDefinitions() {
     }

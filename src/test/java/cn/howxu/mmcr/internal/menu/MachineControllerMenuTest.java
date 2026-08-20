@@ -74,8 +74,8 @@ class MachineControllerMenuTest {
 
     @Test
     void client_menu_uses_synced_progress_when_the_client_controller_has_an_active_recipe() throws Exception {
-        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
-        setField(MachineControllerBlockEntity.class, controller, "active", activeRecipe(MMCR.id("blast_furnace"), 0));
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("test_cube"));
+        setField(MachineControllerBlockEntity.class, controller, "active", activeRecipe(MMCR.id("test_cube"), 0));
         MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory());
         setField(MachineControllerMenu.class, menu, "level", LevelStub.createWithBlockEntities(List.of(controller)));
 
@@ -90,13 +90,13 @@ class MachineControllerMenuTest {
 
     @Test
     void server_menu_syncs_factory_base_thread_progress_when_controller_has_no_local_active_recipe() throws Exception {
-        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("test_cube"));
         FactorySchedulerBlockEntity factory = new FactorySchedulerBlockEntity(BlockPos.ZERO,
                 ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
-        setField(MachineControllerBlockEntity.class, controller, "machine", factoryMachine(MMCR.id("blast_furnace")));
+        setField(MachineControllerBlockEntity.class, controller, "machine", factoryMachine(MMCR.id("test_cube")));
         setField(MachineControllerBlockEntity.class, controller, "components", List.of(new ProcessingComponent(
                 null, factory, BlockPos.ZERO, BlockPos.ZERO, List.of())));
-        setField(FactorySchedulerBlockEntity.class, factory, "scheduler", schedulerWithActiveBaseThread(MMCR.id("blast_furnace")));
+        setField(FactorySchedulerBlockEntity.class, factory, "scheduler", schedulerWithActiveBaseThread(MMCR.id("test_cube")));
         MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory(), controller);
 
         menu.broadcastChanges();
@@ -183,7 +183,7 @@ class MachineControllerMenuTest {
 
     @Test
     void server_menu_exposes_ordinary_controller_recipe_lock_and_full_id() throws Exception {
-        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("test_cube"));
         setField(MachineControllerBlockEntity.class, controller, "lockedRecipeId", MMCR.id("ordinary_menu_locked_recipe"));
         MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory(), controller);
 
@@ -193,7 +193,7 @@ class MachineControllerMenuTest {
 
     @Test
     void server_menu_recipe_lock_data_slot_reads_ordinary_owner_lock() throws Exception {
-        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("test_cube"));
         setField(MachineControllerBlockEntity.class, controller, "lockedRecipeId", MMCR.id("ordinary_data_slot_lock"));
         MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory(), controller);
 
@@ -202,7 +202,7 @@ class MachineControllerMenuTest {
 
     @Test
     void client_menu_uses_synced_recipe_lock_when_client_controller_is_available() throws Exception {
-        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("test_cube"));
         MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory(), controller.getBlockPos());
         setField(MachineControllerMenu.class, menu, "level", LevelStub.createWithBlockEntities(List.of(controller)));
 
@@ -213,7 +213,7 @@ class MachineControllerMenuTest {
 
     @Test
     void client_menu_uses_synced_parallel_data_when_the_client_controller_is_available() throws Exception {
-        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("test_cube"));
         MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory());
         setField(MachineControllerMenu.class, menu, "level", LevelStub.createWithBlockEntities(java.util.List.of(controller)));
 
@@ -238,10 +238,10 @@ class MachineControllerMenuTest {
 
     @Test
     void machine_id_comes_from_the_resolved_controller() throws Exception {
-        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("test_cube"));
         MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory(), controller);
 
-        assertThat(menu.machineId()).isEqualTo(MMCR.id("blast_furnace"));
+        assertThat(menu.machineId()).isEqualTo(MMCR.id("test_cube"));
     }
 
     @Test
@@ -253,7 +253,7 @@ class MachineControllerMenuTest {
 
     @Test
     void formed_controller_menu_becomes_invalid_when_structure_unforms() throws Exception {
-        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("test_cube"));
         controller.setLevel(LevelStub.createWithBlockEntities(List.of(controller)));
         controller.getLevel().setBlock(controller.getBlockPos(), controller.getBlockState().setValue(MachineControllerBlock.FORMED, true), 3);
 
@@ -265,7 +265,7 @@ class MachineControllerMenuTest {
 
     @Test
     void unformed_controller_menu_remains_valid_until_formation_is_observed() throws Exception {
-        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("test_cube"));
         controller.setLevel(LevelStub.createWithBlockEntities(List.of(controller)));
         MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory(), controller);
 
@@ -274,7 +274,7 @@ class MachineControllerMenuTest {
 
     @Test
     void controller_menu_becomes_invalid_after_formed_structure_unforms() throws Exception {
-        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("test_cube"));
         controller.setLevel(LevelStub.createWithBlockEntities(List.of(controller)));
         MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory(), controller);
 
@@ -287,7 +287,7 @@ class MachineControllerMenuTest {
 
     @Test
     void formed_controller_menu_records_formation_on_open() throws Exception {
-        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("blast_furnace"));
+        MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("test_cube"));
         controller.setLevel(LevelStub.createWithBlockEntities(List.of(controller)));
         controller.getLevel().setBlock(controller.getBlockPos(), controller.getBlockState().setValue(MachineControllerBlock.FORMED, true), 3);
 

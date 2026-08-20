@@ -39,7 +39,7 @@ class RuntimeContentSyncTest {
 
     @Test
     void createSnapshotIncludesDynamicStructuresRecipesSpecsAndAppearance() {
-        Identifier machineId = MMCR.id("alloy_furnace");
+        Identifier machineId = MMCR.id("test_cube");
         Identifier recipeId = MMCR.id("runtime_sync_recipe");
         MachineStructureRegistry.replaceDynamic(Map.of(machineId, structure(machineId)));
         RecipeRegistry.replaceDynamic(Map.of(recipeId, recipe(recipeId, machineId)));

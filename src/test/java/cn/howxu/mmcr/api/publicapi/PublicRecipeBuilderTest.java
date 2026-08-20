@@ -48,7 +48,7 @@ class PublicRecipeBuilderTest {
                 .inputFluid(net.minecraft.world.level.material.Fluids.WATER, 1000)
                 .inputEnergy(40)
                 .outputItem(new ItemStack(Items.GOLD_INGOT, 2))
-                .outputFluid(net.minecraft.world.level.material.Fluids.LAVA, 250)
+                .outputFluid(net.minecraft.world.level.material.Fluids.WATER, 250)
                 .outputEnergy(10)
                 .build();
 
@@ -99,13 +99,13 @@ class PublicRecipeBuilderTest {
     @Test
     void adapts_public_recipe_values_to_internal_recipe_semantics() {
         ItemStack itemOutput = new ItemStack(Items.GOLD_INGOT, 2);
-        FluidStack fluidOutput = new FluidStack(net.minecraft.world.level.material.Fluids.LAVA, 250);
+        FluidStack fluidOutput = new FluidStack(net.minecraft.world.level.material.Fluids.WATER, 250);
         var recipe = PublicRecipeAdapter.toRecipe(MachineRecipeBuilder.recipe(id("adapter"), id("machine"))
                 .inputItem(Ingredient.of(Items.IRON_INGOT), 2, components(), 0.25F)
                 .inputFluid(net.minecraft.world.level.material.Fluids.WATER, 1000)
                 .inputEnergy(40)
                 .outputChance(itemOutput, 0.4F)
-                .outputFluid(net.minecraft.world.level.material.Fluids.LAVA, 250)
+                .outputFluid(net.minecraft.world.level.material.Fluids.WATER, 250)
                 .outputEnergy(10)
                 .levelRequirement(DefaultMachineLevels.THERMAL_SMELTING_COIL_TYPE, DefaultMachineLevels.COPPER_COIL)
                 .requiredHost(id("host"))

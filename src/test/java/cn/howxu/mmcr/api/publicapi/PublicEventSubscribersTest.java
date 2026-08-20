@@ -138,6 +138,36 @@ class PublicEventSubscribersTest {
         }
     }
 
+    @Test
+    void machine_event_installs_before_recipe_event() {
+        PublicApiBootstrap.begin();
+        MachineDefinitions.beginRegistryPhase();
+        MachineDefinition machine = machine("event_machine");
+        MachineRecipeDefinition recipe = recipe("event_recipe", machine.id());
+        AtomicBoolean active = new AtomicBoolean(true);
+        NeoForge.EVENT_BUS.addListener((MMCRRegisterMachinesEvent event) -> {
+            if (active.get()) event.registerMachine(machine);
+        });
+        NeoForge.EVENT_BUS.addListener((MMCRRegisterRecipesEvent event) -> {
+            if (active.get()) event.registerRecipe(recipe);
+        });
+
+        try {
+            NeoForge.EVENT_BUS.post(new MMCRRegisterMachinesEvent());
+            PublicApiBootstrap.freezeAndInstallMachines();
+
+            assertThat(MachineDefinitions.getRegistration(machine.id())).isNotNull();
+            assertThat(RecipeRegistry.getRecipe(recipe.id())).isNull();
+
+            NeoForge.EVENT_BUS.post(new MMCRRegisterRecipesEvent());
+            PublicApiBootstrap.installRecipes();
+
+            assertThat(RecipeRegistry.getRecipe(recipe.id())).isNotNull();
+        } finally {
+            active.set(false);
+        }
+    }
+
     private static MachineDefinition machine(String path) {
         return MachineBuilder.machine(id(path))
                 .pattern(pattern -> pattern

@@ -54,7 +54,7 @@ class MachineStructureDisplayTest {
 
     private static Machine testMachine() {
         return new Machine() {
-            @Override public Identifier registryName() { return MMCR.id("blast_furnace"); }
+            @Override public Identifier registryName() { return MMCR.id("test_cube"); }
             @Override public BlockArray pattern() {
                 return new BlockArray(Map.of());
             }

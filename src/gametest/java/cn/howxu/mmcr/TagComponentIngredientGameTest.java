@@ -31,7 +31,7 @@ public class TagComponentIngredientGameTest {
                         { 'minecraft:custom_name': { text: 'Validated' } }
                         """)).getOrThrow(), 1F);
         var recipe = new MachineRecipe(Identifier.parse("mmcr:tag_component_input"),
-                Identifier.parse("mmcr:alloy_furnace"), 20, List.of(ingredient), List.of());
+                MMCR.id("iron_compressor"), 20, List.of(ingredient), List.of());
         var ops = RegistryOps.create(JsonOps.INSTANCE, registryAccess);
         var decoded = MachineRecipe.CODEC.codec().parse(ops,
                 MachineRecipe.CODEC.codec().encodeStart(ops, recipe).getOrThrow()).getOrThrow();
