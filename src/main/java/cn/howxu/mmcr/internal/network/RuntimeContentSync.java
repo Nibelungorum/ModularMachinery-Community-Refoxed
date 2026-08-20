@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.network;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
+import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -24,11 +25,11 @@ public final class RuntimeContentSync {
 
     public static RuntimeContentSnapshot createSnapshot() {
         return new RuntimeContentSnapshot(
-                MachineStructureRegistry.dynamicSnapshot(),
-                RecipeRegistry.dynamicSnapshot(),
+                MachineStructureRegistry.effectiveSnapshot(),
+                RecipeRegistry.effectiveSnapshot(),
                 ControllerSpecSync.createSnapshot(),
                 ControllerSpecSync.createAppearanceSnapshot(),
-                RecipeRegistry.reloadVersion());
+                RuntimeContentVersion.current());
     }
 
     public static void sendTo(ServerPlayer player) {

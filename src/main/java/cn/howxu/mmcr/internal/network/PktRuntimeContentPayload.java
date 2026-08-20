@@ -76,7 +76,7 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
         writeMap(buf, snapshot.recipes(), MAX_RECIPES, MachineRecipeSyncCodec::encode);
         writeMap(buf, snapshot.controllerSpecs(), MAX_SPECS, CONTROLLER_SPEC_CODEC::encode);
         writeMap(buf, snapshot.appearances(), MAX_SPECS, APPEARANCE_SPEC_CODEC::encode);
-        buf.writeVarLong(snapshot.recipeVersion());
+        buf.writeVarLong(snapshot.contentVersion());
     }
 
     private static PktRuntimeContentPayload decode(RegistryFriendlyByteBuf buf) {
@@ -84,8 +84,10 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
         Map<Identifier, MachineRecipe> recipes = readMap(buf, MAX_RECIPES, MachineRecipeSyncCodec::decode);
         Map<Identifier, MachineControllerSpec> controllerSpecs = readMap(buf, MAX_SPECS, CONTROLLER_SPEC_CODEC::decode);
         Map<Identifier, MachineAppearanceSpec> appearances = readMap(buf, MAX_SPECS, APPEARANCE_SPEC_CODEC::decode);
+        long contentVersion = buf.readVarLong();
+        if (contentVersion < 0) throw new IllegalArgumentException("Invalid runtime content version: " + contentVersion);
         return new PktRuntimeContentPayload(new RuntimeContentSnapshot(
-                structures, recipes, controllerSpecs, appearances, buf.readVarLong()));
+                structures, recipes, controllerSpecs, appearances, contentVersion));
     }
 
     private static <T> void writeMap(RegistryFriendlyByteBuf buf, Map<Identifier, T> values, int max,

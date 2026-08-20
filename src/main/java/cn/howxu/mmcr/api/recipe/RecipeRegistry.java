@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
 import net.minecraft.resources.Identifier;
 
 import java.util.Collections;
@@ -43,6 +44,7 @@ public final class RecipeRegistry {
         STATIC_RECIPES.put(recipe.id(), recipe);
         publish(STATIC_RECIPES, STATE.dataPack(), STATE.dynamic());
         registryVersion++;
+        RuntimeContentVersion.advance();
     }
 
     /**
@@ -109,6 +111,7 @@ public final class RecipeRegistry {
         publish(STATE.staticRecipes(), STATE.dataPack(), replacement);
         reloadVersion++;
         registryVersion++;
+        RuntimeContentVersion.advance();
     }
 
     public static Map<Identifier, MachineRecipe> dynamicSnapshot() {
@@ -121,6 +124,13 @@ public final class RecipeRegistry {
 
     public static Map<Identifier, MachineRecipe> staticSnapshot() {
         return STATE.staticRecipes();
+    }
+
+    public static void replaceClientSnapshot(Map<Identifier, MachineRecipe> recipes) {
+        publish(Map.of(), Map.of(), recipes);
+        reloadVersion++;
+        registryVersion++;
+        RuntimeContentVersion.advance();
     }
 
     public static List<String> lastDataPackWarnings() {
@@ -141,6 +151,7 @@ public final class RecipeRegistry {
         publish(STATE.staticRecipes(), replacement, STATE.dynamic(), warnings);
         reloadVersion++;
         registryVersion++;
+        RuntimeContentVersion.advance();
     }
 
     private static void publish(Map<Identifier, MachineRecipe> staticRecipes,
@@ -178,6 +189,7 @@ public final class RecipeRegistry {
         STATE = State.empty();
         reloadVersion++;
         registryVersion++;
+        RuntimeContentVersion.advance();
     }
 
     public static void clearForTesting() {

@@ -9,14 +9,28 @@ import java.util.Map;
  * @author howxu <dev@howxu.cn>
  */
 final class ClientRuntimeSnapshotBridge {
+    private static long lastAppliedVersion = -1L;
+
     private ClientRuntimeSnapshotBridge() {
     }
 
-    static void apply(Map<?, ?> controllerSpecs, Map<?, ?> appearances) {
+    static synchronized boolean canApply(long version) {
+        return version > lastAppliedVersion;
+    }
+
+    static synchronized void markApplied(long version) {
+        lastAppliedVersion = version;
+    }
+
+    static synchronized void resetForTesting() {
+        lastAppliedVersion = -1L;
+    }
+
+    static void apply(RuntimeContentSnapshot snapshot) {
         try {
             Class<?> applierClass = Class.forName("cn.howxu.mmcr.client.RuntimeContentClientApplier");
             Method apply = applierClass.getMethod("apply", Map.class, Map.class);
-            apply.invoke(null, controllerSpecs, appearances);
+            apply.invoke(null, snapshot.controllerSpecs(), snapshot.appearances());
         } catch (ClassNotFoundException ignored) {
             // Dedicated server/common test environments do not load client cache classes.
         } catch (ReflectiveOperationException exception) {

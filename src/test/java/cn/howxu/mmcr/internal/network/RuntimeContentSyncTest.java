@@ -3,13 +3,14 @@ package cn.howxu.mmcr.internal.network;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
-import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.resources.Identifier;
@@ -50,7 +51,29 @@ class RuntimeContentSyncTest {
         assertThat(snapshot.recipes()).containsKey(recipeId);
         assertThat(snapshot.controllerSpecs()).containsKey(machineId);
         assertThat(snapshot.appearances()).containsKey(machineId);
-        assertThat(snapshot.recipeVersion()).isEqualTo(RecipeRegistry.reloadVersion());
+        assertThat(snapshot.contentVersion()).isGreaterThan(0L);
+    }
+
+    @Test
+    void createSnapshotUsesEffectiveStartupDataPackAndDynamicLayers() {
+        Identifier machineId = MMCR.id("test_cube");
+        Identifier staticRecipeId = MMCR.id("static_sync_recipe");
+        Identifier dataPackRecipeId = MMCR.id("datapack_sync_recipe");
+        Identifier dynamicRecipeId = MMCR.id("dynamic_sync_recipe");
+        if (MachineDefinitions.getRegistration(machineId) == null) {
+            MachineDefinitions.register(MachineRegistration.builder(machineId).build());
+        }
+        MachineStructureDefinition startup = structure(machineId);
+        MachineStructureRegistry.replaceStartup(Map.of(machineId, startup));
+        RecipeRegistry.registerStatic(recipe(staticRecipeId, machineId));
+        RecipeRegistry.replaceDataPack(Map.of(dataPackRecipeId, recipe(dataPackRecipeId, machineId)));
+        RecipeRegistry.replaceDynamic(Map.of(dynamicRecipeId, recipe(dynamicRecipeId, machineId)));
+
+        RuntimeContentSnapshot snapshot = RuntimeContentSync.createSnapshot();
+
+        assertThat(snapshot.structures()).containsOnlyKeys(machineId);
+        assertThat(snapshot.recipes()).containsOnlyKeys(staticRecipeId, dataPackRecipeId, dynamicRecipeId);
+        assertThat(snapshot.contentVersion()).isGreaterThan(0L);
     }
 
     private static MachineStructureDefinition structure(Identifier id) {

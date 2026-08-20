@@ -71,6 +71,7 @@ class RuntimeContentSnapshotTest {
     @BeforeEach
     void restoreDefaultRuntimeState() {
         TestBootstrap.registerRuntimeBuiltins();
+        ClientRuntimeSnapshotBridge.resetForTesting();
     }
 
     @Test
@@ -212,7 +213,7 @@ class RuntimeContentSnapshotTest {
 
         assertThat(decoded.snapshot().structures()).containsOnlyKeys(machineId);
         assertThat(decoded.snapshot().recipes()).containsOnlyKeys(MMCR.id("sync_recipe"));
-        assertThat(decoded.snapshot().recipeVersion()).isEqualTo(11L);
+        assertThat(decoded.snapshot().contentVersion()).isEqualTo(11L);
     }
 
     @Test
@@ -239,8 +240,8 @@ class RuntimeContentSnapshotTest {
                 Map.of(newMachine, MachineControllerSpec.defaultsFor(newMachine)),
                 Map.of(), 12L).applyClient();
 
-        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsOnlyKeys(newMachine);
-        assertThat(RecipeRegistry.dynamicSnapshot()).containsOnlyKeys(newRecipe);
+        assertThat(MachineStructureRegistry.effectiveSnapshot()).containsOnlyKeys(newMachine);
+        assertThat(RecipeRegistry.effectiveSnapshot()).containsOnlyKeys(newRecipe);
         assertThat(MachineRegistry.getMachine(oldMachine)).isNull();
         assertThat(RecipeRegistry.getRecipe(oldRecipe)).isNull();
     }
@@ -255,10 +256,23 @@ class RuntimeContentSnapshotTest {
 
         RuntimeContentSnapshot.empty().applyClient();
 
-        assertThat(MachineStructureRegistry.dynamicSnapshot()).doesNotContainKey(removedMachine);
-        assertThat(RecipeRegistry.dynamicSnapshot()).doesNotContainKey(removedRecipe);
+        assertThat(MachineStructureRegistry.effectiveSnapshot()).doesNotContainKey(removedMachine);
+        assertThat(RecipeRegistry.effectiveSnapshot()).doesNotContainKey(removedRecipe);
         assertThat(MachineRegistry.getMachine(removedMachine)).isNull();
         assertThat(RecipeRegistry.getRecipe(removedRecipe)).isNull();
+    }
+
+    @Test
+    void applyClientRejectsOlderSnapshotBeforeReplacingContent() {
+        Identifier machineId = MMCR.id("alloy_furnace");
+        registerMachineIfMissing(machineId);
+        RuntimeContentSnapshot current = new RuntimeContentSnapshot(
+                Map.of(machineId, structure(machineId)), Map.of(), Map.of(), Map.of(), 20L);
+
+        current.applyClient();
+        new RuntimeContentSnapshot(Map.of(), Map.of(), Map.of(), Map.of(), 19L).applyClient();
+
+        assertThat(MachineStructureRegistry.effectiveSnapshot()).containsOnlyKeys(machineId);
     }
 
     @Test

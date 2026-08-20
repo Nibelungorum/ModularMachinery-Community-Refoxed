@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.machine;
 
 import net.minecraft.resources.Identifier;
+import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,6 +23,7 @@ public final class MachineStructureRegistry {
         Map<Identifier, MachineStructureDefinition> replacement = validate(structures);
         MachineRegistry.installStructures(effective(replacement, DYNAMIC_STRUCTURES));
         STARTUP_STRUCTURES = replacement;
+        RuntimeContentVersion.advance();
     }
 
     public static void replaceDynamic(Map<Identifier, MachineStructureDefinition> structures) {
@@ -29,6 +31,7 @@ public final class MachineStructureRegistry {
         validateDynamicRoles(replacement);
         MachineRegistry.installStructures(effective(STARTUP_STRUCTURES, replacement));
         DYNAMIC_STRUCTURES = replacement;
+        RuntimeContentVersion.advance();
     }
 
     private static Map<Identifier, MachineStructureDefinition> validate(
@@ -66,6 +69,14 @@ public final class MachineStructureRegistry {
 
     public static Map<Identifier, MachineStructureDefinition> effectiveSnapshot() {
         return effective(STARTUP_STRUCTURES, DYNAMIC_STRUCTURES);
+    }
+
+    public static void replaceClientSnapshot(Map<Identifier, MachineStructureDefinition> structures) {
+        Map<Identifier, MachineStructureDefinition> replacement = validate(structures);
+        MachineRegistry.installStructures(replacement);
+        STARTUP_STRUCTURES = replacement;
+        DYNAMIC_STRUCTURES = Map.of();
+        RuntimeContentVersion.advance();
     }
 
     public static Machine toRuntimeMachine(MachineRegistration registration, MachineStructureDefinition structure) {

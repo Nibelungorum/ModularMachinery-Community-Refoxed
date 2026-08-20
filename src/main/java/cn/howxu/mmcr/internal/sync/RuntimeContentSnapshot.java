@@ -21,9 +21,10 @@ public record RuntimeContentSnapshot(
         Map<Identifier, MachineRecipe> recipes,
         Map<Identifier, MachineControllerSpec> controllerSpecs,
         Map<Identifier, MachineAppearanceSpec> appearances,
-        long recipeVersion) {
+        long contentVersion) {
 
     public RuntimeContentSnapshot {
+        if (contentVersion < 0) throw new IllegalArgumentException("contentVersion must not be negative");
         structures = Map.copyOf(structures == null ? Map.of() : structures);
         recipes = Map.copyOf(recipes == null ? Map.of() : recipes);
         controllerSpecs = Map.copyOf(controllerSpecs == null ? Map.of() : controllerSpecs);
@@ -35,9 +36,11 @@ public record RuntimeContentSnapshot(
     }
 
     public void applyClient() {
-        MachineStructureRegistry.replaceDynamic(structures);
-        RecipeRegistry.replaceDynamic(recipes);
+        if (!ClientRuntimeSnapshotBridge.canApply(contentVersion)) return;
+        MachineStructureRegistry.replaceClientSnapshot(structures);
+        RecipeRegistry.replaceClientSnapshot(recipes);
         RecipeCraftingContextPool.onGlobalReload();
-        ClientRuntimeSnapshotBridge.apply(controllerSpecs, appearances);
+        ClientRuntimeSnapshotBridge.markApplied(contentVersion);
+        ClientRuntimeSnapshotBridge.apply(this);
     }
 }
