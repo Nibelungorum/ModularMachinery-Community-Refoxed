@@ -242,20 +242,20 @@ public class MMCR {
         registerDynamicControllers(definitions.definitions().keySet());
         NeoForge.EVENT_BUS.post(definitions);
         definitions.freeze();
-        PublicApiBootstrap.collectMachines(definitions);
+        ContentRegistrationCoordinator.collectMachines(definitions);
 
         MMCRMachineStructuresEvent structures = MMCRMachineStructuresEvent.prepare(definitions.definitions().keySet());
         registerDefaultMachineLevels(structures);
         structuresSource.accept(structures);
         NeoForge.EVENT_BUS.post(structures);
         structures.freeze();
-        PublicApiBootstrap.collectStructures(structures);
+        ContentRegistrationCoordinator.collectStructures(structures);
         bindVanillaItemComponents();
         MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
         recipesSource.accept(recipes);
         NeoForge.EVENT_BUS.post(recipes);
         recipes.freeze();
-        PublicApiBootstrap.collectRecipes(recipes);
+        ContentRegistrationCoordinator.collectRecipes(recipes);
         ContentRegistrationCoordinator.commitStartup();
         startupPhase = StartupPhase.COMMITTED;
     }

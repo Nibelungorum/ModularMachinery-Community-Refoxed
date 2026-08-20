@@ -5,7 +5,6 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
 import org.nibelungorum.DefaultMachineLevels;
@@ -46,7 +45,7 @@ class BlockPredicateTest {
         cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.resetCollector();
         var event = cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.prepare(Set.of());
         DefaultMachineLevels.register(event);
-        MachineLevelRegistryBridge.install(event.levelTypes().values(), event.levels().values());
+        MachineLevelRegistry.installSnapshot(event.levelTypes().values(), event.levels().values());
     }
 
     @Test void air_matches_only_air() {
@@ -100,14 +99,14 @@ class BlockPredicateTest {
     }
 
     @Test void preferredState_prefers_the_highest_registered_machine_level_in_anyOf() {
-        MachineLevelRegistryBridge.beginRegistration();
+        TestBootstrap.beginRegistration();
         var typeId = MMCR.id("block_predicate_test");
-        MachineLevelRegistryBridge.registerType(new LevelType(typeId, Component.literal("Test")));
-        MachineLevelRegistryBridge.registerLevel(new MachineLevel(MMCR.id("block_predicate_test_copper"), typeId, 1,
+        TestBootstrap.registerType(new LevelType(typeId, Component.literal("Test")));
+        TestBootstrap.registerLevel(new MachineLevel(MMCR.id("block_predicate_test_copper"), typeId, 1,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
-        MachineLevelRegistryBridge.registerLevel(new MachineLevel(MMCR.id("block_predicate_test_iron"), typeId, 2,
+        TestBootstrap.registerLevel(new MachineLevel(MMCR.id("block_predicate_test_iron"), typeId, 2,
                 new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
-        MachineLevelRegistryBridge.freezeRegistration();
+        TestBootstrap.freezeRegistration();
         var predicate = new BlockPredicate.AnyOf(List.of(
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
                 new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState())));

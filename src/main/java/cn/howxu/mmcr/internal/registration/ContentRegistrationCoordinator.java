@@ -60,6 +60,11 @@ public final class ContentRegistrationCoordinator {
         event.definitions().forEach((id, definition) -> putUnique(MACHINES, id, definition, "machine"));
     }
 
+    public static synchronized void collectMachine(MachineDefinition definition) {
+        requireCollecting();
+        putUnique(MACHINES, definition.id(), definition, "machine");
+    }
+
     public static synchronized void collectStructures(MMCRMachineStructuresEvent event) {
         requireCollecting();
         STRUCTURE_SNAPSHOT = event.freeze();

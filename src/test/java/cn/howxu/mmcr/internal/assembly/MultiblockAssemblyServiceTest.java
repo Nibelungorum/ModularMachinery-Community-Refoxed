@@ -7,7 +7,7 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
+import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -80,13 +80,13 @@ class MultiblockAssemblyServiceTest {
 
     @Test
     void levelCandidatesAreOrderedByPriorityDescending() {
-        MachineLevelRegistryBridge.beginRegistration();
-        MachineLevelRegistryBridge.registerType(new LevelType(MMCR.id("coil"), Component.literal("Coil")));
-        MachineLevelRegistryBridge.registerLevel(new MachineLevel(MMCR.id("basic"), MMCR.id("coil"), 1,
+        TestBootstrap.beginRegistration();
+        TestBootstrap.registerType(new LevelType(MMCR.id("coil"), Component.literal("Coil")));
+        TestBootstrap.registerLevel(new MachineLevel(MMCR.id("basic"), MMCR.id("coil"), 1,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
-        MachineLevelRegistryBridge.registerLevel(new MachineLevel(MMCR.id("advanced"), MMCR.id("coil"), 2,
+        TestBootstrap.registerLevel(new MachineLevel(MMCR.id("advanced"), MMCR.id("coil"), 2,
                 new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
-        MachineLevelRegistryBridge.freezeRegistration();
+        TestBootstrap.freezeRegistration();
         BlockPredicate predicate = new BlockPredicate.AnyOf(List.of(
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
                 new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState())

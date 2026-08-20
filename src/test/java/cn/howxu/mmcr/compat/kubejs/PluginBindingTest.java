@@ -513,7 +513,7 @@ class PluginBindingTest {
         PublicApiBootstrap.clearForTesting();
         try {
             PublicApiBootstrap.begin();
-            PublicApiBootstrap.freezeAndInstallMachines();
+            MachineDefinitions.freezeRegistryPhase();
 
             assertThat(MachineDefinitions.isRegistryPhaseOpen()).isFalse();
 

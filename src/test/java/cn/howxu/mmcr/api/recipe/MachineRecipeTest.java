@@ -6,7 +6,7 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
+import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -224,9 +224,9 @@ class MachineRecipeTest {
     void codec_roundtrips_level_requirements() {
         var coilType = Identifier.parse("test:coil");
         var kanthal = Identifier.parse("test:kanthal");
-        MachineLevelRegistryBridge.beginRegistration();
-        MachineLevelRegistryBridge.registerType(new LevelType(coilType, Component.literal("Coils")));
-        MachineLevelRegistryBridge.registerLevel(new MachineLevel(kanthal, coilType, 1,
+        TestBootstrap.beginRegistration();
+        TestBootstrap.registerType(new LevelType(coilType, Component.literal("Coils")));
+        TestBootstrap.registerLevel(new MachineLevel(kanthal, coilType, 1,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
         var recipe = new MachineRecipe(
                 Identifier.parse("test:levelled"),
@@ -252,11 +252,11 @@ class MachineRecipeTest {
     @Test
     void rejects_duplicate_level_requirement_types() {
         var coilType = Identifier.parse("test:coil");
-        MachineLevelRegistryBridge.beginRegistration();
-        MachineLevelRegistryBridge.registerType(new LevelType(coilType, Component.literal("Coils")));
-        MachineLevelRegistryBridge.registerLevel(new MachineLevel(Identifier.parse("test:kanthal"), coilType, 1,
+        TestBootstrap.beginRegistration();
+        TestBootstrap.registerType(new LevelType(coilType, Component.literal("Coils")));
+        TestBootstrap.registerLevel(new MachineLevel(Identifier.parse("test:kanthal"), coilType, 1,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
-        MachineLevelRegistryBridge.registerLevel(new MachineLevel(Identifier.parse("test:nichrome"), coilType, 2,
+        TestBootstrap.registerLevel(new MachineLevel(Identifier.parse("test:nichrome"), coilType, 2,
                 new BlockPredicate.OfBlockState(Blocks.GOLD_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
 
         assertThatThrownBy(() -> new MachineRecipe(

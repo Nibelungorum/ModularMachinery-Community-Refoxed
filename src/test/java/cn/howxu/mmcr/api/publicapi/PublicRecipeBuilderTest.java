@@ -6,7 +6,6 @@ import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
@@ -49,7 +48,7 @@ class PublicRecipeBuilderTest {
         cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.resetCollector();
         var event = cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.prepare(java.util.Set.of());
         DefaultMachineLevels.register(event);
-        MachineLevelRegistryBridge.install(event.levelTypes().values(), event.levels().values());
+        MachineLevelRegistry.installSnapshot(event.levelTypes().values(), event.levels().values());
     }
 
     @Test

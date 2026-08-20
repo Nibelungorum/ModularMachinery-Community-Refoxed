@@ -2,7 +2,6 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.resources.Identifier;
@@ -41,7 +40,7 @@ class MachineLevelBuilderJSTest {
                 .registerObject();
 
         var event = MMCRMachineStructuresEvent.current();
-        MachineLevelRegistryBridge.install(event.levelTypes().values(), event.levels().values());
+        MachineLevelRegistry.installSnapshot(event.levelTypes().values(), event.levels().values());
         var level = MachineLevelRegistry.getLevel(Identifier.parse("test:copper_coil"));
         assertThat(level.typeId()).isEqualTo(Identifier.parse("test:coil"));
         assertThat(level.priority()).isEqualTo(2);

@@ -16,10 +16,4 @@ public final class PublicMachineDefinitionProviders {
         ServiceLoader.load(MachineDefinitionProvider.class).forEach(provider -> provider.register(event));
     }
 
-    public static void registerAll() {
-        MMCRMachineDefinationsEvent event = new MMCRMachineDefinationsEvent();
-        registerAll(event);
-        event.freeze();
-        PublicApiBootstrap.registerDefinitions(event);
-    }
 }

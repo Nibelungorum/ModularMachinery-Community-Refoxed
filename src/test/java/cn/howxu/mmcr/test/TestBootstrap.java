@@ -4,6 +4,9 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
@@ -52,14 +55,34 @@ import org.nibelungorum.builtin.PublicBuiltinRecipeDefinitions;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.function.Supplier;
 
 import java.nio.file.Path;
 
 public final class TestBootstrap {
     private static boolean initialized;
+    private static final Map<Identifier, LevelType> TEST_LEVEL_TYPES = new LinkedHashMap<>();
+    private static final Map<Identifier, MachineLevel> TEST_LEVELS = new LinkedHashMap<>();
 
     private TestBootstrap() {
+    }
+
+    public static void beginRegistration() {
+        TEST_LEVEL_TYPES.clear();
+        TEST_LEVELS.clear();
+    }
+
+    public static void freezeRegistration() {
+        MachineLevelRegistry.installSnapshot(TEST_LEVEL_TYPES.values(), TEST_LEVELS.values());
+    }
+
+    public static void registerType(LevelType type) {
+        TEST_LEVEL_TYPES.put(type.id(), type);
+    }
+
+    public static void registerLevel(MachineLevel level) {
+        TEST_LEVELS.put(level.id(), level);
     }
 
     public static synchronized void bootstrap() throws Exception {

@@ -3,7 +3,7 @@ package cn.howxu.mmcr.api.machine;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
+import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
@@ -30,9 +30,9 @@ class MachineStructureRequirementsTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
-        MachineLevelRegistryBridge.beginRegistration();
+        TestBootstrap.beginRegistration();
         if (MachineLevelRegistry.getType(COIL_TYPE) == null) {
-            MachineLevelRegistryBridge.registerType(new LevelType(COIL_TYPE, Component.literal("Coil")));
+            TestBootstrap.registerType(new LevelType(COIL_TYPE, Component.literal("Coil")));
         }
     }
 
