@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.kubejs;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
@@ -52,6 +53,8 @@ final class KubeJSContentReloadTransaction {
         if (recipes.putIfAbsent(id, recipe) != null) {
             throw new IllegalStateException("Dynamic recipe already registered: " + id);
         }
+        MMCR.LOG.debug("[MMCR-DIAG] KubeJS queued recipe {} for {}: requirements={}, levels={}",
+                id, recipe.machineId(), recipe.runtimeRequirements().size(), recipe.levelRequirements());
     }
 
     boolean isEmpty() {
@@ -59,6 +62,8 @@ final class KubeJSContentReloadTransaction {
     }
 
     RuntimeContentCoordinator.CommitResult commit() {
+        MMCR.LOG.debug("[MMCR-DIAG] KubeJS committing {} recipes and {} structures; replacing {} previously published recipes",
+                recipes.size(), structures.size(), publishedRecipes.size());
         Map<Identifier, MachineStructureDefinition> mergedStructures = new LinkedHashMap<>(
                 MachineStructureRegistry.dynamicSnapshot());
         removePublishedStructures(mergedStructures);
@@ -70,6 +75,8 @@ final class KubeJSContentReloadTransaction {
                 RuntimeContentCoordinator.commitDynamicAndSnapshot(mergedStructures, mergedRecipes);
         publishedStructures = Map.copyOf(structures);
         publishedRecipes = Map.copyOf(recipes);
+        MMCR.LOG.debug("[MMCR-DIAG] KubeJS committed {} recipes and {} structures", publishedRecipes.size(),
+                publishedStructures.size());
         return committed;
     }
 

@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.jei;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -123,6 +124,13 @@ public record MachineRecipeDisplay(
                 smartInterfaceDisplay(registration == null ? null : registration.smartInterfaceTypes().get(smartInterface.interfaceType()),
                         smartInterface).ifPresent(smartInterfaceOutputs::add);
             }
+        }
+        if (MMCR.LOG.isDebugEnabled()) {
+            itemInputs.stream().filter(input -> !input.components().isEmpty()).forEach(input -> MMCR.LOG.debug(
+                    "[MMCR-DIAG] JEI display input {} for recipe {}: predicates={}, stacks={}",
+                    input.ingredient(), recipe.id(), input.components().values(), input.stacks()));
+            itemOutputs.stream().filter(output -> !output.stack().getComponentsPatch().isEmpty()).forEach(output -> MMCR.LOG.debug(
+                    "[MMCR-DIAG] JEI display output for recipe {}: stack={}", recipe.id(), output.stack()));
         }
         return new MachineRecipeDisplay(
                 recipe,

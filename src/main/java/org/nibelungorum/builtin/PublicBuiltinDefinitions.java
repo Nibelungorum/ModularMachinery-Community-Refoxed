@@ -1,5 +1,6 @@
 package org.nibelungorum.builtin;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
@@ -151,7 +152,11 @@ public final class PublicBuiltinDefinitions {
     }
 
     private static void thermal(Map<Identifier, MachineRecipeDefinition> out, String name, int ticks, Item input, Item output, int energy, Identifier level) {
-        out.put(id("thermal_smelting_furnace_" + name), recipe("thermal_smelting_furnace_" + name, THERMAL_SMELTING_FURNACE, ticks).inputItem(Items.COAL, 1).inputItem(input, 1).inputEnergy(energy).outputItem(output, 1).maxThreads(4).build());
+        MachineRecipeDefinition definition = recipe("thermal_smelting_furnace_" + name, THERMAL_SMELTING_FURNACE, ticks)
+                .inputItem(Items.COAL, 1).inputItem(input, 1).inputEnergy(energy).outputItem(output, 1).maxThreads(4).build();
+        MMCR.LOG.debug("[MMCR-DIAG] Built-in thermal recipe {} requested level {} and produced level requirements {}",
+                definition.id(), level, definition.levelRequirements());
+        out.put(id("thermal_smelting_furnace_" + name), definition);
     }
 
     private static void purpurRecipes(Map<Identifier, MachineRecipeDefinition> out) {
@@ -174,7 +179,10 @@ public final class PublicBuiltinDefinitions {
     private static void purpur(Map<Identifier, MachineRecipeDefinition> out, String path, int ticks, int energy, Item output, int count, SmartInterfaceRequirement... requirements) {
         MachineRecipeBuilder builder = recipe("purpur_furnace_" + path, PURPUR_FURNACE, ticks).inputItem(Items.COAL, 1).inputEnergy(energy).outputItem(output, count);
         for (SmartInterfaceRequirement requirement : requirements) builder.requirement(requirement);
-        out.put(id("purpur_furnace_" + path), builder.build());
+        MachineRecipeDefinition definition = builder.build();
+        MMCR.LOG.debug("[MMCR-DIAG] Built-in purpur recipe {} produced item outputs {} and requirements {}",
+                definition.id(), definition.itemOutputs(), definition.requirements());
+        out.put(id("purpur_furnace_" + path), definition);
     }
 
     private static void distillationRecipes(Map<Identifier, MachineRecipeDefinition> out) {

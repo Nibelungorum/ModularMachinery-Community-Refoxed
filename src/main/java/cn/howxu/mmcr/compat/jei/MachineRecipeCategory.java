@@ -290,6 +290,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             if (stacks.isEmpty() && item.ingredient() != null) {
                 jeiSlot.add(item.ingredient());
             } else {
+                if (MMCR.LOG.isDebugEnabled()) {
+                    stacks.stream().filter(stack -> !stack.getComponentsPatch().isEmpty()).forEach(stack -> MMCR.LOG.debug(
+                            "[MMCR-DIAG] JEI injected input for recipe {}: {}", recipe.recipeId(), describeAddedItemStack(stack)));
+                }
                 jeiSlot.addItemStacks(stacks);
             }
         } else {
@@ -302,6 +306,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             }
             jeiSlot.addRichTooltipCallback((view, tooltip) -> appendOutputTooltip(tooltip, output));
             ItemStack jeiStack = new ItemStack(stack.getItem().builtInRegistryHolder(), stack.getCount(), stack.getComponentsPatch());
+            if (MMCR.LOG.isDebugEnabled() && !jeiStack.getComponentsPatch().isEmpty()) {
+                MMCR.LOG.debug("[MMCR-DIAG] JEI injected output for recipe {}: {}", recipe.recipeId(),
+                        describeAddedItemStack(jeiStack));
+            }
             jeiSlot.add(jeiStack);
         }
     }
