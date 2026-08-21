@@ -140,6 +140,13 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         return this;
     }
 
+    public PortTierRequirementSpec itemInputTier(String id) { return KubeJSInterfaceHelpers.itemInputTier(id); }
+    public PortTierRequirementSpec itemOutputTier(String id) { return KubeJSInterfaceHelpers.itemOutputTier(id); }
+    public PortTierRequirementSpec fluidInputTier(String id) { return KubeJSInterfaceHelpers.fluidInputTier(id); }
+    public PortTierRequirementSpec fluidOutputTier(String id) { return KubeJSInterfaceHelpers.fluidOutputTier(id); }
+    public PortTierRequirementSpec energyInputTier(String id) { return KubeJSInterfaceHelpers.energyInputTier(id); }
+    public PortTierRequirementSpec energyOutputTier(String id) { return KubeJSInterfaceHelpers.energyOutputTier(id); }
+
     public MachineStructureBuilderJS dynamicPattern(DynamicPatternSpec pattern) {
         dynamicPatterns.add(Objects.requireNonNull(pattern, "pattern"));
         classMetadataChanged = true;

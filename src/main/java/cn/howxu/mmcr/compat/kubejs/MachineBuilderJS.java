@@ -380,6 +380,14 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public cn.howxu.mmcr.api.machine.BlockPredicate anyOfEnergyOutput() { return KubeJSInterfaceHelpers.anyOfEnergyOutput(); }
     public cn.howxu.mmcr.api.machine.BlockPredicate parallelControllers() { return KubeJSInterfaceHelpers.parallelControllers(); }
     public cn.howxu.mmcr.api.machine.BlockPredicate smartInterfaceBlock() { return KubeJSInterfaceHelpers.smartInterface(); }
+    public cn.howxu.mmcr.api.machine.BlockPredicate anyOfPort(String... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
+    public cn.howxu.mmcr.api.machine.BlockPredicate smartInterface() { return KubeJSInterfaceHelpers.smartInterface(); }
+    public cn.howxu.mmcr.api.machine.PortTierRequirementSpec itemInputTier(String id) { return KubeJSInterfaceHelpers.itemInputTier(id); }
+    public cn.howxu.mmcr.api.machine.PortTierRequirementSpec itemOutputTier(String id) { return KubeJSInterfaceHelpers.itemOutputTier(id); }
+    public cn.howxu.mmcr.api.machine.PortTierRequirementSpec fluidInputTier(String id) { return KubeJSInterfaceHelpers.fluidInputTier(id); }
+    public cn.howxu.mmcr.api.machine.PortTierRequirementSpec fluidOutputTier(String id) { return KubeJSInterfaceHelpers.fluidOutputTier(id); }
+    public cn.howxu.mmcr.api.machine.PortTierRequirementSpec energyInputTier(String id) { return KubeJSInterfaceHelpers.energyInputTier(id); }
+    public cn.howxu.mmcr.api.machine.PortTierRequirementSpec energyOutputTier(String id) { return KubeJSInterfaceHelpers.energyOutputTier(id); }
 
     public MachineBuilderJS durationByInterface(String type, float min, float max, float atMin, float atMax) {
         return durationByInterface(type, min, max, atMin, atMax, RecipeModifier.Operation.MULTIPLY);

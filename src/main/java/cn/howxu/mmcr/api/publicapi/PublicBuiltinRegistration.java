@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.publicapi;
 
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.resources.Identifier;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.Block;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,10 +32,12 @@ public final class PublicBuiltinRegistration {
     }
 
     public static Supplier<? extends Block> block(String name) {
+        if (name != null && name.indexOf(':') >= 0) return block(Identifier.parse(name));
         return () -> ModBlocks.BLOCKS.get(name).get();
     }
 
     public static Supplier<? extends Block> block(Identifier id) {
-        return block(id.getPath());
+        if (MOD_ID.equals(id.getNamespace())) return block(id.getPath());
+        return () -> BuiltInRegistries.BLOCK.getValue(id);
     }
 }

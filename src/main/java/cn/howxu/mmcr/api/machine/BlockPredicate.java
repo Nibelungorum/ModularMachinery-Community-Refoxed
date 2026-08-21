@@ -18,6 +18,8 @@ import java.util.Optional;
  */
 public sealed interface BlockPredicate {
 
+    default List<BlockPredicate> children() { return List.of(); }
+
     static MachineCoupler machineCoupler() {
         return MachineCoupler.INSTANCE;
     }

@@ -51,7 +51,7 @@ public final class InterfacePredicates {
     public static BlockPredicate anyOfPort(Identifier... ids) {
         if (ids == null || ids.length == 0) throw new IllegalArgumentException("At least one port is required");
         String[] paths = new String[ids.length];
-        for (int i = 0; i < ids.length; i++) paths[i] = ids[i].getPath();
+        for (int i = 0; i < ids.length; i++) paths[i] = ids[i].toString();
         return anyOfPort(paths);
     }
 
