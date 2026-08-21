@@ -15,7 +15,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
-import cn.howxu.mmcr.test.TestBootstrap;
+import dev.latvian.mods.rhino.util.HideFromJS;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -281,5 +281,12 @@ class MachineStructureBuilderJSTest {
                 .extension(new BlockArray(Map.of())))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("extension requires a full structure first");
+    }
+
+    @Test
+    void list_pattern_overload_is_hidden_from_rhino_to_avoid_array_ambiguity() throws Exception {
+        var method = MachineStructureBuilderJS.class.getMethod("pattern", List.class);
+
+        assertThat(method.isAnnotationPresent(HideFromJS.class)).isTrue();
     }
 }
