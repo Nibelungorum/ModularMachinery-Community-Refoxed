@@ -249,7 +249,9 @@ class MachineRecipeLayoutTest {
         assertThat(layout.hostRequirementTextY())
                 .isEqualTo(layout.durationTextY()
                         + 10 * (1 + display.energyInputs().size() + display.energyOutputs().size()));
-        assertThat(layout.levelRequirementY(display, 0)).isGreaterThan(layout.hostRequirementTextY());
+        assertThat(layout.levelRequirementY(display, 0)).isEqualTo(layout.hostRequirementTextY() + 10);
+        assertThat(layout.smartInterfaceTextY(display)).isEqualTo(layout.hostRequirementTextY() + 10);
+        assertThat(layout.lastMetadataTextY(display)).isEqualTo(layout.hostRequirementTextY());
     }
 
 }

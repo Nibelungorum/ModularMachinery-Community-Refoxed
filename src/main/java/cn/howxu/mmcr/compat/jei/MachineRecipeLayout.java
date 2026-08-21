@@ -152,6 +152,12 @@ public record MachineRecipeLayout(
         return metadataY + 10 * index;
     }
 
+    public int smartInterfaceTextY(MachineRecipeDisplay display) {
+        return durationTextY + 10 * (1 + display.energyInputs().size() + display.energyOutputs().size()
+                + (display.requiredHostIds().isEmpty() ? 0 : 1)
+                + display.recipe().levelRequirements().size());
+    }
+
     public int lastMetadataTextY(MachineRecipeDisplay display) {
         return durationTextY + 10 * (display.energyInputs().size() + display.energyOutputs().size()
                 + (display.requiredHostIds().isEmpty() ? 0 : 1)

@@ -45,9 +45,9 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private static final int FLUID_SLOT_CAPACITY = 1000;
     private static final int OVERFLOW_TEXT_OFFSET_X = 5;
     private static final float TEXT_SCALE = 0.85F;
-    private static final int TEXT_LINE_SPACING = 8;
+    private static final int TEXT_LINE_SPACING = 10;
     private static final float SMART_INTERFACE_TEXT_SCALE = 0.85F;
-    private static final int SMART_INTERFACE_LINE_SPACING = 8;
+    private static final int SMART_INTERFACE_LINE_SPACING = 10;
     static final int RECIPE_ARROW_X = 72;
     static final int RECIPE_ARROW_Y = 8;
     static final int ITEM_OVERLAY_X = 0;
@@ -153,6 +153,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                     textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
             y += TEXT_LINE_SPACING;
         }
+        y = layout.smartInterfaceTextY(recipe);
         guiGraphics.pose().popMatrix();
         guiGraphics.pose().pushMatrix();
         guiGraphics.pose().scale(SMART_INTERFACE_TEXT_SCALE, SMART_INTERFACE_TEXT_SCALE);
@@ -413,19 +414,18 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private static Optional<Component> smartInterfaceTooltip(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
             double mouseX, double mouseY) {
         if (mouseX < layout.durationTextX()) return Optional.empty();
-        int y = layout.durationTextY() + TEXT_LINE_SPACING * (1 + recipe.energyInputs().size() + recipe.energyOutputs().size()
-                + sortedLevelRequirements(recipe.recipe()).size());
+        int y = layout.smartInterfaceTextY(recipe);
         for (MachineRecipeDisplay.SmartInterfaceDisplay smartInterface : recipe.smartInterfaceInputs()) {
             if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING) return Optional.of(smartInterface.tooltip());
-            y += TEXT_LINE_SPACING;
+            y += SMART_INTERFACE_LINE_SPACING;
         }
         for (MachineRecipeDisplay.SmartInterfaceDisplay smartInterface : recipe.smartInterfaceOutputs()) {
             if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING) return Optional.of(smartInterface.tooltip());
-            y += TEXT_LINE_SPACING;
+            y += SMART_INTERFACE_LINE_SPACING;
         }
         for (MachineRecipeDisplay.SmartInterfaceModifierDisplay modifier : recipe.smartInterfaceModifiers()) {
             if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING) return Optional.of(modifier.tooltip());
-            y += TEXT_LINE_SPACING;
+            y += SMART_INTERFACE_LINE_SPACING;
         }
         return Optional.empty();
     }
