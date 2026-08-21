@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.api;
 
 import cn.howxu.mmcr.api.publicapi.machine.LevelRequirement;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.publicapi.recipe.FluidInput;
@@ -43,7 +44,7 @@ public final class PublicRecipeAdapter {
     public static MachineRecipe toRecipe(MachineRecipeDefinition definition,
             MMCRMachineStructuresEvent.Snapshot snapshot) {
         Map<Identifier, ModifierDefinition> modifiers = snapshot.modifiers();
-        Map<Identifier, cn.howxu.mmcr.api.machine.level.MachineLevel> levels = snapshot.levels();
+        Map<Identifier, MachineLevel> levels = snapshot.levels();
         List<MachineIngredient> inputs = new ArrayList<>();
         for (ItemInput input : definition.itemInputs()) {
             inputs.add(new MachineIngredient.ItemIngredient(input.ingredient(), input.count(),

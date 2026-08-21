@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.client.preview;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderState;
 import cn.howxu.mmcr.client.preview.scene.PreviewScenePictureInPictureRenderer;
 import cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderer;
@@ -124,7 +125,7 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
                     lifecycle.enqueueCallback(token, () -> readDepthOnOwner(sample)), 0, sample.texel().x(), sample.texel().y(), 1, 1);
         } catch (RuntimeException exception) {
             lifecycle.failReadback(token, issuedBuffer, depthReadbackBuffer);
-            cn.howxu.mmcr.MMCR.LOG.warn("Couldn't request structure preview depth readback", exception);
+            MMCR.LOG.warn("Couldn't request structure preview depth readback", exception);
         }
     }
 

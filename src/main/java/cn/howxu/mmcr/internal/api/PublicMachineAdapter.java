@@ -1,16 +1,19 @@
 package cn.howxu.mmcr.internal.api;
 
+import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineRole;
+import cn.howxu.mmcr.api.machine.MachineStructureFamily;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
+import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.publicapi.machine.AppearanceSpec;
 import cn.howxu.mmcr.api.publicapi.machine.ControllerSpec;
 import cn.howxu.mmcr.api.publicapi.machine.FactorySpec;
@@ -23,6 +26,8 @@ import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.StructureStage;
 import cn.howxu.mmcr.api.publicapi.machine.LevelModifier;
 import cn.howxu.mmcr.api.publicapi.machine.LevelType;
+import cn.howxu.mmcr.api.publicapi.machine.MachineLevel;
+import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import net.minecraft.core.BlockPos;
@@ -45,8 +50,7 @@ public final class PublicMachineAdapter {
         return new cn.howxu.mmcr.api.machine.level.LevelType(type.id(), type.displayName());
     }
 
-    public static cn.howxu.mmcr.api.machine.level.MachineLevel toMachineLevel(
-            cn.howxu.mmcr.api.publicapi.machine.MachineLevel level) {
+    public static cn.howxu.mmcr.api.machine.level.MachineLevel toMachineLevel(MachineLevel level) {
         return new cn.howxu.mmcr.api.machine.level.MachineLevel(level.id(), level.typeId(), level.priority(),
                 toBlockPredicate(level.statePredicate()), level.representative().stack(), toLevelModifier(level.modifier()));
     }
@@ -57,7 +61,7 @@ public final class PublicMachineAdapter {
                 modifier.factoryThreadBonus());
     }
 
-    public static cn.howxu.mmcr.api.machine.BlockArray toBlockArray(PatternDefinition pattern) {
+    public static BlockArray toBlockArray(PatternDefinition pattern) {
         LinkedHashMap<BlockPos, cn.howxu.mmcr.api.machine.BlockPredicate> entries = new LinkedHashMap<>();
         LinkedHashMap<BlockPos, Character> symbolsByPosition = new LinkedHashMap<>();
         BlockPos controller = null;
@@ -93,7 +97,7 @@ public final class PublicMachineAdapter {
             entries = normalized;
             symbolsByPosition = normalizedSymbols;
         }
-        return new cn.howxu.mmcr.api.machine.BlockArray(entries, java.util.Map.of(), symbolsByPosition);
+        return new BlockArray(entries, java.util.Map.of(), symbolsByPosition);
     }
 
     public static DynamicMachine toDynamicMachine(MachineDefinition definition, cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure) {
@@ -179,8 +183,7 @@ public final class PublicMachineAdapter {
                 List.of(), toStructureRequirements(stage.requirements(), modifiers));
     }
 
-    private static cn.howxu.mmcr.api.machine.BlockPredicate toBlockPredicate(
-            cn.howxu.mmcr.api.publicapi.machine.BlockPredicate predicate) {
+    private static cn.howxu.mmcr.api.machine.BlockPredicate toBlockPredicate(BlockPredicate predicate) {
         if (predicate.isMachineCoupler()) return cn.howxu.mmcr.api.machine.BlockPredicate.machineCoupler();
         if (predicate.blockState().isPresent()) {
             return new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState(predicate.blockState().get());
@@ -268,7 +271,7 @@ public final class PublicMachineAdapter {
     }
 
     private static List<MachineStructureStage> toStructureStages(cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure) {
-        return cn.howxu.mmcr.api.machine.MachineStructureFamily.of(toStructureDefinition(structure)).stages();
+        return MachineStructureFamily.of(toStructureDefinition(structure)).stages();
     }
 
     private static MachineStructureDefinition.Declaration.Kind toDeclarationKind(StructureStage.Kind kind) {
@@ -283,7 +286,7 @@ public final class PublicMachineAdapter {
                 || !definition.factory().threads().isEmpty()) {
             throw new IllegalArgumentException("MachineRegistration cannot represent factory settings");
         }
-        if (definition.failureAction() != cn.howxu.mmcr.api.machine.RecipeFailureActions.getDefaultAction()) {
+        if (definition.failureAction() != RecipeFailureActions.getDefaultAction()) {
             throw new IllegalArgumentException("MachineRegistration cannot represent failure action");
         }
     }

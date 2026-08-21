@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeJson;
 import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
+import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -86,7 +87,7 @@ public final class MachineRecipeDataReloadListener extends SimplePreparableReloa
     }
 
     void applySnapshotFromServerReloadHook(Map<Identifier, MachineRecipe> recipes,
-                                           Consumer<cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot> sync) {
+                                           Consumer<RuntimeContentSnapshot> sync) {
         var committed = RuntimeContentCoordinator.replaceDataPackRecipesAndSnapshot(recipes);
         snapshot = Map.copyOf(recipes);
         sync.accept(committed);

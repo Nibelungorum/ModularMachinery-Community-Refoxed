@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.reload;
 
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
 import net.minecraft.resources.Identifier;
@@ -46,7 +47,7 @@ public final class DynamicContentReloadService {
 
         public void registerStructure(MachineStructureDefinition structure) {
             Identifier id = structure.machineId();
-            if (!cn.howxu.mmcr.api.machine.MachineDefinitions.containsStatic(id)) {
+            if (!MachineDefinitions.containsStatic(id)) {
                 throw new IllegalStateException("No startup machine registration for structure: " + id);
             }
             if (structures.containsKey(id)) {

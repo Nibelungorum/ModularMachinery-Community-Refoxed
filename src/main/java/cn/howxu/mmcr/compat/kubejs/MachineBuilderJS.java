@@ -5,6 +5,9 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
+import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
@@ -372,26 +375,26 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return this;
     }
 
-    public cn.howxu.mmcr.api.machine.BlockPredicate anyOfItemInput() { return KubeJSInterfaceHelpers.anyOfItemInput(); }
-    public cn.howxu.mmcr.api.machine.BlockPredicate anyOfItemOutput() { return KubeJSInterfaceHelpers.anyOfItemOutput(); }
-    public cn.howxu.mmcr.api.machine.BlockPredicate anyOfFluidInput() { return KubeJSInterfaceHelpers.anyOfFluidInput(); }
-    public cn.howxu.mmcr.api.machine.BlockPredicate anyOfFluidOutput() { return KubeJSInterfaceHelpers.anyOfFluidOutput(); }
-    public cn.howxu.mmcr.api.machine.BlockPredicate anyOfEnergyInput() { return KubeJSInterfaceHelpers.anyOfEnergyInput(); }
-    public cn.howxu.mmcr.api.machine.BlockPredicate anyOfEnergyOutput() { return KubeJSInterfaceHelpers.anyOfEnergyOutput(); }
-    public cn.howxu.mmcr.api.machine.BlockPredicate parallelControllers() { return KubeJSInterfaceHelpers.parallelControllers(); }
-    public cn.howxu.mmcr.api.machine.BlockPredicate smartInterfaceBlock() { return KubeJSInterfaceHelpers.smartInterface(); }
-    public cn.howxu.mmcr.api.machine.BlockPredicate anyOfPort(String... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
-    public cn.howxu.mmcr.api.machine.BlockPredicate anyOfPort(Identifier... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
+    public BlockPredicate anyOfItemInput() { return KubeJSInterfaceHelpers.anyOfItemInput(); }
+    public BlockPredicate anyOfItemOutput() { return KubeJSInterfaceHelpers.anyOfItemOutput(); }
+    public BlockPredicate anyOfFluidInput() { return KubeJSInterfaceHelpers.anyOfFluidInput(); }
+    public BlockPredicate anyOfFluidOutput() { return KubeJSInterfaceHelpers.anyOfFluidOutput(); }
+    public BlockPredicate anyOfEnergyInput() { return KubeJSInterfaceHelpers.anyOfEnergyInput(); }
+    public BlockPredicate anyOfEnergyOutput() { return KubeJSInterfaceHelpers.anyOfEnergyOutput(); }
+    public BlockPredicate parallelControllers() { return KubeJSInterfaceHelpers.parallelControllers(); }
+    public BlockPredicate smartInterfaceBlock() { return KubeJSInterfaceHelpers.smartInterface(); }
+    public BlockPredicate anyOfPort(String... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
+    public BlockPredicate anyOfPort(Identifier... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
     public cn.howxu.mmcr.api.machine.BlockPredicate anyOfPort(cn.howxu.mmcr.api.publicapi.machine.BlockPredicate... predicates) {
         return KubeJSInterfaceHelpers.anyOfPort(predicates);
     }
-    public cn.howxu.mmcr.api.machine.BlockPredicate smartInterface() { return KubeJSInterfaceHelpers.smartInterface(); }
-    public cn.howxu.mmcr.api.machine.PortTierRequirementSpec itemInputTier(String id) { return KubeJSInterfaceHelpers.itemInputTier(id); }
-    public cn.howxu.mmcr.api.machine.PortTierRequirementSpec itemOutputTier(String id) { return KubeJSInterfaceHelpers.itemOutputTier(id); }
-    public cn.howxu.mmcr.api.machine.PortTierRequirementSpec fluidInputTier(String id) { return KubeJSInterfaceHelpers.fluidInputTier(id); }
-    public cn.howxu.mmcr.api.machine.PortTierRequirementSpec fluidOutputTier(String id) { return KubeJSInterfaceHelpers.fluidOutputTier(id); }
-    public cn.howxu.mmcr.api.machine.PortTierRequirementSpec energyInputTier(String id) { return KubeJSInterfaceHelpers.energyInputTier(id); }
-    public cn.howxu.mmcr.api.machine.PortTierRequirementSpec energyOutputTier(String id) { return KubeJSInterfaceHelpers.energyOutputTier(id); }
+    public BlockPredicate smartInterface() { return KubeJSInterfaceHelpers.smartInterface(); }
+    public PortTierRequirementSpec itemInputTier(String id) { return KubeJSInterfaceHelpers.itemInputTier(id); }
+    public PortTierRequirementSpec itemOutputTier(String id) { return KubeJSInterfaceHelpers.itemOutputTier(id); }
+    public PortTierRequirementSpec fluidInputTier(String id) { return KubeJSInterfaceHelpers.fluidInputTier(id); }
+    public PortTierRequirementSpec fluidOutputTier(String id) { return KubeJSInterfaceHelpers.fluidOutputTier(id); }
+    public PortTierRequirementSpec energyInputTier(String id) { return KubeJSInterfaceHelpers.energyInputTier(id); }
+    public PortTierRequirementSpec energyOutputTier(String id) { return KubeJSInterfaceHelpers.energyOutputTier(id); }
 
     public MachineBuilderJS durationByInterface(String type, float min, float max, float atMin, float atMax) {
         return durationByInterface(type, min, max, atMin, atMax, RecipeModifier.Operation.MULTIPLY);
@@ -505,7 +508,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .role(cn.howxu.mmcr.api.publicapi.machine.MachineRole.valueOf(registration.role().name()))
                 .maxParallelism(registration.maxParallelAmount())
                 .parallelizable(registration.allowParallelism())
-                .failureAction(cn.howxu.mmcr.api.machine.RecipeFailureActions.getDefaultAction());
+                .failureAction(RecipeFailureActions.getDefaultAction());
         registration.acceptedModuleIds().forEach(builder::acceptedModule);
         if (registration.role() == MachineRole.MODULE) {
             builder.role(cn.howxu.mmcr.api.publicapi.machine.MachineRole.MODULE);

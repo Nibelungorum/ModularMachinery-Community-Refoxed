@@ -6,6 +6,7 @@
  */
 package cn.howxu.mmcr.client.preview.scene;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.client.preview.PreviewCamera;
 import cn.howxu.mmcr.client.preview.PreviewLevel;
 import cn.howxu.mmcr.client.preview.PreviewVisibility;
@@ -195,7 +196,7 @@ public final class PreviewSceneRenderer {
                         blockEntities.submit(renderState, context.poseStack(), context.submitStorage(), cameraState);
                     }
                 } catch (RuntimeException exception) {
-                    cn.howxu.mmcr.MMCR.LOG.error("Cannot render preview block entity {} at {} with state {}",
+                    MMCR.LOG.error("Cannot render preview block entity {} at {} with state {}",
                             schema.machineId(), position, blockEntity.getBlockState(), exception);
                 }
             }

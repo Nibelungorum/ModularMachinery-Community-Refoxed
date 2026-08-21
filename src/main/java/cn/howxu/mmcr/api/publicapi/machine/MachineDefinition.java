@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
+import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
@@ -36,7 +37,7 @@ public record MachineDefinition(
         List<SmartInterfaceModifier> smartInterfaceModifiers,
         Identifier runningSoundId,
         Identifier finishSoundId,
-        cn.howxu.mmcr.api.machine.BlockArray pattern) {
+        BlockArray pattern) {
 
     public MachineDefinition(Identifier id, String displayNameKey, ControllerSpec controller,
             AppearanceSpec appearance, FactorySpec factory, MachineRole role,
@@ -44,7 +45,7 @@ public record MachineDefinition(
             RecipeFailureActions failureAction) {
         this(id, displayNameKey, controller, appearance, factory, role, acceptedModuleIds,
                 maxParallelism, parallelizable, failureAction, false, false, 1, false,
-                java.util.Map.of(), false, List.of(), null, null, new cn.howxu.mmcr.api.machine.BlockArray(java.util.Map.of()));
+                java.util.Map.of(), false, List.of(), null, null, new BlockArray(java.util.Map.of()));
     }
 
     public MachineDefinition {

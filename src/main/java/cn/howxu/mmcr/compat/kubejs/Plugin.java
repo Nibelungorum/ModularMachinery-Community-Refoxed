@@ -6,6 +6,7 @@ import cn.howxu.mmcr.internal.network.RuntimeContentServerBridge;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
+import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import dev.latvian.mods.kubejs.event.EventGroupWrapper;
 import dev.latvian.mods.kubejs.recipe.component.RecipeComponentTypeRegistry;
@@ -26,7 +27,7 @@ import java.util.function.Consumer;
 public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     private static boolean startupScriptsLoaded;
     private static final Map<Object, ServerReload> SERVER_RELOADS = new IdentityHashMap<>();
-    private static Consumer<cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot> currentServerSync =
+    private static Consumer<RuntimeContentSnapshot> currentServerSync =
             RuntimeContentServerBridge::sendToCurrentServer;
 
     @Override
@@ -110,7 +111,7 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     }
 
     private static void completeServerReload(Object manager, int errorCount,
-                                              Consumer<cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot> afterCommit) {
+                                              Consumer<RuntimeContentSnapshot> afterCommit) {
         ServerReload reload = SERVER_RELOADS.remove(manager);
         try {
             if (reload != null && errorCount == reload.errorCount()) {

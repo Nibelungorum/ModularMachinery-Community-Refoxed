@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.block;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
@@ -49,7 +50,7 @@ public class MachineControllerBlock extends Block implements EntityBlock {
     private final Identifier machineId;
 
     public MachineControllerBlock(Properties props) {
-        this(cn.howxu.mmcr.MMCR.id("unknown"), props);
+        this(MMCR.id("unknown"), props);
     }
 
     public MachineControllerBlock(Identifier machineId, Properties props) {

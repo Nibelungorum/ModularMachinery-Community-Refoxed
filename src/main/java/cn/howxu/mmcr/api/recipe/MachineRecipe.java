@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.recipe;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
@@ -32,7 +33,7 @@ import java.util.LinkedHashSet;
 public final class MachineRecipe implements Recipe<RecipeInput> {
 
     public static final MapCodec<MachineRecipe> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
-            Identifier.CODEC.optionalFieldOf("id", cn.howxu.mmcr.MMCR.id("generated_recipe")).forGetter(MachineRecipe::id),
+            Identifier.CODEC.optionalFieldOf("id", MMCR.id("generated_recipe")).forGetter(MachineRecipe::id),
             Identifier.CODEC.fieldOf("machine").forGetter(MachineRecipe::machineId),
             Codec.INT.fieldOf("tick_time").forGetter(MachineRecipe::tickTime),
             MachineIngredient.CODEC.listOf().optionalFieldOf("inputs", Collections.emptyList()).forGetter(recipe -> Collections.emptyList()),
