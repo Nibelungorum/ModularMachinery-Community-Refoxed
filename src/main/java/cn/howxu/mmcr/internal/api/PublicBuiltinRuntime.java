@@ -1,7 +1,10 @@
 package cn.howxu.mmcr.internal.api;
 
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
-import org.nibelungorum.builtin.PublicBuiltinDefinitions;
+import cn.howxu.mmcr.internal.registration.OptionalSourceRegistration;
+import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
+
+import java.util.Map;
 
 /** Installs public built-in declarations into the internal runtime models.
  *
@@ -12,8 +15,11 @@ public final class PublicBuiltinRuntime {
     }
 
     public static void registerStructures(DynamicContentReloadService.Candidate candidate) {
-        PublicBuiltinDefinitions.structureDefinitions().values().stream()
-                .map(PublicMachineAdapter::toStructureDefinition)
+        Map<?, ?> structures = OptionalSourceRegistration.invokeDevelopmentSource(
+                "org.nibelungorum.builtin.PublicBuiltinDefinitions", "structureDefinitions", new Class<?>[]{});
+        if (structures == null) return;
+        structures.values().stream()
+                .map(structure -> PublicMachineAdapter.toStructureDefinition((MachineStructureDefinition) structure))
                 .forEach(candidate::registerStructure);
     }
 

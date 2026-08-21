@@ -42,17 +42,23 @@ public final class StartupContentRegistration {
     private static void registerProduction(boolean begin, boolean commit) {
         registerStartupContent(
                 definitions -> {
-                    org.nibelungorum.builtin.PublicBuiltinMachineDefinitions.registerDefinitions(definitions);
+                    OptionalSourceRegistration.invokeDevelopmentSource(
+                            "org.nibelungorum.builtin.PublicBuiltinMachineDefinitions", "registerDefinitions",
+                            new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions);
                     registerGameTestBuiltins("registerMachineDefinitions",
                             new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions);
                 },
                 structures -> {
-                    org.nibelungorum.builtin.PublicBuiltinMachineDefinitions.registerStructures(structures);
+                    OptionalSourceRegistration.invokeDevelopmentSource(
+                            "org.nibelungorum.builtin.PublicBuiltinMachineDefinitions", "registerStructures",
+                            new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
                     registerGameTestBuiltins("registerMachineStructures",
                             new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
                 },
                 recipes -> {
-                    org.nibelungorum.builtin.PublicBuiltinRecipeDefinitions.register(recipes);
+                    OptionalSourceRegistration.invokeDevelopmentSource(
+                            "org.nibelungorum.builtin.PublicBuiltinRecipeDefinitions", "register",
+                            new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
                     registerGameTestBuiltins("registerRecipes",
                             new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
                 }, begin, commit);

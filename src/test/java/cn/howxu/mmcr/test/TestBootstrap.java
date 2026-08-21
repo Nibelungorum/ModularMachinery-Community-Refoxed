@@ -142,6 +142,14 @@ public final class TestBootstrap {
         DynamicContentReloadService.reload(candidate -> {
             PublicBuiltinRuntime.registerStructures(candidate);
         });
+        ModBlocks.registerMachineControllers(MachineRegistry.effectiveSnapshot().keySet());
+        try {
+            for (Identifier machineId : MachineRegistry.effectiveSnapshot().keySet()) {
+                if (!ModBlocks.hasControllerFor(machineId)) bindController(machineId);
+            }
+        } catch (Exception e) {
+            throw new AssertionError("Unable to bind runtime machine controllers", e);
+        }
         MachineRegistry.rebuildCompiledCache();
     }
 

@@ -20,7 +20,9 @@ public final class PublicBuiltinRecipeDefinitions {
 
     @SubscribeEvent
     public static void register(MMCRMachineRecipesEvent event) {
-        recipeDefinitions().forEach((id, recipe) -> {
+        java.util.Map<net.minecraft.resources.Identifier, MachineRecipeDefinition> recipes = recipeDefinitions();
+        MMCR.LOG.debug("Registering {} built-in recipes", recipes.size());
+        recipes.forEach((id, recipe) -> {
             if (!event.recipes().containsKey(id)) event.registerRecipe(recipe);
         });
     }

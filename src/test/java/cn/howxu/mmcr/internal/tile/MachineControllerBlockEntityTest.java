@@ -3600,7 +3600,9 @@ class MachineControllerBlockEntityTest {
             IOPortBlockEntity third) throws Exception {
         MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
         initializeComponents(controller);
-        var controllerBlock = testControllerBlock(machine);
+        var controllerBlock = ModBlocks.hasControllerFor(machine.registryName())
+                ? (MachineControllerBlock) ModBlocks.controllerFor(machine.registryName()).get()
+                : testControllerBlock(machine);
         var controllerState = controllerBlock.defaultBlockState()
                 .setValue(MachineControllerBlock.FORMED, false)
                 .setValue(MachineControllerBlock.FACING, Direction.SOUTH)
@@ -3616,6 +3618,7 @@ class MachineControllerBlockEntityTest {
                 default -> ModBlocks.CASING.get();
             });
         }
+        blocks.put(controllerPos, controllerBlock);
         blocks.put(first.getBlockPos(), blockForPort(first));
         blocks.put(second.getBlockPos(), blockForPort(second));
         blocks.put(third.getBlockPos(), blockForPort(third));

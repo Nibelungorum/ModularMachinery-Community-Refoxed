@@ -76,4 +76,13 @@ class GameTestRegistrationTest {
                         new MappedRegistry<>(ResourceKey.createRegistryKey(Identifier.parse("mmcr:test_instances")), Lifecycle.stable()))))
                 .doesNotThrowAnyException();
     }
+
+    @Test
+    void invokes_present_development_source() {
+        OptionalSourceRegistration.invokeDevelopmentSource(
+                "cn.howxu.mmcr.OptionalGameTestSource", "registerMachineDefinitions",
+                new Class<?>[]{MMCRMachineDefinationsEvent.class}, new MMCRMachineDefinationsEvent());
+
+        assertThat(OptionalGameTestSource.invoked()).isTrue();
+    }
 }
