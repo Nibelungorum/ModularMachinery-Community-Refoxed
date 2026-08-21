@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.storage.ValueInput;
@@ -104,6 +105,10 @@ public final class FactoryRecipeThread extends RecipeThread {
 
     @Override protected void onStarted() {
         idleTicks = 0;
+        MMCR.LOG.info("[MMCR/Temp][Factory] lane={}, recipe={}, parallelism={}, maxParallelism={}",
+                laneId, activeRecipe == null || activeRecipe.getRecipe() == null ? "<null>" : activeRecipe.getRecipe().id(),
+                activeRecipe == null ? 0 : activeRecipe.getParallelism(),
+                activeRecipe == null ? 0 : activeRecipe.getMaxParallelism());
         if (activeRecipe != null && controller != null) {
             rememberLastRecipe(activeRecipe.getRecipe(), controller.getStructureVersion(), controller.getModifierSnapshotVersion());
         }
