@@ -77,6 +77,19 @@ class RecipeRegistryTest {
     }
 
     @Test
+    void dataPackKeyIsAuthoritativeWhenRecipeValueCarriesGeneratedId() {
+        Identifier holderId = Identifier.parse("mmcr:explicit_datapack_recipe");
+        MachineRecipe generated = recipe("mmcr:generated_recipe", "mmcr:datapack_machine");
+
+        RecipeRegistry.replaceDataPack(Map.of(holderId, generated));
+
+        assertThat(RecipeRegistry.getRecipe(holderId).id()).isEqualTo(holderId);
+        assertThat(RecipeRegistry.getRecipe(Identifier.parse("mmcr:generated_recipe"))).isNull();
+        assertThat(RecipeRegistry.byMachineId(generated.machineId())).extracting(MachineRecipe::id)
+                .containsExactly(holderId);
+    }
+
+    @Test
     void replacingDataPackSnapshotRemovesDeletedRecipes() {
         var oldId = Identifier.parse("mmcr:old_datapack_recipe");
         var newId = Identifier.parse("mmcr:new_datapack_recipe");

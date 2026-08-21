@@ -25,16 +25,13 @@ public final class KubeJSRecipeSync {
         for (RecipeHolder<?> holder : holders) {
             if (holder.value() instanceof MachineRecipe machineRecipe) {
                 Identifier id = holder.id().identifier();
-                boolean ownedById = KubeJSContentReloadTransaction.ownsRecipe(id);
-                boolean ownedByValue = KubeJSContentReloadTransaction.ownsRecipe(machineRecipe);
-                MMCR.LOG.info("[MMCR/Temp][KubeJS] holderId={}, valueId={}, machineId={}, ownedById={}, ownedByValue={}",
-                        id, machineRecipe.id(), machineRecipe.machineId(), ownedById, ownedByValue);
-                if (!ownedById && !ownedByValue) {
+                if (!KubeJSContentReloadTransaction.ownsRecipe(id)
+                        && !KubeJSContentReloadTransaction.ownsRecipe(machineRecipe)) {
                     recipes.put(id, machineRecipe.withId(id));
                 }
             }
         }
-        MMCR.LOG.info("[MMCR/Temp][KubeJS] publishing data-pack recipe ids={}", recipes.keySet());
+        MMCR.LOG.debug("[MMCR-DIAG] KubeJS RecipeManager sync found {} MMCR data-pack recipes", recipes.size());
         RuntimeContentSnapshot snapshot = RuntimeContentCoordinator.replaceDataPackRecipesAndSnapshot(recipes);
         JeiRuntimeReloadBridge.reloadIfAvailable(snapshot);
     }

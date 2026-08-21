@@ -145,18 +145,8 @@ public final class RuntimeContentCoordinator {
             if (!structures.containsKey(recipe.machineId())
                     && !MachineStructureRegistry.startupSnapshot().containsKey(recipe.machineId())
                     && !MachineRegistry.containsStatic(recipe.machineId())) {
-                MMCR.LOG.info("[MMCR/Temp][Reload] reject recipeId={}, machineId={}, candidateStructure={}, startupStructure={}, staticMachine={}, registration={}",
-                        recipeId, recipe.machineId(), structures.containsKey(recipe.machineId()),
-                        MachineStructureRegistry.startupSnapshot().containsKey(recipe.machineId()),
-                        MachineRegistry.containsStatic(recipe.machineId()),
-                        MachineDefinitions.getRegistration(recipe.machineId()) != null);
                 throw new IllegalStateException("Machine not found for dynamic recipe: " + recipe.machineId());
             }
-            MMCR.LOG.info("[MMCR/Temp][Reload] accept recipeId={}, machineId={}, candidateStructure={}, startupStructure={}, staticMachine={}, registration={}",
-                    recipeId, recipe.machineId(), structures.containsKey(recipe.machineId()),
-                    MachineStructureRegistry.startupSnapshot().containsKey(recipe.machineId()),
-                    MachineRegistry.containsStatic(recipe.machineId()),
-                    MachineDefinitions.getRegistration(recipe.machineId()) != null);
         }
     }
 

@@ -169,12 +169,14 @@ public final class RecipeRegistry {
         Map<Identifier, MachineRecipe> replacement = new LinkedHashMap<>();
         List<String> warnings = new ArrayList<>();
         for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
+            MachineRecipe recipe = entry.getKey().equals(entry.getValue().id())
+                    ? entry.getValue() : entry.getValue().withId(entry.getKey());
             if (STATE.staticRecipes().containsKey(entry.getKey())) {
                 String warning = "data-pack layer recipe " + entry.getKey() + " overrides static layer recipe " + entry.getKey();
                 warnings.add(warning);
                 MMCR.LOG.warn(warning);
             }
-            replacement.put(entry.getKey(), entry.getValue());
+            replacement.put(entry.getKey(), recipe);
         }
         publish(STATE.staticRecipes(), replacement, STATE.dynamic(), warnings);
         reloadVersion++;

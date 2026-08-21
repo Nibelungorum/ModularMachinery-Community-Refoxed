@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.internal.multiblock;
 
-import cn.howxu.mmcr.MMCR;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
@@ -76,10 +75,6 @@ public final class SharedIoCoordinator {
                 .filter(Request::isStillValid)
                 .sorted(Comparator.comparing(Request::laneKey))
                 .toList();
-        if (!current.isEmpty()) {
-            MMCR.LOG.info("[MMCR/Temp][SharedIO] domain={}, requests={}", domain.id(),
-                    current.stream().map(request -> request.getClass().getSimpleName() + ":" + request.laneKey()).toList());
-        }
         Set<Request> successful = Collections.newSetFromMap(new IdentityHashMap<>());
         resolveRoundRobin(current.stream().filter(StartRequest.class::isInstance).map(StartRequest.class::cast).toList(), startCursors, domain.id(), successful);
         resolveRoundRobin(current.stream().filter(TickRequest.class::isInstance).map(TickRequest.class::cast).toList(), tickCursors, domain.id(), successful);
@@ -141,15 +136,10 @@ public final class SharedIoCoordinator {
         for (int offset = 0; offset < requests.size(); offset++) {
             T request = requests.get((start + offset) % requests.size());
             if (!request.isStillValid()) {
-                MMCR.LOG.info("[MMCR/Temp][SharedIO] skip invalid type={}, lane={}",
-                        request.getClass().getSimpleName(), request.laneKey());
                 successful.add(request);
                 continue;
             }
-            boolean committed = request.tryCommit();
-            MMCR.LOG.info("[MMCR/Temp][SharedIO] commit type={}, lane={}, committed={}, cursorBefore={}",
-                    request.getClass().getSimpleName(), request.laneKey(), committed, cursors.get(domainId));
-            if (committed) {
+            if (request.tryCommit()) {
                 cursors.put(domainId, request.laneKey());
                 successful.add(request);
             }
