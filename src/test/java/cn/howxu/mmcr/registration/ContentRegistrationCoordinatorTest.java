@@ -14,6 +14,7 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
+import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
@@ -261,6 +262,14 @@ class ContentRegistrationCoordinatorTest {
 
         assertThat(ContentRegistrationCoordinator.isCommitted()).isTrue();
         assertThat(MMCR.startupPhaseForTesting()).isEqualTo("COMMITTED");
+    }
+
+    @Test
+    void startup_registration_facade_preserves_testing_lifecycle() {
+        StartupContentRegistration.registerForTesting(event -> { }, event -> { }, event -> { });
+
+        assertThat(ContentRegistrationCoordinator.isCommitted()).isTrue();
+        assertThat(StartupContentRegistration.startupPhaseForTesting()).isEqualTo("COMMITTED");
     }
 
     @Test

@@ -33,21 +33,15 @@ import cn.howxu.mmcr.registry.ModRecipeTypes;
 
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
-import cn.howxu.mmcr.internal.api.PublicMachineDefinitionProviders;
-import cn.howxu.mmcr.internal.api.PublicBuiltinRuntime;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
+import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.core.Holder;
-import net.minecraft.core.component.DataComponentMap;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.CreativeModeTab;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.level.material.Fluids;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
@@ -60,7 +54,6 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
-import net.neoforged.fml.ModList;
 
 import java.util.function.Consumer;
 
@@ -76,29 +69,11 @@ public class MMCR {
     public static final DeferredRegister<CreativeModeTab> CREATIVE_TABS =
             DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
 
-    private static StartupPhase startupPhase = StartupPhase.NOT_STARTED;
-
     public MMCR(IEventBus modBus, ModContainer modContainer) {
         PublicApiBootstrap.begin();
         MachineDefinitions.beginRegistryPhase();
         MachineDefinitions.bootstrapBuiltins();
-        registerStartupContent(
-                definitions -> {
-                    org.nibelungorum.builtin.PublicBuiltinMachineDefinitions.registerDefinitions(definitions);
-                    registerGameTestBuiltins("registerMachineDefinitions",
-                            new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions);
-                },
-                structures -> {
-                    org.nibelungorum.builtin.PublicBuiltinMachineDefinitions.registerStructures(structures);
-                    registerGameTestBuiltins("registerMachineStructures",
-                            new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
-                },
-                recipes -> {
-                    org.nibelungorum.builtin.PublicBuiltinRecipeDefinitions.register(recipes);
-                    registerGameTestBuiltins("registerRecipes",
-                            new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
-                }, false, !ModList.get().isLoaded("kubejs")
-                        || cn.howxu.mmcr.compat.kubejs.Plugin.startupScriptsLoaded());
+        StartupContentRegistration.registerProductionForModStartup();
         registerDeferredRegisters(modBus);
         CREATIVE_TABS.register(modBus);
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
@@ -210,96 +185,36 @@ public class MMCR {
     }
 
     private static void registerPublicApiLifecycle() {
-        registerStartupContent(
-                definitions -> {
-                    registerGameTestBuiltins("registerMachineDefinitions",
-                            new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions);
-                },
-                structures -> {
-                    registerGameTestBuiltins("registerMachineStructures",
-                            new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
-                },
-                recipes -> {
-                    registerGameTestBuiltins("registerRecipes",
-                            new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
-                });
+        StartupContentRegistration.registerForTesting(
+                definitions -> StartupContentRegistration.invokeOptionalSourceForTesting("cn.howxu.mmcr.GameTestRegistry",
+                        "registerMachineDefinitions", new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions),
+                structures -> StartupContentRegistration.invokeOptionalSourceForTesting("cn.howxu.mmcr.GameTestRegistry",
+                        "registerMachineStructures", new Class<?>[]{MMCRMachineStructuresEvent.class}, structures),
+                recipes -> StartupContentRegistration.invokeOptionalSourceForTesting("cn.howxu.mmcr.GameTestRegistry",
+                        "registerRecipes", new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes));
     }
 
     public static void registerProductionApiLifecycleForTesting() {
-        registerPublicApiLifecycle();
+        StartupContentRegistration.registerProduction();
     }
 
     public static void completeKubeJSStartup() {
-        if (ContentRegistrationCoordinator.isCommitted()) return;
-        ContentRegistrationCoordinator.commitStartup();
-        registerDynamicControllers(MachineDefinitions.effectiveSnapshot().keySet());
-        startupPhase = StartupPhase.COMMITTED;
+        StartupContentRegistration.completeKubeJSStartup();
     }
 
     public static void completeKubeJSStartupIfReady() {
-        if (ContentRegistrationCoordinator.isCommitted()) return;
-        if (startupPhase == StartupPhase.COLLECTING) completeKubeJSStartup();
+        StartupContentRegistration.completeKubeJSStartupIfReady();
     }
 
     public static void registerPublicApiLifecycleForTesting() {
-        registerStartupContent(event -> { }, event -> { }, event -> { });
+        StartupContentRegistration.registerForTesting();
     }
 
     public static void registerPublicApiLifecycleForTesting(
             Consumer<MMCRMachineDefinationsEvent> definitionsSource,
             Consumer<MMCRMachineStructuresEvent> structuresSource,
             Consumer<MMCRMachineRecipesEvent> recipesSource) {
-        registerStartupContent(definitionsSource, structuresSource, recipesSource);
-    }
-
-    private static void registerStartupContent(
-            Consumer<MMCRMachineDefinationsEvent> definitionsSource,
-            Consumer<MMCRMachineStructuresEvent> structuresSource,
-            Consumer<MMCRMachineRecipesEvent> recipesSource) {
-        registerStartupContent(definitionsSource, structuresSource, recipesSource, true, true);
-    }
-
-    private static void registerStartupContent(
-            Consumer<MMCRMachineDefinationsEvent> definitionsSource,
-            Consumer<MMCRMachineStructuresEvent> structuresSource,
-            Consumer<MMCRMachineRecipesEvent> recipesSource,
-            boolean commit) {
-        registerStartupContent(definitionsSource, structuresSource, recipesSource, true, commit);
-    }
-
-    private static void registerStartupContent(
-            Consumer<MMCRMachineDefinationsEvent> definitionsSource,
-            Consumer<MMCRMachineStructuresEvent> structuresSource,
-            Consumer<MMCRMachineRecipesEvent> recipesSource,
-            boolean begin,
-            boolean commit) {
-        startupPhase = StartupPhase.COLLECTING;
-        PublicApiBootstrap.begin();
-        if (begin) ContentRegistrationCoordinator.beginStartup();
-        MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
-        PublicMachineDefinitionProviders.registerAll(definitions);
-        definitionsSource.accept(definitions);
-        // Dynamic controller holders must be declared before any startup content is committed.
-        registerDynamicControllers(definitions.definitions().keySet());
-        NeoForge.EVENT_BUS.post(definitions);
-        definitions.freeze();
-        ContentRegistrationCoordinator.collectMachines(definitions);
-
-        MMCRMachineStructuresEvent structures = MMCRMachineStructuresEvent.prepare(definitions.definitions().keySet());
-        structuresSource.accept(structures);
-        NeoForge.EVENT_BUS.post(structures);
-        structures.freeze();
-        ContentRegistrationCoordinator.collectStructures(structures);
-        bindVanillaItemComponents();
-        MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
-        recipesSource.accept(recipes);
-        NeoForge.EVENT_BUS.post(recipes);
-        recipes.freeze();
-        ContentRegistrationCoordinator.collectRecipes(recipes);
-        if (commit) {
-            ContentRegistrationCoordinator.commitStartup();
-            startupPhase = StartupPhase.COMMITTED;
-        }
+        StartupContentRegistration.registerForTesting(definitionsSource, structuresSource, recipesSource);
     }
 
     private static void registerDeferredRegisters(IEventBus modBus) {
@@ -309,33 +224,11 @@ public class MMCR {
         ModBlockEntities.register(modBus);
         ModUIs.register(modBus);
         ModRecipeTypes.register(modBus);
-        startupPhase = StartupPhase.REGISTERS_ATTACHED;
+        StartupContentRegistration.markRegistersAttached();
     }
 
     public static String startupPhaseForTesting() {
-        return startupPhase.name();
-    }
-
-    private static void registerDynamicControllers(java.util.Set<Identifier> machineIds) {
-        ModBlocks.registerMachineControllers(machineIds);
-        ModBlockEntities.registerMachineControllers(machineIds);
-        ModItems.registerMachineControllerItems(machineIds);
-    }
-
-    private static void bindVanillaItemComponents() {
-        try {
-            Fluids.WATER.builtInRegistryHolder().components();
-        } catch (NullPointerException ignored) {
-            Fluids.WATER.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
-        }
-        for (Item item : BuiltInRegistries.ITEM) {
-            Holder.Reference<Item> holder = item.builtInRegistryHolder();
-            try {
-                holder.components();
-            } catch (NullPointerException ignored) {
-                holder.bindComponents(DataComponentMap.EMPTY);
-            }
-        }
+        return StartupContentRegistration.startupPhaseForTesting();
     }
 
     private static void onDefaultDataComponentsBound(DefaultDataComponentsBoundEvent event) {
@@ -346,26 +239,7 @@ public class MMCR {
 
     static void invokeOptionalSourceForTesting(String className, String methodName, Class<?>[] parameterTypes,
             Object... arguments) {
-        invokeOptionalSource(className, methodName, parameterTypes, arguments);
-    }
-
-    private static void invokeOptionalSource(String className, String methodName, Class<?>[] parameterTypes,
-            Object... arguments) {
-        try {
-            Class.forName(className).getMethod(methodName, parameterTypes).invoke(null, arguments);
-        } catch (ClassNotFoundException ignored) {
-            // GameTest classes are only present on the GameTest classpath.
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("Unable to register development builtins from " + className, e);
-        }
-    }
-
-    private static void registerGameTestBuiltins(String methodName, Class<?>[] parameterTypes, Object... arguments) {
-        invokeOptionalSource("cn.howxu.mmcr.GameTestRegistry", methodName, parameterTypes, arguments);
-    }
-
-    private enum StartupPhase {
-        NOT_STARTED, COLLECTING, COMMITTED, REGISTERS_ATTACHED
+        StartupContentRegistration.invokeOptionalSourceForTesting(className, methodName, parameterTypes, arguments);
     }
 
     private static void registerGameTests(RegisterGameTestsEvent event) {
