@@ -50,7 +50,7 @@ public final class RecipeRegistry {
                 throw new IllegalStateException("Recipe already registered: " + recipe.id());
             }
         }
-        publish(candidate, STATE.dataPack(), STATE.dynamic());
+        publish(candidate, STATE.dataPack(), STATE.kubeJS(), STATE.dynamic());
         STATIC_RECIPES.clear();
         STATIC_RECIPES.putAll(candidate);
         registryVersion++;
@@ -122,7 +122,7 @@ public final class RecipeRegistry {
             }
             replacement.put(entry.getKey(), entry.getValue());
         }
-        publish(STATE.staticRecipes(), STATE.dataPack(), replacement);
+        publish(STATE.staticRecipes(), STATE.dataPack(), STATE.kubeJS(), replacement);
         reloadVersion++;
         registryVersion++;
         RuntimeContentVersion.advance();
@@ -137,6 +137,10 @@ public final class RecipeRegistry {
         return STATE.dataPack();
     }
 
+    public static Map<Identifier, MachineRecipe> kubeJSSnapshot() {
+        return STATE.kubeJS();
+    }
+
     public static Map<Identifier, MachineRecipe> staticSnapshot() {
         return STATE.staticRecipes();
     }
@@ -144,7 +148,7 @@ public final class RecipeRegistry {
     public static void replaceClientSnapshot(Map<Identifier, MachineRecipe> recipes) {
         synchronized (RuntimeContentVersion.lock()) {
         validateClientSnapshot(recipes);
-        publish(Map.of(), Map.of(), recipes);
+        publish(Map.of(), Map.of(), Map.of(), recipes);
         reloadVersion++;
         registryVersion++;
         }
@@ -178,24 +182,42 @@ public final class RecipeRegistry {
             }
             replacement.put(entry.getKey(), recipe);
         }
-        publish(STATE.staticRecipes(), replacement, STATE.dynamic(), warnings);
+        publish(STATE.staticRecipes(), replacement, STATE.kubeJS(), STATE.dynamic(), warnings);
         reloadVersion++;
         registryVersion++;
         RuntimeContentVersion.advance();
         }
     }
 
-    private static void publish(Map<Identifier, MachineRecipe> staticRecipes,
-                                Map<Identifier, MachineRecipe> dataPack,
-                                Map<Identifier, MachineRecipe> dynamic) {
-        publish(staticRecipes, dataPack, dynamic, List.of());
+    public static void replaceKubeJS(Map<Identifier, MachineRecipe> recipes) {
+        synchronized (RuntimeContentVersion.lock()) {
+            Map<Identifier, MachineRecipe> replacement = new LinkedHashMap<>();
+            for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
+                MachineRecipe recipe = entry.getKey().equals(entry.getValue().id())
+                        ? entry.getValue() : entry.getValue().withId(entry.getKey());
+                replacement.put(entry.getKey(), recipe);
+            }
+            publish(STATE.staticRecipes(), STATE.dataPack(), replacement, STATE.dynamic());
+            reloadVersion++;
+            registryVersion++;
+            RuntimeContentVersion.advance();
+        }
     }
 
     private static void publish(Map<Identifier, MachineRecipe> staticRecipes,
                                 Map<Identifier, MachineRecipe> dataPack,
+                                Map<Identifier, MachineRecipe> kubeJS,
+                                Map<Identifier, MachineRecipe> dynamic) {
+        publish(staticRecipes, dataPack, kubeJS, dynamic, List.of());
+    }
+
+    private static void publish(Map<Identifier, MachineRecipe> staticRecipes,
+                                Map<Identifier, MachineRecipe> dataPack,
+                                Map<Identifier, MachineRecipe> kubeJS,
                                 Map<Identifier, MachineRecipe> dynamic,
                                 List<String> warnings) {
         Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>(staticRecipes);
+        recipes.putAll(kubeJS);
         recipes.putAll(dataPack);
         for (Map.Entry<Identifier, MachineRecipe> entry : dynamic.entrySet()) {
             recipes.putIfAbsent(entry.getKey(), entry.getValue());
@@ -211,7 +233,7 @@ public final class RecipeRegistry {
         for (Map.Entry<Identifier, TreeMap<Integer, TreeSet<MachineRecipe>>> entry : ordered.entrySet()) {
             byMachine.put(entry.getKey(), entry.getValue().values().stream().flatMap(TreeSet::stream).toList());
         }
-        STATE = new State(immutable(staticRecipes), immutable(dataPack), immutable(dynamic),
+        STATE = new State(immutable(staticRecipes), immutable(dataPack), immutable(kubeJS), immutable(dynamic),
                 immutable(recipes), immutable(byMachine), List.copyOf(warnings));
     }
 
@@ -235,12 +257,13 @@ public final class RecipeRegistry {
 
     private record State(Map<Identifier, MachineRecipe> staticRecipes,
                          Map<Identifier, MachineRecipe> dataPack,
+                         Map<Identifier, MachineRecipe> kubeJS,
                          Map<Identifier, MachineRecipe> dynamic,
                          Map<Identifier, MachineRecipe> effective,
                          Map<Identifier, List<MachineRecipe>> byMachine,
                          List<String> warnings) {
         private static State empty() {
-            return new State(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), List.of());
+            return new State(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), List.of());
         }
 
         private List<MachineRecipe> effectiveValues() {

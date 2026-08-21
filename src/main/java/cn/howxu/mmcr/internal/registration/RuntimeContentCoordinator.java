@@ -90,6 +90,14 @@ public final class RuntimeContentCoordinator {
         }
     }
 
+    public static RuntimeContentSnapshot replaceKubeJSRecipesAndSnapshot(
+            Map<Identifier, MachineRecipe> recipes) {
+        synchronized (RuntimeContentVersion.lock()) {
+            RecipeRegistry.replaceKubeJS(recipes);
+            return snapshotLocked();
+        }
+    }
+
     public static RuntimeContentSnapshot createSnapshot() {
         synchronized (RuntimeContentVersion.lock()) {
             return snapshotLocked();

@@ -34,7 +34,7 @@ public final class KubeJSRecipeSync {
             }
         }
         MMCR.LOG.info("[MMCR/Temp][KubeJS] publishing recipe ids={}", recipes.keySet());
-        RuntimeContentSnapshot snapshot = RuntimeContentCoordinator.replaceDataPackRecipesAndSnapshot(recipes);
+        RuntimeContentSnapshot snapshot = RuntimeContentCoordinator.replaceKubeJSRecipesAndSnapshot(recipes);
         JeiRuntimeReloadBridge.reloadIfAvailable(snapshot);
     }
 }

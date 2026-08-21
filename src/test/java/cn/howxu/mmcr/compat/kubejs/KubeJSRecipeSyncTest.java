@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.kubejs;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
 import cn.howxu.mmcr.registry.ModRecipeTypes;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.resources.ResourceKey;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -57,6 +59,17 @@ class KubeJSRecipeSyncTest {
 
         assertThat(RecipeRegistry.getRecipe(MMCR.id("first"))).isNull();
         assertThat(RecipeRegistry.getRecipe(MMCR.id("second"))).isNotNull();
+    }
+
+    @Test
+    void sync_survives_subsequent_datapack_reload() {
+        var id = ResourceKey.create(Registries.RECIPE, MMCR.id("surviving_recipe"));
+        var recipe = new MachineRecipe(MMCR.id("generated_recipe"), MMCR.id("machine"), 1, List.of(), List.of());
+
+        KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(id, recipe)));
+        RuntimeContentCoordinator.replaceDataPackRecipes(Map.of());
+
+        assertThat(RecipeRegistry.getRecipe(MMCR.id("surviving_recipe"))).isNotNull();
     }
 
     @Test
