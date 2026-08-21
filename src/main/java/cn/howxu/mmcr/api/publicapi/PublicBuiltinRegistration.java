@@ -33,4 +33,8 @@ public final class PublicBuiltinRegistration {
     public static Supplier<? extends Block> block(String name) {
         return () -> ModBlocks.BLOCKS.get(name).get();
     }
+
+    public static Supplier<? extends Block> block(Identifier id) {
+        return block(id.getPath());
+    }
 }

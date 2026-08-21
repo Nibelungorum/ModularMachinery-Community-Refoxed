@@ -146,6 +146,16 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         return this;
     }
 
+    public BlockPredicate anyOfItemInput() { return KubeJSInterfaceHelpers.anyOfItemInput(); }
+    public BlockPredicate anyOfItemOutput() { return KubeJSInterfaceHelpers.anyOfItemOutput(); }
+    public BlockPredicate anyOfFluidInput() { return KubeJSInterfaceHelpers.anyOfFluidInput(); }
+    public BlockPredicate anyOfFluidOutput() { return KubeJSInterfaceHelpers.anyOfFluidOutput(); }
+    public BlockPredicate anyOfEnergyInput() { return KubeJSInterfaceHelpers.anyOfEnergyInput(); }
+    public BlockPredicate anyOfEnergyOutput() { return KubeJSInterfaceHelpers.anyOfEnergyOutput(); }
+    public BlockPredicate anyOfPort(String... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
+    public BlockPredicate parallelControllers() { return KubeJSInterfaceHelpers.parallelControllers(); }
+    public BlockPredicate smartInterface() { return KubeJSInterfaceHelpers.smartInterface(); }
+
     @Override
     public MachineStructureDefinition createObject() {
         if (declarations.isEmpty()) {

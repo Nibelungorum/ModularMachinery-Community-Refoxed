@@ -26,6 +26,15 @@ public record PortTiers(List<Requirement> requirements) {
         return new Builder();
     }
 
+    public static PortTiers combine(PortTiers... declarations) {
+        if (declarations == null) throw new NullPointerException("declarations");
+        List<Requirement> combined = new ArrayList<>();
+        for (PortTiers declaration : declarations) {
+            if (declaration != null) combined.addAll(declaration.requirements());
+        }
+        return combined.isEmpty() ? none() : new PortTiers(combined);
+    }
+
     public enum PortCategory {
         ITEM,
         FLUID,

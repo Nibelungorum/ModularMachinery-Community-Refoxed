@@ -372,6 +372,15 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return this;
     }
 
+    public cn.howxu.mmcr.api.machine.BlockPredicate anyOfItemInput() { return KubeJSInterfaceHelpers.anyOfItemInput(); }
+    public cn.howxu.mmcr.api.machine.BlockPredicate anyOfItemOutput() { return KubeJSInterfaceHelpers.anyOfItemOutput(); }
+    public cn.howxu.mmcr.api.machine.BlockPredicate anyOfFluidInput() { return KubeJSInterfaceHelpers.anyOfFluidInput(); }
+    public cn.howxu.mmcr.api.machine.BlockPredicate anyOfFluidOutput() { return KubeJSInterfaceHelpers.anyOfFluidOutput(); }
+    public cn.howxu.mmcr.api.machine.BlockPredicate anyOfEnergyInput() { return KubeJSInterfaceHelpers.anyOfEnergyInput(); }
+    public cn.howxu.mmcr.api.machine.BlockPredicate anyOfEnergyOutput() { return KubeJSInterfaceHelpers.anyOfEnergyOutput(); }
+    public cn.howxu.mmcr.api.machine.BlockPredicate parallelControllers() { return KubeJSInterfaceHelpers.parallelControllers(); }
+    public cn.howxu.mmcr.api.machine.BlockPredicate smartInterfaceBlock() { return KubeJSInterfaceHelpers.smartInterface(); }
+
     public MachineBuilderJS durationByInterface(String type, float min, float max, float atMin, float atMax) {
         return durationByInterface(type, min, max, atMin, atMax, RecipeModifier.Operation.MULTIPLY);
     }
