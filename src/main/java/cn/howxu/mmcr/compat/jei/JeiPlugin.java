@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * JEI plugin entrypoint for MMCR.
@@ -56,17 +55,15 @@ public final class JeiPlugin implements IModPlugin {
                 .map(MachineStructureDisplay::from)
                 .toList());
         var displaysByMachine = MachineRecipeDisplays.byMachine();
-        Set<Identifier> machineIds = MachineRegistry.getAll().values().stream()
-                .map(machine -> machine.registryName())
-                .collect(Collectors.toSet());
+        Set<Identifier> machineIds = machineIds();
         displaysByMachine.forEach((machineId, displays) -> {
             if (!machineIds.contains(machineId)) {
                 displays.forEach(display -> MMCR.LOG.warn("Skipping JEI recipe {} for unknown machine {}", display.recipeId(), machineId));
             }
         });
-        MachineRegistry.getAll().values().forEach(machine -> registration.addRecipes(
-                JeiMachineRecipeTypes.forMachine(machine.registryName()),
-                displaysByMachine.getOrDefault(machine.registryName(), List.of())));
+        machineIds.forEach(machineId -> registration.addRecipes(
+                JeiMachineRecipeTypes.forMachine(machineId),
+                displaysByMachine.getOrDefault(machineId, List.of())));
     }
 
     @Override
@@ -86,7 +83,7 @@ public final class JeiPlugin implements IModPlugin {
         });
     }
 
-    private static Set<Identifier> machineIds() {
+    static Set<Identifier> machineIds() {
         Set<Identifier> ids = new java.util.LinkedHashSet<>(MachineRegistry.getAll().keySet());
         ids.addAll(MachineDefinitions.effectiveSnapshot().keySet());
         return ids;

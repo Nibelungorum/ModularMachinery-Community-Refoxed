@@ -1569,9 +1569,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void resumePausedRecipeAfterStructureCheck() {
         if (active != null || pausedActive == null || pausedContext == null || redstonePaused) return;
+        int parallelism = getMaxParallelism();
+        pausedActive.setMaxParallelism(parallelism);
+        pausedActive.setParallelism(parallelism);
         active = pausedActive;
         context = pausedContext;
         context.refreshController(this);
+        active.refreshTotalTick(context);
         pausedActive = null;
         pausedContext = null;
         setActiveState(true);
@@ -2266,7 +2270,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
             for (RecipeHolder<?> holder : sl.recipeAccess().getRecipes()) {
                 if (holder.value() instanceof MachineRecipe recipe
                         && recipe.machineId().equals(machine.registryName())) {
-                    recipes.putIfAbsent(recipe.id(), recipe);
+                    Identifier holderId = holder.id().identifier();
+                    MachineRecipe holderRecipe = holderId.equals(recipe.id()) ? recipe : recipe.withId(holderId);
+                    recipes.putIfAbsent(holderId, holderRecipe);
                 }
             }
         }

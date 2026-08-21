@@ -1233,6 +1233,29 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void structure_resume_recomputes_parallelism_for_paused_recipe() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        Identifier machineId = MMCR.id("paused_parallel_machine");
+        DynamicMachine machine = new DynamicMachine(machineId, "Paused Parallel", onePortPattern(Blocks.IRON_BLOCK),
+                MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
+                64, true, false, 1);
+        setField(MachineControllerBlockEntity.class, controller, "machine", machine);
+        addParallelComponent(controller, ParallelTier.PLUS);
+
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("paused_parallel_recipe"), machineId, 20,
+                List.of(), List.of());
+        ActiveMachineRecipe paused = new ActiveMachineRecipe(recipe, 1);
+        RecipeCraftingContext pausedContext = new RecipeCraftingContext(controller);
+        setField(MachineControllerBlockEntity.class, controller, "pausedActive", paused);
+        setField(MachineControllerBlockEntity.class, controller, "pausedContext", pausedContext);
+
+        invokeResumePausedRecipeAfterStructureCheck(controller);
+
+        assertThat(controller.getActive()).isSameAs(paused);
+        assertThat(paused.getParallelism()).isEqualTo(16);
+    }
+
+    @Test
     void paused_recipe_save_load_keeps_consumed_input_route_and_commits_output() throws Exception {
         bindItemComponents(Items.IRON_INGOT);
         bindItemComponents(Items.IRON_NUGGET);

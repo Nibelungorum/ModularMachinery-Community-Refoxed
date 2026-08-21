@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
@@ -40,6 +42,19 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  * @author howxu <dev@howxu.cn>
  */
 class JeiRuntimeReloaderTest {
+
+    @AfterEach
+    void clearDefinitions() {
+        MachineDefinitions.clearForTesting();
+    }
+
+    @Test
+    void machineIds_include_dynamic_kubejs_machine_definitions() {
+        Identifier dynamicId = MMCR.id("jei_dynamic_machine");
+        MachineDefinitions.register(MachineRegistration.builder(dynamicId).build());
+
+        assertThat(JeiPlugin.machineIds()).contains(dynamicId);
+    }
 
     @BeforeAll
     static void bootstrap() throws Exception {
