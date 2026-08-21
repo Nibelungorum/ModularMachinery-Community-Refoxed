@@ -75,6 +75,24 @@ class PktFactoryControllerStatePayloadTest {
     }
 
     @Test
+    void decoder_rejects_negative_active_thread_count() {
+        RegistryFriendlyByteBuf buffer = header(-1, 1, 1);
+        writeThread(buffer, 0);
+
+        assertThatThrownBy(() -> PktFactoryControllerStatePayload.STREAM_CODEC.decode(buffer))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void decoder_rejects_active_thread_count_above_thread_count() {
+        RegistryFriendlyByteBuf buffer = header(2, 1, 1);
+        writeThread(buffer, 0);
+
+        assertThatThrownBy(() -> PktFactoryControllerStatePayload.STREAM_CODEC.decode(buffer))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void decoder_rejects_oversized_strings() {
         RegistryFriendlyByteBuf buffer = buffer();
         buffer.writeBlockPos(BlockPos.ZERO);
@@ -107,11 +125,15 @@ class PktFactoryControllerStatePayloadTest {
     }
 
     private static RegistryFriendlyByteBuf header(int count, int size) {
+        return header(0, count, size);
+    }
+
+    private static RegistryFriendlyByteBuf header(int active, int count, int size) {
         RegistryFriendlyByteBuf buffer = buffer();
         buffer.writeBlockPos(BlockPos.ZERO);
         buffer.writeBoolean(true);
         buffer.writeBoolean(false);
-        buffer.writeVarInt(0);
+        buffer.writeVarInt(active);
         buffer.writeVarInt(count);
         buffer.writeVarInt(0);
         buffer.writeVarInt(1);

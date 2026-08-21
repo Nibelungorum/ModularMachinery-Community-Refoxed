@@ -10,8 +10,8 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.ArrayList;
-import java.util.List;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -63,6 +63,9 @@ public record PktFactoryControllerStatePayload(FactoryControllerSnapshot snapsho
         int count = buf.readVarInt();
         if (count < 1 || count > MAX_THREAD_SNAPSHOTS) {
             throw new IllegalArgumentException("Invalid factory thread snapshot count: " + count);
+        }
+        if (active < 0 || active > count) {
+            throw new IllegalArgumentException("Invalid active factory thread count: " + active);
         }
         int currentParallelism = buf.readVarInt();
         int maxParallelism = buf.readVarInt();

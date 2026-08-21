@@ -1693,6 +1693,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         for (ServerPlayer player : serverLevel.players()) {
             if (player.containerMenu instanceof FactoryControllerMenu menu
                     && menu.controllerPos().equals(getBlockPos())) {
+                menu.applySnapshot(next);
+                menu.markSnapshotSent(next);
                 player.connection.send(new ClientboundCustomPayloadPacket(
                         new PktFactoryControllerStatePayload(next)));
             }

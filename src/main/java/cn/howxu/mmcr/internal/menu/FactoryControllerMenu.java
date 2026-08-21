@@ -104,6 +104,10 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
         if (snapshot.threads().stream().noneMatch(thread -> thread.index() == selectedThreadIndex)) selectedThreadIndex = 0;
     }
 
+    public void markSnapshotSent(FactoryControllerSnapshot snapshot) {
+        if (controllerPos.equals(snapshot.controllerPos())) lastSentSnapshot = snapshot;
+    }
+
     public FactoryRecipeScheduler.ThreadSnapshot selectedThread() {
         return snapshot.threads().stream().filter(thread -> thread.index() == selectedThreadIndex).findFirst()
                 .orElseGet(() -> snapshot.threads().isEmpty()
