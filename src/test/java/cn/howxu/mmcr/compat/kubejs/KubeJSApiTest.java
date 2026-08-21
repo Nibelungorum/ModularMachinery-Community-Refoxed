@@ -172,6 +172,57 @@ class KubeJSApiTest {
     }
 
     @Test
+    void slice_pattern_binds_symbols_and_normalizes_controller() {
+        var definition = new MachineStructureBuilderJS("test:kubejs_slice")
+                .pattern(List.of("XCX", "XXX", "XXX"))
+                .set("X", api.block("minecraft:bricks"))
+                .set("C", api.block("minecraft:blast_furnace"))
+                .fullStructure(api.portRequirements(Map.of()), api.portTierRequirements(List.of()),
+                        List.of(), MachineStructureRequirements.EMPTY)
+                .createObject();
+
+        assertThat(definition.pattern().pattern()).hasSize(9);
+        assertThat(definition.pattern().pattern().get(BlockPos.ZERO)
+                .matches(Blocks.BLAST_FURNACE.defaultBlockState())).isTrue();
+        assertThat(definition.pattern().symbolsByPosition()).containsEntry(BlockPos.ZERO, 'C');
+    }
+
+    @Test
+    void all_slices_are_appended_and_unbound_characters_are_skipped() {
+        var definition = new MachineStructureBuilderJS("test:kubejs_all")
+                .patternAll(List.of(
+                        List.of("AXA", "XIX", "XXX"),
+                        List.of("XXX", "I I", "XBX"),
+                        List.of("AXA", "XCX", "XXX")))
+                .set("X", api.block("minecraft:bricks"))
+                .set("A", api.block("minecraft:stone"))
+                .set("B", api.block("minecraft:iron_block"))
+                .set("C", api.block("minecraft:blast_furnace"))
+                .set("I", api.block("minecraft:hopper"))
+                .fullStructure(api.portRequirements(Map.of()), api.portTierRequirements(List.of()),
+                        List.of(), MachineStructureRequirements.EMPTY)
+                .createObject();
+
+        assertThat(definition.pattern().pattern()).containsKeys(
+                new BlockPos(-1, -1, -2), new BlockPos(1, -1, -1), BlockPos.ZERO);
+        assertThat(definition.pattern().pattern()).doesNotContainKey(new BlockPos(0, 0, -1));
+        assertThat(definition.pattern().symbolsByPosition()).containsEntry(BlockPos.ZERO, 'C');
+    }
+
+    @Test
+    void slice_patterns_reject_inconsistent_dimensions_and_empty_slices() {
+        assertThatThrownBy(() -> new MachineStructureBuilderJS("test:bad_width")
+                .patternAll(List.of(List.of("XX", "XX"), List.of("XXX", "XXX"))))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new MachineStructureBuilderJS("test:bad_height")
+                .patternAll(List.of(List.of("XX", "XX"), List.of("XX"))))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new MachineStructureBuilderJS("test:empty_slice")
+                .patternAll(List.of()))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void block_array_can_bind_script_symbol_metadata_for_character_requirements() {
         var replacement = api.singleBlockModifier("diamond_speedup",
                 new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK), List.of(), ItemStack.EMPTY);

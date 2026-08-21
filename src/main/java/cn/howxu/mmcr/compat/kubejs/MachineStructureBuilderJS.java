@@ -37,8 +37,11 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     public transient List<DynamicPatternSpec> dynamicPatterns = new ArrayList<>();
     public transient MachineStructureRequirements requirements = MachineStructureRequirements.EMPTY;
     private final List<Declaration> declarations = new ArrayList<>();
+    private final BlockArray.Builder sliceBuilder = new BlockArray.Builder();
+    private final MachineStructureRequirements.Builder sliceRequirements = MachineStructureRequirements.builder();
     private boolean patternDeclaration;
     private boolean classMetadataChanged;
+    private boolean slicePatternPending;
 
     public MachineStructureBuilderJS(Identifier id) {
         super(id);
@@ -93,6 +96,49 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         declarations.add(new Declaration(Declaration.Kind.FULL, pattern, portRequirements,
                 portTierRequirements, dynamicPatterns, requirements));
         return this;
+    }
+
+    public MachineStructureBuilderJS pattern(String... rows) {
+        sliceBuilder.pattern(rows);
+        slicePatternPending = true;
+        return this;
+    }
+
+    public MachineStructureBuilderJS pattern(List<String> rows) {
+        return pattern(rows.toArray(String[]::new));
+    }
+
+    public MachineStructureBuilderJS patternAll(List<List<String>> slices) {
+        if (slices.isEmpty()) {
+            throw new IllegalArgumentException("patternAll(...) must contain at least one slice");
+        }
+        for (List<String> slice : slices) {
+            pattern(slice);
+        }
+        return this;
+    }
+
+    public MachineStructureBuilderJS set(String symbol, Object value) {
+        if (symbol == null || symbol.length() != 1 || symbol.charAt(0) == ' ') {
+            throw new IllegalArgumentException("A pattern symbol must be exactly one non-space character");
+        }
+        char key = symbol.charAt(0);
+        PatternEntry entry = toPatternEntry(value);
+        sliceBuilder.set(key, entry.base());
+        for (SingleBlockModifierReplacement modifier : entry.modifiers()) {
+            sliceRequirements.modifier(key, modifier);
+        }
+        if (value instanceof LevelSlot levelSlot) {
+            sliceRequirements.levelSlot(key, validateLevelType(levelSlot.typeId()));
+        }
+        return this;
+    }
+
+    public MachineStructureBuilderJS fullStructure(PortRequirementSpec ports,
+            PortTierRequirementSpec tiers, List<DynamicPatternSpec> dynamicPatterns,
+            MachineStructureRequirements requirements) {
+        syncSlicePattern();
+        return fullStructure(pattern, ports, tiers, dynamicPatterns, this.requirements);
     }
 
     public MachineStructureBuilderJS fullStructure(BlockArray pattern) {
@@ -169,6 +215,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
 
     @Override
     public MachineStructureDefinition createObject() {
+        syncSlicePattern();
         if (declarations.isEmpty()) {
             return new MachineStructureDefinition(id, List.of(new Declaration(Declaration.Kind.FULL, pattern,
                     portRequirements, portTierRequirements, dynamicPatterns, requirements)));
@@ -209,6 +256,15 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         declarations.set(0, new Declaration(first.kind(), first.pattern(), portRequirements, portTierRequirements,
                 dynamicPatterns, requirements));
         classMetadataChanged = false;
+    }
+
+    private void syncSlicePattern() {
+        if (!slicePatternPending) return;
+        pattern = sliceBuilder.build();
+        requirements = sliceRequirements.build(pattern);
+        slicePatternPending = false;
+        declarations.clear();
+        patternDeclaration = true;
     }
 
     private static BlockPredicate levelPredicate(LevelSlot slot) {
