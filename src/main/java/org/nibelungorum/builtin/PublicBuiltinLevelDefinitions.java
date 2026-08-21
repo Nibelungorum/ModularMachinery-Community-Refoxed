@@ -15,6 +15,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.fml.loading.FMLLoader;
 
 /** Public built-in machine level definitions.
  * @author howxu <dev@howxu.cn>
@@ -36,9 +37,9 @@ public final class PublicBuiltinLevelDefinitions {
 
     @SubscribeEvent
     public static void register(MMCRMachineStructuresEvent event) {
-        if (!event.levelTypes().containsKey(THERMAL_SMELTING_COIL_TYPE)) {
-            event.registerLevelType(new LevelType(THERMAL_SMELTING_COIL_TYPE, Component.literal("热能冶炼线圈")));
-        }
+        if (FMLLoader.getCurrent().isProduction()
+                || event.levelTypes().containsKey(THERMAL_SMELTING_COIL_TYPE)) return;
+        event.registerLevelType(new LevelType(THERMAL_SMELTING_COIL_TYPE, Component.literal("热能冶炼线圈")));
         register(event, COPPER_COIL, 0, Blocks.COPPER_BLOCK, 0.9D);
         register(event, IRON_COIL, 1, Blocks.IRON_BLOCK, 0.8D);
         register(event, GOLD_COIL, 2, Blocks.GOLD_BLOCK, 0.7D);

@@ -23,3 +23,14 @@ Implemented and committed as `ec03ec9` (`feat: add public machine level declarat
 ## Concerns
 
 - The full unit test suite remains red because of the two existing builtin subscriber expectations. No unrelated changes were made to correct them.
+
+## Review Follow-up
+
+- Restored `PublicBuiltinLevelDefinitions`'s original runtime guards: production environments skip development levels, and an existing level type skips all builtin level registration.
+- Preserved the public declaration and `PublicMachineAdapter` conversion boundary.
+
+## Review Verification
+
+- `./gradlew test --no-daemon --tests 'cn.howxu.mmcr.api.publicapi.PublicEventSubscribersTest'`: `BUILD SUCCESSFUL in 29s`; 18 actionable tasks, 2 executed, 16 up-to-date.
+- `./gradlew compileJava --no-daemon`: `BUILD SUCCESSFUL in 8s`; 14 actionable tasks, all 14 up-to-date.
+- `git diff --check`: passed with no output.
