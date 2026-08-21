@@ -1,12 +1,12 @@
 package cn.howxu.mmcr.api.publicapi;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
+import cn.howxu.mmcr.api.publicapi.machine.MachineRole;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.internal.api.PublicMachineAdapter;
@@ -94,7 +94,7 @@ class PublicApiAdapterTest {
         assertThat(converted.hasFactory()).isTrue();
         assertThat(converted.factoryThreadLimit()).isEqualTo(4);
         assertThat(converted.factoryThreads()).hasSize(1);
-        assertThat(converted.role()).isEqualTo(MachineRole.HOST);
+        assertThat(converted.role()).isEqualTo(cn.howxu.mmcr.api.machine.MachineRole.HOST);
         assertThat(converted.acceptedModuleIds()).containsExactly(moduleId);
         assertThat(converted.structureStages()).hasSize(1);
         assertThat(converted.structureStages().getFirst().number()).isEqualTo(1);

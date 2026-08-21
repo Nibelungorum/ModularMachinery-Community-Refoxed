@@ -113,7 +113,7 @@ public final class PublicMachineAdapter {
                 definition.factory().hasFactory(),
                 definition.factory().threadLimit(),
                 toFactoryThreads(definition.factory()),
-                definition.role(),
+                toInternalRole(definition.role()),
                 definition.acceptedModuleIds(),
                 toStructureStages(structure),
                 definition.failureAction());
@@ -150,8 +150,8 @@ public final class PublicMachineAdapter {
             builder.pattern(definition.pattern());
             if (definition.expandableStructure()) builder.expandableStructure();
         }
-        if (definition.role() == MachineRole.MODULE) builder.module();
-        if (definition.role() == MachineRole.HOST) {
+        if (definition.role() == cn.howxu.mmcr.api.publicapi.machine.MachineRole.MODULE) builder.module();
+        if (definition.role() == cn.howxu.mmcr.api.publicapi.machine.MachineRole.HOST) {
             definition.acceptedModuleIds().forEach(builder::host);
         }
         return builder.build();
@@ -261,6 +261,10 @@ public final class PublicMachineAdapter {
         return factory.threads().stream()
                 .map(thread -> new FactoryThreadSpec(thread.name(), thread.recipeIds()))
                 .toList();
+    }
+
+    private static MachineRole toInternalRole(cn.howxu.mmcr.api.publicapi.machine.MachineRole role) {
+        return MachineRole.valueOf(role.name());
     }
 
     private static List<MachineStructureStage> toStructureStages(cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure) {

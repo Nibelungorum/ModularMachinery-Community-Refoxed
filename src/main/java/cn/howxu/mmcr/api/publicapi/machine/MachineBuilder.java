@@ -19,7 +19,7 @@ public final class MachineBuilder {
     private ControllerSpec controller = ControllerSpec.builder().build();
     private AppearanceSpec appearance = AppearanceSpec.builder().build();
     private FactorySpec factory = FactorySpec.builder().build();
-    private cn.howxu.mmcr.api.machine.MachineRole role = cn.howxu.mmcr.api.machine.MachineRole.NORMAL;
+    private MachineRole role = MachineRole.NORMAL;
     private final Set<Identifier> acceptedModuleIds = new LinkedHashSet<>();
     private int maxParallelism = 1;
     private boolean parallelizable;
@@ -53,12 +53,7 @@ public final class MachineBuilder {
         return this;
     }
 
-    public MachineBuilder role(cn.howxu.mmcr.api.publicapi.machine.MachineRole role) {
-        this.role = cn.howxu.mmcr.api.machine.MachineRole.valueOf(Objects.requireNonNull(role, "role").name());
-        return this;
-    }
-
-    public MachineBuilder role(cn.howxu.mmcr.api.machine.MachineRole role) {
+    public MachineBuilder role(MachineRole role) {
         this.role = Objects.requireNonNull(role, "role");
         return this;
     }

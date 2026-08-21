@@ -481,12 +481,14 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .factory(factory -> factory
                         .hasFactory(registration.maxParallelAmount() > 1)
                         .threadLimit(registration.maxParallelAmount()))
-                .role(registration.role())
+                .role(cn.howxu.mmcr.api.publicapi.machine.MachineRole.valueOf(registration.role().name()))
                 .maxParallelism(registration.maxParallelAmount())
                 .parallelizable(registration.allowParallelism())
                 .failureAction(cn.howxu.mmcr.api.machine.RecipeFailureActions.getDefaultAction());
         registration.acceptedModuleIds().forEach(builder::acceptedModule);
-        if (registration.role() == MachineRole.MODULE) builder.role(MachineRole.MODULE);
+        if (registration.role() == MachineRole.MODULE) {
+            builder.role(cn.howxu.mmcr.api.publicapi.machine.MachineRole.MODULE);
+        }
         MachineDefinition base = builder.build();
         MachineDefinition definition = new MachineDefinition(base.id(), base.displayNameKey(), base.controller(), base.appearance(),
                 base.factory(), base.role(), base.acceptedModuleIds(), base.maxParallelism(), base.parallelizable(), base.failureAction(),

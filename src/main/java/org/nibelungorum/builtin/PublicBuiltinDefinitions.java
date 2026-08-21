@@ -153,12 +153,8 @@ public final class PublicBuiltinDefinitions {
     }
 
     private static void thermal(Map<Identifier, MachineRecipeDefinition> out, String name, int ticks, Item input, Item output, int energy, Identifier level) {
-        MachineRecipeDefinition definition = recipe("thermal_smelting_furnace_" + name, THERMAL_SMELTING_FURNACE, ticks)
-                .inputItem(Items.COAL, 1).inputItem(input, 1).inputEnergy(energy).outputItem(output, 1).maxThreads(4)
-                .levelRequirement(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE, level).build();
-        MMCR.LOG.debug("[MMCR-DIAG] Built-in thermal recipe {} requested level {} and produced level requirements {}",
-                definition.id(), level, definition.levelRequirements());
-        out.put(id("thermal_smelting_furnace_" + name), definition);
+        out.put(id("thermal_smelting_furnace_" + name), recipe("thermal_smelting_furnace_" + name, THERMAL_SMELTING_FURNACE, ticks)
+                .inputItem(Items.COAL, 1).inputItem(input, 1).inputEnergy(energy).outputItem(output, 1).maxThreads(4).build());
     }
 
     private static void purpurRecipes(Map<Identifier, MachineRecipeDefinition> out) {
