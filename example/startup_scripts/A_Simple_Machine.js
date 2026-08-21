@@ -1,4 +1,4 @@
-// KubeJS Start up Event Register Machine Definations
+// KubeJS Start up Event Register Machine Definitions
 // This stage will automatically register a controller block for your machine
 
 // First, Listen the MMCREvents.startup
