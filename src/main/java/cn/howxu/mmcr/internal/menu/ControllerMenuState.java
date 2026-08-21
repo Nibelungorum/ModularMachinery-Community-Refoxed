@@ -45,9 +45,8 @@ final class ControllerMenuState {
     static DataSlot addRecipeLockSlot(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {
         return menu.addControllerDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
             @Override public int get() {
-                var factory = owner.getFactoryController();
-                if (factory == null) return owner.recipeLocked() ? 1 : 0;
-                return factory.threadSnapshots(owner).stream().findFirst()
+                if (!owner.hasFactoryController()) return owner.recipeLocked() ? 1 : 0;
+                return owner.factoryThreadSnapshots().stream().findFirst()
                         .map(thread -> thread.locked() ? 1 : 0).orElse(0);
             }
 

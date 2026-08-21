@@ -94,15 +94,13 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         });
         this.factoryThreadCount = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
             @Override public int get() {
-                var factory = owner.getFactoryController();
-                return factory == null ? 0 : factory.threadCount();
+                return owner.hasFactoryController() ? owner.factoryScheduler().threadLimit() : 0;
             }
             @Override public void set(int value) {}
         });
         this.factoryActiveThreadCount = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
             @Override public int get() {
-                var factory = owner.getFactoryController();
-                return factory == null ? 0 : factory.activeThreadCount();
+                return owner.activeFactoryThreadCount();
             }
             @Override public void set(int value) {}
         });
@@ -251,9 +249,8 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     }
 
     private static @Nullable FactoryRecipeScheduler.ThreadSnapshot activeFactoryThread(MachineControllerBlockEntity controller) {
-        var factory = controller.getFactoryController();
-        if (factory == null) return null;
-        return factory.threadSnapshots(controller).stream()
+        if (!controller.hasFactoryController()) return null;
+        return controller.factoryThreadSnapshots().stream()
                 .filter(FactoryRecipeScheduler.ThreadSnapshot::active)
                 .findFirst()
                 .orElse(null);
@@ -296,14 +293,12 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     public int factoryThreadCount() {
         if (owner == null) return factoryThreadCount.get();
-        var factory = owner.getFactoryController();
-        return factory == null ? 0 : factory.threadCount();
+        return owner.hasFactoryController() ? owner.factoryScheduler().threadLimit() : 0;
     }
 
     public int factoryActiveThreadCount() {
         if (owner == null) return factoryActiveThreadCount.get();
-        var factory = owner.getFactoryController();
-        return factory == null ? 0 : factory.activeThreadCount();
+        return owner.activeFactoryThreadCount();
     }
 
     public boolean recipeLocked() {
@@ -311,9 +306,8 @@ public class MachineControllerMenu extends AbstractMachineMenu {
                 && controller.hasClientRecipeLock()) return true;
         if (owner == null) return recipeLocked.get() != 0;
         MachineControllerBlockEntity controller = resolvedOwner();
-        var factory = controller.getFactoryController();
-        if (factory == null) return controller.recipeLocked();
-        return factory.threadSnapshots(controller).stream().findFirst()
+        if (!controller.hasFactoryController()) return controller.recipeLocked();
+        return controller.factoryThreadSnapshots().stream().findFirst()
                 .map(FactoryRecipeScheduler.ThreadSnapshot::locked).orElse(false);
     }
 
@@ -363,9 +357,8 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         MachineControllerBlockEntity controller = resolvedOwner();
         if (controller == null) return null;
         if (owner == null && controller.hasClientRecipeLock()) return controller.clientLockedRecipeId();
-        var factory = controller.getFactoryController();
-        if (factory == null) return controller.lockedRecipeId() == null ? null : controller.lockedRecipeId().toString();
-        return factory.threadSnapshots(controller).stream().findFirst()
+        if (!controller.hasFactoryController()) return controller.lockedRecipeId() == null ? null : controller.lockedRecipeId().toString();
+        return controller.factoryThreadSnapshots().stream().findFirst()
                 .map(FactoryRecipeScheduler.ThreadSnapshot::lockedRecipeId).filter(id -> !id.isEmpty()).orElse(null);
     }
 

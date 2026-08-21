@@ -375,6 +375,53 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void controller_scheduler_aggregates_factory_capacity_and_updates_immediately() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
+        FactorySchedulerBlockEntity first = factoryController(new BlockPos(1, 0, 0), 2);
+        FactorySchedulerBlockEntity second = factoryController(new BlockPos(2, 0, 0), 4);
+        addFactorySchedulerComponent(controller, first);
+        addFactorySchedulerComponent(controller, second);
+        var machine = new DynamicMachine(
+                MMCR.id("controller_scheduler_owner_machine"),
+                "Controller Scheduler Owner",
+                onePortPattern(Blocks.IRON_BLOCK),
+                MachineControllerSpec.defaultsFor(MMCR.id("controller_scheduler_owner_machine")),
+                PortRequirementSpec.none(), List.of(), Map.of(), 1, false, true, 1);
+        setField(MachineControllerBlockEntity.class, controller, "machine", machine);
+
+        assertThat(controller.factoryScheduler().threadLimit()).isEqualTo(8);
+
+        first.getItemStackHandler(null).setStackInSlot(0,
+                new ItemStack(ModItems.THREAD_DISPERSER.get(), 10));
+
+        assertThat(controller.factoryScheduler().threadLimit()).isEqualTo(16);
+    }
+
+    @Test
+    void max_parallelism_clamps_long_sum_at_integer_maximum() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        var machine = new DynamicMachine(
+                MMCR.id("long_parallelism_machine"), "Long Parallelism", onePortPattern(Blocks.IRON_BLOCK),
+                MachineControllerSpec.defaultsFor(MMCR.id("long_parallelism_machine")), PortRequirementSpec.none(),
+                List.of(), Map.of(), Integer.MAX_VALUE, true, false, 1);
+        setField(MachineControllerBlockEntity.class, controller, "machine", machine);
+        addParallelComponent(controller, ParallelTier.ULTIMATE);
+        ParallelControllerBlockEntity first = (ParallelControllerBlockEntity) controller.getComponents().getFirst().getContainer();
+        first.setCurrentParallelism(Integer.MAX_VALUE);
+
+        assertThat(controller.getMaxParallelism()).isEqualTo(Integer.MAX_VALUE);
+
+        addParallelComponent(controller, ParallelTier.ULTIMATE);
+        ParallelControllerBlockEntity second = (ParallelControllerBlockEntity) controller.getComponents().get(1).getContainer();
+        second.setCurrentParallelism(Integer.MAX_VALUE);
+
+        assertThat(controller.getMaxParallelism()).isEqualTo(Integer.MAX_VALUE);
+    }
+
+    @Test
     void formed_parallel_controller_is_discovered_from_structure_snapshot() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         Identifier texture = MMCR.id("block/parallel_structure_casing");

@@ -3,7 +3,6 @@ package cn.howxu.mmcr.compat.jade;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
-import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
@@ -29,7 +28,6 @@ public enum MachineControllerDataProvider implements IServerDataProvider<BlockAc
         var boundMachine = controller.getMachine();
         var machine = foundMachine != null ? foundMachine : boundMachine;
         ActiveMachineRecipe active = controller.getActive();
-        FactorySchedulerBlockEntity factory = controller.getFactoryController();
 
         if (machine != null) data.putString("machine", machine.registryName().toString());
         data.putBoolean("formed", controller.isFormed());
@@ -39,9 +37,9 @@ public enum MachineControllerDataProvider implements IServerDataProvider<BlockAc
         data.putInt("parallelSlots", controller.parallelControllerCount());
         data.putInt("maxParallelSlots", controller.maxParallelControllerCount());
         data.putBoolean("factorySupported", machine != null && machine.hasFactory());
-        data.putBoolean("factoryPresent", factory != null);
-        data.putInt("factoryLanes", factory == null ? 0 : factory.activeThreadCount());
-        data.putInt("factoryThreadLimit", factory == null ? 1 : factory.threadLimit());
+        data.putBoolean("factoryPresent", controller.hasFactoryController());
+        data.putInt("factoryLanes", controller.activeFactoryThreadCount());
+        data.putInt("factoryThreadLimit", controller.hasFactoryController() ? controller.factoryScheduler().threadLimit() : 1);
         if (active != null && active.getRecipe() != null) {
             data.putString("activeRecipe", active.getRecipe().id().toString());
             data.putInt("tick", active.getTick());

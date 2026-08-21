@@ -51,9 +51,7 @@ public record PktRecipeLockPayload(BlockPos controllerPos, int threadIndex) impl
         if (!controller.toggleFactoryRecipeLock(payload.threadIndex())) return false;
         controller.setChanged();
         controller.sendRecipeLockState(player);
-        if (controller.getFactoryController() != null) {
-            controller.getFactoryController().syncOpenControllerMenus(controller);
-        }
+        controller.sendFactoryControllerSnapshot(player);
         return true;
     }
 

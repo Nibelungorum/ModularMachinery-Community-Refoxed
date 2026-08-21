@@ -129,7 +129,7 @@ class FactorySchedulerBlockEntityTest {
     }
 
     @Test
-    void saveAndLoadKeepsValidLockIdsForBaseAndWorkerThreads() throws Exception {
+    void saveAndLoadPersistsOnlyFactoryCapacityInventory() throws Exception {
         MachineRecipe baseRecipe = recipe("scheduler_base_lock");
         MachineRecipe workerRecipe = recipe("scheduler_worker_lock");
         RecipeRegistry.register(baseRecipe);
@@ -151,9 +151,9 @@ class FactorySchedulerBlockEntityTest {
                 HolderLookup.Provider.create(Stream.empty()),
                 output.buildResult()));
 
-        assertThat(internalScheduler(loaded).allThreads())
+        assertThat(internalScheduler(loaded).allThreads()).singleElement()
                 .extracting(FactoryRecipeThread::lockedRecipeId)
-                .containsExactly(baseRecipe.id(), workerRecipe.id());
+                .isNull();
     }
 
     private static FactorySchedulerBlockEntity createScheduler() {

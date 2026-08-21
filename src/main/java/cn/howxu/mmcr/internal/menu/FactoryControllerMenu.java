@@ -2,7 +2,6 @@ package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.internal.network.FactoryControllerSnapshot;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
-import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
@@ -44,11 +43,9 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
         ControllerMenuState.addControllerPlayerSlots(this, inventory, FACTORY_PLAYER_INVENTORY_X);
         snapshot = FactoryControllerSnapshot.empty(controllerPos);
         if (owner != null) {
-            FactorySchedulerBlockEntity factory = owner.getFactoryController();
-            if (factory != null) {
-                factory.ensureBaseThreadFor(owner);
-                snapshot = factory.snapshot(owner);
-                factory.sendSnapshot(player, owner);
+            if (owner.hasFactoryController()) {
+                snapshot = owner.factoryControllerSnapshot();
+                owner.sendFactoryControllerSnapshot(player);
             }
         }
     }
@@ -126,12 +123,11 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
     public void broadcastChanges() {
         super.broadcastChanges();
         if (owner == null) return;
-        FactorySchedulerBlockEntity factory = owner.getFactoryController();
-        if (factory == null) return;
-        FactoryControllerSnapshot next = factory.snapshot(owner);
+        if (!owner.hasFactoryController()) return;
+        FactoryControllerSnapshot next = owner.factoryControllerSnapshot();
         snapshot = next;
         if (player != null && !next.equals(lastSentSnapshot)) {
-            factory.sendSnapshot(player, owner);
+            owner.sendFactoryControllerSnapshot(player);
             lastSentSnapshot = next;
         }
     }

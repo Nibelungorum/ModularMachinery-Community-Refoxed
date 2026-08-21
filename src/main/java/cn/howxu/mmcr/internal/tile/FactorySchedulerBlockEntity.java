@@ -115,6 +115,7 @@ public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
 
     void bindOwner(@Nullable MachineControllerBlockEntity owner) {
         this.owner = owner;
+        if (owner != null) owner.adoptFactoryScheduler(scheduler);
     }
 
     void setSchedulerThreadLimit(int threadLimit) {
@@ -234,7 +235,6 @@ public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
         handler.serialize(output.child("inventory"));
-        scheduler.save(output.child("scheduler"));
     }
 
     @Override
@@ -242,7 +242,6 @@ public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
         super.loadAdditional(input);
         handler.deserialize(input.childOrEmpty("inventory"));
         scheduler = new FactoryRecipeScheduler(1);
-        scheduler.load(input.childOrEmpty("scheduler"), null, null);
         lastSyncedSnapshot = null;
     }
 
