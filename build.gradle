@@ -9,6 +9,15 @@ group = mod_group_id
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
+
+tasks.withType(Javadoc).configureEach {
+    options.addStringOption('Xdoclint:none', '-quiet')
+}
+
 sourceSets {
     gametest {
         java.srcDirs = ['src/gametest/java']
