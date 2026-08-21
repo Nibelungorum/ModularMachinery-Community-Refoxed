@@ -1,44 +1,25 @@
 # Task 3 Report
 
+## Status
+
+Implemented and committed as `ec03ec9` (`feat: add public machine level declarations`).
+
 ## Changes
 
-- Added `GameTestRegistration` for optional GameTest source-set loading, the three startup source hooks, and `RegisterGameTestsEvent` registration.
-- Added `RuntimeContentRegistration` for runtime builtin structure reload/cache rebuild ordering and the data-component recipe hook.
-- Reduced `MMCR` to delegation while preserving its public and testing entry points.
-- Kept production, test, GameTest, KubeJS delayed startup, and runtime reload paths intact.
-- Extended optional source tests to cover present and absent sources across the startup event types.
+- Added public declaration contracts for `LevelType`, `MachineLevel`, `LevelModifier`, and `DisplayStack`.
+- Extended the existing public `BlockPredicate` with exact block-state declarations.
+- Added public registration overloads while preserving the existing core registration APIs.
+- Centralized conversion from public declarations to the canonical `api.machine.level` runtime model in `PublicMachineAdapter`.
+- Updated `PublicBuiltinLevelDefinitions` to use only public API declarations for machine levels.
+- Added a lifecycle test covering public declaration registration and runtime snapshot conversion.
 
 ## Verification
 
-- `./gradlew test --no-daemon --tests '*OptionalGameTest*' --tests '*RuntimeContent*' --tests '*Reload*'`: passed
-- `./gradlew test --no-daemon`: passed
-- `./gradlew runGameTestServer --no-daemon`: passed
-
-## Q1-Q4 Follow-up
-
-- Q1: `RuntimeContentRegistrationTest` now records and asserts `startup`, `reload`, `cache-rebuild` order through the facade's test seam.
-- Q2: Added direct missing-source no-op coverage for `registerTests`.
-- Q3: Present `registerTests` coverage constructs a real `RegisterGameTestsEvent` with writable environment/test registries and asserts the fixture instance is registered.
-- Q4: Added `registerTestStartupContent` as the explicit pure-test facade, retained old lifecycle names as deprecated compatibility aliases, and documented the production runtime facade.
-
-## Final Verification
-
-- `./gradlew test --no-daemon --tests '*OptionalGameTest*' --tests '*RuntimeContent*' --tests '*Reload*'`: passed
-- `./gradlew test --no-daemon`: passed
-- `./gradlew runGameTestServer --no-daemon`: passed
+- Focused lifecycle test: passed.
+- `./gradlew runGameTestServer --no-daemon`: passed.
+- `./gradlew test --no-daemon`: 1129 tests completed, 2 pre-existing failures in `PublicEventSubscribersTest` at lines 128 and 141. These assert the older builtin subscriber behavior that is already changed in the shared worktree.
+- `git diff --check`: passed.
 
 ## Concerns
 
-- Existing deprecation and unchecked-operation warnings remain; no new dependency or unrelated cleanup was introduced.
-
-## Review Follow-up
-
-- Added direct `GameTestRegistration` facade tests for all three canonical startup forwards, absent source no-op behavior, and `registerTests`.
-- Added direct `RuntimeContentRegistration` regression tests for startup/runtime/cache behavior and the recipe hook.
-- Documented the production runtime facade versus pure test startup facade; retained compatibility aliases.
-
-## Follow-up Verification
-
-- `./gradlew test --no-daemon --tests '*GameTestRegistration*' --tests '*RuntimeContentRegistration*' --tests '*OptionalGameTest*'`: passed
-- `./gradlew test --no-daemon`: passed
-- `./gradlew runGameTestServer --no-daemon`: passed
+- The full unit test suite remains red because of the two existing builtin subscriber expectations. No unrelated changes were made to correct them.
