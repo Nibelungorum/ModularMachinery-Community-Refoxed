@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.recipe;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
@@ -264,7 +265,12 @@ public final class FactoryRecipeScheduler {
         this.perThreadParallelLimit = Math.max(1, parallelLimit);
         List<MachineRecipe> candidateSnapshot = List.copyOf(candidates == null ? List.of() : candidates);
         long modifierSnapshotVersion = controller == null ? Long.MIN_VALUE : controller.getModifierSnapshotVersion();
+        MMCR.LOG.info("[MMCR/Temp][Factory] tick begin limit={}, parallelLimit={}, candidates={}, threads={}",
+                threadLimit, parallelLimit,
+                candidateSnapshot.stream().map(recipe -> recipe.id() + ":maxThreads=" + recipe.maxThreads()).toList(),
+                threadStateSummary());
         for (FactoryRecipeThread thread : List.copyOf(threads)) {
+            String before = threadState(thread);
             thread.bindController(controller);
             thread.setFinishContinuation(() -> {
                 finishCallback.run();
@@ -272,6 +278,8 @@ public final class FactoryRecipeScheduler {
             });
             thread.tick();
             thread.tickIdle();
+            MMCR.LOG.info("[MMCR/Temp][Factory] tick lane={} before={} after={}",
+                    thread.laneId(), before, threadState(thread));
             if (thread.isTimedOut()) {
                 threads.remove(thread);
                 threadWasActive.remove(thread);
@@ -288,7 +296,9 @@ public final class FactoryRecipeScheduler {
             if (availableCandidates.isEmpty()) break;
             int availableParallelism = availableParallelism();
             if (thread.tryRestartLastRecipe(availableCandidates, availableParallelism, structureVersion, modifierSnapshotVersion)) continue;
-            thread.searchAndStartRecipe(availableCandidates, availableParallelism, structureVersion);
+            boolean started = thread.searchAndStartRecipe(availableCandidates, availableParallelism, structureVersion);
+            MMCR.LOG.info("[MMCR/Temp][Factory] idle start lane={}, candidates={}, started={}, state={}",
+                    thread.laneId(), availableCandidates.stream().map(MachineRecipe::id).toList(), started, threadState(thread));
         }
         while (threads.size() < threadLimit && availableParallelism() > 0) {
             List<MachineRecipe> availableCandidates = availableCandidates(candidateSnapshot);
@@ -297,7 +307,10 @@ public final class FactoryRecipeScheduler {
                     "factory-" + nextFactoryLaneId++);
             threads.add(thread);
             threadWasActive.put(thread, false);
-            if (!thread.searchAndStartRecipe(availableCandidates, availableParallelism(), structureVersion)) break;
+            boolean started = thread.searchAndStartRecipe(availableCandidates, availableParallelism(), structureVersion);
+            MMCR.LOG.info("[MMCR/Temp][Factory] new thread lane={}, candidates={}, started={}, state={}",
+                    thread.laneId(), availableCandidates.stream().map(MachineRecipe::id).toList(), started, threadState(thread));
+            if (!started) break;
         }
         for (FactoryRecipeThread thread : threads) threadWasActive.put(thread, thread.getActiveRecipe() != null);
         clearFinishedThreadContinuations();
@@ -305,13 +318,38 @@ public final class FactoryRecipeScheduler {
 
     private void continueFinishedThread(FactoryRecipeThread thread, List<MachineRecipe> candidates,
                                         long structureVersion, long modifierSnapshotVersion) {
+        MMCR.LOG.info("[MMCR/Temp][Factory] finish callback lane={}, state={}, candidates={}, counts={}",
+                thread.laneId(), threadState(thread), candidates.stream().map(recipe -> recipe.id() + ":maxThreads=" + recipe.maxThreads()).toList(), activeRecipeCounts());
         if (paused || thread.getStatus() != RecipeThread.Status.IDLE || !thread.isIdle()) return;
         List<MachineRecipe> available = availableCandidates(candidates);
-        if (available.isEmpty()) return;
+        if (available.isEmpty()) {
+            MMCR.LOG.info("[MMCR/Temp][Factory] finish restart blocked lane={}, reason=no available candidate, counts={}",
+                    thread.laneId(), activeRecipeCounts());
+            return;
+        }
         int parallelism = availableParallelism();
-        if (thread.tryRestartLastRecipe(available, parallelism, structureVersion, modifierSnapshotVersion)) return;
+        if (thread.tryRestartLastRecipe(available, parallelism, structureVersion, modifierSnapshotVersion)) {
+            MMCR.LOG.info("[MMCR/Temp][Factory] finish restart accepted lane={}, state={}", thread.laneId(), threadState(thread));
+            return;
+        }
         available = availableCandidates(candidates);
-        if (!available.isEmpty()) thread.searchAndStartRecipe(available, availableParallelism(), structureVersion);
+        if (!available.isEmpty()) {
+            boolean started = thread.searchAndStartRecipe(available, availableParallelism(), structureVersion);
+            MMCR.LOG.info("[MMCR/Temp][Factory] finish normal search lane={}, candidates={}, started={}, state={}",
+                    thread.laneId(), available.stream().map(MachineRecipe::id).toList(), started, threadState(thread));
+        }
+    }
+
+    private String threadState(FactoryRecipeThread thread) {
+        MachineRecipe pending = thread.getPendingStartRecipe();
+        var active = thread.getActiveRecipe();
+        return "status=" + thread.getStatus()
+                + ",pending=" + (pending == null ? "-" : pending.id())
+                + ",active=" + (active == null || active.getRecipe() == null ? "-" : active.getRecipe().id());
+    }
+
+    private String threadStateSummary() {
+        return threads.stream().map(thread -> thread.laneId() + "{" + threadState(thread) + "}").toList().toString();
     }
 
     private void clearFinishedThreadContinuations() {
