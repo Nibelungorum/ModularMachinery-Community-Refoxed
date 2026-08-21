@@ -40,8 +40,10 @@ public record RuntimeContentSnapshot(
             if (!ClientRuntimeSnapshotBridge.canApply(contentVersion)) return false;
             validateForClient();
             ClientRuntimeSnapshotBridge.validate(this);
-            MachineStructureRegistry.replaceClientSnapshot(structures);
-            RecipeRegistry.replaceClientSnapshot(recipes);
+            if (!ClientRuntimeSnapshotBridge.isIntegratedServer()) {
+                MachineStructureRegistry.replaceClientSnapshot(structures);
+                RecipeRegistry.replaceClientSnapshot(recipes);
+            }
             RecipeCraftingContextPool.onGlobalReload();
             ClientRuntimeSnapshotBridge.apply(this);
             ClientRuntimeSnapshotBridge.markApplied(contentVersion);

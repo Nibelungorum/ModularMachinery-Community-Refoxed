@@ -83,6 +83,9 @@ final class KubeJSContentReloadTransaction {
         Map<Identifier, MachineRecipe> mergedRecipes = new LinkedHashMap<>(RecipeRegistry.dynamicSnapshot());
         removePublishedRecipes(mergedRecipes);
         mergedRecipes.putAll(recipes);
+        MMCR.LOG.info("[MMCR/Temp][KubeJS-Tx] scriptRecipes={}, previousDynamic={}, dataPack={}, mergedDynamic={}",
+                recipes.keySet(), RecipeRegistry.dynamicSnapshot().keySet(),
+                RecipeRegistry.dataPackSnapshot().keySet(), mergedRecipes.keySet());
         RuntimeContentCoordinator.CommitResult committed =
                 RuntimeContentCoordinator.commitDynamicAndSnapshot(mergedStructures, mergedRecipes);
         publishedStructures = Map.copyOf(structures);

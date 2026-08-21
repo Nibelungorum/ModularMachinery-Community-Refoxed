@@ -23,6 +23,19 @@ public final class ClientRuntimeSnapshotBridge {
         lastAppliedVersion = version;
     }
 
+    static boolean isIntegratedServer() {
+        try {
+            Class<?> minecraftClass = Class.forName("net.minecraft.client.Minecraft");
+            Object minecraft = minecraftClass.getMethod("getInstance").invoke(null);
+            if (minecraft == null) return false;
+            return minecraftClass.getMethod("getSingleplayerServer").invoke(minecraft) != null;
+        } catch (ClassNotFoundException ignored) {
+            return false;
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("Failed to detect integrated server", exception);
+        }
+    }
+
     public static synchronized void resetForConnection() {
         RecipeCraftingContextPool.onGlobalReload();
         resetClientCaches();
