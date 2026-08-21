@@ -7,5 +7,6 @@ package cn.howxu.mmcr.internal.multiblock;
  */
 public enum ComponentClaimPolicy {
     EXCLUSIVE,
-    SHARED_SERIALIZED
+    SHARED_SERIALIZED,
+    SHARED_CAPACITY
 }

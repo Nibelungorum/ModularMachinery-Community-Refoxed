@@ -92,4 +92,25 @@ class StructureClaimRegistryTest {
 
         assertThat(registry.domainFor(first)).isEqualTo(original);
     }
+
+    @Test
+    void shareableCapacityClaimsReleaseWithoutLeavingStaleOwners() {
+        BlockPos first = new BlockPos(0, 64, 0);
+        BlockPos second = new BlockPos(10, 64, 0);
+        BlockPos capacity = new BlockPos(1, 64, 0);
+        StructureClaimRegistry registry = new StructureClaimRegistry();
+        StructureClaimRegistry.Claim claim = new StructureClaimRegistry.Claim(
+                capacity, ComponentClaimPolicy.SHARED_CAPACITY);
+
+        assertThat(registry.claim(first, List.of(claim)).accepted()).isTrue();
+        assertThat(registry.claim(second, List.of(claim)).accepted()).isTrue();
+        assertThat(registry.ownersOf(capacity)).containsExactlyInAnyOrder(first, second);
+
+        registry.release(first);
+        assertThat(registry.ownersOf(capacity)).containsExactly(second);
+
+        registry.release(second);
+        assertThat(registry.ownersOf(capacity)).isEmpty();
+        assertThat(registry.claimedControllers()).isEmpty();
+    }
 }

@@ -678,7 +678,7 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
-    void structure_with_multiple_factory_controllers_does_not_form() throws Exception {
+    void structure_with_multiple_factory_controllers_forms_and_aggregates_capacity() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         var machine = new DynamicMachine(
                 MMCR.id("duplicate_factory_controller_machine"),
@@ -696,10 +696,12 @@ class MachineControllerBlockEntityTest {
         FactorySchedulerBlockEntity second = factoryController(controllerPos.offset(2, 0, 0));
         MachineControllerBlockEntity controller = controllerForFactoriesFormation(machine, controllerPos, first, second);
 
-        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isFalse();
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
 
-        assertThat(controller.isFormed()).isFalse();
-        assertThat(controller.getFactoryController()).isNull();
+        assertThat(controller.isFormed()).isTrue();
+        assertThat(controller.getFactoryController()).isSameAs(first);
+        assertThat(controller.factoryComponents()).containsExactly(first, second);
+        assertThat(controller.factorySchedulerThreadCount()).isEqualTo(2);
     }
 
     @Test

@@ -1257,7 +1257,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
             } else if (entity instanceof MachineComponentTile tile) {
                 claims.add(new StructureClaimRegistry.Claim(entity.getBlockPos(), tile.claimPolicy()));
             } else if (entity instanceof ParallelControllerBlockEntity || entity instanceof FactorySchedulerBlockEntity) {
-                claims.add(new StructureClaimRegistry.Claim(entity.getBlockPos(), ComponentClaimPolicy.EXCLUSIVE));
+                ComponentClaimPolicy policy = entity instanceof FactorySchedulerBlockEntity
+                        ? ComponentClaimPolicy.SHARED_CAPACITY
+                        : ComponentClaimPolicy.EXCLUSIVE;
+                claims.add(new StructureClaimRegistry.Claim(entity.getBlockPos(), policy));
             }
         }
         return claims;
@@ -1437,12 +1440,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private java.util.Optional<PortRequirementSpec.Failure> validateFactoryControllerCount(
             Machine candidate, BlockArray rotatedPattern, @Nullable CompiledMachinePattern compiledPattern, Direction facing) {
         int count = countFactoryControllers(rotatedPattern, compiledPattern, facing);
-        if (count <= 1) return java.util.Optional.empty();
+        if (count == 0 || candidate.hasFactory()) return java.util.Optional.empty();
         return java.util.Optional.of(new PortRequirementSpec.Failure(
                 "factory_controller",
                 count,
                 0,
-                OptionalInt.of(1),
+                OptionalInt.of(0),
                 PortRequirementSpec.FailureReason.TOO_MANY));
     }
 
