@@ -96,11 +96,14 @@ class MultiblockPreviewBuilderTest {
     }
 
     @Test
-    void preview_state_returns_empty_for_unsupported_predicate() {
-        BlockPredicate unsupported = new BlockPredicate.OfTag(TagKey.create(
-                BuiltInRegistries.BLOCK.key(), Identifier.fromNamespaceAndPath("mmcr", "preview_test")));
+    void preview_state_returns_one_block_for_a_tag_predicate() throws Exception {
+        TagKey<Block> tag = TagKey.create(BuiltInRegistries.BLOCK.key(), Identifier.fromNamespaceAndPath("mmcr", "preview_test"));
+        var bindTags = Class.forName("net.minecraft.core.Holder$Reference").getDeclaredMethod("bindTags", java.util.Collection.class);
+        bindTags.setAccessible(true);
+        bindTags.invoke(Blocks.OAK_LOG.builtInRegistryHolder(), java.util.Set.of(tag));
+        BlockPredicate unsupported = new BlockPredicate.OfTag(tag);
 
-        assertTrue(MultiblockPreviewBuilder.previewState(unsupported).isEmpty());
+        assertTrue(MultiblockPreviewBuilder.previewState(unsupported).isPresent());
     }
 
     @Test

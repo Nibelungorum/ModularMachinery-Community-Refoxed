@@ -25,7 +25,8 @@ public final class KubeJSRecipeSync {
         for (RecipeHolder<?> holder : holders) {
             if (holder.value() instanceof MachineRecipe machineRecipe) {
                 Identifier id = holder.id().identifier();
-                if (!KubeJSContentReloadTransaction.ownsRecipe(id)) {
+                if (!KubeJSContentReloadTransaction.ownsRecipe(id)
+                        && !KubeJSContentReloadTransaction.ownsRecipe(machineRecipe)) {
                     recipes.put(id, machineRecipe.withId(id));
                 }
             }

@@ -188,7 +188,9 @@ public final class FactoryRecipeScheduler {
     private Map<Identifier, Integer> activeRecipeCounts() {
         Map<Identifier, Integer> counts = new LinkedHashMap<>();
         for (FactoryRecipeThread thread : threads) {
-            if (thread.getStatus() == RecipeThread.Status.FAILED || thread.isIdle()) continue;
+            if (thread.getStatus() == RecipeThread.Status.FAILED) continue;
+            MachineRecipe pendingRecipe = thread.getPendingStartRecipe();
+            if (pendingRecipe != null) counts.merge(pendingRecipe.id(), 1, Integer::sum);
             var activeRecipe = thread.getActiveRecipe();
             if (activeRecipe == null || activeRecipe.getRecipe() == null) continue;
             counts.merge(activeRecipe.getRecipe().id(), 1, Integer::sum);

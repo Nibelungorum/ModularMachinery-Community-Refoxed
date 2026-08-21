@@ -72,4 +72,21 @@ class KubeJSRecipeSyncTest {
 
         assertThat(RecipeRegistry.dataPackSnapshot()).doesNotContainKey(id);
     }
+
+    @Test
+    void sync_does_not_replace_explicit_kubejs_id_with_generated_holder_id() {
+        Identifier explicitId = MMCR.id("explicit_recipe");
+        MachineRecipe explicit = new MachineRecipe(explicitId, MMCR.id("machine"), 1, List.of(), List.of());
+        KubeJSContentReloadTransaction transaction = new KubeJSContentReloadTransaction();
+        transaction.registerRecipe(explicit);
+        KubeJSContentReloadTransaction.activate(transaction);
+
+        Identifier generatedId = MMCR.id("generated_recipe");
+        MachineRecipe generated = explicit.withId(generatedId);
+        KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(ResourceKey.create(
+                Registries.RECIPE, generatedId), generated)));
+
+        assertThat(RecipeRegistry.getRecipe(explicitId)).isNull();
+        assertThat(RecipeRegistry.getRecipe(generatedId)).isNull();
+    }
 }

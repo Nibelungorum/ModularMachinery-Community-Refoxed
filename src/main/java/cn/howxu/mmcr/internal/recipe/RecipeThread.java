@@ -38,6 +38,7 @@ public abstract class RecipeThread {
     protected Status status = Status.IDLE;
     protected @Nullable String lastFailureUnloc;
     private boolean startPending;
+    private @Nullable MachineRecipe pendingStartRecipe;
     private @Nullable RecipeCraftingContext pendingStartContext;
     private @Nullable StructureClaimRegistry.ResourceDomain pendingStartDomain;
     private long nextStartToken;
@@ -100,6 +101,7 @@ public abstract class RecipeThread {
                                  ActiveMachineRecipe next, RecipeCraftingContext nextContext, long structureVersion) {
         long startToken = ++nextStartToken;
         startPending = true;
+        pendingStartRecipe = next.getRecipe();
         pendingStartContext = nextContext;
         pendingStartDomain = domain;
         pendingStartToken = startToken;
@@ -144,6 +146,7 @@ requested -> {
     private void clearPendingStart(long startToken, RecipeCraftingContext startContext) {
         if (!isPendingStart(startToken, startContext)) return;
         startPending = false;
+        pendingStartRecipe = null;
         pendingStartContext = null;
         pendingStartDomain = null;
         pendingStartToken = 0L;
@@ -333,6 +336,7 @@ requested -> {
             contextPool.returnContext(pendingContext);
         }
         activeRecipe = null;
+        pendingStartRecipe = null;
         context = null;
         tickPending = false;
         pendingTickDomain = null;
@@ -358,6 +362,7 @@ requested -> {
     public @Nullable String getLastFailureUnloc() { return lastFailureUnloc; }
     public boolean isIdle() { return !startPending && activeRecipe == null && context == null; }
     public boolean isStartPending() { return startPending; }
+    public @Nullable MachineRecipe getPendingStartRecipe() { return pendingStartRecipe; }
     public int usedParallelism() { return activeRecipe == null ? 0 : activeRecipe.getParallelism(); }
 
     private boolean isCurrentDomain(@Nullable StructureClaimRegistry.ResourceDomain domain) {

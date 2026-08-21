@@ -33,6 +33,13 @@ final class KubeJSContentReloadTransaction {
         return active != null && active.recipes.containsKey(id);
     }
 
+    static boolean ownsRecipe(MachineRecipe recipe) {
+        KubeJSContentReloadTransaction active = ACTIVE.get();
+        if (active == null || recipe == null) return false;
+        return active.recipes.values().stream()
+                .anyMatch(owned -> owned.equals(recipe.withId(owned.id())));
+    }
+
     static void activate(KubeJSContentReloadTransaction transaction) {
         ACTIVE.set(transaction);
     }

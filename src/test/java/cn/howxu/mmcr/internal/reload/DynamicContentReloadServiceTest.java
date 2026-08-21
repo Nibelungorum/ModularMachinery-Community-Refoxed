@@ -122,6 +122,17 @@ class DynamicContentReloadServiceTest {
     }
 
     @Test
+    void candidateRecipeCanReferenceStartupMachineDefinitionWithoutDynamicStructure() {
+        Identifier machineId = Identifier.parse("mmcr:startup_definition_only");
+        register(machineId.toString());
+
+        DynamicContentReloadService.reload(candidate ->
+                candidate.registerRecipe(recipe("mmcr:startup_definition_recipe", machineId.toString())));
+
+        assertThat(RecipeRegistry.getRecipe(Identifier.parse("mmcr:startup_definition_recipe"))).isNotNull();
+    }
+
+    @Test
     void reloadWithSnapshotReturnsTheCommittedEffectiveContent() {
         String machineId = "mmcr:alloy_furnace";
 
