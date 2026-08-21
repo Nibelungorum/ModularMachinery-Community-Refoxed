@@ -1359,11 +1359,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (!(tile instanceof BlockEntity container)) continue;
             components.add(new ProcessingComponent(component, container, worldPos, relativePos, foundPattern.tagsAt(relativePos)));
         }
-        LOG.info("[MMCR/Temp][Controller] pos={}, formedMachine={}, components={}, parallelControllers={}, maxParallelism={}",
-                getBlockPos(), foundMachine == null ? "<null>" : foundMachine.registryName(),
-                components.stream().map(component -> component.getContainer() == null
-                        ? "<null>" : component.getContainer().getClass().getSimpleName()).toList(),
-                parallelControllerCount(), getMaxParallelism());
         invalidateFactoryCapacity();
     }
 
@@ -1574,9 +1569,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void resumePausedRecipeAfterStructureCheck() {
         if (active != null || pausedActive == null || pausedContext == null || redstonePaused) return;
-        LOG.info("[MMCR/Temp][Controller] pos={}, resume recipe={}, parallelismBefore={}, maxParallelism={}",
-                getBlockPos(), pausedActive.getRecipe() == null ? "<null>" : pausedActive.getRecipe().id(),
-                pausedActive.getParallelism(), getMaxParallelism());
         int parallelism = getMaxParallelism();
         pausedActive.setMaxParallelism(parallelism);
         pausedActive.setParallelism(parallelism);
@@ -1584,8 +1576,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         context = pausedContext;
         context.refreshController(this);
         active.refreshTotalTick(context);
-        LOG.info("[MMCR/Temp][Controller] pos={}, resumed recipe={}, parallelismAfter={}", getBlockPos(),
-                active.getRecipe() == null ? "<null>" : active.getRecipe().id(), active.getParallelism());
         pausedActive = null;
         pausedContext = null;
         setActiveState(true);
@@ -1786,8 +1776,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (tryRestartLastRecipe(machineId)) return true;
         List<MachineRecipe> candidates = recipesForMachine();
         int maxParallelism = getMaxParallelism();
-        LOG.info("[MMCR/Temp][Controller] pos={}, searching machine={}, maxParallelism={}, candidateIds={}",
-                getBlockPos(), machineId, maxParallelism, candidates.stream().map(MachineRecipe::id).toList());
         RecipeSearchResult result;
         try {
             result = new RecipeSearchTask(this, machineId, structureVersion, maxParallelism, candidates,
@@ -1801,9 +1789,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return false;
         }
         if (result.success()) {
-            LOG.info("[MMCR/Temp][Controller] pos={}, search result recipe={}, parallelism={}, maxParallelism={}",
-                    getBlockPos(), result.activeRecipe().getRecipe().id(), result.activeRecipe().getParallelism(),
-                    result.activeRecipe().getMaxParallelism());
             return applySearchResult(result, candidates.size());
         }
         clearPendingConflictStart();
