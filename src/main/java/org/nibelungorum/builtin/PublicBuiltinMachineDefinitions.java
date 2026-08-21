@@ -2,17 +2,17 @@ package org.nibelungorum.builtin;
 
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
+import cn.howxu.mmcr.api.publicapi.PublicBuiltinRegistration;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
-import cn.howxu.mmcr.MMCR;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
 /** Public built-in machine definitions.
  * @author howxu <dev@howxu.cn>
  */
-@EventBusSubscriber(modid = MMCR.MODID)
+@EventBusSubscriber(modid = PublicBuiltinRegistration.MOD_ID)
 public final class PublicBuiltinMachineDefinitions {
     private PublicBuiltinMachineDefinitions() {
     }
@@ -24,7 +24,7 @@ public final class PublicBuiltinMachineDefinitions {
     @SubscribeEvent
     public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
         java.util.Map<net.minecraft.resources.Identifier, MachineDefinition> definitions = machineDefinitions();
-        MMCR.LOG.debug("Registering {} built-in machines", definitions.size());
+        PublicBuiltinRegistration.logger().debug("Registering {} built-in machines", definitions.size());
         definitions.forEach((id, definition) -> {
             if (!event.definitions().containsKey(id)) event.registerMachine(definition);
         });

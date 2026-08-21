@@ -1,6 +1,7 @@
 package org.nibelungorum.builtin;
 
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
+import cn.howxu.mmcr.api.publicapi.PublicBuiltinRegistration;
 import cn.howxu.mmcr.api.publicapi.machine.DisplayStack;
 import cn.howxu.mmcr.api.publicapi.machine.LevelModifier;
 import cn.howxu.mmcr.api.publicapi.machine.LevelType;
@@ -20,7 +21,7 @@ import net.neoforged.fml.loading.FMLLoader;
 /** Public built-in machine level definitions.
  * @author howxu <dev@howxu.cn>
  */
-@EventBusSubscriber(modid = "mmcr")
+@EventBusSubscriber(modid = PublicBuiltinRegistration.MOD_ID)
 public final class PublicBuiltinLevelDefinitions {
     public static final Identifier THERMAL_SMELTING_COIL_TYPE = id("thermal_smelting_coil");
     public static final Identifier COPPER_COIL = id("thermal_smelting_coil_copper");
@@ -32,7 +33,7 @@ public final class PublicBuiltinLevelDefinitions {
     }
 
     private static Identifier id(String path) {
-        return Identifier.parse("mmcr:" + path);
+        return PublicBuiltinRegistration.id(path);
     }
 
     @SubscribeEvent

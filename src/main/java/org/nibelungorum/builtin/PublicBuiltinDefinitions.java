@@ -1,6 +1,6 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.publicapi.PublicBuiltinRegistration;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
@@ -15,7 +15,6 @@ import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
-import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.component.DataComponentMap;
@@ -153,8 +152,11 @@ public final class PublicBuiltinDefinitions {
     }
 
     private static void thermal(Map<Identifier, MachineRecipeDefinition> out, String name, int ticks, Item input, Item output, int energy, Identifier level) {
-        out.put(id("thermal_smelting_furnace_" + name), recipe("thermal_smelting_furnace_" + name, THERMAL_SMELTING_FURNACE, ticks)
-                .inputItem(Items.COAL, 1).inputItem(input, 1).inputEnergy(energy).outputItem(output, 1).maxThreads(4).build());
+        MachineRecipeDefinition definition = recipe("thermal_smelting_furnace_" + name, THERMAL_SMELTING_FURNACE, ticks)
+                .inputItem(Items.COAL, 1).inputItem(input, 1).inputEnergy(energy).outputItem(output, 1).maxThreads(4).build();
+        PublicBuiltinRegistration.logger().debug("[MMCR-DIAG] Built-in thermal recipe {} requested level {} and produced level requirements {}",
+                definition.id(), level, definition.levelRequirements());
+        out.put(id("thermal_smelting_furnace_" + name), definition);
     }
 
     private static void purpurRecipes(Map<Identifier, MachineRecipeDefinition> out) {
@@ -178,7 +180,7 @@ public final class PublicBuiltinDefinitions {
         MachineRecipeBuilder builder = recipe("purpur_furnace_" + path, PURPUR_FURNACE, ticks).inputItem(Items.COAL, 1).inputEnergy(energy).outputItem(output, count);
         for (SmartInterfaceRequirement requirement : requirements) builder.requirement(requirement);
         MachineRecipeDefinition definition = builder.build();
-        MMCR.LOG.debug("[MMCR-DIAG] Built-in purpur recipe {} produced item outputs {} and requirements {}",
+        PublicBuiltinRegistration.logger().debug("[MMCR-DIAG] Built-in purpur recipe {} produced item outputs {} and requirements {}",
                 definition.id(), definition.itemOutputs(), definition.requirements());
         out.put(id("purpur_furnace_" + path), definition);
     }
@@ -321,14 +323,14 @@ public final class PublicBuiltinDefinitions {
         })).build(id);
     }
 
-    private static BlockPredicate controller(Identifier id) { return BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(id).get()); }
+    private static BlockPredicate controller(Identifier id) { return BlockPredicate.deferredBlock(PublicBuiltinRegistration.controller(id)); }
     private static BlockPredicate controller(Identifier id, boolean vertical, boolean symmetric, boolean required) { return controller(id); }
     private static UnaryOperator<cn.howxu.mmcr.api.publicapi.machine.ControllerSpec.Builder> controllerSpec(Identifier id, boolean vertical, boolean symmetric, boolean required) {
         return builder -> builder.id(Identifier.fromNamespaceAndPath(id.getNamespace(), id.getPath() + "_controller"))
                 .allowVerticalFacing(vertical).fullyRotationallySymmetric(symmetric).requireVerticalFacing(required);
     }
     private static BlockPredicate block(Block block) { return BlockPredicate.block(block); }
-    private static BlockPredicate port(String id) { return BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get(id).get()); }
+    private static BlockPredicate port(String id) { return BlockPredicate.deferredBlock(PublicBuiltinRegistration.block(id)); }
     private static BlockPredicate ports() { return any(itemPorts(), fluidPorts(), energyPorts()); }
     private static BlockPredicate itemPorts() { return any(itemInputPorts(), itemOutputPorts()); }
     private static BlockPredicate itemInputPorts() { return any(port("item_input_bus"), port("item_input_bus_tiny"), port("item_input_bus_small"), port("item_input_bus_reinforced"), port("item_input_bus_big"), port("item_input_bus_huge"), port("item_input_bus_ludicrous")); }
@@ -345,7 +347,7 @@ public final class PublicBuiltinDefinitions {
     private static BlockPredicate itemParallel() { return parallelControllers(); }
     private static BlockPredicate any(BlockPredicate... predicates) { return BlockPredicate.any(predicates); }
     private static Identifier mc(String path) { return Identifier.withDefaultNamespace(path); }
-    static Identifier id(String path) { return Identifier.fromNamespaceAndPath("mmcr", path); }
+    static Identifier id(String path) { return PublicBuiltinRegistration.id(path); }
     private static Item modItem(String path) { return BuiltInRegistries.ITEM.getValue(id(path)); }
     private static ItemStack namedItem(Item item, int count, String name) { ItemStack stack = new ItemStack(item, count); stack.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, net.minecraft.network.chat.Component.literal(name)); return stack; }
     private static DataComponentPredicateSet named(String name) { return new DataComponentPredicateSet(Map.of(
