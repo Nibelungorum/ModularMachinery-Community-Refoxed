@@ -21,6 +21,8 @@ import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
 import cn.howxu.mmcr.api.publicapi.machine.StructureRequirements;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.StructureStage;
+import cn.howxu.mmcr.api.publicapi.machine.LevelModifier;
+import cn.howxu.mmcr.api.publicapi.machine.LevelType;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import net.minecraft.core.BlockPos;
@@ -37,6 +39,22 @@ import java.util.Map;
  */
 public final class PublicMachineAdapter {
     private PublicMachineAdapter() {
+    }
+
+    public static cn.howxu.mmcr.api.machine.level.LevelType toLevelType(LevelType type) {
+        return new cn.howxu.mmcr.api.machine.level.LevelType(type.id(), type.displayName());
+    }
+
+    public static cn.howxu.mmcr.api.machine.level.MachineLevel toMachineLevel(
+            cn.howxu.mmcr.api.publicapi.machine.MachineLevel level) {
+        return new cn.howxu.mmcr.api.machine.level.MachineLevel(level.id(), level.typeId(), level.priority(),
+                toBlockPredicate(level.statePredicate()), level.representative().stack(), toLevelModifier(level.modifier()));
+    }
+
+    private static cn.howxu.mmcr.api.machine.level.LevelModifier toLevelModifier(LevelModifier modifier) {
+        return new cn.howxu.mmcr.api.machine.level.LevelModifier(modifier.durationMultiplier(),
+                modifier.energyMultiplier(), modifier.outputMultiplier(), modifier.parallelismBonus(),
+                modifier.factoryThreadBonus());
     }
 
     public static cn.howxu.mmcr.api.machine.BlockArray toBlockArray(PatternDefinition pattern) {
@@ -164,15 +182,20 @@ public final class PublicMachineAdapter {
     private static cn.howxu.mmcr.api.machine.BlockPredicate toBlockPredicate(
             cn.howxu.mmcr.api.publicapi.machine.BlockPredicate predicate) {
         if (predicate.isMachineCoupler()) return cn.howxu.mmcr.api.machine.BlockPredicate.machineCoupler();
-        return predicate.block()
-                .<cn.howxu.mmcr.api.machine.BlockPredicate>map(cn.howxu.mmcr.api.machine.BlockPredicate.OfBlock::new)
-                .or(() -> predicate.blockSupplier()
-                        .map(cn.howxu.mmcr.api.machine.BlockPredicate.DeferredBlock::new))
-                .or(() -> predicate.tag().map(cn.howxu.mmcr.api.machine.BlockPredicate.OfTag::new))
-                .orElseGet(() -> new cn.howxu.mmcr.api.machine.BlockPredicate.AnyOf(
-                        predicate.alternatives().stream()
-                                .map(PublicMachineAdapter::toBlockPredicate)
-                                .toList()));
+        if (predicate.blockState().isPresent()) {
+            return new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState(predicate.blockState().get());
+        }
+        if (predicate.block().isPresent()) {
+            return new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlock(predicate.block().get());
+        }
+        if (predicate.blockSupplier().isPresent()) {
+            return new cn.howxu.mmcr.api.machine.BlockPredicate.DeferredBlock(predicate.blockSupplier().get());
+        }
+        if (predicate.tag().isPresent()) {
+            return new cn.howxu.mmcr.api.machine.BlockPredicate.OfTag(predicate.tag().get());
+        }
+        return new cn.howxu.mmcr.api.machine.BlockPredicate.AnyOf(
+                predicate.alternatives().stream().map(PublicMachineAdapter::toBlockPredicate).toList());
     }
 
     private static MachineControllerSpec toControllerSpec(Identifier machineId, ControllerSpec spec) {

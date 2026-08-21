@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
+import cn.howxu.mmcr.internal.api.PublicMachineAdapter;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import net.minecraft.resources.Identifier;
@@ -104,6 +105,10 @@ public class RegisterMachineStructuresEvent extends Event {
         }
     }
 
+    public void registerLevelType(cn.howxu.mmcr.api.publicapi.machine.LevelType type) {
+        registerLevelType(PublicMachineAdapter.toLevelType(require(type, "level type")));
+    }
+
     public void registerLevel(MachineLevel level) {
         requireOpen();
         require(level, "level");
@@ -113,6 +118,10 @@ public class RegisterMachineStructuresEvent extends Event {
         if (levels.putIfAbsent(level.id(), level) != null) {
             throw new ApiRegistrationException("Duplicate machine level: " + level.id());
         }
+    }
+
+    public void registerLevel(cn.howxu.mmcr.api.publicapi.machine.MachineLevel level) {
+        registerLevel(PublicMachineAdapter.toMachineLevel(require(level, "level")));
     }
 
     public void registerModifier(Identifier id, ModifierDefinition definition) {

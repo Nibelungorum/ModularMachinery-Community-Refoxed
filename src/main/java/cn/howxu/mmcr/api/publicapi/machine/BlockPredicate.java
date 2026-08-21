@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.publicapi.machine;
 
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -18,33 +19,39 @@ import java.util.function.Supplier;
 public final class BlockPredicate {
     private final boolean machineCoupler;
     private final Block block;
+    private final BlockState state;
     private final Supplier<? extends Block> blockSupplier;
     private final TagKey<Block> tag;
     private final List<BlockPredicate> alternatives;
 
-    private BlockPredicate(boolean machineCoupler, Block block, Supplier<? extends Block> blockSupplier,
+    private BlockPredicate(boolean machineCoupler, Block block, BlockState state, Supplier<? extends Block> blockSupplier,
             TagKey<Block> tag, List<BlockPredicate> alternatives) {
         this.machineCoupler = machineCoupler;
         this.block = block;
+        this.state = state;
         this.blockSupplier = blockSupplier;
         this.tag = tag;
         this.alternatives = alternatives;
     }
 
     public static BlockPredicate block(Block block) {
-        return new BlockPredicate(false, Objects.requireNonNull(block, "block"), null, null, List.of());
+        return new BlockPredicate(false, Objects.requireNonNull(block, "block"), null, null, null, List.of());
+    }
+
+    public static BlockPredicate blockState(BlockState state) {
+        return new BlockPredicate(false, null, Objects.requireNonNull(state, "state"), null, null, List.of());
     }
 
     public static BlockPredicate deferredBlock(Supplier<? extends Block> blockSupplier) {
-        return new BlockPredicate(false, null, Objects.requireNonNull(blockSupplier, "blockSupplier"), null, List.of());
+        return new BlockPredicate(false, null, null, Objects.requireNonNull(blockSupplier, "blockSupplier"), null, List.of());
     }
 
     public static BlockPredicate tag(TagKey<Block> tag) {
-        return new BlockPredicate(false, null, null, Objects.requireNonNull(tag, "tag"), List.of());
+        return new BlockPredicate(false, null, null, null, Objects.requireNonNull(tag, "tag"), List.of());
     }
 
     public static BlockPredicate machineCoupler() {
-        return new BlockPredicate(true, null, null, null, List.of());
+        return new BlockPredicate(true, null, null, null, null, List.of());
     }
 
     public static BlockPredicate any(BlockPredicate... predicates) {
@@ -60,7 +67,7 @@ public final class BlockPredicate {
         for (BlockPredicate predicate : predicates) {
             Objects.requireNonNull(predicate, "predicate");
         }
-        return new BlockPredicate(false, null, null, null, List.copyOf(predicates));
+        return new BlockPredicate(false, null, null, null, null, List.copyOf(predicates));
     }
 
     public boolean isMachineCoupler() {
@@ -69,6 +76,10 @@ public final class BlockPredicate {
 
     public Optional<Block> block() {
         return Optional.ofNullable(block);
+    }
+
+    public Optional<BlockState> blockState() {
+        return Optional.ofNullable(state);
     }
 
     public Optional<Supplier<? extends Block>> blockSupplier() {
@@ -89,12 +100,13 @@ public final class BlockPredicate {
         if (!(other instanceof BlockPredicate that)) return false;
         return machineCoupler == that.machineCoupler
                 && Objects.equals(block, that.block)
+                && Objects.equals(state, that.state)
                 && Objects.equals(tag, that.tag)
                 && alternatives.equals(that.alternatives);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(machineCoupler, block, tag, alternatives);
+        return Objects.hash(machineCoupler, block, state, tag, alternatives);
     }
 }

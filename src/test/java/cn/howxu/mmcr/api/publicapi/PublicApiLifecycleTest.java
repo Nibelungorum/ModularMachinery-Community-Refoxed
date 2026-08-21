@@ -5,10 +5,14 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
+import cn.howxu.mmcr.api.publicapi.machine.DisplayStack;
+import cn.howxu.mmcr.api.publicapi.machine.LevelModifier;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
+import cn.howxu.mmcr.api.publicapi.machine.MachineLevel;
 import cn.howxu.mmcr.api.publicapi.machine.PatternBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
+import cn.howxu.mmcr.api.publicapi.machine.LevelType;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
@@ -237,6 +241,24 @@ class PublicApiLifecycleTest {
         assertThatThrownBy(event::freeze)
                 .isInstanceOf(ApiRegistrationException.class)
                 .hasMessageContaining("unknown_modifier");
+    }
+
+    @Test
+    void public_level_declarations_convert_to_canonical_runtime_levels() {
+        Identifier typeId = id("public_type");
+        Identifier levelId = id("public_level");
+        MMCRMachineStructuresEvent event = new MMCRMachineStructuresEvent(List.of());
+        event.registerLevelType(new LevelType(typeId, net.minecraft.network.chat.Component.literal("Public")));
+        event.registerLevel(new MachineLevel(levelId, typeId, 2,
+                BlockPredicate.block(Blocks.FURNACE),
+                DisplayStack.of(new net.minecraft.world.item.ItemStack(Blocks.FURNACE)),
+                new LevelModifier(0.5D, 1D, 1D, 1, 2)));
+
+        var snapshot = event.freeze();
+
+        assertThat(snapshot.levelTypes().get(typeId)).isInstanceOf(cn.howxu.mmcr.api.machine.level.LevelType.class);
+        assertThat(snapshot.levels().get(levelId).priority()).isEqualTo(2);
+        assertThat(snapshot.levels().get(levelId).modifier().parallelismBonus()).isEqualTo(1);
     }
 
     @Test
