@@ -75,6 +75,8 @@ jobs:
       - name: Build release notes
         id: notes
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
