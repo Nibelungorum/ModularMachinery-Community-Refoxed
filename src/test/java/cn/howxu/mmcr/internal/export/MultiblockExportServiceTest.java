@@ -44,7 +44,7 @@ class MultiblockExportServiceTest {
     }
 
     @Test
-    void renderJavaUsesPatternBuilderAndInlineRegistryLookups() {
+    void renderJavaUsesPublicApiFragment() {
         Identifier casing = Identifier.fromNamespaceAndPath("mmcr", "basic_casing");
         Identifier controller = Identifier.fromNamespaceAndPath("mmcr", "blast_furnace_controller");
 
@@ -57,22 +57,38 @@ class MultiblockExportServiceTest {
                 new MultiblockExportService.SnapshotEntry(new BlockPos(0, 1, 0), Identifier.fromNamespaceAndPath("minecraft", "air"), true)
         ), Direction.SOUTH);
 
-        assertThat(java).contains("import cn.howxu.mmcr.api.machine.BlockArray;");
-        assertThat(java).contains("import cn.howxu.mmcr.api.machine.BlockPredicate;");
-        assertThat(java).contains("import net.minecraft.core.registries.BuiltInRegistries;");
-        assertThat(java).contains("import net.minecraft.resources.Identifier;");
-        assertThat(java).doesNotContain("import net.minecraft.core.BlockPos;");
-        assertThat(java).doesNotContain("import java.util.LinkedHashMap;");
-        assertThat(java).doesNotContain("Map<BlockPos, BlockPredicate> blocks");
-        assertThat(java).doesNotContain("blocks.put");
-        assertThat(java).doesNotContain("Block basicCasing");
-        assertThat(java).contains("BlockArray pattern = BlockArray.builder()");
-        assertThat(java).contains(".pattern(\"X X\")");
-        assertThat(java).contains(".pattern(\" C \")");
-        assertThat(java).contains(".set('C', new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"mmcr:blast_furnace_controller\"))))");
-        assertThat(java).contains(".set('X', new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"mmcr:basic_casing\"))))");
+        assertThat(java).contains(".pattern(p -> p");
+        assertThat(java).contains(".layer(\"X X\")");
+        assertThat(java).contains(".layer(\" C \")");
+        assertThat(java).contains(".where('X', new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"mmcr:basic_casing\"))))");
+        assertThat(java).doesNotContain("import ");
+        assertThat(java).doesNotContain("BlockArray pattern");
+        assertThat(java).doesNotContain(".build()");
+        assertThat(java).doesNotContain(".where('C'");
+        assertThat(java).doesNotContain(".controller(");
         assertThat(java).doesNotContain("minecraft:air");
-        assertThat(java).contains(".build();");
+    }
+
+    @Test
+    void renderKubeJsUsesPatternAndSetsIncludingController() {
+        Identifier casing = Identifier.fromNamespaceAndPath("mmcr", "basic_casing");
+        Identifier controller = Identifier.fromNamespaceAndPath("mmcr", "blast_furnace_controller");
+
+        String kubeJs = MultiblockExportService.renderKubeJS(List.of(
+                new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, controller, false),
+                new MultiblockExportService.SnapshotEntry(new BlockPos(-1, 0, -1), casing, false),
+                new MultiblockExportService.SnapshotEntry(new BlockPos(1, 0, -1), casing, false),
+                new MultiblockExportService.SnapshotEntry(new BlockPos(-1, 0, 1), casing, false),
+                new MultiblockExportService.SnapshotEntry(new BlockPos(1, 0, 1), casing, false),
+                new MultiblockExportService.SnapshotEntry(new BlockPos(0, 1, 0), Identifier.fromNamespaceAndPath("minecraft", "air"), true)
+        ), Direction.SOUTH);
+
+        assertThat(kubeJs).contains(".pattern(\"X X\", \" C \", \"X X\")");
+        assertThat(kubeJs).contains(".set('X', api.block('mmcr:basic_casing'))");
+        assertThat(kubeJs).contains(".set('C', api.block('mmcr:blast_furnace_controller'))");
+        assertThat(kubeJs).doesNotContain("BlockArray");
+        assertThat(kubeJs).doesNotContain("import ");
+        assertThat(kubeJs).doesNotContain(".layer(");
     }
 
     @Test
@@ -88,11 +104,8 @@ class MultiblockExportServiceTest {
                         BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.UP), casing, false)
         ), Direction.UP);
 
-        assertThat(java).contains("BlockArray pattern = BlockArray.builder()");
-        assertThat(java).contains(".pattern(\"CX\")");
-        assertThat(java).contains(".pattern(\"X \")");
-        assertThat(java).contains(".set('C', new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"mmcr:blast_furnace_controller\"))))");
-        assertThat(java).contains(".set('X', new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"mmcr:basic_casing\"))))");
+        assertThat(java).contains(".layer(\"CX\")");
+        assertThat(java).contains(".layer(\"X \")");
     }
 
     @Test
@@ -129,11 +142,11 @@ class MultiblockExportServiceTest {
 
         String java = MultiblockExportService.renderJava(entries, controllerFace, rollFacing);
 
-        assertThat(java).contains(".pattern(\"AAA\", \"AAA\", \"AAA\")");
-        assertThat(java).contains(".pattern(\"XBX\", \"B B\", \"XBX\")");
-        assertThat(java).contains(".pattern(\"XDX\", \"D D\", \"XDX\")");
-        assertThat(java).contains(".pattern(\"XEX\", \"ECE\", \"XEX\")");
-        assertThat(java).doesNotContain(".pattern(\"AAA\", \"XBX\", \"XDX\", \"XEX\")");
+        assertThat(java).contains(".layer(\"AAA\", \"AAA\", \"AAA\")");
+        assertThat(java).contains(".layer(\"XBX\", \"B B\", \"XBX\")");
+        assertThat(java).contains(".layer(\"XDX\", \"D D\", \"XDX\")");
+        assertThat(java).contains(".layer(\"XEX\", \"ECE\", \"XEX\")");
+        assertThat(java).doesNotContain(".layer(\"AAA\", \"XBX\", \"XDX\", \"XEX\")");
     }
 
     private static Identifier idFor(char c) {
@@ -156,7 +169,7 @@ class MultiblockExportServiceTest {
 
         assertThat(java).doesNotContain("import net.minecraft.world.level.block.Blocks;");
         assertThat(java).doesNotContain("Blocks.STONE");
-        assertThat(java).contains(".set('X', new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"minecraft:stone\"))))");
+        assertThat(java).contains(".where('X', new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"minecraft:stone\"))))");
     }
 
     @Test

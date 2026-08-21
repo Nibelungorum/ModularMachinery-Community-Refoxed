@@ -35,15 +35,21 @@ public final class ExportCommand {
 
     private static final int MAX_EXPORT_VOLUME = 3_276_800;
 
+    private enum ExportFormat {
+        JAVA,
+        KUBEJS
+    }
+
     private ExportCommand() {}
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("mmcr")
                 .then(Commands.literal("export")
-                        .executes(ExportCommand::run)));
+                        .then(Commands.literal("java").executes(ctx -> run(ctx, ExportFormat.JAVA)))
+                        .then(Commands.literal("kjs").executes(ctx -> run(ctx, ExportFormat.KUBEJS)))));
     }
 
-    private static int run(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+    private static int run(CommandContext<CommandSourceStack> ctx, ExportFormat format) throws CommandSyntaxException {
         ServerPlayer player = ctx.getSource().getPlayerOrException();
         ServerLevel level = player.level();
 
@@ -91,7 +97,7 @@ public final class ExportCommand {
 
         MultiblockExportService.executor().submit(() -> {
             try {
-                var path = MultiblockExportService.writeExport(gameDir, LocalDateTime.now(), snapshot, face, roll);
+                var path = MultiblockExportService.writeExport(gameDir, LocalDateTime.now(), snapshot, face, roll, format == ExportFormat.KUBEJS);
                 server.executeIfPossible(() -> player.sendSystemMessage(Component.translatable(
                         "command.mmcr.export.written", gameDir.relativize(path).toString())));
             } catch (Exception e) {

@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -48,63 +49,96 @@ public final class MultiblockExportService {
     }
 
     public static String renderJava(List<SnapshotEntry> entries, Direction controllerFace, Direction rollFacing) {
+        PreparedExport prepared = prepare(entries, controllerFace, rollFacing);
+        StringBuilder out = new StringBuilder(".pattern(p -> p").append(System.lineSeparator());
+        appendLayers(out, prepared, ".layer(");
+        for (Map.Entry<Identifier, Character> symbol : prepared.symbols().entrySet()) {
+            if (symbol.getValue() == 'C') continue;
+            out.append("        .where('").append(symbol.getValue()).append("', ")
+                    .append(predicateExpression(symbol.getKey())).append(")").append(System.lineSeparator());
+        }
+        return out.append(")").append(System.lineSeparator()).toString();
+    }
+
+    public static String renderKubeJS(List<SnapshotEntry> entries, Direction controllerFace) {
+        return renderKubeJS(entries, controllerFace, Direction.SOUTH);
+    }
+
+    public static String renderKubeJS(List<SnapshotEntry> entries, Direction controllerFace, Direction rollFacing) {
+        PreparedExport prepared = prepare(entries, controllerFace, rollFacing);
+        StringBuilder out = new StringBuilder(".pattern(");
+        appendLayers(out, prepared, null);
+        out.append(")").append(System.lineSeparator());
+        for (Map.Entry<Identifier, Character> symbol : prepared.symbols().entrySet()) {
+            out.append(".set('").append(symbol.getValue()).append("', api.block('")
+                    .append(escapeKubeJs(symbol.getKey().toString())).append("'))")
+                    .append(System.lineSeparator());
+        }
+        return out.toString();
+    }
+
+    private static PreparedExport prepare(List<SnapshotEntry> entries, Direction controllerFace, Direction rollFacing) {
         Direction normalizedRoll = BlockRotator.normalizedRoll(controllerFace, rollFacing);
         List<RenderedEntry> rendered = entries.stream()
                 .filter(entry -> !entry.air())
                 .map(entry -> new RenderedEntry(normalizeOffset(entry.offset(), controllerFace, normalizedRoll), entry.blockId()))
-                .sorted(Comparator
-                        .comparingInt((RenderedEntry entry) -> entry.pos().getZ())
+                .sorted(Comparator.comparingInt((RenderedEntry entry) -> entry.pos().getZ())
                         .thenComparingInt(entry -> entry.pos().getY())
                         .thenComparingInt(entry -> entry.pos().getX())
                         .thenComparing(entry -> entry.blockId().toString()))
                 .toList();
+        return new PreparedExport(rendered, assignSymbols(rendered));
+    }
 
-        String newline = System.lineSeparator();
-        StringBuilder out = new StringBuilder();
-        out.append("import cn.howxu.mmcr.api.machine.BlockArray;").append(newline);
-        out.append("import cn.howxu.mmcr.api.machine.BlockPredicate;").append(newline);
-
-        LinkedHashMap<Identifier, Character> symbols = assignSymbols(rendered);
-        out.append("import net.minecraft.core.registries.BuiltInRegistries;").append(newline);
-        out.append("import net.minecraft.resources.Identifier;").append(newline);
-        out.append(newline);
-
-        out.append("BlockArray pattern = BlockArray.builder()").append(newline);
-        if (rendered.isEmpty()) {
-            out.append("        .pattern(\" \")").append(newline);
-        } else {
-            int minX = rendered.stream().mapToInt(entry -> entry.pos().getX()).min().orElse(0);
-            int maxX = rendered.stream().mapToInt(entry -> entry.pos().getX()).max().orElse(0);
-            int minY = rendered.stream().mapToInt(entry -> entry.pos().getY()).min().orElse(0);
-            int maxY = rendered.stream().mapToInt(entry -> entry.pos().getY()).max().orElse(0);
-            int minZ = rendered.stream().mapToInt(entry -> entry.pos().getZ()).min().orElse(0);
-            int maxZ = rendered.stream().mapToInt(entry -> entry.pos().getZ()).max().orElse(0);
-
-            Map<BlockPos, Character> charsByPos = new HashMap<>();
-            for (RenderedEntry entry : rendered) {
-                charsByPos.put(entry.pos(), symbols.get(entry.blockId()));
-            }
-
+    private static void appendLayers(StringBuilder out, PreparedExport prepared, String method) {
+        List<RenderedEntry> rendered = prepared.rendered();
+        Map<BlockPos, Character> charsByPos = new HashMap<>();
+        for (RenderedEntry entry : rendered) charsByPos.put(entry.pos(), prepared.symbols().get(entry.blockId()));
+        int minX = rendered.stream().mapToInt(entry -> entry.pos().getX()).min().orElse(0);
+        int maxX = rendered.stream().mapToInt(entry -> entry.pos().getX()).max().orElse(0);
+        int minY = rendered.stream().mapToInt(entry -> entry.pos().getY()).min().orElse(0);
+        int maxY = rendered.stream().mapToInt(entry -> entry.pos().getY()).max().orElse(0);
+        int minZ = rendered.stream().mapToInt(entry -> entry.pos().getZ()).min().orElse(0);
+        int maxZ = rendered.stream().mapToInt(entry -> entry.pos().getZ()).max().orElse(0);
+        if (method == null) {
+            List<String> rows = new ArrayList<>();
+            if (rendered.isEmpty()) rows.add(" ");
             for (int z = minZ; z <= maxZ; z++) {
-                out.append("        .pattern(");
                 for (int y = minY; y <= maxY; y++) {
-                    if (y > minY) out.append(", ");
-                    out.append('"');
-                    for (int x = minX; x <= maxX; x++) {
-                        out.append(charsByPos.getOrDefault(new BlockPos(x, y, z), ' '));
-                    }
-                    out.append('"');
+                    StringBuilder row = new StringBuilder();
+                    for (int x = minX; x <= maxX; x++) row.append(charsByPos.getOrDefault(new BlockPos(x, y, z), ' '));
+                    rows.add(row.toString());
                 }
-                out.append(")").append(newline);
             }
+            for (int i = 0; i < rows.size(); i++) {
+                if (i > 0) out.append(", ");
+                out.append('"').append(rows.get(i)).append('"');
+            }
+            return;
         }
-        for (Map.Entry<Identifier, Character> symbol : symbols.entrySet()) {
-            out.append("        .set('").append(symbol.getValue()).append("', ")
-                    .append(predicateExpression(symbol.getKey())).append(")")
-                    .append(newline);
+        if (rendered.isEmpty()) {
+            appendLayer(out, method, List.of(" "));
+            return;
         }
-        out.append("        .build();").append(newline);
-        return out.toString();
+        for (int z = minZ; z <= maxZ; z++) {
+            List<String> rows = new ArrayList<>();
+            for (int y = minY; y <= maxY; y++) {
+                StringBuilder row = new StringBuilder();
+                for (int x = minX; x <= maxX; x++) row.append(charsByPos.getOrDefault(new BlockPos(x, y, z), ' '));
+                rows.add(row.toString());
+            }
+            appendLayer(out, method, rows);
+        }
+    }
+
+    private static void appendLayer(StringBuilder out, String method, List<String> rows) {
+        out.append(System.lineSeparator()).append("        ");
+        if (method != null) out.append(method);
+        for (int i = 0; i < rows.size(); i++) {
+            if (i > 0) out.append(", ");
+            out.append('"').append(rows.get(i)).append('"');
+        }
+        out.append(")");
     }
 
     public static Path nextExportPath(Path gameDir, LocalDateTime timestamp) {
@@ -120,12 +154,17 @@ public final class MultiblockExportService {
 
     public static Path writeExport(Path gameDir, LocalDateTime timestamp, List<SnapshotEntry> entries,
                                    Direction controllerFace) throws IOException {
-        return writeExport(gameDir, timestamp, entries, controllerFace, Direction.SOUTH);
+        return writeExport(gameDir, timestamp, entries, controllerFace, Direction.SOUTH, false);
     }
 
     public static Path writeExport(Path gameDir, LocalDateTime timestamp, List<SnapshotEntry> entries,
                                    Direction controllerFace, Direction rollFacing) throws IOException {
-        String text = renderJava(entries, controllerFace, rollFacing);
+        return writeExport(gameDir, timestamp, entries, controllerFace, rollFacing, false);
+    }
+
+    public static Path writeExport(Path gameDir, LocalDateTime timestamp, List<SnapshotEntry> entries,
+                                   Direction controllerFace, Direction rollFacing, boolean kubeJs) throws IOException {
+        String text = kubeJs ? renderKubeJS(entries, controllerFace, rollFacing) : renderJava(entries, controllerFace, rollFacing);
         Path path = nextExportPath(gameDir, timestamp);
         Files.createDirectories(path.getParent());
         Files.writeString(path, text);
@@ -135,25 +174,16 @@ public final class MultiblockExportService {
     private static LinkedHashMap<Identifier, Character> assignSymbols(List<RenderedEntry> rendered) {
         LinkedHashMap<Identifier, Character> symbols = new LinkedHashMap<>();
         Map<Identifier, Integer> counts = new HashMap<>();
-        for (RenderedEntry entry : rendered) {
-            counts.merge(entry.blockId(), 1, Integer::sum);
-        }
-
+        for (RenderedEntry entry : rendered) counts.merge(entry.blockId(), 1, Integer::sum);
         Identifier controller = null;
         Identifier casing = null;
         for (Identifier id : counts.keySet()) {
             String path = id.getPath();
-            if (controller == null && (path.endsWith("_controller") || path.equals("controller"))) {
-                controller = id;
-            }
-            if (casing == null || counts.get(id) > counts.get(casing)) {
-                casing = id;
-            }
+            if (controller == null && (path.endsWith("_controller") || path.equals("controller"))) controller = id;
+            if (casing == null || counts.get(id) > counts.get(casing)) casing = id;
         }
-
         if (controller != null) symbols.put(controller, 'C');
         if (casing != null && !symbols.containsKey(casing)) symbols.put(casing, 'X');
-
         String available = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         for (RenderedEntry entry : rendered) {
             if (symbols.containsKey(entry.blockId())) continue;
@@ -163,20 +193,28 @@ public final class MultiblockExportService {
                 symbols.put(entry.blockId(), c);
                 break;
             }
-            if (!symbols.containsKey(entry.blockId())) {
-                throw new IllegalArgumentException("Too many unique blocks to export as single-character pattern symbols");
-            }
+            if (!symbols.containsKey(entry.blockId())) throw new IllegalArgumentException("Too many unique blocks to export as single-character pattern symbols");
         }
         return symbols;
     }
 
     private static String predicateExpression(Identifier id) {
-        return "new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"" + id + "\")))";
+        return "new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"" + escapeJava(id.toString()) + "\")))";
+    }
+
+    private static String escapeJava(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private static String escapeKubeJs(String value) {
+        return value.replace("\\", "\\\\").replace("'", "\\'");
     }
 
     public record SnapshotEntry(BlockPos offset, Identifier blockId, boolean air) {}
 
     private record RenderedEntry(BlockPos pos, Identifier blockId) {}
+
+    private record PreparedExport(List<RenderedEntry> rendered, LinkedHashMap<Identifier, Character> symbols) {}
 
     private static final class ExportThreadFactory implements ThreadFactory {
         @Override
