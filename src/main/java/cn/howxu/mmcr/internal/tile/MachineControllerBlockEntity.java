@@ -104,7 +104,7 @@ import java.util.OptionalInt;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class MachineControllerBlockEntity extends BlockEntity implements FactorySchedulerBlockEntity.SyncListener {
+public class MachineControllerBlockEntity extends BlockEntity {
 
     private static final Logger LOG = LoggerFactory.getLogger(MachineControllerBlockEntity.class);
     private static final AtomicInteger INSTANCE_COUNTER = new AtomicInteger();
@@ -654,6 +654,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         RecipeCraftingContextPool pool = contextPool();
         FactoryRecipeScheduler scheduler = factoryScheduler();
         scheduler.setThreadLimit(effectiveFactoryThreadLimit());
+        scheduler.tick();
         scheduler.syncCoreThreads(this, machine, candidates, pool);
         scheduler.tickThreads(this, candidates, structureVersion, maxParallelism, pool, this::playFinishSound);
         setActiveState(scheduler.activeThreadCount() > 0);
@@ -663,19 +664,6 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             recipeFailure = null;
         }
         syncOpenFactoryControllerMenus();
-    }
-
-    private void tickFactoryRecipes(FactorySchedulerBlockEntity ignored) {
-        tickFactoryRecipes();
-    }
-
-    void adoptFactoryScheduler(FactoryRecipeScheduler scheduler) {
-        if (factoryScheduler == null) factoryScheduler = scheduler;
-    }
-
-    @Override
-    public void syncFactoryScheduler() {
-        syncRuntimeStateIfChanged();
     }
 
     private void checkStructure() {
@@ -1215,6 +1203,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private void onStructureFormed(Machine matchedMachine, BlockArray rotatedPattern, CompiledMachinePattern compiledPattern,
                                    Direction facing, Direction rollFacing, Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
                                    Map<Identifier, MachineLevel> levels) {
+        Machine previousMachine = machine;
+        long previousStructureVersion = structureVersion;
         foundMachine = matchedMachine;
         foundPattern = rotatedPattern;
         foundCompiledPattern = compiledPattern;
@@ -1231,6 +1221,10 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         FORMED_CONTROLLERS.add(this);
         if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
         if (previousStage != matchedStructureStage) structureVersion++;
+        if ((previousMachine != null && previousMachine != matchedMachine)
+                || previousStructureVersion != structureVersion) {
+            stopFactoryController();
+        }
         structureDirty = false;
         structureCheckCounter = 0;
         if (!isFormed()) setFormed(true);

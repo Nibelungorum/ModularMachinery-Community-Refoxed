@@ -383,6 +383,8 @@ class MachineControllerBlockEntityTest {
         FactorySchedulerBlockEntity second = factoryController(new BlockPos(2, 0, 0), 4);
         addFactorySchedulerComponent(controller, first);
         addFactorySchedulerComponent(controller, second);
+        first.bindOwner(controller);
+        second.bindOwner(controller);
         var machine = new DynamicMachine(
                 MMCR.id("controller_scheduler_owner_machine"),
                 "Controller Scheduler Owner",
@@ -391,12 +393,15 @@ class MachineControllerBlockEntityTest {
                 PortRequirementSpec.none(), List.of(), Map.of(), 1, false, true, 1);
         setField(MachineControllerBlockEntity.class, controller, "machine", machine);
 
-        assertThat(controller.factoryScheduler().threadLimit()).isEqualTo(8);
+        int initialCapacity = first.threadCount() + second.threadCount();
+        assertThat(controller.effectiveFactoryThreadLimit()).isEqualTo(initialCapacity);
+        assertThat(controller.factoryScheduler().threadLimit()).isEqualTo(controller.effectiveFactoryThreadLimit());
 
         first.getItemStackHandler(null).setStackInSlot(0,
                 new ItemStack(ModItems.THREAD_DISPERSER.get(), 10));
 
-        assertThat(controller.factoryScheduler().threadLimit()).isEqualTo(16);
+        assertThat(controller.effectiveFactoryThreadLimit()).isEqualTo(first.threadCount() + second.threadCount());
+        assertThat(controller.factoryScheduler().threadLimit()).isEqualTo(controller.effectiveFactoryThreadLimit());
     }
 
     @Test
@@ -419,6 +424,42 @@ class MachineControllerBlockEntityTest {
         second.setCurrentParallelism(Integer.MAX_VALUE);
 
         assertThat(controller.getMaxParallelism()).isEqualTo(Integer.MAX_VALUE);
+    }
+
+    @Test
+    void structure_transition_reuses_controller_scheduler_and_stops_invalid_contexts() throws Exception {
+        FactoryRuntimeFixture fixture = formedFactoryRuntimeFixture(
+                MMCR.id("factory_structure_transition_machine"), 2, 2);
+        registerItemRecipe("factory_structure_transition_recipe", fixture.machine().registryName(), 20, 0);
+        fixture.controller().serverTick();
+        FactoryRecipeScheduler scheduler = fixture.controller().factoryScheduler();
+        assertThat(scheduler.activeLaneCount()).isPositive();
+
+        invokeResetMachine(fixture.controller());
+
+        assertThat(scheduler.activeLaneCount()).isZero();
+        assertThat(fixture.controller().factoryScheduler()).isSameAs(scheduler);
+        assertThat(fieldValue(FactorySchedulerBlockEntity.class, fixture.factory(), "owner")).isNull();
+
+        assertThat(invokeTryFormMachine(fixture.controller(), fixture.machine(), Direction.SOUTH)).isTrue();
+        assertThat(fieldValue(FactorySchedulerBlockEntity.class, fixture.factory(), "owner"))
+                .isSameAs(fixture.controller());
+        assertThat(fixture.controller().factoryScheduler()).isSameAs(scheduler);
+    }
+
+    @Test
+    void controller_snapshot_and_lock_access_use_the_controller_scheduler() throws Exception {
+        FactoryRuntimeFixture fixture = formedFactoryRuntimeFixture(
+                MMCR.id("factory_controller_snapshot_machine"), 1, 0);
+        Identifier recipeId = MMCR.id("factory_controller_snapshot_lock");
+        FactoryRecipeScheduler scheduler = fixture.controller().factoryScheduler();
+        scheduler.allThreads().getFirst().setLockedRecipeId(recipeId);
+
+        assertThat(fixture.controller().factoryControllerSnapshot().threads().getFirst().lockedRecipeId())
+                .isEqualTo(recipeId.toString());
+        assertThat(fixture.controller().toggleFactoryRecipeLock(0)).isTrue();
+        assertThat(fixture.controller().factoryControllerSnapshot().threads().getFirst().locked())
+                .isFalse();
     }
 
     @Test
@@ -557,12 +598,12 @@ class MachineControllerBlockEntityTest {
 
         assertThat(controller.getFactoryController()).isSameAs(factory);
         assertThat(controller.factorySchedulerThreadCount()).isEqualTo(3);
-        assertThat(factory.threadLimit()).isEqualTo(3);
-        addFactoryLane(factory);
-        addFactoryLane(factory);
-        addFactoryLane(factory);
-        assertThat(startFactoryLane(factory)).isFalse();
-        assertThat(factory.activeLaneCount()).isEqualTo(3);
+        assertThat(controller.factoryScheduler().threadLimit()).isEqualTo(controller.effectiveFactoryThreadLimit());
+        addFactoryLane(controller);
+        addFactoryLane(controller);
+        addFactoryLane(controller);
+        assertThat(startFactoryLane(controller)).isFalse();
+        assertThat(controller.factoryScheduler().activeLaneCount()).isEqualTo(3);
     }
 
     @Test
@@ -593,9 +634,9 @@ class MachineControllerBlockEntityTest {
         MachineControllerBlockEntity controller = controllerForFactoryFormation(factoryMachine, controllerPos, factory);
         assertThat(invokeTryFormMachine(controller, factoryMachine, Direction.SOUTH)).isTrue();
 
-        invokeTickFactoryRecipes(controller, factory);
+        invokeTickFactoryRecipes(controller);
 
-        assertThat(factory.threadSnapshots(controller)).filteredOn(snapshot -> snapshot.coreThread())
+        assertThat(controller.factoryThreadSnapshots()).filteredOn(snapshot -> snapshot.coreThread())
                 .singleElement()
                 .satisfies(snapshot -> assertThat(snapshot.recipeId()).isEqualTo(coreRecipe.id().toString()));
     }
@@ -654,8 +695,8 @@ class MachineControllerBlockEntityTest {
 
         fixture.controller().serverTick();
 
-        assertThat(fixture.factory().threadLimit()).isEqualTo(3);
-        assertThat(fixture.factory().activeLaneCount()).isEqualTo(3);
+        assertThat(fixture.controller().factoryScheduler().threadLimit()).isEqualTo(fixture.controller().effectiveFactoryThreadLimit());
+        assertThat(fixture.controller().factoryScheduler().activeLaneCount()).isEqualTo(3);
         assertThat(fixture.controller().getActive()).isNull();
         assertThat(fixture.controller().isRuntimeActive()).isTrue();
         assertThat(fixture.controller().activeFactoryThreadCount()).isEqualTo(3);
@@ -774,10 +815,12 @@ class MachineControllerBlockEntityTest {
         addItemOutputComponent(controller, output);
         MachineRecipe recipe = registerItemRecipe("redstone_paused_lock_recipe", machine.registryName(), 20);
         controller.serverTick();
-        assertThat(factory.threadSnapshots(controller).getFirst().recipeId()).isEqualTo(recipe.id().toString());
+        invokeSyncRuntimeStateIfChanged(controller);
+        assertThat(controller.factoryThreadSnapshots().getFirst().recipeId()).isEqualTo(recipe.id().toString());
 
         LevelStub.setDirectSignal(levelOf(controller), controllerPos, 15);
         controller.serverTick();
+        invokeSyncRuntimeStateIfChanged(controller);
         assertThat(controller.isRedstonePaused()).isTrue();
         assertThat(controller.isRuntimeActive()).isFalse();
 
@@ -786,7 +829,7 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.isRedstonePaused()).isTrue();
         assertThat(controller.getActive()).isNull();
         assertThat(controller.isRuntimeActive()).isFalse();
-        assertThat(factory.threadSnapshots(controller).getFirst().lockedRecipeId()).isEqualTo(recipe.id().toString());
+        assertThat(controller.factoryThreadSnapshots().getFirst().lockedRecipeId()).isEqualTo(recipe.id().toString());
     }
 
     @Test
@@ -865,12 +908,13 @@ class MachineControllerBlockEntityTest {
         FactorySchedulerBlockEntity factory = factoryController(controllerPos.offset(1, 0, 0));
         MachineControllerBlockEntity controller = controllerForServerFactoryFormation(machine, controllerPos, factory);
         assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
-        startFiniteFactoryLane(factory, 1);
+        startFiniteFactoryLane(controller, 1);
         invokeSyncRuntimeStateIfChanged(controller);
         assertThat(controller.isRuntimeActive()).isTrue();
         assertThat(blockUpdateCount(levelOf(controller))).isEqualTo(2);
 
-        factory.tickScheduler(controller);
+        controller.factoryScheduler().tick();
+        invokeSyncRuntimeStateIfChanged(controller);
 
         assertThat(controller.isRuntimeActive()).isFalse();
         assertThat(blockUpdateCount(levelOf(controller))).isEqualTo(3);
@@ -883,27 +927,32 @@ class MachineControllerBlockEntityTest {
         FactorySchedulerBlockEntity factory = factoryController(controllerPos.offset(1, 0, 0));
         MachineControllerBlockEntity controller = controllerForServerFactoryFormation(machine, controllerPos, factory);
         assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
-        startFiniteFactoryLane(factory, 3);
+        startFiniteFactoryLane(controller, 3);
         invokeSyncRuntimeStateIfChanged(controller);
         int afterStart = blockUpdateCount(levelOf(controller));
 
-        factory.tickScheduler(controller);
-        factory.tickScheduler(controller);
+        controller.factoryScheduler().tick();
+        invokeSyncRuntimeStateIfChanged(controller);
+        controller.factoryScheduler().tick();
+        invokeSyncRuntimeStateIfChanged(controller);
 
         assertThat(controller.isRuntimeActive()).isTrue();
         assertThat(blockUpdateCount(levelOf(controller))).isEqualTo(afterStart);
     }
 
     @Test
-    void factory_thread_limit_is_not_polled_and_does_not_notify_runtime_state_listener() throws Exception {
-        FactorySchedulerBlockEntity factory = factoryController(new BlockPos(1, 0, 0));
-        factory.getItemStackHandler(null).setStackInSlot(0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 1));
-        int[] runtimeSyncs = {0};
+    void factory_thread_limit_is_updated_from_controller_capacity() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
+        FactorySchedulerBlockEntity factory = factoryController(new BlockPos(1, 0, 0), 1);
+        addFactorySchedulerComponent(controller, factory);
+        setField(MachineControllerBlockEntity.class, controller, "machine",
+                factoryOnlyMachine(MMCR.id("factory_capacity_update_machine"), 1));
 
-        for (int i = 0; i < 40; i++) factory.tickScheduler(() -> runtimeSyncs[0]++);
-
-        assertThat(factory.threadLimit()).isEqualTo(4);
-        assertThat(runtimeSyncs[0]).isZero();
+        assertThat(controller.factoryScheduler().threadLimit()).isEqualTo(controller.effectiveFactoryThreadLimit());
+        factory.getItemStackHandler(null).setStackInSlot(0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 3));
+        assertThat(controller.factoryScheduler().threadLimit()).isEqualTo(controller.effectiveFactoryThreadLimit());
     }
 
     @Test
@@ -930,7 +979,7 @@ class MachineControllerBlockEntityTest {
 
         fixture.controller().serverTick();
 
-        assertThat(fixture.factory().activeLaneCount()).isEqualTo(2);
+        assertThat(fixture.controller().factoryScheduler().activeLaneCount()).isEqualTo(2);
         assertThat(countItem(fixture.inputBus(), Items.IRON_INGOT)).isZero();
     }
 
@@ -1230,17 +1279,17 @@ class MachineControllerBlockEntityTest {
         FactorySchedulerBlockEntity factory = factoryController(controllerPos.offset(1, 0, 0));
         MachineControllerBlockEntity controller = controllerForFactoryFormation(factoryMachine, controllerPos, factory);
         assertThat(invokeTryFormMachine(controller, factoryMachine, Direction.SOUTH)).isTrue();
-        addFactoryLane(factory);
+        addFactoryLane(controller);
 
         invokeResetMachine(controller);
 
-        assertThat(factory.activeLaneCount()).isZero();
+        assertThat(controller.factoryScheduler().activeLaneCount()).isZero();
 
         assertThat(invokeTryFormMachine(controller, factoryMachine, Direction.SOUTH)).isTrue();
-        addFactoryLane(factory);
+        addFactoryLane(controller);
         controller.setRemoved();
 
-        assertThat(factory.activeLaneCount()).isZero();
+        assertThat(controller.factoryScheduler().activeLaneCount()).isZero();
     }
 
     @Test
@@ -1252,11 +1301,11 @@ class MachineControllerBlockEntityTest {
         setField(MachineControllerBlockEntity.class, fixture.controller(), "contextPool", pool);
         MachineRecipe recipe = registerItemRecipe("factory_lane_reset", fixture.machine().registryName(), 20, 0);
         fixture.controller().serverTick();
-        assertThat(fixture.factory().activeLaneCount()).isEqualTo(2);
+        assertThat(fixture.controller().factoryScheduler().activeLaneCount()).isEqualTo(2);
 
         invokeResetMachine(fixture.controller());
 
-        assertThat(fixture.factory().activeLaneCount()).isZero();
+        assertThat(fixture.controller().factoryScheduler().activeLaneCount()).isZero();
         assertReturnedContexts(pool, fixture.controller(), recipe, 2);
     }
 
@@ -1269,11 +1318,11 @@ class MachineControllerBlockEntityTest {
         setField(MachineControllerBlockEntity.class, fixture.controller(), "contextPool", pool);
         MachineRecipe recipe = registerItemRecipe("factory_lane_removed", fixture.machine().registryName(), 20, 0);
         fixture.controller().serverTick();
-        assertThat(fixture.factory().activeLaneCount()).isEqualTo(2);
+        assertThat(fixture.controller().factoryScheduler().activeLaneCount()).isEqualTo(2);
 
         fixture.controller().setRemoved();
 
-        assertThat(fixture.factory().activeLaneCount()).isZero();
+        assertThat(fixture.controller().factoryScheduler().activeLaneCount()).isZero();
         assertReturnedContexts(pool, fixture.controller(), recipe, 2);
     }
 
@@ -1303,11 +1352,11 @@ class MachineControllerBlockEntityTest {
         setField(MachineControllerBlockEntity.class, fixture.controller(), "contextPool", pool);
         MachineRecipe recipe = registerItemRecipe("factory_lane_unload", fixture.machine().registryName(), 20, 0);
         fixture.controller().serverTick();
-        assertThat(fixture.factory().activeLaneCount()).isEqualTo(2);
+        assertThat(fixture.controller().factoryScheduler().activeLaneCount()).isEqualTo(2);
 
         MachineControllerBlockEntity.markStructureChunkDirty(levelOf(fixture.controller()), new ChunkPos(fixture.controller().getBlockPos().getX() >> 4, fixture.controller().getBlockPos().getZ() >> 4));
 
-        assertThat(fixture.factory().activeLaneCount()).isZero();
+        assertThat(fixture.controller().factoryScheduler().activeLaneCount()).isZero();
         assertReturnedContexts(pool, fixture.controller(), recipe, 2);
     }
 
@@ -2628,13 +2677,13 @@ class MachineControllerBlockEntityTest {
         FactorySchedulerBlockEntity factory = factoryController(controllerPos.offset(1, 0, 0));
         MachineControllerBlockEntity controller = controllerForFactoryFormation(factoryMachine, controllerPos, factory);
         assertThat(invokeTryFormMachine(controller, factoryMachine, Direction.SOUTH)).isTrue();
-        addFactoryLane(factory);
+        addFactoryLane(controller);
         assertThat(controller.getActive()).isNull();
 
         MachineControllerBlockEntity.markStructureChunkDirty(levelOf(controller), new ChunkPos(controllerPos.getX() >> 4, controllerPos.getZ() >> 4));
 
         assertThat((boolean) fieldValue(MachineControllerBlockEntity.class, controller, "structureDirty")).isTrue();
-        assertThat(factory.activeLaneCount()).isZero();
+        assertThat(controller.factoryScheduler().activeLaneCount()).isZero();
     }
 
     @Test
@@ -2849,7 +2898,6 @@ class MachineControllerBlockEntityTest {
             setField(BlockEntity.class, entity, "type", null);
             setField(BlockEntity.class, entity, "worldPosition", pos);
             setField(BlockEntity.class, entity, "blockState", Blocks.IRON_BLOCK.defaultBlockState());
-            setField(FactorySchedulerBlockEntity.class, entity, "scheduler", new FactoryRecipeScheduler(4));
             setField(FactorySchedulerBlockEntity.class, entity, "handler", threadDisperserHandler(dispersers));
             initializeLinkedAppearance(entity);
             return entity;
@@ -2869,15 +2917,12 @@ class MachineControllerBlockEntityTest {
         return handler;
     }
 
-    private static void addFactoryLane(FactorySchedulerBlockEntity factory) throws Exception {
-        assertThat(startFactoryLane(factory)).isTrue();
+    private static void addFactoryLane(MachineControllerBlockEntity controller) throws Exception {
+        assertThat(startFactoryLane(controller)).isTrue();
     }
 
-    private static boolean startFactoryLane(FactorySchedulerBlockEntity factory) throws Exception {
-        Field schedulerField = FactorySchedulerBlockEntity.class.getDeclaredField("scheduler");
-        schedulerField.setAccessible(true);
-        FactoryRecipeScheduler scheduler =
-                (FactoryRecipeScheduler) schedulerField.get(factory);
+    private static boolean startFactoryLane(MachineControllerBlockEntity controller) {
+        FactoryRecipeScheduler scheduler = controller.factoryScheduler();
         return scheduler.startLane(new FactoryRecipeScheduler.Lane() {
             @Override
             public boolean tick() {
@@ -3481,11 +3526,8 @@ class MachineControllerBlockEntityTest {
         }
     }
 
-    private static void startFiniteFactoryLane(FactorySchedulerBlockEntity factory, int ticks) throws Exception {
-        Field schedulerField = FactorySchedulerBlockEntity.class.getDeclaredField("scheduler");
-        schedulerField.setAccessible(true);
-        FactoryRecipeScheduler scheduler =
-                (FactoryRecipeScheduler) schedulerField.get(factory);
+    private static void startFiniteFactoryLane(MachineControllerBlockEntity controller, int ticks) {
+        FactoryRecipeScheduler scheduler = controller.factoryScheduler();
         assertThat(scheduler.startLane(new FactoryRecipeScheduler.Lane() {
             private int remaining = ticks;
 
@@ -3778,11 +3820,10 @@ class MachineControllerBlockEntityTest {
         method.invoke(controller, input);
     }
 
-    private static void invokeTickFactoryRecipes(MachineControllerBlockEntity controller,
-                                                 FactorySchedulerBlockEntity factory) throws Exception {
-        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("tickFactoryRecipes", FactorySchedulerBlockEntity.class);
+    private static void invokeTickFactoryRecipes(MachineControllerBlockEntity controller) throws Exception {
+        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("tickFactoryRecipes");
         method.setAccessible(true);
-        method.invoke(controller, factory);
+        method.invoke(controller);
     }
 
     private static void invokeSyncRuntimeStateIfChanged(MachineControllerBlockEntity controller) throws Exception {

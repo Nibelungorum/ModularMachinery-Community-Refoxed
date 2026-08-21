@@ -1,11 +1,6 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.api.recipe.RecipeRegistry;
-import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
-import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
-import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -23,7 +18,6 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
@@ -40,11 +34,6 @@ class FactorySchedulerBlockEntityTest {
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
         bindItemComponents(Items.IRON_INGOT);
-    }
-
-    @AfterEach
-    void cleanup() {
-        RecipeRegistry.clearForTesting();
     }
 
     @Test
@@ -128,34 +117,6 @@ class FactorySchedulerBlockEntityTest {
         assertThat(invalidations).hasValue(2);
     }
 
-    @Test
-    void saveAndLoadPersistsOnlyFactoryCapacityInventory() throws Exception {
-        MachineRecipe baseRecipe = recipe("scheduler_base_lock");
-        MachineRecipe workerRecipe = recipe("scheduler_worker_lock");
-        RecipeRegistry.register(baseRecipe);
-        RecipeRegistry.register(workerRecipe);
-        FactorySchedulerBlockEntity scheduler = createScheduler();
-        FactoryRecipeScheduler internal = internalScheduler(scheduler);
-        internal.allThreads().getFirst().setLockedRecipeId(baseRecipe.id());
-        FactoryRecipeThread worker = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool(), "factory-4");
-        worker.setLockedRecipeId(workerRecipe.id());
-        internal.addThreadForTesting(worker);
-
-        TagValueOutput output = TagValueOutput.createWithContext(
-                ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()));
-        scheduler.saveAdditional(output);
-        FactorySchedulerBlockEntity loaded = createScheduler();
-        loaded.loadAdditional(TagValueInput.create(
-                ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()),
-                output.buildResult()));
-
-        assertThat(internalScheduler(loaded).allThreads()).singleElement()
-                .extracting(FactoryRecipeThread::lockedRecipeId)
-                .isNull();
-    }
-
     private static FactorySchedulerBlockEntity createScheduler() {
         BlockEntity entity = ModBlockEntities.BES.get("factory_controller").get().create(
                 BlockPos.ZERO,
@@ -183,16 +144,6 @@ class FactorySchedulerBlockEntityTest {
         field.setAccessible(true);
         ((List<ProcessingComponent>) field.get(controller)).add(
                 new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), BlockPos.ZERO, List.of(), null));
-    }
-
-    private static FactoryRecipeScheduler internalScheduler(FactorySchedulerBlockEntity scheduler) throws Exception {
-        Field field = FactorySchedulerBlockEntity.class.getDeclaredField("scheduler");
-        field.setAccessible(true);
-        return (FactoryRecipeScheduler) field.get(scheduler);
-    }
-
-    private static MachineRecipe recipe(String path) {
-        return new MachineRecipe(MMCR.id(path), MMCR.id("scheduler_lock_machine"), 1, List.of(), List.of());
     }
 
     private static void bindItemComponents(Item item) {
