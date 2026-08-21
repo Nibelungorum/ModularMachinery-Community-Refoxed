@@ -136,9 +136,14 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
 
     public MachineStructureBuilderJS fullStructure(PortRequirementSpec ports,
             PortTierRequirementSpec tiers, List<DynamicPatternSpec> dynamicPatterns,
-            MachineStructureRequirements requirements) {
+        MachineStructureRequirements requirements) {
         syncSlicePattern();
-        return fullStructure(pattern, ports, tiers, dynamicPatterns, this.requirements);
+        MachineStructureRequirements explicitRequirements = requirements == null
+                ? MachineStructureRequirements.EMPTY : requirements;
+        MachineStructureRequirements combinedRequirements = MachineStructureRequirements.merge(
+                this.requirements, explicitRequirements, 0);
+        this.requirements = combinedRequirements;
+        return fullStructure(pattern, ports, tiers, dynamicPatterns, combinedRequirements);
     }
 
     public MachineStructureBuilderJS fullStructure(BlockArray pattern) {

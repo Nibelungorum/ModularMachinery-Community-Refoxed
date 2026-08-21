@@ -173,18 +173,39 @@ class KubeJSApiTest {
 
     @Test
     void slice_pattern_binds_symbols_and_normalizes_controller() {
+        var replacement = api.singleBlockModifier("explicit", api.block("minecraft:stone"), List.of(), ItemStack.EMPTY);
         var definition = new MachineStructureBuilderJS("test:kubejs_slice")
                 .pattern(List.of("XCX", "XXX", "XXX"))
-                .set("X", api.block("minecraft:bricks"))
+                .set("X", api.patternEntry(api.block("minecraft:bricks"), List.of(replacement)))
                 .set("C", api.block("minecraft:blast_furnace"))
                 .fullStructure(api.portRequirements(Map.of()), api.portTierRequirements(List.of()),
-                        List.of(), MachineStructureRequirements.EMPTY)
+                        List.of(), MachineStructureRequirements.builder().modifier('C', replacement).build())
                 .createObject();
 
         assertThat(definition.pattern().pattern()).hasSize(9);
         assertThat(definition.pattern().pattern().get(BlockPos.ZERO)
                 .matches(Blocks.BLAST_FURNACE.defaultBlockState())).isTrue();
         assertThat(definition.pattern().symbolsByPosition()).containsEntry(BlockPos.ZERO, 'C');
+        assertThat(definition.requirements().modifierReplacements()).containsKeys('X', 'C');
+    }
+
+    @Test
+    void slice_patterns_accept_rhino_javascript_arrays() {
+        var builder = new MachineStructureBuilderJS("test:kubejs_rhino");
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        ScriptableObject.putProperty(scope, "api", api, context);
+        ScriptableObject.putProperty(scope, "builder", builder, context);
+
+        context.evaluateString(scope, """
+                builder.patternAll([['CXX', 'XXX', 'XXX']]);
+                builder.set('X', api.block('minecraft:bricks'));
+                builder.set('C', api.block('minecraft:blast_furnace'));
+                """, "builder-test", 1, null);
+
+        assertThat(builder.createObject().pattern().pattern()).hasSize(9);
+        assertThat(builder.createObject().pattern().pattern().get(BlockPos.ZERO)
+                .matches(Blocks.BLAST_FURNACE.defaultBlockState())).isTrue();
     }
 
     @Test
