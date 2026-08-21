@@ -92,7 +92,7 @@ public final class MachineLevelRegistry {
                 throw new IllegalStateException("Machine level priority already registered for type: " + level.typeId());
             }
         }
-        for (MachineLevel registered : levels.values()) {
+        for (MachineLevel registered : levelsForType) {
             BlockPredicate.OfBlockState registeredPredicate = (BlockPredicate.OfBlockState) registered.statePredicate();
             if (registeredPredicate.matches(statePredicate.state())) {
                 throw new IllegalStateException("Machine level state already registered: " + level.id());
@@ -122,6 +122,12 @@ public final class MachineLevelRegistry {
             }
         }
         return Optional.empty();
+    }
+
+    public static Optional<MachineLevel> findLevel(Identifier typeId, BlockState state) {
+        return levelsForType(typeId).stream()
+                .filter(level -> level.statePredicate().matches(state))
+                .findFirst();
     }
 
     public static List<MachineLevel> levelsForType(Identifier typeId) {

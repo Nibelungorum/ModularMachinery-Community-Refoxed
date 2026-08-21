@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.kubejs;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
 import net.minecraft.resources.Identifier;
@@ -24,6 +25,7 @@ public final class KubeJSRecipeSync {
                 recipes.put(holder.id().identifier(), machineRecipe.withId(holder.id().identifier()));
             }
         }
+        MMCR.LOG.debug("[MMCR-DIAG] KubeJS RecipeManager sync found {} MMCR data-pack recipes", recipes.size());
         RuntimeContentCoordinator.replaceDataPackRecipes(recipes);
     }
 }

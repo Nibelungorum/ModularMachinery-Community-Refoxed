@@ -26,13 +26,18 @@ import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.MappedRegistry;
+import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.Fluids;
@@ -40,6 +45,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.nibelungorum.builtin.PublicBuiltinLevelDefinitions;
+import org.nibelungorum.builtin.PublicBuiltinDefinitions;
+import cn.howxu.mmcr.internal.api.PublicRecipeAdapter;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -50,6 +57,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import com.mojang.serialization.Lifecycle;
 
 import java.util.Collections;
 
@@ -69,7 +77,16 @@ class RuntimeContentSnapshotTest {
     @BeforeAll
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
-        registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        MappedRegistry<Enchantment> enchantments = new MappedRegistry<>(Registries.ENCHANTMENT, Lifecycle.stable());
+        VanillaRegistries.createLookup().lookupOrThrow(Registries.ENCHANTMENT).listElements()
+                .forEach(holder -> Registry.register(enchantments,
+                        holder.key().identifier(), holder.value()));
+        enchantments.freeze();
+        List<Registry<?>> activeRegistries = new java.util.ArrayList<>();
+        RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY).registries()
+                .forEach(entry -> activeRegistries.add(entry.value()));
+        activeRegistries.add(enchantments);
+        registries = new RegistryAccess.ImmutableRegistryAccess(activeRegistries);
     }
 
     @BeforeEach
@@ -221,6 +238,40 @@ class RuntimeContentSnapshotTest {
         MachineStructureDefinition decodedStructure = decoded.snapshot().structures().get(machineId);
         assertThat(decodedStructure.requirements().levelSlots()).containsEntry('L', MMCR.id("coil"));
         assertThat(decodedStructure.requirements().modifierReplacements()).containsKey('M');
+    }
+
+    @Test
+    void runtimeContentPayloadRoundTripsBuiltinEnchantedOutputWithActiveRegistryHolders() {
+        Identifier recipeId = MMCR.id("blast_furnace_component_enchanted_output");
+        var definition = PublicBuiltinDefinitions.recipeDefinitions().get(recipeId);
+        MachineRecipe original = PublicRecipeAdapter.toRecipe(definition,
+                new cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.Snapshot(
+                        Map.of(), Map.of(), Map.of(), Map.of()));
+        ItemRequirement originalOutput = original.requirements().stream()
+                .filter(requirement -> requirement instanceof ItemRequirement item
+                        && item.io() == RecipeModifier.IOType.OUTPUT)
+                .map(ItemRequirement.class::cast)
+                .findFirst().orElseThrow();
+        assertThat(originalOutput.components().values())
+                .containsKey(net.minecraft.core.component.DataComponents.ENCHANTMENTS);
+        RuntimeContentSnapshot snapshot = new RuntimeContentSnapshot(Map.of(), Map.of(recipeId, original),
+                Map.of(), Map.of(), 12L);
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+
+        PktRuntimeContentPayload.STREAM_CODEC.encode(buf, new PktRuntimeContentPayload(snapshot));
+        MachineRecipe decoded = PktRuntimeContentPayload.STREAM_CODEC.decode(buf).snapshot().recipes().get(recipeId);
+        ItemRequirement output = decoded.requirements().stream()
+                .filter(requirement -> requirement instanceof ItemRequirement item
+                        && item.io() == RecipeModifier.IOType.OUTPUT)
+                .map(ItemRequirement.class::cast)
+                .findFirst().orElseThrow();
+        var enchantments = output.stack().get(net.minecraft.core.component.DataComponents.ENCHANTMENTS);
+
+        assertThat(enchantments).isNotNull();
+        assertThat(enchantments.keySet()).anySatisfy(holder ->
+                assertThat(holder.unwrapKey().orElseThrow().identifier())
+                        .isEqualTo(Identifier.parse("minecraft:sharpness")));
+        assertThat(enchantments.entrySet()).anySatisfy(entry -> assertThat(entry.getIntValue()).isEqualTo(4));
     }
 
     @Test

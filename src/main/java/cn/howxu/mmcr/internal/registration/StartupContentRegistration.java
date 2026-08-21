@@ -57,6 +57,9 @@ public final class StartupContentRegistration {
                 },
                 structures -> {
                     OptionalSourceRegistration.invokeDevelopmentSource(
+                            "org.nibelungorum.builtin.PublicBuiltinLevelDefinitions", "register",
+                            new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
+                    OptionalSourceRegistration.invokeDevelopmentSource(
                             "org.nibelungorum.builtin.PublicBuiltinMachineDefinitions", "registerStructures",
                             new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
                     registerGameTestBuiltins("registerMachineStructures",

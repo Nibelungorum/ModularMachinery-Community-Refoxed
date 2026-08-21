@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.sync;
 import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
@@ -18,6 +19,7 @@ import io.netty.handler.codec.EncoderException;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -112,7 +114,7 @@ public final class MachineRecipeSyncCodec {
                     writeJsonWithRegistryCodec(buf, DataComponentPredicateSet.CODEC, item.components());
                     buf.writeFloat(item.consumeChance());
                 } else {
-                    ItemStack stack = item.stack(buf.registryAccess().createSerializationContext(JsonOps.INSTANCE));
+                    ItemStack stack = activeRegistryStack(buf, item);
                     checkStackCount(stack);
                     writeJsonWithRegistryCodec(buf, ItemStack.CODEC, stack);
                     buf.writeFloat(item.chance());
@@ -279,6 +281,25 @@ public final class MachineRecipeSyncCodec {
     private static <T> T readJsonWithRegistryCodec(RegistryFriendlyByteBuf buf, Codec<T> codec) {
         var result = codec.parse(buf.registryAccess().createSerializationContext(JsonOps.INSTANCE), readJson(buf));
         return result.getOrThrow(message -> new DecoderException("Failed to decode json: " + message));
+    }
+
+    private static ItemStack activeRegistryStack(RegistryFriendlyByteBuf buf, ItemRequirement requirement) {
+        ItemStack stack = requirement.stack();
+        com.mojang.serialization.DynamicOps<JsonElement> ops =
+                buf.registryAccess().createSerializationContext(JsonOps.INSTANCE);
+        requirement.components().values().forEach((type, predicate) -> {
+            if (!(predicate instanceof ComponentPredicate.Exact exact)) return;
+            applyComponent(stack, type, exact.value(), ops);
+        });
+        return stack;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> void applyComponent(ItemStack stack, net.minecraft.core.component.DataComponentType<T> type,
+            com.mojang.serialization.Dynamic<?> value, com.mojang.serialization.DynamicOps<JsonElement> ops) {
+        var decoded = type.codec().parse(ops, value.convert(ops).getValue())
+                .getOrThrow(message -> new EncoderException("Failed to bind item component: " + message));
+        stack.set(type, decoded);
     }
 
     private static JsonElement normalizeIngredient(JsonElement value) {

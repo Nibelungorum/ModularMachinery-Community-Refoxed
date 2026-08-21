@@ -1,7 +1,7 @@
 {
     "block.mmcr.alloy_furnace_controller": "合金炉控制器",
     "block.mmcr.blast_furnace_controller": "高炉控制器",
-    "block.mmcr.cracker_controller_controller": "裂化器控制器",
+    "block.mmcr.cracker_controller": "裂化器控制器",
     "block.mmcr.distillation_tower_controller": "蒸馏塔控制器",
     "block.mmcr.eco_matrix_controller": "ECO 矩阵控制器",
     "block.mmcr.purpur_furnace_controller": "紫珀炉控制器",

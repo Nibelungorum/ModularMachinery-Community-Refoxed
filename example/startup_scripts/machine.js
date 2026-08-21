@@ -1,12 +1,18 @@
-// KubeJS recreation of the development defaults. It deliberately does not read mmcr:* definitions.
-MMCREvents.startup(function(event) {
-  var api = event.getAPI()
-  var LinkedHashMap = Java.loadClass('java.util.LinkedHashMap')
-  var NS = 'mmcr_kubejs'
+// KubeJS Start up Event Register Machine Definations
+// This stage will registe a controller block for your machine
 
+// First, Listen the MMCREvents.startup
+MMCREvents.startup(event => {
+  // you can get api by this way, then you are able to access build-in public api
+  var api = event.getAPI()
+  // this is a namespace
+  var NS = 'mmcr_kubejs'
+  // this will make a new Identifier
   function cloneId(path) {
     return NS + ':kubejs_' + path
   }
+
+  var LinkedHashMap = Java.loadClass('java.util.LinkedHashMap')
 
   var thermalCoilType = cloneId('thermal_smelting_coil')
   event.createLevelType(thermalCoilType).displayName('KubeJS Thermal Smelting Coil').register()
@@ -33,10 +39,6 @@ MMCREvents.startup(function(event) {
     for (var x = 0; x < count; x++) blocks.put(api.pos(x, 0, 0), api.coupler())
     return api.blockArray(blocks)
   }
-
-  register('blast_furnace', function(builder) {
-    return builder.allowMultithreading().allowParallelism().maxParallelAmount(2147483647)
-  })
   register('alloy_furnace', function(builder) {
     return builder.appearance('minecraft:bricks').allowModifiers()
   })

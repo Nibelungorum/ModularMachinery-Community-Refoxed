@@ -1,35 +1,35 @@
-# Task 1 Report
+# Task 1 Report: Public Recipe Component Declarations
 
-## Status
+## Scope
 
-Implemented; focused tests verified. Full suite retains unrelated failures noted below.
+Created standalone public declaration DTOs under `cn.howxu.mmcr.api.publicapi.recipe.component` without changing the canonical runtime model in `cn.howxu.mmcr.api.recipe.component`.
 
-## Changes
+## Implementation
 
-- Added `org.nibelungorum.builtin.PublicBuiltinLevelDefinitions` as the canonical `MMCRMachineStructuresEvent` PublicAPI subscriber.
-- Preserved the development-only production guard, `thermal_smelting_coil` duplicate guard, four coil levels, level type, and modifier declarations.
-- Removed `DefaultMachineLevels` and the corresponding level registration/reflection helper path from `MMCR`.
-- Migrated production test fixtures and all current test references to `PublicBuiltinLevelDefinitions`.
-- Kept the existing machine and recipe builtin subscriber paths unchanged.
-- Added real canonical event coverage for the level subscriber, including complete LevelType/level/Modifier declarations.
-- Added duplicate-type and production-environment coverage for the level subscriber.
-- Corrected the tests to invoke the provider through the project's direct event source instead of assuming manual NeoForge bus posts scan `@EventBusSubscriber` classes.
-- Corrected the production fixture to snapshot and restore the original active FML loader, its `LoadingModList`, and the active reference; it also asserts the replacement loader is actually in production before checking suppression.
-- Added `@AfterEach` cleanup gates for manual lifecycle listeners so they become inert after the test and cannot mutate later events.
-- Added behavior assertions for the LevelType display name, all four priorities, block-state predicates, and modifier parameters.
+- Added sealed `ComponentPredicate` declarations for exact JSON, map, list, range, and text forms.
+- Exact JSON values are deep-copied at construction and when exposed, preventing callers from mutating the declaration through a retained or returned `JsonElement`.
+- Map and list forms defensively copy into unmodifiable collections.
+- Added `DataComponentPredicateSet`, keyed by `Identifier`, with an immutable map and `hasNonExactValues()` exact-form detection.
+- No adapter conversion was added; that remains Task 2 work.
+
+## Tests
+
+- Added focused tests for structural equality of all declaration forms.
+- Added tests proving exact JSON, maps, lists, and component maps cannot be mutated through source collections or exposed values.
+- Added tests for predicate and set exact-form detection.
 
 ## Verification
 
-- `./gradlew test --no-daemon --tests '*MachineLevel*' --tests '*Modifier*' --tests '*PublicApi*'`: passed.
-- `./gradlew test --no-daemon`: two existing `ContentRegistrationCoordinatorTest` production lifecycle assertions failed at lines 246 and 269; running that class alone reproduces the failures.
+- `./gradlew compileJava --no-daemon`: passed.
+- `./gradlew test --tests cn.howxu.mmcr.api.publicapi.recipe.component.ComponentPredicateTest --no-daemon`: blocked during `compileTestJava` by the pre-existing user change in `src/test/java/cn/howxu/mmcr/api/publicapi/PublicRecipeBuilderTest.java:172`, where `outputItem(new ItemStack(...), components())` has no matching overload.
+- `./gradlew test --no-daemon`: blocked by the same unrelated `compileTestJava` error.
 - `./gradlew runGameTestServer --no-daemon`: passed.
-- Focused tests now explicitly cover the direct provider event path, duplicate protection, and production suppression.
-- `./gradlew test --no-daemon --tests 'cn.howxu.mmcr.api.publicapi.PublicEventSubscribersTest.builtin_level_subscriber*'`: passed.
-- `./gradlew test --no-daemon --tests 'cn.howxu.mmcr.api.publicapi.PublicEventSubscribersTest'`: passed.
-- `./gradlew runClient`: not run, as required.
-- `docs` files were not modified.
 
-## Concerns
+## Review
 
-- Existing deprecation and `Unsafe` warnings remain; they are unrelated to this task.
-- The full-test failures are unrelated to the modified test file and reproduce in `ContentRegistrationCoordinatorTest` alone.
+- Reviewed the task-file diff and ran `git diff --check`; no whitespace errors were reported.
+- The report is intentionally not staged because `.superpowers/` files must not be committed.
+
+## Commit
+
+- `444d58c feat: add public component declarations`
