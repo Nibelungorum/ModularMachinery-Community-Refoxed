@@ -379,7 +379,7 @@ class RuntimeContentSnapshotTest {
     }
 
     @Test
-    void newClientConnectionClearsPreviousRuntimeContent() {
+    void newClientConnectionRetainsRuntimeContentUntilSnapshotArrives() {
         Identifier machineId = MMCR.id("alloy_furnace");
         registerMachineIfMissing(machineId);
         new RuntimeContentSnapshot(Map.of(machineId, structure(machineId)), Map.of(),
@@ -388,7 +388,7 @@ class RuntimeContentSnapshotTest {
 
         ClientRuntimeSnapshotBridge.resetForConnection();
 
-        assertThat(MachineStructureRegistry.effectiveSnapshot()).isEmpty();
+        assertThat(MachineStructureRegistry.effectiveSnapshot()).containsKey(machineId);
         assertThat(RecipeRegistry.effectiveSnapshot()).isEmpty();
         assertThat(cn.howxu.mmcr.client.controller.ControllerSpecCache.snapshot()).isEmpty();
         assertThat(cn.howxu.mmcr.client.model.MachineAppearanceCache.snapshot()).isEmpty();

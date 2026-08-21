@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.registration;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineRoleValidator;
@@ -70,6 +71,7 @@ public final class ContentRegistrationCoordinator {
         requireCollecting();
         STRUCTURE_SNAPSHOT = event.freeze();
         event.structures().forEach((id, structure) -> putUnique(STRUCTURES, id, structure, "structure"));
+        MMCR.LOG.debug("Collected {} machine structures for startup commit", STRUCTURES.size());
     }
 
     public static synchronized void collectRecipes(MMCRMachineRecipesEvent event) {
@@ -88,6 +90,7 @@ public final class ContentRegistrationCoordinator {
         Map<Identifier, MachineStructureDefinition> structures = validateAndConvertStructures(registrations);
         Map<Identifier, MachineRecipe> recipes = validateAndConvertRecipes();
         validateDuplicates(registrations, structures, recipes);
+        MMCR.LOG.debug("Committing {} startup machine structures", structures.size());
 
         // Prepare and publish recipes before any other registry is changed. The batch validates the
         // complete candidate first, so a recipe failure leaves startup registries untouched.

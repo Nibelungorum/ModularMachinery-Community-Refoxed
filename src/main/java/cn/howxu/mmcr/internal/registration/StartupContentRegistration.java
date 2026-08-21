@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.registration;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
@@ -147,7 +148,10 @@ public final class StartupContentRegistration {
 
         MMCRMachineStructuresEvent structures = MMCRMachineStructuresEvent.prepare(definitions.definitions().keySet());
         structuresSource.accept(structures);
+        MMCR.LOG.debug("Collected {} machine structures from startup sources before event dispatch",
+                structures.structures().size());
         NeoForge.EVENT_BUS.post(structures);
+        MMCR.LOG.debug("Collected {} machine structures after event dispatch", structures.structures().size());
         structureCollectionDeferred = deferStructures;
         if (!deferStructures) {
             structures.freeze();
