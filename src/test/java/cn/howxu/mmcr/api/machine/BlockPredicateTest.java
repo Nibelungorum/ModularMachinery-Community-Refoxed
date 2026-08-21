@@ -134,6 +134,10 @@ class BlockPredicateTest {
     @Test void preferredState_is_empty_when_no_candidate_or_preview_fallback_exists() {
         assertThat(new BlockPredicate.Any().preferredState()).isEmpty();
         assertThat(new BlockPredicate.Air().preferredState()).isEmpty();
-        assertThat(new BlockPredicate.OfTag(BlockTags.DIRT).preferredState()).isEmpty();
+    }
+
+    @Test void preferredState_uses_a_block_from_tag() {
+        assertThat(new BlockPredicate.OfTag(BlockTags.DIRT).preferredState())
+                .containsSame(Blocks.DIRT.defaultBlockState());
     }
 }

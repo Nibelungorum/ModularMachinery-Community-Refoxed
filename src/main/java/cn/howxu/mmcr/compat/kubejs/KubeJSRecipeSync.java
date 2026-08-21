@@ -3,6 +3,8 @@ package cn.howxu.mmcr.compat.kubejs;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
+import cn.howxu.mmcr.internal.sync.JeiRuntimeReloadBridge;
+import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.crafting.RecipeHolder;
 
@@ -26,6 +28,7 @@ public final class KubeJSRecipeSync {
             }
         }
         MMCR.LOG.debug("[MMCR-DIAG] KubeJS RecipeManager sync found {} MMCR data-pack recipes", recipes.size());
-        RuntimeContentCoordinator.replaceDataPackRecipes(recipes);
+        RuntimeContentSnapshot snapshot = RuntimeContentCoordinator.replaceDataPackRecipesAndSnapshot(recipes);
+        JeiRuntimeReloadBridge.reloadIfAvailable(snapshot);
     }
 }

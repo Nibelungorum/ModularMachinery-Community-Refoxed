@@ -18,7 +18,8 @@ public final class JeiRuntimeReloadBridge {
     }
 
     public static void reloadIfAvailable(RuntimeContentSnapshot snapshot) {
-        if (!ModList.get().isLoaded(JEI_MOD_ID)) return;
+        ModList modList = ModList.get();
+        if (modList == null || !modList.isLoaded(JEI_MOD_ID)) return;
         try {
             Class<?> reloaderClass = Class.forName(RELOADER_CLASS);
             Method reload = reloaderClass.getMethod("reloadIfAvailable", RuntimeContentSnapshot.class);

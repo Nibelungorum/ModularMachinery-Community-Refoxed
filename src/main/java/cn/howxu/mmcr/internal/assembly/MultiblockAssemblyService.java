@@ -11,6 +11,7 @@ import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
@@ -185,6 +186,9 @@ public final class MultiblockAssemblyService {
             case BlockPredicate.OfBlockState ofState -> states.add(ofState.state());
             case BlockPredicate.OfBlock ofBlock -> states.add(ofBlock.block().defaultBlockState());
             case BlockPredicate.DeferredBlock deferredBlock -> states.add(deferredBlock.supplier().get().defaultBlockState());
+            case BlockPredicate.OfTag ofTag -> BlockPredicate.blocksInTag(ofTag.tag()).stream()
+                    .map(Block::defaultBlockState)
+                    .forEach(states::add);
             case BlockPredicate.AnyOf anyOf -> anyOf.children().forEach(child -> collectCandidateStates(child, states));
             default -> {}
         }

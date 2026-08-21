@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -48,9 +49,20 @@ public sealed interface BlockPredicate {
             case OfBlockState ofState -> states.add(ofState.state());
             case OfBlock ofBlock -> states.add(ofBlock.block().defaultBlockState());
             case DeferredBlock deferredBlock -> states.add(deferredBlock.supplier().get().defaultBlockState());
+            case OfTag ofTag -> blocksInTag(ofTag.tag()).stream()
+                    .map(Block::defaultBlockState)
+                    .forEach(states::add);
             case AnyOf anyOf -> anyOf.children().forEach(child -> collectCandidateStates(child, states));
             default -> {}
         }
+    }
+
+    public static List<Block> blocksInTag(TagKey<Block> tag) {
+        List<Block> blocks = new ArrayList<>();
+        for (Block block : BuiltInRegistries.BLOCK) {
+            if (block.builtInRegistryHolder().is(tag)) blocks.add(block);
+        }
+        return List.copyOf(blocks);
     }
 
     private static int levelPriority(BlockState state) {
