@@ -15,9 +15,8 @@ import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.util.IOType;
+import dev.latvian.mods.kubejs.util.RegistryAccessContainer;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.RegistryAccess;
-import net.minecraft.core.HolderSet;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -79,12 +78,6 @@ public final class KubeJSApi {
 
     public BlockPredicate tag(String tagId) {
         var tag = TagKey.create(Registries.BLOCK, Identifier.parse(tagId));
-        boolean exists = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY).lookup(Registries.BLOCK)
-                .orElseThrow(() -> new IllegalStateException("Block registry unavailable"))
-                .getTags().map(HolderSet.Named::key).anyMatch(tag::equals);
-        if (!exists) {
-            throw new IllegalArgumentException("Unknown block tag: " + tagId);
-        }
         return new BlockPredicate.OfTag(tag);
     }
 
@@ -131,7 +124,9 @@ public final class KubeJSApi {
 
     public MachineIngredient tagInput(String tagId, int count, float consumeChance) {
         var tag = TagKey.create(Registries.ITEM, Identifier.parse(tagId));
-        return new MachineIngredient.ItemIngredient(Ingredient.of(BuiltInRegistries.ITEM.getOrThrow(tag)), count, null, consumeChance);
+        var items = RegistryAccessContainer.current.lookup(Registries.ITEM)
+                .orElseThrow(() -> new IllegalStateException("Item registry unavailable"));
+        return new MachineIngredient.ItemIngredient(Ingredient.of(items.getOrThrow(tag)), count, null, consumeChance);
     }
 
     public MachineIngredient fluidInput(String fluidId, int amount) {

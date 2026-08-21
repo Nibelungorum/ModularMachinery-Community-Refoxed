@@ -1,7 +1,7 @@
 {
     "block.mmcr_kubejs.kubejs_alloy_furnace_controller": "合金炉控制器",
-    "block.mmcr_kubejs.kubejs_blast_furnace_controller": "高炉控制器",
-    "block.mmcr_kubejs.kubejs_cracker_controller_controller": "裂化器控制器",
+    "block.mmcr.kubejs_blast_furnace_controller": "高炉控制器",
+    "block.mmcr_kubejs.kubejs_cracker_controller": "裂化器控制器",
     "block.mmcr_kubejs.kubejs_distillation_tower_controller": "蒸馏塔控制器",
     "block.mmcr_kubejs.kubejs_eco_matrix_controller": "ECO 矩阵控制器",
     "block.mmcr_kubejs.kubejs_purpur_furnace_controller": "紫珀炉控制器",
@@ -10,8 +10,9 @@
     "block.mmcr_kubejs.kubejs_space_elevator_controller": "太空电梯控制器",
     "block.mmcr_kubejs.kubejs_space_reassembler_controller": "太空重组器控制器",
     "block.mmcr_kubejs.kubejs_monster_farm_controller": "怪物农场控制器",
+
     "item.mmcr_kubejs.kubejs_alloy_furnace_controller": "合金炉控制器",
-    "item.mmcr_kubejs.kubejs_blast_furnace_controller": "高炉控制器",
+    "item.mmcr.kubejs_blast_furnace_controller": "高炉控制器",
     "item.mmcr_kubejs.kubejs_cracker_controller": "裂化器控制器",
     "item.mmcr_kubejs.kubejs_distillation_tower_controller": "蒸馏塔控制器",
     "item.mmcr_kubejs.kubejs_eco_matrix_controller": "ECO 矩阵控制器",
@@ -21,8 +22,9 @@
     "item.mmcr_kubejs.kubejs_space_elevator_controller": "太空电梯控制器",
     "item.mmcr_kubejs.kubejs_space_reassembler_controller": "太空重组器控制器",
     "item.mmcr_kubejs.kubejs_monster_farm_controller": "怪物农场控制器",
+
     "machine.mmcr_kubejs.kubejs_alloy_furnace": "合金炉",
-    "machine.mmcr_kubejs.kubejs_blast_furnace": "高炉",
+    "machine.mmcr.kubejs_blast_furnace": "高炉",
     "machine.mmcr_kubejs.kubejs_cracker": "裂化器",
     "machine.mmcr_kubejs.kubejs_distillation_tower": "蒸馏塔",
     "machine.mmcr_kubejs.kubejs_eco_matrix": "ECO 矩阵",
@@ -32,6 +34,7 @@
     "machine.mmcr_kubejs.kubejs_space_elevator": "太空电梯",
     "machine.mmcr_kubejs.kubejs_space_reassembler": "太空重组器",
     "machine.mmcr_kubejs.kubejs_monster_farm": "怪物农场",
+
     "mmcr.smart_interface.type.ConversionRate_KJS": "转化率",
     "mmcr.smart_interface.type.ConversionRate_KJS.description": "0.0-1.0, 越高耗能和产量越高",
     "mmcr.smart_interface.type.Mode_KJS": "模式",

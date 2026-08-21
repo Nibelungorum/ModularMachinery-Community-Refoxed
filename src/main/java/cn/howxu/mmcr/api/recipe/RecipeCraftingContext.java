@@ -53,8 +53,12 @@ import java.util.Optional;
 import java.util.function.BooleanSupplier;
 
 import java.util.function.Function;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class RecipeCraftingContext {
+
+    private static final Logger LOG = LoggerFactory.getLogger(RecipeCraftingContext.class);
 
     public static final String FAILURE_MISSING_INPUT = "gui.mmcr.controller.failure.missing_input";
     public static final String FAILURE_MISSING_OUTPUT = "gui.mmcr.controller.failure.missing_output";
@@ -666,9 +670,22 @@ public final class RecipeCraftingContext {
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT
                     && consumedAtStart != null && consumedAtStart.consumedBatches(requirementIndex) > 0) {
                 itemInputRoutes.set(requirementIndex, new ItemInputRoute(List.of()));
+                LOG.debug("[MMCR-DIAG] tick input id={} requirement={} skippedAlreadyConsumed=true consumedBatches={}",
+                        poolRecipeId, requirementIndex, consumedAtStart.consumedBatches(requirementIndex));
                 continue;
             }
-            if (requirement.io() == RecipeModifier.IOType.INPUT && !requirement.simulate(this, requirementIndex)) return false;
+            if (requirement.io() == RecipeModifier.IOType.INPUT) {
+                boolean matched = requirement instanceof ItemRequirement item
+                        && item.io() == RecipeModifier.IOType.INPUT
+                        && consumedAtStart != null
+                        && !consumedAtStart.consumedInputBatches().isEmpty()
+                        ? simulateItemInput(requirementIndex, item, false)
+                        : requirement.simulate(this, requirementIndex);
+                LOG.debug("[MMCR-DIAG] tick input id={} requirement={} skippedAlreadyConsumed=false matched={} consumeChance={}",
+                        poolRecipeId, requirementIndex, matched,
+                        requirement instanceof ItemRequirement item ? item.consumeChance() : "n/a");
+                if (!matched) return false;
+            }
         }
         return true;
     }
@@ -1157,7 +1174,10 @@ public final class RecipeCraftingContext {
             }
             consumed.add(consumedBatches);
         }
-        return new ActiveMachineRecipe.InputConsumptionPlan(consumed);
+        ActiveMachineRecipe.InputConsumptionPlan plan = new ActiveMachineRecipe.InputConsumptionPlan(consumed);
+        LOG.debug("[MMCR-DIAG] input plan id={} parallelism={} consumedBatches={} requirements={}",
+                recipe.id(), parallelism, consumed, requirements);
+        return plan;
     }
 
     /**

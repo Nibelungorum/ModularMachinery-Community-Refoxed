@@ -118,5 +118,6 @@ public final class MachineDefinitions {
         STATIC_REGISTRATIONS.clear();
         BUILTIN_SUPPLIERS.clear();
         registryPhaseOpen = true;
+        MachineStructureRegistry.clearForTesting();
     }
 }

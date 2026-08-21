@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -19,6 +20,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.HolderSet;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -202,6 +204,62 @@ class ActiveMachineRecipeTest {
 
         assertThat(context.startCrafting(recipe, 3, new ActiveMachineRecipe.InputConsumptionPlan(List.of(2)))).isTrue();
         assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+    }
+
+    @Test
+    void repeatedTagInputRecipeContinuesAfterFirstCompletion() throws Exception {
+        ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerWithComponents(bus);
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("repeated_tag_input"), MMCR.id("blast_furnace"), 3,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT,
+                        Ingredient.of(HolderSet.direct(Items.WOODEN_SWORD.builtInRegistryHolder(),
+                                Items.DIAMOND_SWORD.builtInRegistryHolder())), 1,
+                        ItemStack.EMPTY)), true);
+        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+
+        bus.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.WOODEN_SWORD));
+        ActiveMachineRecipe first = new ActiveMachineRecipe(recipe);
+        RecipeCraftingContext firstContext = pool.borrow(first, controller);
+        assertThat(first.start(firstContext)).isTrue();
+        for (int tick = 0; tick < first.getTotalTick(); tick++) {
+            assertThat(firstContext.commitSynchronousIoTick(recipe, 1, first.inputConsumptionPlan())).isTrue();
+            assertThat(first.applyTickGrant(true, true, tick)).isNotEqualTo(ActiveMachineRecipe.TickStatus.WAITING);
+        }
+        pool.returnContext(firstContext);
+
+        bus.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.DIAMOND_SWORD));
+        ActiveMachineRecipe second = new ActiveMachineRecipe(recipe);
+        RecipeCraftingContext secondContext = pool.borrow(second, controller);
+        assertThat(second.start(secondContext)).isTrue();
+        assertThat(secondContext.commitSynchronousIoTick(recipe, 1, second.inputConsumptionPlan())).isTrue();
+        assertThat(second.applyTickGrant(true, false, 0)).isEqualTo(ActiveMachineRecipe.TickStatus.CONTINUE);
+        assertThat(secondContext.commitSynchronousIoTick(recipe, 1, second.inputConsumptionPlan())).isTrue();
+        assertThat(second.applyTickGrant(true, false, 1)).isEqualTo(ActiveMachineRecipe.TickStatus.CONTINUE);
+    }
+
+    @Test
+    void nonConsumedInputBatchIsRetainedAcrossTicks() throws Exception {
+        ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerWithComponents(bus);
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("retained_input_tick"), MMCR.id("blast_furnace"), 3,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.DIAMOND_SWORD), 1,
+                        ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0.5F)), true);
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+        bus.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.DIAMOND_SWORD));
+
+        ActiveMachineRecipe.InputConsumptionPlan plan = new ActiveMachineRecipe.InputConsumptionPlan(List.of(0));
+        assertThat(context.startCrafting(recipe, 1, plan)).isTrue();
+        assertThat(bus.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isFalse();
+        for (int tick = 0; tick < 2; tick++) {
+            assertThat(context.commitSynchronousIoTick(recipe, 1, plan)).isTrue();
+            assertThat(active.applyTickGrant(true, false, tick)).isEqualTo(ActiveMachineRecipe.TickStatus.CONTINUE);
+        }
+        assertThat(bus.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isFalse();
     }
 
     @Test

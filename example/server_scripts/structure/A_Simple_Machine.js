@@ -29,10 +29,10 @@ MMCREvents.server(event => {
         .set('A',api.anyOf(api.block('minecraft:iron_block'),api.block('minecraft:stone'),api.block('mmcr:parallel_controller_normal'),api.block('mmcr:factory_controller'))) // this combines a lot of predicates, always used for ports position
         // parallel_controller_normal is the origin of parallel capability
         // factory_controller is the origin of multi thread capability
-        .set('I',api.anyOf(api.block('mmcr:item_input_bus_normal'),api.block('mmcr:item_output_bus_normal'),api.block('mmcr:energy_input_hatch_normal'))) // this is a fixed use of the ports, actually you can combine your special ports
-        .set('B',api.tag('c:storage_blocks')) // you can also use tag
-        // The machine use 'C' as the controller for default ! or you can set it to a standard block
-        .set('C',api.block('mmcr_kubejs:kubejs_blast_furnace_controller')) // base on your machine definition, with a '_controller' suffix
+        .set('I',api.anyOf(api.block('mmcr:item_input_bus'),api.block('mmcr:item_output_bus'),api.block('mmcr:energy_input_hatch'))) // this is a fixed use of the ports, actually you can combine your special ports
+        // one more thing, there is no mmcr:item_output_bus_normal, that's a 技术债T_T
+        .set('B',api.tag('c:natural_logs')) // you can also use block tag, pay attention, it's unsharable block tag
+        .set('C',api.block('mmcr:kubejs_blast_furnace_controller')) // based on your machine definition, with a '_controller' suffix, and the namespace must be mmcr
 
         // 3. call build
         .build()

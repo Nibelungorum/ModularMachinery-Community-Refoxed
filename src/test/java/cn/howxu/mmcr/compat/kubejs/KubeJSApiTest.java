@@ -65,8 +65,8 @@ class KubeJSApiTest {
     }
 
     @Test
-    void tag_rejects_unknown_block_tags() {
-        assertThatThrownBy(() -> api.tag("test:missing_tag")).isInstanceOf(IllegalArgumentException.class);
+    void tag_accepts_tags_before_server_resources_are_bound() {
+        assertThat(api.tag("test:tag_loaded_after_scripts")).isInstanceOf(BlockPredicate.OfTag.class);
     }
 
     @Test
