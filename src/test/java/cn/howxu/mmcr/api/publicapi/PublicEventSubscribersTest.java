@@ -16,6 +16,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.fml.loading.FMLLoader;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.nibelungorum.builtin.PublicBuiltinLevelDefinitions;
@@ -35,8 +36,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class PublicEventSubscribersTest {
+    private boolean lifecycleListenersActive;
+    private boolean deprecatedListenerActive;
+
     @BeforeAll
     static void bootstrapMinecraft() throws Exception { TestBootstrap.bootstrap(); }
+
+    @AfterEach
+    void disableManualListeners() {
+        lifecycleListenersActive = false;
+        deprecatedListenerActive = false;
+    }
 
     @Test
     void events_register_real_definition_structure_and_recipe_ids() {
@@ -48,18 +58,23 @@ class PublicEventSubscribersTest {
         var definitions = new AtomicReference<MMCRMachineDefinationsEvent>();
         var structures = new AtomicReference<MMCRMachineStructuresEvent>();
         var recipes = new AtomicReference<MMCRMachineRecipesEvent>();
+
+        lifecycleListenersActive = true;
         NeoForge.EVENT_BUS.addListener(MMCRMachineDefinationsEvent.class, event -> {
+            if (!lifecycleListenersActive) return;
             definitionReceives.incrementAndGet();
             event.registerMachine(machineId, builder -> builder.displayNameKey("machine.mmcr.event_machine"));
             definitions.set(event);
         });
         NeoForge.EVENT_BUS.addListener(MMCRMachineStructuresEvent.class, event -> {
+            if (!lifecycleListenersActive) return;
             structureReceives.incrementAndGet();
             event.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage.pattern(pattern -> pattern
                     .layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))));
             structures.set(event);
         });
         NeoForge.EVENT_BUS.addListener(MMCRMachineRecipesEvent.class, event -> {
+            if (!lifecycleListenersActive) return;
             recipeReceives.incrementAndGet();
             event.registerRecipe(MachineRecipeBuilder.recipe(recipeId, machineId).duration(1).build());
             recipes.set(event);
@@ -84,15 +99,21 @@ class PublicEventSubscribersTest {
         PublicBuiltinLevelDefinitions.register(event);
 
         assertThat(event.levelTypes()).containsOnlyKeys(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE);
+        assertThat(event.levelTypes().get(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE).displayName().getString())
+                .isEqualTo("热能冶炼线圈");
         assertThat(event.levels()).containsOnlyKeys(
                 PublicBuiltinLevelDefinitions.COPPER_COIL,
                 PublicBuiltinLevelDefinitions.IRON_COIL,
                 PublicBuiltinLevelDefinitions.GOLD_COIL,
                 PublicBuiltinLevelDefinitions.DIAMOND_COIL);
-        assertThat(event.levels().values()).allSatisfy(level -> {
-            assertThat(level.typeId()).isEqualTo(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE);
-            assertThat(level.modifier()).isNotNull();
-        });
+        assertThat(event.levels().get(PublicBuiltinLevelDefinitions.COPPER_COIL))
+                .satisfies(level -> assertBuiltinLevel(level, 0, Blocks.COPPER_BLOCK, 0.9D));
+        assertThat(event.levels().get(PublicBuiltinLevelDefinitions.IRON_COIL))
+                .satisfies(level -> assertBuiltinLevel(level, 1, Blocks.IRON_BLOCK, 0.8D));
+        assertThat(event.levels().get(PublicBuiltinLevelDefinitions.GOLD_COIL))
+                .satisfies(level -> assertBuiltinLevel(level, 2, Blocks.GOLD_BLOCK, 0.7D));
+        assertThat(event.levels().get(PublicBuiltinLevelDefinitions.DIAMOND_COIL))
+                .satisfies(level -> assertBuiltinLevel(level, 3, Blocks.DIAMOND_BLOCK, 0.6D));
     }
 
     @Test
@@ -109,6 +130,7 @@ class PublicEventSubscribersTest {
 
     @Test
     void builtin_level_subscriber_skips_development_levels_in_production() throws Exception {
+        FmlLoaderState originalLoader = captureFmlLoader();
         installFmlLoader(true);
         try {
             assertThat(FMLLoader.getCurrent().isProduction()).isTrue();
@@ -119,8 +141,24 @@ class PublicEventSubscribersTest {
             assertThat(event.levelTypes()).isEmpty();
             assertThat(event.levels()).isEmpty();
         } finally {
-            installFmlLoader(false);
+            restoreFmlLoader(originalLoader);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static FmlLoaderState captureFmlLoader() throws Exception {
+        Class<?> fmlLoaderClass = Class.forName("net.neoforged.fml.loading.FMLLoader");
+        Field currentField = findCurrentField(fmlLoaderClass);
+        AtomicReference<Object> current = (AtomicReference<Object>) currentField.get(null);
+        Object loader = current.get();
+        Field loadingModListField = fmlLoaderClass.getDeclaredField("loadingModList");
+        loadingModListField.setAccessible(true);
+        return new FmlLoaderState(current, loader, loadingModListField, loadingModListField.get(loader));
+    }
+
+    private static void restoreFmlLoader(FmlLoaderState originalLoader) throws IllegalAccessException {
+        originalLoader.loadingModListField.set(originalLoader.loader, originalLoader.loadingModList);
+        originalLoader.current.set(originalLoader.loader);
     }
 
     @SuppressWarnings("unchecked")
@@ -128,16 +166,7 @@ class PublicEventSubscribersTest {
         Class<?> fmlLoaderClass = Class.forName("net.neoforged.fml.loading.FMLLoader");
         Class<?> distClass = Class.forName("net.neoforged.api.distmarker.Dist");
         Class<?> loadingModListClass = Class.forName("net.neoforged.fml.loading.LoadingModList");
-        for (Field field : fmlLoaderClass.getDeclaredFields()) {
-            if (Modifier.isStatic(field.getModifiers()) && field.getType() == fmlLoaderClass) {
-                field.setAccessible(true);
-                field.set(null, null);
-            }
-            if (Modifier.isStatic(field.getModifiers()) && field.getType() == java.util.concurrent.atomic.AtomicReference.class) {
-                field.setAccessible(true);
-                ((java.util.concurrent.atomic.AtomicReference<Object>) field.get(null)).set(null);
-            }
-        }
+        ((AtomicReference<Object>) findCurrentField(fmlLoaderClass).get(null)).set(null);
         Constructor<?> fmlConstructor = fmlLoaderClass.getDeclaredConstructor(
                 ClassLoader.class, String[].class, distClass, boolean.class, Path.class);
         fmlConstructor.setAccessible(true);
@@ -153,6 +182,21 @@ class PublicEventSubscribersTest {
         Field loadingModListField = fmlLoaderClass.getDeclaredField("loadingModList");
         loadingModListField.setAccessible(true);
         loadingModListField.set(fmlLoaderClass.getMethod("getCurrent").invoke(null), emptyLoadingModList);
+    }
+
+    private static Field findCurrentField(Class<?> fmlLoaderClass) {
+        for (Field field : fmlLoaderClass.getDeclaredFields()) {
+            if (Modifier.isStatic(field.getModifiers())
+                    && field.getType() == java.util.concurrent.atomic.AtomicReference.class) {
+                field.setAccessible(true);
+                return field;
+            }
+        }
+        throw new IllegalStateException("Unable to locate active FML loader reference");
+    }
+
+    private record FmlLoaderState(AtomicReference<Object> current, Object loader,
+            Field loadingModListField, Object loadingModList) {
     }
 
     @Test
@@ -233,11 +277,26 @@ class PublicEventSubscribersTest {
     @Test
     void deprecated_definition_listener_receives_the_canonical_event_instance() {
         var observed = new AtomicReference<RegisterMachineDefinationsEvent>();
-        NeoForge.EVENT_BUS.addListener(RegisterMachineDefinationsEvent.class, observed::set);
+        deprecatedListenerActive = true;
+        NeoForge.EVENT_BUS.addListener(RegisterMachineDefinationsEvent.class, event -> {
+            if (deprecatedListenerActive) observed.set(event);
+        });
         var event = new MMCRMachineDefinationsEvent();
-
         NeoForge.EVENT_BUS.post(event);
-
         assertThat(observed.get()).isSameAs(event);
     }
+
+    private static void assertBuiltinLevel(cn.howxu.mmcr.api.machine.level.MachineLevel level,
+            int priority, net.minecraft.world.level.block.Block block, double durationMultiplier) {
+        assertThat(level.typeId()).isEqualTo(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE);
+        assertThat(level.priority()).isEqualTo(priority);
+        assertThat(level.statePredicate()).isInstanceOfSatisfying(cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState.class,
+                predicate -> assertThat(predicate.state()).isEqualTo(block.defaultBlockState()));
+        assertThat(level.modifier().durationMultiplier()).isEqualTo(durationMultiplier);
+        assertThat(level.modifier().energyMultiplier()).isEqualTo(1D);
+        assertThat(level.modifier().outputMultiplier()).isEqualTo(1D);
+        assertThat(level.modifier().parallelismBonus()).isZero();
+        assertThat(level.modifier().factoryThreadBonus()).isZero();
+    }
+
 }
