@@ -1,13 +1,9 @@
 package cn.howxu.mmcr.api.publicapi;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRRegisterRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.event.RegisterMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.RegisterMachineStructuresEvent;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
@@ -37,7 +33,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class PublicEventSubscribersTest {
     private boolean lifecycleListenersActive;
-    private boolean deprecatedListenerActive;
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception { TestBootstrap.bootstrap(); }
@@ -45,7 +40,6 @@ class PublicEventSubscribersTest {
     @AfterEach
     void disableManualListeners() {
         lifecycleListenersActive = false;
-        deprecatedListenerActive = false;
     }
 
     @Test
@@ -253,13 +247,6 @@ class PublicEventSubscribersTest {
     }
 
     @Test
-    void canonical_events_keep_deprecated_external_assignability() {
-        assertThat(new MMCRMachineDefinationsEvent()).isInstanceOf(RegisterMachineDefinationsEvent.class);
-        assertThat(new MMCRMachineStructuresEvent(Set.of())).isInstanceOf(RegisterMachineStructuresEvent.class);
-        assertThat(new MMCRMachineRecipesEvent()).isInstanceOf(MMCRRegisterRecipesEvent.class);
-    }
-
-    @Test
     void provider_can_implement_only_the_canonical_definition_signature() {
         var event = new MMCRMachineDefinationsEvent();
         MachineDefinitionProvider provider = new MachineDefinitionProvider() {
@@ -272,18 +259,6 @@ class PublicEventSubscribersTest {
         provider.register(event);
 
         assertThat(event.definitions()).containsKey(MMCR.id("canonical_provider_machine"));
-    }
-
-    @Test
-    void deprecated_definition_listener_receives_the_canonical_event_instance() {
-        var observed = new AtomicReference<RegisterMachineDefinationsEvent>();
-        deprecatedListenerActive = true;
-        NeoForge.EVENT_BUS.addListener(RegisterMachineDefinationsEvent.class, event -> {
-            if (deprecatedListenerActive) observed.set(event);
-        });
-        var event = new MMCRMachineDefinationsEvent();
-        NeoForge.EVENT_BUS.post(event);
-        assertThat(observed.get()).isSameAs(event);
     }
 
     private static void assertBuiltinLevel(cn.howxu.mmcr.api.machine.level.MachineLevel level,
