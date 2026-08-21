@@ -80,11 +80,11 @@ public record MachineRecipeLayout(
     }
 
     private static int hostRequirementTextY(MachineRecipeDisplay display, int guiScale) {
-        return baseMetadataTextY(display, guiScale);
+        return durationTextY(display, guiScale) + 10 * (1 + display.energyInputs().size() + display.energyOutputs().size());
     }
 
     private static int durationTextY(MachineRecipeDisplay display, int guiScale) {
-        return baseMetadataTextY(display, guiScale) + (display.requiredHostIds().isEmpty() ? 0 : 10);
+        return baseMetadataTextY(display, guiScale);
     }
 
     private static int baseMetadataTextY(MachineRecipeDisplay display, int guiScale) {
@@ -146,11 +146,15 @@ public record MachineRecipeLayout(
     }
 
     public int levelRequirementY(MachineRecipeDisplay display, int index) {
-        return durationTextY + 10 * (1 + display.energyInputs().size() + display.energyOutputs().size() + index);
+        int metadataY = display.requiredHostIds().isEmpty()
+                ? durationTextY + 10 * (1 + display.energyInputs().size() + display.energyOutputs().size())
+                : hostRequirementTextY + 10;
+        return metadataY + 10 * index;
     }
 
     public int lastMetadataTextY(MachineRecipeDisplay display) {
         return durationTextY + 10 * (display.energyInputs().size() + display.energyOutputs().size()
+                + (display.requiredHostIds().isEmpty() ? 0 : 1)
                 + display.recipe().levelRequirements().size() + display.smartInterfaceInputs().size()
                 + display.smartInterfaceOutputs().size() + display.smartInterfaceModifiers().size());
     }

@@ -3,6 +3,9 @@ package cn.howxu.mmcr.compat.jei;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
@@ -214,7 +217,7 @@ class MachineRecipeLayoutTest {
     }
 
     @Test
-    void metadataRowsReserveHostRequirementBeforeDurationAndStayInsideRecipeHeight() {
+    void metadataRowsReserveHostRequirementAfterEnergyRowsAndStayInsideRecipeHeight() {
         MachineRecipe recipe = new MachineRecipe(
                 MMCR.id("jei_host_layout"), MMCR.id("hosted_module"), 100,
                 IntStream.range(0, 22)
@@ -225,9 +228,28 @@ class MachineRecipeLayoutTest {
 
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(MachineRecipeDisplay.from(recipe), 4);
 
-        assertThat(layout.hostRequirementTextY()).isEqualTo(102);
-        assertThat(layout.durationTextY()).isEqualTo(112);
+        assertThat(layout.hostRequirementTextY()).isEqualTo(112);
+        assertThat(layout.durationTextY()).isEqualTo(102);
         assertThat(layout.lastMetadataTextY(MachineRecipeDisplay.from(recipe))).isLessThan(layout.height());
+    }
+
+    @Test
+    void hostRequirementFollowsEnergyOutputRows() {
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("jei_host_after_energy"), MMCR.id("hosted_module"), 100,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.<MachineRequirement>of(
+                        new EnergyRequirement(RecipeModifier.IOType.INPUT, 40),
+                        new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 80),
+                        new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 120)),
+                false, List.of(), false, Set.of(MMCR.id("host_a")), false);
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(display, 4);
+
+        assertThat(layout.hostRequirementTextY())
+                .isEqualTo(layout.durationTextY()
+                        + 10 * (1 + display.energyInputs().size() + display.energyOutputs().size()));
+        assertThat(layout.levelRequirementY(display, 0)).isGreaterThan(layout.hostRequirementTextY());
     }
 
 }
