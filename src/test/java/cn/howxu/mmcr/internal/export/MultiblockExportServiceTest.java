@@ -83,12 +83,30 @@ class MultiblockExportServiceTest {
                 new MultiblockExportService.SnapshotEntry(new BlockPos(0, 1, 0), Identifier.fromNamespaceAndPath("minecraft", "air"), true)
         ), Direction.SOUTH);
 
-        assertThat(kubeJs).contains(".pattern(\"X X\", \" C \", \"X X\")");
+        assertThat(kubeJs).contains(".pattern(\"X X\")");
+        assertThat(kubeJs).contains(".pattern(\" C \")");
         assertThat(kubeJs).contains(".set('X', api.block('mmcr:basic_casing'))");
         assertThat(kubeJs).contains(".set('C', api.block('mmcr:blast_furnace_controller'))");
         assertThat(kubeJs).doesNotContain("BlockArray");
         assertThat(kubeJs).doesNotContain("import ");
         assertThat(kubeJs).doesNotContain(".layer(");
+    }
+
+    @Test
+    void renderKubeJsKeepsEachZSliceInSeparatePatternCall() {
+        Identifier controller = Identifier.fromNamespaceAndPath("mmcr", "blast_furnace_controller");
+        Identifier casing = Identifier.fromNamespaceAndPath("mmcr", "basic_casing");
+
+        String kubeJs = MultiblockExportService.renderKubeJS(List.of(
+                new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, controller, false),
+                new MultiblockExportService.SnapshotEntry(new BlockPos(0, 0, 1), casing, false)
+        ), Direction.SOUTH);
+
+        assertThat(kubeJs).contains(".pattern(\"C\")");
+        assertThat(kubeJs).contains(".pattern(\"X\")");
+        assertThat(kubeJs.indexOf(".pattern(\"C\")"))
+                .isLessThan(kubeJs.indexOf(".pattern(\"X\")"));
+        assertThat(kubeJs).doesNotContain(".pattern(\"C\", \"X\")");
     }
 
     @Test

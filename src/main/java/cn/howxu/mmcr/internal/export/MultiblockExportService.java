@@ -66,9 +66,8 @@ public final class MultiblockExportService {
 
     public static String renderKubeJS(List<SnapshotEntry> entries, Direction controllerFace, Direction rollFacing) {
         PreparedExport prepared = prepare(entries, controllerFace, rollFacing);
-        StringBuilder out = new StringBuilder(".pattern(");
+        StringBuilder out = new StringBuilder();
         appendLayers(out, prepared, null);
-        out.append(")").append(System.lineSeparator());
         for (Map.Entry<Identifier, Character> symbol : prepared.symbols().entrySet()) {
             out.append(".set('").append(symbol.getValue()).append("', api.block('")
                     .append(escapeKubeJs(symbol.getKey().toString())).append("'))")
@@ -101,18 +100,19 @@ public final class MultiblockExportService {
         int minZ = rendered.stream().mapToInt(entry -> entry.pos().getZ()).min().orElse(0);
         int maxZ = rendered.stream().mapToInt(entry -> entry.pos().getZ()).max().orElse(0);
         if (method == null) {
-            List<String> rows = new ArrayList<>();
-            if (rendered.isEmpty()) rows.add(" ");
+            if (rendered.isEmpty()) {
+                out.append(".pattern(\" \")").append(System.lineSeparator());
+                return;
+            }
             for (int z = minZ; z <= maxZ; z++) {
+                out.append(".pattern(");
                 for (int y = minY; y <= maxY; y++) {
                     StringBuilder row = new StringBuilder();
                     for (int x = minX; x <= maxX; x++) row.append(charsByPos.getOrDefault(new BlockPos(x, y, z), ' '));
-                    rows.add(row.toString());
+                    if (y > minY) out.append(", ");
+                    out.append('"').append(row).append('"');
                 }
-            }
-            for (int i = 0; i < rows.size(); i++) {
-                if (i > 0) out.append(", ");
-                out.append('"').append(rows.get(i)).append('"');
+                out.append(")").append(System.lineSeparator());
             }
             return;
         }
