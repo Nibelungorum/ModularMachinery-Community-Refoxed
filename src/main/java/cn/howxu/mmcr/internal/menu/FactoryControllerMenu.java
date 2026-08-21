@@ -125,7 +125,7 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
         if (owner == null) return;
         if (!owner.hasFactoryController()) return;
         FactoryControllerSnapshot next = owner.factoryControllerSnapshot();
-        snapshot = next;
+        applySnapshot(next);
         if (player != null && !next.equals(lastSentSnapshot)) {
             owner.sendFactoryControllerSnapshot(player);
             lastSentSnapshot = next;

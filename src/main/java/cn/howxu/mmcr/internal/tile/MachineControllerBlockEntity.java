@@ -593,7 +593,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         boolean powered = level.getDirectSignalTo(getBlockPos()) > 0;
         if (powered) {
             redstonePaused = true;
-            if (hasFactoryController()) factoryScheduler().pause();
+            if (hasFactoryController()) {
+                factoryScheduler().pause();
+                syncOpenFactoryControllerMenus();
+            }
             syncRuntimeStateIfChanged();
             if (active != null && context != null) {
                 pausedActive = active;
@@ -615,7 +618,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return;
         }
         redstonePaused = false;
-        if (hasFactoryController()) factoryScheduler().resume();
+        if (hasFactoryController()) {
+            factoryScheduler().resume();
+            syncOpenFactoryControllerMenus();
+        }
         syncRuntimeStateIfChanged();
         if (shouldCheckStructure()) checkStructure();
         if (active == null && pausedActive != null && pausedContext != null) {

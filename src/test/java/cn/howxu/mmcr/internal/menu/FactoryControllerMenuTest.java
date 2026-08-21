@@ -52,6 +52,18 @@ class FactoryControllerMenuTest {
     }
 
     @Test
+    void client_menu_ignores_snapshot_for_another_controller() {
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null), bufferAt(BlockPos.ZERO));
+
+        menu.applySnapshot(new FactoryControllerSnapshot(new BlockPos(1, 0, 0), true, false, 1, 1, 0, 1,
+                "Other", 0, List.of(new FactoryRecipeScheduler.ThreadSnapshot(0, true, false, true,
+                "mmcr:other", 1, 2, 1))));
+
+        assertThat(menu.isFormed()).isFalse();
+        assertThat(menu.threads()).containsExactly(FactoryRecipeScheduler.ThreadSnapshot.idleBase());
+    }
+
+    @Test
     void current_parallelism_uses_the_selected_active_thread() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
         menu.applySnapshot(new FactoryControllerSnapshot(BlockPos.ZERO, true, false, 2, 2, 32, 16,
