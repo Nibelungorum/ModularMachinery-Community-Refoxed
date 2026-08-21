@@ -1359,6 +1359,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (!(tile instanceof BlockEntity container)) continue;
             components.add(new ProcessingComponent(component, container, worldPos, relativePos, foundPattern.tagsAt(relativePos)));
         }
+        LOG.info("[MMCR/Temp][Controller] pos={}, formedMachine={}, components={}, parallelControllers={}, maxParallelism={}",
+                getBlockPos(), foundMachine == null ? "<null>" : foundMachine.registryName(),
+                components.stream().map(component -> component.getContainer() == null
+                        ? "<null>" : component.getContainer().getClass().getSimpleName()).toList(),
+                parallelControllerCount(), getMaxParallelism());
         invalidateFactoryCapacity();
     }
 
@@ -1780,9 +1785,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (machineId == null) return false;
         if (tryRestartLastRecipe(machineId)) return true;
         List<MachineRecipe> candidates = recipesForMachine();
+        int maxParallelism = getMaxParallelism();
+        LOG.info("[MMCR/Temp][Controller] pos={}, searching machine={}, maxParallelism={}, candidateIds={}",
+                getBlockPos(), machineId, maxParallelism, candidates.stream().map(MachineRecipe::id).toList());
         RecipeSearchResult result;
         try {
-            result = new RecipeSearchTask(this, machineId, structureVersion, getMaxParallelism(), candidates,
+            result = new RecipeSearchTask(this, machineId, structureVersion, maxParallelism, candidates,
                     contextPool(), cachedCandidateIndex, lockedRecipeId).compute();
         } catch (RuntimeException e) {
             LOG.warn("[Ctrl#{}] tryStartNewRecipe: recipe search failed at pos={}; retrying later", instanceId, getBlockPos(), e);
@@ -1793,6 +1801,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return false;
         }
         if (result.success()) {
+            LOG.info("[MMCR/Temp][Controller] pos={}, search result recipe={}, parallelism={}, maxParallelism={}",
+                    getBlockPos(), result.activeRecipe().getRecipe().id(), result.activeRecipe().getParallelism(),
+                    result.activeRecipe().getMaxParallelism());
             return applySearchResult(result, candidates.size());
         }
         clearPendingConflictStart();
