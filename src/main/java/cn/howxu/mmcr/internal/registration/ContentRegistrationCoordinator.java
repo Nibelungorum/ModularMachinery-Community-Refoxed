@@ -136,12 +136,12 @@ public final class ContentRegistrationCoordinator {
         state = State.BEFORE_BEGIN;
         testCommitCount = 0;
         lastStartupSnapshot = new StartupSnapshotForTesting(Set.of(), Set.of(), Set.of());
+        StartupContentRegistration.resetForTesting();
     }
 
     /** Resets the complete startup test seam, including public API lifecycle state. */
     public static synchronized void resetForTesting() {
         clearForTesting();
-        StartupContentRegistration.resetForTesting();
         MMCRMachineStructuresEvent.resetCollector();
         PublicApiBootstrap.resetStateForTesting();
         MachineDefinitions.clearForTesting();

@@ -15,6 +15,7 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
+import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
@@ -279,6 +280,26 @@ class ContentRegistrationCoordinatorTest {
         ContentRegistrationCoordinator.resetForTesting();
 
         assertThat(StartupContentRegistration.startupPhaseForTesting()).isEqualTo("NOT_STARTED");
+    }
+
+    @Test
+    void public_api_clear_also_resets_startup_registration_phase() {
+        StartupContentRegistration.registerForTesting(event -> { }, event -> { }, event -> { });
+
+        PublicApiBootstrap.clearForTesting();
+
+        assertThat(StartupContentRegistration.startupPhaseForTesting()).isEqualTo("NOT_STARTED");
+    }
+
+    @Test
+    void kubejs_completion_after_register_attachment_still_commits_startup() {
+        ContentRegistrationCoordinator.beginStartup();
+        StartupContentRegistration.markCollectingForTesting();
+        StartupContentRegistration.markRegistersAttached();
+
+        MMCR.completeKubeJSStartupIfReady();
+
+        assertThat(ContentRegistrationCoordinator.isCommitted()).isTrue();
     }
 
     @Test

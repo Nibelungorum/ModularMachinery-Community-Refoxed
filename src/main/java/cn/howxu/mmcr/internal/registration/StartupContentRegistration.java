@@ -77,7 +77,9 @@ public final class StartupContentRegistration {
 
     public static void completeKubeJSStartupIfReady() {
         if (ContentRegistrationCoordinator.isCommitted()) return;
-        if (startupPhase == StartupPhase.COLLECTING) completeKubeJSStartup();
+        if (startupPhase == StartupPhase.COLLECTING || startupPhase == StartupPhase.REGISTERS_ATTACHED) {
+            completeKubeJSStartup();
+        }
     }
 
     public static String startupPhaseForTesting() {
@@ -86,6 +88,10 @@ public final class StartupContentRegistration {
 
     public static void resetForTesting() {
         startupPhase = StartupPhase.NOT_STARTED;
+    }
+
+    public static void markCollectingForTesting() {
+        startupPhase = StartupPhase.COLLECTING;
     }
 
     public static void invokeOptionalSourceForTesting(String className, String methodName,
