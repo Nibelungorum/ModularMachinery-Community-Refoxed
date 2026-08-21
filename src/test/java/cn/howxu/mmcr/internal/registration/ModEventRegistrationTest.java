@@ -30,10 +30,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -55,9 +54,9 @@ class ModEventRegistrationTest {
 
         ModEventRegistration.registerListeners(modBus, gameBus, handlers(invoked));
 
-        assertThat(modBus.types()).containsExactlyInAnyOrder(
+        assertThat(modBus.types()).containsExactly(
                 RegisterCapabilitiesEvent.class, RegisterPayloadHandlersEvent.class, RegisterGameTestsEvent.class);
-        assertThat(gameBus.types()).containsExactlyInAnyOrder(
+        assertThat(gameBus.types()).containsExactly(
                 BlockEvent.EntityPlaceEvent.class, BlockEvent.EntityMultiPlaceEvent.class,
                 BlockEvent.FluidPlaceBlockEvent.class, BreakBlockEvent.class, ChunkEvent.Unload.class,
                 ChunkEvent.Load.class, LevelTickEvent.Post.class, LevelEvent.Unload.class,
@@ -67,7 +66,7 @@ class ModEventRegistrationTest {
 
         modBus.fireAll();
         gameBus.fireAll();
-        assertThat(invoked).containsExactlyInAnyOrderElementsOf(
+        assertThat(invoked).containsExactlyElementsOf(
                 List.of(RegisterCapabilitiesEvent.class, RegisterPayloadHandlersEvent.class,
                         RegisterGameTestsEvent.class, BlockEvent.EntityPlaceEvent.class,
                         BlockEvent.EntityMultiPlaceEvent.class, BlockEvent.FluidPlaceBlockEvent.class,
@@ -119,6 +118,21 @@ class ModEventRegistrationTest {
                 .contains("reload", "build", "export");
     }
 
+    @Test
+    void production_handlers_are_wired_and_execute_the_real_command_handler() {
+        RecordingBus modBus = new RecordingBus();
+        RecordingBus gameBus = new RecordingBus();
+        ModEventRegistration.registerListeners(modBus, gameBus, ModEventRegistration.EventHandlers.production());
+        CommandDispatcher<CommandSourceStack> dispatcher = new CommandDispatcher<>();
+
+        gameBus.fire(RegisterCommandsEvent.class, new RegisterCommandsEvent(
+                dispatcher, Commands.CommandSelection.ALL, (CommandBuildContext) null));
+
+        assertThat(dispatcher.getRoot().getChild("mmcr").getChildren())
+                .extracting(command -> command.getName())
+                .contains("reload", "build", "export");
+    }
+
     private static ModEventRegistration.EventHandlers handlers(List<Class<?>> invoked) {
         return new ModEventRegistration.EventHandlers(
                 recording(invoked, RegisterCapabilitiesEvent.class),
@@ -143,15 +157,20 @@ class ModEventRegistrationTest {
     }
 
     private static final class RecordingBus implements ModEventRegistration.ListenerRegistrar {
-        private final Map<Class<?>, Consumer<?>> listeners = new HashMap<>();
+        private final Map<Class<?>, Consumer<?>> listeners = new LinkedHashMap<>();
 
         @Override
         public <T extends Event> void add(Class<T> eventType, Consumer<T> listener) {
             listeners.put(eventType, listener);
         }
 
-        Set<Class<?>> types() {
-            return listeners.keySet();
+        List<Class<?>> types() {
+            return new ArrayList<>(listeners.keySet());
+        }
+
+        @SuppressWarnings("unchecked")
+        <T extends Event> void fire(Class<T> eventType, T event) {
+            ((Consumer<T>) listeners.get(eventType)).accept(event);
         }
 
         @SuppressWarnings("unchecked")

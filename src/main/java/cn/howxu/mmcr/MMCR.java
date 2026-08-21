@@ -49,11 +49,6 @@ public class MMCR {
         RuntimeContentRegistration.registerBuiltins();
     }
 
-    /** Runtime recipe seam invoked by the data-component lifecycle callback, not an event wiring implementation. */
-    private static void registerRuntimeRecipes() {
-        RuntimeContentRegistration.registerRecipes();
-    }
-
     /** Compatibility/test facade for the production public API startup lifecycle. */
     private static void registerPublicApiLifecycle() {
         RuntimeContentRegistration.registerProductionStartupContentForTesting();
