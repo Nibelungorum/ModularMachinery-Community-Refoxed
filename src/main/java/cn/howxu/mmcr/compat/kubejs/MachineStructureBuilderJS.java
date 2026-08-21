@@ -42,6 +42,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     private boolean patternDeclaration;
     private boolean classMetadataChanged;
     private boolean slicePatternPending;
+    private PatternApiMode patternApiMode;
 
     public MachineStructureBuilderJS(Identifier id) {
         super(id);
@@ -52,6 +53,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     }
 
     public MachineStructureBuilderJS pattern(String grid, Map<String, Object> keys) {
+        selectPatternApi(PatternApiMode.LEGACY);
         var blocks = new HashMap<BlockPos, BlockPredicate>();
         var symbolsByPosition = new HashMap<BlockPos, Character>();
         var requirementBuilder = MachineStructureRequirements.builder();
@@ -99,6 +101,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     }
 
     public MachineStructureBuilderJS pattern(String... rows) {
+        selectPatternApi(PatternApiMode.CHAINED);
         sliceBuilder.pattern(rows);
         slicePatternPending = true;
         return this;
@@ -119,6 +122,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     }
 
     public MachineStructureBuilderJS set(String symbol, Object value) {
+        selectPatternApi(PatternApiMode.CHAINED);
         if (symbol == null || symbol.length() != 1 || symbol.charAt(0) == ' ') {
             throw new IllegalArgumentException("A pattern symbol must be exactly one non-space character");
         }
@@ -132,6 +136,13 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
             sliceRequirements.levelSlot(key, validateLevelType(levelSlot.typeId()));
         }
         return this;
+    }
+
+    private void selectPatternApi(PatternApiMode requested) {
+        if (patternApiMode != null && patternApiMode != requested) {
+            throw new IllegalStateException("Legacy and chained pattern APIs cannot be mixed");
+        }
+        patternApiMode = requested;
     }
 
     public MachineStructureBuilderJS fullStructure(PortRequirementSpec ports,
@@ -287,6 +298,11 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
             throw new IllegalArgumentException("Unknown machine level type: " + typeId);
         }
         return typeId;
+    }
+
+    private enum PatternApiMode {
+        LEGACY,
+        CHAINED
     }
 
     /**

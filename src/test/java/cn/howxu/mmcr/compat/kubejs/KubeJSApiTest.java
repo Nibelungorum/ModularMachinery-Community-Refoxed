@@ -244,6 +244,21 @@ class KubeJSApiTest {
     }
 
     @Test
+    void legacy_and_slice_pattern_apis_cannot_be_mixed() {
+        assertThatThrownBy(() -> new MachineStructureBuilderJS("test:legacy_then_slice")
+                .pattern("B", Map.of("B", api.block("minecraft:bricks")))
+                .set("X", api.block("minecraft:stone")))
+                .isInstanceOf(IllegalStateException.class);
+
+        var builder = new MachineStructureBuilderJS("test:slice_then_legacy")
+                .pattern(List.of("C"))
+                .set("C", api.block("minecraft:blast_furnace"));
+
+        assertThatThrownBy(() -> builder.pattern("B", Map.of("B", api.block("minecraft:bricks"))))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     void block_array_can_bind_script_symbol_metadata_for_character_requirements() {
         var replacement = api.singleBlockModifier("diamond_speedup",
                 new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK), List.of(), ItemStack.EMPTY);
