@@ -63,6 +63,8 @@ public final class JeiRuntimeReloader {
         Runnable reload = () -> {
             try {
                 Map<Identifier, List<MachineRecipeDisplay>> displaysByMachine = MachineRecipeDisplays.byMachine(snapshot);
+                MMCR.LOG.info("[MMCR/Temp][JEI-Reload] snapshotMachines={}, snapshotRecipes={}, displayMachines={}",
+                        snapshot.structures().keySet(), snapshot.recipes().keySet(), displaysByMachine.keySet());
                 Map<Identifier, List<MachineRecipeDisplay>> previousVisible = visibleDisplaysByMachine;
                 Map<Identifier, List<MachineRecipeDisplay>> updatedVisible = new LinkedHashMap<>();
                 Set<Identifier> refreshedMachineIds = new LinkedHashSet<>(previousVisible.keySet());
@@ -77,6 +79,9 @@ public final class JeiRuntimeReloader {
                     if (!snapshot.structures().containsKey(machineId)) continue;
                     List<MachineRecipeDisplay> displays = displaysByMachine.getOrDefault(machineId, List.of());
                     current.getRecipeManager().addRecipes(type, displays);
+                    MMCR.LOG.info("[MMCR/Temp][JEI-Reload] add machine={}, recipes={}, categoryRegistered={}",
+                            machineId, displays.stream().map(MachineRecipeDisplay::recipeId).toList(),
+                            !categoriesCaptured || REGISTERED_MACHINE_CATEGORIES.contains(machineId));
                     updatedVisible.put(machineId, displays);
                 }
                 visibleDisplaysByMachine = Map.copyOf(updatedVisible);
