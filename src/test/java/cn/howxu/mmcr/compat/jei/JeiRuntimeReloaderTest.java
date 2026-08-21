@@ -93,6 +93,23 @@ class JeiRuntimeReloaderTest {
     }
 
     @Test
+    void firstRuntimeReloadHidesDisplaysRegisteredBeforeRuntimeWasAvailable() {
+        FakeRecipeManager manager = new FakeRecipeManager();
+        Identifier machineId = MMCR.id("alloy_furnace");
+        Identifier recipeId = MMCR.id("initial_kubejs_recipe");
+        MachineRecipe recipe = new MachineRecipe(recipeId, machineId, 20, List.of(),
+                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)));
+        JeiRuntimeReloader.captureInitialDisplays(Map.of(machineId, List.of(MachineRecipeDisplay.from(recipe))));
+        JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
+        JeiRuntimeReloader.setRuntime(runtime(manager));
+
+        JeiRuntimeReloader.reloadIfAvailable(snapshotWithRecipe(machineId, recipeId));
+
+        assertThat(manager.hiddenRecipeIds()).containsExactly(recipeId);
+        assertThat(manager.addedRecipeIds()).containsExactly(recipeId);
+    }
+
+    @Test
     void reloadDoesNotRefreshTheSameCommittedVersionTwice() {
         FakeRecipeManager manager = new FakeRecipeManager();
         Identifier machineId = MMCR.id("alloy_furnace");

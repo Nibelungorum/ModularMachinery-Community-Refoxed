@@ -38,9 +38,12 @@ public final class JeiRuntimeReloader {
         categoriesCaptured = true;
     }
 
+    static void captureInitialDisplays(Map<Identifier, List<MachineRecipeDisplay>> displaysByMachine) {
+        visibleDisplaysByMachine = copyDisplays(displaysByMachine);
+    }
+
     public static void setRuntime(IJeiRuntime runtime) {
         JeiRuntimeReloader.runtime = runtime;
-        visibleDisplaysByMachine = Map.of();
         lastReloadedVersion = Long.MIN_VALUE;
         scheduledReloadVersion = Long.MIN_VALUE;
     }
@@ -93,5 +96,12 @@ public final class JeiRuntimeReloader {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft == null) reload.run();
         else minecraft.execute(reload);
+    }
+
+    private static Map<Identifier, List<MachineRecipeDisplay>> copyDisplays(
+            Map<Identifier, List<MachineRecipeDisplay>> displaysByMachine) {
+        Map<Identifier, List<MachineRecipeDisplay>> copy = new LinkedHashMap<>();
+        displaysByMachine.forEach((machineId, displays) -> copy.put(machineId, List.copyOf(displays)));
+        return Map.copyOf(copy);
     }
 }
