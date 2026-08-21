@@ -87,6 +87,19 @@ class KubeJSRecipeSyncTest {
     }
 
     @Test
+    void sync_does_not_duplicate_recipe_already_published_as_dynamic_content() {
+        Identifier id = MMCR.id("dynamic_recipe");
+        MachineRecipe recipe = new MachineRecipe(id, MMCR.id("machine"), 1, List.of(), List.of());
+        RecipeRegistry.replaceDynamic(Map.of(id, recipe));
+
+        ResourceKey<Recipe<?>> holderId = ResourceKey.create(Registries.RECIPE, id);
+        KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(holderId, recipe)));
+
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsEntry(id, recipe);
+        assertThat(RecipeRegistry.kubeJSSnapshot()).doesNotContainKey(id);
+    }
+
+    @Test
     void sync_does_not_replace_explicit_kubejs_id_with_generated_holder_id() {
         Identifier explicitId = MMCR.id("explicit_recipe");
         MachineRecipe explicit = new MachineRecipe(explicitId, MMCR.id("machine"), 1, List.of(), List.of());
