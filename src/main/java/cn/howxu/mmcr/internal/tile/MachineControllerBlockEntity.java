@@ -173,6 +173,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private boolean syncedRuntimeActive;
     private Map<UUID, Long> previewReceivers = new LinkedHashMap<>();
     private @Nullable Runnable factoryCapacityInvalidationCallbackForTesting;
+    private @Nullable ValueInput pendingFactorySchedulerInput;
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
@@ -366,7 +367,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public int activeFactoryThreadCount() {
-        return factoryScheduler().activeLaneCount();
+        return hasFactoryController() ? factoryScheduler().activeLaneCount() : 0;
     }
 
     public List<ProcessingComponent> getComponents() { return List.copyOf(components); }
@@ -511,11 +512,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public FactoryRecipeScheduler factoryScheduler() {
-        if (factoryScheduler == null) {
-            for (FactorySchedulerBlockEntity factory : factoryComponents()) factory.bindOwner(this);
+        if (factoryScheduler == null && !hasFactoryController()) {
+            throw new IllegalStateException("Factory scheduler requested without a formed factory controller");
         }
         if (factoryScheduler == null) {
             factoryScheduler = new FactoryRecipeScheduler(1, contextPool());
+            if (pendingFactorySchedulerInput != null) {
+                factoryScheduler.load(pendingFactorySchedulerInput, this, contextPool());
+                pendingFactorySchedulerInput = null;
+            }
         }
         factoryScheduler.ensureBaseThread(this, contextPool());
         if (machine != null && machine.hasFactory()) factoryScheduler.setThreadLimit(effectiveFactoryThreadLimit());
@@ -523,10 +528,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public List<FactoryRecipeScheduler.ThreadSnapshot> factoryThreadSnapshots() {
-        return factoryScheduler().threadSnapshots();
+        return hasFactoryController()
+                ? factoryScheduler().threadSnapshots()
+                : List.of(FactoryRecipeScheduler.ThreadSnapshot.idleBase());
     }
 
     public FactoryControllerSnapshot factoryControllerSnapshot() {
+        if (!hasFactoryController()) return FactoryControllerSnapshot.empty(getBlockPos());
         FactoryRecipeScheduler scheduler = factoryScheduler();
         return new FactoryControllerSnapshot(getBlockPos(), isFormed(), isRedstonePaused(),
                 scheduler.activeThreadCount(), scheduler.threadLimit(), scheduler.usedParallelism(),
@@ -2310,14 +2318,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
             pausedContext.serialize(output.child("active_context"));
         }
         if (lockedRecipeId != null) output.putString("locked_recipe", lockedRecipeId.toString());
-        factoryScheduler().save(output.child("factory_scheduler"));
+        if (hasFactoryController()) factoryScheduler().save(output.child("factory_scheduler"));
     }
 
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
-        factoryScheduler = new FactoryRecipeScheduler(1, contextPool());
-        factoryScheduler.load(input.childOrEmpty("factory_scheduler"), this, contextPool());
+        pendingFactorySchedulerInput = input.childOrEmpty("factory_scheduler");
         matchedStructureStage = Math.max(0, input.getIntOr("matched_structure_stage", 0));
         structureDirty = true;
         setChanged();

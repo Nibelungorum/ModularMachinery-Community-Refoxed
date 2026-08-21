@@ -463,6 +463,22 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void non_factory_accessors_do_not_create_a_factory_scheduler() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        setField(MachineControllerBlockEntity.class, controller, "machine",
+                new DynamicMachine(MMCR.id("non_factory_scheduler_guard"), "Non Factory Guard",
+                        onePortPattern(Blocks.IRON_BLOCK)));
+
+        assertThat(controller.activeFactoryThreadCount()).isZero();
+        assertThat(controller.factoryThreadSnapshots())
+                .containsExactly(FactoryRecipeScheduler.ThreadSnapshot.idleBase());
+        assertThat(controller.factoryControllerSnapshot().threads())
+                .containsExactly(FactoryRecipeScheduler.ThreadSnapshot.idleBase());
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "factoryScheduler")).isNull();
+    }
+
+    @Test
     void formed_parallel_controller_is_discovered_from_structure_snapshot() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         Identifier texture = MMCR.id("block/parallel_structure_casing");
