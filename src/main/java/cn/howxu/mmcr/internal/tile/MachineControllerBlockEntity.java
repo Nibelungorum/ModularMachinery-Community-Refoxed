@@ -1569,6 +1569,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void resumePausedRecipeAfterStructureCheck() {
         if (active != null || pausedActive == null || pausedContext == null || redstonePaused) return;
+        LOG.info("[MMCR/Temp][Controller] pos={}, resume recipe={}, parallelismBefore={}, maxParallelism={}",
+                getBlockPos(), pausedActive.getRecipe() == null ? "<null>" : pausedActive.getRecipe().id(),
+                pausedActive.getParallelism(), getMaxParallelism());
         int parallelism = getMaxParallelism();
         pausedActive.setMaxParallelism(parallelism);
         pausedActive.setParallelism(parallelism);
@@ -1576,6 +1579,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         context = pausedContext;
         context.refreshController(this);
         active.refreshTotalTick(context);
+        LOG.info("[MMCR/Temp][Controller] pos={}, resumed recipe={}, parallelismAfter={}", getBlockPos(),
+                active.getRecipe() == null ? "<null>" : active.getRecipe().id(), active.getParallelism());
         pausedActive = null;
         pausedContext = null;
         setActiveState(true);
@@ -2281,6 +2286,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         cachedDatapackRecipeCount = datapackCount;
         cachedCandidates = List.copyOf(recipes.values());
         cachedCandidateIndex = RecipeCandidateIndex.build(cachedCandidates);
+        LOG.info("[MMCR/Temp][Controller] pos={}, machine={}, candidates={}", getBlockPos(), machineId,
+                cachedCandidates.stream().map(recipe -> recipe.id() + ":" + recipe.machineId()).toList());
         return cachedCandidates;
     }
 

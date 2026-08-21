@@ -56,6 +56,8 @@ public final class JeiPlugin implements IModPlugin {
                 .toList());
         var displaysByMachine = MachineRecipeDisplays.byMachine();
         Set<Identifier> machineIds = machineIds();
+        MMCR.LOG.info("[MMCR/Temp][JEI] recipeMachines={}, displayMachines={}", machineIds,
+                displaysByMachine.keySet());
         displaysByMachine.forEach((machineId, displays) -> {
             if (!machineIds.contains(machineId)) {
                 displays.forEach(display -> MMCR.LOG.warn("Skipping JEI recipe {} for unknown machine {}", display.recipeId(), machineId));
