@@ -84,6 +84,10 @@ public final class StartupContentRegistration {
         return startupPhase.name();
     }
 
+    public static void resetForTesting() {
+        startupPhase = StartupPhase.NOT_STARTED;
+    }
+
     public static void invokeOptionalSourceForTesting(String className, String methodName,
                                                        Class<?>[] parameterTypes, Object... arguments) {
         invokeOptionalSource(className, methodName, parameterTypes, arguments);

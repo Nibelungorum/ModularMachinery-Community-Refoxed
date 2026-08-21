@@ -195,7 +195,7 @@ public class MMCR {
     }
 
     public static void registerProductionApiLifecycleForTesting() {
-        StartupContentRegistration.registerProduction();
+        registerPublicApiLifecycle();
     }
 
     public static void completeKubeJSStartup() {

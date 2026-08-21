@@ -240,7 +240,7 @@ class ContentRegistrationCoordinatorTest {
 
     @Test
     void production_bootstrap_commits_without_optional_gametest_classpath() {
-        assertThatCode(MMCR::registerProductionApiLifecycleForTesting).doesNotThrowAnyException();
+        assertThatCode(StartupContentRegistration::registerProduction).doesNotThrowAnyException();
         var productionSnapshot = ContentRegistrationCoordinator.startupSnapshotForTesting();
         int productionCommitCount = ContentRegistrationCoordinator.commitCountForTesting();
         assertThat(productionSnapshot.machines()).isNotEmpty();
@@ -273,8 +273,17 @@ class ContentRegistrationCoordinatorTest {
     }
 
     @Test
+    void coordinator_reset_also_resets_startup_registration_phase() {
+        StartupContentRegistration.registerForTesting(event -> { }, event -> { }, event -> { });
+
+        ContentRegistrationCoordinator.resetForTesting();
+
+        assertThat(StartupContentRegistration.startupPhaseForTesting()).isEqualTo("NOT_STARTED");
+    }
+
+    @Test
     void production_bootstrap_projects_structures_into_effective_registry() {
-        assertThatCode(MMCR::registerProductionApiLifecycleForTesting).doesNotThrowAnyException();
+        assertThatCode(StartupContentRegistration::registerProduction).doesNotThrowAnyException();
         assertThat(MachineStructureRegistry.startupSnapshot()).isNotEmpty()
                 .allSatisfy((machineId, structure) -> {
                     assertThat(MachineStructureRegistry.effectiveSnapshot()).containsKey(machineId);

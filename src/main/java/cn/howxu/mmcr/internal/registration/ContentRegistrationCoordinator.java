@@ -141,6 +141,7 @@ public final class ContentRegistrationCoordinator {
     /** Resets the complete startup test seam, including public API lifecycle state. */
     public static synchronized void resetForTesting() {
         clearForTesting();
+        StartupContentRegistration.resetForTesting();
         MMCRMachineStructuresEvent.resetCollector();
         PublicApiBootstrap.resetStateForTesting();
         MachineDefinitions.clearForTesting();
