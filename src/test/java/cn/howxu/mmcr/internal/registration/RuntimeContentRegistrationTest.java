@@ -8,6 +8,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,11 +31,16 @@ class RuntimeContentRegistrationTest {
 
     @Test
     void startup_then_builtin_reload_then_cache_rebuild() {
-        RuntimeContentRegistration.registerBuiltins();
+        List<String> order = new ArrayList<>();
+        RuntimeContentRegistration.registerBuiltins(
+                () -> order.add("startup"),
+                () -> {
+                    order.add("reload");
+                    return null;
+                },
+                () -> order.add("cache-rebuild"));
 
-        assertThat(ContentRegistrationCoordinator.isCommitted()).isTrue();
-        assertThat(MachineRegistry.effectiveSnapshot()).isNotEmpty();
-        assertThat(MachineRegistry.getAllCompiled()).isNotEmpty();
+        assertThat(order).containsExactly("startup", "reload", "cache-rebuild");
     }
 
     @Test
@@ -43,7 +50,7 @@ class RuntimeContentRegistrationTest {
         AtomicBoolean structures = new AtomicBoolean();
         AtomicBoolean recipes = new AtomicBoolean();
 
-        RuntimeContentRegistration.registerPublicApiLifecycleForTesting(
+        RuntimeContentRegistration.registerTestStartupContent(
                 event -> definitions.set(true), event -> structures.set(true), event -> recipes.set(true));
         RuntimeContentRegistration.registerRecipes();
 

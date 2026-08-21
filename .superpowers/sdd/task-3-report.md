@@ -14,6 +14,19 @@
 - `./gradlew test --no-daemon`: passed
 - `./gradlew runGameTestServer --no-daemon`: passed
 
+## Q1-Q4 Follow-up
+
+- Q1: `RuntimeContentRegistrationTest` now records and asserts `startup`, `reload`, `cache-rebuild` order through the facade's test seam.
+- Q2: Added direct missing-source no-op coverage for `registerTests`.
+- Q3: Present `registerTests` coverage constructs a real `RegisterGameTestsEvent` with writable environment/test registries and asserts the fixture instance is registered.
+- Q4: Added `registerTestStartupContent` as the explicit pure-test facade, retained old lifecycle names as deprecated compatibility aliases, and documented the production runtime facade.
+
+## Final Verification
+
+- `./gradlew test --no-daemon --tests '*OptionalGameTest*' --tests '*RuntimeContent*' --tests '*Reload*'`: passed
+- `./gradlew test --no-daemon`: passed
+- `./gradlew runGameTestServer --no-daemon`: passed
+
 ## Concerns
 
 - Existing deprecation and unchecked-operation warnings remain; no new dependency or unrelated cleanup was introduced.

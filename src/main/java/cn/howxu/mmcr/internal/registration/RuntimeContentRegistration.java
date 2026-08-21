@@ -8,6 +8,7 @@ import cn.howxu.mmcr.internal.api.PublicBuiltinRuntime;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /** Owns runtime builtin registration and the runtime recipe hook.
  * @author howxu <dev@howxu.cn>
@@ -17,26 +18,50 @@ public final class RuntimeContentRegistration {
     }
 
     public static void registerBuiltins() {
-        ensureStartupContentRegistered();
-        DynamicContentReloadService.reload(PublicBuiltinRuntime::registerStructures);
-        MachineRegistry.rebuildCompiledCache();
+        registerBuiltins(RuntimeContentRegistration::ensureStartupContentRegistered,
+                () -> DynamicContentReloadService.reload(PublicBuiltinRuntime::registerStructures),
+                MachineRegistry::rebuildCompiledCache);
+    }
+
+    static void registerBuiltins(Runnable startup, Supplier<DynamicContentReloadService.ReloadResult> reload,
+                                 Runnable rebuildCache) {
+        startup.run();
+        reload.get();
+        rebuildCache.run();
     }
 
     public static void registerRecipes() {
         ensureStartupContentRegistered();
     }
 
-    public static void registerPublicApiLifecycleForTesting() {
+    /** Pure test startup facade; production runtime callers should use {@link #registerBuiltins()}. */
+    public static void registerTestStartupContent() {
         StartupContentRegistration.registerForTesting(RuntimeContentRegistration::registerDefinitions,
                 RuntimeContentRegistration::registerStructures, RuntimeContentRegistration::registerRecipesSource);
     }
 
-    /** Compatibility alias for the production startup test seam. */
-    public static void registerProductionStartupContentForTesting() {
-        registerPublicApiLifecycleForTesting();
+    /** @deprecated Use {@link #registerTestStartupContent()} for the pure test startup facade. */
+    @Deprecated
+    public static void registerPublicApiLifecycleForTesting() {
+        registerTestStartupContent();
     }
 
+    /** Compatibility alias for the production startup test seam. */
+    public static void registerProductionStartupContentForTesting() {
+        registerTestStartupContent();
+    }
+
+    /** @deprecated Use {@link #registerTestStartupContent(Consumer, Consumer, Consumer)}. */
+    @Deprecated
     public static void registerPublicApiLifecycleForTesting(
+            Consumer<MMCRMachineDefinationsEvent> definitionsSource,
+            Consumer<MMCRMachineStructuresEvent> structuresSource,
+            Consumer<MMCRMachineRecipesEvent> recipesSource) {
+        registerTestStartupContent(definitionsSource, structuresSource, recipesSource);
+    }
+
+    /** Pure test startup facade with explicit declaration sources. */
+    public static void registerTestStartupContent(
             Consumer<MMCRMachineDefinationsEvent> definitionsSource,
             Consumer<MMCRMachineStructuresEvent> structuresSource,
             Consumer<MMCRMachineRecipesEvent> recipesSource) {
@@ -45,7 +70,7 @@ public final class RuntimeContentRegistration {
 
     private static void ensureStartupContentRegistered() {
         if (!ContentRegistrationCoordinator.isCommitted()) {
-            registerPublicApiLifecycleForTesting();
+            registerTestStartupContent();
         }
     }
 

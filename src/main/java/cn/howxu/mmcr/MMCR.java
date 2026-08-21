@@ -192,15 +192,19 @@ public class MMCR {
     }
 
     /** Pure test startup seam; unlike the production seam, it does not install production sources. */
+    /** Compatibility alias for the pure test startup facade. */
+    @Deprecated
     public static void registerPublicApiLifecycleForTesting() {
         StartupContentRegistration.registerForTesting();
     }
 
+    /** Compatibility alias for the pure test startup facade with explicit sources. */
+    @Deprecated
     public static void registerPublicApiLifecycleForTesting(
             Consumer<MMCRMachineDefinationsEvent> definitionsSource,
             Consumer<MMCRMachineStructuresEvent> structuresSource,
             Consumer<MMCRMachineRecipesEvent> recipesSource) {
-        RuntimeContentRegistration.registerPublicApiLifecycleForTesting(definitionsSource, structuresSource, recipesSource);
+        RuntimeContentRegistration.registerTestStartupContent(definitionsSource, structuresSource, recipesSource);
     }
 
     private static void registerDeferredRegisters(IEventBus modBus) {
