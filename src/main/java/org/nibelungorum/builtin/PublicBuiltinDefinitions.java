@@ -1,22 +1,23 @@
 package org.nibelungorum.builtin;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.machine.MachineRole;
-import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
+import cn.howxu.mmcr.api.publicapi.machine.MachineRole;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.publicapi.machine.ParallelTier;
 import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement;
-import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
-import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.api.publicapi.recipe.component.ComponentPredicate;
+import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.ItemTags;
@@ -153,7 +154,8 @@ public final class PublicBuiltinDefinitions {
 
     private static void thermal(Map<Identifier, MachineRecipeDefinition> out, String name, int ticks, Item input, Item output, int energy, Identifier level) {
         MachineRecipeDefinition definition = recipe("thermal_smelting_furnace_" + name, THERMAL_SMELTING_FURNACE, ticks)
-                .inputItem(Items.COAL, 1).inputItem(input, 1).inputEnergy(energy).outputItem(output, 1).maxThreads(4).build();
+                .inputItem(Items.COAL, 1).inputItem(input, 1).inputEnergy(energy).outputItem(output, 1).maxThreads(4)
+                .levelRequirement(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE, level).build();
         MMCR.LOG.debug("[MMCR-DIAG] Built-in thermal recipe {} requested level {} and produced level requirements {}",
                 definition.id(), level, definition.levelRequirements());
         out.put(id("thermal_smelting_furnace_" + name), definition);
@@ -206,7 +208,8 @@ public final class PublicBuiltinDefinitions {
             out.put(id(prefix + "mixed_inputs"), recipe(prefix + "mixed_inputs", machine, 20).inputItem(net.minecraft.world.item.crafting.Ingredient.of(Items.DIAMOND), 1, named("Named"), 1).inputItem(Items.IRON_INGOT, 1).outputItem(Items.EMERALD, 1).build());
             out.put(id(prefix + "mixed_outputs"), recipe(prefix + "mixed_outputs", machine, 20).inputItem(Items.IRON_INGOT, 1).outputItem(namedItem(Items.GOLD_INGOT, 1, "Named Output")).outputItem(Items.EMERALD, 1).build());
             out.put(id(prefix + "enchanted_non_consumable"), recipe(prefix + "enchanted_non_consumable", machine, 100).inputItem(net.minecraft.world.item.crafting.Ingredient.of(Items.DIAMOND_SWORD), 1, enchantment(), 0F).build());
-            out.put(id(prefix + "enchanted_output"), recipe(prefix + "enchanted_output", machine, 100).inputItem(Items.IRON_SWORD, 1).outputItem(enchantedIronSword()).build());
+            out.put(id(prefix + "enchanted_output"), recipe(prefix + "enchanted_output", machine, 100).inputItem(Items.IRON_SWORD, 1)
+                    .outputItem(new ItemStack(Items.IRON_SWORD), enchantment()).build());
             out.put(id(prefix + "chanced_outputs"), recipe(prefix + "chanced_outputs", machine, 20).inputItem(Items.IRON_INGOT, 1).outputChance(new ItemStack(Items.EMERALD, 1), 1).outputChance(new ItemStack(Items.DIAMOND, 1), .5F).outputFluid(Fluids.LAVA, 250).build());
         }
         out.put(id("blast_furnace_component_tag_input"), recipe("blast_furnace_component_tag_input", BLAST_FURNACE, 20).inputItem(ItemTags.LOGS, 1).outputItem(Items.CHARCOAL, 1).build());
@@ -349,9 +352,15 @@ public final class PublicBuiltinDefinitions {
     static Identifier id(String path) { return Identifier.fromNamespaceAndPath("mmcr", path); }
     private static Item modItem(String path) { return BuiltInRegistries.ITEM.getValue(id(path)); }
     private static ItemStack namedItem(Item item, int count, String name) { ItemStack stack = new ItemStack(item, count); stack.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, net.minecraft.network.chat.Component.literal(name)); return stack; }
-    private static DataComponentPredicateSet named(String name) { return new DataComponentPredicateSet(Map.of(net.minecraft.core.component.DataComponents.CUSTOM_NAME, ComponentPredicate.text(name, ComponentPredicate.TextMode.PLAIN))); }
-    private static DataComponentPredicateSet enchantment() { return DataComponentPredicateSet.EMPTY; }
-    private static ItemStack enchantedIronSword() { return new ItemStack(Items.IRON_SWORD); }
+    private static DataComponentPredicateSet named(String name) { return new DataComponentPredicateSet(Map.of(
+            Identifier.parse("minecraft:custom_name"),
+            ComponentPredicate.text(name, ComponentPredicate.TextMode.PLAIN))); }
+    private static DataComponentPredicateSet enchantment() {
+        com.google.gson.JsonObject enchantments = new com.google.gson.JsonObject();
+        enchantments.addProperty("minecraft:sharpness", 4);
+        return new DataComponentPredicateSet(Map.of(Identifier.parse("minecraft:enchantments"),
+                ComponentPredicate.exact(enchantments)));
+    }
     private static void bindVanillaFluids() {
         bindFluid(Fluids.WATER);
         bindFluid(Fluids.LAVA);
