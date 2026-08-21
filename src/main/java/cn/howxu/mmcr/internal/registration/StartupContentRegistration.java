@@ -96,7 +96,7 @@ public final class StartupContentRegistration {
 
     public static void invokeOptionalSourceForTesting(String className, String methodName,
                                                        Class<?>[] parameterTypes, Object... arguments) {
-        invokeOptionalSource(className, methodName, parameterTypes, arguments);
+        GameTestRegistration.invokeOptionalSourceForTesting(className, methodName, parameterTypes, arguments);
     }
 
     public static void markRegistersAttached() {
@@ -167,18 +167,8 @@ public final class StartupContentRegistration {
     }
 
     private static void registerGameTestBuiltins(String methodName, Class<?>[] parameterTypes, Object... arguments) {
-        invokeOptionalSource("cn.howxu.mmcr.GameTestRegistry", methodName, parameterTypes, arguments);
-    }
-
-    private static void invokeOptionalSource(String className, String methodName, Class<?>[] parameterTypes,
-                                             Object... arguments) {
-        try {
-            Class.forName(className).getMethod(methodName, parameterTypes).invoke(null, arguments);
-        } catch (ClassNotFoundException ignored) {
-            // GameTest classes are only present on the GameTest classpath.
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("Unable to register development builtins from " + className, e);
-        }
+        GameTestRegistration.invokeOptionalSourceForTesting("cn.howxu.mmcr.GameTestRegistry", methodName,
+                parameterTypes, arguments);
     }
 
     private enum StartupPhase {

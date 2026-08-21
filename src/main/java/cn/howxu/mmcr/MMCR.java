@@ -1,12 +1,10 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
-import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.command.BuildCommand;
 import cn.howxu.mmcr.internal.command.ExportCommand;
 import cn.howxu.mmcr.internal.command.ReloadCommand;
-import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.internal.reload.MachineRecipeDataReloadListener;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.event.StructureDirtyEvents;
@@ -33,11 +31,12 @@ import cn.howxu.mmcr.registry.ModRecipeTypes;
 
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
-import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
+import cn.howxu.mmcr.internal.registration.GameTestRegistration;
+import cn.howxu.mmcr.internal.registration.RuntimeContentRegistration;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -50,7 +49,6 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 import net.neoforged.neoforge.event.DefaultDataComponentsBoundEvent;
-import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -155,7 +153,7 @@ public class MMCR {
                              PktRecipeLockPayload.STREAM_CODEC,
                              PktRecipeLockPayload::handle);
         });
-        modBus.addListener((RegisterGameTestsEvent ev) -> registerGameTests(ev));
+        modBus.addListener(GameTestRegistration::registerTests);
         CREATIVE_TABS.register(MODID, () -> CreativeModeTab.builder()
                 .title(Component.translatable("itemGroup.mmcr"))
                 .icon(() -> ModItems.ITEMS.get("basic_casing").get().getDefaultInstance())
@@ -169,29 +167,15 @@ public class MMCR {
     }
 
     public static void registerRuntimeBuiltins() {
-        if (!ContentRegistrationCoordinator.isCommitted()) {
-            registerPublicApiLifecycle();
-        }
-        DynamicContentReloadService.reload(candidate -> {
-            cn.howxu.mmcr.internal.api.PublicBuiltinRuntime.registerStructures(candidate);
-        });
-        MachineRegistry.rebuildCompiledCache();
+        RuntimeContentRegistration.registerBuiltins();
     }
 
     private static void registerRuntimeRecipes() {
-        if (!ContentRegistrationCoordinator.isCommitted()) {
-            registerPublicApiLifecycle();
-        }
+        RuntimeContentRegistration.registerRecipes();
     }
 
     private static void registerPublicApiLifecycle() {
-        StartupContentRegistration.registerForTesting(
-                definitions -> StartupContentRegistration.invokeOptionalSourceForTesting("cn.howxu.mmcr.GameTestRegistry",
-                        "registerMachineDefinitions", new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions),
-                structures -> StartupContentRegistration.invokeOptionalSourceForTesting("cn.howxu.mmcr.GameTestRegistry",
-                        "registerMachineStructures", new Class<?>[]{MMCRMachineStructuresEvent.class}, structures),
-                recipes -> StartupContentRegistration.invokeOptionalSourceForTesting("cn.howxu.mmcr.GameTestRegistry",
-                        "registerRecipes", new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes));
+        RuntimeContentRegistration.registerPublicApiLifecycleForTesting();
     }
 
     public static void registerProductionApiLifecycleForTesting() {
@@ -214,7 +198,7 @@ public class MMCR {
             Consumer<MMCRMachineDefinationsEvent> definitionsSource,
             Consumer<MMCRMachineStructuresEvent> structuresSource,
             Consumer<MMCRMachineRecipesEvent> recipesSource) {
-        StartupContentRegistration.registerForTesting(definitionsSource, structuresSource, recipesSource);
+        RuntimeContentRegistration.registerPublicApiLifecycleForTesting(definitionsSource, structuresSource, recipesSource);
     }
 
     private static void registerDeferredRegisters(IEventBus modBus) {
@@ -239,16 +223,7 @@ public class MMCR {
 
     static void invokeOptionalSourceForTesting(String className, String methodName, Class<?>[] parameterTypes,
             Object... arguments) {
-        StartupContentRegistration.invokeOptionalSourceForTesting(className, methodName, parameterTypes, arguments);
+        GameTestRegistration.invokeOptionalSourceForTesting(className, methodName, parameterTypes, arguments);
     }
 
-    private static void registerGameTests(RegisterGameTestsEvent event) {
-        try {
-            Class.forName("cn.howxu.mmcr.GameTestRegistry")
-                    .getMethod("registerAll", RegisterGameTestsEvent.class)
-                    .invoke(null, event);
-        } catch (ReflectiveOperationException ignored) {
-            // GameTest classes are only present in the gametest source set.
-        }
-    }
 }
