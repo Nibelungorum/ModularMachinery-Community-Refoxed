@@ -175,9 +175,10 @@ public class MMCR {
     }
 
     private static void registerPublicApiLifecycle() {
-        RuntimeContentRegistration.registerPublicApiLifecycleForTesting();
+        RuntimeContentRegistration.registerProductionStartupContentForTesting();
     }
 
+    /** Test seam for the production startup path; runtime code should not call this directly. */
     public static void registerProductionApiLifecycleForTesting() {
         registerPublicApiLifecycle();
     }
@@ -190,6 +191,7 @@ public class MMCR {
         StartupContentRegistration.completeKubeJSStartupIfReady();
     }
 
+    /** Pure test startup seam; unlike the production seam, it does not install production sources. */
     public static void registerPublicApiLifecycleForTesting() {
         StartupContentRegistration.registerForTesting();
     }

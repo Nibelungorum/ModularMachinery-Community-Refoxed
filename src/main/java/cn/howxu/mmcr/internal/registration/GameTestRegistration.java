@@ -14,25 +14,38 @@ public final class GameTestRegistration {
     private GameTestRegistration() {
     }
 
+    /** Forwards the three startup declarations to the optional GameTest source set. */
     public static void registerStartupSources(MMCRMachineDefinationsEvent definitions,
                                               MMCRMachineStructuresEvent structures,
                                               MMCRMachineRecipesEvent recipes) {
+        registerStartupSources(GAME_TEST_REGISTRY, definitions, structures, recipes);
+    }
+
+    static void registerStartupSources(String sourceClass,
+                                       MMCRMachineDefinationsEvent definitions,
+                                       MMCRMachineStructuresEvent structures,
+                                       MMCRMachineRecipesEvent recipes) {
         if (definitions != null) {
-            invokeOptionalSource(GAME_TEST_REGISTRY, "registerMachineDefinitions",
+            invokeOptionalSource(sourceClass, "registerMachineDefinitions",
                     new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions);
         }
         if (structures != null) {
-            invokeOptionalSource(GAME_TEST_REGISTRY, "registerMachineStructures",
+            invokeOptionalSource(sourceClass, "registerMachineStructures",
                     new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
         }
         if (recipes != null) {
-            invokeOptionalSource(GAME_TEST_REGISTRY, "registerRecipes",
+            invokeOptionalSource(sourceClass, "registerRecipes",
                     new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
         }
     }
 
+    /** Registers GameTest instances when the optional GameTest source set is present. */
     public static void registerTests(RegisterGameTestsEvent event) {
-        invokeOptionalSource(GAME_TEST_REGISTRY, "registerAll",
+        registerTests(GAME_TEST_REGISTRY, event);
+    }
+
+    static void registerTests(String sourceClass, RegisterGameTestsEvent event) {
+        invokeOptionalSource(sourceClass, "registerAll",
                 new Class<?>[]{RegisterGameTestsEvent.class}, event);
     }
 

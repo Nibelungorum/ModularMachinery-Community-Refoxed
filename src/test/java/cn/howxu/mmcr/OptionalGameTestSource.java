@@ -11,6 +11,7 @@ public final class OptionalGameTestSource {
     private static boolean invoked;
     private static boolean structuresInvoked;
     private static boolean recipesInvoked;
+    private static boolean testsInvoked;
 
     private OptionalGameTestSource() {
     }
@@ -31,11 +32,38 @@ public final class OptionalGameTestSource {
         recipesInvoked = true;
     }
 
+    public static void registerMachineDefinitions(MMCRMachineDefinationsEvent event) {
+        accept(event);
+    }
+
+    public static void registerMachineStructures(MMCRMachineStructuresEvent event) {
+        acceptStructures(event);
+    }
+
+    public static void registerRecipes(MMCRMachineRecipesEvent event) {
+        acceptRecipes(event);
+    }
+
+    public static void registerAll(net.neoforged.neoforge.event.RegisterGameTestsEvent event) {
+        testsInvoked = true;
+    }
+
     public static boolean structuresInvoked() {
         return structuresInvoked;
     }
 
     public static boolean recipesInvoked() {
         return recipesInvoked;
+    }
+
+    public static boolean testsInvoked() {
+        return testsInvoked;
+    }
+
+    public static void reset() {
+        invoked = false;
+        structuresInvoked = false;
+        recipesInvoked = false;
+        testsInvoked = false;
     }
 }

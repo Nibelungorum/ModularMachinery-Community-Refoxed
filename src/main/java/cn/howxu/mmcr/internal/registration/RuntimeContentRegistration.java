@@ -31,6 +31,11 @@ public final class RuntimeContentRegistration {
                 RuntimeContentRegistration::registerStructures, RuntimeContentRegistration::registerRecipesSource);
     }
 
+    /** Compatibility alias for the production startup test seam. */
+    public static void registerProductionStartupContentForTesting() {
+        registerPublicApiLifecycleForTesting();
+    }
+
     public static void registerPublicApiLifecycleForTesting(
             Consumer<MMCRMachineDefinationsEvent> definitionsSource,
             Consumer<MMCRMachineStructuresEvent> structuresSource,
