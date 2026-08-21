@@ -88,8 +88,7 @@ public final class MachineRecipeBuilder {
     public MachineRecipeBuilder modifier(Identifier modifierId) { if (modifierId == null) throw new IllegalArgumentException("modifier id null"); modifierIds.add(modifierId); return this; }
 
     public MachineRecipeDefinition build() {
-        List<RecipeRequirement> recipeRequirements = derivedRequirements();
-        recipeRequirements.addAll(requirements);
+        List<RecipeRequirement> recipeRequirements = requirements.isEmpty() ? derivedRequirements() : requirements;
         return new MachineRecipeDefinition(id, machineId, tickTime, priority, maxThreads,
                 cancelRecipeOnPerTickFailure, parallelized, allowPartialOutputs, itemInputs, fluidInputs,
                 energyInputs, itemOutputs, fluidOutputs, energyOutputs, recipeRequirements, modifierIds,

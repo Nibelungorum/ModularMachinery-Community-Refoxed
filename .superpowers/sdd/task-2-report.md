@@ -26,3 +26,14 @@ Implemented Task 2: component-aware public item inputs and outputs.
 
 - The full test suite remains red because of the unrelated builtin level subscriber failures in the shared worktree. Those files were not modified.
 - The compatibility input overload converts existing core predicates to the public DTO before the adapter converts them back to core predicates; this is retained only to preserve existing callers while exposing the public DTO API.
+
+## Review Fix
+
+- Restored `MachineRecipeBuilder` behavior that uses explicit requirements exclusively when any are provided; automatic requirements remain the fallback when none are explicit.
+- Kept the valid public component DTO, output component, and adapter work unchanged.
+- Strengthened `retains_explicit_requirements_smart_interface_level_host_and_modifier_without_deriving_duplicates` with an item input so the regression is observable.
+
+## Review Fix Verification
+
+- RED: `./gradlew test --tests cn.howxu.mmcr.api.publicapi.PublicRecipeBuilderTest --no-daemon` failed with 1 test failure in `retains_explicit_requirements_smart_interface_level_host_and_modifier_without_deriving_duplicates` before the behavior fix.
+- GREEN: `./gradlew test --tests cn.howxu.mmcr.api.publicapi.PublicRecipeBuilderTest --no-daemon` passed; build successful, 9 tests completed.

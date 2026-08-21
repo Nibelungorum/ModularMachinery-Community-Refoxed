@@ -96,6 +96,7 @@ class PublicRecipeBuilderTest {
         var explicit = new cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement(RecipeIo.INPUT, 12);
         SmartInterfaceRequirement smart = SmartInterfaceRequirement.input("Mode", 1F);
         MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("explicit"), id("machine"))
+                .inputItem(Items.IRON_INGOT, 1)
                 .requirement(explicit).requirement(smart)
                 .modifier(id("snapshot_modifier"))
                 .levelRequirement(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE, PublicBuiltinLevelDefinitions.COPPER_COIL)
