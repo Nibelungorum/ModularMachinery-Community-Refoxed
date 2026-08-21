@@ -111,7 +111,10 @@ public final class PublicBuiltinDefinitions {
         purpurRecipes(result);
         distillationRecipes(result);
         result.put(id("eco_matrix_energy_drain"), recipe("eco_matrix_energy_drain", ECO_MATRIX, 200).inputEnergy(100).parallelized(false).build());
-        result.put(id("space_elevator_thread_dispersal"), recipe("space_elevator_thread_dispersal", SPACE_ELEVATOR, 1000).inputItem(modItem("thread_disperser"), 1).inputEnergy(10000).parallelized(false).build());
+        Item threadDisperser = modItem("thread_disperser");
+        if (threadDisperser != Items.AIR) {
+            result.put(id("space_elevator_thread_dispersal"), recipe("space_elevator_thread_dispersal", SPACE_ELEVATOR, 1000).inputItem(threadDisperser, 1).inputEnergy(10000).parallelized(false).build());
+        }
         result.put(id("space_reassembler_steak_to_golden_carrot"), recipe("space_reassembler_steak_to_golden_carrot", SPACE_REASSEMBLER, 600).inputItem(Items.COOKED_BEEF, 4).inputEnergy(15000).outputItem(Items.GOLDEN_CARROT, 1).requiredHost(SPACE_ELEVATOR).parallelized(false).build());
         result.put(id("space_reassembler_water_to_healing"), recipe("space_reassembler_water_to_healing", SPACE_REASSEMBLER, 400).inputItem(Items.POTION, 1).inputEnergy(8000).outputItem(Items.POTION, 1).requiredHost(SPACE_ELEVATOR).parallelized(false).build());
         result.put(id("space_reassembler_water_to_swiftness"), recipe("space_reassembler_water_to_swiftness", SPACE_REASSEMBLER, 400).inputItem(Items.POTION, 1).inputEnergy(8000).outputItem(Items.POTION, 1).requiredHost(SPACE_ELEVATOR).parallelized(false).build());

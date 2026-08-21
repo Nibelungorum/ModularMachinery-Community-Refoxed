@@ -15,6 +15,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.JsonOps;
 import org.nibelungorum.builtin.PublicBuiltinLevelDefinitions;
+import org.nibelungorum.builtin.PublicBuiltinDefinitions;
 import net.minecraft.resources.Identifier;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
@@ -204,6 +205,11 @@ class PublicRecipeBuilderTest {
         assertThatThrownBy(() -> MachineRecipeBuilder.recipe(id("bad"), id("machine"))
                 .outputChance(new ItemStack(Items.STICK), 2F))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void builds_builtin_recipes_when_optional_mod_items_are_missing() {
+        assertThat(PublicBuiltinDefinitions.recipeDefinitions()).isNotEmpty();
     }
 
     private static Identifier id(String path) {
