@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.publicapi.machine.InterfacePredicates;
+import cn.howxu.mmcr.api.publicapi.machine.InterfaceTiers;
 import net.minecraft.resources.Identifier;
 
 /** Script-safe interface predicates and requirement factories.
@@ -24,6 +25,19 @@ public final class KubeJSInterfaceHelpers {
     public static BlockPredicate anyOfPort(String... ids) {
         if (ids == null || ids.length == 0) throw new IllegalArgumentException("At least one port is required");
         return convert(InterfacePredicates.anyOfPort(ids));
+    }
+
+    public static BlockPredicate anyOfPort() {
+        throw new IllegalArgumentException("At least one port is required");
+    }
+
+    public static BlockPredicate anyOfPort(Identifier... ids) {
+        return convert(InterfacePredicates.anyOfPort(ids));
+    }
+
+    public static BlockPredicate anyOfPort(cn.howxu.mmcr.api.publicapi.machine.BlockPredicate... predicates) {
+        if (predicates == null || predicates.length == 0) throw new IllegalArgumentException("At least one port is required");
+        return convert(InterfacePredicates.anyOfPort(predicates));
     }
 
     public static BlockPredicate parallelControllers() {
@@ -53,27 +67,27 @@ public final class KubeJSInterfaceHelpers {
     }
 
     public static PortTierRequirementSpec itemInputTier(String id) {
-        return PortTierRequirementSpec.builder().minItemInput(itemTier(id)).build();
+        return PortTierRequirementSpec.from(InterfaceTiers.itemInput(id));
     }
 
     public static PortTierRequirementSpec itemOutputTier(String id) {
-        return PortTierRequirementSpec.builder().minItemOutput(itemTier(id)).build();
+        return PortTierRequirementSpec.from(InterfaceTiers.itemOutput(id));
     }
 
     public static PortTierRequirementSpec fluidInputTier(String id) {
-        return PortTierRequirementSpec.builder().minFluidInput(fluidTier(id)).build();
+        return PortTierRequirementSpec.from(InterfaceTiers.fluidInput(id));
     }
 
     public static PortTierRequirementSpec fluidOutputTier(String id) {
-        return PortTierRequirementSpec.builder().minFluidOutput(fluidTier(id)).build();
+        return PortTierRequirementSpec.from(InterfaceTiers.fluidOutput(id));
     }
 
     public static PortTierRequirementSpec energyInputTier(String id) {
-        return PortTierRequirementSpec.builder().minEnergyInput(energyTier(id)).build();
+        return PortTierRequirementSpec.from(InterfaceTiers.energyInput(id));
     }
 
     public static PortTierRequirementSpec energyOutputTier(String id) {
-        return PortTierRequirementSpec.builder().minEnergyOutput(energyTier(id)).build();
+        return PortTierRequirementSpec.from(InterfaceTiers.energyOutput(id));
     }
 
     private static BlockPredicate convert(cn.howxu.mmcr.api.publicapi.machine.BlockPredicate predicate) {
@@ -85,18 +99,4 @@ public final class KubeJSInterfaceHelpers {
         return new BlockPredicate.AnyOf(predicate.alternatives().stream().map(KubeJSInterfaceHelpers::convert).toList());
     }
 
-    private static cn.howxu.mmcr.internal.port.ItemBusSize itemTier(String id) {
-        return java.util.Arrays.stream(cn.howxu.mmcr.internal.port.ItemBusSize.values())
-                .filter(tier -> tier.id().equals(id)).findFirst().orElseThrow(() -> new IllegalArgumentException("Unknown item tier: " + id));
-    }
-
-    private static cn.howxu.mmcr.internal.port.FluidHatchSize fluidTier(String id) {
-        return java.util.Arrays.stream(cn.howxu.mmcr.internal.port.FluidHatchSize.values())
-                .filter(tier -> tier.id().equals(id)).findFirst().orElseThrow(() -> new IllegalArgumentException("Unknown fluid tier: " + id));
-    }
-
-    private static cn.howxu.mmcr.internal.port.EnergyHatchSize energyTier(String id) {
-        return java.util.Arrays.stream(cn.howxu.mmcr.internal.port.EnergyHatchSize.values())
-                .filter(tier -> tier.id().equals(id)).findFirst().orElseThrow(() -> new IllegalArgumentException("Unknown energy tier: " + id));
-    }
 }

@@ -381,6 +381,10 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public cn.howxu.mmcr.api.machine.BlockPredicate parallelControllers() { return KubeJSInterfaceHelpers.parallelControllers(); }
     public cn.howxu.mmcr.api.machine.BlockPredicate smartInterfaceBlock() { return KubeJSInterfaceHelpers.smartInterface(); }
     public cn.howxu.mmcr.api.machine.BlockPredicate anyOfPort(String... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
+    public cn.howxu.mmcr.api.machine.BlockPredicate anyOfPort(Identifier... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
+    public cn.howxu.mmcr.api.machine.BlockPredicate anyOfPort(cn.howxu.mmcr.api.publicapi.machine.BlockPredicate... predicates) {
+        return KubeJSInterfaceHelpers.anyOfPort(predicates);
+    }
     public cn.howxu.mmcr.api.machine.BlockPredicate smartInterface() { return KubeJSInterfaceHelpers.smartInterface(); }
     public cn.howxu.mmcr.api.machine.PortTierRequirementSpec itemInputTier(String id) { return KubeJSInterfaceHelpers.itemInputTier(id); }
     public cn.howxu.mmcr.api.machine.PortTierRequirementSpec itemOutputTier(String id) { return KubeJSInterfaceHelpers.itemOutputTier(id); }

@@ -4,6 +4,7 @@ import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
+import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
 import cn.howxu.mmcr.util.IOType;
 
 import java.util.ArrayList;
@@ -26,6 +27,19 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
 
     public static PortTierRequirementSpec none() {
         return NONE;
+    }
+
+    public static PortTierRequirementSpec from(PortTiers tiers) {
+        if (tiers == null) throw new IllegalArgumentException("tiers null");
+        if (tiers.requirements().isEmpty()) return none();
+        return new PortTierRequirementSpec(tiers.requirements().stream()
+                .map(requirement -> new Requirement(
+                        switch (requirement.category()) {
+                            case ITEM -> PortCategory.ITEM;
+                            case FLUID -> PortCategory.FLUID;
+                            case ENERGY -> PortCategory.ENERGY;
+                        }, requirement.ioType(), requirement.minTier(), requirement.minTierId()))
+                .toList());
     }
 
     public static Builder builder() {

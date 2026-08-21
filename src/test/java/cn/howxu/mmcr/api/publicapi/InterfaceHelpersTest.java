@@ -12,6 +12,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
+import cn.howxu.mmcr.registry.ModBlocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -80,6 +81,30 @@ class InterfaceHelpersTest {
                 .isEqualTo(SmartInterfaceRequirement.output("mode", 2F));
         assertThat(MachineRecipeFactory.smartInterfaceInput("mode", 1F, 3F))
                 .isEqualTo(SmartInterfaceRequirement.input("mode", 1F, 3F));
+    }
+
+    @Test
+    void kubejs_port_overloads_preserve_registered_block_identity() {
+        var identifierPredicate = KubeJSInterfaceHelpers.anyOfPort(Identifier.parse("mmcr:item_input_bus"));
+        var publicPredicate = KubeJSInterfaceHelpers.anyOfPort(InterfacePredicates.smartInterface());
+        var registeredPort = ModBlocks.BLOCKS.get("item_input_bus").get();
+        var smartInterface = ModBlocks.BLOCKS.get("smart_interface").get();
+
+        assertThat(identifierPredicate.children()).singleElement()
+                .matches(child -> child.matches(registeredPort.defaultBlockState()))
+                .matches(child -> !child.matches(Blocks.STONE.defaultBlockState()));
+        assertThat(publicPredicate.children()).singleElement()
+                .matches(child -> child.matches(smartInterface.defaultBlockState()));
+    }
+
+    @Test
+    void interface_tier_direction_requires_non_null_io_type() {
+        assertThatThrownBy(() -> InterfaceTiers.item(PortTiers.ItemTier.NORMAL, null))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> InterfaceTiers.fluid(PortTiers.FluidTier.NORMAL, null))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> InterfaceTiers.energy(PortTiers.EnergyTier.NORMAL, null))
+                .isInstanceOf(NullPointerException.class);
     }
 
     @Test

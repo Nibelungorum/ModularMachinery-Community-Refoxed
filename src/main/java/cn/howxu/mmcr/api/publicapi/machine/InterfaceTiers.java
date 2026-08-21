@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
 import cn.howxu.mmcr.util.IOType;
+import java.util.Objects;
 /** Small factories for independent item, fluid, and energy port tiers.
  * @author howxu <dev@howxu.cn>
  */
@@ -17,6 +18,7 @@ public final class InterfaceTiers {
     }
 
     public static PortTiers item(PortTiers.ItemTier tier, IOType ioType) {
+        Objects.requireNonNull(ioType, "ioType");
         return ioType == IOType.INPUT ? itemInput(tier) : itemOutput(tier);
     }
 
@@ -29,6 +31,7 @@ public final class InterfaceTiers {
     }
 
     public static PortTiers fluid(PortTiers.FluidTier tier, IOType ioType) {
+        Objects.requireNonNull(ioType, "ioType");
         return ioType == IOType.INPUT ? fluidInput(tier) : fluidOutput(tier);
     }
 
@@ -41,6 +44,7 @@ public final class InterfaceTiers {
     }
 
     public static PortTiers energy(PortTiers.EnergyTier tier, IOType ioType) {
+        Objects.requireNonNull(ioType, "ioType");
         return ioType == IOType.INPUT ? energyInput(tier) : energyOutput(tier);
     }
 

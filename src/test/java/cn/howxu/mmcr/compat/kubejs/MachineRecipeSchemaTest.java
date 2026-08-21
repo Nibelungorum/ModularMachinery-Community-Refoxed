@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
@@ -210,6 +211,30 @@ class MachineRecipeSchemaTest {
                 SmartInterfaceRequirement.input("mode", 1F),
                 SmartInterfaceRequirement.input("mode", 1F, 2F),
                 SmartInterfaceRequirement.output("mode", 9F));
+    }
+
+    @Test
+    void schema_exposes_script_usable_smart_interface_factory_functions() {
+        var input = new KubeRecipe();
+        input.json = new JsonObject();
+        var output = new KubeRecipe();
+        output.json = new JsonObject();
+
+        MachineRecipeSchema.SCHEMA.functions.get("smartInterfaceInput").function()
+                .execute(new TestRecipeContext(input), List.of("mode", 1F));
+        MachineRecipeSchema.SCHEMA.functions.get("smartInterfaceInputRange").function()
+                .execute(new TestRecipeContext(input), List.of("temperature", 1F, 3F));
+        MachineRecipeSchema.SCHEMA.functions.get("smartInterfaceOutput").function()
+                .execute(new TestRecipeContext(output), List.of("mode", 2F));
+
+        assertThat(input.json.getAsJsonArray("requirements")).hasSize(2);
+        assertThat(output.json.getAsJsonArray("requirements")).hasSize(1);
+        assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
+                input.json.getAsJsonArray("requirements").get(1)).getOrThrow())
+                .isEqualTo(SmartInterfaceRequirement.input("temperature", 1F, 3F));
+        assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
+                output.json.getAsJsonArray("requirements").get(0)).getOrThrow())
+                .isEqualTo(SmartInterfaceRequirement.output("mode", 2F));
     }
 
     private static JsonElement json(String value) {

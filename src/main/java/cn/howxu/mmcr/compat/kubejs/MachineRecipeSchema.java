@@ -3,9 +3,11 @@ package cn.howxu.mmcr.compat.kubejs;
 import cn.howxu.mmcr.MMCR;
 
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.Codec;
 import dev.latvian.mods.kubejs.recipe.RecipeKey;
+import dev.latvian.mods.kubejs.recipe.KubeRecipe;
 import dev.latvian.mods.kubejs.recipe.RecipeScriptContext;
 import dev.latvian.mods.kubejs.recipe.component.ComponentRole;
 import dev.latvian.mods.kubejs.recipe.component.BooleanComponent;
@@ -85,6 +87,46 @@ public final class MachineRecipeSchema {
                             cx.recipe().save();
                         }
                     }))
+            .function(new RecipeFunctionInstance("smartInterfaceInput", List.of(StringComponent.ID, NumberComponent.FLOAT),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() {
+                            return List.of(StringComponent.ID, NumberComponent.FLOAT);
+                        }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            appendRequirement(cx.recipe(), MachineRecipeFactory.smartInterfaceInput(
+                                    (String) args.get(0), ((Number) args.get(1)).floatValue()));
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("smartInterfaceInputRange", List.of(StringComponent.ID,
+                    NumberComponent.FLOAT, NumberComponent.FLOAT), new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() {
+                            return List.of(StringComponent.ID, NumberComponent.FLOAT, NumberComponent.FLOAT);
+                        }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            appendRequirement(cx.recipe(), MachineRecipeFactory.smartInterfaceInput(
+                                    (String) args.get(0), ((Number) args.get(1)).floatValue(),
+                                    ((Number) args.get(2)).floatValue()));
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("smartInterfaceOutput", List.of(StringComponent.ID, NumberComponent.FLOAT),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() {
+                            return List.of(StringComponent.ID, NumberComponent.FLOAT);
+                        }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            appendRequirement(cx.recipe(), MachineRecipeFactory.smartInterfaceOutput(
+                                    (String) args.get(0), ((Number) args.get(1)).floatValue()));
+                        }
+                    }))
             .function(new RecipeFunctionInstance("requiredHost", List.of(StringComponent.ID),
                     new ResolvedRecipeSchemaFunction() {
                         @Override
@@ -137,6 +179,16 @@ public final class MachineRecipeSchema {
 
     public static void register(RecipeSchemaRegistry registry) {
         registry.register(MachineRecipeFactory.TYPE, SCHEMA);
+    }
+
+    private static void appendRequirement(KubeRecipe recipe, MachineRequirement requirement) {
+        JsonArray requirements = recipe.json.getAsJsonArray("requirements");
+        if (requirements == null) {
+            requirements = new JsonArray();
+            recipe.json.add("requirements", requirements);
+        }
+        requirements.add(MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, requirement).getOrThrow());
+        recipe.save();
     }
 
     private record JsonElementComponent() implements RecipeComponent<JsonElement> {
