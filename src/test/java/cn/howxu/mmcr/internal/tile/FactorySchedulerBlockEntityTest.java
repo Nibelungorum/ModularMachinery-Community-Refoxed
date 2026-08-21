@@ -109,7 +109,7 @@ class FactorySchedulerBlockEntityTest {
         addFactoryComponent(controller, first);
         addFactoryComponent(controller, second);
 
-        assertThat(controller.factorySchedulerThreadCount()).isEqualTo(8);
+        assertThat(controller.factorySchedulerThreadCount()).isEqualTo(first.threadCount() + second.threadCount());
     }
 
     @Test

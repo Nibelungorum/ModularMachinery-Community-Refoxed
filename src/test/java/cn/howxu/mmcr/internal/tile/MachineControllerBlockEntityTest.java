@@ -52,6 +52,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -553,21 +554,23 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
-    void factory_thread_count_uses_first_factory_controller_only() throws Exception {
+    void factory_thread_count_aggregates_all_factory_controllers() throws Exception {
         MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
         initializeComponents(controller);
         setField(BlockEntity.class, controller, "worldPosition", BlockPos.ZERO);
 
         assertThat(controller.factorySchedulerThreadCount()).isZero();
 
-        addFactorySchedulerComponent(controller, factoryController(new BlockPos(1, 0, 0), 64));
-        addFactorySchedulerComponent(controller, factoryController(new BlockPos(2, 0, 0), 3));
+        FactorySchedulerBlockEntity first = factoryController(new BlockPos(1, 0, 0), 64);
+        FactorySchedulerBlockEntity second = factoryController(new BlockPos(2, 0, 0), 3);
+        addFactorySchedulerComponent(controller, first);
+        addFactorySchedulerComponent(controller, second);
 
-        assertThat(controller.factorySchedulerThreadCount()).isEqualTo(65);
+        assertThat(controller.factorySchedulerThreadCount()).isEqualTo(first.threadCount() + second.threadCount());
 
         addFactorySchedulerComponent(controller, factoryController(new BlockPos(3, 0, 0), Integer.MAX_VALUE));
 
-        assertThat(controller.factorySchedulerThreadCount()).isEqualTo(65);
+        assertThat(controller.factorySchedulerThreadCount()).isEqualTo(Integer.MAX_VALUE);
     }
 
     @Test
@@ -845,14 +848,14 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
-    void factory_thread_limit_sync_does_not_notify_runtime_state_listener() throws Exception {
+    void factory_thread_limit_is_not_polled_and_does_not_notify_runtime_state_listener() throws Exception {
         FactorySchedulerBlockEntity factory = factoryController(new BlockPos(1, 0, 0));
         factory.getItemStackHandler(null).setStackInSlot(0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 1));
         int[] runtimeSyncs = {0};
 
         for (int i = 0; i < 40; i++) factory.tickScheduler(() -> runtimeSyncs[0]++);
 
-        assertThat(factory.threadLimit()).isEqualTo(2);
+        assertThat(factory.threadLimit()).isEqualTo(4);
         assertThat(runtimeSyncs[0]).isZero();
     }
 
@@ -2799,7 +2802,6 @@ class MachineControllerBlockEntityTest {
             setField(BlockEntity.class, entity, "type", null);
             setField(BlockEntity.class, entity, "worldPosition", pos);
             setField(BlockEntity.class, entity, "blockState", Blocks.IRON_BLOCK.defaultBlockState());
-            setField(FactorySchedulerBlockEntity.class, entity, "threadLimit", 4);
             setField(FactorySchedulerBlockEntity.class, entity, "scheduler", new FactoryRecipeScheduler(4));
             setField(FactorySchedulerBlockEntity.class, entity, "handler", threadDisperserHandler(dispersers));
             initializeLinkedAppearance(entity);
@@ -3820,6 +3822,8 @@ class MachineControllerBlockEntityTest {
         @Override public BlockState getBlockState(BlockPos pos) {
             return blocks.getOrDefault(pos, Blocks.AIR.defaultBlockState());
         }
+
+        @Override public List<ServerPlayer> players() { return List.of(); }
 
         @Override public BlockEntity getBlockEntity(BlockPos pos) {
             return blockEntities.get(pos);
