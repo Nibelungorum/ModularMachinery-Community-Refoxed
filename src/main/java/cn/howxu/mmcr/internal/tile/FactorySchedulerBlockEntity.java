@@ -32,8 +32,6 @@ import java.util.List;
  */
 public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
 
-    private static final int THREAD_LIMIT_SYNC_INTERVAL = 40;
-
     private final ItemStackHandler handler = new ItemStackHandler(1) {
         @Override
         public boolean isItemValid(int slot, ItemStack stack) {
@@ -43,11 +41,11 @@ public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
         @Override
         protected void onContentsChanged(int slot) {
             setChanged();
+            if (owner != null) owner.invalidateFactoryCapacity();
         }
     };
-    private int threadLimit = 1;
-    private int threadLimitSyncTicks;
-    private FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(threadLimit);
+    private FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1);
+    private @Nullable MachineControllerBlockEntity owner;
     private @Nullable FactoryControllerSnapshot lastSyncedSnapshot;
 
     public FactorySchedulerBlockEntity(BlockPos pos, BlockState state) {
@@ -71,7 +69,7 @@ public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
     }
 
     public int threadLimit() {
-        return threadLimit;
+        return scheduler.threadLimit();
     }
 
     public boolean hasLaneCapacity() {
@@ -97,19 +95,15 @@ public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
     }
 
     public void tickScheduler(SyncListener syncListener) {
-        int previousThreadLimit = threadLimit;
-        boolean threadLimitChanged = tickThreadLimitSync(null);
         int before = scheduler.activeLaneCount();
         scheduler.tick();
         int after = scheduler.activeLaneCount();
         if (after != before) setChanged();
-        if (threadLimitChanged && previousThreadLimit < threadLimit && syncListener != null) syncListener.syncFactoryScheduler();
         notifyRuntimeActiveBoundary(syncListener, before > 0, after > 0);
     }
 
     public void tickScheduler(MachineControllerBlockEntity controller, List<MachineRecipe> candidates,
                               long structureVersion, int parallelLimit, RecipeCraftingContextPool contextPool) {
-        tickThreadLimitSync(controller);
         int before = scheduler.activeThreadCount();
         scheduler.tickThreads(controller, candidates, structureVersion, parallelLimit, contextPool,
                 controller == null ? () -> { } : controller::playFinishSound);
@@ -119,25 +113,16 @@ public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
         if (controller != null) syncOpenControllerMenus(controller);
     }
 
-    public void setThreadLimit(int threadLimit) {
-        this.threadLimit = Math.max(1, threadLimit);
-        this.scheduler.setThreadLimit(this.threadLimit);
+    void bindOwner(@Nullable MachineControllerBlockEntity owner) {
+        this.owner = owner;
+    }
+
+    void setSchedulerThreadLimit(int threadLimit) {
+        int normalized = Math.max(1, threadLimit);
+        if (scheduler.threadLimit() == normalized) return;
+        scheduler.setThreadLimit(normalized);
         lastSyncedSnapshot = null;
         setChanged();
-    }
-
-    private void syncThreadLimit(SyncListener syncListener) {
-        int current = threadCount();
-        if (current == threadLimit) return;
-        setThreadLimit(current);
-    }
-
-    private boolean tickThreadLimitSync(SyncListener syncListener) {
-        if (++threadLimitSyncTicks < THREAD_LIMIT_SYNC_INTERVAL) return false;
-        threadLimitSyncTicks = 0;
-        int before = threadLimit;
-        syncThreadLimit(syncListener);
-        return before != threadLimit;
     }
 
     public void stopAll() {
@@ -188,13 +173,11 @@ public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
     }
 
     public List<FactoryRecipeScheduler.ThreadSnapshot> threadSnapshots(MachineControllerBlockEntity controller) {
-        syncThreadLimit(null);
         ensureBaseThreadFor(controller);
         return scheduler.threadSnapshots();
     }
 
     public FactoryControllerSnapshot snapshot(MachineControllerBlockEntity controller) {
-        syncThreadLimit(null);
         ensureBaseThreadFor(controller);
         return new FactoryControllerSnapshot(controller.getBlockPos(), controller.isFormed(), controller.isRedstonePaused(),
                 activeThreadCount(), threadLimit(), usedParallelism(), controller.getMaxParallelism(),
@@ -251,7 +234,6 @@ public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
         handler.serialize(output.child("inventory"));
-        output.putInt("thread_limit", threadLimit);
         scheduler.save(output.child("scheduler"));
     }
 
@@ -259,9 +241,7 @@ public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
         handler.deserialize(input.childOrEmpty("inventory"));
-        threadLimit = Math.max(1, input.getIntOr("thread_limit", 1));
-        threadLimitSyncTicks = 0;
-        scheduler = new FactoryRecipeScheduler(threadLimit);
+        scheduler = new FactoryRecipeScheduler(1);
         scheduler.load(input.childOrEmpty("scheduler"), null, null);
         lastSyncedSnapshot = null;
     }
@@ -269,6 +249,7 @@ public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
     @Override
     public void setRemoved() {
         stopAll();
+        owner = null;
         super.setRemoved();
     }
 

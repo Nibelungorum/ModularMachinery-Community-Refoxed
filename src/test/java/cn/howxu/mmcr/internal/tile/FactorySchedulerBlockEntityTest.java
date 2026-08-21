@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
+import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -96,35 +98,34 @@ class FactorySchedulerBlockEntityTest {
     }
 
     @Test
-    void tickSyncsThreadLimitFromInventoryEveryFortyTicksAndNotifiesChanges() {
-        FactorySchedulerBlockEntity scheduler = createScheduler();
-        AtomicInteger syncs = new AtomicInteger();
+    void controllerAggregatesAllFactoryComponentThreadCounts() throws Exception {
+        MachineControllerBlockEntity controller = createController();
+        FactorySchedulerBlockEntity first = createScheduler();
+        FactorySchedulerBlockEntity second = createScheduler();
+        first.getItemStackHandler(null).setStackInSlot(0,
+                new ItemStack(ModItems.THREAD_DISPERSER.get(), 2));
+        second.getItemStackHandler(null).setStackInSlot(0,
+                new ItemStack(ModItems.THREAD_DISPERSER.get(), 4));
+        addFactoryComponent(controller, first);
+        addFactoryComponent(controller, second);
 
-        scheduler.getItemStackHandler(null).setStackInSlot(0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 3));
-
-        for (int i = 0; i < 39; i++) scheduler.tickScheduler(syncs::incrementAndGet);
-
-        assertThat(syncs).hasValue(0);
-        assertThat(scheduler.threadLimit()).isEqualTo(1);
-
-        scheduler.tickScheduler(syncs::incrementAndGet);
-
-        assertThat(scheduler.threadLimit()).isEqualTo(4);
-        assertThat(syncs).hasValue(1);
-
-        for (int i = 0; i < 40; i++) scheduler.tickScheduler(syncs::incrementAndGet);
-
-        assertThat(syncs).hasValue(1);
+        assertThat(controller.factorySchedulerThreadCount()).isEqualTo(8);
     }
 
     @Test
-    void threadSnapshotsImmediatelyReflectIdleInventoryThreadCount() {
+    void boundControllerIsNotifiedImmediatelyWhenInventoryChanges() throws Exception {
+        MachineControllerBlockEntity controller = createController();
         FactorySchedulerBlockEntity scheduler = createScheduler();
-        scheduler.getItemStackHandler(null).setStackInSlot(0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 64));
+        AtomicInteger invalidations = new AtomicInteger();
+        controller.setFactoryCapacityInvalidationCallbackForTesting(invalidations::incrementAndGet);
+        addFactoryComponent(controller, scheduler);
+        scheduler.bindOwner(controller);
 
-        assertThat(scheduler.threadSnapshots(null)).hasSize(65);
-        assertThat(scheduler.threadLimit()).isEqualTo(65);
-        assertThat(scheduler.activeThreadCount()).isZero();
+        scheduler.getItemStackHandler(null).insertItem(0,
+                new ItemStack(ModItems.THREAD_DISPERSER.get(), 3), false);
+        scheduler.getItemStackHandler(null).extractItem(0, 1, false);
+
+        assertThat(invalidations).hasValue(2);
     }
 
     @Test
@@ -161,6 +162,27 @@ class FactorySchedulerBlockEntityTest {
                 ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
         assertThat(entity).isInstanceOf(FactorySchedulerBlockEntity.class);
         return (FactorySchedulerBlockEntity) entity;
+    }
+
+    private static MachineControllerBlockEntity createController() throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+        MachineControllerBlockEntity controller =
+                (MachineControllerBlockEntity) unsafe.allocateInstance(MachineControllerBlockEntity.class);
+        Field components = MachineControllerBlockEntity.class.getDeclaredField("components");
+        components.setAccessible(true);
+        components.set(controller, new ArrayList<ProcessingComponent>());
+        return controller;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void addFactoryComponent(MachineControllerBlockEntity controller,
+                                            FactorySchedulerBlockEntity scheduler) throws Exception {
+        Field field = MachineControllerBlockEntity.class.getDeclaredField("components");
+        field.setAccessible(true);
+        ((List<ProcessingComponent>) field.get(controller)).add(
+                new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), BlockPos.ZERO, List.of(), null));
     }
 
     private static FactoryRecipeScheduler internalScheduler(FactorySchedulerBlockEntity scheduler) throws Exception {

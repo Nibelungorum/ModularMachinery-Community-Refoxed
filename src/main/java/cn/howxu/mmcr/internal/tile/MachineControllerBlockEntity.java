@@ -167,6 +167,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     private @Nullable StructureClaimRegistry.ResourceDomain pendingSharedTickDomain;
     private boolean syncedRuntimeActive;
     private Map<UUID, Long> previewReceivers = new LinkedHashMap<>();
+    private @Nullable Runnable factoryCapacityInvalidationCallbackForTesting;
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
@@ -460,14 +461,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
 
     public @Nullable FactorySchedulerBlockEntity getFactoryController() {
         if (machine == null || !machine.hasFactory()) return null;
-        for (ProcessingComponent component : components) {
-            if (component.getContainer() instanceof FactorySchedulerBlockEntity factory) {
-                int threadLimit = effectiveFactoryThreadLimit();
-                if (factory.threadLimit() != threadLimit) factory.setThreadLimit(threadLimit);
-                return factory;
-            }
-        }
-        return null;
+        return factoryComponents().stream().findFirst().orElse(null);
     }
 
     public boolean toggleFactoryRecipeLock(int threadIndex) {
@@ -514,12 +508,41 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     public int factorySchedulerThreadCount() {
+        long total = 0;
         for (ProcessingComponent component : components) {
             if (component.getContainer() instanceof FactorySchedulerBlockEntity scheduler) {
-                return scheduler.threadCount();
+                total += scheduler.threadCount();
+                if (total >= Integer.MAX_VALUE) return Integer.MAX_VALUE;
             }
         }
-        return 0;
+        return (int) total;
+    }
+
+    List<FactorySchedulerBlockEntity> factoryComponents() {
+        return components.stream()
+                .map(ProcessingComponent::getContainer)
+                .filter(FactorySchedulerBlockEntity.class::isInstance)
+                .map(FactorySchedulerBlockEntity.class::cast)
+                .toList();
+    }
+
+    void setFactoryCapacityInvalidationCallbackForTesting(Runnable callback) {
+        factoryCapacityInvalidationCallbackForTesting = callback;
+    }
+
+    void invalidateFactoryCapacity() {
+        int threadLimit = effectiveFactoryThreadLimit();
+        for (FactorySchedulerBlockEntity factory : factoryComponents()) {
+            factory.setSchedulerThreadLimit(threadLimit);
+        }
+        setChanged();
+        syncRuntimeStateIfChanged();
+        for (FactorySchedulerBlockEntity factory : factoryComponents()) {
+            factory.syncOpenControllerMenus(this);
+        }
+        if (factoryCapacityInvalidationCallbackForTesting != null) {
+            factoryCapacityInvalidationCallbackForTesting.run();
+        }
     }
 
     public void serverTick() {
@@ -1225,6 +1248,8 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
     }
 
     private void updateComponents() {
+        List<FactorySchedulerBlockEntity> previousFactories = factoryComponents();
+        for (FactorySchedulerBlockEntity factory : previousFactories) factory.bindOwner(null);
         List<SmartInterfaceBlockEntity> previousSmartInterfaces = components.stream()
                 .map(ProcessingComponent::getContainer)
                 .filter(SmartInterfaceBlockEntity.class::isInstance)
@@ -1266,6 +1291,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
                 continue;
             }
             if (level.getBlockEntity(worldPos) instanceof FactorySchedulerBlockEntity scheduler) {
+                scheduler.bindOwner(this);
                 scheduler.linkControllerAppearance(getBlockPos(), foundMachine.appearance().formedPortBaseTexture());
                 linkedPortPositions().add(worldPos.immutable());
                 components.add(new ProcessingComponent(null, scheduler, worldPos, relativePos, foundPattern.tagsAt(relativePos), null));
@@ -1282,6 +1308,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
             if (!(tile instanceof BlockEntity container)) continue;
             components.add(new ProcessingComponent(component, container, worldPos, relativePos, foundPattern.tagsAt(relativePos)));
         }
+        invalidateFactoryCapacity();
     }
 
     private void unlinkLinkedPorts() {
@@ -1547,6 +1574,7 @@ public class MachineControllerBlockEntity extends BlockEntity implements Factory
         unbindSmartInterfaces();
         unlinkLinkedPorts();
         stopFactoryController();
+        for (FactorySchedulerBlockEntity factory : factoryComponents()) factory.bindOwner(null);
         foundMachine = null;
         foundPattern = null;
         foundCompiledPattern = null;
