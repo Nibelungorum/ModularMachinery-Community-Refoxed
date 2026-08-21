@@ -86,7 +86,12 @@ public final class MultiblockExportService {
                         .thenComparingInt(entry -> entry.pos().getX())
                         .thenComparing(entry -> entry.blockId().toString()))
                 .toList();
-        return new PreparedExport(rendered, assignSymbols(rendered));
+        Identifier controller = entries.stream()
+                .filter(SnapshotEntry::controller)
+                .map(SnapshotEntry::blockId)
+                .findFirst()
+                .orElse(null);
+        return new PreparedExport(rendered, assignSymbols(rendered, controller));
     }
 
     private static void appendLayers(StringBuilder out, PreparedExport prepared, String method) {
@@ -171,11 +176,11 @@ public final class MultiblockExportService {
         return path;
     }
 
-    private static LinkedHashMap<Identifier, Character> assignSymbols(List<RenderedEntry> rendered) {
+    private static LinkedHashMap<Identifier, Character> assignSymbols(List<RenderedEntry> rendered, Identifier explicitController) {
         LinkedHashMap<Identifier, Character> symbols = new LinkedHashMap<>();
-        Map<Identifier, Integer> counts = new HashMap<>();
+        Map<Identifier, Integer> counts = new LinkedHashMap<>();
         for (RenderedEntry entry : rendered) counts.merge(entry.blockId(), 1, Integer::sum);
-        Identifier controller = null;
+        Identifier controller = explicitController;
         Identifier casing = null;
         for (Identifier id : counts.keySet()) {
             String path = id.getPath();
@@ -210,7 +215,11 @@ public final class MultiblockExportService {
         return value.replace("\\", "\\\\").replace("'", "\\'");
     }
 
-    public record SnapshotEntry(BlockPos offset, Identifier blockId, boolean air) {}
+    public record SnapshotEntry(BlockPos offset, Identifier blockId, boolean air, boolean controller) {
+        public SnapshotEntry(BlockPos offset, Identifier blockId, boolean air) {
+            this(offset, blockId, air, false);
+        }
+    }
 
     private record RenderedEntry(BlockPos pos, Identifier blockId) {}
 

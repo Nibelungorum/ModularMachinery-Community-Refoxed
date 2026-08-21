@@ -136,7 +136,8 @@ public final class ExportCommand {
                     entries.add(new MultiblockExportService.SnapshotEntry(
                             worldPos.subtract(controller),
                             BuiltInRegistries.BLOCK.getKey(state.getBlock()),
-                            state.isAir()));
+                            state.isAir(),
+                            worldPos.equals(controller)));
                 }
             }
         }

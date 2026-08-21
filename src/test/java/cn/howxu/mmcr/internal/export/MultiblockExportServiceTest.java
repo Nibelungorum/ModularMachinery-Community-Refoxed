@@ -99,14 +99,47 @@ class MultiblockExportServiceTest {
 
         String kubeJs = MultiblockExportService.renderKubeJS(List.of(
                 new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, controller, false),
-                new MultiblockExportService.SnapshotEntry(new BlockPos(0, 0, 1), casing, false)
+                new MultiblockExportService.SnapshotEntry(new BlockPos(0, 0, 1), casing, false),
+                new MultiblockExportService.SnapshotEntry(new BlockPos(1, 0, 1), casing, false)
         ), Direction.SOUTH);
 
-        assertThat(kubeJs).contains(".pattern(\"C\")");
-        assertThat(kubeJs).contains(".pattern(\"X\")");
-        assertThat(kubeJs.indexOf(".pattern(\"C\")"))
-                .isLessThan(kubeJs.indexOf(".pattern(\"X\")"));
-        assertThat(kubeJs).doesNotContain(".pattern(\"C\", \"X\")");
+        assertThat(kubeJs).contains(".pattern(\"C \")");
+        assertThat(kubeJs).contains(".pattern(\"XX\")");
+        assertThat(kubeJs.indexOf(".pattern(\"C \")"))
+                .isLessThan(kubeJs.indexOf(".pattern(\"XX\")"));
+        assertThat(kubeJs).doesNotContain(".pattern(\"C\", \"XX\")");
+    }
+
+    @Test
+    void renderersUseMarkedControllerEvenWithNonStandardBlockId() {
+        Identifier controller = Identifier.fromNamespaceAndPath("mmcr", "machine_core");
+        Identifier casing = Identifier.fromNamespaceAndPath("mmcr", "basic_casing");
+        List<MultiblockExportService.SnapshotEntry> entries = List.of(
+                new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, controller, false, true),
+                new MultiblockExportService.SnapshotEntry(new BlockPos(1, 0, 0), casing, false)
+        );
+
+        String java = MultiblockExportService.renderJava(entries, Direction.SOUTH);
+        String kubeJs = MultiblockExportService.renderKubeJS(entries, Direction.SOUTH);
+
+        assertThat(java).doesNotContain(".where('C'");
+        assertThat(kubeJs).contains(".set('C', api.block('mmcr:machine_core'))");
+    }
+
+    @Test
+    void renderersAssignSymbolsDeterministicallyFromSortedEntries() {
+        Identifier first = Identifier.fromNamespaceAndPath("test", "first_block");
+        Identifier second = Identifier.fromNamespaceAndPath("test", "second_block");
+        List<MultiblockExportService.SnapshotEntry> entries = List.of(
+                new MultiblockExportService.SnapshotEntry(new BlockPos(0, 0, 0), first, false),
+                new MultiblockExportService.SnapshotEntry(new BlockPos(1, 0, 0), second, false)
+        );
+        List<MultiblockExportService.SnapshotEntry> reversed = List.of(entries.get(1), entries.get(0));
+
+        assertThat(MultiblockExportService.renderJava(entries, Direction.SOUTH))
+                .isEqualTo(MultiblockExportService.renderJava(reversed, Direction.SOUTH));
+        assertThat(MultiblockExportService.renderKubeJS(entries, Direction.SOUTH))
+                .isEqualTo(MultiblockExportService.renderKubeJS(reversed, Direction.SOUTH));
     }
 
     @Test
