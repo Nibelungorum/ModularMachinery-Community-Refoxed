@@ -8,6 +8,18 @@ MMCREvents.startup(function(event) {
     return NS + ':kubejs_' + path
   }
 
+  var thermalCoilType = cloneId('thermal_smelting_coil')
+  event.createLevelType(thermalCoilType).displayName('KubeJS Thermal Smelting Coil').register()
+  function thermalCoil(path, priority, block, durationMultiplier) {
+    event.createLevel(cloneId('thermal_smelting_coil_' + path))
+      .type(thermalCoilType).priority(priority).state(block)
+      .modifier({ durationMultiplier: durationMultiplier }).register()
+  }
+  thermalCoil('copper', 0, 'minecraft:copper_block', 0.9)
+  thermalCoil('iron', 1, 'minecraft:iron_block', 0.8)
+  thermalCoil('gold', 2, 'minecraft:gold_block', 0.7)
+  thermalCoil('diamond', 3, 'minecraft:diamond_block', 0.6)
+
   function register(path, configure) {
     var builder = event.createMachine(cloneId(path))
       .displayNameKey('machine.mmcr_kubejs.' + path)

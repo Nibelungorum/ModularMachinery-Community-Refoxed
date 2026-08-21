@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
+import net.minecraft.SharedConstants;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.PackLocationInfo;
@@ -47,7 +48,7 @@ public final class RuntimeMachineResourcePack implements PackResources {
                     LOCATION,
                     new Supplier(),
                     PackType.CLIENT_RESOURCES,
-                    new PackSelectionConfig(true, Pack.Position.BOTTOM, true));
+                    new PackSelectionConfig(true, Pack.Position.TOP, true));
             if (pack != null) {
                 output.accept(pack);
             }
@@ -68,7 +69,9 @@ public final class RuntimeMachineResourcePack implements PackResources {
     @Override
     public IoSupplier<InputStream> getRootResource(String... path) {
         if (path.length == 1 && PackResources.PACK_META.equals(path[0])) {
-            return bytes("{\"pack\":{\"description\":\"MMCR Runtime Dynamical Resources\",\"pack_format\":1}}\n");
+            PackFormat packVersion = SharedConstants.getCurrentVersion().packVersion(PackType.CLIENT_RESOURCES);
+            return bytes("{\"pack\":{\"description\":\"MMCR Runtime Dynamical Resources\",\"pack_format\":"
+                    + packVersion.major() + "}}\n");
         }
         return null;
     }
@@ -105,7 +108,7 @@ public final class RuntimeMachineResourcePack implements PackResources {
         if (type == PackMetadataSection.CLIENT_TYPE || type == PackMetadataSection.FALLBACK_TYPE) {
             return (T) new PackMetadataSection(
                     Component.literal("Runtime BuildIn"),
-                    new InclusiveRange<>(PackFormat.of(1), PackFormat.of(Integer.MAX_VALUE)));
+                    new InclusiveRange<>(SharedConstants.getCurrentVersion().packVersion(PackType.CLIENT_RESOURCES)));
         }
         return null;
     }

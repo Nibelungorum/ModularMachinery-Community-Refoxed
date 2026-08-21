@@ -26,6 +26,7 @@ import java.util.function.Consumer;
  */
 public final class StartupContentRegistration {
     private static StartupPhase startupPhase = StartupPhase.NOT_STARTED;
+    private static boolean structureCollectionDeferred;
 
     private StartupContentRegistration() {
     }
@@ -35,11 +36,16 @@ public final class StartupContentRegistration {
     }
 
     public static void registerProductionForModStartup() {
-        registerProduction(false, ModList.get() == null || !ModList.get().isLoaded("kubejs")
-                || Plugin.startupScriptsLoaded());
+        boolean deferStructures = ModList.get() != null && ModList.get().isLoaded("kubejs")
+                && !Plugin.startupScriptsLoaded();
+        registerProduction(false, !deferStructures, deferStructures);
     }
 
     private static void registerProduction(boolean begin, boolean commit) {
+        registerProduction(begin, commit, false);
+    }
+
+    private static void registerProduction(boolean begin, boolean commit, boolean deferStructures) {
         registerStartupContent(
                 definitions -> {
                     OptionalSourceRegistration.invokeDevelopmentSource(
@@ -61,7 +67,7 @@ public final class StartupContentRegistration {
                             new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
                     registerGameTestBuiltins("registerRecipes",
                             new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
-                }, begin, commit);
+                }, begin, commit, deferStructures);
     }
 
     public static void registerForTesting() {
@@ -76,6 +82,10 @@ public final class StartupContentRegistration {
 
     public static void completeKubeJSStartup() {
         if (ContentRegistrationCoordinator.isCommitted()) return;
+        if (structureCollectionDeferred) {
+            ContentRegistrationCoordinator.collectStructures(MMCRMachineStructuresEvent.current());
+            structureCollectionDeferred = false;
+        }
         ContentRegistrationCoordinator.commitStartup();
         registerDynamicControllers(MachineDefinitions.effectiveSnapshot().keySet());
         startupPhase = StartupPhase.COMMITTED;
@@ -94,6 +104,7 @@ public final class StartupContentRegistration {
 
     public static void resetForTesting() {
         startupPhase = StartupPhase.NOT_STARTED;
+        structureCollectionDeferred = false;
     }
 
     public static void markCollectingForTesting() {
@@ -113,7 +124,7 @@ public final class StartupContentRegistration {
             Consumer<MMCRMachineDefinationsEvent> definitionsSource,
             Consumer<MMCRMachineStructuresEvent> structuresSource,
             Consumer<MMCRMachineRecipesEvent> recipesSource) {
-        registerStartupContent(definitionsSource, structuresSource, recipesSource, true, true);
+        registerStartupContent(definitionsSource, structuresSource, recipesSource, true, true, false);
     }
 
     private static void registerStartupContent(
@@ -121,7 +132,8 @@ public final class StartupContentRegistration {
             Consumer<MMCRMachineStructuresEvent> structuresSource,
             Consumer<MMCRMachineRecipesEvent> recipesSource,
             boolean begin,
-            boolean commit) {
+            boolean commit,
+            boolean deferStructures) {
         startupPhase = StartupPhase.COLLECTING;
         PublicApiBootstrap.begin();
         if (begin) ContentRegistrationCoordinator.beginStartup();
@@ -136,8 +148,11 @@ public final class StartupContentRegistration {
         MMCRMachineStructuresEvent structures = MMCRMachineStructuresEvent.prepare(definitions.definitions().keySet());
         structuresSource.accept(structures);
         NeoForge.EVENT_BUS.post(structures);
-        structures.freeze();
-        ContentRegistrationCoordinator.collectStructures(structures);
+        structureCollectionDeferred = deferStructures;
+        if (!deferStructures) {
+            structures.freeze();
+            ContentRegistrationCoordinator.collectStructures(structures);
+        }
         bindVanillaItemComponents();
         MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
         recipesSource.accept(recipes);

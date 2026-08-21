@@ -119,7 +119,7 @@ full('reactor', pattern([
 
 var thermalA = api.anyOf(api.block('minecraft:smooth_basalt'), itemIn, itemOut, energyIn, factory, parallelControllers())
 var thermalPattern = pattern([['AAA','XXX','XXX','AAA'], ['AAA','X X','X X','ADA'], ['ABA','XXX','XXX','AAA']], { X: api.anyOf(api.block('minecraft:copper_block'), api.block('minecraft:iron_block'), api.block('minecraft:gold_block'), api.block('minecraft:diamond_block')), A: thermalA, B: controllerBlock('thermal_smelting_furnace'), D: api.block('minecraft:reinforced_deepslate') }, 'B')
-var thermalRequirements = MachineStructureRequirements.builder().levelSlot('X', api.id('mmcr:thermal_smelting_coil')).build()
+var thermalRequirements = MachineStructureRequirements.builder().levelSlot('X', api.id('mmcr_kubejs:kubejs_thermal_smelting_coil')).build()
 event.createStructure(cloneId('thermal_smelting_furnace')).fullStructure(thermalPattern, api.portRequirements({}), api.portTierRequirements(['item_input_bus>=tiny', 'item_output_bus>=tiny', 'energy_input_hatch>=tiny']), [], thermalRequirements).build()
 
 var purpurB = api.anyOf(api.block('minecraft:purpur_pillar'), itemIn, itemOut, energyIn, factory, smart, parallelControllers())
@@ -272,7 +272,7 @@ ServerEvents.recipes(function(event) {
     var input = thermalRecipe[3]
     var output = thermalRecipe[4]
     var energy = thermalRecipe[5]
-    recipe('thermal_smelting_furnace_' + name, 'thermal_smelting_furnace', ticks, [item('minecraft:coal'), item('minecraft:' + input)], [{ id: 'minecraft:' + output, count: 1 }], { energy: energy, maxThreads: 4, level: ['mmcr:thermal_smelting_coil', 'mmcr:' + level] })
+    recipe('thermal_smelting_furnace_' + name, 'thermal_smelting_furnace', ticks, [item('minecraft:coal'), item('minecraft:' + input)], [{ id: 'minecraft:' + output, count: 1 }], { energy: energy, maxThreads: 4, level: ['mmcr_kubejs:kubejs_thermal_smelting_coil', 'mmcr_kubejs:kubejs_' + level] })
   }
   var componentMachines = ['blast_furnace','alloy_furnace','cracker','reactor','thermal_smelting_furnace']
   for (var componentMachineIndex = 0; componentMachineIndex < componentMachines.length; componentMachineIndex++) {

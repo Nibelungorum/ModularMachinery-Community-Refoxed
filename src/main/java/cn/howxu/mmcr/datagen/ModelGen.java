@@ -1,9 +1,8 @@
 package cn.howxu.mmcr.datagen;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.machine.MachineControllerSpec;
-import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.PortKinds;
@@ -48,7 +47,7 @@ public final class ModelGen extends ModelProvider {
 
     static List<String> collectKnownBlockNames() {
         return ModBlocks.BLOCKS.keySet().stream()
-                .filter(ModelGen::shouldGenerateBlockModels)
+                .filter(name -> shouldGenerateBlockModels(name, ModBlocks.BLOCKS.get(name)))
                 .toList();
     }
 
@@ -64,7 +63,7 @@ public final class ModelGen extends ModelProvider {
     private static void registerModels(BlockModelRegistration blockRegistration,
                                        ItemModelRegistration itemRegistration) {
         ModBlocks.BLOCKS.forEach((name, blockHolder) -> {
-            if (shouldGenerateBlockModels(name)) {
+            if (shouldGenerateBlockModels(name, blockHolder)) {
                 blockRegistration.register(blockHolder::get, name);
             }
         });
@@ -84,12 +83,10 @@ public final class ModelGen extends ModelProvider {
         return new Material(MMCR.id("block/" + textureName));
     }
 
-    private static boolean shouldGenerateBlockModels(String name) {
+    private static boolean shouldGenerateBlockModels(String name, Supplier<? extends Block> block) {
         return !isIoPort(name) && !isParallelController(name) && !"factory_controller".equals(name)
                 && !"smart_interface".equals(name) && !"module_bridge".equals(name)
-                && MachineDefinitions.allRegistrations().stream()
-                .map(registration -> MachineControllerSpec.defaultsFor(registration.id()).id().getPath())
-                .noneMatch(name::equals);
+                && !(block.get() instanceof MachineControllerBlock);
     }
 
     @FunctionalInterface

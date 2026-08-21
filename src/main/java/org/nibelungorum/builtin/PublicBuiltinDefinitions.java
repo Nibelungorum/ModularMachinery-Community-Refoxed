@@ -1,6 +1,7 @@
 package org.nibelungorum.builtin;
 
 import cn.howxu.mmcr.api.machine.MachineRole;
+import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
@@ -329,7 +330,11 @@ public final class PublicBuiltinDefinitions {
     private static BlockPredicate energyPorts() { return any(energyInputPorts(), energyOutputPorts()); }
     private static BlockPredicate energyInputPorts() { return any(port("energy_input_hatch"), port("energy_input_hatch_tiny"), port("energy_input_hatch_small"), port("energy_input_hatch_reinforced"), port("energy_input_hatch_big"), port("energy_input_hatch_huge"), port("energy_input_hatch_ludicrous"), port("energy_input_hatch_ultimate")); }
     private static BlockPredicate energyOutputPorts() { return any(port("energy_output_hatch"), port("energy_output_hatch_tiny"), port("energy_output_hatch_small"), port("energy_output_hatch_reinforced"), port("energy_output_hatch_big"), port("energy_output_hatch_huge"), port("energy_output_hatch_ludicrous"), port("energy_output_hatch_ultimate")); }
-    private static BlockPredicate parallelControllers() { return any(port("parallel_controller_tiny"), port("parallel_controller_small"), port("parallel_controller_normal"), port("parallel_controller_reinforced"), port("parallel_controller_big"), port("parallel_controller_huge")); }
+     private static BlockPredicate parallelControllers() {
+         List<BlockPredicate> predicates = new ArrayList<>();
+         for (ParallelTier tier : ParallelTier.values()) predicates.add(port(tier.idSuffix()));
+         return any(predicates.toArray(BlockPredicate[]::new));
+     }
     private static BlockPredicate itemParallel() { return parallelControllers(); }
     private static BlockPredicate any(BlockPredicate... predicates) { return BlockPredicate.any(predicates); }
     private static Identifier mc(String path) { return Identifier.withDefaultNamespace(path); }
