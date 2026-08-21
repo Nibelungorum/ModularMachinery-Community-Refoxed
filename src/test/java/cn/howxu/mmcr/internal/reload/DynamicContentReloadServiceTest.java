@@ -125,6 +125,7 @@ class DynamicContentReloadServiceTest {
     void candidateRecipeCanReferenceStartupMachineDefinitionWithoutDynamicStructure() {
         Identifier machineId = Identifier.parse("mmcr:startup_definition_only");
         register(machineId.toString());
+        MachineStructureRegistry.replaceStartup(Map.of(machineId, structure(machineId.toString())));
 
         DynamicContentReloadService.reload(candidate ->
                 candidate.registerRecipe(recipe("mmcr:startup_definition_recipe", machineId.toString())));

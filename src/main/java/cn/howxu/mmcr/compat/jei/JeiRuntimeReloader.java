@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import mezz.jei.api.runtime.IJeiRuntime;
 import net.minecraft.client.Minecraft;

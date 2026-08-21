@@ -142,7 +142,7 @@ public final class RuntimeContentCoordinator {
                 throw new IllegalStateException("No startup machine registration for recipe: " + recipe.machineId());
             }
             if (!structures.containsKey(recipe.machineId())
-                    && !(structures.isEmpty() && MachineDefinitions.getRegistration(recipe.machineId()) != null)
+                    && !MachineStructureRegistry.startupSnapshot().containsKey(recipe.machineId())
                     && !MachineRegistry.containsStatic(recipe.machineId())) {
                 throw new IllegalStateException("Machine not found for dynamic recipe: " + recipe.machineId());
             }
