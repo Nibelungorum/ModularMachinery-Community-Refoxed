@@ -41,14 +41,20 @@ public class MMCR {
         return Identifier.fromNamespaceAndPath(MODID, path);
     }
 
+    /**
+     * Compatibility entry point for the runtime builtin refresh path; event wiring lives in
+     * {@link ModEventRegistration}.
+     */
     public static void registerRuntimeBuiltins() {
         RuntimeContentRegistration.registerBuiltins();
     }
 
+    /** Runtime recipe seam invoked by the data-component lifecycle callback, not an event wiring implementation. */
     private static void registerRuntimeRecipes() {
         RuntimeContentRegistration.registerRecipes();
     }
 
+    /** Compatibility/test facade for the production public API startup lifecycle. */
     private static void registerPublicApiLifecycle() {
         RuntimeContentRegistration.registerProductionStartupContentForTesting();
     }
@@ -58,22 +64,23 @@ public class MMCR {
         registerPublicApiLifecycle();
     }
 
+    /** Compatibility seam called by KubeJS after its startup declarations are ready. */
     public static void completeKubeJSStartup() {
         StartupContentRegistration.completeKubeJSStartup();
     }
 
+    /** Compatibility/test seam that conditionally completes delayed KubeJS startup. */
     public static void completeKubeJSStartupIfReady() {
         StartupContentRegistration.completeKubeJSStartupIfReady();
     }
 
-    /** Pure test startup seam; unlike the production seam, it does not install production sources. */
-    /** Compatibility alias for the pure test startup facade. */
+    /** Compatibility alias for the pure test startup facade; it is not event wiring. */
     @Deprecated
     public static void registerPublicApiLifecycleForTesting() {
         StartupContentRegistration.registerForTesting();
     }
 
-    /** Compatibility alias for the pure test startup facade with explicit sources. */
+    /** Compatibility alias for the pure test startup facade with explicit sources, not event wiring. */
     @Deprecated
     public static void registerPublicApiLifecycleForTesting(
             Consumer<MMCRMachineDefinationsEvent> definitionsSource,
@@ -82,10 +89,12 @@ public class MMCR {
         RuntimeContentRegistration.registerTestStartupContent(definitionsSource, structuresSource, recipesSource);
     }
 
+    /** Test-only view of startup lifecycle state. */
     public static String startupPhaseForTesting() {
         return StartupContentRegistration.startupPhaseForTesting();
     }
 
+    /** Test seam for invoking an optional GameTest source without making it a production dependency. */
     static void invokeOptionalSourceForTesting(String className, String methodName, Class<?>[] parameterTypes,
             Object... arguments) {
         GameTestRegistration.invokeOptionalSourceForTesting(className, methodName, parameterTypes, arguments);
