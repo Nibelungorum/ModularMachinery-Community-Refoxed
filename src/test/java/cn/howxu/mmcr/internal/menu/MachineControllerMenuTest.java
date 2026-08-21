@@ -9,7 +9,6 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
-import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -96,7 +95,8 @@ class MachineControllerMenuTest {
         setField(MachineControllerBlockEntity.class, controller, "machine", factoryMachine(MMCR.id("test_cube")));
         setField(MachineControllerBlockEntity.class, controller, "components", List.of(new ProcessingComponent(
                 null, factory, BlockPos.ZERO, BlockPos.ZERO, List.of())));
-        setField(FactorySchedulerBlockEntity.class, factory, "scheduler", schedulerWithActiveBaseThread(MMCR.id("test_cube")));
+        controller.factoryScheduler().allThreads().getFirst()
+                .setActiveRecipeForTesting(activeRecipe(MMCR.id("test_cube"), 35));
         MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory(), controller);
 
         menu.broadcastChanges();
@@ -319,13 +319,6 @@ class MachineControllerMenuTest {
                 PortRequirementSpec.none(),
                 PortTierRequirementSpec.none(), List.of(), Map.of(),
                 16, true, true, 1, List.of());
-    }
-
-    private static FactoryRecipeScheduler schedulerWithActiveBaseThread(Identifier machineId) throws Exception {
-        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1, new RecipeCraftingContextPool());
-        ActiveMachineRecipe active = activeRecipe(machineId, 35);
-        scheduler.allThreads().getFirst().setActiveRecipeForTesting(active);
-        return scheduler;
     }
 
     private static ActiveMachineRecipe activeRecipe(Identifier machineId, int tick) {

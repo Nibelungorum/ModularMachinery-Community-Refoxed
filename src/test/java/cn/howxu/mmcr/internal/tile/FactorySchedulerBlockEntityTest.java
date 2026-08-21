@@ -1,6 +1,10 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -10,6 +14,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -23,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import java.util.stream.Stream;
@@ -134,6 +140,12 @@ class FactorySchedulerBlockEntityTest {
         Field components = MachineControllerBlockEntity.class.getDeclaredField("components");
         components.setAccessible(true);
         components.set(controller, new ArrayList<ProcessingComponent>());
+        Identifier machineId = MMCR.id("factory_capacity_notification_test");
+        Field machine = MachineControllerBlockEntity.class.getDeclaredField("machine");
+        machine.setAccessible(true);
+        machine.set(controller, new DynamicMachine(machineId, "Factory Capacity Notification Test",
+                new BlockArray(Map.of()), MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(),
+                List.of(), Map.of(), 1, false, true, 4));
         return controller;
     }
 
