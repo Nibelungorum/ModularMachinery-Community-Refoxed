@@ -37,7 +37,26 @@ class InterfaceHelpersTest {
     @Test
     void any_of_port_rejects_empty_alternatives() {
         assertThatThrownBy(() -> InterfacePredicates.anyOfPort())
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("At least one port is required");
+        assertThatThrownBy(() -> InterfacePredicates.anyOfPort((String[]) null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("At least one port is required");
+        assertThatThrownBy(() -> InterfacePredicates.anyOfPort(new String[0]))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("At least one port is required");
+        assertThatThrownBy(() -> InterfacePredicates.anyOfPort((Identifier[]) null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("At least one port is required");
+        assertThatThrownBy(() -> InterfacePredicates.anyOfPort(new Identifier[0]))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("At least one port is required");
+        assertThatThrownBy(() -> InterfacePredicates.anyOfPort((BlockPredicate[]) null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("At least one port is required");
+        assertThatThrownBy(() -> InterfacePredicates.anyOfPort(new BlockPredicate[0]))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("At least one port is required");
     }
 
     @Test

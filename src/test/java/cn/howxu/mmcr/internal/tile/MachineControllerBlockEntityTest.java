@@ -91,6 +91,7 @@ import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
+import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
@@ -445,6 +446,62 @@ class MachineControllerBlockEntityTest {
         assertThat(fieldValue(FactorySchedulerBlockEntity.class, fixture.factory(), "owner"))
                 .isSameAs(fixture.controller());
         assertThat(fixture.controller().factoryScheduler()).isSameAs(scheduler);
+    }
+
+    @Test
+    void controller_scheduler_round_trips_active_recipe_and_lock_state() throws Exception {
+        FactoryRuntimeFixture fixture = formedFactoryRuntimeFixture(
+                MMCR.id("factory_controller_scheduler_persistence"), 2, 2);
+        MachineRecipe recipe = registerItemRecipe("factory_controller_scheduler_persistence_recipe",
+                fixture.machine().registryName(), 20, 0);
+        fixture.controller().serverTick();
+        FactoryRecipeScheduler scheduler = fixture.controller().factoryScheduler();
+        FactoryRecipeThread activeThread = scheduler.allThreads().stream()
+                .filter(thread -> thread.getActiveRecipe() != null)
+                .findFirst().orElseThrow();
+        activeThread.setLockedRecipeId(recipe.id());
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()));
+        fixture.controller().saveAdditional(output);
+
+        MachineControllerBlockEntity restored = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(restored);
+        setField(BlockEntity.class, restored, "worldPosition", BlockPos.ZERO);
+        setField(MachineControllerBlockEntity.class, restored, "machine", fixture.machine());
+        FactorySchedulerBlockEntity restoredFactory = factoryController(new BlockPos(3, 0, 0));
+        addFactorySchedulerComponent(restored, restoredFactory);
+        restoredFactory.bindOwner(restored);
+        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+
+        List<FactoryRecipeThread> restoredThreads = restored.factoryScheduler().allThreads();
+        assertThat(restoredThreads).anyMatch(thread -> thread.getActiveRecipe() != null
+                && thread.getActiveRecipe().getRecipe().id().equals(recipe.id()));
+        assertThat(restoredThreads).anyMatch(thread -> recipe.id().equals(thread.lockedRecipeId()));
+    }
+
+    @Test
+    void controller_scheduler_loads_old_data_without_factory_scheduler_as_base_thread() throws Exception {
+        MachineControllerBlockEntity restored = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(restored);
+        setField(BlockEntity.class, restored, "worldPosition", BlockPos.ZERO);
+        Machine machine = new DynamicMachine(
+                MMCR.id("factory_controller_scheduler_old_data"), "Factory Old Data",
+                factoryItemPattern(), MachineControllerSpec.defaultsFor(MMCR.id("factory_controller_scheduler_old_data")),
+                PortRequirementSpec.none(), List.of(), Map.of(), 1, false, true, 1);
+        setField(MachineControllerBlockEntity.class, restored, "machine", machine);
+        FactorySchedulerBlockEntity factory = factoryController(new BlockPos(3, 0, 0));
+        addFactorySchedulerComponent(restored, factory);
+        factory.bindOwner(restored);
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()));
+        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+
+        assertThat(restored.factoryScheduler().allThreads()).hasSize(1);
+        assertThat(restored.factoryScheduler().allThreads().getFirst().isBaseThread()).isTrue();
     }
 
     @Test

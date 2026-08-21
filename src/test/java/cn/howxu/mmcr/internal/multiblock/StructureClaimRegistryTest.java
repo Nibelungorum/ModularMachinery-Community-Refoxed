@@ -113,4 +113,34 @@ class StructureClaimRegistryTest {
         assertThat(registry.ownersOf(capacity)).isEmpty();
         assertThat(registry.claimedControllers()).isEmpty();
     }
+
+    @Test
+    void exclusive_conflicts_with_shared_capacity_in_both_directions() {
+        BlockPos first = new BlockPos(0, 64, 0);
+        BlockPos second = new BlockPos(10, 64, 0);
+        BlockPos component = new BlockPos(1, 64, 0);
+        StructureClaimRegistry registry = new StructureClaimRegistry();
+
+        registry.claim(first, List.of(new StructureClaimRegistry.Claim(component, ComponentClaimPolicy.EXCLUSIVE)));
+        assertThat(registry.claim(second, List.of(new StructureClaimRegistry.Claim(component,
+                ComponentClaimPolicy.SHARED_CAPACITY))).accepted()).isFalse();
+
+        registry.release(first);
+        registry.claim(first, List.of(new StructureClaimRegistry.Claim(component, ComponentClaimPolicy.SHARED_CAPACITY)));
+        assertThat(registry.claim(second, List.of(new StructureClaimRegistry.Claim(component,
+                ComponentClaimPolicy.EXCLUSIVE))).accepted()).isFalse();
+    }
+
+    @Test
+    void exclusive_still_conflicts_with_exclusive() {
+        BlockPos first = new BlockPos(0, 64, 0);
+        BlockPos second = new BlockPos(10, 64, 0);
+        BlockPos component = new BlockPos(1, 64, 0);
+        StructureClaimRegistry registry = new StructureClaimRegistry();
+
+        registry.claim(first, List.of(new StructureClaimRegistry.Claim(component, ComponentClaimPolicy.EXCLUSIVE)));
+
+        assertThat(registry.claim(second, List.of(new StructureClaimRegistry.Claim(component,
+                ComponentClaimPolicy.EXCLUSIVE))).accepted()).isFalse();
+    }
 }

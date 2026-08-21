@@ -69,8 +69,12 @@ public record PktFactoryControllerStatePayload(FactoryControllerSnapshot snapsho
         }
         int currentParallelism = buf.readVarInt();
         int maxParallelism = buf.readVarInt();
+        validateParallelism(currentParallelism, maxParallelism);
         String machineName = buf.readUtf(MAX_STRING_LENGTH);
         int parallelSlots = buf.readVarInt();
+        if (parallelSlots < 0) {
+            throw new IllegalArgumentException("Invalid factory parallel slot count: " + parallelSlots);
+        }
         String lastFailure = buf.readUtf(MAX_STRING_LENGTH);
         int size = buf.readVarInt();
         if (size != count) {
@@ -83,9 +87,17 @@ public record PktFactoryControllerStatePayload(FactoryControllerSnapshot snapsho
             if (index < 0 || index >= count || !indexes.add(index)) {
                 throw new IllegalArgumentException("Invalid factory thread snapshot index: " + index);
             }
-            threads.add(new FactoryRecipeScheduler.ThreadSnapshot(index, buf.readBoolean(), buf.readBoolean(),
-                    buf.readBoolean(), buf.readUtf(MAX_STRING_LENGTH), buf.readVarInt(), buf.readVarInt(),
-                    buf.readVarInt(), buf.readUtf(MAX_STRING_LENGTH), buf.readBoolean(), buf.readUtf(MAX_STRING_LENGTH)));
+            boolean baseThread = buf.readBoolean();
+            boolean coreThread = buf.readBoolean();
+            boolean activeThread = buf.readBoolean();
+            String recipeId = buf.readUtf(MAX_STRING_LENGTH);
+            int tick = buf.readVarInt();
+            int totalTick = buf.readVarInt();
+            int parallelism = buf.readVarInt();
+            validateThread(activeThread, tick, totalTick, parallelism);
+            threads.add(new FactoryRecipeScheduler.ThreadSnapshot(index, baseThread, coreThread, activeThread,
+                    recipeId, tick, totalTick, parallelism, buf.readUtf(MAX_STRING_LENGTH), buf.readBoolean(),
+                    buf.readUtf(MAX_STRING_LENGTH)));
         }
         return new PktFactoryControllerStatePayload(new FactoryControllerSnapshot(pos, formed, paused, active, count,
                 currentParallelism, maxParallelism, machineName, parallelSlots, lastFailure, threads));
@@ -100,11 +112,37 @@ public record PktFactoryControllerStatePayload(FactoryControllerSnapshot snapsho
         if (state.activeThreadCount() < 0 || state.activeThreadCount() > count) {
             throw new IllegalArgumentException("Invalid active factory thread count: " + state.activeThreadCount());
         }
+        validateParallelism(state.currentParallelism(), state.maxParallelism());
+        if (state.parallelSlots() < 0) {
+            throw new IllegalArgumentException("Invalid factory parallel slot count: " + state.parallelSlots());
+        }
         Set<Integer> indexes = new HashSet<>(count);
         for (FactoryRecipeScheduler.ThreadSnapshot thread : state.threads()) {
             if (thread == null || thread.index() < 0 || thread.index() >= count || !indexes.add(thread.index())) {
                 throw new IllegalArgumentException("Invalid factory thread snapshot index");
             }
+            validateThread(thread.active(), thread.tick(), thread.totalTick(), thread.parallelism());
+        }
+    }
+
+    private static void validateParallelism(int currentParallelism, int maxParallelism) {
+        if (currentParallelism < 0) {
+            throw new IllegalArgumentException("Invalid current factory parallelism: " + currentParallelism);
+        }
+        if (maxParallelism < 1) {
+            throw new IllegalArgumentException("Invalid maximum factory parallelism: " + maxParallelism);
+        }
+    }
+
+    private static void validateThread(boolean active, int tick, int totalTick, int parallelism) {
+        if (tick < 0 || totalTick < 0 || tick > totalTick) {
+            throw new IllegalArgumentException("Invalid factory thread tick range: " + tick + "/" + totalTick);
+        }
+        if (parallelism < 1) {
+            throw new IllegalArgumentException("Invalid factory thread parallelism: " + parallelism);
+        }
+        if (!active && (tick != 0 || totalTick != 0 || parallelism != 1)) {
+            throw new IllegalArgumentException("Inactive factory thread has runtime progress");
         }
     }
 

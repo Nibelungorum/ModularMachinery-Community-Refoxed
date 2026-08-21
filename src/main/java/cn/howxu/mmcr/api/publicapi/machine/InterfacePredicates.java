@@ -56,6 +56,9 @@ public final class InterfacePredicates {
     }
 
     public static BlockPredicate anyOfPort(BlockPredicate... predicates) {
+        if (predicates == null || predicates.length == 0) {
+            throw new IllegalArgumentException("At least one port is required");
+        }
         return BlockPredicate.anyOf(List.of(predicates));
     }
 
