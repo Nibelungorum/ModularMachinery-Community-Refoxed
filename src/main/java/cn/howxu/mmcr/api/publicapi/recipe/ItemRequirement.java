@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.publicapi.recipe;
 
-import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 
@@ -38,7 +38,7 @@ public record ItemRequirement(RecipeIo io, Ingredient ingredient, int count, Ite
 
     public static ItemRequirement output(ItemOutput output) {
         return new ItemRequirement(RecipeIo.OUTPUT, null, 0, output.stack(), output.chance(),
-                DataComponentPredicateSet.EMPTY, 1F);
+                output.components(), 1F);
     }
 
     @Override public ItemStack stack() { return stack.copy(); }

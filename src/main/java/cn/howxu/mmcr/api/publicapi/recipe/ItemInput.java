@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.publicapi.recipe;
 
-import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.crafting.Ingredient;
 

@@ -4,7 +4,8 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement;
-import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.api.publicapi.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
@@ -12,7 +13,6 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.internal.api.PublicRecipeAdapter;
 import cn.howxu.mmcr.test.TestBootstrap;
-import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.JsonOps;
 import org.nibelungorum.builtin.PublicBuiltinLevelDefinitions;
 import org.nibelungorum.builtin.PublicBuiltinDefinitions;
@@ -138,7 +138,7 @@ class PublicRecipeBuilderTest {
             assertThat(item.io()).isEqualTo(cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.INPUT);
             assertThat(item.count()).isEqualTo(2);
             assertThat(item.consumeChance()).isEqualTo(0.25F);
-            assertThat(item.components()).isEqualTo(components());
+            assertThat(item.components().values()).containsKey(DataComponents.REPAIR_COST);
         });
         var smartRecipe = PublicRecipeAdapter.toRecipe(MachineRecipeBuilder.recipe(id("adapter_smart"), id("machine"))
                 .requirement(SmartInterfaceRequirement.input("Mode", 1F, 2F)).build(),
@@ -164,6 +164,35 @@ class PublicRecipeBuilderTest {
             assertThat(level.levelId()).isEqualTo(PublicBuiltinLevelDefinitions.COPPER_COIL);
         });
         assertThat(recipe.requiredHostIds()).containsExactly(id("host"));
+    }
+
+    @Test
+    void preserves_output_component_predicates_during_internal_adaptation() {
+        var definition = MachineRecipeBuilder.recipe(id("component_output"), id("machine"))
+                .outputItem(new ItemStack(Items.IRON_SWORD), components())
+                .build();
+
+        var recipe = PublicRecipeAdapter.toRecipe(definition,
+                new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+
+        assertThat(recipe.requirements()).singleElement().satisfies(requirement -> {
+            assertThat(requirement).isInstanceOf(cn.howxu.mmcr.api.recipe.requirement.ItemRequirement.class);
+            var item = (cn.howxu.mmcr.api.recipe.requirement.ItemRequirement) requirement;
+            assertThat(item.io()).isEqualTo(cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.OUTPUT);
+            assertThat(item.components().values()).containsKey(DataComponents.REPAIR_COST);
+            assertThat(item.resolvedStack().get(DataComponents.REPAIR_COST)).isEqualTo(1);
+        });
+    }
+
+    @Test
+    void rejects_non_exact_output_component_predicates() {
+        DataComponentPredicateSet nonExactComponents = new DataComponentPredicateSet(Map.of(
+                net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(DataComponents.REPAIR_COST),
+                new ComponentPredicate.Range(1, 2)));
+
+        assertThatThrownBy(() -> MachineRecipeBuilder.recipe(id("non_exact_output"), id("machine"))
+                .outputItem(new ItemStack(Items.IRON_SWORD), nonExactComponents))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -217,8 +246,8 @@ class PublicRecipeBuilderTest {
     }
 
     private static DataComponentPredicateSet components() {
-        return new DataComponentPredicateSet(Map.of(DataComponents.REPAIR_COST,
-                cn.howxu.mmcr.api.recipe.component.ComponentPredicate.exact(
-                        new Dynamic<>(JsonOps.INSTANCE, JsonOps.INSTANCE.createInt(1)))));
+        return new DataComponentPredicateSet(Map.of(
+                net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(DataComponents.REPAIR_COST),
+                new ComponentPredicate.Exact(JsonOps.INSTANCE.createInt(1))));
     }
 }
