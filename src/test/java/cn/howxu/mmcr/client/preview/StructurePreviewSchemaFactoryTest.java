@@ -24,6 +24,9 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.tags.TagKey;
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import org.nibelungorum.builtin.PublicBuiltinLevelDefinitions;
 import org.junit.jupiter.api.BeforeAll;
@@ -49,6 +52,19 @@ class StructurePreviewSchemaFactoryTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+        bindHolderTag(net.minecraft.world.level.block.Blocks.OAK_LOG.builtInRegistryHolder(), previewTag());
+        bindHolderTag(net.minecraft.world.level.block.Blocks.BIRCH_LOG.builtInRegistryHolder(), previewTag());
+    }
+
+    private static TagKey<net.minecraft.world.level.block.Block> previewTag() {
+        return TagKey.create(Registries.BLOCK, MMCR.id("preview_logs"));
+    }
+
+    private static void bindHolderTag(Holder<?> holder, TagKey<?> tag) throws Exception {
+        java.lang.reflect.Method bindTags = Class.forName("net.minecraft.core.Holder$Reference")
+                .getDeclaredMethod("bindTags", java.util.Collection.class);
+        bindTags.setAccessible(true);
+        bindTags.invoke(holder, java.util.Set.of(tag));
     }
 
     @AfterEach
@@ -79,6 +95,19 @@ class StructurePreviewSchemaFactoryTest {
         DynamicMachine machine = new DynamicMachine(MMCR.id("unrepresentable"), "machine.unrepresentable", pattern);
 
         assertThat(new StructurePreviewSchemaFactory().create(machine).states()).isEmpty();
+    }
+
+    @Test
+    void factory_adds_every_block_from_tag_to_preview_carousel() {
+        BlockArray pattern = new BlockArray(Map.of(
+                BlockPos.ZERO, new BlockPredicate.OfTag(previewTag())));
+        Machine machine = new DynamicMachine(MMCR.id("tag_preview_machine"), "machine.tag_preview", pattern);
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(machine);
+
+        assertThat(schema.previewCandidatesAt(BlockPos.ZERO).stream()
+                .map(candidate -> candidate.stack().getItem().builtInRegistryHolder().getRegisteredName()))
+                .contains("minecraft:oak_log", "minecraft:birch_log");
     }
 
     @Test

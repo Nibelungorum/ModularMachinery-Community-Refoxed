@@ -28,6 +28,11 @@ final class KubeJSContentReloadTransaction {
         return ACTIVE.get();
     }
 
+    static boolean ownsRecipe(Identifier id) {
+        KubeJSContentReloadTransaction active = ACTIVE.get();
+        return active != null && active.recipes.containsKey(id);
+    }
+
     static void activate(KubeJSContentReloadTransaction transaction) {
         ACTIVE.set(transaction);
     }

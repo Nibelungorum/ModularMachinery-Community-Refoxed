@@ -9,6 +9,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,7 @@ class KubeJSRecipeSyncTest {
 
     @AfterEach
     void cleanup() {
+        KubeJSContentReloadTransaction.deactivate();
         RecipeRegistry.clearForTesting();
     }
 
@@ -55,5 +57,19 @@ class KubeJSRecipeSyncTest {
 
         assertThat(RecipeRegistry.getRecipe(MMCR.id("first"))).isNull();
         assertThat(RecipeRegistry.getRecipe(MMCR.id("second"))).isNotNull();
+    }
+
+    @Test
+    void sync_does_not_publish_recipe_owned_by_active_kubejs_transaction_as_datapack_content() {
+        Identifier id = MMCR.id("transaction_recipe");
+        MachineRecipe recipe = new MachineRecipe(id, MMCR.id("machine"), 1, List.of(), List.of());
+        KubeJSContentReloadTransaction transaction = new KubeJSContentReloadTransaction();
+        transaction.registerRecipe(recipe);
+        KubeJSContentReloadTransaction.activate(transaction);
+
+        ResourceKey<Recipe<?>> holderId = ResourceKey.create(Registries.RECIPE, id);
+        KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(holderId, recipe)));
+
+        assertThat(RecipeRegistry.dataPackSnapshot()).doesNotContainKey(id);
     }
 }

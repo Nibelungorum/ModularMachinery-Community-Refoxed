@@ -54,17 +54,21 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     static final int ITEM_OVERLAY_Y = 0;
     static final float ITEM_OVERLAY_SCALE = 0.6F;
 
-    private final Machine machine;
+    private final Component title;
     private final IRecipeType<MachineRecipeDisplay> recipeType;
     private final IDrawable icon;
     private final IDrawable slotBackground;
     private final IGuiHelper guiHelper;
 
     public MachineRecipeCategory(IGuiHelper guiHelper, Machine machine) {
+        this(guiHelper, machine.registryName(), machine.displayName());
+    }
+
+    public MachineRecipeCategory(IGuiHelper guiHelper, Identifier machineId, Component title) {
         this.guiHelper = guiHelper;
-        this.machine = machine;
-        this.recipeType = JeiMachineRecipeTypes.forMachine(machine.registryName());
-        this.icon = guiHelper.createDrawableItemLike(ModBlocks.controllerFor(machine.registryName()).get());
+        this.title = title;
+        this.recipeType = JeiMachineRecipeTypes.forMachine(machineId);
+        this.icon = guiHelper.createDrawableItemLike(ModBlocks.controllerFor(machineId).get());
         this.slotBackground = guiHelper.getSlotDrawable();
     }
 
@@ -75,7 +79,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     @Override
     public Component getTitle() {
-        return machine.displayName();
+        return title;
     }
 
     @Override

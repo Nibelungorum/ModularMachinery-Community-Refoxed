@@ -24,7 +24,10 @@ public final class KubeJSRecipeSync {
         Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>();
         for (RecipeHolder<?> holder : holders) {
             if (holder.value() instanceof MachineRecipe machineRecipe) {
-                recipes.put(holder.id().identifier(), machineRecipe.withId(holder.id().identifier()));
+                Identifier id = holder.id().identifier();
+                if (!KubeJSContentReloadTransaction.ownsRecipe(id)) {
+                    recipes.put(id, machineRecipe.withId(id));
+                }
             }
         }
         MMCR.LOG.debug("[MMCR-DIAG] KubeJS RecipeManager sync found {} MMCR data-pack recipes", recipes.size());

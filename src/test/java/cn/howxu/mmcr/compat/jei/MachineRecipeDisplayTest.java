@@ -451,6 +451,21 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
+    void displayKeepsEveryResolvedTagItemForJeiCarousel() {
+        Ingredient tag = Ingredient.of(HolderSet.direct(
+                Items.OAK_LOG.builtInRegistryHolder(), Items.BIRCH_LOG.builtInRegistryHolder()));
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("resolved_tag_input_display"), MMCR.id("blast_furnace"), 40,
+                List.of(new MachineIngredient.ItemIngredient(tag, 1)), List.of());
+
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+
+        assertThat(display.itemInputs()).singleElement().satisfies(input ->
+                assertThat(input.stacks()).extracting(ItemStack::getItem)
+                        .containsExactly(Items.OAK_LOG, Items.BIRCH_LOG));
+    }
+
+    @Test
     void displaysAllRecipesInDeterministicOrder() {
         RecipeRegistry.clearForTesting();
         MachineRecipe low = recipe("low", "blast_furnace", 0);
