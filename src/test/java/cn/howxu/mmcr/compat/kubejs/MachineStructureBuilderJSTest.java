@@ -17,6 +17,9 @@ import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.registry.ModBlocks;
 import dev.latvian.mods.rhino.util.HideFromJS;
+import dev.latvian.mods.rhino.ContextFactory;
+import dev.latvian.mods.rhino.ScriptableObject;
+import dev.latvian.mods.rhino.type.TypeInfo;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -260,6 +263,28 @@ class MachineStructureBuilderJSTest {
             assertThat(declaration.pattern().pattern().values())
                     .allMatch(predicate -> predicate.matches(Blocks.IRON_BLOCK.defaultBlockState()));
         }
+    }
+
+    @Test
+    void rhino_callback_exposes_stage_builder_methods_and_creates_declaration() {
+        var event = new MMCRServerEventJS();
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        ScriptableObject.putProperty(scope, "event", event, context);
+
+        context.evaluateString(scope, """
+                var structure = event.createStructure('mmcr:rhino_callback');
+                structure.mainStructure(function(stage) {
+                    stage.pattern(['X']);
+                    stage.set('X', 'minecraft:iron_block');
+                });
+                """, "structure-builder-test", 1, null);
+
+        var builder = (MachineStructureBuilderJS) context.jsToJava(
+                ScriptableObject.getProperty(scope, "structure", context), TypeInfo.of(MachineStructureBuilderJS.class));
+        assertThat(builder.createObject().declarations()).singleElement()
+                .satisfies(declaration -> assertThat(declaration.pattern().pattern())
+                        .containsKey(BlockPos.ZERO));
     }
 
     @Test

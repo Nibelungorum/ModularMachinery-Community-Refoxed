@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.registry.ModBlocks;
+import dev.latvian.mods.kubejs.registry.BuilderBase;
 import dev.latvian.mods.rhino.util.HideFromJS;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -26,8 +27,7 @@ import java.util.Objects;
  *
  * @author howxu <dev@howxu.cn>
  */
-public class MachineStructureStageBuilderJS {
-    private final Identifier id;
+public class MachineStructureStageBuilderJS extends BuilderBase<MachineStructureDefinition.Declaration> {
     private final BlockArray.Builder sliceBuilder = new BlockArray.Builder();
     private final MachineStructureRequirements.Builder stageRequirements = MachineStructureRequirements.builder();
     private final List<DynamicPatternSpec> dynamicPatterns = new ArrayList<>();
@@ -35,7 +35,7 @@ public class MachineStructureStageBuilderJS {
     private PortTierRequirementSpec portTierRequirements = PortTierRequirementSpec.none();
 
     public MachineStructureStageBuilderJS(Identifier id) {
-        this.id = Objects.requireNonNull(id, "id");
+        super(Objects.requireNonNull(id, "id"));
         sliceBuilder.noController();
     }
 
@@ -127,6 +127,12 @@ public class MachineStructureStageBuilderJS {
                 sliceBuilder.requirements(), stageRequirements.build(pattern), 0);
         return new MachineStructureDefinition.Declaration(MachineStructureDefinition.Declaration.Kind.FULL,
                 pattern, portRequirements, portTierRequirements, dynamicPatterns, requirements);
+    }
+
+    @Override
+    @HideFromJS
+    public MachineStructureDefinition.Declaration createObject() {
+        return build();
     }
 
     private static MachineStructureBuilderJS.PatternEntry toPatternEntry(Object value) {
