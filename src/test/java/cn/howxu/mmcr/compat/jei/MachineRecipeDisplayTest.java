@@ -93,8 +93,11 @@ class MachineRecipeDisplayTest {
             assertThat(((TranslatableContents)
                     ((Component) contents.getArgs()[0]).getContents()).getKey())
                     .isEqualTo("mmcr.smart_interface.type.mode");
-            assertThat(contents.getArgs()[1]).isEqualTo("1.0 - 2.0");
+            assertThat(contents.getArgs()[1]).isEqualTo("[1.0, 2.0]");
         });
+        assertThat(display.smartInterfaceInputs()).singleElement()
+                .extracting(MachineRecipeDisplay.SmartInterfaceDisplay::value)
+                .isEqualTo("[1.0, 2.0]");
     }
 
     @Test

@@ -190,7 +190,7 @@ public record MachineRecipeDisplay(
     private static String valueText(SmartInterfaceType.ValueType valueType, float minValue, float maxValue) {
         String min = formatValue(valueType, minValue);
         if (Float.compare(minValue, maxValue) == 0) return min;
-        return min + " - " + formatValue(valueType, maxValue);
+        return "[" + min + ", " + formatValue(valueType, maxValue) + "]";
     }
 
     private static String formatValue(SmartInterfaceType.ValueType valueType, float value) {
