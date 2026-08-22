@@ -1690,6 +1690,12 @@ class MachineControllerBlockEntityTest {
 
         assertThat(controller.getActive()).isNull();
         assertThat(controller.getFoundMachine()).isNull();
+
+        controller.setRemoved();
+        controller.serverTick();
+
+        assertThat(controller.getActive()).isNull();
+        assertThat(controller.getFoundMachine()).isNull();
     }
 
     @Test

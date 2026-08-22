@@ -591,7 +591,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void serverTick() {
-        if (level == null || level.isClientSide()) return;
+        if (level == null || level.isClientSide() || isRemoved()) return;
         boolean activeBefore = isRuntimeActive();
         if (machine == null) bindDefaultMachine();
 
