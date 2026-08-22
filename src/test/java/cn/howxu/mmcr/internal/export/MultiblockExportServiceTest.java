@@ -85,10 +85,13 @@ class MultiblockExportServiceTest {
 
         String java = MultiblockExportService.renderJava(List.of(
                 new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, controller, false, true),
-                new MultiblockExportService.SnapshotEntry(new BlockPos(0, 1, 0), casing, false)
+                new MultiblockExportService.SnapshotEntry(new BlockPos(0, 0, 1), casing, false)
         ), Direction.SOUTH);
 
         assertThat(java).contains(".pattern(p -> p" + System.lineSeparator() + "        .layer(");
+        assertThat(java).contains(".layer(\"C\")" + System.lineSeparator()
+                + "        .layer(\"X\")" + System.lineSeparator()
+                + "        .where(");
         assertThat(java).doesNotContain(")        .where(");
         assertThat(java).endsWith(".where('X', new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"mmcr:basic_casing\"))))"
                 + System.lineSeparator() + ")" + System.lineSeparator());
@@ -100,18 +103,22 @@ class MultiblockExportServiceTest {
                 .setValue(BlockStateProperties.AXIS, Direction.Axis.X);
         var zAxisState = Blocks.OAK_LOG.defaultBlockState()
                 .setValue(BlockStateProperties.AXIS, Direction.Axis.Z);
+        var defaultState = Blocks.OAK_LOG.defaultBlockState();
         List<MultiblockExportService.SnapshotEntry> entries = List.of(
                 new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, Blocks.CRAFTING_TABLE.defaultBlockState(), false, true),
                 new MultiblockExportService.SnapshotEntry(new BlockPos(1, 0, 0), xAxisState, false),
-                new MultiblockExportService.SnapshotEntry(new BlockPos(2, 0, 0), zAxisState, false));
+                new MultiblockExportService.SnapshotEntry(new BlockPos(2, 0, 0), zAxisState, false),
+                new MultiblockExportService.SnapshotEntry(new BlockPos(3, 0, 0), defaultState, false));
 
         String java = MultiblockExportService.renderJava(entries, Direction.SOUTH);
         String kubeJs = MultiblockExportService.renderKubeJS(entries, Direction.SOUTH);
 
         assertThat(java).contains("new BlockPredicate.OfBlockState").contains("axis=x").contains("axis=z");
+        assertThat(java).contains("axis=y");
         assertThat(java).doesNotContain("new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"minecraft:oak_log\")))");
         assertThat(kubeJs).contains(".set('X', api.state('minecraft:oak_log[axis=x]'))")
-                .contains(".set('A', api.state('minecraft:oak_log[axis=z]'))");
+                .contains(".set('A', api.state('minecraft:oak_log[axis=z]'))")
+                .contains("api.state('minecraft:oak_log[axis=y]')");
         assertThat(kubeJs).doesNotContain("api.block('minecraft:oak_log')");
     }
 
