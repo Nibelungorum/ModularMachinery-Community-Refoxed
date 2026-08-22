@@ -225,6 +225,30 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void matching_structure_uses_rotated_directional_block_state_predicate() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockPos rawPosition = new BlockPos(1, 0, 0);
+        BlockState southState = Blocks.OAK_LOG.defaultBlockState()
+                .setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.AXIS, Direction.Axis.X);
+        BlockArray pattern = new BlockArray(Map.of(rawPosition, new BlockPredicate.OfBlockState(southState)));
+        DynamicMachine machine = stagedMachine(MMCR.id("rotated_directional_match_machine"), pattern);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, Blocks.AIR);
+        Level level = levelOf(controller);
+        BlockPos rotatedPosition = controllerPos.offset(BlockRotator.rotateSouthTo(rawPosition, Direction.EAST));
+        BlockState rotatedState = southState.rotate(net.minecraft.world.level.block.Rotation.COUNTERCLOCKWISE_90);
+        level.setBlock(controllerPos.offset(rawPosition), Blocks.AIR.defaultBlockState(), 3);
+        level.setBlock(rotatedPosition, rotatedState, 3);
+        setField(BlockEntity.class, controller, "blockState",
+                testControllerState(testControllerBlock(machine)).setValue(MachineControllerBlock.FACING, Direction.EAST));
+
+        assertThat(invokeTryFormMachine(controller, machine, Direction.EAST)).isTrue();
+
+        setField(BlockEntity.class, controller, "blockState",
+                testControllerState(testControllerBlock(machine)).setValue(MachineControllerBlock.FACING, Direction.SOUTH));
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isFalse();
+    }
+
+    @Test
     void matched_stage_is_persisted_and_invalid_saved_stage_is_dirty() throws Exception {
         MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
         setField(MachineControllerBlockEntity.class, controller, "matchedStructureStage", 2);

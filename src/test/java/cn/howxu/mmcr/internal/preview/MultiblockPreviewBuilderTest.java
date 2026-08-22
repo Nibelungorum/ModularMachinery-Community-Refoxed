@@ -2,6 +2,8 @@ package cn.howxu.mmcr.internal.preview;
 
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.BlockArrayCache;
+import cn.howxu.mmcr.api.machine.BlockRotator;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -42,10 +44,33 @@ class MultiblockPreviewBuilderTest {
     }
 
     @Test
+    void build_uses_directional_state_from_the_rotated_compiled_pattern() {
+        BlockPos rawPosition = new BlockPos(1, 0, 0);
+        BlockState southState = Blocks.OAK_LOG.defaultBlockState()
+                .setValue(BlockStateProperties.AXIS, Direction.Axis.X);
+        BlockArray pattern = new BlockArray(Map.of(rawPosition, new BlockPredicate.OfBlockState(southState)));
+        BlockArray rotated = BlockArrayCache.get(pattern, Direction.EAST);
+        BlockPos rotatedPosition = BlockRotator.rotateSouthTo(rawPosition, Direction.EAST);
+
+        var snapshot = MultiblockPreviewBuilder.build(LevelStub.create(Map.of()), BlockPos.ZERO, rotated, 16);
+
+        assertEquals(southState.rotate(net.minecraft.world.level.block.Rotation.COUNTERCLOCKWISE_90),
+                entriesByPosition(snapshot).get(rotatedPosition));
+    }
+
+    @Test
     void preview_state_uses_default_state_for_block_predicate() {
         var result = MultiblockPreviewBuilder.previewState(new BlockPredicate.OfBlock(Blocks.IRON_BLOCK));
 
         assertEquals(Blocks.IRON_BLOCK.defaultBlockState(), result.orElseThrow());
+    }
+
+    @Test
+    void preview_state_resolves_deferred_port_predicate() {
+        var result = MultiblockPreviewBuilder.previewState(new BlockPredicate.DeferredBlock(
+                () -> ModBlocks.BLOCKS.get("item_input_bus").get()));
+
+        assertEquals(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState(), result.orElseThrow());
     }
 
     @Test

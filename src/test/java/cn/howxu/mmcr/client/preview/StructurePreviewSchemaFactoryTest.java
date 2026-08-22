@@ -3,6 +3,8 @@ package cn.howxu.mmcr.client.preview;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.BlockArrayCache;
+import cn.howxu.mmcr.api.machine.BlockRotator;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
@@ -87,6 +89,25 @@ class StructurePreviewSchemaFactoryTest {
         assertThat(schema.machineId()).isEqualTo(MMCR.id("preview_machine"));
         assertThat(schema.stateAt(BlockPos.ZERO)).isEqualTo(Blocks.IRON_BLOCK.defaultBlockState());
         assertThat(schema.stateAt(new BlockPos(1, 2, -1))).isEqualTo(Blocks.GOLD_BLOCK.defaultBlockState());
+    }
+
+    @Test
+    void factory_uses_directional_state_and_candidate_from_the_rotated_compiled_pattern() {
+        BlockPos rawPosition = new BlockPos(1, 0, 0);
+        BlockState southState = Blocks.OAK_LOG.defaultBlockState()
+                .setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.AXIS, Direction.Axis.X);
+        BlockArray pattern = new BlockArray(Map.of(rawPosition, new BlockPredicate.OfBlockState(southState)));
+        BlockArray rotated = BlockArrayCache.get(pattern, Direction.EAST);
+        BlockPos rotatedPosition = BlockRotator.rotateSouthTo(rawPosition, Direction.EAST);
+        MachineStructureStage stage = new MachineStructureStage(1, rotated, PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("rotated_preview"));
+
+        assertThat(schema.stateAt(rotatedPosition)).isEqualTo(
+                southState.rotate(net.minecraft.world.level.block.Rotation.COUNTERCLOCKWISE_90));
+        assertThat(schema.candidatesAt(rotatedPosition)).extracting(ItemStack::getItem)
+                .containsExactly(Blocks.OAK_LOG.asItem());
     }
 
     @Test
@@ -229,6 +250,22 @@ class StructurePreviewSchemaFactoryTest {
 
         assertThat(schema.candidatesAt(BlockPos.ZERO)).extracting(ItemStack::getItem).containsExactlyInAnyOrder(
                 Blocks.IRON_BLOCK.asItem(), ModBlocks.BLOCKS.get("item_input_bus").get().asItem());
+    }
+
+    @Test
+    void factory_keeps_deferred_block_options_as_preview_candidates() {
+        BlockPredicate predicate = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.DeferredBlock(() -> ModBlocks.BLOCKS.get("item_input_bus").get()),
+                new BlockPredicate.DeferredBlock(() -> ModBlocks.BLOCKS.get("item_input_bus_tiny").get())));
+        MachineStructureStage stage = new MachineStructureStage(1, new BlockArray(Map.of(BlockPos.ZERO, predicate)),
+                PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("deferred_port_candidates"),
+                StructurePreviewVariantSelection.defaults());
+
+        assertThat(schema.candidatesAt(BlockPos.ZERO)).extracting(ItemStack::getItem).containsExactlyInAnyOrder(
+                ModBlocks.BLOCKS.get("item_input_bus").get().asItem(),
+                ModBlocks.BLOCKS.get("item_input_bus_tiny").get().asItem());
     }
 
     @Test
