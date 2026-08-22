@@ -12,7 +12,7 @@ import net.minecraft.resources.Identifier;
  * @author howxu <dev@howxu.cn>
  */
 public class LevelTypeBuilderJS extends BuilderBase<LevelType> {
-    public transient String displayName;
+    public transient String displayNameKey;
 
     public LevelTypeBuilderJS(Identifier id) {
         super(id);
@@ -23,13 +23,13 @@ public class LevelTypeBuilderJS extends BuilderBase<LevelType> {
     }
 
     public LevelTypeBuilderJS displayName(String displayName) {
-        this.displayName = displayName;
+        this.displayNameKey = displayName;
         return this;
     }
 
     @Override
     public LevelType createObject() {
-        return new LevelType(id, Component.translatable(displayName == null ? id.toString() : displayName));
+        return new LevelType(id, Component.translatable(displayNameKey == null ? id.toString() : displayNameKey));
     }
 
     public void registerObject() {
