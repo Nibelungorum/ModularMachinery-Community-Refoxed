@@ -133,6 +133,10 @@ public final class RuntimeContentCoordinator {
             registrations.put(id, registration.withPattern(structure.pattern()));
         }
         MachineRoleValidator.validate(registrations.values(), null);
+        MachineRoleValidator.validateCouplerCounts(registrations.values(), id -> {
+            MachineStructureDefinition structure = structures.get(id);
+            return structure == null ? null : structure.pattern();
+        });
         for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
             Identifier recipeId = entry.getKey();
             MachineRecipe recipe = entry.getValue();

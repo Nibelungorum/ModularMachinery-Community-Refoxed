@@ -274,24 +274,4 @@ class KubeJSApiTest {
                 .isInstanceOf(IllegalStateException.class);
     }
 
-    @Test
-    void block_array_can_bind_script_symbol_metadata_for_character_requirements() {
-        var replacement = api.singleBlockModifier("diamond_speedup",
-                new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK), List.of(), ItemStack.EMPTY);
-        var pattern = api.blockArray(
-                Map.of(BlockPos.ZERO, api.block("minecraft:blast_furnace")),
-                Map.of(BlockPos.ZERO, 'M'));
-
-        var requirements = MachineStructureRequirements.builder()
-                .modifier('M', replacement)
-                .build(pattern);
-
-        assertThat(requirements.modifierReplacements()).containsEntry('M', List.of(replacement));
-    }
-
-    @Test
-    void api_is_documented_as_lower_camel_kubejs_binding() {
-        assertThat(KubeJSApi.class.getDeclaredAnnotation(Deprecated.class)).isNull();
-        assertThat(new KubeJSApi().pos(1, 2, 3)).isEqualTo(new BlockPos(1, 2, 3));
-    }
 }

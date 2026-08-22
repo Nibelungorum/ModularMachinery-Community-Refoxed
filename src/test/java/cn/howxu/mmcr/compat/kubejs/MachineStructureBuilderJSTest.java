@@ -53,6 +53,19 @@ class MachineStructureBuilderJSTest {
     }
 
     @Test
+    void server_structure_builder_declares_couplers_without_block_positions() {
+        var structure = new MachineStructureBuilderJS("mmcr:space_elevator")
+                .pattern("XXX")
+                .set("X", new KubeJSApi().coupler())
+                .createObject();
+
+        assertThat(structure.pattern().pattern()).hasSize(3);
+        assertThat(structure.pattern().pattern().values())
+                .allSatisfy(predicate -> assertThat(predicate)
+                        .isInstanceOf(BlockPredicate.MachineCoupler.class));
+    }
+
+    @Test
     void controller_symbol_normalizes_pattern_around_controller() {
         var machineId = Identifier.parse("mmcr_test:iron_compressor");
         var structure = new MachineStructureBuilderJS(machineId.toString())

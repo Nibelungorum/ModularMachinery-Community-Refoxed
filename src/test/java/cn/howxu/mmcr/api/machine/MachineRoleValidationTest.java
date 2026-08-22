@@ -89,21 +89,28 @@ class MachineRoleValidationTest {
             case "module_machine" -> module;
             default -> null;
         });
+        MachineRoleValidator.validateCouplerCounts(List.of(normal, host, module), id -> switch (id.getPath()) {
+            case "normal_machine" -> normal.pattern();
+            case "host_machine" -> host.pattern();
+            case "module_machine" -> module.pattern();
+            default -> null;
+        });
 
-        assertThatThrownBy(() -> MachineRoleValidator.validate(List.of(
+        assertThatThrownBy(() -> MachineRoleValidator.validateCouplerCounts(List.of(
                 normal.withPattern(patternWithCouplers(1)), host.withPattern(patternWithCouplers(1)), module.withPattern(patternWithCouplers(1))), id -> switch (id.getPath()) {
-            case "normal_machine" -> normal.withPattern(patternWithCouplers(1));
-            case "host_machine" -> host.withPattern(patternWithCouplers(1));
-            case "module_machine" -> module.withPattern(patternWithCouplers(1));
+            case "normal_machine" -> patternWithCouplers(1);
+            case "host_machine" -> patternWithCouplers(1);
+            case "module_machine" -> patternWithCouplers(1);
             default -> null;
         })).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("NORMAL machine must declare 0 couplers");
 
-        assertThatThrownBy(() -> MachineRoleValidator.validate(List.of(host.withPattern(patternWithCouplers(0)), module), id -> id.equals(moduleId) ? module : null))
+        assertThatThrownBy(() -> MachineRoleValidator.validateCouplerCounts(List.of(host, module), id ->
+                id.equals(host.id()) ? patternWithCouplers(0) : module.pattern()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("HOST machine must declare at least 1 coupler");
 
-        assertThatThrownBy(() -> MachineRoleValidator.validate(List.of(module.withPattern(patternWithCouplers(2))), id -> module))
+        assertThatThrownBy(() -> MachineRoleValidator.validateCouplerCounts(List.of(module), id -> patternWithCouplers(2)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("MODULE machine must declare exactly 1 coupler");
     }

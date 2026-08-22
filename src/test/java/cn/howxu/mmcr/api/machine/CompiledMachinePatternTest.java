@@ -53,6 +53,20 @@ class CompiledMachinePatternTest {
     }
 
     @Test
+    void compiler_derives_coupler_positions_from_the_structure_pattern() {
+        Identifier id = Identifier.parse("mmcr:coupler_pattern");
+        BlockArray pattern = new BlockArray(Map.of(
+                BlockPos.ZERO, BlockPredicate.machineCoupler(),
+                new BlockPos(1, 0, 0), BlockPredicate.machineCoupler()));
+        Machine machine = new DynamicMachine(id, "Coupler Pattern", pattern);
+
+        CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
+
+        assertThat(compiled.couplerPositions(Direction.SOUTH))
+                .containsExactlyInAnyOrder(BlockPos.ZERO, new BlockPos(1, 0, 0));
+    }
+
+    @Test
     void clear_for_testing_clears_compiled_patterns() {
         Machine machine = new DynamicMachine(Identifier.fromNamespaceAndPath("mmcr", "clear_test"), "Clear Test", pattern());
         MachineRegistry.register(machine);

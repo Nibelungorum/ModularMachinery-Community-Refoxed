@@ -4,7 +4,6 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
-import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
@@ -43,7 +42,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient Identifier formedPortBaseTexture;
     public transient Identifier runningSoundId;
     public transient Identifier finishSoundId;
-    public transient BlockArray pattern;
     private Identifier recipeFamilyId;
     private boolean expandableStructure;
     private MachineControllerSpec explicitControllerSpec;
@@ -88,7 +86,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .maxParallelAmount(maxParallelAmount)
                 .runningSound(runningSoundId)
                 .finishSound(finishSoundId)
-                .pattern(pattern)
                 .shareSmartInterfaces(shareSmartInterfaces);
         if (expandableStructure) registration.expandableStructure();
         if (explicitRole && (role == MachineRole.NORMAL && (!acceptedModuleIds.isEmpty() || module)
@@ -190,11 +187,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
 
     public MachineBuilderJS module(boolean module) {
         this.module = module;
-        return this;
-    }
-
-    public MachineBuilderJS pattern(BlockArray pattern) {
-        this.pattern = pattern;
         return this;
     }
 

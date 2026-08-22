@@ -88,6 +88,10 @@ public final class ContentRegistrationCoordinator {
 
         Map<Identifier, MachineRegistration> registrations = validateAndConvertMachines();
         Map<Identifier, MachineStructureDefinition> structures = validateAndConvertStructures(registrations);
+        MachineRoleValidator.validateCouplerCounts(registrations.values(), id -> {
+            MachineStructureDefinition structure = structures.get(id);
+            return structure == null ? null : structure.pattern();
+        });
         MachineLevelRegistry.installSnapshot(STRUCTURE_SNAPSHOT.levelTypes().values(), STRUCTURE_SNAPSHOT.levels().values());
         Map<Identifier, MachineRecipe> recipes = validateAndConvertRecipes();
         validateDuplicates(registrations, structures, recipes);

@@ -138,6 +138,10 @@ public final class MachineStructureRegistry {
             registrations.put(id, registration.withPattern(structure.pattern()));
         }
         MachineRoleValidator.validate(registrations.values(), null);
+        MachineRoleValidator.validateCouplerCounts(registrations.values(), id -> {
+            MachineStructureDefinition structure = structures.get(id);
+            return structure == null ? null : structure.pattern();
+        });
     }
 
     public static void clearForTesting() {

@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.compat.kubejs;
 
-import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
@@ -17,7 +16,6 @@ import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.util.IOType;
 import dev.latvian.mods.kubejs.util.RegistryAccessContainer;
-import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -35,7 +33,6 @@ import com.google.gson.JsonElement;
 import com.mojang.serialization.JsonOps;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -49,7 +46,6 @@ public final class KubeJSApi {
         return Identifier.parse(id);
     }
 
-    public BlockPos pos(int x, int y, int z) { return new BlockPos(x, y, z); }
     public BlockPredicate air() { return new BlockPredicate.Air(); }
     public BlockPredicate any() { return new BlockPredicate.Any(); }
     public BlockPredicate coupler() { return BlockPredicate.machineCoupler(); }
@@ -85,19 +81,6 @@ public final class KubeJSApi {
     public BlockPredicate anyOf(BlockPredicate... children) {
         if (children == null || children.length == 0) throw new IllegalArgumentException("anyOf requires children");
         return new BlockPredicate.AnyOf(List.of(children));
-    }
-
-    public BlockArray blockArray(Map<BlockPos, BlockPredicate> blocks) { return new BlockArray(blocks); }
-
-    public BlockArray blockArray(Map<BlockPos, BlockPredicate> blocks, Map<BlockPos, ?> symbolsByPosition) {
-        Map<BlockPos, Character> symbols = new LinkedHashMap<>();
-        for (var entry : symbolsByPosition.entrySet()) {
-            Object value = entry.getValue();
-            if (value instanceof Character symbol) symbols.put(entry.getKey(), symbol);
-            else if (value instanceof String string && string.length() == 1) symbols.put(entry.getKey(), string.charAt(0));
-            else throw new IllegalArgumentException("Invalid block array symbol at " + entry.getKey() + ": " + value);
-        }
-        return new BlockArray(blocks, Map.of(), symbols);
     }
 
     public PortRequirementSpec portRequirements(Map<String, Object> ranges) {

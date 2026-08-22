@@ -25,8 +25,15 @@ public final class MachineRoleValidator {
         }
 
         for (MachineRegistration registration : registrations) {
-            validateCouplerCount(registration, countCouplers(registration.pattern()));
             if (registration.isHost()) validateAcceptedModules(registration, byId, resolver);
+        }
+    }
+
+    public static void validateCouplerCounts(Collection<MachineRegistration> registrations,
+                                              Function<Identifier, BlockArray> patternResolver) {
+        for (MachineRegistration registration : registrations) {
+            BlockArray pattern = patternResolver.apply(registration.id());
+            validateCouplerCount(registration, pattern == null ? 0 : countCouplers(pattern));
         }
     }
 
