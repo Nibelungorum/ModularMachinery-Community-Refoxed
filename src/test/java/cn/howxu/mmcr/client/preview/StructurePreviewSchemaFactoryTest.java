@@ -3,7 +3,6 @@ package cn.howxu.mmcr.client.preview;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
-import cn.howxu.mmcr.api.machine.BlockArrayCache;
 import cn.howxu.mmcr.api.machine.BlockRotator;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
@@ -97,12 +96,11 @@ class StructurePreviewSchemaFactoryTest {
         BlockState southState = Blocks.OAK_LOG.defaultBlockState()
                 .setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.AXIS, Direction.Axis.X);
         BlockArray pattern = new BlockArray(Map.of(rawPosition, new BlockPredicate.OfBlockState(southState)));
-        BlockArray rotated = BlockArrayCache.get(pattern, Direction.EAST);
         BlockPos rotatedPosition = BlockRotator.rotateSouthTo(rawPosition, Direction.EAST);
-        MachineStructureStage stage = new MachineStructureStage(1, rotated, PortRequirementSpec.none(),
+        MachineStructureStage stage = new MachineStructureStage(1, pattern, PortRequirementSpec.none(),
                 PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
 
-        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("rotated_preview"));
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("rotated_preview"), Direction.EAST);
 
         assertThat(schema.stateAt(rotatedPosition)).isEqualTo(
                 southState.rotate(net.minecraft.world.level.block.Rotation.COUNTERCLOCKWISE_90));

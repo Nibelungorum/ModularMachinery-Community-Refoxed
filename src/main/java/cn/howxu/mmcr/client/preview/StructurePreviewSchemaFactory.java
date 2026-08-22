@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.client.preview;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.BlockArrayCache;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
@@ -35,36 +37,51 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         Objects.requireNonNull(machine, "machine");
         List<MachineStructureStage> stages = machine.structureStages();
         if (stages.isEmpty()) throw new IllegalArgumentException("machine structure stages empty");
-        return create(stages.getFirst(), machine.registryName());
+        return create(stages.getFirst(), machine.registryName(), Direction.SOUTH);
     }
 
     public StructurePreviewSchema create(MachineStructureStage stage, Identifier machineId) {
-        return create(stage, machineId, StructurePreviewVariantSelection.defaults());
+        return create(stage, machineId, Direction.SOUTH);
+    }
+
+    public StructurePreviewSchema create(MachineStructureStage stage, Identifier machineId, Direction facing) {
+        return create(stage, machineId, StructurePreviewVariantSelection.defaults(), facing);
     }
 
     public StructurePreviewSchema create(MachineStructureStage stage, Identifier machineId,
             StructurePreviewVariantSelection selection) {
+        return create(stage, machineId, selection, Direction.SOUTH);
+    }
+
+    private StructurePreviewSchema create(MachineStructureStage stage, Identifier machineId,
+            StructurePreviewVariantSelection selection, Direction facing) {
         Objects.requireNonNull(machineId, "machineId");
-        StructurePreviewSchema resolved = resolve(stage, selection);
+        StructurePreviewSchema resolved = resolve(stage, selection, facing);
         return new StructurePreviewSchema(machineId, resolved.states(), resolved.levelSlots(), resolved.previewCandidates(), true);
     }
 
     @Override
     public StructurePreviewSchema resolve(MachineStructureStage stage, StructurePreviewVariantSelection selection) {
+        return resolve(stage, selection, Direction.SOUTH);
+    }
+
+    private StructurePreviewSchema resolve(MachineStructureStage stage, StructurePreviewVariantSelection selection,
+            Direction facing) {
         Objects.requireNonNull(stage, "stage");
         Objects.requireNonNull(selection, "selection");
+        BlockArray rotatedPattern = BlockArrayCache.get(stage.pattern(), facing);
         Map<BlockPos, BlockState> states = new LinkedHashMap<>();
         Map<BlockPos, Identifier> levelSlots = new LinkedHashMap<>();
         Map<BlockPos, List<StructurePreviewSchema.Candidate>> candidates = new LinkedHashMap<>();
         int levelRank = highestSharedLevelRank(stage);
-        for (var entry : stage.pattern().pattern().entrySet()) {
+        for (var entry : rotatedPattern.pattern().entrySet()) {
             BlockPos position = entry.getKey().immutable();
             Identifier levelSlot = stage.levelSlots().get(entry.getKey());
             BlockState state = levelSlot == null
                     ? entry.getValue().preferredState().orElse(null)
                     : levelState(levelSlot, levelRank);
             if (state == null) continue;
-            states.put(position, orientController(position, state, stage.pattern().pattern()));
+            states.put(position, orientController(position, state, rotatedPattern.pattern()));
             List<StructurePreviewSchema.Candidate> positionCandidates = candidates(entry.getValue(), stage.modifierReplacements().get(position));
             if (!positionCandidates.isEmpty()) candidates.put(position, positionCandidates);
             if (levelSlot != null) levelSlots.put(position, levelSlot);
