@@ -26,6 +26,10 @@ Release artifacts are published on the [GitHub releases page](https://github.com
 
 MMCR has no additional required mod dependencies beyond NeoForge. Install JEI, KubeJS, or Jade separately to use their optional integrations.
 
+## KubeJS Usage
+
+MMCR **fully** supports `KubeJS` modifications, you can see `example` fold and learn how to use `KubeJS` to build your machine
+
 ## Reporting Issues
 
 Report bugs and feature requests through the [issue tracker](https://github.com/Nibelungorum/ModularMachinery-Community-Refoxed/issues). Before opening an issue, search existing reports and reproduce the problem with the latest available version where possible.
