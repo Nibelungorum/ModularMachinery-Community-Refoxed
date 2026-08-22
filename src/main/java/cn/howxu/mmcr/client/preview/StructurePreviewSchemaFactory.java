@@ -3,6 +3,7 @@ package cn.howxu.mmcr.client.preview;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockArrayCache;
+import cn.howxu.mmcr.api.machine.BlockRotator;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
@@ -70,19 +71,25 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         Objects.requireNonNull(stage, "stage");
         Objects.requireNonNull(selection, "selection");
         BlockArray rotatedPattern = BlockArrayCache.get(stage.pattern(), facing);
+        Map<BlockPos, Identifier> rotatedLevelSlots = new LinkedHashMap<>();
+        stage.levelSlots().forEach((position, levelSlot) ->
+                rotatedLevelSlots.put(BlockRotator.rotateSouthTo(position, facing), levelSlot));
+        Map<BlockPos, List<SingleBlockModifierReplacement>> rotatedModifierReplacements = new LinkedHashMap<>();
+        stage.modifierReplacements().forEach((position, replacements) ->
+                rotatedModifierReplacements.put(BlockRotator.rotateSouthTo(position, facing), replacements));
         Map<BlockPos, BlockState> states = new LinkedHashMap<>();
         Map<BlockPos, Identifier> levelSlots = new LinkedHashMap<>();
         Map<BlockPos, List<StructurePreviewSchema.Candidate>> candidates = new LinkedHashMap<>();
         int levelRank = highestSharedLevelRank(stage);
         for (var entry : rotatedPattern.pattern().entrySet()) {
             BlockPos position = entry.getKey().immutable();
-            Identifier levelSlot = stage.levelSlots().get(entry.getKey());
+            Identifier levelSlot = rotatedLevelSlots.get(entry.getKey());
             BlockState state = levelSlot == null
                     ? entry.getValue().preferredState().orElse(null)
                     : levelState(levelSlot, levelRank);
             if (state == null) continue;
             states.put(position, orientController(position, state, rotatedPattern.pattern()));
-            List<StructurePreviewSchema.Candidate> positionCandidates = candidates(entry.getValue(), stage.modifierReplacements().get(position));
+            List<StructurePreviewSchema.Candidate> positionCandidates = candidates(entry.getValue(), rotatedModifierReplacements.get(position));
             if (!positionCandidates.isEmpty()) candidates.put(position, positionCandidates);
             if (levelSlot != null) levelSlots.put(position, levelSlot);
         }

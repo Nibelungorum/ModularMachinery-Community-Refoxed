@@ -288,6 +288,32 @@ class StructurePreviewSchemaFactoryTest {
     }
 
     @Test
+    void factory_rotates_level_slots_and_modifier_candidates_with_the_pattern() {
+        Identifier levelType = MMCR.id("rotated_preview_level");
+        registerLevels(Map.of(levelType, List.of(Blocks.COPPER_BLOCK)));
+        BlockPos rawPosition = new BlockPos(1, 0, 0);
+        BlockArray pattern = new BlockArray(
+                Map.of(rawPosition, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)),
+                Map.of(), Map.of(rawPosition, 'L'));
+        MachineStructureStage stage = new MachineStructureStage(1, pattern, PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.builder()
+                        .levelSlot('L', levelType)
+                        .modifier('L', modifierReplacement(rawPosition, Blocks.GOLD_BLOCK))
+                        .build(pattern));
+        BlockPos rotatedPosition = BlockRotator.rotateSouthTo(rawPosition, Direction.EAST);
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage,
+                MMCR.id("rotated_preview_metadata"), Direction.EAST);
+
+        assertThat(schema.levelSlotAt(rotatedPosition)).isEqualTo(levelType);
+        assertThat(schema.stateAt(rotatedPosition)).isEqualTo(Blocks.COPPER_BLOCK.defaultBlockState());
+        assertThat(schema.previewCandidatesAt(rotatedPosition)).extracting(candidate -> candidate.stack().getItem())
+                .containsExactly(Blocks.IRON_BLOCK.asItem(), Blocks.GOLD_BLOCK.asItem());
+        assertThat(schema.previewCandidatesAt(rotatedPosition)).extracting(StructurePreviewSchema.Candidate::modifier)
+                .containsExactly(false, true);
+    }
+
+    @Test
     void factory_keeps_base_candidate_first_when_modifiers_have_higher_level_priority() {
         Identifier modifierLevels = MMCR.id("preview_modifier_priority");
         registerLevels(Map.of(modifierLevels, List.of(Blocks.IRON_BLOCK, Blocks.DIAMOND_BLOCK)));
