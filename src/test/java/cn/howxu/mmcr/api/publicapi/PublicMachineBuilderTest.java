@@ -146,6 +146,32 @@ class PublicMachineBuilderTest {
     }
 
     @Test
+    void structure_builder_expands_complete_levels_in_order() {
+        var structure = MachineStructureBuilder.structure()
+                .fullStructure(stage -> stage.pattern(pattern -> pattern.layer("F")
+                        .where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F')))
+                .expandStructure(stage -> stage.pattern(pattern -> pattern.layer("S")
+                        .where('S', BlockPredicate.block(Blocks.STONE)).controller('S')))
+                .expandStructure(stage -> stage.pattern(pattern -> pattern.layer("I")
+                        .where('I', BlockPredicate.block(Blocks.IRON_BLOCK)).controller('I')))
+                .build(MMCR.id("expanded_levels"));
+
+        assertThat(structure.stages()).extracting("kind")
+                .containsExactly(cn.howxu.mmcr.api.publicapi.machine.StructureStage.Kind.FULL,
+                        cn.howxu.mmcr.api.publicapi.machine.StructureStage.Kind.EXPANSION,
+                        cn.howxu.mmcr.api.publicapi.machine.StructureStage.Kind.EXPANSION);
+    }
+
+    @Test
+    void structure_builder_rejects_expansion_before_main_structure() {
+        assertThatThrownBy(() -> MachineStructureBuilder.structure()
+                .expandStructure(stage -> stage.pattern(pattern -> pattern.layer("S")
+                        .where('S', BlockPredicate.block(Blocks.STONE)).controller('S'))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("expandStructure requires a full structure first");
+    }
+
+    @Test
     void structure_builder_rejects_multiple_main_structures() {
         assertThatThrownBy(() -> MachineStructureBuilder.structure()
                 .fullStructure(stage -> stage.pattern(pattern -> pattern.layer("F")

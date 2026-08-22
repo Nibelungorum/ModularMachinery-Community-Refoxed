@@ -23,6 +23,14 @@ public final class MachineStructureBuilder {
         return this;
     }
 
+    public MachineStructureBuilder expandStructure(UnaryOperator<StructureStage.Builder> consumer) {
+        if (stages.isEmpty() || stages.getFirst().kind() != StructureStage.Kind.FULL) {
+            throw new IllegalStateException("expandStructure requires a full structure first");
+        }
+        stages.add(Objects.requireNonNull(consumer, "consumer").apply(StructureStage.builder().expansion()).build());
+        return this;
+    }
+
     public MachineStructureBuilder extension(UnaryOperator<StructureStage.Builder> consumer) {
         stages.add(Objects.requireNonNull(consumer, "consumer").apply(StructureStage.builder().extension()).build());
         return this;

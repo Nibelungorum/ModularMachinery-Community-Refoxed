@@ -277,6 +277,7 @@ public final class PublicMachineAdapter {
     private static MachineStructureDefinition.Declaration.Kind toDeclarationKind(StructureStage.Kind kind) {
         return switch (kind) {
             case FULL -> MachineStructureDefinition.Declaration.Kind.FULL;
+            case EXPANSION -> MachineStructureDefinition.Declaration.Kind.FULL;
             case EXTENSION -> MachineStructureDefinition.Declaration.Kind.EXTENSION;
         };
     }

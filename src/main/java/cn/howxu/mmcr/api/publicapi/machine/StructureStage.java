@@ -17,6 +17,7 @@ public record StructureStage(
 
     public enum Kind {
         FULL,
+        EXPANSION,
         EXTENSION
     }
 
@@ -46,6 +47,11 @@ public record StructureStage(
 
         public Builder full() {
             kind = Kind.FULL;
+            return this;
+        }
+
+        public Builder expansion() {
+            kind = Kind.EXPANSION;
             return this;
         }
 

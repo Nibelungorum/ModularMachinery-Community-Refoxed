@@ -220,6 +220,16 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         return this;
     }
 
+    public MachineStructureBuilderJS expandStructure(Consumer<MachineStructureStageBuilderJS> consumer) {
+        Objects.requireNonNull(consumer, "consumer");
+        if (declarations.isEmpty() || declarations.getFirst().kind() != Declaration.Kind.FULL) {
+            throw new IllegalStateException("expandStructure requires a full structure first");
+        }
+        selectCallbackStructureApi();
+        declarations.add(stageDeclaration(consumer, Declaration.Kind.FULL));
+        return this;
+    }
+
     @HideFromJS
     public MachineStructureBuilderJS extension(BlockArray pattern) {
         return extension(pattern, PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(),

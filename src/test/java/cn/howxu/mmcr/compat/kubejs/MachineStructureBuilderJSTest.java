@@ -312,6 +312,52 @@ class MachineStructureBuilderJSTest {
     }
 
     @Test
+    void rhino_callback_resolves_expand_structure_levels() {
+        var event = new MMCRServerEventJS();
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        ScriptableObject.putProperty(scope, "event", event, context);
+
+        context.evaluateString(scope, """
+                var structure = event.createStructure('mmcr:rhino_expand_callback');
+                structure.mainStructure(function(stage) {
+                    stage.pattern(['X']);
+                    stage.set('X', 'minecraft:iron_block');
+                });
+                structure.expandStructure(function(stage) {
+                    stage.pattern(['XX']);
+                    stage.set('X', 'minecraft:iron_block');
+                });
+                structure.expandStructure(function(stage) {
+                    stage.pattern(['XXX']);
+                    stage.set('X', 'minecraft:iron_block');
+                });
+                """, "structure-expand-builder-test", 1, null);
+
+        var builder = (MachineStructureBuilderJS) context.jsToJava(
+                ScriptableObject.getProperty(scope, "structure", context), TypeInfo.of(MachineStructureBuilderJS.class));
+        assertThat(builder.createObject().declarations()).extracting("kind")
+                .containsExactly(Declaration.Kind.FULL, Declaration.Kind.FULL, Declaration.Kind.FULL);
+    }
+
+    @Test
+    void rhino_rejects_expand_structure_before_main_structure() {
+        var event = new MMCRServerEventJS();
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        ScriptableObject.putProperty(scope, "event", event, context);
+
+        assertThatThrownBy(() -> context.evaluateString(scope, """
+                var structure = event.createStructure('mmcr:rhino_invalid_expand');
+                structure.expandStructure(function(stage) {
+                    stage.pattern(['X']);
+                    stage.set('X', 'minecraft:iron_block');
+                });
+                """, "structure-invalid-expand-test", 1, null))
+                .hasMessageContaining("expandStructure requires a full structure first");
+    }
+
+    @Test
     void callback_conversion_retains_stage_metadata() {
         Identifier coilType = Identifier.parse("test:callback_coil");
         TestBootstrap.beginRegistration();

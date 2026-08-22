@@ -27,7 +27,7 @@ MMCREvents.server(event => {
                 .controller('E')
         )
         // then create extension structure
-        .extension(stage => stage
+        .expandStructure(stage => stage
             .pattern(['  XXX  ','  AAA  ','       ','       ','       '])
             .pattern([' XXXXX ',' B   B ','  ACA  ','  ACA  ','       '])
             .pattern(['XXXXXXX','A     A',' B   B ',' B   B ','  DDD  '])
@@ -48,7 +48,7 @@ MMCREvents.server(event => {
             .controller('E')
         )
 
-        .extension(stage => stage
+        .expandStructure(stage => stage
             .pattern(['  XXX  ','  AAA  ','       ','       ','       ','       '])
             .pattern([' XXXXX ',' B   B ','  ACA  ','  ACA  ','  ACA  ','       '])
             .pattern(['XXXXXXX','A     A',' B   B ',' B   B ',' B   B ','  DDD  '])
