@@ -9,6 +9,8 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.core.Direction;
 import net.neoforged.neoforge.network.connection.ConnectionType;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -44,6 +46,25 @@ class PktMultiblockPreviewPayloadTest {
         assertEquals(new BlockPos(4, 5, 6), decoded.entries().getFirst().relativePos());
         assertEquals(Blocks.IRON_BLOCK.defaultBlockState(), decoded.entries().getFirst().state());
         assertEquals(200, decoded.durationTicks());
+    }
+
+    @Test
+    void payload_preserves_non_default_block_state_properties() {
+        var state = Blocks.OAK_LOG.defaultBlockState().setValue(BlockStateProperties.AXIS, Direction.Axis.X);
+        var payload = new PktMultiblockPreviewPayload(
+                Level.OVERWORLD,
+                BlockPos.ZERO,
+                List.of(new MultiblockPreviewSnapshot.Entry(BlockPos.ZERO, state)),
+                200);
+
+        var buffer = new RegistryFriendlyByteBuf(
+                Unpooled.buffer(),
+                RegistryAccess.EMPTY,
+                ConnectionType.NEOFORGE);
+        PktMultiblockPreviewPayload.STREAM_CODEC.encode(buffer, payload);
+        var decoded = PktMultiblockPreviewPayload.STREAM_CODEC.decode(buffer);
+
+        assertEquals(state, decoded.entries().getFirst().state());
     }
 
     @Test
