@@ -29,7 +29,7 @@ public class LevelTypeBuilderJS extends BuilderBase<LevelType> {
 
     @Override
     public LevelType createObject() {
-        return new LevelType(id, Component.literal(displayName == null ? id.toString() : displayName));
+        return new LevelType(id, Component.translatable(displayName == null ? id.toString() : displayName));
     }
 
     public void registerObject() {

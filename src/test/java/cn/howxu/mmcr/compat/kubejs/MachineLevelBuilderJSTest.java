@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
@@ -46,6 +47,21 @@ class MachineLevelBuilderJSTest {
         assertThat(level.priority()).isEqualTo(2);
         assertThat(level.statePredicate().matches(Blocks.COPPER_BLOCK.defaultBlockState())).isTrue();
         assertThat(level.modifier()).isEqualTo(new LevelModifier(1D, 0.75D, 1D, 2, 0));
+    }
+
+    @Test
+    void level_type_display_name_uses_translation_key() {
+        new LevelTypeBuilderJS("test:coil")
+                .displayName("level.test.coil")
+                .registerObject();
+
+        var displayName = MMCRMachineStructuresEvent.current().levelTypes()
+                .get(Identifier.parse("test:coil"))
+                .displayName();
+
+        assertThat(displayName.getContents()).isInstanceOf(TranslatableContents.class);
+        assertThat(((TranslatableContents) displayName.getContents()).getKey())
+                .isEqualTo("level.test.coil");
     }
 
     @Test
