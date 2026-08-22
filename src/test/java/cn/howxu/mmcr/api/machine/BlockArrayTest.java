@@ -9,6 +9,8 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DirectionalBlock;
+import net.minecraft.world.level.block.Rotation;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -216,6 +218,49 @@ class BlockArrayTest {
                 BlockRotator.rotateSouthTo(first, Direction.EAST),
                 BlockRotator.rotateSouthTo(second, Direction.EAST),
                 BlockRotator.rotateSouthTo(third, Direction.EAST));
+    }
+
+    @Test void block_array_cache_rotates_block_state_predicates() {
+        var southState = Blocks.DISPENSER.defaultBlockState().setValue(DirectionalBlock.FACING, Direction.SOUTH);
+        var array = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlockState(southState)));
+
+        for (Direction facing : List.of(Direction.EAST, Direction.NORTH, Direction.WEST)) {
+            BlockArray rotated = BlockArrayCache.get(array, facing);
+            Rotation rotation = switch (facing) {
+                case EAST -> Rotation.COUNTERCLOCKWISE_90;
+                case NORTH -> Rotation.CLOCKWISE_180;
+                case WEST -> Rotation.CLOCKWISE_90;
+                default -> throw new AssertionError(facing);
+            };
+
+            assertThat(((BlockPredicate.OfBlockState) rotated.get(BlockPos.ZERO)).state())
+                    .isEqualTo(southState.rotate(rotation));
+        }
+    }
+
+    @Test void block_array_cache_recursively_rotates_any_of_state_predicates() {
+        var southState = Blocks.DISPENSER.defaultBlockState().setValue(DirectionalBlock.FACING, Direction.SOUTH);
+        var plainBlock = new BlockPredicate.OfBlock(Blocks.STONE);
+        var array = new BlockArray(Map.of(BlockPos.ZERO,
+                new BlockPredicate.AnyOf(List.of(new BlockPredicate.OfBlockState(southState), plainBlock))));
+
+        BlockPredicate.AnyOf rotated = (BlockPredicate.AnyOf) BlockArrayCache.get(array, Direction.EAST)
+                .get(BlockPos.ZERO);
+
+        assertThat(((BlockPredicate.OfBlockState) rotated.children().getFirst()).state())
+                .isEqualTo(southState.rotate(Rotation.COUNTERCLOCKWISE_90));
+        assertThat(rotated.children().get(1)).isSameAs(plainBlock);
+    }
+
+    @Test void block_array_cache_keeps_vertical_state_direction_vertical() {
+        var upState = Blocks.DISPENSER.defaultBlockState().setValue(DirectionalBlock.FACING, Direction.UP);
+        var array = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlockState(upState)));
+
+        for (Direction facing : Direction.Plane.HORIZONTAL) {
+            BlockPredicate.OfBlockState rotated = (BlockPredicate.OfBlockState) BlockArrayCache.get(array, facing)
+                    .get(BlockPos.ZERO);
+            assertThat(rotated.state().getValue(DirectionalBlock.FACING)).isEqualTo(Direction.UP);
+        }
     }
 
     @Test void block_rotator_treats_raw_multiblock_template_as_south_facing() {

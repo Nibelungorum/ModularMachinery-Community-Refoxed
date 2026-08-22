@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.machine;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.Rotation;
 
 import java.util.LinkedHashMap;
 import java.util.Collection;
@@ -73,8 +74,10 @@ public final class BlockArrayCache {
 
     private static BlockArray rotate(Key key) {
         Map<BlockPos, BlockPredicate> rotated = new LinkedHashMap<>();
+        Rotation rotation = rotationFor(key.facing());
         for (var entry : key.pattern().pattern().entrySet()) {
-            rotated.put(BlockRotator.rotateSouthTo(entry.getKey(), key.facing(), key.rollFacing()), entry.getValue());
+            rotated.put(BlockRotator.rotateSouthTo(entry.getKey(), key.facing(), key.rollFacing()),
+                    rotatePredicate(entry.getValue(), rotation));
         }
         Map<BlockPos, List<String>> rotatedTags = new LinkedHashMap<>();
         for (var entry : key.pattern().tagsByPosition().entrySet()) {
@@ -85,6 +88,25 @@ public final class BlockArrayCache {
             rotatedSymbols.put(BlockRotator.rotateSouthTo(entry.getKey(), key.facing(), key.rollFacing()), entry.getValue());
         }
         return new BlockArray(rotated, rotatedTags, rotatedSymbols);
+    }
+
+    private static Rotation rotationFor(Direction facing) {
+        for (Rotation rotation : Rotation.values()) {
+            if (rotation.rotate(Direction.SOUTH) == facing) return rotation;
+        }
+        return Rotation.NONE;
+    }
+
+    private static BlockPredicate rotatePredicate(BlockPredicate predicate, Rotation rotation) {
+        return switch (predicate) {
+            case BlockPredicate.OfBlockState state ->
+                    new BlockPredicate.OfBlockState(state.state().rotate(rotation));
+            case BlockPredicate.AnyOf anyOf ->
+                    new BlockPredicate.AnyOf(anyOf.children().stream()
+                            .map(child -> rotatePredicate(child, rotation))
+                            .toList());
+            default -> predicate;
+        };
     }
 
     private static void add(Map<Key, BlockArray> cache, BlockArray pattern, Direction facing) {
