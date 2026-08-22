@@ -3,7 +3,9 @@ package cn.howxu.mmcr.internal.export;
 import cn.howxu.mmcr.api.machine.BlockRotator;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.state.BlockState;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -215,9 +217,21 @@ public final class MultiblockExportService {
         return value.replace("\\", "\\\\").replace("'", "\\'");
     }
 
-    public record SnapshotEntry(BlockPos offset, Identifier blockId, boolean air, boolean controller) {
+    public record SnapshotEntry(BlockPos offset, Identifier blockId, BlockState state, boolean air, boolean controller) {
+        public SnapshotEntry(BlockPos offset, BlockState state, boolean air, boolean controller) {
+            this(offset, BuiltInRegistries.BLOCK.getKey(state.getBlock()), state, air, controller);
+        }
+
+        public SnapshotEntry(BlockPos offset, BlockState state, boolean air) {
+            this(offset, state, air, false);
+        }
+
         public SnapshotEntry(BlockPos offset, Identifier blockId, boolean air) {
-            this(offset, blockId, air, false);
+            this(offset, blockId, null, air, false);
+        }
+
+        public SnapshotEntry(BlockPos offset, Identifier blockId, boolean air, boolean controller) {
+            this(offset, blockId, null, air, controller);
         }
     }
 

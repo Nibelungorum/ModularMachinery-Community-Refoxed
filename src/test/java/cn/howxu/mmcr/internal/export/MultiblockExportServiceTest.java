@@ -1,10 +1,14 @@
 package cn.howxu.mmcr.internal.export;
 
 import cn.howxu.mmcr.api.machine.BlockRotator;
+import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
@@ -16,6 +20,11 @@ import java.util.ArrayList;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MultiblockExportServiceTest {
+
+    @BeforeAll
+    static void bootstrap() throws Exception {
+        TestBootstrap.bootstrap();
+    }
 
     @TempDir
     Path tempDir;
@@ -67,6 +76,43 @@ class MultiblockExportServiceTest {
         assertThat(java).doesNotContain(".where('C'");
         assertThat(java).doesNotContain(".controller(");
         assertThat(java).doesNotContain("minecraft:air");
+    }
+
+    @Test
+    void renderJavaSeparatesLayersAndPredicatesWithNewlines() {
+        Identifier casing = Identifier.fromNamespaceAndPath("mmcr", "basic_casing");
+        Identifier controller = Identifier.fromNamespaceAndPath("mmcr", "blast_furnace_controller");
+
+        String java = MultiblockExportService.renderJava(List.of(
+                new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, controller, false, true),
+                new MultiblockExportService.SnapshotEntry(new BlockPos(0, 1, 0), casing, false)
+        ), Direction.SOUTH);
+
+        assertThat(java).contains(".pattern(p -> p" + System.lineSeparator() + "        .layer(");
+        assertThat(java).doesNotContain(")        .where(");
+        assertThat(java).endsWith(".where('X', new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"mmcr:basic_casing\"))))"
+                + System.lineSeparator() + ")" + System.lineSeparator());
+    }
+
+    @Test
+    void renderersPreserveExactBlockStateProperties() {
+        var xAxisState = Blocks.OAK_LOG.defaultBlockState()
+                .setValue(BlockStateProperties.AXIS, Direction.Axis.X);
+        var zAxisState = Blocks.OAK_LOG.defaultBlockState()
+                .setValue(BlockStateProperties.AXIS, Direction.Axis.Z);
+        List<MultiblockExportService.SnapshotEntry> entries = List.of(
+                new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, Blocks.CRAFTING_TABLE.defaultBlockState(), false, true),
+                new MultiblockExportService.SnapshotEntry(new BlockPos(1, 0, 0), xAxisState, false),
+                new MultiblockExportService.SnapshotEntry(new BlockPos(2, 0, 0), zAxisState, false));
+
+        String java = MultiblockExportService.renderJava(entries, Direction.SOUTH);
+        String kubeJs = MultiblockExportService.renderKubeJS(entries, Direction.SOUTH);
+
+        assertThat(java).contains("new BlockPredicate.OfBlockState").contains("axis=x").contains("axis=z");
+        assertThat(java).doesNotContain("new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"minecraft:oak_log\")))");
+        assertThat(kubeJs).contains(".set('X', api.state('minecraft:oak_log[axis=x]'))")
+                .contains(".set('A', api.state('minecraft:oak_log[axis=z]'))");
+        assertThat(kubeJs).doesNotContain("api.block('minecraft:oak_log')");
     }
 
     @Test
