@@ -314,6 +314,30 @@ class StructurePreviewSchemaFactoryTest {
     }
 
     @Test
+    void factory_rotates_directional_level_state_with_the_pattern() {
+        Identifier levelType = MMCR.id("rotated_directional_level");
+        BlockState southState = Blocks.DISPENSER.defaultBlockState().setValue(
+                net.minecraft.world.level.block.state.properties.BlockStateProperties.FACING, Direction.SOUTH);
+        TestBootstrap.beginRegistration();
+        TestBootstrap.registerType(new LevelType(levelType, Component.literal(levelType.toString())));
+        TestBootstrap.registerLevel(new MachineLevel(MMCR.id("rotated_directional_level_0"), levelType, 0,
+                new BlockPredicate.OfBlockState(southState), ItemStack.EMPTY, LevelModifier.IDENTITY));
+        TestBootstrap.freezeRegistration();
+
+        BlockPos rawPosition = new BlockPos(1, 0, 0);
+        BlockArray pattern = new BlockArray(Map.of(rawPosition, new BlockPredicate.Any()), Map.of(), Map.of(rawPosition, 'L'));
+        MachineStructureStage stage = new MachineStructureStage(1, pattern, PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.builder()
+                        .levelSlot('L', levelType).build(pattern));
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage,
+                MMCR.id("rotated_directional_preview"), Direction.EAST);
+
+        assertThat(schema.stateAt(BlockRotator.rotateSouthTo(rawPosition, Direction.EAST))).isEqualTo(
+                southState.rotate(net.minecraft.world.level.block.Rotation.COUNTERCLOCKWISE_90));
+    }
+
+    @Test
     void factory_keeps_base_candidate_first_when_modifiers_have_higher_level_priority() {
         Identifier modifierLevels = MMCR.id("preview_modifier_priority");
         registerLevels(Map.of(modifierLevels, List.of(Blocks.IRON_BLOCK, Blocks.DIAMOND_BLOCK)));

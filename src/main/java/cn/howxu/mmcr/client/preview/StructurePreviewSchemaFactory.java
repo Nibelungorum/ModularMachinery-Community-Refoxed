@@ -14,6 +14,7 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.item.ItemStack;
@@ -86,7 +87,7 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
             Identifier levelSlot = rotatedLevelSlots.get(entry.getKey());
             BlockState state = levelSlot == null
                     ? entry.getValue().preferredState().orElse(null)
-                    : levelState(levelSlot, levelRank);
+                    : levelState(levelSlot, levelRank).rotate(rotationFor(facing));
             if (state == null) continue;
             states.put(position, orientController(position, state, rotatedPattern.pattern()));
             List<StructurePreviewSchema.Candidate> positionCandidates = candidates(entry.getValue(), rotatedModifierReplacements.get(position));
@@ -139,6 +140,13 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
                 .map(BlockPredicate.OfBlockState.class::cast)
                 .map(BlockPredicate.OfBlockState::state)
                 .orElse(Blocks.AIR.defaultBlockState());
+    }
+
+    private static Rotation rotationFor(Direction facing) {
+        for (Rotation rotation : Rotation.values()) {
+            if (rotation.rotate(Direction.SOUTH) == facing) return rotation;
+        }
+        return Rotation.NONE;
     }
 
     private static BlockState orientController(BlockPos position, BlockState state, Map<BlockPos, ?> pattern) {
