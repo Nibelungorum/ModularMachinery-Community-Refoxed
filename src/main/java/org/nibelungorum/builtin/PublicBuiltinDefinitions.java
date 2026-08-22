@@ -154,8 +154,6 @@ public final class PublicBuiltinDefinitions {
     private static void thermal(Map<Identifier, MachineRecipeDefinition> out, String name, int ticks, Item input, Item output, int energy, Identifier level) {
         MachineRecipeDefinition definition = recipe("thermal_smelting_furnace_" + name, THERMAL_SMELTING_FURNACE, ticks)
                 .inputItem(Items.COAL, 1).inputItem(input, 1).inputEnergy(energy).outputItem(output, 1).maxThreads(4).build();
-        PublicBuiltinRegistration.logger().debug("[MMCR-DIAG] Built-in thermal recipe {} requested level {} and produced level requirements {}",
-                definition.id(), level, definition.levelRequirements());
         out.put(id("thermal_smelting_furnace_" + name), definition);
     }
 
@@ -180,8 +178,6 @@ public final class PublicBuiltinDefinitions {
         MachineRecipeBuilder builder = recipe("purpur_furnace_" + path, PURPUR_FURNACE, ticks).inputItem(Items.COAL, 1).inputEnergy(energy).outputItem(output, count);
         for (SmartInterfaceRequirement requirement : requirements) builder.requirement(requirement);
         MachineRecipeDefinition definition = builder.build();
-        PublicBuiltinRegistration.logger().debug("[MMCR-DIAG] Built-in purpur recipe {} produced item outputs {} and requirements {}",
-                definition.id(), definition.itemOutputs(), definition.requirements());
         out.put(id("purpur_furnace_" + path), definition);
     }
 

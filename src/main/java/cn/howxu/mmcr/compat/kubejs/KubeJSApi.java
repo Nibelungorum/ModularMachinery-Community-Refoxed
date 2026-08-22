@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
@@ -168,6 +169,14 @@ public final class KubeJSApi {
             throw new IllegalArgumentException("Unknown or mismatched machine level: " + typeId + "/" + levelId);
         }
         return new LevelRequirement(type, level);
+    }
+
+    public LevelSlot levelSlot(String typeId) {
+        Identifier type = Identifier.parse(typeId);
+        if (MachineLevelRegistry.getType(type) == null) {
+            throw new IllegalArgumentException("Unknown machine level type: " + typeId);
+        }
+        return new LevelSlot(type);
     }
 
     public SmartInterfaceRequirement smartInterfaceInput(String type, float min, float max) {

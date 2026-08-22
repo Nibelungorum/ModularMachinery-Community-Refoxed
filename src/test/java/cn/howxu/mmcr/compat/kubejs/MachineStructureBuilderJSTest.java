@@ -86,6 +86,14 @@ class MachineStructureBuilderJSTest {
     }
 
     @Test
+    void factory_controller_predicate_is_exposed_by_name() {
+        var structure = new MachineStructureBuilderJS("mmcr:factory_structure");
+
+        assertThat(structure.factoryController().matches(
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState())).isTrue();
+    }
+
+    @Test
     void pattern_retains_level_slot_coordinates_and_uses_the_type_predicate() {
         Identifier coilType = Identifier.parse("test:coil");
         TestBootstrap.beginRegistration();

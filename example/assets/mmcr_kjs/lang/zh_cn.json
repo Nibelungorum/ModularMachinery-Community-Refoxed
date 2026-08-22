@@ -35,10 +35,10 @@
     "machine.mmcr_kubejs.kubejs_space_reassembler": "太空重组器",
     "machine.mmcr_kubejs.kubejs_monster_farm": "怪物农场",
 
-    "mmcr.smart_interface.type.ConversionRate_KJS": "转化率",
-    "mmcr.smart_interface.type.ConversionRate_KJS.description": "0.0-1.0, 越高耗能和产量越高",
-    "mmcr.smart_interface.type.Mode_KJS": "模式",
-    "mmcr.smart_interface.type.Mode_KJS.description": "1: 钻石, 2: 金锭, 3: 铁锭",
-    "mmcr.smart_interface.type.Temperature_KJS": "温度",
-    "mmcr.smart_interface.type.Temperature_KJS.description": "400-6800 K, 越高越快但产率越低"
+    "level.mmcr_kubejs.thermal_smelting_coil": "线圈等级",
+
+    "mmcr.smart_interface.type.kubejs_conversation": "转化率",
+    "mmcr.smart_interface.type.kubejs_conversation.description": "[0,1] 更高的耗能和更高的产量",
+    "mmcr.smart_interface.type.kubejs_mode": "模式",
+    "mmcr.smart_interface.type.kubejs_mode.description": "[1,2,3] 取决于配方"
 }

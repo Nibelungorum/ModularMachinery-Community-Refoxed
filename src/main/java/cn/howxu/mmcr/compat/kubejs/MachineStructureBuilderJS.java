@@ -240,6 +240,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     public BlockPredicate anyOfPort(cn.howxu.mmcr.api.publicapi.machine.BlockPredicate... predicates) {
         return KubeJSInterfaceHelpers.anyOfPort(predicates);
     }
+    public BlockPredicate factoryController() { return anyOfPort("factory_controller"); }
     public BlockPredicate parallelControllers() { return KubeJSInterfaceHelpers.parallelControllers(); }
     public BlockPredicate smartInterface() { return KubeJSInterfaceHelpers.smartInterface(); }
 

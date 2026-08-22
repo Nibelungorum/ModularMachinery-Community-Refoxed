@@ -35,10 +35,10 @@
     "machine.mmcr_kubejs.kubejs_space_reassembler": "Space Reassembler",
     "machine.mmcr_kubejs.kubejs_monster_farm": "Monster Farm",
 
-    "mmcr.smart_interface.type.ConversionRate_KJS": "Conversion Rate",
-    "mmcr.smart_interface.type.ConversionRate_KJS.description": "0.0-1.0; higher increases energy use and output",
-    "mmcr.smart_interface.type.Mode_KJS": "Mode",
-    "mmcr.smart_interface.type.Mode_KJS.description": "1: Diamond, 2: Gold Ingot, 3: Iron Ingot",
-    "mmcr.smart_interface.type.Temperature_KJS": "Temperature",
-    "mmcr.smart_interface.type.Temperature_KJS.description": "400-6800 K; higher is faster but lowers yield"
+    "level.mmcr_kubejs.thermal_smelting_coil": "Coil Level",
+
+    "mmcr.smart_interface.type.kubejs_conversation": "Conversion Rate",
+    "mmcr.smart_interface.type.kubejs_conversation.description": "[0,1] higher increases energy and output",
+    "mmcr.smart_interface.type.kubejs_mode": "Mode",
+    "mmcr.smart_interface.type.kubejs_mode.description": "[1,2,3] Based on the recipe"
 }

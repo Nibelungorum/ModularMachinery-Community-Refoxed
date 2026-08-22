@@ -11,6 +11,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DirectionalBlock;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -57,6 +58,19 @@ class StructureMatcherTest {
         assertThat(mismatch.get().worldPos()).isEqualTo(new BlockPos(1, 0, 0));
         assertThat(mismatch.get().expected()).isEqualTo(new BlockPredicate.OfBlock(Blocks.FURNACE));
         assertThat(mismatch.get().actualState().getBlock()).isEqualTo(Blocks.DIRT);
+    }
+
+    @Test
+    void structure_matching_rejects_a_block_with_the_wrong_state() {
+        BlockPos position = new BlockPos(1, 0, 0);
+        BlockState expected = Blocks.DISPENSER.defaultBlockState()
+                .setValue(DirectionalBlock.FACING, Direction.NORTH);
+        BlockState actual = Blocks.DISPENSER.defaultBlockState()
+                .setValue(DirectionalBlock.FACING, Direction.SOUTH);
+        BlockArray pattern = new BlockArray(Map.of(position, new BlockPredicate.OfBlockState(expected)));
+
+        assertThat(StructureMatcher.matchesRotated(pattern,
+                cn.howxu.mmcr.LevelStub.createStates(Map.of(position, actual)), BlockPos.ZERO)).isFalse();
     }
 
     @Test

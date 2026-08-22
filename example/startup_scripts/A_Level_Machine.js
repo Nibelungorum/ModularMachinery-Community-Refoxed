@@ -7,6 +7,8 @@ MMCREvents.startup(event => {
         .createMachine("mmcr_kubejs:kubejs_thermal_smelting_furnace")
         .displayNameKey("machine.mmcr_kubejs.kubejs_thermal_smelting_furnace")
         .recipeFamily("mmcr_kubejs:kubejs_thermal_smelting_furnace")
+        .allowParallelism()
+        .maxParallelAmount(32)
         .appearance("minecraft:smooth_basalt")
 
     builder.register()
@@ -16,7 +18,7 @@ MMCREvents.startup(event => {
     // when used in recipe and structure, you needn't care this
     event
         .createLevelType("mmcr_kubejs:thermal_smelting_coil") // type register name
-        .displayName('level.mmcr_kubejs.thermal_smelting_coil') // type display name
+        .displayNameKey('level.mmcr_kubejs.thermal_smelting_coil') // type display name
         .register() // register
 
     // then create level

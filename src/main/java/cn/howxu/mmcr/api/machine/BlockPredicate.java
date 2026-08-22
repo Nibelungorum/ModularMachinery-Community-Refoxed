@@ -1,14 +1,17 @@
 package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
+import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
+import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
+import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -32,8 +35,7 @@ public sealed interface BlockPredicate {
      */
     default Optional<BlockState> preferredState() {
         List<BlockState> candidates = candidateStates(this).stream()
-                .sorted(Comparator.comparingInt(Candidate::exactState).reversed()
-                        .thenComparing(Comparator.comparingInt((Candidate candidate) -> levelPriority(candidate.state())).reversed()))
+                .sorted(BlockPredicate::compareCandidates)
                 .map(Candidate::state)
                 .toList();
         if (!candidates.isEmpty()) return Optional.of(candidates.getFirst());
@@ -72,6 +74,22 @@ public sealed interface BlockPredicate {
         return MachineLevelRegistry.findLevel(state).map(level -> level.priority()).orElse(Integer.MIN_VALUE);
     }
 
+    private static int blockPriority(Block block) {
+        if (block instanceof FactorySchedulerBlock) return 4;
+        if (block instanceof ParallelControllerBlock) return 3;
+        if (block instanceof SmartInterfaceBlock) return 2;
+        if (block instanceof IOPortBlock) return 1;
+        return 0;
+    }
+
+    private static int compareCandidates(Candidate left, Candidate right) {
+        int priority = Integer.compare(blockPriority(left.state().getBlock()), blockPriority(right.state().getBlock()));
+        if (priority != 0) return priority;
+        int exactState = Integer.compare(right.exactState(), left.exactState());
+        if (exactState != 0) return exactState;
+        return Integer.compare(levelPriority(right.state()), levelPriority(left.state()));
+    }
+
 
     record Candidate(BlockState state, int exactState) {}
 
@@ -98,7 +116,9 @@ public sealed interface BlockPredicate {
     }
 
     record OfBlockState(BlockState state) implements BlockPredicate {
-        @Override public boolean matches(BlockState s) { return this.state == s; }
+        @Override public boolean matches(BlockState s) {
+            return state.getBlock() == s.getBlock() && state.getValues().toList().equals(s.getValues().toList());
+        }
     }
 
     record OfTag(TagKey<Block> tag) implements BlockPredicate {

@@ -25,16 +25,17 @@ public class LevelTypeBuilderJS extends BuilderBase<LevelType> {
 
     public LevelTypeBuilderJS displayName(String displayName) {
         this.displayNameKey = displayName;
-        MMCR.LOG.debug("[MMCR-DIAG] Level type {} received displayName key {}", id, displayName);
         return this;
+    }
+
+    public LevelTypeBuilderJS displayNameKey(String key) {
+        return displayName(key);
     }
 
     @Override
     public LevelType createObject() {
         String key = displayNameKey == null ? id.toString() : displayNameKey;
         Component component = Component.translatable(key);
-        MMCR.LOG.debug("[MMCR-DIAG] Level type {} created with key={}, text={}, contents={}",
-                id, key, component.getString(), component.getContents().getClass().getSimpleName());
         return new LevelType(id, component);
     }
 

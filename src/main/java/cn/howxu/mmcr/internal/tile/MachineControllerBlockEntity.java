@@ -232,8 +232,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void onMachineDestroyed() {
-        MMCR.LOG.debug("[MMCR-DIAG] Controller destroyed pos={}, removed={}, block={}, formed={}",
-                getBlockPos(), isRemoved(), getBlockState().getBlock(), isFormed());
+        MMCR.LOG.debug("[MMCR-DIAG] Controller onMachineDestroyed pos={}, removed={}, block={}, formed={}, active={}, recipe={}, tick={}",
+                getBlockPos(), isRemoved(), getBlockState().getBlock(), isFormed(), active != null,
+                active == null ? "null" : active.getRecipe().id(), active == null ? 0 : active.getTick());
         notifyPreviewReceiversCleared();
         resetMachine(true, false);
     }
@@ -247,6 +248,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public void setFormed(boolean f) {
         boolean before = isFormed();
         if (before == f) return;
+        MMCR.LOG.debug("[MMCR-DIAG] Controller formed state pos={}, removed={}, {} -> {}, active={}, recipe={}",
+                getBlockPos(), isRemoved(), before, f, active != null,
+                active == null ? "null" : active.getRecipe().id());
         level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.FORMED, f), 3);
         if (f) notifyPreviewReceiversStructureFormed();
     }
@@ -327,8 +331,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public void applyClientState(String recipeName, boolean formed, boolean active, List<String> foundLevelIds,
                                  boolean recipeLocked, String lockedRecipeId) {
         if (level == null || !level.isClientSide()) return;
-        MMCR.LOG.debug("[MMCR-DIAG] Applying controller client state pos={}, removed={}, block={}, formed={}, active={}, recipe={}",
-                getBlockPos(), isRemoved(), getBlockState().getBlock(), formed, active, recipeName);
         if (isFormed() != formed) {
             level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.FORMED, formed), 3);
         }
@@ -591,7 +593,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void serverTick() {
-        if (level == null || level.isClientSide() || isRemoved()) return;
+        if (level == null || level.isClientSide() || isRemoved()) {
+            MMCR.LOG.debug("[MMCR-DIAG] Controller serverTick skipped pos={}, level={}, client={}, removed={}, block={}",
+                    getBlockPos(), level == null ? "null" : level.dimension().identifier(),
+                    level != null && level.isClientSide(), isRemoved(),
+                    level == null ? "null" : level.getBlockState(getBlockPos()).getBlock());
+            return;
+        }
         boolean activeBefore = isRuntimeActive();
         if (machine == null) bindDefaultMachine();
 
@@ -1530,8 +1538,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (getBlockState() == null) return;
         boolean next = isRuntimeActive();
         if (next == syncedRuntimeActive) return;
-        MMCR.LOG.debug("[MMCR-DIAG] Syncing controller runtime state pos={}, removed={}, block={}, active {} -> {}",
-                getBlockPos(), isRemoved(), getBlockState().getBlock(), syncedRuntimeActive, next);
+        MMCR.LOG.debug("[MMCR-DIAG] Controller runtime state pos={}, removed={}, block={}, active {} -> {}, formed={}, recipe={}",
+                getBlockPos(), isRemoved(), getBlockState().getBlock(), syncedRuntimeActive, next,
+                isFormed(), active == null ? "null" : active.getRecipe().id());
         syncedRuntimeActive = next;
         setChanged();
         if (level != null && !level.isClientSide()) {
@@ -1645,6 +1654,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         Identifier dropped = foundMachine == null ? null : foundMachine.registryName();
         boolean hadActive = active != null;
         Identifier activeRecipe = hadActive ? active.getRecipe().id() : null;
+        if (wasFormed || hadActive || dropped != null) {
+            MMCR.LOG.debug("[MMCR-DIAG] Controller resetMachine pos={}, removed={}, formed={}, active={}, recipe={}, dropped={}, clearFailure={}, updateBlockState={}",
+                    getBlockPos(), isRemoved(), wasFormed, hadActive, activeRecipe, dropped, clearFormationFailure, updateBlockState);
+        }
         releaseStructureClaims();
         unbindSmartInterfaces();
         unlinkLinkedPorts();
@@ -2244,18 +2257,22 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void setActiveState(boolean activeState) {
-        if (level == null || level.isClientSide()) return;
+        if (level == null || level.isClientSide() || isRemoved()) return;
         if (getBlockState().getValue(MachineControllerBlock.ACTIVE) != activeState) {
+            MMCR.LOG.debug("[MMCR-DIAG] Controller active state pos={}, removed={}, {} -> {}, formed={}, recipe={}",
+                    getBlockPos(), isRemoved(), getBlockState().getValue(MachineControllerBlock.ACTIVE), activeState,
+                    isFormed(), active == null ? "null" : active.getRecipe().id());
             level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.ACTIVE, activeState), 3);
         }
     }
 
     @Override
     public void setRemoved() {
-        MMCR.LOG.debug("[MMCR-DIAG] Controller setRemoved pos={}, block={}, formed={}",
-                getBlockPos(), getBlockState().getBlock(), isFormed());
-        if (level != null && !level.isClientSide()) resetMachine(true, false);
+        MMCR.LOG.debug("[MMCR-DIAG] Controller setRemoved pos={}, block={}, formed={}, active={}, recipe={}, levelClient={}",
+                getBlockPos(), getBlockState().getBlock(), isFormed(), active != null,
+                active == null ? "null" : active.getRecipe().id(), level != null && level.isClientSide());
         super.setRemoved();
+        if (level != null && !level.isClientSide()) resetMachine(true, false);
     }
 
     void bindDefaultMachine() {

@@ -27,6 +27,7 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.core.Direction;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class MultiblockPreviewBuilderTest {
     @BeforeAll
@@ -131,6 +132,19 @@ class MultiblockPreviewBuilderTest {
                 new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()))));
 
         assertEquals(ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState(), result.orElseThrow());
+    }
+
+    @Test
+    void preview_state_prefers_normal_port_parallel_and_factory_in_that_order() {
+        var predicate = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get()),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("parallel_controller_normal").get()),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()),
+                new BlockPredicate.OfBlock(Blocks.PURPUR_PILLAR)));
+
+        assertEquals(Blocks.PURPUR_PILLAR.defaultBlockState(), MultiblockPreviewBuilder.previewState(predicate).orElseThrow());
+        var preferred = predicate.preferredState().orElseThrow();
+        assertThat(preferred.getBlock()).as("preferred block").isSameAs(Blocks.PURPUR_PILLAR);
     }
 
     @Test

@@ -172,11 +172,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                     textX, (int) (y / SMART_INTERFACE_TEXT_SCALE), 0xFF404040, false);
             y += SMART_INTERFACE_LINE_SPACING;
         }
-        for (MachineRecipeDisplay.SmartInterfaceModifierDisplay modifier : recipe.smartInterfaceModifiers()) {
-            guiGraphics.text(Minecraft.getInstance().font, Component.literal(modifier.label()),
-                    textX, (int) (y / SMART_INTERFACE_TEXT_SCALE), 0xFF404040, false);
-            y += SMART_INTERFACE_LINE_SPACING;
-        }
         guiGraphics.pose().popMatrix();
         drawOverflowSlot(layout.inputs().overflowSlot(), guiGraphics, slotBackground);
         drawOverflowSlot(layout.outputs().overflowSlot(), guiGraphics, slotBackground);
@@ -243,9 +238,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         Component suffix = selected.id().equals(required.id())
                 ? Component.translatable("jei.mmcr.machine_recipe.minimum_level")
                 : Component.empty();
-        MMCR.LOG.debug("[MMCR-DIAG] JEI level requirement type={}, level={}, text={}, contents={}",
-                requirement.typeId(), requirement.levelId(), type.displayName().getString(),
-                type.displayName().getContents().getClass().getSimpleName());
         return type.displayName().copy()
                 .append(Component.literal(": "))
                 .append(levelName)
@@ -300,10 +292,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             if (stacks.isEmpty() && item.ingredient() != null) {
                 jeiSlot.add(item.ingredient());
             } else {
-                if (MMCR.LOG.isDebugEnabled()) {
-                    stacks.stream().filter(stack -> !stack.getComponentsPatch().isEmpty()).forEach(stack -> MMCR.LOG.debug(
-                            "[MMCR-DIAG] JEI injected input for recipe {}: {}", recipe.recipeId(), describeAddedItemStack(stack)));
-                }
                 jeiSlot.addItemStacks(stacks);
             }
         } else {
@@ -316,10 +304,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             }
             jeiSlot.addRichTooltipCallback((view, tooltip) -> appendOutputTooltip(tooltip, output));
             ItemStack jeiStack = new ItemStack(stack.getItem().builtInRegistryHolder(), stack.getCount(), stack.getComponentsPatch());
-            if (MMCR.LOG.isDebugEnabled() && !jeiStack.getComponentsPatch().isEmpty()) {
-                MMCR.LOG.debug("[MMCR-DIAG] JEI injected output for recipe {}: {}", recipe.recipeId(),
-                        describeAddedItemStack(jeiStack));
-            }
             jeiSlot.add(jeiStack);
         }
     }
@@ -428,10 +412,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
         for (MachineRecipeDisplay.SmartInterfaceDisplay smartInterface : recipe.smartInterfaceOutputs()) {
             if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING) return Optional.of(smartInterface.tooltip());
-            y += SMART_INTERFACE_LINE_SPACING;
-        }
-        for (MachineRecipeDisplay.SmartInterfaceModifierDisplay modifier : recipe.smartInterfaceModifiers()) {
-            if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING) return Optional.of(modifier.tooltip());
             y += SMART_INTERFACE_LINE_SPACING;
         }
         return Optional.empty();

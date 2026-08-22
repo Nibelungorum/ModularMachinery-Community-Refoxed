@@ -674,8 +674,6 @@ public final class RecipeCraftingContext {
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT
                     && consumedAtStart != null && consumedAtStart.consumedBatches(requirementIndex) > 0) {
                 itemInputRoutes.set(requirementIndex, new ItemInputRoute(List.of()));
-                LOG.debug("[MMCR-DIAG] tick input id={} requirement={} skippedAlreadyConsumed=true consumedBatches={}",
-                        poolRecipeId, requirementIndex, consumedAtStart.consumedBatches(requirementIndex));
                 continue;
             }
             if (requirement.io() == RecipeModifier.IOType.INPUT) {
@@ -685,9 +683,6 @@ public final class RecipeCraftingContext {
                         && !consumedAtStart.consumedInputBatches().isEmpty()
                         ? simulateItemInput(requirementIndex, item, false)
                         : requirement.simulate(this, requirementIndex);
-                LOG.debug("[MMCR-DIAG] tick input id={} requirement={} skippedAlreadyConsumed=false matched={} consumeChance={}",
-                        poolRecipeId, requirementIndex, matched,
-                        requirement instanceof ItemRequirement item ? item.consumeChance() : "n/a");
                 if (!matched) return false;
             }
         }
@@ -1181,8 +1176,6 @@ public final class RecipeCraftingContext {
             consumed.add(consumedBatches);
         }
         ActiveMachineRecipe.InputConsumptionPlan plan = new ActiveMachineRecipe.InputConsumptionPlan(consumed);
-        LOG.debug("[MMCR-DIAG] input plan id={} parallelism={} consumedBatches={} requirements={}",
-                recipe.id(), parallelism, consumed, requirements);
         return plan;
     }
 

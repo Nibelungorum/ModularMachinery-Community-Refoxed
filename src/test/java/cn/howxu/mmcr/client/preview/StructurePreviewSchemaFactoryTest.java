@@ -23,6 +23,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.tags.TagKey;
@@ -106,6 +107,24 @@ class StructurePreviewSchemaFactoryTest {
                 southState.rotate(net.minecraft.world.level.block.Rotation.COUNTERCLOCKWISE_90));
         assertThat(schema.candidatesAt(rotatedPosition)).extracting(ItemStack::getItem)
                 .containsExactly(Blocks.OAK_LOG.asItem());
+    }
+
+    @Test
+    void factory_rotates_directional_state_with_the_corrected_controller_facing() {
+        Identifier machineId = MMCR.id("directional_preview");
+        BlockState southFacing = Blocks.DISPENSER.defaultBlockState()
+                .setValue(DirectionalBlock.FACING, Direction.SOUTH);
+        BlockArray pattern = new BlockArray(Map.of(
+                BlockPos.ZERO, new BlockPredicate.OfBlock(ModBlocks.controllerFor(MMCR.id("test_cube")).get()),
+                new BlockPos(1, 0, 0), new BlockPredicate.OfBlockState(southFacing)));
+        MachineStructureStage stage = new MachineStructureStage(1, pattern, PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, machineId, Direction.EAST);
+
+        assertThat(schema.stateAt(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.EAST)))
+                .extracting(state -> state.getValue(DirectionalBlock.FACING))
+                .isEqualTo(Direction.SOUTH);
     }
 
     @Test

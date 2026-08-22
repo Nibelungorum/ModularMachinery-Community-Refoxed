@@ -1,7 +1,9 @@
 package cn.howxu.mmcr.internal.preview;
 
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
+import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.world.level.block.Block;
@@ -73,6 +75,8 @@ public final class MultiblockPreviewPredicates {
     }
 
     private static int blockPriority(Block block) {
+        if (block instanceof FactorySchedulerBlock) return 4;
+        if (block instanceof ParallelControllerBlock) return 3;
         if (block instanceof SmartInterfaceBlock) return 2;
         if (block instanceof IOPortBlock) return 1;
         return 0;

@@ -1,16 +1,22 @@
 MMCREvents.server(event => {
     const api = event.getAPI()
-    const structure = event.createStructure("mmcr_kubejs:kubejs_cracker")
+    const structure = event.createStructure("mmcr_kubejs:kubejs_thermal_smelting_furnace")
 
     structure
-        .set('B', api.anyOf(
+        .pattern(['AAA','XXX','XXX','AAA'])
+        .pattern(['AAA','X X','X X','ADA'])
+        .pattern(['ABA','XXX','XXX','AAA'])
+        .set('X',api.levelSlot("mmcr_kubejs:thermal_smelting_coil")) // call levelSlot and everything solved
+        .set('A',api.anyOf(
             structure.anyOfItemInput(),
             structure.anyOfItemOutput(),
-            structure.anyOfFluidOutput(),
-            structure.anyOfEnergyInput()
+            structure.anyOfEnergyInput(),
+            structure.anyOfEnergyInput(),
+            structure.parallelControllers(),
+            api.block('minecraft:smooth_basalt')
         ))
-        .controller('C')
-
+        .set('D',api.block('minecraft:reinforced_deepslate'))
+        .controller('B')
         // Do not forget this
         .build()
 

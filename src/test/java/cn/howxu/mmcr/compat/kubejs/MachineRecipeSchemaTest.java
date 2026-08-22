@@ -77,6 +77,16 @@ class MachineRecipeSchemaTest {
     }
 
     @Test
+    void schema_preserves_raw_requirements_and_level_requirements_for_custom_recipes() {
+        assertThat(MachineRecipeSchema.SCHEMA.keys).contains(
+                MachineRecipeSchema.REQUIREMENTS, MachineRecipeSchema.LEVEL_REQUIREMENTS);
+        assertThat(MachineRecipeSchema.SCHEMA.includedKeys).doesNotContain(
+                MachineRecipeSchema.REQUIREMENTS, MachineRecipeSchema.LEVEL_REQUIREMENTS);
+        assertThat(MachineRecipeSchema.REQUIREMENTS.excluded).isTrue();
+        assertThat(MachineRecipeSchema.LEVEL_REQUIREMENTS.excluded).isTrue();
+    }
+
+    @Test
     void schema_allows_empty_recipe_lists() {
         assertThat(((ListRecipeComponent<?>) MachineRecipeSchema.INPUTS.component).allowEmpty()).isTrue();
         assertThat(((ListRecipeComponent<?>) MachineRecipeSchema.OUTPUTS.component).allowEmpty()).isTrue();

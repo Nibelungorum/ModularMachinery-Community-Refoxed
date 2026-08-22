@@ -251,9 +251,6 @@ public final class ActiveMachineRecipe {
         if (!canRunOnConnectedHost(context)) return false;
         setParallelism(parallelism);
         inputConsumptionPlan = context.createInputConsumptionPlan(recipe, this.parallelism);
-        LOG.debug("[MMCR-DIAG] recipe start id={} parallelism={} totalTick={} inputPlan={}",
-                recipe == null ? "<null>" : recipe.id(), this.parallelism, totalTick,
-                inputConsumptionPlan.consumedInputBatches());
         boolean started = context.startCrafting(recipe, this.parallelism, inputConsumptionPlan);
         if (started) {
             refreshTotalTick(context);
@@ -309,33 +306,21 @@ public final class ActiveMachineRecipe {
         int beforeTick = tick;
         if (!resourcesGranted) {
             doFailureAction(RecipeFailureActions.STILL);
-            LOG.debug("[MMCR-DIAG] recipe tick id={} tick={}/{} -> WAITING resourcesGranted=false outputsCommitted={} plan={}",
-                    recipe == null ? "<null>" : recipe.id(), beforeTick, totalTick, outputsCommitted,
-                    inputConsumptionPlan == null ? List.of() : inputConsumptionPlan.consumedInputBatches());
             return TickStatus.WAITING;
         }
         int nextTick = Math.min(tick + 1, totalTick);
         if (nextTick < totalTick) {
             tick = nextTick;
-            LOG.debug("[MMCR-DIAG] recipe tick id={} tick={}/{} -> CONTINUE resourcesGranted=true outputsCommitted={} plan={}",
-                    recipe == null ? "<null>" : recipe.id(), tick, totalTick, outputsCommitted,
-                    inputConsumptionPlan == null ? List.of() : inputConsumptionPlan.consumedInputBatches());
             return TickStatus.CONTINUE;
         }
         if (!outputsCommitted) {
             tick = Math.max(0, totalTick - 1);
             finishPending = true;
             markFinishBlocked(gameTime);
-            LOG.debug("[MMCR-DIAG] recipe tick id={} tick={}/{} -> WAITING finishBlocked outputsCommitted=false plan={}",
-                    recipe == null ? "<null>" : recipe.id(), tick, totalTick,
-                    inputConsumptionPlan == null ? List.of() : inputConsumptionPlan.consumedInputBatches());
             return TickStatus.WAITING;
         }
         tick = nextTick;
         finishPending = false;
-        LOG.debug("[MMCR-DIAG] recipe tick id={} tick={}/{} -> FINISHED plan={}",
-                recipe == null ? "<null>" : recipe.id(), tick, totalTick,
-                inputConsumptionPlan == null ? List.of() : inputConsumptionPlan.consumedInputBatches());
         return TickStatus.FINISHED;
     }
 

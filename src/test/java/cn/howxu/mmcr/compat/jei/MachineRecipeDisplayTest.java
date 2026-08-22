@@ -159,6 +159,8 @@ class MachineRecipeDisplayTest {
                 "temperature", IntegrationTypeHelper.TARGET_ENERGY, RecipeModifier.IOType.INPUT, false,
                 0F, 100F, 1F, 2F, RecipeModifier.Operation.MULTIPLY));
         assertThat(display.tooltips()).anyMatch(text -> text.getString().contains("temperature") && text.getString().contains("energy"));
+        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(display, 4);
+        assertThat(layout.lastMetadataTextY(display)).isEqualTo(layout.smartInterfaceTextY(display) - 10);
     }
 
     @Test

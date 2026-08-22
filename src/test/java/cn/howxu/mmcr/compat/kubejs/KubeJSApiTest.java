@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -111,6 +112,16 @@ class KubeJSApiTest {
 
         assertThatThrownBy(() -> api.levelRequirement(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE.toString(), "mmcr:api_other_level"))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void level_slot_factory_exposes_registered_type_to_server_scripts() {
+        var slot = api.levelSlot(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE.toString());
+
+        assertThat(slot).isEqualTo(new LevelSlot(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE));
+        assertThatThrownBy(() -> api.levelSlot("test:missing_level_type"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unknown machine level type");
     }
 
     @Test

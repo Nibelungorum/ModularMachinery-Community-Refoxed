@@ -81,6 +81,10 @@ public final class LevelStub {
         return createFromStates(map);
     }
 
+    public static Level createStates(Map<BlockPos, BlockState> states) {
+        return createFromStates(states);
+    }
+
     public static Level createWithBlockEntities(List<BlockEntity> blockEntities) {
         Level level = create(Map.of());
         ((TestLevel) level).blockEntities = blockEntities.stream()

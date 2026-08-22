@@ -52,7 +52,7 @@ class MachineLevelBuilderJSTest {
     @Test
     void level_type_display_name_uses_translation_key() {
         new LevelTypeBuilderJS("test:coil")
-                .displayName("level.test.coil")
+                .displayNameKey("level.test.coil")
                 .registerObject();
 
         var displayName = MMCRMachineStructuresEvent.current().levelTypes()

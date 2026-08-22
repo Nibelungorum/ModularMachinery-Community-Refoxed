@@ -60,6 +60,14 @@ public final class MachineRecipeSchema {
             new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false, IntBounds.OPTIONAL, Optional.empty()), "modifiers", ComponentRole.OTHER)
                     .optional(List.of()).exclude();
 
+    public static final RecipeKey<List<JsonElement>> REQUIREMENTS =
+            new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false, IntBounds.OPTIONAL, Optional.empty()), "requirements", ComponentRole.OTHER)
+                    .optional(List.of()).exclude();
+
+    public static final RecipeKey<List<JsonElement>> LEVEL_REQUIREMENTS =
+            new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false, IntBounds.OPTIONAL, Optional.empty()), "level_requirements", ComponentRole.OTHER)
+                    .optional(List.of()).exclude();
+
     public static final RecipeKey<Integer> MAX_THREADS =
             new RecipeKey<>(NumberComponent.NON_NEGATIVE_INT, "max_threads", ComponentRole.OTHER).optional(1);
 
@@ -72,7 +80,8 @@ public final class MachineRecipeSchema {
     public static final RecipeKey<Boolean> ALLOW_PARTIAL_OUTPUTS =
             new RecipeKey<>(BooleanComponent.BOOLEAN, "allow_partial_outputs", ComponentRole.OTHER).optional(false);
 
-    public static final RecipeSchema SCHEMA = new RecipeSchema(MACHINE, TICK_TIME, INPUTS, ENERGY_PER_TICK, OUTPUTS, MODIFIERS, MAX_THREADS, PARALLELIZED, CANCEL_IF_PER_TICK_FAILS, ALLOW_PARTIAL_OUTPUTS)
+    public static final RecipeSchema SCHEMA = new RecipeSchema(MACHINE, TICK_TIME, INPUTS, ENERGY_PER_TICK, OUTPUTS,
+            MODIFIERS, REQUIREMENTS, LEVEL_REQUIREMENTS, MAX_THREADS, PARALLELIZED, CANCEL_IF_PER_TICK_FAILS, ALLOW_PARTIAL_OUTPUTS)
             .factory(MachineRecipeFactory.INSTANCE)
             .function(new RecipeFunctionInstance("allowPartialOutputs", List.of(),
                     new ResolvedRecipeSchemaFunction() {

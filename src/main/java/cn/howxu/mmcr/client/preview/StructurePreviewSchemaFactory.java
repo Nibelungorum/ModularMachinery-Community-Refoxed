@@ -89,7 +89,7 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
                     ? entry.getValue().preferredState().orElse(null)
                     : levelState(levelSlot, levelRank).rotate(rotationFor(facing));
             if (state == null) continue;
-            states.put(position, orientController(position, state, rotatedPattern.pattern()));
+            states.put(position, orientState(position, state, facing, rotatedPattern.pattern()));
             List<StructurePreviewSchema.Candidate> positionCandidates = candidates(entry.getValue(), rotatedModifierReplacements.get(position));
             if (!positionCandidates.isEmpty()) candidates.put(position, positionCandidates);
             if (levelSlot != null) levelSlots.put(position, levelSlot);
@@ -150,18 +150,50 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         return Rotation.NONE;
     }
 
-    private static BlockState orientController(BlockPos position, BlockState state, Map<BlockPos, ?> pattern) {
-        if (!(state.getBlock() instanceof MachineControllerBlock) || !position.equals(BlockPos.ZERO)) return state;
+    private static BlockState orientState(BlockPos position, BlockState state, Direction facing,
+                                          Map<BlockPos, BlockPredicate> pattern) {
+        if (!hasController(pattern)) return state;
+        Direction correctedFacing = correctedControllerFacing(pattern);
+        if (correctedFacing == null || !facing.getAxis().isHorizontal()) return state;
+        if (state.getBlock() instanceof MachineControllerBlock && position.equals(BlockPos.ZERO)) {
+            return state.setValue(MachineControllerBlock.FACING, correctedFacing);
+        }
+        return state.rotate(rotationBetween(facing, correctedFacing));
+    }
+
+    private static boolean hasController(Map<BlockPos, BlockPredicate> pattern) {
+        return isController(pattern.get(BlockPos.ZERO));
+    }
+
+    private static boolean isController(BlockPredicate predicate) {
+        return switch (predicate) {
+            case null -> false;
+            case BlockPredicate.OfBlock block -> block.block() instanceof MachineControllerBlock;
+            case BlockPredicate.OfBlockState state -> state.state().getBlock() instanceof MachineControllerBlock;
+            case BlockPredicate.DeferredBlock deferred -> deferred.supplier().get() instanceof MachineControllerBlock;
+            case BlockPredicate.AnyOf anyOf -> anyOf.children().stream().anyMatch(StructurePreviewSchemaFactory::isController);
+            default -> false;
+        };
+    }
+
+    private static Direction correctedControllerFacing(Map<BlockPos, BlockPredicate> pattern) {
         int x = 0;
         int z = 0;
         for (BlockPos other : pattern.keySet()) {
             x += other.getX();
             z += other.getZ();
         }
-        if (Math.abs(x) == Math.abs(z) && x == 0) return state;
+        if (Math.abs(x) == Math.abs(z) && x == 0) return null;
         Direction interior = Math.abs(x) > Math.abs(z)
                 ? (x < 0 ? Direction.WEST : Direction.EAST)
                 : (z < 0 ? Direction.NORTH : Direction.SOUTH);
-        return state.setValue(MachineControllerBlock.FACING, interior.getOpposite());
+        return interior.getOpposite();
+    }
+
+    private static Rotation rotationBetween(Direction source, Direction target) {
+        for (Rotation rotation : Rotation.values()) {
+            if (rotation.rotate(source) == target) return rotation;
+        }
+        return Rotation.NONE;
     }
 }

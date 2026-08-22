@@ -162,7 +162,7 @@ public record MachineRecipeLayout(
         return durationTextY + 10 * (display.energyInputs().size() + display.energyOutputs().size()
                 + (display.requiredHostIds().isEmpty() ? 0 : 1)
                 + display.recipe().levelRequirements().size() + display.smartInterfaceInputs().size()
-                + display.smartInterfaceOutputs().size() + display.smartInterfaceModifiers().size());
+                + display.smartInterfaceOutputs().size());
     }
 
     public enum Kind { ITEM, FLUID }

@@ -134,9 +134,6 @@ public final class MachineControllerScreen extends AbstractContainerScreen<Machi
     static Component levelLine(MachineLevel level) {
         var type = MachineLevelRegistry.getType(level.typeId());
         if (type == null || !(level.statePredicate() instanceof BlockPredicate.OfBlockState predicate)) return Component.empty();
-        MMCR.LOG.debug("[MMCR-DIAG] Controller UI level type={}, level={}, text={}, contents={}",
-                level.typeId(), level.id(), type.displayName().getString(),
-                type.displayName().getContents().getClass().getSimpleName());
         return Component.translatable("gui.mmcr.controller.level", type.displayName(), predicate.state().getBlock().getName());
     }
 

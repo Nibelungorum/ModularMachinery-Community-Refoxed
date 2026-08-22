@@ -13,7 +13,9 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.core.Direction;
+import com.mojang.serialization.JsonOps;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -73,6 +75,17 @@ class BlockPredicateTest {
         var p = new BlockPredicate.OfBlockState(s);
         assertThat(p.matches(s)).isTrue();
         assertThat(p.matches(Blocks.STONE.defaultBlockState())).isFalse();
+    }
+
+    @Test void ofBlockState_matches_equivalent_state_after_serialization() {
+        var expected = Blocks.DISPENSER.defaultBlockState()
+                .setValue(DirectionalBlock.FACING, Direction.WEST);
+        var encoded = net.minecraft.world.level.block.state.BlockState.CODEC
+                .encodeStart(JsonOps.INSTANCE, expected).getOrThrow();
+        var actual = net.minecraft.world.level.block.state.BlockState.CODEC
+                .parse(JsonOps.INSTANCE, encoded).getOrThrow();
+
+        assertThat(new BlockPredicate.OfBlockState(expected).matches(actual)).isTrue();
     }
 
     @Test void ofTag_matches_any_in_tag() {
