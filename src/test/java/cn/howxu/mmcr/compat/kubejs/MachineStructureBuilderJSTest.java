@@ -242,6 +242,35 @@ class MachineStructureBuilderJSTest {
     }
 
     @Test
+    void builder_supports_callback_main_structure_and_extension_chain() {
+        var definition = new MachineStructureBuilderJS("mmcr:test")
+                .mainStructure(stage -> stage.pattern("XC"))
+                .extension(stage -> stage.pattern("XXC"))
+                .extension(stage -> stage.pattern("XXXC"))
+                .createObject();
+
+        assertThat(definition.declarations()).extracting(Declaration::kind)
+                .containsExactly(Declaration.Kind.FULL, Declaration.Kind.EXTENSION, Declaration.Kind.EXTENSION);
+    }
+
+    @Test
+    void callback_extension_requires_main_structure() {
+        assertThatThrownBy(() -> new MachineStructureBuilderJS("mmcr:test")
+                .extension(stage -> stage.pattern("XC")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("extension requires a full structure first");
+    }
+
+    @Test
+    void callback_main_structure_can_only_be_declared_once() {
+        assertThatThrownBy(() -> new MachineStructureBuilderJS("mmcr:test")
+                .mainStructure(stage -> stage.pattern("XC"))
+                .mainStructure(stage -> stage.pattern("XXC")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("mainStructure can only be declared once");
+    }
+
+    @Test
     void builder_retains_complete_metadata_for_each_structure_declaration() {
         Identifier coilType = Identifier.parse("test:coil");
         TestBootstrap.beginRegistration();

@@ -25,6 +25,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Consumer;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration;
 
 /**
@@ -188,6 +189,12 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         return this;
     }
 
+    public MachineStructureBuilderJS mainStructure(Consumer<MachineStructureStageBuilderJS> consumer) {
+        if (!declarations.isEmpty()) throw new IllegalStateException("mainStructure can only be declared once");
+        declarations.add(stageDeclaration(consumer, Declaration.Kind.FULL));
+        return this;
+    }
+
     public MachineStructureBuilderJS extension(BlockArray pattern) {
         return extension(pattern, PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(),
                 MachineStructureRequirements.EMPTY);
@@ -201,6 +208,12 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         BlockArray extensionPattern = Objects.requireNonNull(pattern);
         declarations.add(new Declaration(Declaration.Kind.EXTENSION, extensionPattern, ports, tiers,
                 dynamicPatterns, requirements));
+        return this;
+    }
+
+    public MachineStructureBuilderJS extension(Consumer<MachineStructureStageBuilderJS> consumer) {
+        if (declarations.isEmpty()) throw new IllegalStateException("extension requires a full structure first");
+        declarations.add(stageDeclaration(consumer, Declaration.Kind.EXTENSION));
         return this;
     }
 
@@ -296,6 +309,15 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         slicePatternPending = false;
         declarations.clear();
         patternDeclaration = true;
+    }
+
+    private Declaration stageDeclaration(Consumer<MachineStructureStageBuilderJS> consumer,
+            Declaration.Kind kind) {
+        MachineStructureStageBuilderJS stage = new MachineStructureStageBuilderJS(id);
+        consumer.accept(stage);
+        Declaration declaration = stage.build();
+        return new Declaration(kind, declaration.pattern(), declaration.portRequirements(),
+                declaration.portTierRequirements(), declaration.dynamicPatterns(), declaration.requirements());
     }
 
     private static BlockPredicate levelPredicate(LevelSlot slot) {
