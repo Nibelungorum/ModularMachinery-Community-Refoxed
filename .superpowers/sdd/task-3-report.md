@@ -32,4 +32,4 @@ Implemented Task 3. `MachineBuilderJS` now exposes both `expandableStructure(boo
 - Updated `MachineBuilderJSTest.expandable_structure_settings_enter_machine_registration` to call `.expandableStructure(true)` directly.
 - Retained `.expandableStructure(false)` and its false assertion, covering both boolean overload values.
 - Focused test: `./gradlew test --tests '*MachineBuilderJSTest' --no-daemon`: passed.
-- Fix commit: pending.
+- Fix commit: `6e2c7ba` (`fix: cover expandable structure boolean overload`).
