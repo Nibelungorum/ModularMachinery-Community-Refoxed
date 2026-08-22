@@ -3,18 +3,16 @@ MMCREvents.server(event => {
     const structure = event.createStructure("mmcr_kubejs:kubejs_cracker")
 
     structure
-        // You can see how it performs:
-        // All structure follow one general structure arrangement, but can perform differently
+        // Structures follow the same basic layout, but machine settings can change their behavior.
         .pattern(['AAA', 'AAA', 'AAA'])
         .pattern(['XBX', 'B B', 'XBX'])
         .pattern(['XDX', 'D D', 'XDX'])
         .pattern(['XEX', 'ECE', 'XEX'])
-        .set('X', api.block('minecraft:polished_diorite')) // one block
-        .set('A', api.block('minecraft:polished_andesite')) // one block
+        .set('X', api.block('minecraft:polished_diorite')) // Regular block.
+        .set('A', api.block('minecraft:polished_andesite')) // Regular block.
         .set('D', api.block('minecraft:blue_ice'))
         .set('E', api.block('minecraft:mossy_cobblestone'))
-        // In the previous example, we always use fixed ports
-        // There are some convenient methods you can use if you use "const structure"
+        // Previous examples used fixed ports. A const structure also provides convenient port predicates.
         .set('B', api.anyOf(
             structure.anyOfItemInput(),
             structure.anyOfItemOutput(),
@@ -22,25 +20,23 @@ MMCREvents.server(event => {
             structure.anyOfEnergyInput()
         ))
         .controller('C')
-        // call this will set a range of port requirement
-        // if it is not satisfied, the structure will not form
-        // the number is the minium requirement
+        // Set the required port counts. The structure will not form when these requirements are not met.
+        // A number is an exact count; an array specifies the minimum and maximum.
         .portRequirements(api.portRequirements({
             item_input_bus: 1,
             item_output_bus: 1,
             fluid_output_hatch: 1,
-            energy_input_hatch: [1,3] // you can use a range
+            energy_input_hatch: [1,3] // Allow one to three energy input hatches.
         }))
-        // call this to set the port tier requirement
-        // it receives string argument, this is a design for easy usage and readable
+        // Set port tier requirements using a readable string format.
         .portTierRequirements(api.portTierRequirements([
             'item_input_bus>=normal',
             'item_output_bus>=normal',
             'energy_input_hatch>=normal'
         ]))
 
-        // Do not forget this
+        // Build the structure.
         .build()
 
-    // Move to server_scripts/recipe/A_Vertical_Machine.js see how to create some special recipes
+    // See server_scripts/recipe/A_Vertical_Machine.js for the recipe definitions.
 })

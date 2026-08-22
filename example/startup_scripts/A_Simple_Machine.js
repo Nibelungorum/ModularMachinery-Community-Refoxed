@@ -1,27 +1,27 @@
-// KubeJS Start up Event Register Machine Definitions
-// This stage will automatically register a controller block for your machine
+// Register a machine definition during the startup event.
+// A controller block is generated automatically after registration.
 
-// First, Listen the MMCREvents.startup
+// Listen for the MMCREvents.startup event.
 MMCREvents.startup(event => {
 
 
-    // Then call the register function
+    // Create the machine definition.
     const builder = event
-        .createMachine("mmcr_kubejs:kubejs_blast_furnace") // This is the Machine Global Identifier
-        .displayNameKey("machine.mmcr_kubejs.kubejs_blast_furnace") // This is the i18n Machine Display Name
-        .recipeFamily("mmcr_kubejs:kubejs_blast_furnace"); // This bind a recipe family for your machine
+        .createMachine("mmcr_kubejs:kubejs_blast_furnace") // Global machine identifier.
+        .displayNameKey("machine.mmcr_kubejs.kubejs_blast_furnace") // Translation key for the display name.
+        .recipeFamily("mmcr_kubejs:kubejs_blast_furnace"); // Recipe family used by the machine.
 
 
-    // Then you can use this builder to set some value or functions
+    // Configure the machine properties.
     builder
-        .allowMultithreading() // This allows your machine use multi thread
-        .allowParallelism() // this allows your machine use parallelism recipe processing
-        .maxParallelAmount(2147483647) // this limit the parallelism max_value, if you do not set this, it will be default 1
+        .allowMultithreading() // Allow the machine to process recipes across multiple threads.
+        .allowParallelism() // Allow the machine to process recipes in parallel.
+        .maxParallelAmount(2147483647) // Set the maximum parallel amount; defaults to 1 when omitted.
 
 
-    // Last you need to do is register it
+    // Register the machine after configuration.
     builder.register()
 
 
-    // Move to server_scripts/structure/A_Simple_Machine.js see how to define a structure for your machine
+    // See server_scripts/structure/A_Simple_Machine.js for the structure definition.
 })

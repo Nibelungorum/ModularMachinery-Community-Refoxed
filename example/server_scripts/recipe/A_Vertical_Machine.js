@@ -1,7 +1,6 @@
 ServerEvents.recipes( event => {
 
-    // I don't think this machine have some things interesting
-    // Just a recipe which can produce fluid uhh
+    // This example focuses on fluid output rather than recipe complexity.
     event.custom({
         type: 'mmcr:machine_recipe',
         machine: 'mmcr_kubejs:kubejs_cracker',
@@ -17,24 +16,24 @@ ServerEvents.recipes( event => {
                 type: 'item',
                 io: 'output',
                 stack: {
-                    id: 'minecraft:iron_ingot', // what a magic
+                    id: 'minecraft:iron_ingot',
                     count: 10
                 }
             },
             {
-                type: 'fluid', // just set to fluid
+                type: 'fluid', // Set the requirement type to fluid.
                 io: 'output',
                 stack: {
-                    id: 'minecraft:water', // just be the identifier
-                    amount: 1000 // mB, pay attention to "amount"
+                    id: 'minecraft:water', // Fluid identifier.
+                    amount: 1000 // Amount in mB.
                 }
             },
             {
-                type: 'energy', // I think you know that, if you do not set energy input, there will not be any energy consume
+                type: 'energy', // No energy is consumed when no energy input is defined.
                 io: 'input',
                 fe_per_tick: 20
             }
         ]
     })
-    // I found that with no id is a thing which every 爽
+    // Recipe IDs are optional in KubeJS.
 })

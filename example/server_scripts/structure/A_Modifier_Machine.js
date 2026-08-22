@@ -1,29 +1,27 @@
 MMCREvents.server(event => {
     const api = event.getAPI()
 
-    // This way we use a new formation, we can make the builder as a value, the use it for some advanced features
-    // Typically, in A_Simple_Machine you can also do like this
+    // Store the structure in a variable so it can be used for advanced features.
     const structure = event.createStructure("mmcr_kubejs:kubejs_alloy_furnace")
 
-    // This is a modifier creater, with the way of object and function api.singleBlockModifier()
-    // This declares the diamond block as one special block
+    // Create a single-block modifier for the diamond block.
     const diamondSpeedup = api.singleBlockModifier(
-        'alloy_furnace_diamond_speedup', // this is the identifier, for some runtime usage
-        api.block('minecraft:diamond_block'), // api.block() are optional, you can use any predicate
-        // this is an array argument, meaning you can make the modifier a lot of functions
+        'alloy_furnace_diamond_speedup', // Modifier identifier used at runtime.
+        api.block('minecraft:diamond_block'), // Matching predicate; other predicates can be used as well.
+        // Each entry in this array defines one modifier effect.
         [
             api.modifier(
-                'duration', // this modifier block will change the
-                'input',    // because duration happens before the recipe start, so you should use input as sign
-                0.5,        // the value
-                'multiply', // the value calculation way
-                false       // will it affect the output chance? If it's no, it will modify the output counts
+                'duration', // Modify the recipe duration.
+                'input',    // Duration is processed before the recipe starts, so use the input phase.
+                0.5,        // Modifier value.
+                'multiply', // Modifier calculation mode.
+                false       // Do not affect output chance; modify the output count instead.
             )
         ],
-        Item.of('minecraft:diamond_block') // When you use JEI 3D preview, this will append an info on diamond block in JEI
+        Item.of('minecraft:diamond_block') // Item shown for the modifier in the JEI preview.
     )
 
-    // one another modifier, will make the output x2
+    // Create another modifier that doubles the output count.
     const goldDoubling = api.singleBlockModifier(
         'alloy_furnace_gold_doubling',
         api.block('minecraft:gold_block'),
@@ -39,15 +37,15 @@ MMCREvents.server(event => {
         Item.of('minecraft:gold_block')
     )
 
-    // The build our machine structure
+    // Define and build the machine structure.
         structure
             .pattern(['XXX', 'XIX', 'XXX'])
             .pattern(['XMX', 'I I', 'XMX'])
             .pattern(['XXX', 'XCX', 'XXX'])
             .set('X',api.block('minecraft:bricks'))
-            .set('M',api.patternEntry( // use api.patternEntry to create a special modifier declaration
-                api.block('minecraft:blast_furnace'), // predicate
-                [   // this array contains all modifiers
+            .set('M',api.patternEntry( // Use api.patternEntry to declare a modifier position.
+                api.block('minecraft:blast_furnace'), // Matching predicate.
+                [   // Modifiers allowed at this position.
                     diamondSpeedup,
                     goldDoubling
                 ]
@@ -56,5 +54,5 @@ MMCREvents.server(event => {
             .controller('C')
             .build()
 
-    // Move to server_scripts/recipe/A_Modifier_Machine.js see how to create some special recipes
+    // See server_scripts/recipe/A_Modifier_Machine.js for the recipe definitions.
 })

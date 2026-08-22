@@ -7,7 +7,7 @@ ServerEvents.recipes( event => {
             {
                 type: 'item',
                 io: 'input',
-                item: 'minecraft:apple', // unbelievable apple generator
+                item: 'minecraft:apple',
                 count: 3
             },
             {
@@ -20,7 +20,7 @@ ServerEvents.recipes( event => {
                 type: 'item',
                 io: 'output',
                 stack: {
-                    id: 'minecraft:diamond', // what a magic
+                    id: 'minecraft:diamond',
                     count: 10
                 }
             },
@@ -40,9 +40,8 @@ ServerEvents.recipes( event => {
         ]
     })
 
-    // and this is an error recipe
-    // with no energy input port in structure, you can't process this recipe
-    // sure, requirement system and recipe system do not have close connection
+    // This recipe cannot run because the structure has no energy input port.
+    // The requirement and recipe systems are intentionally independent.
     event.custom({
         type: 'mmcr:machine_recipe',
         machine: 'mmcr_kubejs:kubejs_reactor',

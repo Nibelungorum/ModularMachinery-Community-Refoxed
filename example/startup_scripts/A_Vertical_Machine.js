@@ -1,16 +1,16 @@
-// Here I will introduce more advanced features
+// Configure machine facing and rotational symmetry.
 
 MMCREvents.startup(event => {
 
     const builder = event
-        .createMachine("mmcr_kubejs:kubejs_cracker") // First, create your machine definition
-        .displayNameKey("machine.mmcr_kubejs.kubejs_cracker") //
-        .recipeFamily("mmcr_kubejs:kubejs_cracker") //
-        .allowVerticalFacing() // This allows your controller to be placed in vertical face
-        .fullyRotationallySymmetric() // This allows your structure to be spined when placed vertically
+        .createMachine("mmcr_kubejs:kubejs_cracker") // Create the machine definition.
+        .displayNameKey("machine.mmcr_kubejs.kubejs_cracker") // Translation key for the display name.
+        .recipeFamily("mmcr_kubejs:kubejs_cracker") // Bind the recipe family.
+        .allowVerticalFacing() // Allow the controller to be placed vertically.
+        .fullyRotationallySymmetric() // Allow full rotation when the structure is placed vertically.
 
     builder.register()
 
 
-    // Move to server_scripts/structure/A_Vertical_Machine.js see how to define a vertical-able structure for your machine
+    // See server_scripts/structure/A_Vertical_Machine.js for the rotatable structure.
 })

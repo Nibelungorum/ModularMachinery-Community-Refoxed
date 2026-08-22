@@ -1,4 +1,4 @@
-// Module couplers belong to the machine structure, not the startup machine registration.
+// Module couplers belong to the machine structure, not the startup registration.
 
 MMCREvents.server(event => {
     const api = event.getAPI()
@@ -25,8 +25,7 @@ MMCREvents.server(event => {
         .pattern(['        X        ','                 ','                 ','                 ','                 ','                 ','                 ','                 ','                 ','                 ','                 ','                 '])
         .set('X' ,api.block('minecraft:smooth_quartz'))
         .set('A' ,api.block('minecraft:amethyst_block'))
-        // you can use api.coupler() quickly set the copler pos
-        // 其实应该也在space_elevator构造器里 但是已经是技术债了T_T
+        // Use api.coupler() to quickly declare a module coupler position.
         .set('B' ,api.coupler())
         .set('D' ,api.anyOf(
             api.block('minecraft:smooth_quartz'),
@@ -56,5 +55,5 @@ MMCREvents.server(event => {
         .controller('F')
         .build()
 
-    // Move to server_scripts/recipe/A_Module_Machine.js see how to create some special recipes
+    // See server_scripts/recipe/A_Module_Machine.js for the recipe definitions.
 })

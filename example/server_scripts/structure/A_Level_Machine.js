@@ -6,7 +6,7 @@ MMCREvents.server(event => {
         .pattern(['AAA','XXX','XXX','AAA'])
         .pattern(['AAA','X X','X X','ADA'])
         .pattern(['ABA','XXX','XXX','AAA'])
-        .set('X',api.levelSlot("mmcr_kubejs:thermal_smelting_coil")) // call levelSlot and everything solved
+        .set('X',api.levelSlot("mmcr_kubejs:thermal_smelting_coil")) // Use a level slot to match the corresponding level block.
         .set('A',api.anyOf(
             structure.anyOfItemInput(),
             structure.anyOfItemOutput(),
@@ -17,8 +17,8 @@ MMCREvents.server(event => {
         ))
         .set('D',api.block('minecraft:reinforced_deepslate'))
         .controller('B')
-        // Do not forget this
+        // Build the structure.
         .build()
 
-    // Move to server_scripts/recipe/A_Level_Machine.js see how to create some special recipes
+    // See server_scripts/recipe/A_Level_Machine.js for the recipe definitions.
 })

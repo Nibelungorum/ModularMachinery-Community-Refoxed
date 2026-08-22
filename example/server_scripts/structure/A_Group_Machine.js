@@ -2,9 +2,9 @@ MMCREvents.server(event => {
     const api = event.getAPI()
     const structure = event.createStructure("mmcr_kubejs:kubejs_distillation_tower")
 
-    // Distillation Tower
+    // Define the main structure of the distillation tower.
     structure
-        // use mainStructure to create a header
+        // Use mainStructure to define the main section.
         .mainStructure(stage =>
             stage
                 .pattern(['  XXX  ','  AAA  ','       ','       '])
@@ -26,7 +26,7 @@ MMCREvents.server(event => {
                 .set('D', api.block('minecraft:gilded_blackstone'))
                 .controller('E')
         )
-        // then create extension structure
+        // Use expandStructure to define an additional section.
         .expandStructure(stage => stage
             .pattern(['  XXX  ','  AAA  ','       ','       ','       '])
             .pattern([' XXXXX ',' B   B ','  ACA  ','  ACA  ','       '])
@@ -69,8 +69,8 @@ MMCREvents.server(event => {
             .controller('E')
         )
 
-        // Do not forget this
+        // Build the grouped structure.
         structure.build()
 
-    // Move to server_scripts/recipe/A_Group_Machine.js see how to create some special recipes
+    // See server_scripts/recipe/A_Group_Machine.js for the recipe definitions.
 })

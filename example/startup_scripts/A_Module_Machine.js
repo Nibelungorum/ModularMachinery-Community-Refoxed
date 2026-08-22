@@ -1,5 +1,5 @@
-// Here we will register one special type, Host machine and module machine
-// 参考 GTL的太空电梯
+// Register a host machine and a module machine.
+// This example is based on GTL's space elevator.
 
 MMCREvents.startup(event => {
     const space_elevator = event
@@ -7,7 +7,7 @@ MMCREvents.startup(event => {
         .displayNameKey("machine.mmcr_kubejs.kubejs_space_elevator")
         .recipeFamily("mmcr_kubejs:kubejs_space_elevator")
         .appearance('minecraft:smooth_quartz')
-        .controllerBaseTexture('minecraft:block/quartz_block_bottom') // Smooth Quartz does not have standard texture, re modify it
+        .controllerBaseTexture('minecraft:block/quartz_block_bottom') // Smooth quartz has no standard texture, so set the base texture manually.
         .formedPortBaseTexture('minecraft:block/quartz_block_bottom')
         .host("mmcr_kubejs:kubejs_space_reassembler")
 

@@ -23,7 +23,7 @@ MMCREvents.server(event => {
             structure.anyOfItemOutput(),
             structure.anyOfEnergyInput(),
             structure.parallelControllers(),
-            structure.smartInterface() // do not forget the smart interface
+            structure.smartInterface() // Allow a smart interface at this position.
         ))
         .set('I', api.block('minecraft:purple_terracotta'))
         .set('J', api.block('minecraft:purpur_block'))
@@ -45,10 +45,8 @@ MMCREvents.server(event => {
         .set('a', api.state('minecraft:end_stone_brick_stairs[facing=east,half=bottom,shape=outer_left,waterlogged=false]'))
         .set('b', api.state('minecraft:end_stone_brick_stairs[facing=north,half=bottom,shape=straight,waterlogged=false]'))
 
-        // Do not forget this
+        // Build the structure.
         .build()
 
-    // Move to server_scripts/recipe/A_Smart_Machine.js see how to create some special recipes
+    // See server_scripts/recipe/A_Smart_Machine.js for the recipe definitions.
 })
-
-

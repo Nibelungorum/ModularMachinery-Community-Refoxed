@@ -6,7 +6,7 @@ ServerEvents.recipes(event => {
         parallelized: true,
         required_host_ids: [
             "mmcr_kubejs:kubejs_space_elevator"
-        ], // use required_host_ids to declare this recipe must happen in which machines
+        ], // Declare the host machines where this recipe can run.
         requirements: [
             {
                 type: 'item',
@@ -40,7 +40,7 @@ ServerEvents.recipes(event => {
         ]
     })
 
-    // also host recipe is available
+    // Recipes can also run on the host machine.
     event.custom({
         type: 'mmcr:machine_recipe',
         machine: 'mmcr_kubejs:kubejs_space_elevator',
@@ -58,7 +58,7 @@ ServerEvents.recipes(event => {
                 io: 'output',
                 stack: {
                     id: 'minecraft:golden_apple',
-                    count: 12 // amazing uhh
+                    count: 12
                 }
             },
             {
@@ -68,5 +68,5 @@ ServerEvents.recipes(event => {
             }
         ]
     })
-    // you have finished your first machine again ! just launch game and see what happen
+    // The module and host recipes are complete.
 })

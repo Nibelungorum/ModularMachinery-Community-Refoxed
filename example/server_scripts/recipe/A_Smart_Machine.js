@@ -8,7 +8,7 @@ ServerEvents.recipes( event => {
             {
                 type: 'item',
                 io: 'input',
-                item: 'minecraft:stick', // magic uhh
+                item: 'minecraft:stick',
                 count: 4
             },
             {
@@ -25,11 +25,11 @@ ServerEvents.recipes( event => {
                 fe_per_tick: 10
             },
             {
-                type: 'smart_interface', // we add smart interface here
-                io: 'input', // when set to output, will change the value of smart interface
+                type: 'smart_interface', // Add a smart interface requirement.
+                io: 'input', // Use output to change the interface value instead.
                 interface_type: 'kubejs_mode',
                 min_value: 1,
-                max_value: 1 // set to one value just make min == max
+                max_value: 1 // Equal bounds require exactly one value.
             }
         ]
     })
@@ -112,5 +112,5 @@ ServerEvents.recipes( event => {
         ]
     })
 
-    // you have finished your first machine again ! just launch game and see what happen
+    // The smart interface recipes are complete.
 })

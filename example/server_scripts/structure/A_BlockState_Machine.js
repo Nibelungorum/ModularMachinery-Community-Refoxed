@@ -2,8 +2,8 @@ MMCREvents.server(event => {
     const api = event.getAPI()
     const structure = event.createStructure("mmcr_kubejs:kubejs_reactor")
 
-    // Is it complex? do not worry, I just use the export tool uhh
-    // what you need care is just building it once in the game
+    // The structure is complex, but its layout can be copied from the export tool.
+    // After exporting it, build the structure once in-game.
     structure
         .pattern("  ABBBD  ", "         ", "         ", "         ", "         ", "         ", "         ", "         ")
         .pattern(" AEXXXFD ", "   XXX   ", "         ", "         ", "         ", "         ", "         ", "         ")
@@ -19,7 +19,7 @@ MMCREvents.server(event => {
             structure.anyOfItemOutput(),
             structure.anyOfFluidOutput(),
             structure.anyOfFluidInput(),
-            structure.anyOfEnergyOutput(), // hey, reactor may not need energy input
+            structure.anyOfEnergyOutput(), // This reactor can output energy without requiring an energy input port.
             api.block('minecraft:blue_ice')
         ))
         .set('A', api.state('minecraft:deepslate_brick_stairs[facing=east,half=bottom,shape=outer_right,waterlogged=false]'))
@@ -48,16 +48,14 @@ MMCREvents.server(event => {
         .set('Z', api.state('minecraft:polished_deepslate_stairs[facing=east,half=bottom,shape=outer_left,waterlogged=false]'))
         .set('a', api.block('minecraft:polished_deepslate_stairs'))
         .set('b', api.state('minecraft:polished_deepslate_stairs[facing=north,half=bottom,shape=outer_left,waterlogged=false]'))
-        // here I must tell you something you must pay attention
-        // the export tool didn't know which block has exact block state
-        // for example, if minecraft:deepslate_brick_stairs is placed with no state, it will be an api.block,
-        // so it will not been adjusted, and cause some problems
-        // you have to adjust these block but block state by hand
+        // Note: the export tool cannot determine the exact block state required by every block.
+        // For example, a stair without recorded state is exported as api.block(), which can cause mismatches.
+        // Replace it with the correct api.state() manually when necessary.
         .set('c', api.state('minecraft:deepslate_brick_stairs[facing=north,half=bottom,shape=straight,waterlogged=false]'))
         .controller('C')
 
-        // Do not forget this
+        // Build the structure.
         .build()
 
-    // Move to server_scripts/recipe/A_BlockState_Machine.js see how to create some special recipes
+    // See server_scripts/recipe/A_BlockState_Machine.js for the recipe definitions.
 })

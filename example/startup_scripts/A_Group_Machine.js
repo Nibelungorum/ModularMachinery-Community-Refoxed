@@ -1,4 +1,4 @@
-// Here we will register two machines which have different structure
+// Register a machine with an expandable structure.
 
 MMCREvents.startup(event => {
 
@@ -7,9 +7,9 @@ MMCREvents.startup(event => {
         .displayNameKey("machine.mmcr_kubejs.kubejs_distillation_tower")
         .recipeFamily("mmcr_kubejs:kubejs_distillation_tower")
         .appearance("minecraft:polished_blackstone")
-        .expandableStructure(true) // use this make it an expandable machine
+        .expandableStructure(true) // Enable the expandable structure.
 
     distillation_tower.register()
 
-    // Move to server_scripts/structure/A_Group_Machine.js see how to use group for your machine
+    // See server_scripts/structure/A_Group_Machine.js for the grouped structure.
 })

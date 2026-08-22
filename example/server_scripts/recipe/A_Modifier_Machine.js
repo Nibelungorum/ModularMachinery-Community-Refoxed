@@ -2,21 +2,21 @@ ServerEvents.recipes( event => {
 
     event.custom({
         type: 'mmcr:machine_recipe',
-        machine: 'mmcr_kubejs:kubejs_alloy_furnace', // do not forget your registration name
+        machine: 'mmcr_kubejs:kubejs_alloy_furnace', // Use the machine's registered identifier.
         tick_time: 10,
         parallelized: true,
         requirements: [
             {
                 type: 'item',
                 io: 'input',
-                item: '#minecraft:swords', // you are allowed to use tag
-                components: { // you are allowed to use data components
+                item: '#minecraft:swords', // Tags can be used as ingredients.
+                components: { // Item data components can also be matched.
                     'minecraft:enchantments': {
                         'minecraft:sharpness': 2
                     }
                 },
                 count: 1,
-                consume_chance: 0.5 // you can set its consume chance, when it is 0, it will be never consumed
+                consume_chance: 0.5 // Set the consumption chance; 0 keeps the input intact.
             },
             {
                 type: 'item',
@@ -24,7 +24,7 @@ ServerEvents.recipes( event => {
                 stack: {
                     id: 'minecraft:iron_ingot',
                     count: 2,
-                    components: { // here allowed data components too
+                    components: { // Output data components are also supported.
                         'minecraft:custom_name': {
                             text: 'What an amazing design!'
                         },
@@ -33,7 +33,7 @@ ServerEvents.recipes( event => {
                         }
                     }
                 },
-                chance: 0.5 // output chance is also allowed
+                chance: 0.5 // Outputs can have a chance as well.
             },
             {
                 type: 'energy',
@@ -42,7 +42,7 @@ ServerEvents.recipes( event => {
             }
         ]
     })
-    //.id('mmcr_kubejs:blast_furnace_1') this way we do not register it's id
+    //.id('mmcr_kubejs:blast_furnace_1') Omit this call to leave the recipe ID automatic.
 
-    // you have finished your first machine again ! just launch game and see what happen
+    // The modifier recipe is complete.
 })

@@ -3,14 +3,14 @@ ServerEvents.recipes( event => {
         type: 'mmcr:machine_recipe',
         machine: 'mmcr_kubejs:kubejs_thermal_smelting_furnace',
         tick_time: 300,
-        // use the object below to set level_requirement
+        // Use level_requirements to require a specific machine level.
         level_requirements: [
             {
                 type: 'mmcr_kubejs:thermal_smelting_coil',
                 level: 'mmcr_kubejs:thermal_smelting_coil_iron'
             }
         ],
-        // magic uhh
+        // Define the item and energy requirements.
         requirements: [
             {
                 type: 'item',
@@ -46,11 +46,11 @@ ServerEvents.recipes( event => {
         tick_time: 300,
         level_requirements: [
             {
-                type: 'mmcr_kubejs:thermal_smelting_coil', // the type register name
-                level: 'mmcr_kubejs:thermal_smelting_coil_gold' // the level name
+                type: 'mmcr_kubejs:thermal_smelting_coil', // Registered level type.
+                level: 'mmcr_kubejs:thermal_smelting_coil_gold' // Required level.
             }
         ],
-        // magic uhh
+        // Define the item and energy requirements.
         requirements: [
             {
                 type: 'item',
@@ -86,8 +86,8 @@ ServerEvents.recipes( event => {
         tick_time: 300,
         level_requirements: [
             {
-                type: 'mmcr_kubejs:thermal_smelting_coil', // the type register name
-                level: 'mmcr_kubejs:thermal_smelting_coil_diamond' // the level name
+                type: 'mmcr_kubejs:thermal_smelting_coil', // Registered level type.
+                level: 'mmcr_kubejs:thermal_smelting_coil_diamond' // Required level.
             }
         ],
         // magic uhh

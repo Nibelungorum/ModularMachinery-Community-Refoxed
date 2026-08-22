@@ -1,8 +1,8 @@
-// Here we will introduce the level system and shared structure system
+// Use the level system and a shared structure.
 
 MMCREvents.startup(event => {
 
-    // If you see it in game, you will find this is one gt machine uhh
+    // Register the machine that uses levels.
     const builder = event
         .createMachine("mmcr_kubejs:kubejs_thermal_smelting_furnace")
         .displayNameKey("machine.mmcr_kubejs.kubejs_thermal_smelting_furnace")
@@ -13,25 +13,24 @@ MMCREvents.startup(event => {
 
     builder.register()
 
-    // Then we should register level type here
-    // you must be sure that level type register is prior to level
-    // when used in recipe and structure, you needn't care this
+    // Register the level type before registering individual levels.
+    // Recipes and structures only need to reference the registered level.
     event
-        .createLevelType("mmcr_kubejs:thermal_smelting_coil") // type register name
-        .displayNameKey('level.mmcr_kubejs.thermal_smelting_coil') // type display name
-        .register() // register
+        .createLevelType("mmcr_kubejs:thermal_smelting_coil") // Level type identifier.
+        .displayNameKey('level.mmcr_kubejs.thermal_smelting_coil') // Translation key for the level type name.
+        .register() // Register the level type.
 
-    // then create level
-    event.createLevel("mmcr_kubejs:thermal_smelting_coil_iron") // level register name
-        .type("mmcr_kubejs:thermal_smelting_coil") // level type
-        .priority(0) // prority, iron usually be the lowest
-        .state('minecraft:iron_block') // the block state, it's difficulty to get block state in kubejs, so just use block id
-        .modifier({ // the level can provide some modifiers, they are work as same as single block modifier
+    // Register an individual level.
+    event.createLevel("mmcr_kubejs:thermal_smelting_coil_iron") // Level identifier.
+        .type("mmcr_kubejs:thermal_smelting_coil") // Parent level type.
+        .priority(0) // Priority; iron is usually the lowest tier.
+        .state('minecraft:iron_block') // Block identifier representing the level.
+        .modifier({ // A level can provide modifiers, just like a single-block modifier.
             durationMultiplier: 0.95,
             energyMultiplier: 0.95,
             parallelismBonus: 4
         })
-        .register() // then register
+        .register() // Register the level.
 
     event.createLevel("mmcr_kubejs:thermal_smelting_coil_gold")
         .type("mmcr_kubejs:thermal_smelting_coil")
@@ -55,5 +54,5 @@ MMCREvents.startup(event => {
         })
         .register()
 
-    // Move to server_scripts/structure/A_Level_Machine.js see how to use level for your machine
+    // See server_scripts/structure/A_Level_Machine.js for the level structure.
 })

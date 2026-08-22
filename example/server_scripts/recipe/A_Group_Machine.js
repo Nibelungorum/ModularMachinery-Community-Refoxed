@@ -3,7 +3,7 @@ ServerEvents.recipes( event => {
         type: 'mmcr:machine_recipe',
         machine: 'mmcr_kubejs:kubejs_distillation_tower',
         tick_time: 300,
-        allow_partial_outputs: true, // this make a special recipe, which means if there is not enough ports, some products will be trashed
+        allow_partial_outputs: true, // Discard outputs when the structure lacks enough output ports.
         requirements: [
             {
                 type: 'item',
@@ -11,8 +11,8 @@ ServerEvents.recipes( event => {
                 item: '#minecraft:logs',
                 count: 1
             },
-            // Here are 3 products, but if you do not build one 3-levels distillation tower
-            // 2 of the output will trash directly
+            // This recipe has three outputs. Without a three-level distillation tower,
+            // outputs without an available port are discarded.
             {
                 type: 'item',
                 io: 'output',
