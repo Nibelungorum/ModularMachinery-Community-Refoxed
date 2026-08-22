@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.kubejs;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
@@ -24,12 +25,17 @@ public class LevelTypeBuilderJS extends BuilderBase<LevelType> {
 
     public LevelTypeBuilderJS displayName(String displayName) {
         this.displayNameKey = displayName;
+        MMCR.LOG.debug("[MMCR-DIAG] Level type {} received displayName key {}", id, displayName);
         return this;
     }
 
     @Override
     public LevelType createObject() {
-        return new LevelType(id, Component.translatable(displayNameKey == null ? id.toString() : displayNameKey));
+        String key = displayNameKey == null ? id.toString() : displayNameKey;
+        Component component = Component.translatable(key);
+        MMCR.LOG.debug("[MMCR-DIAG] Level type {} created with key={}, text={}, contents={}",
+                id, key, component.getString(), component.getContents().getClass().getSimpleName());
+        return new LevelType(id, component);
     }
 
     public void registerObject() {

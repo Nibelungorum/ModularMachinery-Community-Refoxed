@@ -243,6 +243,9 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         Component suffix = selected.id().equals(required.id())
                 ? Component.translatable("jei.mmcr.machine_recipe.minimum_level")
                 : Component.empty();
+        MMCR.LOG.debug("[MMCR-DIAG] JEI level requirement type={}, level={}, text={}, contents={}",
+                requirement.typeId(), requirement.levelId(), type.displayName().getString(),
+                type.displayName().getContents().getClass().getSimpleName());
         return type.displayName().copy()
                 .append(Component.literal(": "))
                 .append(levelName)

@@ -118,6 +118,9 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     private static Component levelLine(MachineLevel level) {
         var type = MachineLevelRegistry.getType(level.typeId());
         if (type == null || !(level.statePredicate() instanceof BlockPredicate.OfBlockState predicate)) return Component.empty();
+        MMCR.LOG.debug("[MMCR-DIAG] Factory UI level type={}, level={}, text={}, contents={}",
+                level.typeId(), level.id(), type.displayName().getString(),
+                type.displayName().getContents().getClass().getSimpleName());
         return Component.translatable("gui.mmcr.controller.level", type.displayName(), predicate.state().getBlock().getName());
     }
 

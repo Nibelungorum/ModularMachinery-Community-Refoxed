@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.tile;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockArrayCache;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
@@ -231,6 +232,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void onMachineDestroyed() {
+        MMCR.LOG.debug("[MMCR-DIAG] Controller destroyed pos={}, removed={}, block={}, formed={}",
+                getBlockPos(), isRemoved(), getBlockState().getBlock(), isFormed());
         notifyPreviewReceiversCleared();
         resetMachine(true, false);
     }
@@ -324,6 +327,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public void applyClientState(String recipeName, boolean formed, boolean active, List<String> foundLevelIds,
                                  boolean recipeLocked, String lockedRecipeId) {
         if (level == null || !level.isClientSide()) return;
+        MMCR.LOG.debug("[MMCR-DIAG] Applying controller client state pos={}, removed={}, block={}, formed={}, active={}, recipe={}",
+                getBlockPos(), isRemoved(), getBlockState().getBlock(), formed, active, recipeName);
         if (isFormed() != formed) {
             level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.FORMED, formed), 3);
         }
@@ -1525,6 +1530,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (getBlockState() == null) return;
         boolean next = isRuntimeActive();
         if (next == syncedRuntimeActive) return;
+        MMCR.LOG.debug("[MMCR-DIAG] Syncing controller runtime state pos={}, removed={}, block={}, active {} -> {}",
+                getBlockPos(), isRemoved(), getBlockState().getBlock(), syncedRuntimeActive, next);
         syncedRuntimeActive = next;
         setChanged();
         if (level != null && !level.isClientSide()) {
@@ -2245,6 +2252,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     @Override
     public void setRemoved() {
+        MMCR.LOG.debug("[MMCR-DIAG] Controller setRemoved pos={}, block={}, formed={}",
+                getBlockPos(), getBlockState().getBlock(), isFormed());
         if (level != null && !level.isClientSide()) resetMachine(true, false);
         super.setRemoved();
     }
