@@ -143,6 +143,19 @@ class MachineBuilderJSTest {
     }
 
     @Test
+    void expandable_structure_settings_enter_machine_registration() {
+        var expandable = new MachineBuilderJS(MMCR.id("expandable_machine"))
+                .expandableStructure()
+                .createObject();
+        var fixed = new MachineBuilderJS(MMCR.id("fixed_machine"))
+                .expandableStructure(false)
+                .createObject();
+
+        assertThat(expandable.expandableStructure()).isTrue();
+        assertThat(fixed.expandableStructure()).isFalse();
+    }
+
+    @Test
     void startup_event_creates_machine_builder() {
         var builder = new MMCRStartupEventJS().createMachine("mmcr:event_machine");
 

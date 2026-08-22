@@ -110,6 +110,10 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return this;
     }
 
+    public MachineBuilderJS expandableStructure() {
+        return expandableStructure(true);
+    }
+
     public MachineBuilderJS expandableStructure(boolean expandableStructure) {
         this.expandableStructure = expandableStructure;
         return this;
