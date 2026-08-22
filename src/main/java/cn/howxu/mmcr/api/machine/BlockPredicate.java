@@ -32,25 +32,28 @@ public sealed interface BlockPredicate {
      */
     default Optional<BlockState> preferredState() {
         List<BlockState> candidates = candidateStates(this).stream()
-                .sorted(Comparator.comparingInt(BlockPredicate::levelPriority).reversed())
+                .sorted(Comparator.comparingInt(Candidate::exactState).reversed()
+                        .thenComparing(Comparator.comparingInt((Candidate candidate) -> levelPriority(candidate.state())).reversed()))
+                .map(Candidate::state)
                 .toList();
         if (!candidates.isEmpty()) return Optional.of(candidates.getFirst());
         return Optional.empty();
     }
 
-    private static List<BlockState> candidateStates(BlockPredicate predicate) {
-        List<BlockState> states = new ArrayList<>();
+    private static List<Candidate> candidateStates(BlockPredicate predicate) {
+        List<Candidate> states = new ArrayList<>();
         collectCandidateStates(predicate, states);
         return states;
     }
 
-    private static void collectCandidateStates(BlockPredicate predicate, List<BlockState> states) {
+    private static void collectCandidateStates(BlockPredicate predicate, List<Candidate> states) {
         switch (predicate) {
-            case OfBlockState ofState -> states.add(ofState.state());
-            case OfBlock ofBlock -> states.add(ofBlock.block().defaultBlockState());
-            case DeferredBlock deferredBlock -> states.add(deferredBlock.supplier().get().defaultBlockState());
+            case OfBlockState ofState -> states.add(new Candidate(ofState.state(), 1));
+            case OfBlock ofBlock -> states.add(new Candidate(ofBlock.block().defaultBlockState(), 0));
+            case DeferredBlock deferredBlock -> states.add(new Candidate(deferredBlock.supplier().get().defaultBlockState(), 0));
             case OfTag ofTag -> blocksInTag(ofTag.tag()).stream()
                     .map(Block::defaultBlockState)
+                    .map(state -> new Candidate(state, 0))
                     .forEach(states::add);
             case AnyOf anyOf -> anyOf.children().forEach(child -> collectCandidateStates(child, states));
             default -> {}
@@ -68,6 +71,9 @@ public sealed interface BlockPredicate {
     private static int levelPriority(BlockState state) {
         return MachineLevelRegistry.findLevel(state).map(level -> level.priority()).orElse(Integer.MIN_VALUE);
     }
+
+
+    record Candidate(BlockState state, int exactState) {}
 
     enum MachineCoupler implements BlockPredicate {
         INSTANCE;

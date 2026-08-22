@@ -21,6 +21,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.core.Direction;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -53,6 +55,17 @@ class MultiblockPreviewBuilderTest {
                 new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK))));
 
         assertEquals(Blocks.GOLD_BLOCK.defaultBlockState(), result.orElseThrow());
+    }
+
+    @Test
+    void preview_state_prefers_exact_state_over_plain_block_in_any_of() {
+        var exactState = Blocks.OAK_LOG.defaultBlockState().setValue(BlockStateProperties.AXIS, Direction.Axis.X);
+
+        var result = MultiblockPreviewBuilder.previewState(new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(Blocks.OAK_LOG),
+                new BlockPredicate.OfBlockState(exactState))));
+
+        assertEquals(exactState, result.orElseThrow());
     }
 
     @Test

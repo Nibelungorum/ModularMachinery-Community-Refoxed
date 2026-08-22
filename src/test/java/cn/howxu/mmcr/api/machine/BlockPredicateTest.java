@@ -12,6 +12,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.core.Direction;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -112,6 +114,15 @@ class BlockPredicateTest {
                 new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState())));
 
         assertThat(predicate.preferredState()).containsSame(Blocks.IRON_BLOCK.defaultBlockState());
+    }
+
+    @Test void preferredState_prefers_exact_state_over_plain_block_in_anyOf() {
+        var exactState = Blocks.OAK_LOG.defaultBlockState().setValue(BlockStateProperties.AXIS, Direction.Axis.X);
+        var predicate = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(Blocks.OAK_LOG),
+                new BlockPredicate.OfBlockState(exactState)));
+
+        assertThat(predicate.preferredState()).containsSame(exactState);
     }
 
     @Test void preferredState_recursively_considers_nested_anyOf_children() {

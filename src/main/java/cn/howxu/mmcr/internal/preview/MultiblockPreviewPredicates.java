@@ -23,7 +23,8 @@ public final class MultiblockPreviewPredicates {
         if (predicate instanceof BlockPredicate.AnyOf anyOf) {
             return anyOf.children().stream()
                     .flatMap(child -> representative(child).stream())
-                    .min(Comparator.comparingInt(MultiblockPreviewPredicates::priority));
+                    .min(Comparator.comparingInt(MultiblockPreviewPredicates::exactStatePriority).reversed()
+                            .thenComparingInt(MultiblockPreviewPredicates::priority));
         }
         return Optional.of(predicate).filter(MultiblockPreviewPredicates::hasRepresentableBlock);
     }
@@ -54,6 +55,10 @@ public final class MultiblockPreviewPredicates {
         return block(predicate)
                 .map(MultiblockPreviewPredicates::blockPriority)
                 .orElse(3);
+    }
+
+    private static int exactStatePriority(BlockPredicate predicate) {
+        return predicate instanceof BlockPredicate.OfBlockState ? 1 : 0;
     }
 
     private static Optional<Block> block(BlockPredicate predicate) {
