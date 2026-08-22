@@ -6,6 +6,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Property;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -54,7 +55,7 @@ public final class MultiblockExportService {
         PreparedExport prepared = prepare(entries, controllerFace, rollFacing);
         StringBuilder out = new StringBuilder(".pattern(p -> p").append(System.lineSeparator());
         appendLayers(out, prepared, ".layer(");
-        for (Map.Entry<Identifier, Character> symbol : prepared.symbols().entrySet()) {
+        for (Map.Entry<PredicateKey, Character> symbol : prepared.symbols().entrySet()) {
             if (symbol.getValue() == 'C') continue;
             out.append("        .where('").append(symbol.getValue()).append("', ")
                     .append(predicateExpression(symbol.getKey())).append(")").append(System.lineSeparator());
@@ -70,9 +71,9 @@ public final class MultiblockExportService {
         PreparedExport prepared = prepare(entries, controllerFace, rollFacing);
         StringBuilder out = new StringBuilder();
         appendLayers(out, prepared, null);
-        for (Map.Entry<Identifier, Character> symbol : prepared.symbols().entrySet()) {
-            out.append(".set('").append(symbol.getValue()).append("', api.block('")
-                    .append(escapeKubeJs(symbol.getKey().toString())).append("'))")
+        for (Map.Entry<PredicateKey, Character> symbol : prepared.symbols().entrySet()) {
+            out.append(".set('").append(symbol.getValue()).append("', ")
+                    .append(kubeJsPredicateExpression(symbol.getKey())).append(")")
                     .append(System.lineSeparator());
         }
         return out.toString();
@@ -82,11 +83,13 @@ public final class MultiblockExportService {
         Direction normalizedRoll = BlockRotator.normalizedRoll(controllerFace, rollFacing);
         List<RenderedEntry> rendered = entries.stream()
                 .filter(entry -> !entry.air())
-                .map(entry -> new RenderedEntry(normalizeOffset(entry.offset(), controllerFace, normalizedRoll), entry.blockId()))
+                .map(entry -> new RenderedEntry(normalizeOffset(entry.offset(), controllerFace, normalizedRoll),
+                        new PredicateKey(entry.blockId(), entry.state())))
                 .sorted(Comparator.comparingInt((RenderedEntry entry) -> entry.pos().getZ())
                         .thenComparingInt(entry -> entry.pos().getY())
                         .thenComparingInt(entry -> entry.pos().getX())
-                        .thenComparing(entry -> entry.blockId().toString()))
+                        .thenComparing(entry -> entry.predicate().blockId().toString())
+                        .thenComparing(entry -> entry.predicate().state() == null ? "" : entry.predicate().state().toString()))
                 .toList();
         Identifier controller = entries.stream()
                 .filter(SnapshotEntry::controller)
@@ -99,7 +102,7 @@ public final class MultiblockExportService {
     private static void appendLayers(StringBuilder out, PreparedExport prepared, String method) {
         List<RenderedEntry> rendered = prepared.rendered();
         Map<BlockPos, Character> charsByPos = new HashMap<>();
-        for (RenderedEntry entry : rendered) charsByPos.put(entry.pos(), prepared.symbols().get(entry.blockId()));
+        for (RenderedEntry entry : rendered) charsByPos.put(entry.pos(), prepared.symbols().get(entry.predicate()));
         int minX = rendered.stream().mapToInt(entry -> entry.pos().getX()).min().orElse(0);
         int maxX = rendered.stream().mapToInt(entry -> entry.pos().getX()).max().orElse(0);
         int minY = rendered.stream().mapToInt(entry -> entry.pos().getY()).min().orElse(0);
@@ -139,13 +142,13 @@ public final class MultiblockExportService {
     }
 
     private static void appendLayer(StringBuilder out, String method, List<String> rows) {
-        out.append(System.lineSeparator()).append("        ");
+        out.append("        ");
         if (method != null) out.append(method);
         for (int i = 0; i < rows.size(); i++) {
             if (i > 0) out.append(", ");
             out.append('"').append(rows.get(i)).append('"');
         }
-        out.append(")");
+        out.append(")").append(System.lineSeparator());
     }
 
     public static Path nextExportPath(Path gameDir, LocalDateTime timestamp) {
@@ -178,35 +181,72 @@ public final class MultiblockExportService {
         return path;
     }
 
-    private static LinkedHashMap<Identifier, Character> assignSymbols(List<RenderedEntry> rendered, Identifier explicitController) {
-        LinkedHashMap<Identifier, Character> symbols = new LinkedHashMap<>();
-        Map<Identifier, Integer> counts = new LinkedHashMap<>();
-        for (RenderedEntry entry : rendered) counts.merge(entry.blockId(), 1, Integer::sum);
+    private static LinkedHashMap<PredicateKey, Character> assignSymbols(List<RenderedEntry> rendered, Identifier explicitController) {
+        LinkedHashMap<PredicateKey, Character> symbols = new LinkedHashMap<>();
+        Map<PredicateKey, Integer> counts = new LinkedHashMap<>();
+        for (RenderedEntry entry : rendered) counts.merge(entry.predicate(), 1, Integer::sum);
         Identifier controller = explicitController;
-        Identifier casing = null;
-        for (Identifier id : counts.keySet()) {
-            String path = id.getPath();
-            if (controller == null && (path.endsWith("_controller") || path.equals("controller"))) controller = id;
-            if (casing == null || counts.get(id) > counts.get(casing)) casing = id;
+        PredicateKey casing = null;
+        for (PredicateKey key : counts.keySet()) {
+            String path = key.blockId().getPath();
+            if (controller == null && key.state() == null && (path.endsWith("_controller") || path.equals("controller"))) controller = key.blockId();
+            if (!key.blockId().equals(controller) && (casing == null || counts.get(key) > counts.get(casing))) casing = key;
         }
-        if (controller != null) symbols.put(controller, 'C');
+        if (controller != null) {
+            for (PredicateKey key : counts.keySet()) {
+                if (key.blockId().equals(controller)) {
+                    symbols.put(key, 'C');
+                    break;
+                }
+            }
+        }
         if (casing != null && !symbols.containsKey(casing)) symbols.put(casing, 'X');
         String available = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         for (RenderedEntry entry : rendered) {
-            if (symbols.containsKey(entry.blockId())) continue;
+            if (symbols.containsKey(entry.predicate())) continue;
             for (int i = 0; i < available.length(); i++) {
                 char c = available.charAt(i);
                 if (c == 'C' || c == 'X' || symbols.containsValue(c)) continue;
-                symbols.put(entry.blockId(), c);
+                symbols.put(entry.predicate(), c);
                 break;
             }
-            if (!symbols.containsKey(entry.blockId())) throw new IllegalArgumentException("Too many unique blocks to export as single-character pattern symbols");
+            if (!symbols.containsKey(entry.predicate())) throw new IllegalArgumentException("Too many unique blocks to export as single-character pattern symbols");
         }
         return symbols;
     }
 
-    private static String predicateExpression(Identifier id) {
-        return "new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"" + escapeJava(id.toString()) + "\")))";
+    private static String predicateExpression(PredicateKey key) {
+        String block = "BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"" + escapeJava(key.blockId().toString()) + "\"))";
+        if (key.state() == null) return "new BlockPredicate.OfBlock(" + block + ")";
+        String expression = block + ".defaultBlockState()";
+        for (Property<?> property : key.state().getProperties().stream().sorted(Comparator.comparing(Property::getName)).toList()) {
+            expression += ".setValue(" + javaPropertyExpression(property) + ", "
+                    + javaValueExpression(key.state().getValue(property)) + ")";
+        }
+        return "new BlockPredicate.OfBlockState(" + expression + ")";
+    }
+
+    private static String javaPropertyExpression(Property<?> property) {
+        return "BlockStateProperties." + property.getName().toUpperCase(java.util.Locale.ROOT);
+    }
+
+    private static String javaValueExpression(Object value) {
+        if (value instanceof Enum<?> enumValue) {
+            String type = enumValue.getDeclaringClass().getName().replace("net.minecraft.core.", "").replace('$', '.');
+            return type + "." + enumValue.name();
+        }
+        if (value instanceof String string) return "\"" + escapeJava(string) + "\"";
+        return String.valueOf(value);
+    }
+
+    private static String kubeJsPredicateExpression(PredicateKey key) {
+        if (key.state() == null) return "api.block('" + escapeKubeJs(key.blockId().toString()) + "')";
+        StringBuilder state = new StringBuilder(key.blockId().toString()).append('[');
+        key.state().getProperties().stream().sorted(Comparator.comparing(Property::getName)).forEach(property -> {
+            if (state.charAt(state.length() - 1) != '[') state.append(',');
+            state.append(property.getName()).append('=').append(key.state().getValue(property));
+        });
+        return "api.state('" + escapeKubeJs(state.append(']').toString()) + "')";
     }
 
     private static String escapeJava(String value) {
@@ -238,9 +278,11 @@ public final class MultiblockExportService {
         }
     }
 
-    private record RenderedEntry(BlockPos pos, Identifier blockId) {}
+    private record PredicateKey(Identifier blockId, BlockState state) {}
 
-    private record PreparedExport(List<RenderedEntry> rendered, LinkedHashMap<Identifier, Character> symbols) {}
+    private record RenderedEntry(BlockPos pos, PredicateKey predicate) {}
+
+    private record PreparedExport(List<RenderedEntry> rendered, LinkedHashMap<PredicateKey, Character> symbols) {}
 
     private static final class ExportThreadFactory implements ThreadFactory {
         @Override
