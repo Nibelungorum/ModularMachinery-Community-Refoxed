@@ -29,6 +29,7 @@ import java.util.Objects;
 public class MachineStructureStageBuilderJS {
     private final Identifier id;
     private final BlockArray.Builder sliceBuilder = new BlockArray.Builder();
+    private final MachineStructureRequirements.Builder stageRequirements = MachineStructureRequirements.builder();
     private final List<DynamicPatternSpec> dynamicPatterns = new ArrayList<>();
     private PortRequirementSpec portRequirements = PortRequirementSpec.none();
     private PortTierRequirementSpec portTierRequirements = PortTierRequirementSpec.none();
@@ -68,6 +69,9 @@ public class MachineStructureStageBuilderJS {
         }
         MachineStructureBuilderJS.PatternEntry entry = toPatternEntry(value);
         sliceBuilder.set(symbol.charAt(0), entry.base(), entry.modifiers().toArray(SingleBlockModifierReplacement[]::new));
+        if (value instanceof LevelSlot levelSlot) {
+            stageRequirements.levelSlot(symbol.charAt(0), levelSlot.typeId());
+        }
         return this;
     }
 
@@ -119,7 +123,8 @@ public class MachineStructureStageBuilderJS {
 
     public MachineStructureDefinition.Declaration build() {
         BlockArray pattern = sliceBuilder.build();
-        MachineStructureRequirements requirements = sliceBuilder.requirements();
+        MachineStructureRequirements requirements = MachineStructureRequirements.merge(
+                sliceBuilder.requirements(), stageRequirements.build(pattern), 0);
         return new MachineStructureDefinition.Declaration(MachineStructureDefinition.Declaration.Kind.FULL,
                 pattern, portRequirements, portTierRequirements, dynamicPatterns, requirements);
     }

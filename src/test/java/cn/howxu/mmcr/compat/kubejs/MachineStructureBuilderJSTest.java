@@ -94,6 +94,24 @@ class MachineStructureBuilderJSTest {
     }
 
     @Test
+    void stage_builder_set_retains_level_slot_requirement() {
+        Identifier coilType = Identifier.parse("test:coil");
+        TestBootstrap.beginRegistration();
+        TestBootstrap.registerType(new LevelType(coilType, Component.literal("Coils")));
+        TestBootstrap.registerLevel(new MachineLevel(
+                Identifier.parse("test:copper_coil"), coilType, 1,
+                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
+                ItemStack.EMPTY, LevelModifier.IDENTITY));
+
+        var declaration = new MachineStructureStageBuilderJS("test:stage_level")
+                .pattern("L")
+                .set("L", new LevelSlot(coilType))
+                .build();
+
+        assertThat(declaration.requirements().levelSlots()).containsEntry('L', coilType);
+    }
+
+    @Test
     void set_controller_block_without_controller_keeps_it_as_a_normal_block() {
         var structure = new MachineStructureBuilderJS("mmcr_test:iron_compressor")
                 .pattern("CX")
