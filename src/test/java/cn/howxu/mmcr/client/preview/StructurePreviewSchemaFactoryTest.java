@@ -92,6 +92,17 @@ class StructurePreviewSchemaFactoryTest {
     }
 
     @Test
+    void factory_renders_machine_couplers_in_the_jei_preview_schema() {
+        BlockArray pattern = new BlockArray(Map.of(
+                BlockPos.ZERO, BlockPredicate.machineCoupler()));
+        DynamicMachine machine = new DynamicMachine(MMCR.id("preview_coupler"), "machine.preview_coupler", pattern);
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(machine);
+
+        assertThat(schema.stateAt(BlockPos.ZERO)).isEqualTo(ModBlocks.MODULE_BRIDGE.get().defaultBlockState());
+    }
+
+    @Test
     void factory_uses_directional_state_and_candidate_from_the_rotated_compiled_pattern() {
         BlockPos rawPosition = new BlockPos(1, 0, 0);
         BlockState southState = Blocks.OAK_LOG.defaultBlockState()

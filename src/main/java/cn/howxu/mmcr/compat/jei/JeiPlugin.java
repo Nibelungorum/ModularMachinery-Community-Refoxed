@@ -57,8 +57,6 @@ public final class JeiPlugin implements IModPlugin {
                 .toList());
         var displaysByMachine = MachineRecipeDisplays.byMachine();
         Set<Identifier> machineIds = machineIds();
-        MMCR.LOG.info("[MMCR/Temp][JEI] recipeMachines={}, displayMachines={}", machineIds,
-                displaysByMachine.keySet());
         Set<Identifier> kubeJSRecipeIds = RecipeRegistry.kubeJSSnapshot().keySet();
         JeiRuntimeReloader.captureInitialDisplays(displaysByMachine.entrySet().stream()
                 .map(entry -> Map.entry(entry.getKey(), entry.getValue().stream()

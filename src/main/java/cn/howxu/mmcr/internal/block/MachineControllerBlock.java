@@ -71,8 +71,6 @@ public class MachineControllerBlock extends Block implements EntityBlock {
     @Override
     public List<ItemStack> getDrops(BlockState state, LootParams.Builder builder) {
         boolean explosion = builder.getOptionalParameter(LootContextParams.EXPLOSION_RADIUS) != null;
-        MMCR.LOG.debug("[MMCR-DIAG] Controller getDrops pos unavailable, block={}, formed={}, active={}, explosion={}, drops={}",
-                state.getBlock(), state.getValue(FORMED), state.getValue(ACTIVE), explosion, !explosion);
         if (explosion) return List.of();
         return List.of(asItem().getDefaultInstance());
     }
@@ -156,9 +154,6 @@ public class MachineControllerBlock extends Block implements EntityBlock {
 
     @Override
     public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean moving) {
-        MMCR.LOG.debug("[MMCR-DIAG] Controller onPlace pos={}, server={}, moving={}, oldBlock={}, newBlock={}, formed={}, active={}",
-                pos, !level.isClientSide(), moving, oldState.getBlock(), state.getBlock(),
-                state.getValue(FORMED), state.getValue(ACTIVE));
         super.onPlace(state, level, pos, oldState, moving);
     }
 
@@ -218,10 +213,6 @@ public class MachineControllerBlock extends Block implements EntityBlock {
 
     protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean moving) {
         BlockEntity blockEntity = level.getBlockEntity(pos);
-        MMCR.LOG.debug("[MMCR-DIAG] Controller onRemove pos={}, server={}, moving={}, oldBlock={}, newBlock={}, oldFormed={}, oldActive={}, be={}, beRemoved={}",
-                pos, !level.isClientSide(), moving, state.getBlock(), newState.getBlock(),
-                state.getValue(FORMED), state.getValue(ACTIVE), blockEntity == null ? "null" : blockEntity.getClass().getSimpleName(),
-                blockEntity != null && blockEntity.isRemoved());
         if (moving || state.getBlock() == newState.getBlock()) return;
         if (!level.isClientSide() && blockEntity instanceof MachineControllerBlockEntity controller) {
             controller.onMachineDestroyed();

@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.preview.MultiblockPreviewPredicates;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
@@ -86,7 +87,9 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
             BlockPos position = entry.getKey().immutable();
             Identifier levelSlot = rotatedLevelSlots.get(entry.getKey());
             BlockState state = levelSlot == null
-                    ? entry.getValue().preferredState().orElse(null)
+                    ? entry.getValue() instanceof BlockPredicate.MachineCoupler
+                            ? MultiblockPreviewPredicates.machineCouplerState().orElse(null)
+                            : entry.getValue().preferredState().orElse(null)
                     : levelState(levelSlot, levelRank).rotate(rotationFor(facing));
             if (state == null) continue;
             states.put(position, orientState(position, state, facing, rotatedPattern.pattern()));

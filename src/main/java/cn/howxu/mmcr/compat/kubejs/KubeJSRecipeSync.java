@@ -26,8 +26,6 @@ public final class KubeJSRecipeSync {
         for (RecipeHolder<?> holder : holders) {
             if (holder.value() instanceof MachineRecipe machineRecipe) {
                 Identifier id = holder.id().identifier();
-                MMCR.LOG.info("[MMCR/Temp][KubeJS] holderId={}, valueId={}, machineId={}",
-                        id, machineRecipe.id(), machineRecipe.machineId());
                 if (!RecipeRegistry.dynamicSnapshot().containsKey(id)
                         && !KubeJSContentReloadTransaction.ownsRecipe(id)
                         && !KubeJSContentReloadTransaction.ownsRecipe(machineRecipe)) {
@@ -35,7 +33,6 @@ public final class KubeJSRecipeSync {
                 }
             }
         }
-        MMCR.LOG.info("[MMCR/Temp][KubeJS] publishing recipe ids={}", recipes.keySet());
         RuntimeContentSnapshot snapshot = RuntimeContentCoordinator.replaceKubeJSRecipesAndSnapshot(recipes);
         JeiRuntimeReloadBridge.reloadIfAvailable(snapshot);
     }
