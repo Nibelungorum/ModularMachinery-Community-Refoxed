@@ -66,6 +66,34 @@ class MachineStructureBuilderJSTest {
     }
 
     @Test
+    void stage_builder_converts_chained_pattern_set_and_controller_to_declaration() {
+        var machineId = Identifier.parse("mmcr_test:iron_compressor");
+        var declaration = new MachineStructureStageBuilderJS(machineId)
+                .pattern("XIX")
+                .set("X", Blocks.BLUE_ICE)
+                .controller("I")
+                .build();
+
+        assertThat(declaration.pattern().pattern()).containsKeys(
+                new BlockPos(-1, 0, 0), BlockPos.ZERO, new BlockPos(1, 0, 0));
+        assertThat(declaration.pattern().symbolsByPosition()).containsEntry(BlockPos.ZERO, 'I');
+        assertThat(declaration.pattern().pattern().get(BlockPos.ZERO)
+                .matches(ModBlocks.controllerFor(machineId).get().defaultBlockState())).isTrue();
+    }
+
+    @Test
+    void stage_builder_pattern_all_preserves_multiple_slices() {
+        var declaration = new MachineStructureStageBuilderJS("mmcr_test:stage_machine")
+                .patternAll(List.of(List.of("XX"), List.of("XX")))
+                .set("X", Blocks.IRON_BLOCK)
+                .build();
+
+        assertThat(declaration.pattern().pattern()).containsKeys(
+                new BlockPos(-1, 0, -1), new BlockPos(0, 0, -1),
+                new BlockPos(-1, 0, 0), new BlockPos(0, 0, 0));
+    }
+
+    @Test
     void set_controller_block_without_controller_keeps_it_as_a_normal_block() {
         var structure = new MachineStructureBuilderJS("mmcr_test:iron_compressor")
                 .pattern("CX")
