@@ -4,23 +4,16 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.fml.loading.FMLLoader;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.nibelungorum.builtin.PublicBuiltinLevelDefinitions;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
-import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Set;
@@ -84,113 +77,6 @@ class PublicEventSubscribersTest {
         assertThat(definitions.get().definitions()).containsOnlyKeys(machineId);
         assertThat(structures.get().structures()).containsOnlyKeys(machineId);
         assertThat(recipes.get().recipes()).containsOnlyKeys(recipeId);
-    }
-
-    @Test
-    void builtin_level_subscriber_registers_the_complete_development_declaration() {
-        var event = new MMCRMachineStructuresEvent(Set.of());
-
-        PublicBuiltinLevelDefinitions.register(event);
-
-        assertThat(event.levelTypes()).containsOnlyKeys(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE);
-        assertThat(event.levelTypes().get(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE).displayName().getString())
-                .isEqualTo("热能冶炼线圈");
-        assertThat(event.levels()).containsOnlyKeys(
-                PublicBuiltinLevelDefinitions.COPPER_COIL,
-                PublicBuiltinLevelDefinitions.IRON_COIL,
-                PublicBuiltinLevelDefinitions.GOLD_COIL,
-                PublicBuiltinLevelDefinitions.DIAMOND_COIL);
-        assertThat(event.levels().get(PublicBuiltinLevelDefinitions.COPPER_COIL))
-                .satisfies(level -> assertBuiltinLevel(level, 0, Blocks.COPPER_BLOCK, 0.9D));
-        assertThat(event.levels().get(PublicBuiltinLevelDefinitions.IRON_COIL))
-                .satisfies(level -> assertBuiltinLevel(level, 1, Blocks.IRON_BLOCK, 0.8D));
-        assertThat(event.levels().get(PublicBuiltinLevelDefinitions.GOLD_COIL))
-                .satisfies(level -> assertBuiltinLevel(level, 2, Blocks.GOLD_BLOCK, 0.7D));
-        assertThat(event.levels().get(PublicBuiltinLevelDefinitions.DIAMOND_COIL))
-                .satisfies(level -> assertBuiltinLevel(level, 3, Blocks.DIAMOND_BLOCK, 0.6D));
-    }
-
-    @Test
-    void builtin_level_subscriber_does_not_duplicate_an_existing_type() {
-        var event = new MMCRMachineStructuresEvent(Set.of());
-        event.registerLevelType(new LevelType(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE,
-                net.minecraft.network.chat.Component.literal("existing")));
-
-        PublicBuiltinLevelDefinitions.register(event);
-
-        assertThat(event.levelTypes()).containsOnlyKeys(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE);
-        assertThat(event.levels()).isEmpty();
-    }
-
-    @Test
-    void builtin_level_subscriber_skips_development_levels_in_production() throws Exception {
-        FmlLoaderState originalLoader = captureFmlLoader();
-        installFmlLoader(true);
-        try {
-            assertThat(FMLLoader.getCurrent().isProduction()).isTrue();
-            var event = new MMCRMachineStructuresEvent(Set.of());
-
-            PublicBuiltinLevelDefinitions.register(event);
-
-            assertThat(event.levelTypes()).isEmpty();
-            assertThat(event.levels()).isEmpty();
-        } finally {
-            restoreFmlLoader(originalLoader);
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private static FmlLoaderState captureFmlLoader() throws Exception {
-        Class<?> fmlLoaderClass = Class.forName("net.neoforged.fml.loading.FMLLoader");
-        Field currentField = findCurrentField(fmlLoaderClass);
-        AtomicReference<Object> current = (AtomicReference<Object>) currentField.get(null);
-        Object loader = current.get();
-        Field loadingModListField = fmlLoaderClass.getDeclaredField("loadingModList");
-        loadingModListField.setAccessible(true);
-        return new FmlLoaderState(current, loader, loadingModListField, loadingModListField.get(loader));
-    }
-
-    private static void restoreFmlLoader(FmlLoaderState originalLoader) throws IllegalAccessException {
-        originalLoader.loadingModListField.set(originalLoader.loader, originalLoader.loadingModList);
-        originalLoader.current.set(originalLoader.loader);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static void installFmlLoader(boolean production) throws Exception {
-        Class<?> fmlLoaderClass = Class.forName("net.neoforged.fml.loading.FMLLoader");
-        Class<?> distClass = Class.forName("net.neoforged.api.distmarker.Dist");
-        Class<?> loadingModListClass = Class.forName("net.neoforged.fml.loading.LoadingModList");
-        ((AtomicReference<Object>) findCurrentField(fmlLoaderClass).get(null)).set(null);
-        Constructor<?> fmlConstructor = fmlLoaderClass.getDeclaredConstructor(
-                ClassLoader.class, String[].class, distClass, boolean.class, Path.class);
-        fmlConstructor.setAccessible(true);
-        fmlConstructor.newInstance(
-                Thread.currentThread().getContextClassLoader(), new String[0],
-                distClass.getField("CLIENT").get(null), production, Path.of("."));
-
-        Constructor<?> loadingModListConstructor = loadingModListClass.getDeclaredConstructor(
-                java.util.List.class, java.util.List.class, java.util.List.class, java.util.List.class, java.util.Map.class);
-        loadingModListConstructor.setAccessible(true);
-        Object emptyLoadingModList = loadingModListConstructor.newInstance(
-                java.util.List.of(), java.util.List.of(), java.util.List.of(), java.util.List.of(), java.util.Map.of());
-        Field loadingModListField = fmlLoaderClass.getDeclaredField("loadingModList");
-        loadingModListField.setAccessible(true);
-        loadingModListField.set(fmlLoaderClass.getMethod("getCurrent").invoke(null), emptyLoadingModList);
-    }
-
-    private static Field findCurrentField(Class<?> fmlLoaderClass) {
-        for (Field field : fmlLoaderClass.getDeclaredFields()) {
-            if (Modifier.isStatic(field.getModifiers())
-                    && field.getType() == java.util.concurrent.atomic.AtomicReference.class) {
-                field.setAccessible(true);
-                return field;
-            }
-        }
-        throw new IllegalStateException("Unable to locate active FML loader reference");
-    }
-
-    private record FmlLoaderState(AtomicReference<Object> current, Object loader,
-            Field loadingModListField, Object loadingModList) {
     }
 
     @Test
@@ -259,19 +145,6 @@ class PublicEventSubscribersTest {
         provider.register(event);
 
         assertThat(event.definitions()).containsKey(MMCR.id("canonical_provider_machine"));
-    }
-
-    private static void assertBuiltinLevel(cn.howxu.mmcr.api.machine.level.MachineLevel level,
-            int priority, net.minecraft.world.level.block.Block block, double durationMultiplier) {
-        assertThat(level.typeId()).isEqualTo(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE);
-        assertThat(level.priority()).isEqualTo(priority);
-        assertThat(level.statePredicate()).isInstanceOfSatisfying(cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState.class,
-                predicate -> assertThat(predicate.state()).isEqualTo(block.defaultBlockState()));
-        assertThat(level.modifier().durationMultiplier()).isEqualTo(durationMultiplier);
-        assertThat(level.modifier().energyMultiplier()).isEqualTo(1D);
-        assertThat(level.modifier().outputMultiplier()).isEqualTo(1D);
-        assertThat(level.modifier().parallelismBonus()).isZero();
-        assertThat(level.modifier().factoryThreadBonus()).isZero();
     }
 
 }

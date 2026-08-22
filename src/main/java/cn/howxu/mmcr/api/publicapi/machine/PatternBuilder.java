@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+
 /**
  * Layered structure pattern builder.
  *
@@ -76,6 +77,9 @@ public final class PatternBuilder {
             throw new IllegalStateException("Pattern controller symbol is already set");
         }
         controllerSymbol = symbol;
+        if (!predicates.containsKey(symbol)) {
+            predicates.put(symbol, BlockPredicate.automaticController());
+        }
         return this;
     }
 

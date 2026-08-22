@@ -7,6 +7,9 @@ import cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.publicapi.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
@@ -14,13 +17,13 @@ import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.internal.api.PublicRecipeAdapter;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.JsonOps;
-import org.nibelungorum.builtin.PublicBuiltinLevelDefinitions;
-import org.nibelungorum.builtin.PublicBuiltinDefinitions;
 import net.minecraft.resources.Identifier;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.Map;
@@ -39,6 +42,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class PublicRecipeBuilderTest {
+    private static final Identifier TEST_LEVEL_TYPE = id("test_recipe_level");
+    private static final Identifier TEST_LEVEL = id("test_recipe_level_normal");
+
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
@@ -48,7 +54,10 @@ class PublicRecipeBuilderTest {
     void restoreDefaultMachineLevels() {
         cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.resetCollector();
         var event = cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.prepare(java.util.Set.of());
-        PublicBuiltinLevelDefinitions.register(event);
+        event.registerLevelType(new LevelType(TEST_LEVEL_TYPE, Component.literal("Test Recipe Level")));
+        event.registerLevel(new MachineLevel(TEST_LEVEL, TEST_LEVEL_TYPE, 0,
+                new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY,
+                LevelModifier.IDENTITY));
         MachineLevelRegistry.installSnapshot(event.levelTypes().values(), event.levels().values());
     }
 
@@ -99,7 +108,7 @@ class PublicRecipeBuilderTest {
                 .inputItem(Items.IRON_INGOT, 1)
                 .requirement(explicit).requirement(smart)
                 .modifier(id("snapshot_modifier"))
-                .levelRequirement(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE, PublicBuiltinLevelDefinitions.COPPER_COIL)
+                .levelRequirement(TEST_LEVEL_TYPE, TEST_LEVEL)
                 .requiredHost(id("host"))
                 .build();
 
@@ -120,14 +129,14 @@ class PublicRecipeBuilderTest {
                 .outputChance(itemOutput, 0.4F)
                 .outputFluid(net.minecraft.world.level.material.Fluids.WATER, 250)
                 .outputEnergy(10)
-                .levelRequirement(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE, PublicBuiltinLevelDefinitions.COPPER_COIL)
+                .levelRequirement(TEST_LEVEL_TYPE, TEST_LEVEL)
                 .requiredHost(id("host"))
                 .modifier(id("snapshot_modifier"))
                 .build();
         var recipe = PublicRecipeAdapter.toRecipe(definition, new MMCRMachineStructuresEvent.Snapshot(
                 Map.of(),
                 Map.of(),
-                Map.of(PublicBuiltinLevelDefinitions.COPPER_COIL, MachineLevelRegistry.getLevel(PublicBuiltinLevelDefinitions.COPPER_COIL)),
+                 Map.of(TEST_LEVEL, MachineLevelRegistry.getLevel(TEST_LEVEL)),
                 Map.of(id("snapshot_modifier"), new ModifierDefinition(List.of(new cn.howxu.mmcr.api.recipe.modifier.RecipeModifier(
                         "item", cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.OUTPUT, 2F,
                         cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.Operation.MULTIPLY, true))))));
@@ -161,8 +170,8 @@ class PublicRecipeBuilderTest {
             assertThat(modifier.affectsChance()).isTrue();
         });
         assertThat(recipe.levelRequirements()).singleElement().satisfies(level -> {
-            assertThat(level.typeId()).isEqualTo(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE);
-            assertThat(level.levelId()).isEqualTo(PublicBuiltinLevelDefinitions.COPPER_COIL);
+            assertThat(level.typeId()).isEqualTo(TEST_LEVEL_TYPE);
+            assertThat(level.levelId()).isEqualTo(TEST_LEVEL);
         });
         assertThat(recipe.requiredHostIds()).containsExactly(id("host"));
     }
@@ -235,11 +244,6 @@ class PublicRecipeBuilderTest {
         assertThatThrownBy(() -> MachineRecipeBuilder.recipe(id("bad"), id("machine"))
                 .outputChance(new ItemStack(Items.STICK), 2F))
                 .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
-    void builds_builtin_recipes_when_optional_mod_items_are_missing() {
-        assertThat(PublicBuiltinDefinitions.recipeDefinitions()).isNotEmpty();
     }
 
     private static Identifier id(String path) {

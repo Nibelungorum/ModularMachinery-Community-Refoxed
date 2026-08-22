@@ -18,15 +18,18 @@ import java.util.function.Supplier;
  */
 public final class BlockPredicate {
     private final boolean machineCoupler;
+    private final boolean automaticController;
     private final Block block;
     private final BlockState state;
     private final Supplier<? extends Block> blockSupplier;
     private final TagKey<Block> tag;
     private final List<BlockPredicate> alternatives;
 
-    private BlockPredicate(boolean machineCoupler, Block block, BlockState state, Supplier<? extends Block> blockSupplier,
+    private BlockPredicate(boolean machineCoupler, boolean automaticController, Block block, BlockState state,
+            Supplier<? extends Block> blockSupplier,
             TagKey<Block> tag, List<BlockPredicate> alternatives) {
         this.machineCoupler = machineCoupler;
+        this.automaticController = automaticController;
         this.block = block;
         this.state = state;
         this.blockSupplier = blockSupplier;
@@ -35,23 +38,27 @@ public final class BlockPredicate {
     }
 
     public static BlockPredicate block(Block block) {
-        return new BlockPredicate(false, Objects.requireNonNull(block, "block"), null, null, null, List.of());
+        return new BlockPredicate(false, false, Objects.requireNonNull(block, "block"), null, null, null, List.of());
     }
 
     public static BlockPredicate blockState(BlockState state) {
-        return new BlockPredicate(false, null, Objects.requireNonNull(state, "state"), null, null, List.of());
+        return new BlockPredicate(false, false, null, Objects.requireNonNull(state, "state"), null, null, List.of());
     }
 
     public static BlockPredicate deferredBlock(Supplier<? extends Block> blockSupplier) {
-        return new BlockPredicate(false, null, null, Objects.requireNonNull(blockSupplier, "blockSupplier"), null, List.of());
+        return new BlockPredicate(false, false, null, null, Objects.requireNonNull(blockSupplier, "blockSupplier"), null, List.of());
     }
 
     public static BlockPredicate tag(TagKey<Block> tag) {
-        return new BlockPredicate(false, null, null, null, Objects.requireNonNull(tag, "tag"), List.of());
+        return new BlockPredicate(false, false, null, null, null, Objects.requireNonNull(tag, "tag"), List.of());
     }
 
     public static BlockPredicate machineCoupler() {
-        return new BlockPredicate(true, null, null, null, null, List.of());
+        return new BlockPredicate(true, false, null, null, null, null, List.of());
+    }
+
+    static BlockPredicate automaticController() {
+        return new BlockPredicate(false, true, null, null, null, null, List.of());
     }
 
     public static BlockPredicate any(BlockPredicate... predicates) {
@@ -67,11 +74,15 @@ public final class BlockPredicate {
         for (BlockPredicate predicate : predicates) {
             Objects.requireNonNull(predicate, "predicate");
         }
-        return new BlockPredicate(false, null, null, null, null, List.copyOf(predicates));
+        return new BlockPredicate(false, false, null, null, null, null, List.copyOf(predicates));
     }
 
     public boolean isMachineCoupler() {
         return machineCoupler;
+    }
+
+    boolean isAutomaticController() {
+        return automaticController;
     }
 
     public Optional<Block> block() {
@@ -98,7 +109,7 @@ public final class BlockPredicate {
     public boolean equals(Object other) {
         if (this == other) return true;
         if (!(other instanceof BlockPredicate that)) return false;
-        return machineCoupler == that.machineCoupler
+        return machineCoupler == that.machineCoupler && automaticController == that.automaticController
                 && Objects.equals(block, that.block)
                 && Objects.equals(state, that.state)
                 && Objects.equals(tag, that.tag)
@@ -107,6 +118,6 @@ public final class BlockPredicate {
 
     @Override
     public int hashCode() {
-        return Objects.hash(machineCoupler, block, state, tag, alternatives);
+        return Objects.hash(machineCoupler, automaticController, block, state, tag, alternatives);
     }
 }

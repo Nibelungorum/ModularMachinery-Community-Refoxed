@@ -365,7 +365,7 @@ class MachineRecipeDisplayTest {
         namedSharpnessFourSword.setCount(2);
         MachineRecipe recipe = new MachineRecipe(
                 MMCR.id("component_output_display"),
-                MMCR.id("alloy_furnace"),
+                MMCR.id("test_machine_name"),
                 40,
                 List.of(),
                 List.of(namedSharpnessFourSword)
@@ -387,7 +387,7 @@ class MachineRecipeDisplayTest {
                         new Dynamic<>(JsonOps.INSTANCE,
                                 new JsonPrimitive(1)))));
         MachineRecipe recipe = new MachineRecipe(
-                MMCR.id("explicit_component_output_display"), MMCR.id("alloy_furnace"), 40,
+                MMCR.id("explicit_component_output_display"), MMCR.id("test_machine_name"), 40,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.IRON_SWORD),
                         1F, List.of(), components, 1F)
@@ -402,7 +402,7 @@ class MachineRecipeDisplayTest {
     void displayAppliesTextComponentPredicatesToInputStacks() {
         MachineRecipe recipe = new MachineRecipe(
                 MMCR.id("component_input_display"),
-                MMCR.id("alloy_furnace"),
+                MMCR.id("test_machine_name"),
                 40,
                 List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.DIAMOND_SWORD), 1,
                         new DataComponentPredicateSet(Map.of(DataComponents.CUSTOM_NAME,

@@ -1,5 +1,8 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
+import cn.howxu.mmcr.api.publicapi.PublicBuiltinRegistration;
+import net.minecraft.resources.Identifier;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -60,5 +63,14 @@ public record PatternDefinition(List<List<String>> layers, Map<Character, BlockP
         if (controllerCount != 1) {
             throw new IllegalArgumentException("Pattern must contain exactly one controller symbol");
         }
+    }
+
+    PatternDefinition bindController(Identifier machineId) {
+        Map<Character, BlockPredicate> boundPredicates = new java.util.LinkedHashMap<>(predicates);
+        if (predicates.get(controllerSymbol).isAutomaticController()) {
+            boundPredicates.put(controllerSymbol,
+                    BlockPredicate.deferredBlock(PublicBuiltinRegistration.controller(machineId)));
+        }
+        return new PatternDefinition(layers, boundPredicates, controllerSymbol, width, height, depth);
     }
 }

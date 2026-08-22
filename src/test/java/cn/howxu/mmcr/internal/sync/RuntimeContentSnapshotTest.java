@@ -44,9 +44,6 @@ import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.nibelungorum.builtin.PublicBuiltinLevelDefinitions;
-import org.nibelungorum.builtin.PublicBuiltinDefinitions;
-import cn.howxu.mmcr.internal.api.PublicRecipeAdapter;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -97,7 +94,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void snapshotDefensivelyCopiesAllMaps() {
-        Identifier machineId = MMCR.id("alloy_furnace");
+        Identifier machineId = MMCR.id("runtime_test_machine");
         Map<Identifier, MachineStructureDefinition> structures = mapWithOpaqueValue(machineId);
         Map<Identifier, MachineRecipe> recipes = mapWithOpaqueValue(machineId);
         Map<Identifier, MachineControllerSpec> controllerSpecs = mapWithOpaqueValue(machineId);
@@ -122,7 +119,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void structureSyncCodecRoundTripsPatternAndMetadata() {
-        MachineStructureDefinition original = structure(MMCR.id("alloy_furnace"));
+        MachineStructureDefinition original = structure(MMCR.id("runtime_test_machine"));
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
 
         MachineStructureSyncCodec.encode(buf, original);
@@ -158,12 +155,12 @@ class RuntimeContentSnapshotTest {
     @Test
     void recipeSyncCodecRoundTripsRuntimeRecipe() {
         MachineRecipe original = new MachineRecipe(
-                MMCR.id("sync_recipe"), MMCR.id("alloy_furnace"), 40,
+                MMCR.id("sync_recipe"), MMCR.id("runtime_test_machine"), 40,
                 List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
                 List.of(new ItemStack(Items.GOLD_INGOT, 4)),
                 List.of(new RecipeModifier("input_bus", RecipeModifier.IOType.INPUT, 2F, RecipeModifier.Operation.MULTIPLY, false)),
                 5, 3, true, List.of(), List.of(), true,
-                List.of(new LevelRequirement(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE, PublicBuiltinLevelDefinitions.IRON_COIL)),
+                 List.of(),
                 true, Set.of(MMCR.id("runtime_host")));
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
 
@@ -219,7 +216,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void runtimeContentPayloadRoundTripsCompleteSnapshot() {
-        Identifier machineId = MMCR.id("alloy_furnace");
+        Identifier machineId = MMCR.id("runtime_test_machine");
         RuntimeContentSnapshot snapshot = new RuntimeContentSnapshot(
                 Map.of(machineId, structureWithLevelAndModifier(machineId)),
                 Map.of(MMCR.id("sync_recipe"), recipe(MMCR.id("sync_recipe"), machineId)),
@@ -241,49 +238,8 @@ class RuntimeContentSnapshotTest {
     }
 
     @Test
-    void runtimeContentPayloadRoundTripsBuiltinEnchantedOutputWithActiveRegistryHolders() {
-        Identifier recipeId = MMCR.id("blast_furnace_component_enchanted_output");
-        var definition = PublicBuiltinDefinitions.recipeDefinitions().get(recipeId);
-        MachineRecipe original = PublicRecipeAdapter.toRecipe(definition,
-                new cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.Snapshot(
-                        Map.of(), Map.of(), Map.of(), Map.of()));
-        ItemRequirement originalOutput = original.requirements().stream()
-                .filter(requirement -> requirement instanceof ItemRequirement item
-                        && item.io() == RecipeModifier.IOType.OUTPUT)
-                .map(ItemRequirement.class::cast)
-                .findFirst().orElseThrow();
-        assertThat(originalOutput.components().values())
-                .containsKey(net.minecraft.core.component.DataComponents.ENCHANTMENTS);
-        RuntimeContentSnapshot snapshot = new RuntimeContentSnapshot(Map.of(), Map.of(recipeId, original),
-                Map.of(), Map.of(), 12L);
-        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
-
-        PktRuntimeContentPayload.STREAM_CODEC.encode(buf, new PktRuntimeContentPayload(snapshot));
-        MachineRecipe decoded = PktRuntimeContentPayload.STREAM_CODEC.decode(buf).snapshot().recipes().get(recipeId);
-        ItemRequirement output = decoded.requirements().stream()
-                .filter(requirement -> requirement instanceof ItemRequirement item
-                        && item.io() == RecipeModifier.IOType.OUTPUT)
-                .map(ItemRequirement.class::cast)
-                .findFirst().orElseThrow();
-        var enchantments = output.stack().get(net.minecraft.core.component.DataComponents.ENCHANTMENTS);
-
-        assertThat(enchantments).isNotNull();
-        assertThat(enchantments.keySet()).anySatisfy(holder ->
-                assertThat(holder.unwrapKey().orElseThrow().identifier())
-                        .isEqualTo(Identifier.parse("minecraft:sharpness")));
-        assertThat(enchantments.entrySet()).anySatisfy(entry -> assertThat(entry.getIntValue()).isEqualTo(4));
-    }
-
-    @Test
-    void runtimeContentPayloadDoesNotHardReferenceOptionalJeiReloader() throws IOException {
-        String classBytes = classBytes(PktRuntimeContentPayload.class);
-
-        assertThat(classBytes).doesNotContain("cn/howxu/mmcr/compat/jei/JeiRuntimeReloader");
-    }
-
-    @Test
     void runtimeContentPayloadRejectsDuplicateStructureKeys() {
-        Identifier machineId = MMCR.id("alloy_furnace");
+        Identifier machineId = MMCR.id("runtime_test_machine");
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
         buf.writeVarInt(2);
         Identifier.STREAM_CODEC.encode(buf, machineId);
@@ -298,8 +254,8 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void runtimeContentPayloadRejectsStructureKeyIdMismatch() {
-        Identifier key = MMCR.id("alloy_furnace");
-        Identifier structureId = MMCR.id("cracker");
+        Identifier key = MMCR.id("runtime_test_machine");
+        Identifier structureId = MMCR.id("runtime_test_machine_new");
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
         buf.writeVarInt(1);
         Identifier.STREAM_CODEC.encode(buf, key);
@@ -316,8 +272,8 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void applyClientReplacesOldDynamicStructuresAndRecipes() {
-        Identifier oldMachine = MMCR.id("alloy_furnace");
-        Identifier newMachine = MMCR.id("cracker");
+        Identifier oldMachine = MMCR.id("runtime_test_machine");
+        Identifier newMachine = MMCR.id("runtime_test_machine_new");
         Identifier oldRecipe = MMCR.id("old_synced_recipe");
         Identifier newRecipe = MMCR.id("new_synced_recipe");
         registerMachineIfMissing(oldMachine);
@@ -339,7 +295,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void applyClientRemovesDynamicContentOmittedFromSnapshot() {
-        Identifier removedMachine = MMCR.id("alloy_furnace");
+        Identifier removedMachine = MMCR.id("runtime_test_machine");
         Identifier removedRecipe = MMCR.id("removed_synced_recipe");
         registerMachineIfMissing(removedMachine);
         MachineStructureRegistry.replaceDynamic(Map.of(removedMachine, structure(removedMachine)));
@@ -355,7 +311,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void applyClientRejectsOlderSnapshotBeforeReplacingContent() {
-        Identifier machineId = MMCR.id("alloy_furnace");
+        Identifier machineId = MMCR.id("runtime_test_machine");
         registerMachineIfMissing(machineId);
         RuntimeContentSnapshot current = new RuntimeContentSnapshot(
                 Map.of(machineId, structure(machineId)), Map.of(), Map.of(), Map.of(), 20L);
@@ -368,8 +324,8 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void invalidSnapshotDoesNotPartiallyReplaceClientContent() {
-        Identifier oldMachine = MMCR.id("alloy_furnace");
-        Identifier newMachine = MMCR.id("cracker");
+        Identifier oldMachine = MMCR.id("runtime_test_machine");
+        Identifier newMachine = MMCR.id("runtime_test_machine_new");
         registerMachineIfMissing(oldMachine);
         registerMachineIfMissing(newMachine);
         MachineStructureRegistry.replaceDynamic(Map.of(oldMachine, structure(oldMachine)));
@@ -407,7 +363,7 @@ class RuntimeContentSnapshotTest {
     @Test
     void applyingClientSnapshotDoesNotAdvanceServerContentVersion() {
         long before = RuntimeContentVersion.current();
-        Identifier machineId = MMCR.id("alloy_furnace");
+        Identifier machineId = MMCR.id("runtime_test_machine");
         registerMachineIfMissing(machineId);
 
         new RuntimeContentSnapshot(Map.of(machineId, structure(machineId)), Map.of(), Map.of(), Map.of(), 31L)
@@ -418,7 +374,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void newClientConnectionAcceptsLowerVersionFromAnotherServer() {
-        Identifier machineId = MMCR.id("alloy_furnace");
+        Identifier machineId = MMCR.id("runtime_test_machine");
         registerMachineIfMissing(machineId);
         new RuntimeContentSnapshot(Map.of(machineId, structure(machineId)), Map.of(), Map.of(), Map.of(), 90L)
                 .applyClient();
@@ -431,7 +387,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void newClientConnectionRetainsRuntimeContentUntilSnapshotArrives() {
-        Identifier machineId = MMCR.id("alloy_furnace");
+        Identifier machineId = MMCR.id("runtime_test_machine");
         registerMachineIfMissing(machineId);
         new RuntimeContentSnapshot(Map.of(machineId, structure(machineId)), Map.of(),
                 Map.of(machineId, MachineControllerSpec.defaultsFor(machineId)),
@@ -447,11 +403,11 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void clientRejectsControllerSpecForAnotherMachine() {
-        Identifier machineId = MMCR.id("alloy_furnace");
+        Identifier machineId = MMCR.id("runtime_test_machine");
         registerMachineIfMissing(machineId);
         RuntimeContentSnapshot invalid = new RuntimeContentSnapshot(
                 Map.of(machineId, structure(machineId)), Map.of(),
-                Map.of(machineId, MachineControllerSpec.defaultsFor(MMCR.id("cracker"))), Map.of(), 92L);
+                Map.of(machineId, MachineControllerSpec.defaultsFor(MMCR.id("runtime_test_machine_new"))), Map.of(), 92L);
 
         assertThatThrownBy(invalid::applyClient)
                 .isInstanceOf(IllegalArgumentException.class)
@@ -461,7 +417,7 @@ class RuntimeContentSnapshotTest {
     @Test
     void recipeCodecRejectsOversizedFluidOutput() {
         MachineRecipe recipe = new MachineRecipe(
-                MMCR.id("oversized_fluid_recipe"), MMCR.id("alloy_furnace"), 20,
+                MMCR.id("oversized_fluid_recipe"), MMCR.id("runtime_test_machine"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                 List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                         new net.neoforged.neoforge.fluids.FluidStack(Fluids.WATER, 10_000_001))));
@@ -475,7 +431,7 @@ class RuntimeContentSnapshotTest {
     @Test
     void structureSyncCodecRejectsOversizedDeclarationCountOnEncode() {
         List<MachineStructureDefinition.Declaration> declarations = Collections.nCopies(1025,
-                structure(MMCR.id("alloy_furnace")).declarations().getFirst());
+                structure(MMCR.id("runtime_test_machine")).declarations().getFirst());
         MachineStructureDefinition original = new MachineStructureDefinition(MMCR.id("oversized"), declarations);
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
 

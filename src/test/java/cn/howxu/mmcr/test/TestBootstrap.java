@@ -21,7 +21,6 @@ import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
-import cn.howxu.mmcr.internal.api.PublicBuiltinRuntime;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
@@ -48,9 +47,6 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.registries.DeferredHolder;
-import org.nibelungorum.builtin.PublicBuiltinLevelDefinitions;
-import org.nibelungorum.builtin.PublicBuiltinMachineDefinitions;
-import org.nibelungorum.builtin.PublicBuiltinRecipeDefinitions;
 
 
 import java.lang.reflect.Field;
@@ -123,24 +119,27 @@ public final class TestBootstrap {
         bindSmartInterface();
         bindModuleBridge();
         bind(ModItems.THREAD_DISPERSER, registerItem(ModItems.THREAD_DISPERSER));
-        registerPublicBuiltinEvents();
-        registerRuntimeBuiltins();
+        registerTestEvents();
+        registerRuntimeTestContent();
         initialized = true;
     }
 
     public static void restoreMachineDefinitions() {
         ContentRegistrationCoordinator.resetForTesting();
         MachineDefinitions.beginRegistryPhase();
-        registerPublicBuiltinEvents();
+        registerTestEvents();
     }
 
     public static void registerRuntimeBuiltins() {
         if (!ContentRegistrationCoordinator.isCommitted()
-                || MachineDefinitions.getRegistration(MMCR.id("blast_furnace")) == null) {
+                || MachineDefinitions.getRegistration(id("test_cube")) == null) {
             restoreMachineDefinitions();
         }
+        registerRuntimeTestContent();
+    }
+
+    private static void registerRuntimeTestContent() {
         DynamicContentReloadService.reload(candidate -> {
-            PublicBuiltinRuntime.registerStructures(candidate);
         });
         ModBlocks.registerMachineControllers(MachineRegistry.effectiveSnapshot().keySet());
         try {
@@ -153,7 +152,7 @@ public final class TestBootstrap {
         MachineRegistry.rebuildCompiledCache();
     }
 
-    private static void registerPublicBuiltinEvents() {
+    private static void registerTestEvents() {
         MMCR.registerPublicApiLifecycleForTesting(
                 TestBootstrap::registerAllMachineDefinitions,
                 TestBootstrap::registerAllMachineStructures,
@@ -161,18 +160,14 @@ public final class TestBootstrap {
     }
 
     public static void registerAllMachineDefinitions(MMCRMachineDefinationsEvent event) {
-        PublicBuiltinMachineDefinitions.registerDefinitions(event);
         registerTestMachineDefinitions(event);
     }
 
     public static void registerAllMachineStructures(MMCRMachineStructuresEvent event) {
-        PublicBuiltinLevelDefinitions.register(event);
-        PublicBuiltinMachineDefinitions.registerStructures(event);
         registerTestMachineStructures(event);
     }
 
     public static void registerAllRecipes(MMCRMachineRecipesEvent event) {
-        PublicBuiltinRecipeDefinitions.register(event);
         registerTestRecipes(event);
     }
 
@@ -222,7 +217,8 @@ public final class TestBootstrap {
     }
 
     private static List<String> testMachineNames() {
-        return List.of("test_cube", "controller_tick", "iron_compressor", "distillation_tower_test",
+        return List.of("test_cube", "test_machine_name", "cracker", "runtime_test_machine", "runtime_test_machine_new",
+                "controller_tick", "iron_compressor", "distillation_tower_test",
                 "expandable_structure_stages", "expandable_structure_vertical_roll");
     }
 

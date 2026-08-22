@@ -4,7 +4,9 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import org.nibelungorum.builtin.PublicBuiltinLevelDefinitions;
+import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -12,11 +14,14 @@ import com.mojang.serialization.JsonOps;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Blocks;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -30,6 +35,12 @@ class MachineRecipeJsonTest {
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
         TestBootstrap.registerRuntimeBuiltins();
+        TestBootstrap.beginRegistration();
+        TestBootstrap.registerType(new LevelType(id("test_level_type"), Component.literal("Test Level")));
+        TestBootstrap.registerLevel(new MachineLevel(id("test_level"), id("test_level_type"), 0,
+                new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()),
+                ItemStack.EMPTY, LevelModifier.IDENTITY));
+        TestBootstrap.freezeRegistration();
         registries = VanillaRegistries.createLookup();
     }
 
@@ -42,7 +53,7 @@ class MachineRecipeJsonTest {
         var recipe = MachineRecipeJson.parse(id("basic"), json, registries);
 
         assertThat(recipe.id()).isEqualTo(id("basic"));
-        assertThat(recipe.machineId()).isEqualTo(id("alloy_furnace"));
+        assertThat(recipe.machineId()).isEqualTo(id("test_cube"));
         assertThat(recipe.tickTime()).isEqualTo(20);
         assertThat(recipe.inputs()).singleElement().isInstanceOfSatisfying(MachineIngredient.ItemIngredient.class,
                 input -> assertThat(input.count()).isEqualTo(2));
@@ -123,8 +134,8 @@ class MachineRecipeJsonTest {
         assertThat(recipe.allowPartialOutputs()).isTrue();
         assertThat(recipe.requiredHostIds()).containsExactly(Identifier.parse("mmcr:factory_controller"));
         assertThat(recipe.levelRequirements()).singleElement().satisfies(level -> {
-            assertThat(level.typeId()).isEqualTo(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE);
-            assertThat(level.levelId()).isEqualTo(PublicBuiltinLevelDefinitions.COPPER_COIL);
+            assertThat(level.typeId()).isEqualTo(Identifier.parse("mmcr:test_level_type"));
+            assertThat(level.levelId()).isEqualTo(Identifier.parse("mmcr:test_level"));
         });
         assertThat(recipe.requirements()).anyMatch(ItemRequirement.class::isInstance);
         assertThat(recipe.requirements().stream().filter(ItemRequirement.class::isInstance).findFirst().orElseThrow())
@@ -198,7 +209,7 @@ class MachineRecipeJsonTest {
 
         var primitive = new JsonObject();
         primitive.addProperty("type", "mmcr:machine_recipe");
-        primitive.addProperty("machine", "mmcr:alloy_furnace");
+        primitive.addProperty("machine", "mmcr:test_cube");
         primitive.addProperty("tick_time", 20);
         primitive.addProperty("inputs", "not-an-array");
         assertThatThrownBy(() -> MachineRecipeJson.parse(id("primitive"), primitive, registries))
@@ -218,7 +229,7 @@ class MachineRecipeJsonTest {
     private static JsonObject recipeJson() {
         var json = new JsonObject();
         json.addProperty("type", "mmcr:machine_recipe");
-        json.addProperty("machine", "mmcr:alloy_furnace");
+        json.addProperty("machine", "mmcr:test_cube");
         json.addProperty("tick_time", 20);
         return json;
     }
@@ -245,8 +256,8 @@ class MachineRecipeJsonTest {
 
     private static JsonObject levelRequirement() {
         var level = new JsonObject();
-        level.addProperty("type", PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE.toString());
-        level.addProperty("level", PublicBuiltinLevelDefinitions.COPPER_COIL.toString());
+        level.addProperty("type", "mmcr:test_level_type");
+        level.addProperty("level", "mmcr:test_level");
         return level;
     }
 

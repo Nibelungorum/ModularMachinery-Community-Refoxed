@@ -37,6 +37,10 @@ public final class MachineStructureBuilder {
     }
 
     public MachineStructureDefinition build(net.minecraft.resources.Identifier machineId) {
-        return new MachineStructureDefinition(machineId, stages);
+        List<StructureStage> boundStages = stages.stream()
+                .map(stage -> new StructureStage(stage.kind(), stage.pattern().bindController(machineId),
+                        stage.portRequirements(), stage.portTiers(), stage.requirements()))
+                .toList();
+        return new MachineStructureDefinition(machineId, boundStages);
     }
 }

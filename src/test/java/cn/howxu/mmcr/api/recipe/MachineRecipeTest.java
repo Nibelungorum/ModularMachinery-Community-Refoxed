@@ -120,7 +120,7 @@ class MachineRecipeTest {
         bindItemComponents(Items.DIAMOND_SWORD);
         var root = new JsonObject();
         root.addProperty("id", "mmcr:better_diamond_sword");
-        root.addProperty("machine", "mmcr:alloy_furnace");
+        root.addProperty("machine", "mmcr:test_machine_name");
         root.addProperty("tick_time", 40);
         var output = new JsonObject();
         output.addProperty("id", "minecraft:diamond_sword");

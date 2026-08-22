@@ -136,6 +136,8 @@ public class E2ERecipeRunGameTest {
 
         var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(machine);
+        controller.serverTick();
+        helper.assertTrue(controller.isFormed(), "Distillation tower forms before recipe starts");
 
         runDistillationBatch(helper, controller, inputPos);
         assertDistillationStage(helper, controller, 1);

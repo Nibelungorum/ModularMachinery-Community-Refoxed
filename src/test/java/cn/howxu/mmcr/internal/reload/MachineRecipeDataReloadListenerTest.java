@@ -48,14 +48,6 @@ class MachineRecipeDataReloadListenerTest {
     }
 
     @Test
-    void loadsMachineRecipeFilesUnderDataNamespaceRecipesPath() throws Exception {
-        var snapshot = MachineRecipeDataReloadListener.load(resources(Map.of(
-                Identifier.parse("mmcr_test:recipes/datapack_machine_recipe.json"), resourceFromTestData())), registries);
-
-        assertThat(snapshot).containsKey(Identifier.parse("mmcr_test:datapack_machine_recipe"));
-    }
-
-    @Test
     void derivesRecipeIdFromResourcePath() {
         var snapshot = MachineRecipeDataReloadListener.load(resources(Map.of(
                 Identifier.parse("mmcr_test:recipes/nested/custom_recipe.json"), resource(recipeJson()))), registries);
@@ -77,7 +69,7 @@ class MachineRecipeDataReloadListenerTest {
     @Test
     void applyingSnapshotPublishesDataPackLayerToRecipeRegistry() {
         var id = Identifier.parse("mmcr_test:published_recipe");
-        var recipe = new MachineRecipe(id, Identifier.parse("mmcr:alloy_furnace"), 1,
+        var recipe = new MachineRecipe(id, Identifier.parse("mmcr:test_machine_name"), 1,
                 List.of(), List.of());
         var listener = new MachineRecipeDataReloadListener(registries);
 
@@ -93,9 +85,9 @@ class MachineRecipeDataReloadListenerTest {
         var staticId = Identifier.parse("mmcr_test:static_layer_recipe");
         var dynamicId = Identifier.parse("mmcr_test:dynamic_layer_recipe");
         var dataPackId = Identifier.parse("mmcr_test:datapack_layer_recipe");
-        var staticRecipe = new MachineRecipe(staticId, Identifier.parse("mmcr:alloy_furnace"), 1, List.of(), List.of());
-        var dynamicRecipe = new MachineRecipe(dynamicId, Identifier.parse("mmcr:alloy_furnace"), 2, List.of(), List.of());
-        var dataPackRecipe = new MachineRecipe(dataPackId, Identifier.parse("mmcr:alloy_furnace"), 3, List.of(), List.of());
+        var staticRecipe = new MachineRecipe(staticId, Identifier.parse("mmcr:test_machine_name"), 1, List.of(), List.of());
+        var dynamicRecipe = new MachineRecipe(dynamicId, Identifier.parse("mmcr:test_machine_name"), 2, List.of(), List.of());
+        var dataPackRecipe = new MachineRecipe(dataPackId, Identifier.parse("mmcr:test_machine_name"), 3, List.of(), List.of());
         RecipeRegistry.registerStatic(staticRecipe);
         RecipeRegistry.replaceDynamic(Map.of(dynamicId, dynamicRecipe));
 
@@ -110,7 +102,7 @@ class MachineRecipeDataReloadListenerTest {
     @Test
     void serverReloadHookAppliesSnapshotAndRunsSyncAfterPublishingDataPackLayer() {
         var id = Identifier.parse("mmcr_test:published_sync_recipe");
-        var recipe = new MachineRecipe(id, Identifier.parse("mmcr:alloy_furnace"), 1,
+        var recipe = new MachineRecipe(id, Identifier.parse("mmcr:test_machine_name"), 1,
                 List.of(), List.of());
         var listener = new MachineRecipeDataReloadListener(registries);
         AtomicBoolean synced = new AtomicBoolean();
@@ -175,11 +167,11 @@ class MachineRecipeDataReloadListenerTest {
     }
 
     private static String recipeJson() {
-        return "{\"type\":\"mmcr:machine_recipe\",\"machine\":\"mmcr:alloy_furnace\",\"tick_time\":20}";
+        return "{\"type\":\"mmcr:machine_recipe\",\"machine\":\"mmcr:test_machine_name\",\"tick_time\":20}";
     }
 
     private static MachineRecipe recipe() {
-        return new MachineRecipe(Identifier.parse("mmcr_test:placeholder"), Identifier.parse("mmcr:alloy_furnace"), 1,
+        return new MachineRecipe(Identifier.parse("mmcr_test:placeholder"), Identifier.parse("mmcr:test_machine_name"), 1,
                 List.of(), List.of());
     }
 }

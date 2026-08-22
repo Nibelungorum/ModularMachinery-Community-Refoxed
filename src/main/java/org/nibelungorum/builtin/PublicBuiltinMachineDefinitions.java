@@ -5,8 +5,11 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.PublicBuiltinRegistration;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
+import net.minecraft.resources.Identifier;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+
+import java.util.Map;
 
 /** Public built-in machine definitions.
  * @author howxu <dev@howxu.cn>
@@ -16,7 +19,7 @@ public final class PublicBuiltinMachineDefinitions {
     private PublicBuiltinMachineDefinitions() {
     }
 
-    public static java.util.Map<net.minecraft.resources.Identifier, MachineDefinition> machineDefinitions() {
+    public static Map<Identifier, MachineDefinition> machineDefinitions() {
         return PublicBuiltinDefinitions.machineDefinitions();
     }
 
@@ -31,7 +34,7 @@ public final class PublicBuiltinMachineDefinitions {
 
     @SubscribeEvent
     public static void registerStructures(MMCRMachineStructuresEvent event) {
-        PublicBuiltinDefinitions.modifierDefinitions().forEach(event::registerModifier);
+        // PublicBuiltinDefinitions.modifierDefinitions().forEach(event::registerModifier);
         java.util.Map<net.minecraft.resources.Identifier, MachineStructureDefinition> structures =
                 PublicBuiltinDefinitions.structureDefinitions();
         structures.forEach((id, structure) -> {

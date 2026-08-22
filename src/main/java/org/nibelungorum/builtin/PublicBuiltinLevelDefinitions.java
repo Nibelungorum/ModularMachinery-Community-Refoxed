@@ -30,6 +30,7 @@ public final class PublicBuiltinLevelDefinitions {
     public static final Identifier DIAMOND_COIL = id("thermal_smelting_coil_diamond");
 
     private PublicBuiltinLevelDefinitions() {
+
     }
 
     private static Identifier id(String path) {

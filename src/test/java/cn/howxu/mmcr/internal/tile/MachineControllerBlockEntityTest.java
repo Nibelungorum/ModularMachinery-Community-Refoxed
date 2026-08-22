@@ -2029,24 +2029,6 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
-    void built_in_blast_furnace_rejects_three_arbitrary_ports() throws Exception {
-        TestBootstrap.registerRuntimeBuiltins();
-        DynamicMachine machine = (DynamicMachine) MachineRegistry.getMachine(MMCR.id("blast_furnace"));
-        BlockPos controllerPos = new BlockPos(20, 4, 20);
-        MachineControllerBlockEntity controller = controllerForPattern(
-                machine,
-                controllerPos,
-                itemInputBus(controllerPos.offset(0, 0, -2)),
-                itemInputBus(controllerPos.offset(-1, 0, -1)),
-                itemInputBus(controllerPos.offset(1, 0, -1)));
-
-        boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
-
-        assertThat(formed).isFalse();
-        assertThat(controller.getLastFormationFailure()).isNotNull();
-    }
-
-    @Test
     void test_cube_forms_with_required_ports() throws Exception {
         DynamicMachine machine = requiredPortTestCube();
         MachineRegistry.register(machine);

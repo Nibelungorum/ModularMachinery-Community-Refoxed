@@ -93,9 +93,9 @@ class RecipeRegistryTest {
     void replacingDataPackSnapshotRemovesDeletedRecipes() {
         var oldId = Identifier.parse("mmcr:old_datapack_recipe");
         var newId = Identifier.parse("mmcr:new_datapack_recipe");
-        RecipeRegistry.replaceDataPack(Map.of(oldId, recipe(oldId.toString(), "mmcr:alloy_furnace")));
+        RecipeRegistry.replaceDataPack(Map.of(oldId, recipe(oldId.toString(), "mmcr:test_machine_name")));
 
-        RecipeRegistry.replaceDataPack(Map.of(newId, recipe(newId.toString(), "mmcr:alloy_furnace")));
+        RecipeRegistry.replaceDataPack(Map.of(newId, recipe(newId.toString(), "mmcr:test_machine_name")));
 
         assertThat(RecipeRegistry.getRecipe(oldId)).isNull();
         assertThat(RecipeRegistry.dataPackSnapshot()).containsOnlyKeys(newId);

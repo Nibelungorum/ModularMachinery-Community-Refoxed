@@ -30,7 +30,6 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
-import org.nibelungorum.builtin.PublicBuiltinLevelDefinitions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -50,6 +49,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class StructurePreviewSchemaFactoryTest {
+    private static final Identifier TEST_LEVEL_TYPE = MMCR.id("preview_test_level_type");
+    private static final Identifier TEST_LEVEL = MMCR.id("preview_test_level");
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -73,7 +74,10 @@ class StructurePreviewSchemaFactoryTest {
     void restoreDefaultLevels() {
         cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.resetCollector();
         var event = cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.prepare(java.util.Set.of());
-        PublicBuiltinLevelDefinitions.register(event);
+        event.registerLevelType(new LevelType(TEST_LEVEL_TYPE, Component.literal("Preview Test")));
+        event.registerLevel(new MachineLevel(TEST_LEVEL, TEST_LEVEL_TYPE, 0,
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY,
+                LevelModifier.IDENTITY));
         MachineLevelRegistry.installSnapshot(event.levelTypes().values(), event.levels().values());
     }
 

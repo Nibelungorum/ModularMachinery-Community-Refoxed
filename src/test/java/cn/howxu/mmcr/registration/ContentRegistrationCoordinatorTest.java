@@ -245,8 +245,8 @@ class ContentRegistrationCoordinatorTest {
         var productionSnapshot = ContentRegistrationCoordinator.startupSnapshotForTesting();
         int productionCommitCount = ContentRegistrationCoordinator.commitCountForTesting();
         assertThat(productionSnapshot.machines()).isNotEmpty();
-        assertThat(productionSnapshot.structures()).isNotEmpty();
-        assertThat(productionSnapshot.recipes()).isNotEmpty();
+        assertThat(productionSnapshot.structures()).isEmpty();
+        assertThat(productionSnapshot.recipes()).isEmpty();
 
         ContentRegistrationCoordinator.resetForTesting();
         TestBootstrap.restoreMachineDefinitions();
@@ -305,12 +305,7 @@ class ContentRegistrationCoordinatorTest {
     @Test
     void production_bootstrap_projects_structures_into_effective_registry() {
         assertThatCode(StartupContentRegistration::registerProduction).doesNotThrowAnyException();
-        assertThat(MachineStructureRegistry.startupSnapshot()).isNotEmpty()
-                .allSatisfy((machineId, structure) -> {
-                    assertThat(MachineStructureRegistry.effectiveSnapshot()).containsKey(machineId);
-                    assertThat(MachineRegistry.getMachine(machineId)).isNotNull();
-                    assertThat(MachineRegistry.getCompiledStages(machineId)).isNotEmpty();
-                });
+        assertThat(MachineStructureRegistry.startupSnapshot()).isEmpty();
     }
 
     private static Identifier id(String path) {

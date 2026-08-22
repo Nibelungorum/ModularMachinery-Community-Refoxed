@@ -135,7 +135,7 @@ class DynamicContentReloadServiceTest {
 
     @Test
     void reloadWithSnapshotReturnsTheCommittedEffectiveContent() {
-        String machineId = "mmcr:alloy_furnace";
+        String machineId = "mmcr:test_machine_name";
 
         var commit = DynamicContentReloadService.reloadWithSnapshot(candidate ->
                 candidate.registerStructure(structure(machineId)));

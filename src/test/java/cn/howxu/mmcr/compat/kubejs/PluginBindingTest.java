@@ -71,7 +71,7 @@ class PluginBindingTest {
 
     @Test
     void kubejs_content_transaction_replaces_dynamic_content_only_after_validation() {
-        var machineId = MMCR.id("alloy_furnace");
+        var machineId = MMCR.id("test_machine_name");
         var recipeId = MMCR.id("kubejs_transaction_success_recipe");
 
         var transaction = new KubeJSContentReloadTransaction();
@@ -87,7 +87,7 @@ class PluginBindingTest {
 
     @Test
     void kubejs_recipe_reload_keeps_builtin_machine_structure() {
-        var machineId = MMCR.id("alloy_furnace");
+        var machineId = MMCR.id("test_machine_name");
         var recipeId = MMCR.id("kubejs_recipe_with_builtin_structure");
         MachineStructureRegistry.replaceDynamic(Map.of(machineId, structure(machineId)));
 
@@ -101,7 +101,7 @@ class PluginBindingTest {
 
     @Test
     void invalid_kubejs_content_transaction_preserves_previous_dynamic_snapshot() {
-        var machineId = MMCR.id("alloy_furnace");
+        var machineId = MMCR.id("test_machine_name");
         var recipeId = MMCR.id("kubejs_transaction_previous_recipe");
 
         var previous = new KubeJSContentReloadTransaction();
@@ -123,7 +123,7 @@ class PluginBindingTest {
 
     @Test
     void successful_kubejs_server_reload_replaces_previous_script_snapshot() {
-        var removedMachineId = MMCR.id("alloy_furnace");
+        var removedMachineId = MMCR.id("test_machine_name");
         var keptMachineId = MMCR.id("cracker");
         var removedRecipeId = MMCR.id("kubejs_transaction_removed_recipe");
         var keptRecipeId = MMCR.id("kubejs_transaction_kept_recipe");
@@ -146,7 +146,7 @@ class PluginBindingTest {
 
     @Test
     void successful_kubejs_server_reload_runs_completion_sync_after_commit() {
-        var machineId = MMCR.id("alloy_furnace");
+        var machineId = MMCR.id("test_machine_name");
         var recipeId = MMCR.id("kubejs_sync_after_commit_recipe");
         var reload = new Object();
         AtomicBoolean synced = new AtomicBoolean();
@@ -162,7 +162,7 @@ class PluginBindingTest {
 
     @Test
     void after_scripts_loaded_server_path_sends_runtime_sync_when_current_server_is_available() {
-        var machineId = MMCR.id("alloy_furnace");
+        var machineId = MMCR.id("test_machine_name");
         var recipeId = MMCR.id("kubejs_after_scripts_sync_recipe");
         var reload = new Object();
         AtomicBoolean synced = new AtomicBoolean();
@@ -206,7 +206,7 @@ class PluginBindingTest {
 
     @Test
     void server_reload_removes_previous_script_ids_even_if_registry_republished_instances() {
-        var removedMachineId = MMCR.id("alloy_furnace");
+        var removedMachineId = MMCR.id("test_machine_name");
         var keptMachineId = MMCR.id("cracker");
         var removedRecipeId = MMCR.id("kubejs_transaction_republished_removed_recipe");
         var keptRecipeId = MMCR.id("kubejs_transaction_republished_kept_recipe");
@@ -231,7 +231,7 @@ class PluginBindingTest {
 
     @Test
     void server_reload_removes_republished_script_structure_with_modifier_requirements() {
-        var removedMachineId = MMCR.id("alloy_furnace");
+        var removedMachineId = MMCR.id("test_machine_name");
         var keptMachineId = MMCR.id("cracker");
 
         var previous = new KubeJSContentReloadTransaction();
@@ -249,7 +249,7 @@ class PluginBindingTest {
 
     @Test
     void successful_empty_server_reload_removes_previous_script_snapshot() {
-        var machineId = MMCR.id("alloy_furnace");
+        var machineId = MMCR.id("test_machine_name");
         var recipeId = MMCR.id("kubejs_transaction_empty_reload_removed_recipe");
         var previous = new KubeJSContentReloadTransaction();
         previous.registerStructure(structure(machineId));
@@ -266,7 +266,7 @@ class PluginBindingTest {
 
     @Test
     void empty_server_reload_preserves_same_id_content_replaced_outside_script_snapshot() {
-        var machineId = MMCR.id("alloy_furnace");
+        var machineId = MMCR.id("test_machine_name");
         var recipeId = MMCR.id("kubejs_transaction_external_takeover_recipe");
         var previous = new KubeJSContentReloadTransaction();
         previous.registerStructure(structure(machineId));
@@ -289,7 +289,7 @@ class PluginBindingTest {
 
     @Test
     void datapack_conflict_rejects_entire_kubejs_transaction_and_preserves_old_snapshot() {
-        var machineId = MMCR.id("alloy_furnace");
+        var machineId = MMCR.id("test_machine_name");
         var previousId = MMCR.id("kubejs_previous_after_datapack_conflict");
         var conflictId = MMCR.id("kubejs_datapack_conflict");
         var previous = new KubeJSContentReloadTransaction();
@@ -314,7 +314,7 @@ class PluginBindingTest {
         var machineId = MMCR.id("kubejs_datapack_conflict_structure");
         var recipeId = MMCR.id("kubejs_datapack_conflict_structure_recipe");
         RecipeRegistry.replaceDataPack(Map.of(recipeId,
-                new MachineRecipe(recipeId, MMCR.id("alloy_furnace"), 2, List.of(), List.of())));
+                new MachineRecipe(recipeId, MMCR.id("test_machine_name"), 2, List.of(), List.of())));
         var transaction = new KubeJSContentReloadTransaction();
         transaction.registerStructure(structure(machineId));
         transaction.registerRecipe(new MachineRecipe(recipeId, machineId, 3, List.of(), List.of()));
@@ -328,11 +328,11 @@ class PluginBindingTest {
     void duplicate_recipe_id_is_rejected_without_changing_transaction_snapshot() {
         var id = MMCR.id("kubejs_duplicate_recipe");
         var transaction = new KubeJSContentReloadTransaction();
-        transaction.registerStructure(structure(MMCR.id("alloy_furnace")));
-        transaction.registerRecipe(new MachineRecipe(id, MMCR.id("alloy_furnace"), 1, List.of(), List.of()));
+        transaction.registerStructure(structure(MMCR.id("test_machine_name")));
+        transaction.registerRecipe(new MachineRecipe(id, MMCR.id("test_machine_name"), 1, List.of(), List.of()));
 
         assertThatThrownBy(() -> transaction.registerRecipe(
-                new MachineRecipe(id, MMCR.id("alloy_furnace"), 2, List.of(), List.of())))
+                new MachineRecipe(id, MMCR.id("test_machine_name"), 2, List.of(), List.of())))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining(id.toString());
         transaction.commit();
@@ -341,7 +341,7 @@ class PluginBindingTest {
 
     @Test
     void server_script_error_discards_collected_content_and_preserves_previous_snapshot() {
-        var machineId = MMCR.id("alloy_furnace");
+        var machineId = MMCR.id("test_machine_name");
         var previousRecipeId = MMCR.id("kubejs_transaction_error_previous_recipe");
         var previous = new KubeJSContentReloadTransaction();
         previous.registerStructure(structure(machineId));
@@ -363,7 +363,7 @@ class PluginBindingTest {
 
     @Test
     void interrupted_server_reload_is_cleaned_before_after_hook_can_commit_it() {
-        var machineId = MMCR.id("alloy_furnace");
+        var machineId = MMCR.id("test_machine_name");
         var previousRecipeId = MMCR.id("kubejs_transaction_interrupted_previous_recipe");
         var previous = new KubeJSContentReloadTransaction();
         previous.registerStructure(structure(machineId));
@@ -383,7 +383,7 @@ class PluginBindingTest {
 
         assertThat(MachineStructureRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousStructures);
         assertThat(RecipeRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousRecipes);
-        new MachineRecipeBuilderJS("mmcr:kubejs_transaction_direct_recipe").machine("mmcr:alloy_furnace").build();
+        new MachineRecipeBuilderJS("mmcr:kubejs_transaction_direct_recipe").machine("mmcr:test_machine_name").build();
         assertThat(RecipeRegistry.containsStatic(MMCR.id("kubejs_transaction_direct_recipe"))).isTrue();
     }
 
@@ -394,7 +394,7 @@ class PluginBindingTest {
 
         Plugin.beginServerReload(reload, 0);
         new MachineRecipeBuilderJS(recipeId)
-                .machine("mmcr:alloy_furnace")
+                .machine("mmcr:test_machine_name")
                 .build();
 
         assertThat(RecipeRegistry.containsStatic(recipeId)).isFalse();
@@ -403,7 +403,7 @@ class PluginBindingTest {
 
     @Test
     void empty_server_reload_preserves_existing_dynamic_content() {
-        var machineId = MMCR.id("alloy_furnace");
+        var machineId = MMCR.id("test_machine_name");
         var recipeId = MMCR.id("non_script_dynamic_recipe");
         MachineStructureRegistry.replaceDynamic(Map.of(machineId, structure(machineId)));
         RecipeRegistry.replaceDynamic(Map.of(recipeId, new MachineRecipe(recipeId, machineId, 1, List.of(), List.of())));
@@ -585,7 +585,7 @@ class PluginBindingTest {
     void public_recipe_builder_creates_a_component_output_in_recipe_event_context() {
         Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         var builder = new MachineRecipeBuilderJS("mmcr:sharp_sword")
-                .machine("mmcr:alloy_furnace")
+                .machine("mmcr:test_machine_name")
                 .itemOutputWithComponents("minecraft:diamond_sword", 1, JsonParser.parseString("""
                         {
                           'minecraft:custom_name': { text: 'Better钻石剑' },
@@ -608,7 +608,7 @@ class PluginBindingTest {
     void outputs_replaces_previously_declared_component_outputs() {
         Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         var builder = new MachineRecipeBuilderJS("mmcr:replaced_component_output")
-                .machine("mmcr:alloy_furnace")
+                .machine("mmcr:test_machine_name")
                 .itemOutput("minecraft:iron_ingot", 1)
                 .itemOutputWithComponents("minecraft:diamond_sword", 1, JsonParser.parseString("""
                         { 'minecraft:custom_name': { text: 'Discarded' } }
@@ -623,7 +623,7 @@ class PluginBindingTest {
     @Test
     void component_output_rejects_negative_count_before_codec_decoding() {
         assertThatThrownBy(() -> new MachineRecipeBuilderJS("mmcr:negative_component_output")
-                .machine("mmcr:alloy_furnace")
+                .machine("mmcr:test_machine_name")
                 .itemOutputWithComponents("minecraft:diamond_sword", -1, JsonParser.parseString("{}")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Component item output count must not be negative: -1");
@@ -633,7 +633,7 @@ class PluginBindingTest {
     void component_output_added_after_outputs_list_is_merged_at_the_new_position() {
         Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         var builder = new MachineRecipeBuilderJS("mmcr:component_after_outputs")
-                .machine("mmcr:alloy_furnace")
+                .machine("mmcr:test_machine_name")
                 .outputs(List.of(new ItemStack(Items.DIAMOND)))
                 .itemOutputWithComponents("minecraft:diamond_sword", 1, JsonParser.parseString("""
                         { 'minecraft:custom_name': { text: 'Kept' } }
@@ -649,7 +649,7 @@ class PluginBindingTest {
     @Test
     void public_recipe_builder_creates_chanced_item_output_requirement() {
         new MachineRecipeBuilderJS("mmcr:chanced_diamond")
-                .machine("mmcr:alloy_furnace")
+                .machine("mmcr:test_machine_name")
                 .chancedItemOutput("minecraft:diamond", 1, 0.5F)
                 .build();
 

@@ -7,7 +7,6 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
-import org.nibelungorum.builtin.PublicBuiltinLevelDefinitions;
 import net.minecraft.network.chat.Component;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.item.ItemStack;
@@ -47,9 +46,7 @@ class BlockPredicateTest {
     @AfterEach
     void clearMachineLevels() {
         cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.resetCollector();
-        var event = cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.prepare(Set.of());
-        PublicBuiltinLevelDefinitions.register(event);
-        MachineLevelRegistry.installSnapshot(event.levelTypes().values(), event.levels().values());
+        MachineLevelRegistry.installSnapshot(List.of(), List.of());
     }
 
     @Test void air_matches_only_air() {

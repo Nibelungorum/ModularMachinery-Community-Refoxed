@@ -17,24 +17,53 @@ public final class InterfacePredicates {
         return anyOfPorts("item_input_bus", PortTiers.ItemTier.values());
     }
 
+    public static BlockPredicate anyItemInput() {
+        return anyOfItemInput();
+    }
+
     public static BlockPredicate anyOfItemOutput() {
         return anyOfPorts("item_output_bus", PortTiers.ItemTier.values());
+    }
+
+    public static BlockPredicate anyItemOutput() {
+        return anyOfItemOutput();
     }
 
     public static BlockPredicate anyOfFluidInput() {
         return anyOfPorts("fluid_input_hatch", PortTiers.FluidTier.values());
     }
 
+    public static BlockPredicate anyFluidInput() {
+        return anyOfFluidInput();
+    }
+
     public static BlockPredicate anyOfFluidOutput() {
         return anyOfPorts("fluid_output_hatch", PortTiers.FluidTier.values());
+    }
+
+    public static BlockPredicate anyFluidOutput() {
+        return anyOfFluidOutput();
     }
 
     public static BlockPredicate anyOfEnergyInput() {
         return anyOfPorts("energy_input_hatch", PortTiers.EnergyTier.values());
     }
 
+    public static BlockPredicate anyEnergyInput() {
+        return anyOfEnergyInput();
+    }
+
     public static BlockPredicate anyOfEnergyOutput() {
         return anyOfPorts("energy_output_hatch", PortTiers.EnergyTier.values());
+    }
+
+    public static BlockPredicate anyEnergyOutput() {
+        return anyOfEnergyOutput();
+    }
+
+    public static BlockPredicate ports() {
+        return BlockPredicate.any(anyItemInput(), anyItemOutput(), anyFluidInput(), anyFluidOutput(),
+                anyEnergyInput(), anyEnergyOutput());
     }
 
     public static BlockPredicate anyOfPort() {
@@ -62,10 +91,22 @@ public final class InterfacePredicates {
         return BlockPredicate.anyOf(List.of(predicates));
     }
 
+    public static BlockPredicate port(String id) {
+        return BlockPredicate.deferredBlock(PublicBuiltinRegistration.block(id));
+    }
+
+    public static BlockPredicate port(Identifier id) {
+        return BlockPredicate.deferredBlock(PublicBuiltinRegistration.block(id));
+    }
+
     public static BlockPredicate parallelControllers() {
         List<BlockPredicate> predicates = new ArrayList<>();
         for (ParallelTier tier : ParallelTier.values()) predicates.add(port(tier.idSuffix()));
         return BlockPredicate.anyOf(predicates);
+    }
+
+    public static BlockPredicate factoryController() {
+        return port("factory_controller");
     }
 
     public static BlockPredicate smartInterface() {
@@ -84,7 +125,4 @@ public final class InterfacePredicates {
         return BlockPredicate.anyOf(predicates);
     }
 
-    private static BlockPredicate port(String id) {
-        return BlockPredicate.deferredBlock(PublicBuiltinRegistration.block(id));
-    }
 }

@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
 import cn.howxu.mmcr.internal.assembly.PlayerInventoryStructureItemSource;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.registry.ModBlocks;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
@@ -33,6 +34,7 @@ public class TerminalAssemblyGameTest {
 
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("test_cube")));
         List<MultiblockAssemblyService.Placement> template = template(controller);
         BlockPos occupiedPos = template.get(0).pos();
         BlockPos missingPos = template.get(1).pos();
@@ -54,6 +56,7 @@ public class TerminalAssemblyGameTest {
 
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("test_cube")));
         List<MultiblockAssemblyService.Placement> template = template(controller);
         BlockPos airPos = template.get(0).pos();
         BlockPos nonMatchingPos = template.get(1).pos();
@@ -82,6 +85,7 @@ public class TerminalAssemblyGameTest {
         BlockPos controllerPos = new BlockPos(4, 1, 4);
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("expandable_structure_stages")).get().defaultBlockState());
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("expandable_structure_stages")));
         Machine machine = controller.boundMachine().orElseThrow();
         List<MultiblockAssemblyService.Placement> stage1Template = template(controller);
         BlockPos stage1Pos = stage1Template.getFirst().pos();
@@ -101,6 +105,7 @@ public class TerminalAssemblyGameTest {
         BlockPos controllerPos = new BlockPos(4, 1, 4);
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("expandable_structure_stages")).get().defaultBlockState());
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("expandable_structure_stages")));
         Machine machine = controller.boundMachine().orElseThrow();
         List<MultiblockAssemblyService.Placement> stage2Template = MultiblockAssemblyService.createTemplatePlacements(
                 controller.getBlockPos(), controller.assemblyPattern(machine, 2));
@@ -127,6 +132,7 @@ public class TerminalAssemblyGameTest {
         BlockPos controllerPos = new BlockPos(4, 1, 4);
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("expandable_structure_stages")).get().defaultBlockState());
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("expandable_structure_stages")));
         Machine machine = controller.boundMachine().orElseThrow();
         BlockPos stage2OnlyPos = stageOnlyPos(controller, machine, 2, template(controller));
         ServerPlayer player = servicePlayer(helper);
@@ -146,6 +152,7 @@ public class TerminalAssemblyGameTest {
         BlockPos controllerPos = new BlockPos(4, 1, 4);
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("test_cube")));
         List<MultiblockAssemblyService.Placement> template = template(controller);
         ServerPlayer player = servicePlayer(helper);
         player.getInventory().add(new ItemStack(ModBlocks.CASING.get(), template.size() - 1));
@@ -173,6 +180,7 @@ public class TerminalAssemblyGameTest {
         BlockPos controllerPos = new BlockPos(4, 1, 4);
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("iron_compressor")).get().defaultBlockState());
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("iron_compressor")));
         List<MultiblockAssemblyService.Placement> template = template(controller);
         int firstIndex = -1;
         int missingIndex = -1;

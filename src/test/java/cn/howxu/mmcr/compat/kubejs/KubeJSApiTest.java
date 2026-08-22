@@ -23,7 +23,6 @@ import dev.latvian.mods.rhino.ContextFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.nibelungorum.builtin.PublicBuiltinLevelDefinitions;
 
 import java.util.List;
 import java.util.Map;
@@ -37,6 +36,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class KubeJSApiTest {
+    private static final Identifier TEST_LEVEL_TYPE = MMCR.id("api_test_level_type");
+    private static final Identifier TEST_LEVEL = MMCR.id("api_test_level");
     private final KubeJSApi api = new KubeJSApi();
 
     @BeforeAll
@@ -48,7 +49,10 @@ class KubeJSApiTest {
     void restoreMachineLevels() {
         cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.resetCollector();
         var event = cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.prepare(java.util.Set.of());
-        PublicBuiltinLevelDefinitions.register(event);
+        event.registerLevelType(new LevelType(TEST_LEVEL_TYPE, Component.literal("API Test")));
+        event.registerLevel(new MachineLevel(TEST_LEVEL, TEST_LEVEL_TYPE, 0,
+                new BlockPredicate.OfBlockState(Blocks.EMERALD_BLOCK.defaultBlockState()), ItemStack.EMPTY,
+                LevelModifier.IDENTITY));
         MachineLevelRegistry.installSnapshot(event.levelTypes().values(), event.levels().values());
     }
 
@@ -120,15 +124,15 @@ class KubeJSApiTest {
                 new BlockPredicate.OfBlockState(Blocks.EMERALD_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
         TestBootstrap.freezeRegistration();
 
-        assertThatThrownBy(() -> api.levelRequirement(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE.toString(), "mmcr:api_other_level"))
+        assertThatThrownBy(() -> api.levelRequirement(TEST_LEVEL_TYPE.toString(), "mmcr:api_other_level"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void level_slot_factory_exposes_registered_type_to_server_scripts() {
-        var slot = api.levelSlot(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE.toString());
+        var slot = api.levelSlot(TEST_LEVEL_TYPE.toString());
 
-        assertThat(slot).isEqualTo(new LevelSlot(PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE));
+        assertThat(slot).isEqualTo(new LevelSlot(TEST_LEVEL_TYPE));
         assertThatThrownBy(() -> api.levelSlot("test:missing_level_type"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unknown machine level type");

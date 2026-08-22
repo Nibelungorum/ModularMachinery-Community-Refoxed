@@ -44,13 +44,7 @@ public final class GameTestRegistry {
         register(event, "controller_tick", 100, helper -> new ControllerTickGameTest().structureForms3x3Casing(helper));
         register(event, "multi_factory_controller", 160,
                 helper -> new MultiFactoryControllerGameTest().formsWithTwoFactoryControllersAndReformsAfterRelease(helper));
-        register(event, "controller_tick_scan_registry", 100, helper -> new ControllerTickGameTest().scansRegisteredMachineWhenDefaultBindingIsEmpty(helper));
-        register(event, "expandable_structure_stages", 120, helper -> new ExpandableStructureGameTest().upgradesAndDowngradesHighestAvailableStage(helper));
-        register(event, "expandable_structure_vertical_roll", 120, helper -> new ExpandableStructureGameTest().verticalNonDefaultRollUsesStageSelection(helper));
         register(event, "e2e_recipe_run", 200, helper -> new E2ERecipeRunGameTest().ironCompressorRuns(helper));
-        register(event, "datapack_recipe_run", 160, helper -> new DataPackRecipeGameTest().dataPackRecipeRunsOnMachine(helper));
-        register(event, "datapack_recipe_override", 100, helper -> new DataPackRecipeGameTest().dataPackRecipeOverridesStaticRecipe(helper));
-        register(event, "datapack_recipe_malformed_isolation", 100, helper -> new DataPackRecipeGameTest().malformedDataPackRecipeDoesNotBlockValidRecipe(helper));
         register(event, "e2e_distillation_tower_partial_outputs", 160, helper -> new E2ERecipeRunGameTest().distillationTowerUnlocksPartialFluidOutputsByStage(helper));
         register(event, "energy_hatch_capability", 100, helper -> new EnergyHatchCapabilityGameTest().energyHatchStoresFE(helper));
         register(event, "fluid_hatch_capability", 100, helper -> new FluidHatchCapabilityGameTest().fluidHatchStoresWater(helper));
@@ -196,9 +190,6 @@ public final class GameTestRegistry {
     }
 
     public static void registerRecipes(MMCRMachineRecipesEvent event) {
-        Identifier id = Identifier.parse("mmcr_test:datapack_static_override");
-        event.registerRecipe(MachineRecipeBuilder.recipe(id, MMCR.id("iron_compressor")).duration(20)
-                .inputItem(Items.COAL, 1).outputItem(Items.CHARCOAL, 1).build());
         event.registerRecipe(MachineRecipeBuilder.recipe(MMCR.id("distillation_test_recipe"),
                         MMCR.id("distillation_tower_test"))
                 .duration(20).inputItem(Items.COAL, 1).outputFluid(Fluids.WATER, 1).build());

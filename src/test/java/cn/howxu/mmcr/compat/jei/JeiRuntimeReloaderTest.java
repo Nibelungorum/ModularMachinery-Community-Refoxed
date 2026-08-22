@@ -79,7 +79,7 @@ class JeiRuntimeReloaderTest {
     @Test
     void reloadUpdatesJeiRecipesForSyncedMachines() {
         FakeRecipeManager manager = new FakeRecipeManager();
-        Identifier machineId = MMCR.id("alloy_furnace");
+        Identifier machineId = MMCR.id("test_machine_name");
         RecipeRegistry.clearForTesting();
         JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
         JeiRuntimeReloader.setRuntime(runtime(manager));
@@ -95,7 +95,7 @@ class JeiRuntimeReloaderTest {
     @Test
     void firstRuntimeReloadHidesDisplaysRegisteredBeforeRuntimeWasAvailable() {
         FakeRecipeManager manager = new FakeRecipeManager();
-        Identifier machineId = MMCR.id("alloy_furnace");
+        Identifier machineId = MMCR.id("test_machine_name");
         Identifier recipeId = MMCR.id("initial_kubejs_recipe");
         MachineRecipe recipe = new MachineRecipe(recipeId, machineId, 20, List.of(),
                 List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)));
@@ -112,7 +112,7 @@ class JeiRuntimeReloaderTest {
     @Test
     void reloadDoesNotRefreshTheSameCommittedVersionTwice() {
         FakeRecipeManager manager = new FakeRecipeManager();
-        Identifier machineId = MMCR.id("alloy_furnace");
+        Identifier machineId = MMCR.id("test_machine_name");
         JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
         JeiRuntimeReloader.setRuntime(runtime(manager));
         RuntimeContentSnapshot snapshot = snapshotWithRecipe(machineId, MMCR.id("jei_same_version_recipe"));
@@ -128,7 +128,7 @@ class JeiRuntimeReloaderTest {
     @Test
     void failedAsyncReloadDoesNotClaimVersionBeforeRetrySucceeds() {
         FakeRecipeManager manager = new FakeRecipeManager();
-        Identifier machineId = MMCR.id("alloy_furnace");
+        Identifier machineId = MMCR.id("test_machine_name");
         JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
         JeiRuntimeReloader.setRuntime(runtime(manager));
         RuntimeContentSnapshot snapshot = snapshotWithRecipe(machineId, MMCR.id("jei_retry_recipe"));
@@ -145,7 +145,7 @@ class JeiRuntimeReloaderTest {
         FakeRecipeManager manager = new FakeRecipeManager();
         Identifier machineId = MMCR.id("runtime_only_machine");
         RecipeRegistry.clearForTesting();
-        JeiRuntimeReloader.markRegisteredMachineCategories(List.of(MMCR.id("alloy_furnace")));
+        JeiRuntimeReloader.markRegisteredMachineCategories(List.of(MMCR.id("test_machine_name")));
         JeiRuntimeReloader.setRuntime(runtime(manager));
 
         JeiRuntimeReloader.reloadIfAvailable(snapshotWithRecipe(machineId, MMCR.id("runtime_only_recipe")));
@@ -157,7 +157,7 @@ class JeiRuntimeReloaderTest {
     @Test
     void reloadHidesVisibleDisplaysForRemovedMachine() {
         FakeRecipeManager manager = new FakeRecipeManager();
-        Identifier machineId = MMCR.id("alloy_furnace");
+        Identifier machineId = MMCR.id("test_machine_name");
         Identifier recipeId = MMCR.id("removed_runtime_recipe");
         RecipeRegistry.clearForTesting();
         JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
@@ -177,7 +177,7 @@ class JeiRuntimeReloaderTest {
     @Test
     void reloadDoesNotHidePreExistingStaticDisplayForUnsyncedMachine() {
         FakeRecipeManager manager = new FakeRecipeManager();
-        Identifier machineId = MMCR.id("alloy_furnace");
+        Identifier machineId = MMCR.id("test_machine_name");
         Identifier staticRecipeId = MMCR.id("pre_existing_static_recipe");
         RecipeRegistry.register(new MachineRecipe(staticRecipeId, machineId, 20, List.of(),
                 List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1))));

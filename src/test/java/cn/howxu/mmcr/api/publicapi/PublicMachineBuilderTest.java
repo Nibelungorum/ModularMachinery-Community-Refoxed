@@ -195,9 +195,8 @@ class PublicMachineBuilderTest {
                 .isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> PatternBuilder.pattern().layer("CC", "CCC"))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("same width");
-        assertThatThrownBy(() -> PatternBuilder.pattern().layer("CF")
-                .where('C', casing).controller('F').build())
-                .isInstanceOf(IllegalStateException.class).hasMessageContaining("Unbound");
+        assertThat(PatternBuilder.pattern().layer("CF")
+                .where('C', casing).controller('F').build().predicates()).containsKey('F');
     }
 
     @Test
