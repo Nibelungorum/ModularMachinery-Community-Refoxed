@@ -144,8 +144,10 @@ public final class PublicMachineAdapter {
                 .allowModifiers(definition.allowModifiers())
                 .allowMultithreading(definition.allowMultithreading())
                 .shareSmartInterfaces(definition.shareSmartInterfaces());
-        definition.smartInterfaceTypes().values().forEach(builder::smartInterfaceType);
-        definition.smartInterfaceModifiers().forEach(builder::smartInterfaceModifier);
+        definition.smartInterfaceTypes().values().stream().map(PublicMachineAdapter::toInternalSmartInterfaceType)
+                .forEach(builder::smartInterfaceType);
+        definition.smartInterfaceModifiers().stream().map(PublicMachineAdapter::toInternalSmartInterfaceModifier)
+                .forEach(builder::smartInterfaceModifier);
         builder.runningSound(definition.runningSoundId()).finishSound(definition.finishSoundId());
         if (structure != null) {
             builder.pattern(toBlockArray(structure.stages().getFirst().pattern()));
@@ -268,6 +270,20 @@ public final class PublicMachineAdapter {
 
     private static MachineRole toInternalRole(cn.howxu.mmcr.api.publicapi.machine.MachineRole role) {
         return MachineRole.valueOf(role.name());
+    }
+
+    private static cn.howxu.mmcr.api.machine.SmartInterfaceType toInternalSmartInterfaceType(
+            cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceType type) {
+        return new cn.howxu.mmcr.api.machine.SmartInterfaceType(type.type(), type.defaultValue(), type.minValue(),
+                type.maxValue(), type.priority(), cn.howxu.mmcr.api.machine.SmartInterfaceType.ValueType.valueOf(type.valueType().name()));
+    }
+
+    private static cn.howxu.mmcr.api.machine.SmartInterfaceModifier toInternalSmartInterfaceModifier(
+            cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceModifier modifier) {
+        return new cn.howxu.mmcr.api.machine.SmartInterfaceModifier(modifier.interfaceType(), modifier.target(),
+                cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.valueOf(modifier.io().name()),
+                modifier.affectsChance(), modifier.minValue(), modifier.maxValue(), modifier.atMin(), modifier.atMax(),
+                cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.Operation.valueOf(modifier.operation().name()));
     }
 
     private static List<MachineStructureStage> toStructureStages(cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure) {

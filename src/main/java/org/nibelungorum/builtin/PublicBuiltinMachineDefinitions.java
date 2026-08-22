@@ -5,7 +5,6 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.PublicBuiltinRegistration;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
@@ -32,10 +31,7 @@ public final class PublicBuiltinMachineDefinitions {
 
     @SubscribeEvent
     public static void registerStructures(MMCRMachineStructuresEvent event) {
-        event.registerModifier(PublicBuiltinDefinitions.id("alloy_furnace_diamond_speedup"),
-                ModifierDefinition.of("duration", "input", 0.5F, "multiply", false));
-        event.registerModifier(PublicBuiltinDefinitions.id("alloy_furnace_gold_doubling"),
-                ModifierDefinition.of("item", "output", 2.0F, "multiply", false));
+        PublicBuiltinDefinitions.modifierDefinitions().forEach(event::registerModifier);
         java.util.Map<net.minecraft.resources.Identifier, MachineStructureDefinition> structures =
                 PublicBuiltinDefinitions.structureDefinitions();
         structures.forEach((id, structure) -> {

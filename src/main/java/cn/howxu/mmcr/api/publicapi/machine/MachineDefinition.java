@@ -3,8 +3,6 @@ package cn.howxu.mmcr.api.publicapi.machine;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
-import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
-import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import net.minecraft.resources.Identifier;
 
 import java.util.Collections;

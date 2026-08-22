@@ -7,8 +7,13 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.MachineRole;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.ParallelTier;
 import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
+import cn.howxu.mmcr.api.publicapi.machine.StructureStage;
+import cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceModifier;
+import cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceType;
+import cn.howxu.mmcr.api.publicapi.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
@@ -16,6 +21,7 @@ import cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.resources.Identifier;
@@ -58,10 +64,11 @@ public final class PublicBuiltinDefinitions {
     public static Map<Identifier, MachineDefinition> machineDefinitions() {
         Map<Identifier, MachineDefinition> result = new LinkedHashMap<>();
         result.put(BLAST_FURNACE, MachineBuilder.machine(BLAST_FURNACE).displayNameKey("machine.mmcr.blast_furnace")
-                .controller(controllerSpec(BLAST_FURNACE, true, true, false)).maxParallelism(Integer.MAX_VALUE)
-                .parallelizable(true).factory(factory -> factory.hasFactory(true).threadLimit(4)).build());
+                .controller(controllerSpec(BLAST_FURNACE, true, true, false)).allowMultithreading()
+                .maxParallelAmount(Integer.MAX_VALUE).parallelizable(true)
+                .factory(factory -> factory.hasFactory(true).threadLimit(4)).build());
         result.put(ALLOY_FURNACE, MachineBuilder.machine(ALLOY_FURNACE).displayNameKey("machine.mmcr.alloy_furnace")
-                .appearance(appearance -> appearance.machineBasicBlock(mc("bricks"))).build());
+                .appearance(appearance -> appearance.machineBasicBlock(mc("bricks"))).allowModifiers().build());
         result.put(CRACKER, MachineBuilder.machine(CRACKER).displayNameKey("machine.mmcr.cracker")
                 .controller(controllerSpec(CRACKER, true, true, false)).build());
         result.put(REACTOR, MachineBuilder.machine(REACTOR).displayNameKey("machine.mmcr.reactor")
@@ -70,14 +77,23 @@ public final class PublicBuiltinDefinitions {
                 .displayNameKey("machine.mmcr.thermal_smelting_furnace").appearance(a -> a.machineBasicBlock(mc("smooth_basalt")))
                 .maxParallelism(Integer.MAX_VALUE).parallelizable(true).build());
         result.put(PURPUR_FURNACE, MachineBuilder.machine(PURPUR_FURNACE).displayNameKey("machine.mmcr.purpur_furnace")
-                .appearance(a -> a.machineBasicBlock(mc("end_stone_bricks"))).maxParallelism(4).parallelizable(true).build());
+                .appearance(a -> a.machineBasicBlock(mc("end_stone_bricks"))).maxParallelAmount(32).parallelizable(true)
+                .smartInterface(new SmartInterfaceType("mode", 1F, 3F, 1, SmartInterfaceType.ValueType.INTEGER))
+                .smartInterface(new SmartInterfaceType("conversation", 0F, 1F, 0))
+                .smartInterfaceModifier(SmartInterfaceModifier.energy("mode", 1F, 2F, 1F, 2F, RecipeModifier.Operation.MULTIPLY))
+                .smartInterfaceModifier(SmartInterfaceModifier.energy("mode", 2F, 3F, 2F, 4F, RecipeModifier.Operation.MULTIPLY))
+                .smartInterfaceModifier(SmartInterfaceModifier.duration("conversation", 0F, .5F, 1F, 1.5F, RecipeModifier.Operation.MULTIPLY))
+                .smartInterfaceModifier(SmartInterfaceModifier.duration("conversation", .5F, 1F, 1.5F, 2.5F, RecipeModifier.Operation.MULTIPLY))
+                .runningSound(Identifier.parse("minecraft:block.furnace.fire_crackle"))
+                .finishSound(Identifier.parse("minecraft:entity.ender_dragon.growl")).build());
         result.put(DISTILLATION_TOWER, MachineBuilder.machine(DISTILLATION_TOWER).displayNameKey("machine.mmcr.distillation_tower")
-                .appearance(a -> a.machineBasicBlock(mc("polished_blackstone"))).maxParallelism(4).parallelizable(true).build());
+                .appearance(a -> a.machineBasicBlock(mc("polished_blackstone"))).maxParallelAmount(32).parallelizable(true)
+                .build());
         result.put(ECO_MATRIX, MachineBuilder.machine(ECO_MATRIX).displayNameKey("machine.mmcr.eco_matrix")
                 .appearance(a -> a.machineBasicBlock(mc("sea_lantern"))).build());
         result.put(SPACE_ELEVATOR, MachineBuilder.machine(SPACE_ELEVATOR).displayNameKey("machine.mmcr.space_elevator")
                 .appearance(a -> a.machineBasicBlock(mc("smooth_quartz")).controllerBaseTexture(mc("block/quartz_block_bottom"))
-                        .formedPortBaseTexture(mc("block/quartz_block_bottom"))).role(MachineRole.HOST)
+                .formedPortBaseTexture(mc("block/quartz_block_bottom"))).role(MachineRole.HOST)
                 .acceptedModule(SPACE_REASSEMBLER).build());
         result.put(SPACE_REASSEMBLER, MachineBuilder.machine(SPACE_REASSEMBLER).displayNameKey("machine.mmcr.space_reassembler")
                 .appearance(a -> a.machineBasicBlock(mc("quartz_pillar"))).role(MachineRole.MODULE).build());
@@ -100,6 +116,14 @@ public final class PublicBuiltinDefinitions {
         result.put(SPACE_REASSEMBLER, spaceReassembler());
         result.put(MONSTER_FARM, monsterFarm());
         return Map.copyOf(result);
+    }
+
+    public static Map<Identifier, ModifierDefinition> modifierDefinitions() {
+        return Map.of(
+                id("alloy_furnace_diamond_speedup"),
+                ModifierDefinition.of("duration", "input", 0.5F, "multiply", false),
+                id("alloy_furnace_gold_doubling"),
+                ModifierDefinition.of("item", "output", 2.0F, "multiply", false));
     }
 
     public static Map<Identifier, MachineRecipeDefinition> recipeDefinitions() {
@@ -158,20 +182,12 @@ public final class PublicBuiltinDefinitions {
     }
 
     private static void purpurRecipes(Map<Identifier, MachineRecipeDefinition> out) {
-        purpur(out, "mode_1", 200, 5, Items.DIAMOND, 2, SmartInterfaceRequirement.input("Mode", 1));
-        purpur(out, "mode_2", 200, 5, Items.GOLD_INGOT, 4, SmartInterfaceRequirement.input("Mode", 2));
-        purpur(out, "mode_3", 200, 5, Items.IRON_INGOT, 8, SmartInterfaceRequirement.input("Mode", 3));
-        purpur(out, "temperature_400", 320, 3, Items.APPLE, 8, SmartInterfaceRequirement.input("Temperature", 400));
-        purpur(out, "temperature_1600", 240, 6, Items.BAKED_POTATO, 6, SmartInterfaceRequirement.input("Temperature", 1600));
-        purpur(out, "temperature_3200", 160, 9, Items.BRICK, 4, SmartInterfaceRequirement.input("Temperature", 3200));
-        purpur(out, "temperature_6800", 60, 14, Items.CHARCOAL, 2, SmartInterfaceRequirement.input("Temperature", 6800));
-        purpur(out, "conversion_0", 200, 2, Items.STICK, 1, SmartInterfaceRequirement.input("ConversionRate", 0));
-        purpur(out, "conversion_50", 200, 6, Items.BONE_MEAL, 4, SmartInterfaceRequirement.input("ConversionRate", .5F));
-        purpur(out, "conversion_100", 200, 12, Items.GLOWSTONE_DUST, 8, SmartInterfaceRequirement.input("ConversionRate", 1));
-        purpur(out, "mode_temperature", 120, 10, Items.POPPED_CHORUS_FRUIT, 3, SmartInterfaceRequirement.input("Mode", 2), SmartInterfaceRequirement.input("Temperature", 3200));
-        purpur(out, "mode_conversion", 200, 9, Items.STRING, 6, SmartInterfaceRequirement.input("Mode", 3), SmartInterfaceRequirement.input("ConversionRate", .75F));
-        purpur(out, "temperature_conversion", 90, 15, Items.CLAY_BALL, 5, SmartInterfaceRequirement.input("Temperature", 5200), SmartInterfaceRequirement.input("ConversionRate", .8F));
-        purpur(out, "mode_temperature_conversion", 80, 18, Items.ENDER_PEARL, 4, SmartInterfaceRequirement.input("Mode", 1), SmartInterfaceRequirement.input("Temperature", 5200), SmartInterfaceRequirement.input("ConversionRate", 1));
+        purpur(out, "mode_1", 100, 10, Items.IRON_INGOT, 10, SmartInterfaceRequirement.input("mode", 1));
+        purpur(out, "mode_2", 100, 1, Items.DIAMOND, 10, SmartInterfaceRequirement.input("mode", 2, 3));
+        out.put(id("purpur_furnace_conversation_low"), recipe("purpur_furnace_conversation_low", PURPUR_FURNACE, 100)
+                .parallelized(true).inputItem(Items.STICK, 4).inputEnergy(10)
+                .outputItem(namedItem(Items.GOLD_INGOT, 10, "Too low Conversation!"))
+                .requirement(SmartInterfaceRequirement.input("conversation", 0F, .5F)).build());
     }
 
     private static void purpur(Map<Identifier, MachineRecipeDefinition> out, String path, int ticks, int energy, Item output, int count, SmartInterfaceRequirement... requirements) {
@@ -228,7 +244,9 @@ public final class PublicBuiltinDefinitions {
         .layer("XXX", "XIX", "XXX")
         .layer("XMX", "I I", "XMX")
         .layer("XXX", "XCX", "XXX")
-        .where('X', block(Blocks.BRICKS)).where('I', ports()).where('M', block(Blocks.BLAST_FURNACE)).where('C', controller(ALLOY_FURNACE)).controller('C'))).build(ALLOY_FURNACE);
+        .where('X', block(Blocks.BRICKS)).where('I', ports()).where('M', block(Blocks.BLAST_FURNACE)).where('C', controller(ALLOY_FURNACE)).controller('C'))
+                .requirements(r -> r.modifier('M', id("alloy_furnace_diamond_speedup"), block(Blocks.DIAMOND_BLOCK), descriptiveStack(Items.DIAMOND_BLOCK))
+                        .modifier('M', id("alloy_furnace_gold_doubling"), block(Blocks.GOLD_BLOCK), descriptiveStack(Items.GOLD_BLOCK)))).build(ALLOY_FURNACE);
     }
 
     private static MachineStructureDefinition cracker() {
@@ -261,7 +279,8 @@ public final class PublicBuiltinDefinitions {
         .layer("AAA", "X X", "X X", "ADA")
         .layer("ABA", "XXX", "XXX", "AAA")
                  .where('X', any(block(Blocks.COPPER_BLOCK), block(Blocks.IRON_BLOCK), block(Blocks.GOLD_BLOCK), block(Blocks.DIAMOND_BLOCK))).where('A', any(block(Blocks.SMOOTH_BASALT), ports(), port("factory_controller"), parallelControllers())).where('B', controller(THERMAL_SMELTING_FURNACE)).where('D', block(Blocks.REINFORCED_DEEPSLATE)).controller('B'))
-        .portTiers(t -> t.anyItemInput().anyItemOutput().anyEnergyInput())).build(THERMAL_SMELTING_FURNACE);
+                 .requirements(r -> r.levelSlot('X', PublicBuiltinLevelDefinitions.THERMAL_SMELTING_COIL_TYPE))
+         .portTiers(t -> t.anyItemInput().anyItemOutput().anyEnergyInput())).build(THERMAL_SMELTING_FURNACE);
     }
 
     private static MachineStructureDefinition purpurFurnace() {
@@ -269,16 +288,30 @@ public final class PublicBuiltinDefinitions {
     }
 
     private static MachineStructureDefinition distillationTower() {
-        return MachineStructureBuilder.structure().fullStructure(s -> s.pattern(p -> p
-        .layer("  XXX  ", "  AAA  ", "       ", "       ")
-        .layer(" XXXXX ", " B   B ", "  ACA  ", "       ")
-        .layer("XXXXXXX", "A     A", " B   B ", "  DDD  ")
-        .layer("XXXXXXX", "A     A", " B   B ", "  DDD  ")
-        .layer("XXXXXXX", "A     A", " B   B ", "  DDD  ")
-        .layer(" XXXXX ", " B   B ", "  BBB  ", "       ")
-        .layer("  XXX  ", "  BEB  ", "       ", "       ")
-        .where('X', block(Blocks.POLISHED_BLACKSTONE)).where('A', any(block(Blocks.DEEPSLATE_BRICKS), ports())).where('B', block(Blocks.POLISHED_BLACKSTONE_BRICKS)).where('C', any(block(Blocks.DEEPSLATE_BRICKS), port("item_output_bus_tiny"))).where('D', block(Blocks.GILDED_BLACKSTONE)).where('E', controller(DISTILLATION_TOWER)).controller('E')).portTiers(t -> t.anyItemInput().anyItemOutput().anyEnergyInput()))
-        .build(DISTILLATION_TOWER);
+        return MachineStructureBuilder.structure()
+                .fullStructure(PublicBuiltinDefinitions::distillationStage)
+                .expandStructure(PublicBuiltinDefinitions::distillationStage)
+                .expandStructure(PublicBuiltinDefinitions::distillationStage)
+                .build(DISTILLATION_TOWER);
+    }
+
+    private static StructureStage.Builder distillationStage(StructureStage.Builder stage) {
+        String middle = "  ACA  ";
+        return stage.pattern(p -> p
+                .layer("  XXX  ", "  AAA  ", "       ", "       ")
+                .layer(" XXXXX ", " B   B ", middle, "       ")
+                .layer("XXXXXXX", "A     A", " B   B ", "  DDD  ")
+                .layer("XXXXXXX", "A     A", " B   B ", "  DDD  ")
+                .layer("XXXXXXX", "A     A", " B   B ", "  DDD  ")
+                .layer(" XXXXX ", " B   B ", "  BBB  ", "       ")
+                .layer("  XXX  ", "  BEB  ", "       ", "       ")
+                .where('X', block(Blocks.POLISHED_BLACKSTONE))
+                .where('A', any(block(Blocks.DEEPSLATE_BRICKS), ports()))
+                .where('B', block(Blocks.POLISHED_BLACKSTONE_BRICKS))
+                .where('C', any(block(Blocks.DEEPSLATE_BRICKS), port("item_output_bus_tiny")))
+                .where('D', block(Blocks.GILDED_BLACKSTONE))
+                .where('E', controller(DISTILLATION_TOWER)).controller('E'))
+                .portTiers(t -> t.anyItemInput().anyItemOutput().anyEnergyInput());
     }
 
     private static MachineStructureDefinition ecoMatrix() {
@@ -346,6 +379,7 @@ public final class PublicBuiltinDefinitions {
     static Identifier id(String path) { return PublicBuiltinRegistration.id(path); }
     private static Item modItem(String path) { return BuiltInRegistries.ITEM.getValue(id(path)); }
     private static ItemStack namedItem(Item item, int count, String name) { ItemStack stack = new ItemStack(item, count); stack.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, net.minecraft.network.chat.Component.literal(name)); return stack; }
+    private static ItemStack descriptiveStack(Item item) { return new ItemStack(Holder.direct(item, DataComponentMap.EMPTY)); }
     private static DataComponentPredicateSet named(String name) { return new DataComponentPredicateSet(Map.of(
             Identifier.parse("minecraft:custom_name"),
             ComponentPredicate.text(name, ComponentPredicate.TextMode.PLAIN))); }

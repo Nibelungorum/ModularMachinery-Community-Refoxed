@@ -513,8 +513,12 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         MachineDefinition definition = new MachineDefinition(base.id(), base.displayNameKey(), base.controller(), base.appearance(),
                 base.factory(), base.role(), base.acceptedModuleIds(), base.maxParallelism(), base.parallelizable(), base.failureAction(),
                 registration.allowModifiers(), registration.allowMultithreading(), registration.maxParallelAmount(),
-                registration.expandableStructure(), registration.smartInterfaceTypes(), registration.shareSmartInterfaces(),
-                registration.smartInterfaceModifiers(), registration.runningSoundId(), registration.finishSoundId(), registration.pattern());
+                registration.expandableStructure(), registration.smartInterfaceTypes().entrySet().stream()
+                        .collect(java.util.stream.Collectors.toMap(java.util.Map.Entry::getKey,
+                                entry -> toPublicSmartInterfaceType(entry.getValue()))),
+                registration.shareSmartInterfaces(), registration.smartInterfaceModifiers().stream()
+                        .map(MachineBuilderJS::toPublicSmartInterfaceModifier).toList(),
+                registration.runningSoundId(), registration.finishSoundId(), registration.pattern());
         Plugin.registerStartupMachine(definition);
     }
 
@@ -545,6 +549,22 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 base.machineBasicBlock(),
                 controllerBaseTexture != null ? controllerBaseTexture : base.controllerBaseTexture(),
                 formedPortBaseTexture != null ? formedPortBaseTexture : base.formedPortBaseTexture());
+    }
+
+    private static cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceType toPublicSmartInterfaceType(
+            SmartInterfaceType type) {
+        return new cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceType(type.type(), type.defaultValue(),
+                type.minValue(), type.maxValue(), type.priority(),
+                cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceType.ValueType.valueOf(type.valueType().name()));
+    }
+
+    private static cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceModifier toPublicSmartInterfaceModifier(
+            SmartInterfaceModifier modifier) {
+        return new cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceModifier(modifier.interfaceType(),
+                modifier.target(),
+                cn.howxu.mmcr.api.publicapi.recipe.modifier.RecipeModifier.IOType.valueOf(modifier.io().name()),
+                modifier.affectsChance(), modifier.minValue(), modifier.maxValue(), modifier.atMin(), modifier.atMax(),
+                cn.howxu.mmcr.api.publicapi.recipe.modifier.RecipeModifier.Operation.valueOf(modifier.operation().name()));
     }
 
     public static final class SmartInterfaceTypeBuilderJS {

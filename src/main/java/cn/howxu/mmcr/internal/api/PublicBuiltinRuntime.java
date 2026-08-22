@@ -4,6 +4,8 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.internal.registration.OptionalSourceRegistration;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
+import net.minecraft.resources.Identifier;
 
 import java.util.Map;
 
@@ -23,8 +25,13 @@ public final class PublicBuiltinRuntime {
             return;
         }
         MMCR.LOG.debug("Registering {} built-in machine structures for dynamic reload", structures.size());
+        Map<Identifier, ModifierDefinition> modifiers = OptionalSourceRegistration.invokeDevelopmentSource(
+                "org.nibelungorum.builtin.PublicBuiltinDefinitions", "modifierDefinitions", new Class<?>[]{});
+        if (modifiers == null) modifiers = Map.of();
+        Map<Identifier, ModifierDefinition> registeredModifiers = modifiers;
         structures.values().stream()
-                .map(structure -> PublicMachineAdapter.toStructureDefinition((MachineStructureDefinition) structure))
+                .map(structure -> PublicMachineAdapter.toStructureDefinition(
+                        (MachineStructureDefinition) structure, registeredModifiers))
                 .forEach(candidate::registerStructure);
     }
 

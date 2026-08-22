@@ -6,6 +6,9 @@ import net.minecraft.resources.Identifier;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.function.UnaryOperator;
 
 /**
@@ -24,6 +27,14 @@ public final class MachineBuilder {
     private int maxParallelism = 1;
     private boolean parallelizable;
     private RecipeFailureActions failureAction = RecipeFailureActions.getDefaultAction();
+    private boolean allowModifiers;
+    private boolean allowMultithreading;
+    private int maxParallelAmount = 1;
+    private final java.util.Map<String, SmartInterfaceType> smartInterfaceTypes = new LinkedHashMap<>();
+    private boolean shareSmartInterfaces;
+    private final List<SmartInterfaceModifier> smartInterfaceModifiers = new ArrayList<>();
+    private Identifier runningSoundId;
+    private Identifier finishSoundId;
 
     private MachineBuilder(Identifier id) {
         this.id = Objects.requireNonNull(id, "id");
@@ -73,6 +84,56 @@ public final class MachineBuilder {
         return this;
     }
 
+    public MachineBuilder allowModifiers() { return allowModifiers(true); }
+
+    public MachineBuilder allowModifiers(boolean allow) {
+        allowModifiers = allow;
+        return this;
+    }
+
+    public MachineBuilder allowMultithreading() { return allowMultithreading(true); }
+
+    public MachineBuilder allowMultithreading(boolean allow) {
+        allowMultithreading = allow;
+        return this;
+    }
+
+    public MachineBuilder maxParallelAmount(int amount) {
+        if (amount < 1) throw new IllegalArgumentException("maxParallelAmount must be positive");
+        maxParallelAmount = amount;
+        return this;
+    }
+
+    public MachineBuilder smartInterface(SmartInterfaceType type) {
+        Objects.requireNonNull(type, "type");
+        if (smartInterfaceTypes.putIfAbsent(type.type(), type) != null) {
+            throw new IllegalArgumentException("Duplicate smart interface type: " + type.type());
+        }
+        return this;
+    }
+
+    public MachineBuilder shareSmartInterfaces() { return shareSmartInterfaces(true); }
+
+    public MachineBuilder shareSmartInterfaces(boolean share) {
+        shareSmartInterfaces = share;
+        return this;
+    }
+
+    public MachineBuilder smartInterfaceModifier(SmartInterfaceModifier modifier) {
+        smartInterfaceModifiers.add(Objects.requireNonNull(modifier, "modifier"));
+        return this;
+    }
+
+    public MachineBuilder runningSound(Identifier soundId) {
+        this.runningSoundId = soundId;
+        return this;
+    }
+
+    public MachineBuilder finishSound(Identifier soundId) {
+        this.finishSoundId = soundId;
+        return this;
+    }
+
     public MachineBuilder failureAction(RecipeFailureActions failureAction) {
         this.failureAction = Objects.requireNonNull(failureAction, "failureAction");
         return this;
@@ -80,6 +141,8 @@ public final class MachineBuilder {
 
     public MachineDefinition build() {
         return new MachineDefinition(id, displayNameKey, controller, appearance, factory, role,
-                acceptedModuleIds, maxParallelism, parallelizable, failureAction);
+                acceptedModuleIds, maxParallelism, parallelizable, failureAction, allowModifiers,
+                allowMultithreading, maxParallelAmount, false, smartInterfaceTypes,
+                shareSmartInterfaces, smartInterfaceModifiers, runningSoundId, finishSoundId, null);
     }
 }
