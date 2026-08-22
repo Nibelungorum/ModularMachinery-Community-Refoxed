@@ -226,6 +226,9 @@ public final class MultiblockExportService {
             this(offset, state, air, false);
         }
 
+        /**
+         * Legacy identifier-only capture; {@link #state} remains nullable until Task 2 captures states.
+         */
         public SnapshotEntry(BlockPos offset, Identifier blockId, boolean air) {
             this(offset, blockId, null, air, false);
         }

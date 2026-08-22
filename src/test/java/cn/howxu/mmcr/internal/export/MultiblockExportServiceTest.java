@@ -113,12 +113,15 @@ class MultiblockExportServiceTest {
         String java = MultiblockExportService.renderJava(entries, Direction.SOUTH);
         String kubeJs = MultiblockExportService.renderKubeJS(entries, Direction.SOUTH);
 
-        assertThat(java).contains("new BlockPredicate.OfBlockState").contains("axis=x").contains("axis=z");
-        assertThat(java).contains("axis=y");
+        assertThat(java).contains(".layer(\"CXAB\")");
+        assertThat(java).contains(".where('X', new BlockPredicate.OfBlockState(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"minecraft:oak_log\")).defaultBlockState().setValue(BlockStateProperties.AXIS, Direction.Axis.X)))");
+        assertThat(java).contains(".where('A', new BlockPredicate.OfBlockState(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"minecraft:oak_log\")).defaultBlockState().setValue(BlockStateProperties.AXIS, Direction.Axis.Z)))");
+        assertThat(java).contains(".where('B', new BlockPredicate.OfBlockState(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"minecraft:oak_log\")).defaultBlockState().setValue(BlockStateProperties.AXIS, Direction.Axis.Y)))");
         assertThat(java).doesNotContain("new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"minecraft:oak_log\")))");
-        assertThat(kubeJs).contains(".set('X', api.state('minecraft:oak_log[axis=x]'))")
+        assertThat(kubeJs).contains(".pattern(\"CXAB\")")
+                .contains(".set('X', api.state('minecraft:oak_log[axis=x]'))")
                 .contains(".set('A', api.state('minecraft:oak_log[axis=z]'))")
-                .contains("api.state('minecraft:oak_log[axis=y]')");
+                .contains(".set('B', api.state('minecraft:oak_log[axis=y]'))");
         assertThat(kubeJs).doesNotContain("api.block('minecraft:oak_log')");
     }
 
