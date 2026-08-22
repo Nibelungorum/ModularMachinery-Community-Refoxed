@@ -84,7 +84,7 @@ public final class MultiblockExportService {
         List<RenderedEntry> rendered = entries.stream()
                 .filter(entry -> !entry.air())
                 .map(entry -> new RenderedEntry(normalizeOffset(entry.offset(), controllerFace, normalizedRoll),
-                        new PredicateKey(entry.blockId(), entry.state())))
+                        new PredicateKey(entry.blockId(), normalizeState(entry.blockId(), entry.state()))))
                 .sorted(Comparator.comparingInt((RenderedEntry entry) -> entry.pos().getZ())
                         .thenComparingInt(entry -> entry.pos().getY())
                         .thenComparingInt(entry -> entry.pos().getX())
@@ -93,10 +93,14 @@ public final class MultiblockExportService {
                 .toList();
         PredicateKey controller = entries.stream()
                 .filter(SnapshotEntry::controller)
-                .map(entry -> new PredicateKey(entry.blockId(), entry.state()))
+                .map(entry -> new PredicateKey(entry.blockId(), normalizeState(entry.blockId(), entry.state())))
                 .findFirst()
                 .orElse(null);
         return new PreparedExport(rendered, assignSymbols(rendered, controller));
+    }
+
+    private static BlockState normalizeState(Identifier blockId, BlockState state) {
+        return state != null && state.equals(BuiltInRegistries.BLOCK.getValue(blockId).defaultBlockState()) ? null : state;
     }
 
     private static void appendLayers(StringBuilder out, PreparedExport prepared, String method) {

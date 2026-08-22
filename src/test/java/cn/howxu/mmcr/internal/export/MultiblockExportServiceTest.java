@@ -12,6 +12,8 @@ import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.Half;
+import net.minecraft.world.level.block.state.properties.StairsShape;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.io.TempDir;
@@ -103,7 +105,7 @@ class MultiblockExportServiceTest {
     }
 
     @Test
-    void renderersPreserveExactBlockStateProperties() {
+    void renderersNormalizeDefaultStateAndShareSymbols() {
         var xAxisState = Blocks.OAK_LOG.defaultBlockState()
                 .setValue(BlockStateProperties.AXIS, Direction.Axis.X);
         var zAxisState = Blocks.OAK_LOG.defaultBlockState()
@@ -121,17 +123,36 @@ class MultiblockExportServiceTest {
         assertThat(java).contains(".layer(\"CXAB\")");
         assertThat(java).contains(".where('X', new BlockPredicate.OfBlockState")
                 .contains(".where('A', new BlockPredicate.OfBlockState")
-                .contains(".where('B', new BlockPredicate.OfBlockState")
                 .contains("getStateDefinition().getProperty(\"axis\")")
                 .contains("getValue(\"x\")")
                 .contains("getValue(\"z\")")
-                .contains("getValue(\"y\")");
-        assertThat(java).doesNotContain("new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"minecraft:oak_log\")))");
+                .contains(".where('B', new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"minecraft:oak_log\"))))");
         assertThat(kubeJs).contains(".pattern(\"CXAB\")")
                 .contains(".set('X', api.state('minecraft:oak_log[axis=x]'))")
                 .contains(".set('A', api.state('minecraft:oak_log[axis=z]'))")
-                .contains(".set('B', api.state('minecraft:oak_log[axis=y]'))");
-        assertThat(kubeJs).doesNotContain("api.block('minecraft:oak_log')");
+                .contains(".set('B', api.block('minecraft:oak_log'))");
+        assertThat(java).contains(".where('X', new BlockPredicate.OfBlockState");
+        assertThat(kubeJs).contains(".set('X', api.state('minecraft:oak_log[axis=x]'))");
+    }
+
+    @Test
+    void renderersPreserveAllPropertiesForNonDefaultStairState() {
+        var stairs = Blocks.OAK_STAIRS.defaultBlockState()
+                .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.WEST)
+                .setValue(BlockStateProperties.HALF, Half.TOP)
+                .setValue(BlockStateProperties.STAIRS_SHAPE, StairsShape.INNER_LEFT)
+                .setValue(BlockStateProperties.WATERLOGGED, true);
+
+        String java = MultiblockExportService.renderJava(List.of(
+                new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, stairs, false)), Direction.SOUTH);
+        String kubeJs = MultiblockExportService.renderKubeJS(List.of(
+                new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, stairs, false)), Direction.SOUTH);
+
+        assertThat(java).contains("getValue(\"west\")")
+                .contains("getValue(\"top\")")
+                .contains("getValue(\"inner_left\")")
+                .contains("getValue(\"true\")");
+        assertThat(kubeJs).contains("api.state('minecraft:oak_stairs[facing=west,half=top,shape=inner_left,waterlogged=true]')");
     }
 
     @Test
@@ -149,12 +170,13 @@ class MultiblockExportServiceTest {
     }
 
     @Test
-    void renderKubeJsSerializesDefaultStateForBlockWithoutProperties() {
+    void renderKubeJsSerializesDefaultStateAsBlock() {
         String kubeJs = MultiblockExportService.renderKubeJS(List.of(
                 new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, Blocks.CRAFTING_TABLE.defaultBlockState(), false)),
                 Direction.SOUTH);
 
-        assertThat(kubeJs).contains(".set('X', api.state('minecraft:crafting_table'))")
+        assertThat(kubeJs).contains(".set('X', api.block('minecraft:crafting_table'))")
+                .doesNotContain("api.state('minecraft:crafting_table')")
                 .doesNotContain("minecraft:crafting_table[]");
         assertThat(new KubeJSApi().state("minecraft:crafting_table"))
                 .isEqualTo(new BlockPredicate.OfBlockState(Blocks.CRAFTING_TABLE.defaultBlockState()));
