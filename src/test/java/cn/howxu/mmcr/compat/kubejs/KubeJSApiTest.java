@@ -102,6 +102,16 @@ class KubeJSApiTest {
     }
 
     @Test
+    void interface_predicate_factories_expose_all_port_categories() {
+        assertThat(api.anyItemInput().children()).hasSize(7);
+        assertThat(api.anyItemOutput().children()).hasSize(7);
+        assertThat(api.anyFluidInput().children()).hasSize(8);
+        assertThat(api.anyFluidOutput().children()).hasSize(8);
+        assertThat(api.anyEnergyInput().children()).hasSize(8);
+        assertThat(api.anyEnergyOutput().children()).hasSize(8);
+    }
+
+    @Test
     void level_requirement_rejects_a_level_from_another_type() {
         var otherType = MMCR.id("api_other_type");
         TestBootstrap.beginRegistration();
@@ -132,6 +142,7 @@ class KubeJSApiTest {
 
         context.evaluateString(scope, """
                 api.anyOf(api.block('minecraft:stone'), api.block('minecraft:dirt'));
+                api.anyOf(api.anyItemInput(), api.anyFluidOutput());
                 api.portRequirements({item_input_bus: [1, 2]});
                 api.portTierRequirements(['item_input_bus>=small']);
                 """, "api-test", 1, null);

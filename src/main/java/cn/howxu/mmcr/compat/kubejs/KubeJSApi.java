@@ -49,6 +49,12 @@ public final class KubeJSApi {
     public BlockPredicate air() { return new BlockPredicate.Air(); }
     public BlockPredicate any() { return new BlockPredicate.Any(); }
     public BlockPredicate coupler() { return BlockPredicate.machineCoupler(); }
+    public BlockPredicate anyItemInput() { return KubeJSInterfaceHelpers.anyOfItemInput(); }
+    public BlockPredicate anyItemOutput() { return KubeJSInterfaceHelpers.anyOfItemOutput(); }
+    public BlockPredicate anyFluidInput() { return KubeJSInterfaceHelpers.anyOfFluidInput(); }
+    public BlockPredicate anyFluidOutput() { return KubeJSInterfaceHelpers.anyOfFluidOutput(); }
+    public BlockPredicate anyEnergyInput() { return KubeJSInterfaceHelpers.anyOfEnergyInput(); }
+    public BlockPredicate anyEnergyOutput() { return KubeJSInterfaceHelpers.anyOfEnergyOutput(); }
 
     public BlockPredicate block(String blockId) {
         return new BlockPredicate.OfBlock(requireBlock(blockId));
