@@ -9,9 +9,11 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.network.chat.Component;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.Fluids;
@@ -174,24 +176,25 @@ class KubeJSApiTest {
     @Test
     void slice_pattern_binds_symbols_and_normalizes_controller() {
         var replacement = api.singleBlockModifier("explicit", api.block("minecraft:stone"), List.of(), ItemStack.EMPTY);
-        var definition = new MachineStructureBuilderJS("test:kubejs_slice")
+        var definition = new MachineStructureBuilderJS("mmcr_test:iron_compressor")
                 .pattern(List.of("XCX", "XXX", "XXX"))
                 .set("X", api.patternEntry(api.block("minecraft:bricks"), List.of(replacement)))
                 .set("C", api.block("minecraft:blast_furnace"))
+                .controller("C")
                 .fullStructure(api.portRequirements(Map.of()), api.portTierRequirements(List.of()),
                         List.of(), MachineStructureRequirements.builder().modifier('C', replacement).build())
                 .createObject();
 
         assertThat(definition.pattern().pattern()).hasSize(9);
         assertThat(definition.pattern().pattern().get(BlockPos.ZERO)
-                .matches(Blocks.BLAST_FURNACE.defaultBlockState())).isTrue();
+                .matches(ModBlocks.controllerFor(Identifier.parse("mmcr_test:iron_compressor")).get().defaultBlockState())).isTrue();
         assertThat(definition.pattern().symbolsByPosition()).containsEntry(BlockPos.ZERO, 'C');
         assertThat(definition.requirements().modifierReplacements()).containsKeys('X', 'C');
     }
 
     @Test
     void slice_patterns_accept_rhino_javascript_arrays() {
-        var builder = new MachineStructureBuilderJS("test:kubejs_rhino");
+        var builder = new MachineStructureBuilderJS("mmcr_test:iron_compressor");
         var context = new ContextFactory().enter();
         var scope = context.initStandardObjects();
         ScriptableObject.putProperty(scope, "api", api, context);
@@ -201,16 +204,17 @@ class KubeJSApiTest {
                 builder.patternAll([['CXX', 'XXX', 'XXX']]);
                 builder.set('X', api.block('minecraft:bricks'));
                 builder.set('C', api.block('minecraft:blast_furnace'));
+                builder.controller('C');
                 """, "builder-test", 1, null);
 
         assertThat(builder.createObject().pattern().pattern()).hasSize(9);
         assertThat(builder.createObject().pattern().pattern().get(BlockPos.ZERO)
-                .matches(Blocks.BLAST_FURNACE.defaultBlockState())).isTrue();
+                .matches(ModBlocks.controllerFor(Identifier.parse("mmcr_test:iron_compressor")).get().defaultBlockState())).isTrue();
     }
 
     @Test
     void all_slices_are_appended_and_unbound_characters_are_skipped() {
-        var definition = new MachineStructureBuilderJS("test:kubejs_all")
+        var definition = new MachineStructureBuilderJS("mmcr_test:iron_compressor")
                 .patternAll(List.of(
                         List.of("AXA", "XIX", "XXX"),
                         List.of("XXX", "I I", "XBX"),
@@ -220,6 +224,7 @@ class KubeJSApiTest {
                 .set("B", api.block("minecraft:iron_block"))
                 .set("C", api.block("minecraft:blast_furnace"))
                 .set("I", api.block("minecraft:hopper"))
+                .controller("C")
                 .fullStructure(api.portRequirements(Map.of()), api.portTierRequirements(List.of()),
                         List.of(), MachineStructureRequirements.EMPTY)
                 .createObject();

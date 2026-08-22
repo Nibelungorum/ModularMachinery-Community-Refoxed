@@ -1945,6 +1945,29 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void base_port_count_accepts_tiered_port_before_tier_validation() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray pattern = anyEnergyInputPattern();
+        DynamicMachine machine = new DynamicMachine(
+                MMCR.id("requires_ludicrous_energy_with_count_machine"),
+                "Requires Ludicrous Energy With Count",
+                pattern,
+                MachineControllerSpec.defaultsFor(MMCR.id("requires_ludicrous_energy_with_count_machine")),
+                PortRequirementSpec.builder().min(PortKinds.ENERGY_INPUT.id(), 1).build(),
+                PortTierRequirementSpec.builder().minEnergyInput(EnergyHatchSize.LUDICROUS).build(),
+                List.of(),
+                Map.of());
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos,
+                energyHatch(controllerPos.offset(1, 0, 0), "energy_input_hatch_tiny"));
+
+        boolean formed = invokeTryFormMachine(controller, machine, Direction.SOUTH);
+
+        assertThat(formed).isFalse();
+        assertThat(controller.getLastFormationFailure()).isNotNull();
+        assertThat(controller.getLastFormationFailure().portId()).isEqualTo("energy_input_hatch>=ludicrous");
+    }
+
+    @Test
     void matching_structure_accepts_port_at_required_tier() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         BlockArray pattern = anyEnergyInputPattern();

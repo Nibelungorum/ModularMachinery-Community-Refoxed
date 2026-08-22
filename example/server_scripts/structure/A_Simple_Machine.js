@@ -32,7 +32,7 @@ MMCREvents.server(event => {
         .set('I',api.anyOf(api.block('mmcr:item_input_bus'),api.block('mmcr:item_output_bus'),api.block('mmcr:energy_input_hatch'))) // this is a fixed use of the ports, actually you can combine your special ports
         // one more thing, there is no mmcr:item_output_bus_normal, that's a 技术债T_T
         .set('B',api.tag('c:natural_logs')) // you can also use block tag, pay attention, it's unsharable block tag
-        .set('C',api.block('mmcr:kubejs_blast_furnace_controller')) // based on your machine definition, with a '_controller' suffix, and the namespace must be mmcr
+        .controller('C') // set your controller position, the block based on your machine definition, with a '_controller' suffix, and the namespace must be mmcr
 
         // 3. call build
         .build()

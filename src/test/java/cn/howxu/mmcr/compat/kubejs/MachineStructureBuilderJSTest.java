@@ -15,6 +15,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
+import cn.howxu.mmcr.registry.ModBlocks;
 import dev.latvian.mods.rhino.util.HideFromJS;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -46,6 +47,34 @@ class MachineStructureBuilderJSTest {
 
         assertThat(structure.machineId()).isEqualTo(MMCR.id("arc_furnace"));
         assertThat(structure.pattern().pattern()).containsKey(new BlockPos(1, 0, 0));
+    }
+
+    @Test
+    void controller_symbol_normalizes_pattern_around_controller() {
+        var machineId = Identifier.parse("mmcr_test:iron_compressor");
+        var structure = new MachineStructureBuilderJS(machineId.toString())
+                .pattern("XIX")
+                .set("X", Blocks.BLUE_ICE)
+                .controller("I")
+                .createObject();
+
+        assertThat(structure.pattern().pattern()).containsKeys(
+                new BlockPos(-1, 0, 0), BlockPos.ZERO, new BlockPos(1, 0, 0));
+        assertThat(structure.pattern().symbolsByPosition()).containsEntry(BlockPos.ZERO, 'I');
+        assertThat(structure.pattern().pattern().get(BlockPos.ZERO)
+                .matches(ModBlocks.controllerFor(machineId).get().defaultBlockState())).isTrue();
+    }
+
+    @Test
+    void set_controller_block_without_controller_keeps_it_as_a_normal_block() {
+        var structure = new MachineStructureBuilderJS("mmcr_test:iron_compressor")
+                .pattern("CX")
+                .set("C", Blocks.IRON_BLOCK)
+                .set("X", Blocks.BLUE_ICE)
+                .createObject();
+
+        assertThat(structure.pattern().symbolsByPosition()).containsEntry(new BlockPos(-1, 0, 0), 'C');
+        assertThat(structure.pattern().symbolsByPosition()).containsEntry(new BlockPos(0, 0, 0), 'X');
     }
 
     @Test

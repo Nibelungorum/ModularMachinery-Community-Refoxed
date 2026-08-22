@@ -120,6 +120,12 @@ public final class MachineControllerScreen extends AbstractContainerScreen<Machi
             graphics.text(font, parallelLine(menu.currentParallelism(), menu.maxParallelism()), x, lineY, STATUS_LABEL_COLOR, true);
             lineY += DETAIL_LINE_SPACING;
         }
+        int totalTick = menu.activeRecipeTotalTick();
+        if (menu.hasActiveRecipe() && totalTick > 0) {
+            graphics.text(font, Component.translatable("gui.mmcr.controller.progress",
+                    progressPercent(menu.activeRecipeTick(), totalTick) + "%"), x, lineY, PROGRESS_STATUS_COLOR, true);
+            lineY += DETAIL_LINE_SPACING;
+        }
         if (menu.isRedstonePaused()) {
             graphics.text(font, Component.translatable("gui.mmcr.controller.redstone_stopped"), x, lineY, STATUS_LABEL_COLOR, true);
         }
@@ -137,6 +143,11 @@ public final class MachineControllerScreen extends AbstractContainerScreen<Machi
 
     static Component parallelSlotLine(int parallelSlots) {
         return Component.translatable("gui.mmcr.controller.parallel_slots", Component.literal(NUMBER_FORMAT.format(parallelSlots)));
+    }
+
+    static int progressPercent(int tick, int totalTick) {
+        if (totalTick <= 0) return 0;
+        return Math.clamp((int) ((long) tick * 100 / totalTick), 0, 100);
     }
 
     static List<ControllerStatusLine> moduleStatusLines(boolean hostController, boolean moduleController, int installedModuleCount, Optional<Identifier> connectedHostId) {

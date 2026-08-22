@@ -16,7 +16,7 @@ MMCREvents.startup(event => {
     builder
         .allowMultithreading() // This allows your machine use multi thread
         .allowParallelism() // this allows your machine use parallelism recipe processing
-        .maxParallelAmount(2147483647) // this limit the parallelism max_value
+        .maxParallelAmount(2147483647) // this limit the parallelism max_value, if you do not set this, it will be default 1
 
 
     // Last you need to do is register it

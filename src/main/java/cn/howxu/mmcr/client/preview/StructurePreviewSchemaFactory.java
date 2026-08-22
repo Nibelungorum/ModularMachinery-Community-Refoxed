@@ -118,6 +118,7 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         switch (predicate) {
             case BlockPredicate.OfBlock block -> addCandidate(block.block(), candidates, modifier);
             case BlockPredicate.OfBlockState state -> addCandidate(state.state().getBlock(), candidates, modifier);
+            case BlockPredicate.DeferredBlock deferred -> addCandidate(deferred.supplier().get(), candidates, modifier);
             case BlockPredicate.OfTag tag -> BlockPredicate.blocksInTag(tag.tag()).forEach(block -> addCandidate(block, candidates, modifier));
             case BlockPredicate.AnyOf anyOf -> anyOf.children().forEach(child -> collectCandidates(child, candidates, modifier));
             default -> { }

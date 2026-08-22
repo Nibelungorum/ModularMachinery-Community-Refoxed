@@ -53,7 +53,7 @@ MMCREvents.server(event => {
                 ]
             ))
             .set('I',api.anyOf(api.block('mmcr:item_input_bus'),api.block('mmcr:item_output_bus'),api.block('mmcr:energy_input_hatch')))
-            .set('C',api.block('mmcr:kubejs_alloy_furnace_controller'))
+            .controller('C')
             .build()
 
     // Move to server_scripts/recipe/A_Modifier_Machine.js see how to create some special recipes

@@ -485,7 +485,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         }
         if (requirement instanceof EnergyRequirement energy) {
             int fePerTick = IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyEnergy(effectiveModifiers, energy.fePerTick()));
-            return new EnergyRequirement(fePerTick, energy.tags());
+            return new EnergyRequirement(energy.io(), fePerTick, energy.tags());
         }
         return requirement;
     }

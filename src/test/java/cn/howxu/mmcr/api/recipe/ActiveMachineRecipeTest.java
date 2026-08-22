@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -47,6 +48,9 @@ import cn.howxu.mmcr.util.IOType;
 import java.util.stream.Stream;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ActiveMachineRecipeTest {
@@ -204,6 +208,20 @@ class ActiveMachineRecipeTest {
 
         assertThat(context.startCrafting(recipe, 3, new ActiveMachineRecipe.InputConsumptionPlan(List.of(2)))).isTrue();
         assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+    }
+
+    @Test
+    void inputConsumptionPlan_marks_fluid_input_as_consumed_at_start() throws Exception {
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("active_fluid_input"), MMCR.id("blast_furnace"), 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(new FluidRequirement(RecipeModifier.IOType.INPUT,
+                        FluidIngredient.of(Fluids.WATER), 800, FluidStack.EMPTY)),
+                true);
+        RecipeCraftingContext context = new RecipeCraftingContext(
+                controllerWithComponents());
+
+        assertThat(context.createInputConsumptionPlan(recipe, 1).consumedBatches(0)).isEqualTo(1);
     }
 
     @Test

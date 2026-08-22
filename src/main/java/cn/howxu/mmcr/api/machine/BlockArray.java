@@ -135,7 +135,7 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
         private final Map<Character, BlockPredicate> symbols = new LinkedHashMap<>();
         private final MachineStructureRequirements.Builder requirements = MachineStructureRequirements.builder();
         private List<List<String>> slices = List.of();
-        private char controllerSymbol = 'C';
+        private Character controllerSymbol = 'C';
         private int width = -1;
         private int height = -1;
 
@@ -203,6 +203,11 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
             return this;
         }
 
+        public Builder noController() {
+            controllerSymbol = null;
+            return this;
+        }
+
         public BlockArray build() {
             entries.clear();
             LinkedHashMap<BlockPos, Character> symbolsByPosition = new LinkedHashMap<>();
@@ -225,7 +230,7 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
                         BlockPredicate predicate = symbols.get(c);
                         if (predicate == null) continue; // 空格 / 未注册字符 = 空气,跳过
                         BlockPos pos = new BlockPos(x, y, z);
-                        if (c == controllerSymbol) controller = pos;
+                        if (controllerSymbol != null && c == controllerSymbol) controller = pos;
                         entries.put(pos, predicate);
                         symbolsByPosition.put(pos, c);
                     }

@@ -12,5 +12,5 @@ MMCREvents.startup(event => {
     builder.register()
 
 
-    // Move to server_scripts/structure/A_Modifier_Machine.js see how to define a structure for your machine
+    // Move to server_scripts/structure/A_Modifier_Machine.js see how to use modifier for your machine
 })

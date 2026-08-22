@@ -16,7 +16,7 @@ ServerEvents.recipes( event => {
                     }
                 },
                 count: 1,
-                consume_chance: 0.5 // you can set it's consume chance, when it is 0, it will be never consumed
+                consume_chance: 0.5 // you can set its consume chance, when it is 0, it will be never consumed
             },
             {
                 type: 'item',

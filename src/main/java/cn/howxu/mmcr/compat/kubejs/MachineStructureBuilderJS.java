@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
+import cn.howxu.mmcr.registry.ModBlocks;
 import dev.latvian.mods.rhino.util.HideFromJS;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
 import net.minecraft.core.BlockPos;
@@ -47,6 +48,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
 
     public MachineStructureBuilderJS(Identifier id) {
         super(id);
+        sliceBuilder.noController();
     }
 
     public MachineStructureBuilderJS(String id) {
@@ -137,6 +139,16 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         if (value instanceof LevelSlot levelSlot) {
             sliceRequirements.levelSlot(key, validateLevelType(levelSlot.typeId()));
         }
+        return this;
+    }
+
+    public MachineStructureBuilderJS controller(String symbol) {
+        selectPatternApi(PatternApiMode.CHAINED);
+        if (symbol == null || symbol.length() != 1 || symbol.charAt(0) == ' ') {
+            throw new IllegalArgumentException("A controller symbol must be exactly one non-space character");
+        }
+        sliceBuilder.set(symbol.charAt(0), new BlockPredicate.OfBlock(ModBlocks.controllerFor(id).get()));
+        sliceBuilder.controller(symbol.charAt(0));
         return this;
     }
 

@@ -37,6 +37,7 @@ public final class MultiblockPreviewPredicates {
         return switch (predicate) {
             case BlockPredicate.OfBlockState ofState -> Optional.of(ofState.state());
             case BlockPredicate.OfBlock ofBlock -> Optional.of(ofBlock.block().defaultBlockState());
+            case BlockPredicate.DeferredBlock deferred -> Optional.of(deferred.supplier().get().defaultBlockState());
             case BlockPredicate.OfTag ofTag -> BlockPredicate.blocksInTag(ofTag.tag()).stream()
                     .findFirst().map(Block::defaultBlockState);
             default -> Optional.empty();
@@ -65,6 +66,7 @@ public final class MultiblockPreviewPredicates {
         return switch (predicate) {
             case BlockPredicate.OfBlock ofBlock -> Optional.of(ofBlock.block());
             case BlockPredicate.OfBlockState ofState -> Optional.of(ofState.state().getBlock());
+            case BlockPredicate.DeferredBlock deferred -> Optional.of(deferred.supplier().get());
             case BlockPredicate.OfTag ofTag -> BlockPredicate.blocksInTag(ofTag.tag()).stream().findFirst();
             default -> Optional.empty();
         };

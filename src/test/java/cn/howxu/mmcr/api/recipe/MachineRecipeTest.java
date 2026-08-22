@@ -10,6 +10,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -560,6 +561,28 @@ class MachineRecipeTest {
         assertThat(recipe.runtimeRequirements(effective).getFirst()).isInstanceOf(ItemRequirement.class);
         assertThat(((ItemRequirement) recipe.runtimeRequirements(effective).getFirst()).consumeChance()).isEqualTo(0.25F);
         assertThat(((ItemRequirement) recipe.requirements().getFirst()).consumeChance()).isEqualTo(0.5F);
+    }
+
+    @Test
+    void runtime_requirements_preserve_energy_output_direction() {
+        MachineRecipe recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "energy_output_direction"),
+                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                20,
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(),
+                List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 200)),
+                false,
+                List.of());
+
+        assertThat(recipe.runtimeRequirements()).singleElement()
+                .isInstanceOfSatisfying(EnergyRequirement.class,
+                        energy -> assertThat(energy.io()).isEqualTo(RecipeModifier.IOType.OUTPUT));
     }
 
     private static Holder<Fluid> bindFluidComponents(Fluid fluid) {

@@ -49,6 +49,7 @@ import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
 import cn.howxu.mmcr.internal.recipe.RecipeStartDelay;
 import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
 import cn.howxu.mmcr.registry.ModBlockEntities;
+import cn.howxu.mmcr.util.IOType;
 
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
@@ -1411,8 +1412,20 @@ public class MachineControllerBlockEntity extends BlockEntity {
             BlockPos worldPos = getBlockPos().offset(relativePos);
             if (!(level.getBlockEntity(worldPos) instanceof IOPortBlockEntity port)) continue;
             counts.merge(port.kind().id(), 1, Integer::sum);
+            String baseId = basePortId(port.kind());
+            if (!baseId.equals(port.kind().id())) counts.merge(baseId, 1, Integer::sum);
         }
         return PortRequirementSpec.PortCounts.of(counts);
+    }
+
+    private static String basePortId(IOPortKind kind) {
+        String family = kind.itemBusSize().isPresent() ? "item"
+                : kind.fluidHatchSize().isPresent() ? "fluid"
+                : kind.energyHatchSize().isPresent() ? "energy" : null;
+        if (family == null) return kind.id();
+        String direction = kind.ioType() == IOType.INPUT ? "input" : "output";
+        String suffix = family.equals("item") ? "bus" : "hatch";
+        return family + "_" + direction + "_" + suffix;
     }
 
     private List<IOPortKind> portKinds(BlockArray rotatedPattern, @Nullable CompiledMachinePattern compiledPattern, Direction facing) {

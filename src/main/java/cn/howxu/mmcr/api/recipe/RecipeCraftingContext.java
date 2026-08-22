@@ -667,6 +667,10 @@ public final class RecipeCraftingContext {
 
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
+            if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.INPUT
+                    && consumedAtStart != null && consumedAtStart.consumedBatches(requirementIndex) > 0) {
+                continue;
+            }
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT
                     && consumedAtStart != null && consumedAtStart.consumedBatches(requirementIndex) > 0) {
                 itemInputRoutes.set(requirementIndex, new ItemInputRoute(List.of()));
@@ -1171,6 +1175,8 @@ public final class RecipeCraftingContext {
                 for (int batch = 0; batch < parallelism; batch++) {
                     if (shouldConsume(item.consumeChance())) consumedBatches++;
                 }
+            } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.INPUT) {
+                consumedBatches = 1;
             }
             consumed.add(consumedBatches);
         }
@@ -1282,12 +1288,16 @@ public final class RecipeCraftingContext {
         List<FluidInputTransfer> fluidTransfers = new ArrayList<>();
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
+            if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.INPUT
+                    && consumedAtStart != null && consumedAtStart.consumedBatches(requirementIndex) > 0) continue;
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT
                     && consumedAtStart != null && consumedAtStart.consumedBatches(requirementIndex) > 0) continue;
             if (requirement.io() == RecipeModifier.IOType.INPUT && !requirement.commit(this, requirementIndex)) return false;
         }
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
+            if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.INPUT
+                    && consumedAtStart != null && consumedAtStart.consumedBatches(requirementIndex) > 0) continue;
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT
                     && consumedAtStart != null && consumedAtStart.consumedBatches(requirementIndex) > 0) continue;
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT) {
@@ -1671,6 +1681,7 @@ public final class RecipeCraftingContext {
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
             if (!(requirement instanceof FluidRequirement fluid) || fluid.io() != RecipeModifier.IOType.INPUT) continue;
+            if (consumedAtStart != null && consumedAtStart.consumedBatches(requirementIndex) > 0) continue;
             restoreFluidInputRoute(requirementIndex);
             FluidInputRoute route = requirementIndex < fluidInputRoutes.size() ? fluidInputRoutes.get(requirementIndex) : null;
             if (route == null) return new RequirementFailure(requirementIndex, RequirementFailure.Kind.MISSING_INPUT, fluid.amount(), 0);

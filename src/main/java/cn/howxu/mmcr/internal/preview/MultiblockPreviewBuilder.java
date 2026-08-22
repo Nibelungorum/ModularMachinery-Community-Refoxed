@@ -22,6 +22,7 @@ public final class MultiblockPreviewBuilder {
         return switch (predicate) {
             case BlockPredicate.OfBlockState ignored -> MultiblockPreviewPredicates.state(predicate);
             case BlockPredicate.OfBlock ignored -> MultiblockPreviewPredicates.state(predicate);
+            case BlockPredicate.DeferredBlock ignored -> MultiblockPreviewPredicates.state(predicate);
             case BlockPredicate.OfTag ignored -> MultiblockPreviewPredicates.state(predicate);
             case BlockPredicate.AnyOf ignored -> MultiblockPreviewPredicates.representativeValue(predicate, MultiblockPreviewPredicates::state);
             case BlockPredicate.MachineCoupler ignored -> MultiblockPreviewPredicates.machineCouplerState();

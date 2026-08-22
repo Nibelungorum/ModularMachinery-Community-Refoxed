@@ -118,6 +118,12 @@ class MenuScreenTest {
                 .hasSize(2);
     }
 
+    @Test
+    void controller_progress_percent_uses_active_recipe_ticks() {
+        assertThat(MachineControllerScreen.progressPercent(25, 100)).isEqualTo(25);
+        assertThat(MachineControllerScreen.progressPercent(0, 0)).isEqualTo(0);
+    }
+
     private static void bind(Object deferredHolder, MenuType<?> menuType) throws Exception {
         bindDeferredHolder(deferredHolder, menuType);
     }
