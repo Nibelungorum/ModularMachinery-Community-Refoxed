@@ -244,13 +244,74 @@ class MachineStructureBuilderJSTest {
     @Test
     void builder_supports_callback_main_structure_and_extension_chain() {
         var definition = new MachineStructureBuilderJS("mmcr:test")
-                .mainStructure(stage -> stage.pattern("XC"))
-                .extension(stage -> stage.pattern("XXC"))
-                .extension(stage -> stage.pattern("XXXC"))
+                .mainStructure(stage -> stage.pattern("X").set("X", Blocks.IRON_BLOCK))
+                .extension(stage -> stage.pattern("XX").set("X", Blocks.IRON_BLOCK))
+                .extension(stage -> stage.pattern("XXX").set("X", Blocks.IRON_BLOCK))
                 .createObject();
 
         assertThat(definition.declarations()).extracting(Declaration::kind)
                 .containsExactly(Declaration.Kind.FULL, Declaration.Kind.EXTENSION, Declaration.Kind.EXTENSION);
+        assertThat(definition.declarations().get(0).pattern().pattern()).containsOnlyKeys(BlockPos.ZERO);
+        assertThat(definition.declarations().get(1).pattern().pattern()).containsOnlyKeys(
+                new BlockPos(-1, 0, 0), BlockPos.ZERO);
+        assertThat(definition.declarations().get(2).pattern().pattern()).containsOnlyKeys(
+                new BlockPos(-1, 0, 0), BlockPos.ZERO, new BlockPos(1, 0, 0));
+        for (var declaration : definition.declarations()) {
+            assertThat(declaration.pattern().pattern().values())
+                    .allMatch(predicate -> predicate.matches(Blocks.IRON_BLOCK.defaultBlockState()));
+        }
+    }
+
+    @Test
+    void callback_conversion_retains_stage_metadata() {
+        Identifier coilType = Identifier.parse("test:callback_coil");
+        TestBootstrap.beginRegistration();
+        TestBootstrap.registerType(new LevelType(coilType, Component.literal("Callback Coils")));
+        TestBootstrap.registerLevel(new MachineLevel(
+                Identifier.parse("test:callback_copper_coil"), coilType, 1,
+                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
+                ItemStack.EMPTY, LevelModifier.IDENTITY));
+        PortRequirementSpec ports = PortRequirementSpec.builder().min("item_input_bus", 1).build();
+        PortTierRequirementSpec tiers = PortTierRequirementSpec.builder().anyItemInput().build();
+        DynamicPatternSpec dynamic = new DynamicPatternSpec("callback_length", new BlockArray(Map.of()), null,
+                1, 3, BlockPos.ZERO, new BlockPos(0, 0, 1), null);
+
+        var definition = new MachineStructureBuilderJS("test:callback_metadata")
+                .mainStructure(stage -> stage.pattern("L")
+                        .set("L", new LevelSlot(coilType))
+                        .portRequirements(ports)
+                        .portTierRequirements(tiers)
+                        .dynamicPattern(dynamic))
+                .extension(stage -> stage.pattern("LL")
+                        .set("L", new LevelSlot(coilType))
+                        .portRequirements(ports)
+                        .portTierRequirements(tiers)
+                        .dynamicPattern(dynamic))
+                .createObject();
+
+        assertThat(definition.declarations()).hasSize(2);
+        for (var declaration : definition.declarations()) {
+            assertThat(declaration.requirements().levelSlots()).containsEntry('L', coilType);
+            assertThat(declaration.portRequirements()).isEqualTo(ports);
+            assertThat(declaration.portTierRequirements()).isEqualTo(tiers);
+            assertThat(declaration.dynamicPatterns()).containsExactly(dynamic);
+        }
+    }
+
+    @Test
+    void callback_stage_api_rejects_top_level_pattern_api() {
+        assertThatThrownBy(() -> new MachineStructureBuilderJS("mmcr:test")
+                .mainStructure(stage -> stage.pattern("X").set("X", Blocks.IRON_BLOCK))
+                .pattern("X", Map.of("X", Blocks.IRON_BLOCK)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Callback and top-level structure APIs cannot be mixed");
+    }
+
+    @Test
+    void callback_stage_api_rejects_null_callback() {
+        assertThatThrownBy(() -> new MachineStructureBuilderJS("mmcr:test").mainStructure(null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("consumer");
     }
 
     @Test

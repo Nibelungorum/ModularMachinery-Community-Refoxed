@@ -46,6 +46,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     private boolean classMetadataChanged;
     private boolean slicePatternPending;
     private PatternApiMode patternApiMode;
+    private StructureApiMode structureApiMode;
 
     public MachineStructureBuilderJS(Identifier id) {
         super(id);
@@ -154,15 +155,31 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     }
 
     private void selectPatternApi(PatternApiMode requested) {
+        selectTopLevelStructureApi();
         if (patternApiMode != null && patternApiMode != requested) {
             throw new IllegalStateException("Legacy and chained pattern APIs cannot be mixed");
         }
         patternApiMode = requested;
     }
 
+    private void selectTopLevelStructureApi() {
+        if (structureApiMode == StructureApiMode.CALLBACK) {
+            throw new IllegalStateException("Callback and top-level structure APIs cannot be mixed");
+        }
+        structureApiMode = StructureApiMode.TOP_LEVEL;
+    }
+
+    private void selectCallbackStructureApi() {
+        if (structureApiMode == StructureApiMode.TOP_LEVEL) {
+            throw new IllegalStateException("Callback and top-level structure APIs cannot be mixed");
+        }
+        structureApiMode = StructureApiMode.CALLBACK;
+    }
+
     public MachineStructureBuilderJS fullStructure(PortRequirementSpec ports,
             PortTierRequirementSpec tiers, List<DynamicPatternSpec> dynamicPatterns,
-        MachineStructureRequirements requirements) {
+            MachineStructureRequirements requirements) {
+        selectTopLevelStructureApi();
         syncSlicePattern();
         MachineStructureRequirements explicitRequirements = requirements == null
                 ? MachineStructureRequirements.EMPTY : requirements;
@@ -180,6 +197,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     public MachineStructureBuilderJS fullStructure(BlockArray pattern, PortRequirementSpec ports,
             PortTierRequirementSpec tiers, List<DynamicPatternSpec> dynamicPatterns,
             MachineStructureRequirements requirements) {
+        selectTopLevelStructureApi();
         applyPendingPatternMetadata();
         BlockArray fullPattern = Objects.requireNonNull(pattern);
         declarations.add(new Declaration(Declaration.Kind.FULL, fullPattern, ports, tiers,
@@ -190,7 +208,14 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     }
 
     public MachineStructureBuilderJS mainStructure(Consumer<MachineStructureStageBuilderJS> consumer) {
-        if (!declarations.isEmpty()) throw new IllegalStateException("mainStructure can only be declared once");
+        Objects.requireNonNull(consumer, "consumer");
+        if (!declarations.isEmpty()) {
+            if (structureApiMode == StructureApiMode.TOP_LEVEL) {
+                throw new IllegalStateException("Callback and top-level structure APIs cannot be mixed");
+            }
+            throw new IllegalStateException("mainStructure can only be declared once");
+        }
+        selectCallbackStructureApi();
         declarations.add(stageDeclaration(consumer, Declaration.Kind.FULL));
         return this;
     }
@@ -204,6 +229,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
             PortTierRequirementSpec tiers, List<DynamicPatternSpec> dynamicPatterns,
             MachineStructureRequirements requirements) {
         if (declarations.isEmpty()) throw new IllegalStateException("extension requires a full structure first");
+        selectTopLevelStructureApi();
         applyPendingPatternMetadata();
         BlockArray extensionPattern = Objects.requireNonNull(pattern);
         declarations.add(new Declaration(Declaration.Kind.EXTENSION, extensionPattern, ports, tiers,
@@ -212,7 +238,9 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     }
 
     public MachineStructureBuilderJS extension(Consumer<MachineStructureStageBuilderJS> consumer) {
+        Objects.requireNonNull(consumer, "consumer");
         if (declarations.isEmpty()) throw new IllegalStateException("extension requires a full structure first");
+        selectCallbackStructureApi();
         declarations.add(stageDeclaration(consumer, Declaration.Kind.EXTENSION));
         return this;
     }
@@ -313,6 +341,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
 
     private Declaration stageDeclaration(Consumer<MachineStructureStageBuilderJS> consumer,
             Declaration.Kind kind) {
+        Objects.requireNonNull(consumer, "consumer");
         MachineStructureStageBuilderJS stage = new MachineStructureStageBuilderJS(id);
         consumer.accept(stage);
         Declaration declaration = stage.build();
@@ -340,6 +369,11 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     private enum PatternApiMode {
         LEGACY,
         CHAINED
+    }
+
+    private enum StructureApiMode {
+        TOP_LEVEL,
+        CALLBACK
     }
 
     /**
