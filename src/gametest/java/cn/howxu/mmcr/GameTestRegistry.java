@@ -5,6 +5,8 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
+import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
+import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.registry.ModBlocks;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.Holder;
@@ -92,13 +94,22 @@ public final class GameTestRegistry {
         for (String name : List.of("test_cube", "controller_tick", "iron_compressor",
                 "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll")) {
             Identifier id = MMCR.id(name);
-            event.registerMachine(id, builder -> {
-                builder.displayNameKey("machine.mmcr_test." + name);
-                if (name.equals("expandable_structure_vertical_roll")) {
-                    builder.controller(controller -> controller.allowVerticalFacing());
-                }
-                return builder;
-            });
+            MachineBuilder builder = MachineBuilder.machine(id);
+            builder.displayNameKey("machine.mmcr_test." + name);
+            if (name.equals("expandable_structure_vertical_roll")) {
+                builder.controller(controller -> controller.allowVerticalFacing());
+            }
+            MachineDefinition definition = builder.build();
+            if (name.equals("distillation_tower_test") || name.equals("expandable_structure_stages")
+                    || name.equals("expandable_structure_vertical_roll")) {
+                definition = new MachineDefinition(definition.id(), definition.displayNameKey(), definition.controller(),
+                        definition.appearance(), definition.factory(), definition.role(), definition.acceptedModuleIds(),
+                        definition.maxParallelism(), definition.parallelizable(), definition.failureAction(),
+                        definition.allowModifiers(), definition.allowMultithreading(), definition.maxParallelAmount(), true,
+                        definition.smartInterfaceTypes(), definition.shareSmartInterfaces(), definition.smartInterfaceModifiers(),
+                        definition.runningSoundId(), definition.finishSoundId(), definition.pattern());
+            }
+            event.registerMachine(definition);
         }
     }
 
