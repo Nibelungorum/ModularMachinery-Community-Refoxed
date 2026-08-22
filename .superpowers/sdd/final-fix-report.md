@@ -1,5 +1,28 @@
 # Final Fix Report
 
+## KubeJS 阶段回调绑定修复
+
+### 根因
+
+`MachineStructureBuilderJS` 继承 KubeJS 的 `BuilderBase`，而 `MachineStructureStageBuilderJS` 原先是普通 public class。KubeJS 专用脚本上下文因此没有按 builder 类型包装阶段对象，导致 `stage.pattern(...)` 抛出 `TypeError: Cannot find function pattern in object {}`。
+
+### 修改
+
+- `MachineStructureStageBuilderJS` 继承 `BuilderBase<MachineStructureDefinition.Declaration>`，沿用 KubeJS 公开 builder 的包装路径。
+- 用旧 `build()` 实现 `createObject()`，保留现有 Java 单元测试和旧 Java API。
+- 新增真实 Rhino callback 测试，执行 `event.createStructure(...).mainStructure(stage => stage.pattern([...]).set(...))`，并断言生成声明包含实际结构位置。
+- 未修改 `example/server_scripts/structure/A_Group_Machine.js`。
+
+### 验证
+
+- `./gradlew test --tests '*MachineStructureBuilderJSTest' --tests '*PluginBindingTest' --no-daemon`: 通过。
+- `./gradlew test --no-daemon`: 通过。
+- `./gradlew runGameTestServer --no-daemon`: 通过。
+
+### Commit
+
+- `f6d6f4d fix: bind kubejs structure stage builder`
+
 ## 修复内容
 
 - 为 KubeJS 结构 builder 增加 callback / 顶层结构 API 模式隔离。

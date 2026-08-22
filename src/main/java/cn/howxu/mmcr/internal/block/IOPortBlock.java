@@ -39,6 +39,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.transfer.fluid.FluidUtil;
 import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.NonNull;
 
 import java.util.function.Supplier;
 
@@ -72,8 +73,8 @@ public class IOPortBlock extends Block implements EntityBlock {
     }
 
     @Override
-    protected InteractionResult useItemOn(ItemStack stack, BlockState state, Level level,
-                                          BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+    protected @NonNull InteractionResult useItemOn(ItemStack stack, BlockState state, Level level,
+                                                   BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
         if (!player.isShiftKeyDown() && level.getBlockEntity(pos) instanceof FluidHatchBlockEntity hatch) {
             if (level.isClientSide()) return InteractionResult.TRY_WITH_EMPTY_HAND;
             ResourceHandler<FluidResource> handler = new PortFluidTransferHandler(
@@ -87,8 +88,8 @@ public class IOPortBlock extends Block implements EntityBlock {
     }
 
     @Override
-    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
-                                                 Player player, BlockHitResult hit) {
+    protected @NonNull InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
+                                                        Player player, BlockHitResult hit) {
         if (!level.isClientSide()) {
             MenuProvider provider = state.getMenuProvider(level, pos);
             if (provider != null) player.openMenu(provider, pos);

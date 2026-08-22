@@ -11,12 +11,5 @@ MMCREvents.startup(event => {
 
     distillation_tower.register()
 
-    const eco_matrix = event
-        .createMachine("mmcr_kubejs:kubejs_eco_matrix")
-        .displayNameKey("machine.mmcr_kubejs.kubejs_eco_matrix")
-        .recipeFamily("mmcr_kubejs:kubejs_eco_matrix")
-        .appearance('minecraft:sea_lantern')
-        .expandableStructure(true)
-
-    eco_matrix.register()
+    // Move to server_scripts/structure/A_Group_Machine.js see how to use group for your machine
 })

@@ -595,7 +595,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public void serverTick() {
         if (level == null || level.isClientSide() || isRemoved()) {
             MMCR.LOG.debug("[MMCR-DIAG] Controller serverTick skipped pos={}, level={}, client={}, removed={}, block={}",
-                    getBlockPos(), level == null ? "null" : level.dimension().identifier(),
+                    getBlockPos(), level == null || level.dimension() == null ? "null" : level.dimension().identifier(),
                     level != null && level.isClientSide(), isRemoved(),
                     level == null ? "null" : level.getBlockState(getBlockPos()).getBlock());
             return;

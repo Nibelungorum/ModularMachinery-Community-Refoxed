@@ -22,7 +22,6 @@ MMCREvents.server(event => {
             structure.anyOfItemInput(),
             structure.anyOfItemOutput(),
             structure.anyOfEnergyInput(),
-            structure.anyOfEnergyInput(),
             structure.parallelControllers(),
             structure.smartInterface() // do not forget the smart interface
         ))

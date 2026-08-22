@@ -1,38 +1,76 @@
 MMCREvents.server(event => {
     const api = event.getAPI()
-    const distillation_tower = event.createStructure("mmcr_kubejs:kubejs_distillation_tower")
-    const eco_matrix = event.createStructure("mmcr_kubejs:kubejs_eco_matrix")
+    const structure = event.createStructure("mmcr_kubejs:kubejs_distillation_tower")
 
-    distillation_tower
-    (['  XXX  ','  AAA  ','       ','       '])
-    ([' XXXXX ',' B   B ','  ACA  ','       '])
-    (['XXXXXXX','A     A',' B   B ','  DDD  '])
-    (['XXXXXXX','A     A',' B   B ','  DDD  '])
-    (['XXXXXXX','A     A',' B   B ','  DDD  '])
-    ([' XXXXX ',' B   B ','  BBB  ','       '])
-    (['  XXX  ','  BEB  ','       ','       '])
-    api.portRequirements({}), api.portTierRequirements(towerTiers), [], MachineStructureRequirements.EMPTY)
+    // Distillation Tower
+    structure
+        // use mainStructure to create a header
+        .mainStructure(stage =>
+            stage
+                .pattern(['  XXX  ','  AAA  ','       ','       '])
+                .pattern([' XXXXX ',' B   B ','  ACA  ','       '])
+                .pattern(['XXXXXXX','A     A',' B   B ','  DDD  '])
+                .pattern(['XXXXXXX','A     A',' B   B ','  DDD  '])
+                .pattern(['XXXXXXX','A     A',' B   B ','  DDD  '])
+                .pattern([' XXXXX ',' B   B ','  BBB  ','       '])
+                .pattern(['  XXX  ','  BEB  ','       ','       '])
+                .set('C',api.anyOf(
+                    stage.anyOfItemInput(),
+                    stage.anyOfItemOutput(),
+                    stage.anyOfEnergyInput(),
+                    api.block('minecraft:deepslate_bricks')
+                ))
+                .set('X', api.block('minecraft:polished_blackstone'))
+                .set('A', api.block('minecraft:deepslate_bricks'))
+                .set('B', api.block('minecraft:polished_blackstone_bricks'))
+                .set('D', api.block('minecraft:gilded_blackstone'))
+                .controller('E')
+        )
+        // then create extension structure
+        .extension(stage => stage
+            .pattern(['  XXX  ','  AAA  ','       ','       ','       '])
+            .pattern([' XXXXX ',' B   B ','  ACA  ','  ACA  ','       '])
+            .pattern(['XXXXXXX','A     A',' B   B ',' B   B ','  DDD  '])
+            .pattern(['XXXXXXX','A     A',' B   B ',' B   B ','  DDD  '])
+            .pattern(['XXXXXXX','A     A',' B   B ',' B   B ','  DDD  '])
+            .pattern([' XXXXX ',' B   B ','  BBB  ','  BBB  ','       '])
+            .pattern(['  XXX  ','  BEB  ','       ','       ','       '])
+            .set('C',api.anyOf(
+                stage.anyOfItemInput(),
+                stage.anyOfItemOutput(),
+                stage.anyOfEnergyInput(),
+                api.block('minecraft:deepslate_bricks')
+            ))
+            .set('X', api.block('minecraft:polished_blackstone'))
+            .set('A', api.block('minecraft:deepslate_bricks'))
+            .set('B', api.block('minecraft:polished_blackstone_bricks'))
+            .set('D', api.block('minecraft:gilded_blackstone'))
+            .controller('E')
+        )
 
-    (['  XXX  ','  AAA  ','       ','       ','       '])
-    ([' XXXXX ',' B   B ','  ACA  ','  ACA  ','       '])
-    (['XXXXXXX','A     A',' B   B ',' B   B ','  DDD  '])
-    (['XXXXXXX','A     A',' B   B ',' B   B ','  DDD  '])
-    (['XXXXXXX','A     A',' B   B ',' B   B ','  DDD  '])
-    ([' XXXXX ',' B   B ','  BBB  ','  BBB  ','       '])
-    (['  XXX  ','  BEB  ','       ','       ','       '])
-    api.portRequirements({}), api.portTierRequirements(towerTiers), [], MachineStructureRequirements.EMPTY)
-
-    (['  XXX  ','  AAA  ','       ','       ','       ','       '])
-    ([' XXXXX ',' B   B ','  ACA  ','  ACA  ','  ACA  ','       '])
-    (['XXXXXXX','A     A',' B   B ',' B   B ',' B   B ','  DDD  '])
-    (['XXXXXXX','A     A',' B   B ',' B   B ',' B   B ','  DDD  '])
-    (['XXXXXXX','A     A',' B   B ',' B   B ',' B   B ','  DDD  '])
-    ([' XXXXX ',' B   B ','  BBB  ','  BBB  ','  BBB  ','       '])
-    (['  XXX  ','  BEB  ','       ','       ','       ','       '])
-    api.portRequirements({}), api.portTierRequirements(towerTiers), [], MachineStructureRequirements.EMPTY).build()
+        .extension(stage => stage
+            .pattern(['  XXX  ','  AAA  ','       ','       ','       ','       '])
+            .pattern([' XXXXX ',' B   B ','  ACA  ','  ACA  ','  ACA  ','       '])
+            .pattern(['XXXXXXX','A     A',' B   B ',' B   B ',' B   B ','  DDD  '])
+            .pattern(['XXXXXXX','A     A',' B   B ',' B   B ',' B   B ','  DDD  '])
+            .pattern(['XXXXXXX','A     A',' B   B ',' B   B ',' B   B ','  DDD  '])
+            .pattern([' XXXXX ',' B   B ','  BBB  ','  BBB  ','  BBB  ','       '])
+            .pattern(['  XXX  ','  BEB  ','       ','       ','       ','       '])
+            .set('C',api.anyOf(
+                stage.anyOfItemInput(),
+                stage.anyOfItemOutput(),
+                stage.anyOfEnergyInput(),
+                api.block('minecraft:deepslate_bricks')
+            ))
+            .set('X', api.block('minecraft:polished_blackstone'))
+            .set('A', api.block('minecraft:deepslate_bricks'))
+            .set('B', api.block('minecraft:polished_blackstone_bricks'))
+            .set('D', api.block('minecraft:gilded_blackstone'))
+            .controller('E')
+        )
 
         // Do not forget this
-        .build()
+        structure.build()
 
-    // Move to server_scripts/recipe/A_Level_Machine.js see how to create some special recipes
+    // Move to server_scripts/recipe/A_Group_Machine.js see how to create some special recipes
 })
