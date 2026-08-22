@@ -91,9 +91,9 @@ public final class MultiblockExportService {
                         .thenComparing(entry -> entry.predicate().blockId().toString())
                         .thenComparing(entry -> entry.predicate().state() == null ? "" : entry.predicate().state().toString()))
                 .toList();
-        Identifier controller = entries.stream()
+        PredicateKey controller = entries.stream()
                 .filter(SnapshotEntry::controller)
-                .map(SnapshotEntry::blockId)
+                .map(entry -> new PredicateKey(entry.blockId(), entry.state()))
                 .findFirst()
                 .orElse(null);
         return new PreparedExport(rendered, assignSymbols(rendered, controller));
@@ -181,20 +181,20 @@ public final class MultiblockExportService {
         return path;
     }
 
-    private static LinkedHashMap<PredicateKey, Character> assignSymbols(List<RenderedEntry> rendered, Identifier explicitController) {
+    private static LinkedHashMap<PredicateKey, Character> assignSymbols(List<RenderedEntry> rendered, PredicateKey explicitController) {
         LinkedHashMap<PredicateKey, Character> symbols = new LinkedHashMap<>();
         Map<PredicateKey, Integer> counts = new LinkedHashMap<>();
         for (RenderedEntry entry : rendered) counts.merge(entry.predicate(), 1, Integer::sum);
-        Identifier controller = explicitController;
+        PredicateKey controller = explicitController;
         PredicateKey casing = null;
         for (PredicateKey key : counts.keySet()) {
             String path = key.blockId().getPath();
-            if (controller == null && key.state() == null && (path.endsWith("_controller") || path.equals("controller"))) controller = key.blockId();
-            if (!key.blockId().equals(controller) && (casing == null || counts.get(key) > counts.get(casing))) casing = key;
+            if (controller == null && (path.endsWith("_controller") || path.equals("controller"))) controller = key;
+            if (!key.equals(controller) && (casing == null || counts.get(key) > counts.get(casing))) casing = key;
         }
         if (controller != null) {
             for (PredicateKey key : counts.keySet()) {
-                if (key.blockId().equals(controller)) {
+                if (key.equals(controller)) {
                     symbols.put(key, 'C');
                     break;
                 }
@@ -220,23 +220,22 @@ public final class MultiblockExportService {
         if (key.state() == null) return "new BlockPredicate.OfBlock(" + block + ")";
         String expression = block + ".defaultBlockState()";
         for (Property<?> property : key.state().getProperties().stream().sorted(Comparator.comparing(Property::getName)).toList()) {
-            expression += ".setValue(" + javaPropertyExpression(property) + ", "
-                    + javaValueExpression(key.state().getValue(property)) + ")";
+            String propertyExpression = javaPropertyExpression(block, property);
+            expression += ".setValue(" + propertyExpression + ", "
+                    + propertyExpression + ".getValue(\""
+                    + escapeJava(propertyValueName(property, key.state().getValue(property))) + "\").orElseThrow())";
         }
         return "new BlockPredicate.OfBlockState(" + expression + ")";
     }
 
-    private static String javaPropertyExpression(Property<?> property) {
-        return "BlockStateProperties." + property.getName().toUpperCase(java.util.Locale.ROOT);
+    private static String javaPropertyExpression(String block, Property<?> property) {
+        return "((net.minecraft.world.level.block.state.properties.Property) " + block
+                + ".getStateDefinition().getProperty(\"" + escapeJava(property.getName()) + "\"))";
     }
 
-    private static String javaValueExpression(Object value) {
-        if (value instanceof Enum<?> enumValue) {
-            String type = enumValue.getDeclaringClass().getName().replace("net.minecraft.core.", "").replace('$', '.');
-            return type + "." + enumValue.name();
-        }
-        if (value instanceof String string) return "\"" + escapeJava(string) + "\"";
-        return String.valueOf(value);
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static String propertyValueName(Property<?> property, Object value) {
+        return ((Property) property).getName((Comparable) value);
     }
 
     private static String kubeJsPredicateExpression(PredicateKey key) {
@@ -267,7 +266,7 @@ public final class MultiblockExportService {
         }
 
         /**
-         * Legacy identifier-only capture; {@link #state} remains nullable until Task 2 captures states.
+         * Legacy identifier-only capture; nullable {@link #state} keeps this entry as a plain Block predicate.
          */
         public SnapshotEntry(BlockPos offset, Identifier blockId, boolean air) {
             this(offset, blockId, null, air, false);

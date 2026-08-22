@@ -1,6 +1,9 @@
 package cn.howxu.mmcr.internal.export;
 
 import cn.howxu.mmcr.api.machine.BlockRotator;
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -114,15 +117,51 @@ class MultiblockExportServiceTest {
         String kubeJs = MultiblockExportService.renderKubeJS(entries, Direction.SOUTH);
 
         assertThat(java).contains(".layer(\"CXAB\")");
-        assertThat(java).contains(".where('X', new BlockPredicate.OfBlockState(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"minecraft:oak_log\")).defaultBlockState().setValue(BlockStateProperties.AXIS, Direction.Axis.X)))");
-        assertThat(java).contains(".where('A', new BlockPredicate.OfBlockState(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"minecraft:oak_log\")).defaultBlockState().setValue(BlockStateProperties.AXIS, Direction.Axis.Z)))");
-        assertThat(java).contains(".where('B', new BlockPredicate.OfBlockState(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"minecraft:oak_log\")).defaultBlockState().setValue(BlockStateProperties.AXIS, Direction.Axis.Y)))");
+        assertThat(java).contains(".where('X', new BlockPredicate.OfBlockState")
+                .contains(".where('A', new BlockPredicate.OfBlockState")
+                .contains(".where('B', new BlockPredicate.OfBlockState")
+                .contains("getStateDefinition().getProperty(\"axis\")")
+                .contains("getValue(\"x\")")
+                .contains("getValue(\"z\")")
+                .contains("getValue(\"y\")");
         assertThat(java).doesNotContain("new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"minecraft:oak_log\")))");
         assertThat(kubeJs).contains(".pattern(\"CXAB\")")
                 .contains(".set('X', api.state('minecraft:oak_log[axis=x]'))")
                 .contains(".set('A', api.state('minecraft:oak_log[axis=z]'))")
                 .contains(".set('B', api.state('minecraft:oak_log[axis=y]'))");
         assertThat(kubeJs).doesNotContain("api.block('minecraft:oak_log')");
+    }
+
+    @Test
+    void renderJavaSerializesArbitraryRuntimePropertyNamesAndValues() {
+        var state = ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
+                .setValue(MachineControllerBlock.FORMED, true);
+        Identifier id = Identifier.fromNamespaceAndPath("test", "custom_state_block");
+
+        String java = MultiblockExportService.renderJava(List.of(
+                new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, id, state, false, false)), Direction.SOUTH);
+
+        assertThat(java).contains("getStateDefinition().getProperty(\"formed\")")
+                .contains("getValue(\"true\")")
+                .doesNotContain("BlockStateProperties.FORMED");
+    }
+
+    @Test
+    void controllerSymbolUsesTheMarkedStateIdentity() {
+        var controllerState = Blocks.OAK_LOG.defaultBlockState()
+                .setValue(BlockStateProperties.AXIS, Direction.Axis.X);
+        var otherState = Blocks.OAK_LOG.defaultBlockState()
+                .setValue(BlockStateProperties.AXIS, Direction.Axis.Z);
+        Identifier id = Identifier.fromNamespaceAndPath("test", "stateful_controller");
+
+        String java = MultiblockExportService.renderJava(List.of(
+                new MultiblockExportService.SnapshotEntry(new BlockPos(-1, 0, 0), id, controllerState, false, true),
+                new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, id, otherState, false, false)),
+                Direction.SOUTH);
+
+        assertThat(java).contains(".where('X', new BlockPredicate.OfBlockState")
+                .contains("getValue(\"z\")")
+                .doesNotContain(".where('C'");
     }
 
     @Test
