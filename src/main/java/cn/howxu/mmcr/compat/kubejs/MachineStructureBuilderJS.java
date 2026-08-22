@@ -220,11 +220,13 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         return this;
     }
 
+    @HideFromJS
     public MachineStructureBuilderJS extension(BlockArray pattern) {
         return extension(pattern, PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(),
                 MachineStructureRequirements.EMPTY);
     }
 
+    @HideFromJS
     public MachineStructureBuilderJS extension(BlockArray pattern, PortRequirementSpec ports,
             PortTierRequirementSpec tiers, List<DynamicPatternSpec> dynamicPatterns,
             MachineStructureRequirements requirements) {

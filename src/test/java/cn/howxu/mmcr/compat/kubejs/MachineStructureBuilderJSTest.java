@@ -284,7 +284,31 @@ class MachineStructureBuilderJSTest {
                 ScriptableObject.getProperty(scope, "structure", context), TypeInfo.of(MachineStructureBuilderJS.class));
         assertThat(builder.createObject().declarations()).singleElement()
                 .satisfies(declaration -> assertThat(declaration.pattern().pattern())
-                        .containsKey(BlockPos.ZERO));
+                .containsKey(BlockPos.ZERO));
+    }
+
+    @Test
+    void rhino_callback_resolves_extension_stage_builder() {
+        var event = new MMCRServerEventJS();
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        ScriptableObject.putProperty(scope, "event", event, context);
+
+        context.evaluateString(scope, """
+                var structure = event.createStructure('mmcr:rhino_extension_callback');
+                structure.mainStructure(function(stage) {
+                    stage.pattern(['X']);
+                    stage.set('X', 'minecraft:iron_block');
+                });
+                structure.extension(function(stage) {
+                    stage.pattern(['XX']);
+                    stage.set('X', 'minecraft:iron_block');
+                });
+                """, "structure-extension-builder-test", 1, null);
+
+        var builder = (MachineStructureBuilderJS) context.jsToJava(
+                ScriptableObject.getProperty(scope, "structure", context), TypeInfo.of(MachineStructureBuilderJS.class));
+        assertThat(builder.createObject().declarations()).hasSize(2);
     }
 
     @Test
