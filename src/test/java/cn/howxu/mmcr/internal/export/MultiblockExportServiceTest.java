@@ -1,7 +1,9 @@
 package cn.howxu.mmcr.internal.export;
 
 import cn.howxu.mmcr.api.machine.BlockRotator;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.compat.kubejs.KubeJSApi;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -136,14 +138,37 @@ class MultiblockExportServiceTest {
     void renderJavaSerializesArbitraryRuntimePropertyNamesAndValues() {
         var state = ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
                 .setValue(MachineControllerBlock.FORMED, true);
-        Identifier id = Identifier.fromNamespaceAndPath("test", "custom_state_block");
 
         String java = MultiblockExportService.renderJava(List.of(
-                new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, id, state, false, false)), Direction.SOUTH);
+                new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, Blocks.CRAFTING_TABLE.defaultBlockState(), false, true),
+                new MultiblockExportService.SnapshotEntry(new BlockPos(1, 0, 0), state, false, false)), Direction.SOUTH);
 
         assertThat(java).contains("getStateDefinition().getProperty(\"formed\")")
                 .contains("getValue(\"true\")")
                 .doesNotContain("BlockStateProperties.FORMED");
+    }
+
+    @Test
+    void renderKubeJsSerializesDefaultStateForBlockWithoutProperties() {
+        String kubeJs = MultiblockExportService.renderKubeJS(List.of(
+                new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, Blocks.CRAFTING_TABLE.defaultBlockState(), false)),
+                Direction.SOUTH);
+
+        assertThat(kubeJs).contains(".set('X', api.state('minecraft:crafting_table'))")
+                .doesNotContain("minecraft:crafting_table[]");
+        assertThat(new KubeJSApi().state("minecraft:crafting_table"))
+                .isEqualTo(new BlockPredicate.OfBlockState(Blocks.CRAFTING_TABLE.defaultBlockState()));
+    }
+
+    @Test
+    void renderKubeJsUsesRuntimePropertySerializedNameForRegisteredState() {
+        var state = Blocks.OAK_LOG.defaultBlockState().setValue(BlockStateProperties.AXIS, Direction.Axis.X);
+
+        String kubeJs = MultiblockExportService.renderKubeJS(List.of(
+                new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, state, false)), Direction.SOUTH);
+
+        assertThat(kubeJs).contains("api.state('minecraft:oak_log[axis=x]')")
+                .doesNotContain("api.state('minecraft:oak_log[axis=X]')");
     }
 
     @Test
@@ -152,11 +177,10 @@ class MultiblockExportServiceTest {
                 .setValue(BlockStateProperties.AXIS, Direction.Axis.X);
         var otherState = Blocks.OAK_LOG.defaultBlockState()
                 .setValue(BlockStateProperties.AXIS, Direction.Axis.Z);
-        Identifier id = Identifier.fromNamespaceAndPath("test", "stateful_controller");
 
         String java = MultiblockExportService.renderJava(List.of(
-                new MultiblockExportService.SnapshotEntry(new BlockPos(-1, 0, 0), id, controllerState, false, true),
-                new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, id, otherState, false, false)),
+                new MultiblockExportService.SnapshotEntry(new BlockPos(-1, 0, 0), controllerState, false, true),
+                new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, otherState, false, false)),
                 Direction.SOUTH);
 
         assertThat(java).contains(".where('X', new BlockPredicate.OfBlockState")

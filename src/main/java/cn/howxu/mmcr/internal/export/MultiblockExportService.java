@@ -243,8 +243,9 @@ public final class MultiblockExportService {
         StringBuilder state = new StringBuilder(key.blockId().toString()).append('[');
         key.state().getProperties().stream().sorted(Comparator.comparing(Property::getName)).forEach(property -> {
             if (state.charAt(state.length() - 1) != '[') state.append(',');
-            state.append(property.getName()).append('=').append(key.state().getValue(property));
+            state.append(property.getName()).append('=').append(propertyValueName(property, key.state().getValue(property)));
         });
+        if (state.charAt(state.length() - 1) == '[') return "api.state('" + escapeKubeJs(key.blockId().toString()) + "')";
         return "api.state('" + escapeKubeJs(state.append(']').toString()) + "')";
     }
 
