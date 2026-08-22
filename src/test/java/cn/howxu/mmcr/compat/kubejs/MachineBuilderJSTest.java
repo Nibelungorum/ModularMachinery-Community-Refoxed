@@ -145,7 +145,7 @@ class MachineBuilderJSTest {
     @Test
     void expandable_structure_settings_enter_machine_registration() {
         var expandable = new MachineBuilderJS(MMCR.id("expandable_machine"))
-                .expandableStructure()
+                .expandableStructure(true)
                 .createObject();
         var fixed = new MachineBuilderJS(MMCR.id("fixed_machine"))
                 .expandableStructure(false)
