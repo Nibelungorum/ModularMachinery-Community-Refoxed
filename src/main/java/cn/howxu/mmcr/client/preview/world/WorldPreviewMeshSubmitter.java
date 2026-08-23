@@ -5,6 +5,7 @@ import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Map;
@@ -36,5 +37,10 @@ public final class WorldPreviewMeshSubmitter {
         }
         poseStack.popPose();
         return submissions;
+    }
+
+    public static int submit(UploadedWorldPreviewMesh mesh, PoseStack poseStack, SubmitNodeCollector collector,
+            Vec3 camera, BlockPos origin) {
+        return mesh.submit(poseStack, collector, camera, origin);
     }
 }
