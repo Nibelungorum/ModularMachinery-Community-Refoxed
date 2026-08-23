@@ -28,8 +28,8 @@ PASS. Task 2 client preview caching, distance culling, layer-aware visibility re
 
 ## Concerns
 
-- The model cache stores `BlockModelRenderState` instances and assumes the existing `submitMultiLayer` API does not mutate them during submission. Cache clearing is performed on preview replacement, `clear()`, expiry, and client-level unload.
-- The report is intentionally not part of the implementation commit because the approved Task 2 file list contains only the three source/test files above.
+- The original implementation concern about sharing `BlockModelRenderState` was resolved by the review fix below; cache clearing remains performed on preview replacement, `clear()`, expiry, and client-level unload.
+- The review record is committed separately because `.superpowers` is ignored by default; it was explicitly force-added for this requested report update.
 
 ## Review Fix
 
