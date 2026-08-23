@@ -19,11 +19,11 @@ MMCREvents.server(event => {
         .set('G', api.state('minecraft:end_stone_brick_stairs[facing=south,half=bottom,shape=inner_right,waterlogged=false]'))
         .set('H', api.anyOf(
             api.block('minecraft:purpur_pillar'),
-            structure.anyOfItemInput(),
-            structure.anyOfItemOutput(),
-            structure.anyOfEnergyInput(),
-            structure.parallelControllers(),
-            structure.smartInterface() // Allow a smart interface at this position.
+            api.anyOfItemInput(),
+            api.anyOfItemOutput(),
+            api.anyOfEnergyInput(),
+            api.parallelControllers(),
+            api.smartInterface() // Allow a smart interface at this position.
         ))
         .set('I', api.block('minecraft:purple_terracotta'))
         .set('J', api.block('minecraft:purpur_block'))

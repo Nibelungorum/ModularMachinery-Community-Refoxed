@@ -14,10 +14,10 @@ MMCREvents.server(event => {
         .set('E', api.block('minecraft:mossy_cobblestone'))
         // Previous examples used fixed ports. A const structure also provides convenient port predicates.
         .set('B', api.anyOf(
-            structure.anyOfItemInput(),
-            structure.anyOfItemOutput(),
-            structure.anyOfFluidOutput(),
-            structure.anyOfEnergyInput()
+            api.anyOfItemInput(),
+            api.anyOfItemOutput(),
+            api.anyOfFluidOutput(),
+            api.anyOfEnergyInput()
         ))
         .controller('C')
         // Set the required port counts. The structure will not form when these requirements are not met.

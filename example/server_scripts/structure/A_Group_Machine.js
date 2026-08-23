@@ -15,9 +15,9 @@ MMCREvents.server(event => {
                 .pattern([' XXXXX ',' B   B ','  BBB  ','       '])
                 .pattern(['  XXX  ','  BEB  ','       ','       '])
                 .set('C',api.anyOf(
-                    stage.anyOfItemInput(),
-                    stage.anyOfItemOutput(),
-                    stage.anyOfEnergyInput(),
+                    api.anyOfItemInput(),
+                    api.anyOfItemOutput(),
+                    api.anyOfEnergyInput(),
                     api.block('minecraft:deepslate_bricks')
                 ))
                 .set('X', api.block('minecraft:polished_blackstone'))
@@ -36,9 +36,9 @@ MMCREvents.server(event => {
             .pattern([' XXXXX ',' B   B ','  BBB  ','  BBB  ','       '])
             .pattern(['  XXX  ','  BEB  ','       ','       ','       '])
             .set('C',api.anyOf(
-                stage.anyOfItemInput(),
-                stage.anyOfItemOutput(),
-                stage.anyOfEnergyInput(),
+                api.anyOfItemInput(),
+                api.anyOfItemOutput(),
+                api.anyOfEnergyInput(),
                 api.block('minecraft:deepslate_bricks')
             ))
             .set('X', api.block('minecraft:polished_blackstone'))
@@ -57,9 +57,9 @@ MMCREvents.server(event => {
             .pattern([' XXXXX ',' B   B ','  BBB  ','  BBB  ','  BBB  ','       '])
             .pattern(['  XXX  ','  BEB  ','       ','       ','       ','       '])
             .set('C',api.anyOf(
-                stage.anyOfItemInput(),
-                stage.anyOfItemOutput(),
-                stage.anyOfEnergyInput(),
+                api.anyOfItemInput(),
+                api.anyOfItemOutput(),
+                api.anyOfEnergyInput(),
                 api.block('minecraft:deepslate_bricks')
             ))
             .set('X', api.block('minecraft:polished_blackstone'))

@@ -29,9 +29,9 @@ MMCREvents.server(event => {
         .set('B' ,api.coupler())
         .set('D' ,api.anyOf(
             api.block('minecraft:smooth_quartz'),
-            space_elevator.anyOfItemInput(),
-            space_elevator.anyOfItemOutput(),
-            space_elevator.anyOfEnergyInput()
+            api.anyOfItemInput(),
+            api.anyOfItemOutput(),
+            api.anyOfEnergyInput()
         ))
         .controller('E')
         .build()
@@ -46,9 +46,9 @@ MMCREvents.server(event => {
         .set('A',api.block('minecraft:amethyst_block'))
         .set('B',api.anyOf(
             api.block('minecraft:smooth_quartz'),
-            space_reassembler.anyOfItemInput(),
-            space_reassembler.anyOfItemOutput(),
-            space_reassembler.anyOfEnergyInput()
+            api.anyOfItemInput(),
+            api.anyOfItemOutput(),
+            api.anyOfEnergyInput()
         ))
         .set('D', api.block('minecraft:glass'))
         .set('E',api.coupler())

@@ -15,11 +15,11 @@ MMCREvents.server(event => {
         .pattern(" UVXXXWY ", "   XCX   ", "         ", "         ", "         ", "         ", "         ", "         ")
         .pattern("  UcccY  ", "         ", "         ", "         ", "         ", "         ", "         ", "         ")
         .set('X', api.anyOf(
-            structure.anyOfItemInput(),
-            structure.anyOfItemOutput(),
-            structure.anyOfFluidOutput(),
-            structure.anyOfFluidInput(),
-            structure.anyOfEnergyOutput(), // This reactor can output energy without requiring an energy input port.
+            api.anyOfItemInput(),
+            api.anyOfItemOutput(),
+            api.anyOfFluidOutput(),
+            api.anyOfFluidInput(),
+            api.anyOfEnergyOutput(), // This reactor can output energy without requiring an energy input port.
             api.block('minecraft:blue_ice')
         ))
         .set('A', api.state('minecraft:deepslate_brick_stairs[facing=east,half=bottom,shape=outer_right,waterlogged=false]'))

@@ -8,11 +8,11 @@ MMCREvents.server(event => {
         .pattern(['ABA','XXX','XXX','AAA'])
         .set('X',api.levelSlot("mmcr_kubejs:thermal_smelting_coil")) // Use a level slot to match the corresponding level block.
         .set('A',api.anyOf(
-            structure.anyOfItemInput(),
-            structure.anyOfItemOutput(),
-            structure.anyOfEnergyInput(),
-            structure.anyOfEnergyInput(),
-            structure.parallelControllers(),
+            api.anyOfItemInput(),
+            api.anyOfItemOutput(),
+            api.anyOfEnergyInput(),
+            api.anyOfEnergyInput(),
+            api.parallelControllers(),
             api.block('minecraft:smooth_basalt')
         ))
         .set('D',api.block('minecraft:reinforced_deepslate'))
