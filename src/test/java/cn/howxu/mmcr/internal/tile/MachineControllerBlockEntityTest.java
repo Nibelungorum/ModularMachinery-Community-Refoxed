@@ -2024,9 +2024,7 @@ class MachineControllerBlockEntityTest {
                 Map.of());
         MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, energyHatch(portPos, "energy_input_hatch_ludicrous"));
         setField(MachineControllerBlockEntity.class, controller, "machine", machine);
-        for (int i = 0; i < Config.DEFAULT_MACHINE_CHECK_INTERVAL_TICKS; i++) {
-            controller.serverTick();
-        }
+        tickController(controller, Config.DEFAULT_MACHINE_CHECK_INTERVAL_TICKS);
         assertThat(controller.isFormed()).isTrue();
 
         Level level = levelOf(controller);
@@ -2034,6 +2032,7 @@ class MachineControllerBlockEntityTest {
         setField(BlockEntity.class, replacement, "level", level);
         level.setBlock(portPos, blockForPort(replacement).defaultBlockState(), 3);
         LevelStub.putBlockEntity(level, replacement);
+        controller.requestImmediateStructureCheck();
 
         controller.serverTick();
 
@@ -2113,9 +2112,7 @@ class MachineControllerBlockEntityTest {
                 PortRequirementSpec.builder().min(PortKinds.ENERGY_INPUT.id(), 1).build());
         MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, energyHatch(portPos));
         setField(MachineControllerBlockEntity.class, controller, "machine", machine);
-        for (int i = 0; i < Config.DEFAULT_MACHINE_CHECK_INTERVAL_TICKS; i++) {
-            controller.serverTick();
-        }
+        tickController(controller, Config.DEFAULT_MACHINE_CHECK_INTERVAL_TICKS);
         assertThat(controller.isFormed()).isTrue();
 
         Level level = levelOf(controller);
@@ -2123,6 +2120,7 @@ class MachineControllerBlockEntityTest {
         setField(BlockEntity.class, replacement, "level", level);
         level.setBlock(portPos, blockForPort(replacement).defaultBlockState(), 3);
         LevelStub.putBlockEntity(level, replacement);
+        controller.requestImmediateStructureCheck();
 
         controller.serverTick();
 
@@ -2858,9 +2856,64 @@ class MachineControllerBlockEntityTest {
         controller.setStructureCheckCallbackForTesting(checks::incrementAndGet);
         setField(MachineControllerBlockEntity.class, controller, "structureDirty", false);
         setField(MachineControllerBlockEntity.class, controller, "structureCheckCounter", 0);
+        setField(MachineControllerBlockEntity.class, controller, "nextStructureCheckTick", 40L);
         controller.serverTick();
         assertThat(checks).hasValue(0);
         assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "structureCheckCounter")).isEqualTo(1);
+    }
+
+    @Test
+    void formed_controller_uses_configured_forty_tick_interval() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        DynamicMachine machine = new DynamicMachine(MMCR.id("schedule_forty_tick_machine"), "Schedule Forty Tick",
+                onePortPattern(Blocks.IRON_BLOCK));
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, Blocks.IRON_BLOCK);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        AtomicInteger checks = new AtomicInteger();
+        controller.setStructureCheckCallbackForTesting(checks::incrementAndGet);
+        setField(MachineControllerBlockEntity.class, controller, "structureDirty", false);
+        setField(MachineControllerBlockEntity.class, controller, "nextStructureCheckTick", 40L);
+
+        tickController(controller, 39);
+        assertThat(checks).hasValue(0);
+        tickController(controller, 1);
+        assertThat(checks).hasValue(1);
+    }
+
+    @Test
+    void unformed_failure_does_not_reschedule_every_skipped_tick() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        DynamicMachine machine = new DynamicMachine(MMCR.id("schedule_unformed_machine"), "Schedule Unformed",
+                onePortPattern(Blocks.IRON_BLOCK));
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, Blocks.AIR);
+        AtomicInteger checks = new AtomicInteger();
+        controller.setStructureCheckCallbackForTesting(checks::incrementAndGet);
+        setField(MachineControllerBlockEntity.class, controller, "structureDirty", true);
+
+        tickController(controller, 1);
+        assertThat(checks).hasValue(1);
+        tickController(controller, 39);
+        assertThat(checks).hasValue(1);
+        tickController(controller, 1);
+        assertThat(checks).hasValue(2);
+    }
+
+    @Test
+    void explicit_request_runs_on_next_tick_without_synchronous_full_scan() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        DynamicMachine machine = new DynamicMachine(MMCR.id("schedule_request_machine"), "Schedule Request",
+                onePortPattern(Blocks.IRON_BLOCK));
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, Blocks.AIR);
+        AtomicInteger checks = new AtomicInteger();
+        controller.setStructureCheckCallbackForTesting(checks::incrementAndGet);
+        setField(MachineControllerBlockEntity.class, controller, "structureDirty", false);
+        setField(MachineControllerBlockEntity.class, controller, "nextStructureCheckTick", 40L);
+
+        tickController(controller, 10);
+        controller.requestImmediateStructureCheck();
+        assertThat(checks).hasValue(0);
+        tickController(controller, 1);
+        assertThat(checks).hasValue(1);
     }
 
     @Test
@@ -4077,6 +4130,14 @@ class MachineControllerBlockEntityTest {
         Field field = BlockEntity.class.getDeclaredField("level");
         field.setAccessible(true);
         return (Level) field.get(blockEntity);
+    }
+
+    private static void tickController(MachineControllerBlockEntity controller, int ticks) throws Exception {
+        Level level = levelOf(controller);
+        for (int i = 0; i < ticks; i++) {
+            LevelStub.setGameTime(level, level.getGameTime() + 1);
+            controller.serverTick();
+        }
     }
 
     private static void setField(Class<?> declaringClass, Object target, String name, Object value) throws ReflectiveOperationException {

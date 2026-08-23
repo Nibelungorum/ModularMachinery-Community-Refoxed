@@ -134,6 +134,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private long structureVersion;
     private long modifierSnapshotVersion;
     private int structureCheckCounter;
+    private long nextStructureCheckTick = -1L;
     private boolean structureDirty = true;
     private boolean clientActive;
     private Boolean lastBroadcastFormed;
@@ -239,6 +240,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public void invalidateFormedStructure() {
         resetMachine();
+        structureDirty = true;
+        nextStructureCheckTick = -1L;
+    }
+
+    public void requestImmediateStructureCheck() {
+        structureDirty = true;
+        nextStructureCheckTick = -1L;
     }
 
     public void onMachineDestroyed() {
@@ -298,7 +306,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void onStructureBlockChanged(BlockPos changedPos) {
-        if (!isFormed() || foundCompiledPattern == null || controllerFacing == null) return;
+        if (!isFormed()) {
+            if (machine != null) requestImmediateStructureCheck();
+            return;
+        }
+        if (foundPattern == null || controllerFacing == null) return;
         if (!isInsideCompiledBounds(changedPos)) return;
         structureDirty = true;
         if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
@@ -768,6 +780,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (structureCheckCallbackForTesting != null) structureCheckCallbackForTesting.run();
         structureDirty = false;
         structureCheckCounter = 0;
+        nextStructureCheckTick = level.getGameTime() + structureCheckIntervalTicks();
         lastFormationFailure = null;
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
         if (facing.getAxis().isVertical() && machine != null && !machine.controller().allowVerticalFacing()) {
@@ -785,7 +798,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     || StructureMatcher.isAreaLoaded(foundCompiledPattern, facing, level, getBlockPos());
             if (!compiledAreaLoaded) {
                 pauseActiveForUnloadedStructure();
-                structureDirty = true;
                 return;
             }
             Machine validationMachine = foundCompiledPattern == null ? foundMachine : foundCompiledPattern.machine();
@@ -855,9 +867,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private boolean shouldCheckStructure() {
         if (structureDirty) return true;
-        if (!isFormed()) return true;
+        if (!isFormed() && nextStructureCheckTick < 0L) return true;
         structureCheckCounter++;
-        return structureCheckCounter >= structureCheckIntervalTicks();
+        return level.getGameTime() >= nextStructureCheckTick;
     }
 
     private void invalidateForControllerRotation() {
@@ -867,6 +879,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         Direction normalizedRoll = BlockRotator.normalizedRoll(facing, rollFacing);
         if (controllerFacing != facing || (facing.getAxis().isVertical() && matchedRollFacing != normalizedRoll)) {
             structureDirty = true;
+            nextStructureCheckTick = -1L;
         }
     }
 
@@ -878,7 +891,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private static int structureCheckIntervalTicks() {
         try {
-            return Math.min(Config.MACHINE_CHECK_INTERVAL_TICKS.get(), Config.DEFAULT_MACHINE_CHECK_INTERVAL_TICKS);
+            return Config.MACHINE_CHECK_INTERVAL_TICKS.get();
         } catch (IllegalStateException ignored) {
             return Config.DEFAULT_MACHINE_CHECK_INTERVAL_TICKS;
         }
@@ -1790,7 +1803,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         foundLevels = Map.of();
         FORMED_CONTROLLERS.remove(this);
         components.clear();
-        structureDirty = true;
+        structureDirty = false;
+        if (wasFormed) nextStructureCheckTick = -1L;
         if (active != null) {
             returnContext(context);
             active = null;
