@@ -1,27 +1,22 @@
 package cn.howxu.mmcr.client.preview.world;
 
-import cn.howxu.mmcr.mixin.client.preview.RenderSetupAccessor;
-import cn.howxu.mmcr.mixin.client.preview.RenderTypeAccessor;
+import cn.howxu.mmcr.mixin.client.preview.MeshDataAccessor;
 import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.pipeline.RenderTarget;
-import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.MeshData;
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import net.minecraft.client.renderer.DynamicUniforms;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.client.renderer.rendertype.RenderSetup;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import org.joml.Matrix4fc;
-import org.joml.Vector3f;
-import org.joml.Vector4f;
 import net.minecraft.world.phys.Vec3;
+import org.lwjgl.system.MemoryUtil;
 
+import java.nio.ByteBuffer;
 import java.util.EnumMap;
 import java.util.Map;
-import java.util.OptionalDouble;
-import java.util.OptionalInt;
 
 /**
  * Owns persistent GPU buffers for a compiled world preview.
@@ -62,36 +57,38 @@ public final class WorldPreviewGpuMesh implements AutoCloseable {
         RenderSystem.assertOnRenderThread();
         Layer gpuLayer = layers.get(layer);
         RenderType renderType = RENDER_TYPES.get(layer);
-        if (gpuLayer == null || renderType == null) return;
-
-        RenderSetup setup = ((RenderTypeAccessor) (Object) renderType).mmcr$getState();
-        RenderSetupAccessor setupAccessor = (RenderSetupAccessor) (Object) setup;
-        RenderTarget target = renderType.outputTarget().getRenderTarget();
-        var color = RenderSystem.outputColorTextureOverride != null
-                ? RenderSystem.outputColorTextureOverride : target.getColorTextureView();
-        var depth = target.useDepth
-                ? (RenderSystem.outputDepthTextureOverride != null
-                ? RenderSystem.outputDepthTextureOverride : target.getDepthTextureView()) : null;
-        DynamicUniforms uniforms = RenderSystem.getDynamicUniforms();
-        var transforms = uniforms.writeTransform(modelViewMatrix, new Vector4f(1, 1, 1, 1),
-                new Vector3f(), setupAccessor.mmcr$getTextureTransform().getMatrix());
-
-        try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
-                () -> "MMCR world preview " + layer, color, OptionalInt.empty(), depth, OptionalDouble.empty())) {
-            pass.setPipeline(setupAccessor.mmcr$getPipeline());
-            var scissor = RenderSystem.getScissorStateForRenderTypeDraws();
-            if (scissor.enabled()) {
-                pass.enableScissor(scissor.x(), scissor.y(), scissor.width(), scissor.height());
-            }
-            RenderSystem.bindDefaultUniforms(pass);
-            pass.setUniform("DynamicTransforms", transforms);
-            pass.setVertexBuffer(0, gpuLayer.vertices());
-            for (var texture : setup.getTextures().entrySet()) {
-                pass.bindTexture(texture.getKey(), texture.getValue().textureView(), texture.getValue().sampler());
-            }
-            pass.setIndexBuffer(gpuLayer.indices(), gpuLayer.indexType());
-            pass.drawIndexed(0, 0, gpuLayer.indexCount(), 1);
+        if (gpuLayer == null || renderType == null) {
+            return;
         }
+        MeshData sourceMesh = source.meshes().get(layer);
+        if (sourceMesh != null) {
+            drawCopy(renderType, sourceMesh);
+        }
+    }
+
+    private static void drawCopy(RenderType renderType, MeshData cached) {
+        ByteBuffer vertices = cached.vertexBuffer();
+        ByteBuffer indices = cached.indexBuffer();
+        if (vertices == null || !vertices.hasRemaining()) return;
+        try (ByteBufferBuilder vertexBuilder = new ByteBufferBuilder(vertices.remaining());
+             ByteBufferBuilder indexBuilder = indices == null ? null : new ByteBufferBuilder(indices.remaining())) {
+            MeshData drawMesh = new MeshData(copy(vertices, vertexBuilder), cached.drawState());
+            if (indices != null && indexBuilder != null) {
+                ((MeshDataAccessor) (Object) drawMesh).mmcr$setIndexBuffer(copy(indices, indexBuilder));
+            }
+            try {
+                renderType.draw(drawMesh);
+            } finally {
+                drawMesh.close();
+            }
+        }
+    }
+
+    private static ByteBufferBuilder.Result copy(ByteBuffer source, ByteBufferBuilder destination) {
+        ByteBuffer duplicate = source.duplicate();
+        long pointer = destination.reserve(duplicate.remaining());
+        MemoryUtil.memCopy(MemoryUtil.memAddress(duplicate), pointer, duplicate.remaining());
+        return destination.build();
     }
 
     @Override
@@ -135,7 +132,7 @@ public final class WorldPreviewGpuMesh implements AutoCloseable {
         private static Layer upload(MeshData mesh) {
             MeshData.DrawState drawState = mesh.drawState();
             GpuBuffer vertices = RenderSystem.getDevice().createBuffer(
-                    () -> "MMCR preview vertices", GpuBuffer.USAGE_VERTEX, mesh.vertexBuffer());
+                    () -> "MMCR preview vertices", GpuBuffer.USAGE_VERTEX, mesh.vertexBuffer().duplicate());
             try {
                 if (mesh.indexBuffer() == null) {
                     var sequential = RenderSystem.getSequentialBuffer(drawState.mode());
@@ -143,7 +140,7 @@ public final class WorldPreviewGpuMesh implements AutoCloseable {
                             sequential.type(), drawState.indexCount());
                 }
                 GpuBuffer indices = RenderSystem.getDevice().createBuffer(
-                        () -> "MMCR preview indices", GpuBuffer.USAGE_INDEX, mesh.indexBuffer());
+                        () -> "MMCR preview indices", GpuBuffer.USAGE_INDEX, mesh.indexBuffer().duplicate());
                 return new Layer(vertices, indices, true, drawState.indexType(), drawState.indexCount());
             } catch (RuntimeException exception) {
                 vertices.close();

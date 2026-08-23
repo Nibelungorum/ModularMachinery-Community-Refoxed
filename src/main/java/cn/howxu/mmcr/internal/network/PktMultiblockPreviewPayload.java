@@ -105,12 +105,6 @@ public record PktMultiblockPreviewPayload(ResourceKey<Level> dimension, BlockPos
     }
 
     public void handle(IPayloadContext context) {
-        MMCR.LOG.debug("Received multiblock preview payload: dimension={}, controller={}, entries={}, durationTicks={}",
-                dimension, controllerPos, entries.size(), durationTicks);
-        context.enqueueWork(() -> {
-            MMCR.LOG.debug("Applying multiblock preview payload on client thread: controller={}, entries={}",
-                    controllerPos, entries.size());
-            MultiblockPreviewClientHandler.show(dimension, controllerPos, entries, durationTicks);
-        });
+        context.enqueueWork(() -> MultiblockPreviewClientHandler.show(dimension, controllerPos, entries, durationTicks));
     }
 }

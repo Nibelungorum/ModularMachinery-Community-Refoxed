@@ -185,9 +185,6 @@ public class MachineControllerBlock extends Block implements EntityBlock {
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
                                                 Player player, BlockHitResult hit) {
-        MMCR.LOG.debug("Controller interaction at {}: clientSide={}, shift={}, mainHandEmpty={}, offHandEmpty={}, player={}",
-                pos, level.isClientSide(), player.isShiftKeyDown(), player.getMainHandItem().isEmpty(),
-                player.getOffhandItem().isEmpty(), player.getName().getString());
         if (!level.isClientSide()
                 && player.isShiftKeyDown()
                 && player.getMainHandItem().isEmpty()
@@ -195,9 +192,7 @@ public class MachineControllerBlock extends Block implements EntityBlock {
                 && level.getBlockEntity(pos) instanceof MachineControllerBlockEntity controller
                 && !controller.isFormed()
             && player instanceof ServerPlayer serverPlayer) {
-            boolean sent = controller.sendStructurePreview(serverPlayer);
-            MMCR.LOG.debug("Controller preview request at {}: sent={}, formed={}, player={}",
-                    pos, sent, controller.isFormed(), player.getName().getString());
+            controller.sendStructurePreview(serverPlayer);
             controller.requestImmediateStructureCheck(serverPlayer);
             return InteractionResult.SUCCESS;
         }

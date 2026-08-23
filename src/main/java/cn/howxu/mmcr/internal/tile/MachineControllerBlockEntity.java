@@ -1020,14 +1020,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public boolean sendStructurePreview(ServerPlayer player) {
         Optional<MultiblockPreviewSnapshot> snapshot = createStructurePreviewSnapshot(PktMultiblockPreviewPayload.MAX_ENTRIES);
-        if (snapshot.isEmpty()) {
-            MMCR.LOG.debug("No structure preview snapshot available for controller {} and player {} (formed={}, machine={})",
-                    getBlockPos(), player.getName().getString(), isFormed(), machineId());
-            return false;
-        }
-        MMCR.LOG.debug("Sending structure preview for controller {} to {}: dimension={}, entries={}, durationTicks={}",
-                getBlockPos(), player.getName().getString(), level.dimension(), snapshot.get().entries().size(),
-                PREVIEW_RECEIVER_WINDOW_TICKS);
+        if (snapshot.isEmpty()) return false;
         PacketDistributor.sendToPlayer(player, new PktMultiblockPreviewPayload(snapshot.get()));
         rememberPreviewReceiver(player.getUUID(), level.getGameTime(), PREVIEW_RECEIVER_WINDOW_TICKS);
         return true;
