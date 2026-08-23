@@ -97,6 +97,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.StateDefinition;
@@ -150,11 +151,24 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.assemblyPattern(machine)).isSameAs(controller.getFoundPattern());
 
         setField(MachineControllerBlockEntity.class, controller, "structureDirty", true);
-        invokeCheckStructure(controller);
+        AtomicInteger checks = new AtomicInteger();
+        controller.setStructureCheckCallbackForTesting(checks::incrementAndGet);
+        BlockPos stagePos = controllerPos.offset(1, 0, 0);
+        levelOf(controller).setBlock(stagePos, Blocks.DIAMOND_BLOCK.defaultBlockState(), 3);
+        controller.onStructureBlockChanged(stagePos);
+        controller.serverTick();
+        assertThat(checks).hasValue(1);
+        assertThat(controller.getMatchedStructureStage()).isEqualTo(3);
+
+        checks.set(0);
+        levelOf(controller).setBlock(stagePos, Blocks.GOLD_BLOCK.defaultBlockState(), 3);
+        controller.onStructureBlockChanged(controllerPos.offset(1, 0, 0));
+        controller.serverTick();
+        assertThat(checks).hasValue(1);
         assertThat(controller.getMatchedStructureStage()).isEqualTo(2);
         assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "lastStructureMismatchDiagnostic")).isNull();
 
-        invokeResetMachine(controller);
+        controller.invalidateFormedStructure();
 
         assertThat(controller.getMatchedStructureStage()).isZero();
         assertThat(controller.assemblyPattern(machine)).isSameAs(MachineRegistry.getCompiledStages(machine.registryName()).getFirst().rotatedPattern(Direction.SOUTH));
@@ -2835,16 +2849,17 @@ class MachineControllerBlockEntityTest {
 
     @Test
     void clean_formed_controller_waits_for_structure_check_interval() throws Exception {
-        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        DynamicMachine machine = new DynamicMachine(MMCR.id("schedule_clean_machine"), "Schedule Clean",
+                onePortPattern(Blocks.IRON_BLOCK));
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, Blocks.IRON_BLOCK);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        AtomicInteger checks = new AtomicInteger();
+        controller.setStructureCheckCallbackForTesting(checks::incrementAndGet);
         setField(MachineControllerBlockEntity.class, controller, "structureDirty", false);
         setField(MachineControllerBlockEntity.class, controller, "structureCheckCounter", 0);
-        setField(BlockEntity.class, controller, "blockState", testControllerState(testControllerBlock(
-                new DynamicMachine(MMCR.id("schedule_clean_machine"), "Schedule Clean", onePortPattern(Blocks.IRON_BLOCK))))
-                .setValue(MachineControllerBlock.FORMED, true));
-
-        Method shouldCheck = MachineControllerBlockEntity.class.getDeclaredMethod("shouldCheckStructure");
-        shouldCheck.setAccessible(true);
-        assertThat((boolean) shouldCheck.invoke(controller)).isFalse();
+        controller.serverTick();
+        assertThat(checks).hasValue(0);
         assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "structureCheckCounter")).isEqualTo(1);
     }
 
@@ -2859,29 +2874,39 @@ class MachineControllerBlockEntityTest {
         assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
         controller.onStructureBlockChanged(controllerPos.offset(1, 0, 0));
         controller.onStructureBlockChanged(controllerPos.offset(1, 0, 0));
+        AtomicInteger checks = new AtomicInteger();
+        controller.setStructureCheckCallbackForTesting(checks::incrementAndGet);
 
         assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "structureDirty")).isEqualTo(true);
-        invokeCheckStructure(controller);
+        controller.serverTick();
+        assertThat(checks).hasValue(1);
         assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "structureCheckCounter")).isEqualTo(0);
         assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "structureDirty")).isEqualTo(false);
+        controller.serverTick();
+        assertThat(checks).hasValue(1);
     }
 
     @Test
     void controller_rotation_invalidates_the_cached_structure_path() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
+        var defaults = MachineControllerSpec.defaultsFor(MMCR.id("schedule_rotation_machine"));
+        var spec = new MachineControllerSpec(defaults.id(), defaults.frontTexture(), defaults.sideTexture(),
+                defaults.topTexture(), defaults.bottomTexture(), true, false);
         DynamicMachine machine = new DynamicMachine(MMCR.id("schedule_rotation_machine"), "Schedule Rotation",
-                onePortPattern(Blocks.IRON_BLOCK));
-        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, Blocks.IRON_BLOCK);
-        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
-        setField(MachineControllerBlockEntity.class, controller, "structureDirty", false);
+                onePortPattern(Blocks.IRON_BLOCK), spec, PortRequirementSpec.none(), List.of(), Map.of());
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, Direction.UP,
+                Direction.WEST, itemInputBus(controllerPos.offset(0, 0, -1)));
+        BlockPos formedPos = controllerPos.offset(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.UP, Direction.WEST));
+        levelOf(controller).setBlock(formedPos, Blocks.IRON_BLOCK.defaultBlockState(), 3);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.UP)).isTrue();
+        AtomicInteger checks = new AtomicInteger();
+        controller.setStructureCheckCallbackForTesting(checks::incrementAndGet);
         setField(BlockEntity.class, controller, "blockState", controller.getBlockState()
-                .setValue(MachineControllerBlock.FACING, Direction.WEST));
+                .setValue(MachineControllerBlock.ROLL_FACING, Direction.EAST));
 
-        Method invalidate = MachineControllerBlockEntity.class.getDeclaredMethod("invalidateForControllerRotation");
-        invalidate.setAccessible(true);
-        invalidate.invoke(controller);
+        controller.serverTick();
 
-        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "structureDirty")).isEqualTo(true);
+        assertThat(checks).hasValue(1);
     }
 
     @Test

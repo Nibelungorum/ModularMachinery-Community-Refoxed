@@ -179,6 +179,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private boolean syncedRuntimeActive;
     private Map<UUID, Long> previewReceivers = new LinkedHashMap<>();
     private @Nullable Runnable factoryCapacityInvalidationCallbackForTesting;
+    private @Nullable Runnable structureCheckCallbackForTesting;
     private @Nullable ValueInput pendingFactorySchedulerInput;
     private @Nullable MultiblockAssemblyService.BuildTaskRegistry buildTasks;
     private @Nullable ServerPlayer buildTaskOwner;
@@ -581,6 +582,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         factoryCapacityInvalidationCallbackForTesting = callback;
     }
 
+    void setStructureCheckCallbackForTesting(Runnable callback) {
+        structureCheckCallbackForTesting = callback;
+    }
+
     void invalidateFactoryCapacity() {
         if (factoryComponents().isEmpty()) return;
         int threadLimit = effectiveFactoryThreadLimit();
@@ -749,6 +754,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void checkStructure() {
+        if (structureCheckCallbackForTesting != null) structureCheckCallbackForTesting.run();
         structureDirty = false;
         structureCheckCounter = 0;
         lastFormationFailure = null;
