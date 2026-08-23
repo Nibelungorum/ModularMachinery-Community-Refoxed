@@ -134,7 +134,7 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
         if (previewLightmap != null) return;
         var device = RenderSystem.getDevice();
         previewLightmap = device.createTexture(() -> "MMCR preview full-bright lightmap",
-                GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_COPY_DST,
+                GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_COPY_DST,
                 TextureFormat.RGBA8, 16, 16, 1, 1);
         previewLightmapView = device.createTextureView(previewLightmap);
         device.createCommandEncoder().clearColorTexture(previewLightmap, -1);
