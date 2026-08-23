@@ -3,7 +3,6 @@ package cn.howxu.mmcr.compat.jei;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
-import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.registry.ModBlocks;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.constants.VanillaTypes;
@@ -57,14 +56,7 @@ public final class JeiPlugin implements IModPlugin {
                 .toList());
         var displaysByMachine = MachineRecipeDisplays.byMachine();
         Set<Identifier> machineIds = machineIds();
-        Set<Identifier> kubeJSRecipeIds = RecipeRegistry.kubeJSSnapshot().keySet();
-        JeiRuntimeReloader.captureInitialDisplays(displaysByMachine.entrySet().stream()
-                .map(entry -> Map.entry(entry.getKey(), entry.getValue().stream()
-                        .filter(display -> kubeJSRecipeIds.contains(display.recipeId()))
-                        .toList()))
-                .filter(entry -> !entry.getValue().isEmpty())
-                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue,
-                        (left, right) -> left, LinkedHashMap::new)));
+        JeiRuntimeReloader.captureInitialDisplays(displaysByMachine);
         displaysByMachine.forEach((machineId, displays) -> {
             if (!machineIds.contains(machineId)) {
                 displays.forEach(display -> MMCR.LOG.warn("Skipping JEI recipe {} for unknown machine {}", display.recipeId(), machineId));

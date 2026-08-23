@@ -63,7 +63,8 @@ public final class RuntimeContentRegistration {
     }
 
     private static void ensureStartupContentRegistered() {
-        if (!ContentRegistrationCoordinator.isCommitted()) {
+        if (!ContentRegistrationCoordinator.isCommitted()
+                && "NOT_STARTED".equals(StartupContentRegistration.startupPhaseForTesting())) {
             registerTestStartupContent();
         }
     }

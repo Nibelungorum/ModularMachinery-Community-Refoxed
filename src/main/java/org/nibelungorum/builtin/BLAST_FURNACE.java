@@ -1,12 +1,11 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.api.publicapi.PublicBuiltinRegistration;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.*;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
-import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.ModBlocks; // I love casings
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -23,18 +22,17 @@ import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
  * @author: HowXu
  * @date: 2026/8/23 08:57
  */
-@EventBusSubscriber(modid = PublicBuiltinRegistration.MOD_ID)
+@EventBusSubscriber
 public class BLAST_FURNACE {
 
     private static final Identifier BLAST_FURNACE = id("blast_furnace"); // equal to mmcr:blast_furnace
 
-    static {
-        PublicBuiltinRegistration.logger().info("[MMCR/Temp] Loaded BLAST_FURNACE event subscriber");
-    }
-
-    @SubscribeEvent
+    // cause we have to register controller block
+    // this must work before ModBlocs, it's not suggested to use mixin to change the neoforge lifecycle
+    // so you must use a provider
+    // see resources/META-INF/services how to use provider to register machine defination
+    // see org/nibelungorum/provider/BuiltInProvider.java
     public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
-        PublicBuiltinRegistration.logger().info("[MMCR/Temp] Registering built-in machine {}", BLAST_FURNACE);
         if (!event.definitions().containsKey(BLAST_FURNACE)) {
             var machine = MachineBuilder
                     .machine(BLAST_FURNACE)
@@ -50,7 +48,6 @@ public class BLAST_FURNACE {
 
     @SubscribeEvent
     public static void registerStructures(MMCRMachineStructuresEvent event) {
-        PublicBuiltinRegistration.logger().info("[MMCR/Temp] Registering built-in structure {}", BLAST_FURNACE);
             if (!event.structures().containsKey(BLAST_FURNACE)) {
                 var structure = MachineStructureBuilder
                         .structure()
@@ -84,7 +81,6 @@ public class BLAST_FURNACE {
     // recipe has multiple id use, do not use event.recipes().containsKey(BLAST_FURNACE)
     @SubscribeEvent
     public static void register(MMCRMachineRecipesEvent event) {
-        PublicBuiltinRegistration.logger().info("[MMCR/Temp] Registering built-in recipe for {}", BLAST_FURNACE);
         var recipe = MachineRecipeBuilder
                 .recipe(BLAST_FURNACE.withSuffix("_recipe_1"),BLAST_FURNACE)
                 .inputItem(Ingredient.of(Items.IRON_INGOT),9)

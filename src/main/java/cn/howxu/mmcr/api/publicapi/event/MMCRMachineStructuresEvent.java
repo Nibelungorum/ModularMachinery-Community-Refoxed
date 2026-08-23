@@ -9,7 +9,6 @@ import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import net.minecraft.resources.Identifier;
 import net.neoforged.bus.api.Event;
-import net.neoforged.fml.event.IModBusEvent;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -22,7 +21,7 @@ import java.util.function.UnaryOperator;
 /** Canonical event for collecting complete machine structures and their requirements.
  * @author howxu <dev@howxu.cn>
  */
-public class MMCRMachineStructuresEvent extends Event implements IModBusEvent {
+public class MMCRMachineStructuresEvent extends Event {
     protected static MMCRMachineStructuresEvent current;
     protected Set<Identifier> machineIds;
     protected final Map<Identifier, MachineStructureDefinition> structures = new LinkedHashMap<>();

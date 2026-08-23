@@ -2,7 +2,6 @@ package cn.howxu.mmcr.api.publicapi.event;
 
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import net.neoforged.bus.api.Event;
-import net.neoforged.fml.event.IModBusEvent;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -12,7 +11,7 @@ import java.util.Objects;
 /** Canonical event for collecting static machine recipes.
  * @author howxu <dev@howxu.cn>
  */
-public class MMCRMachineRecipesEvent extends Event implements IModBusEvent {
+public class MMCRMachineRecipesEvent extends Event {
     private boolean frozen;
     private final Map<net.minecraft.resources.Identifier, MachineRecipeDefinition> recipes = new LinkedHashMap<>();
 

@@ -4,7 +4,6 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import net.minecraft.resources.Identifier;
 import net.neoforged.bus.api.Event;
-import net.neoforged.fml.event.IModBusEvent;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -15,7 +14,7 @@ import java.util.function.UnaryOperator;
 /** Canonical event for collecting machine declarations.
  * @author howxu <dev@howxu.cn>
  */
-public class MMCRMachineDefinationsEvent extends Event implements IModBusEvent {
+public class MMCRMachineDefinationsEvent extends Event {
     private final Map<Identifier, MachineDefinition> definitions = new LinkedHashMap<>();
     private boolean frozen;
 

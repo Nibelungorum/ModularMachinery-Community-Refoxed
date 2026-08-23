@@ -9,7 +9,7 @@ import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.world.level.block.Blocks;
-import net.neoforged.fml.event.IModBusEvent;
+import net.neoforged.bus.api.Event;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -26,10 +26,10 @@ class PublicEventSubscribersTest {
     static void bootstrapMinecraft() throws Exception { TestBootstrap.bootstrap(); }
 
     @Test
-    void public_registration_events_are_mod_bus_events() {
-        assertThat(new MMCRMachineDefinationsEvent()).isInstanceOf(IModBusEvent.class);
-        assertThat(new MMCRMachineStructuresEvent(Set.of())).isInstanceOf(IModBusEvent.class);
-        assertThat(new MMCRMachineRecipesEvent()).isInstanceOf(IModBusEvent.class);
+    void public_registration_events_are_game_bus_events() {
+        assertThat(new MMCRMachineDefinationsEvent()).isInstanceOf(Event.class);
+        assertThat(new MMCRMachineStructuresEvent(Set.of())).isInstanceOf(Event.class);
+        assertThat(new MMCRMachineRecipesEvent()).isInstanceOf(Event.class);
     }
 
     @Test

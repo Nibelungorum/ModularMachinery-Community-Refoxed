@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.internal.registration;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
@@ -47,9 +46,9 @@ public final class StartupContentRegistration {
         PublicApiBootstrap.begin();
         ContentRegistrationCoordinator.beginStartup();
         MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
+        PublicMachineDefinitionProviders.registerAll(definitions);
         registerGameTestBuiltins("registerMachineDefinitions",
                 new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions);
-        MMCR.LOG.info("[MMCR/Temp] Posting MMCR machine definitions event with {} definitions", definitions.definitions().size());
         eventBus.post(definitions);
         registerDynamicControllers(definitions.definitions().keySet());
         definitions.freeze();
@@ -65,7 +64,6 @@ public final class StartupContentRegistration {
                 pendingProductionDefinitions.definitions().keySet());
         registerGameTestBuiltins("registerMachineStructures",
                 new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
-        MMCR.LOG.info("[MMCR/Temp] Posting MMCR machine structures event with {} structures", structures.structures().size());
         eventBus.post(structures);
         structureCollectionDeferred = deferStructures;
         if (!deferStructures) {
@@ -76,7 +74,6 @@ public final class StartupContentRegistration {
         MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
         registerGameTestBuiltins("registerRecipes",
                 new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
-        MMCR.LOG.info("[MMCR/Temp] Posting MMCR machine recipes event with {} recipes", recipes.recipes().size());
         eventBus.post(recipes);
         recipes.freeze();
         ContentRegistrationCoordinator.collectRecipes(recipes);
@@ -136,6 +133,11 @@ public final class StartupContentRegistration {
         }
     }
 
+    public static void registerKubeJSStartupMachine(cn.howxu.mmcr.api.publicapi.machine.MachineDefinition definition) {
+        ContentRegistrationCoordinator.collectMachine(definition);
+        registerDynamicControllers(Set.of(definition.id()));
+    }
+
     public static String startupPhaseForTesting() {
         return startupPhase.name();
     }
@@ -187,7 +189,6 @@ public final class StartupContentRegistration {
         MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
         PublicMachineDefinitionProviders.registerAll(definitions);
         definitionsSource.accept(definitions);
-        MMCR.LOG.info("[MMCR/Temp] Posting MMCR machine definitions event with {} definitions", definitions.definitions().size());
         eventBus.post(definitions);
         registerDynamicControllers(definitions.definitions().keySet());
         definitions.freeze();
@@ -195,11 +196,7 @@ public final class StartupContentRegistration {
 
         MMCRMachineStructuresEvent structures = MMCRMachineStructuresEvent.prepare(definitions.definitions().keySet());
         structuresSource.accept(structures);
-        MMCR.LOG.info("[MMCR/Temp] Posting MMCR machine structures event with {} structures", structures.structures().size());
-        MMCR.LOG.info("[MMCR/Temp] Collected {} machine structures from startup sources before event dispatch",
-                structures.structures().size());
         eventBus.post(structures);
-        MMCR.LOG.info("[MMCR/Temp] Collected {} machine structures after event dispatch", structures.structures().size());
         structureCollectionDeferred = deferStructures;
         if (!deferStructures) {
             structures.freeze();
@@ -208,7 +205,6 @@ public final class StartupContentRegistration {
         bindVanillaItemComponents();
         MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
         recipesSource.accept(recipes);
-        MMCR.LOG.info("[MMCR/Temp] Posting MMCR machine recipes event with {} recipes", recipes.recipes().size());
         eventBus.post(recipes);
         recipes.freeze();
         ContentRegistrationCoordinator.collectRecipes(recipes);
