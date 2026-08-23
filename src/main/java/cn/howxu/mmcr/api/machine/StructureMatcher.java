@@ -46,10 +46,20 @@ public final class StructureMatcher {
         return matchesCompiled(compiled, facing, Direction.SOUTH, level, ctrlPos);
     }
 
+    public static boolean matchesCompiled(CompiledMachinePattern compiled, Direction facing, Level level,
+                                          BlockPos ctrlPos, boolean stateSensitive) {
+        return matchesCompiled(compiled, facing, Direction.SOUTH, level, ctrlPos, stateSensitive);
+    }
+
     public static boolean matchesCompiled(CompiledMachinePattern compiled, Direction facing, Direction rollFacing, Level level, BlockPos ctrlPos) {
+        return matchesCompiled(compiled, facing, rollFacing, level, ctrlPos, true);
+    }
+
+    public static boolean matchesCompiled(CompiledMachinePattern compiled, Direction facing, Direction rollFacing,
+                                          Level level, BlockPos ctrlPos, boolean stateSensitive) {
         if (!isAreaLoaded(compiled, facing, level, ctrlPos)) return false;
         return matchesRotated(compiled.rotatedPattern(facing), level, ctrlPos,
-                compiled.modifierReplacements(facing, rollFacing));
+                compiled.modifierReplacements(facing, rollFacing), stateSensitive);
     }
 
     public static boolean matchesRotated(BlockArray pattern, Level level, BlockPos ctrlPos) {
@@ -58,9 +68,15 @@ public final class StructureMatcher {
 
     public static boolean matchesRotated(BlockArray pattern, Level level, BlockPos ctrlPos,
                                          Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
+        return matchesRotated(pattern, level, ctrlPos, replacements, true);
+    }
+
+    public static boolean matchesRotated(BlockArray pattern, Level level, BlockPos ctrlPos,
+                                         Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
+                                         boolean stateSensitive) {
         if (pattern.isEmpty()) return false;
 
-        return firstMismatch(pattern, level, ctrlPos, replacements).isEmpty();
+        return firstMismatch(pattern, level, ctrlPos, replacements, stateSensitive).isEmpty();
     }
 
     public static Optional<Mismatch> firstMismatch(BlockArray pattern, Level level, BlockPos ctrlPos) {
@@ -69,10 +85,16 @@ public final class StructureMatcher {
 
     public static Optional<Mismatch> firstMismatch(BlockArray pattern, Level level, BlockPos ctrlPos,
                                                    Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
+        return firstMismatch(pattern, level, ctrlPos, replacements, true);
+    }
+
+    public static Optional<Mismatch> firstMismatch(BlockArray pattern, Level level, BlockPos ctrlPos,
+                                                   Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
+                                                   boolean stateSensitive) {
         for (var entry : pattern.pattern().entrySet()) {
             BlockPos worldPos = ctrlPos.offset(entry.getKey());
             BlockState actualState = level.getBlockState(worldPos);
-            if (!matchesEntry(entry.getValue(), actualState, replacements.getOrDefault(entry.getKey(), List.of()))) {
+            if (!matchesEntry(entry.getValue(), actualState, replacements.getOrDefault(entry.getKey(), List.of()), stateSensitive)) {
                 return Optional.of(new Mismatch(entry.getKey(), worldPos, entry.getValue(), actualState));
             }
         }
@@ -103,10 +125,11 @@ public final class StructureMatcher {
     private static boolean matchesEntry(
             BlockPredicate expected,
             BlockState actual,
-            List<SingleBlockModifierReplacement> replacements) {
-        if (expected.matches(actual)) return true;
+            List<SingleBlockModifierReplacement> replacements,
+            boolean stateSensitive) {
+        if (expected.matches(actual, stateSensitive)) return true;
         for (SingleBlockModifierReplacement replacement : replacements) {
-            if (replacement.getReplacement().matches(actual)) return true;
+            if (replacement.getReplacement().matches(actual, stateSensitive)) return true;
         }
         return false;
     }

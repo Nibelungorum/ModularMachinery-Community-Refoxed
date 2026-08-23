@@ -10,12 +10,23 @@ import java.util.function.UnaryOperator;
  */
 public final class MachineStructureBuilder {
     private final List<StructureStage> stages = new ArrayList<>();
+    private boolean stateSensitive;
 
     private MachineStructureBuilder() {
     }
 
     public static MachineStructureBuilder structure() {
         return new MachineStructureBuilder();
+    }
+
+    public MachineStructureBuilder stateSensitive() {
+        stateSensitive = true;
+        return this;
+    }
+
+    public MachineStructureBuilder stateInsensitive() {
+        stateSensitive = false;
+        return this;
     }
 
     public MachineStructureBuilder fullStructure(UnaryOperator<StructureStage.Builder> consumer) {
@@ -41,6 +52,6 @@ public final class MachineStructureBuilder {
                 .map(stage -> new StructureStage(stage.kind(), stage.pattern().bindController(machineId),
                         stage.portRequirements(), stage.portTiers(), stage.requirements()))
                 .toList();
-        return new MachineStructureDefinition(machineId, boundStages);
+        return new MachineStructureDefinition(machineId, boundStages, stateSensitive);
     }
 }

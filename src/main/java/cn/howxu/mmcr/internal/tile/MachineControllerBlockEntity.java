@@ -15,6 +15,7 @@ import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.api.machine.BlockRotator;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
+import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.machine.level.LevelMismatch;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
@@ -61,6 +62,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
@@ -708,9 +710,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
             }
             Machine validationMachine = foundCompiledPattern == null ? foundMachine : foundCompiledPattern.machine();
             var replacements = replacementsFor(validationMachine, foundCompiledPattern, facing, foundPattern, matchedRollFacing);
+            boolean stateSensitive = foundCompiledPattern != null && foundCompiledPattern.stateSensitive();
             boolean stillMatches = !hasCompiledFacing(foundCompiledPattern, facing) || !replacements.isEmpty()
-                    ? StructureMatcher.matchesRotated(foundPattern, level, getBlockPos(), replacements)
-                    : StructureMatcher.matchesCompiled(foundCompiledPattern, facing, matchedRollFacing, level, getBlockPos());
+                    ? StructureMatcher.matchesRotated(foundPattern, level, getBlockPos(), replacements, stateSensitive)
+                    : StructureMatcher.matchesCompiled(foundCompiledPattern, facing, matchedRollFacing, level, getBlockPos(), stateSensitive);
             if (stillMatches) {
                 var levels = resolveLevels(validationMachine, facing, matchedRollFacing);
                 if (levels.mismatch() != null) {
@@ -820,7 +823,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
             CompiledMachinePattern compiled = compiledFor(machine, rotatedPattern, facing);
             Machine validationMachine = compiled == null ? machine : compiled.machine();
             Map<BlockPos, List<SingleBlockModifierReplacement>> replacements = replacementsFor(validationMachine, compiled, facing, rotatedPattern, candidatePattern.rollFacing());
-            var mismatch = StructureMatcher.firstMismatch(rotatedPattern, level, getBlockPos(), replacements);
+            boolean stateSensitive = compiled != null && compiled.stateSensitive();
+            var mismatch = StructureMatcher.firstMismatch(rotatedPattern, level, getBlockPos(), replacements, stateSensitive);
             if (mismatch.isPresent()) {
                 sendStructureMismatchDiagnostic(player, mismatch.get());
                 return true;
@@ -865,6 +869,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 .orElseThrow(() -> new IllegalArgumentException("Unknown structure stage " + stageNumber
                         + " for machine " + candidate.registryName()))
                 .pattern();
+    }
+
+    public boolean assemblyStateSensitive(Machine candidate) {
+        int stageNumber = isFormed() && matchedStructureStage > 0 ? matchedStructureStage : 1;
+        return candidate.structureStages().stream()
+                .filter(stage -> stage.number() == stageNumber)
+                .findFirst()
+                .map(MachineStructureStage::stateSensitive)
+                .orElse(false);
     }
 
     public boolean sendStructurePreview(ServerPlayer player) {
@@ -930,12 +943,33 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void sendStructureMismatchDiagnostic(ServerPlayer player, StructureMatcher.Mismatch mismatch) {
         BlockPos pos = mismatch.worldPos();
+        MMCR.LOG.debug("Structure mismatch at world position {} (relative {}): expected={}, actual={}",
+                pos, mismatch.relativePos(), describeExpectedForLog(mismatch.expected()), describeActualForLog(mismatch.actualState()));
         player.sendSystemMessage(Component.translatable(
                 "message.mmcr.multiblock_mismatch",
                 styledPosition(pos),
                 describeExpected(mismatch.expected()),
                 mismatch.actualState().getBlock().getName().copy().withStyle(ChatFormatting.RED)));
         PacketDistributor.sendToPlayer(player, new PktMultiblockMismatchHighlightPayload(level.dimension(), pos));
+    }
+
+    private static String describeExpectedForLog(BlockPredicate expected) {
+        return switch (expected) {
+            case BlockPredicate.OfBlock ofBlock -> "block=" + BuiltInRegistries.BLOCK.getKey(ofBlock.block());
+            case BlockPredicate.DeferredBlock deferredBlock ->
+                    "block=" + BuiltInRegistries.BLOCK.getKey(deferredBlock.supplier().get());
+            case BlockPredicate.OfBlockState ofState -> "state=" + describeActualForLog(ofState.state());
+            case BlockPredicate.OfTag ofTag -> "tag=#" + ofTag.tag().location();
+            case BlockPredicate.AnyOf anyOf -> "any_of=" + anyOf.children().stream()
+                    .map(MachineControllerBlockEntity::describeExpectedForLog).toList();
+            case BlockPredicate.Air ignored -> "air";
+            case BlockPredicate.Any ignored -> "any block";
+            case BlockPredicate.MachineCoupler ignored -> "machine coupler";
+        };
+    }
+
+    private static String describeActualForLog(BlockState state) {
+        return "block=" + BuiltInRegistries.BLOCK.getKey(state.getBlock()) + ", state=" + state;
     }
 
     private void sendFormationFailureDiagnostic(ServerPlayer player, PortRequirementSpec.Failure failure) {
@@ -1061,11 +1095,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
         CompiledMachinePattern stageCompiled = candidatePattern.compiled();
         Machine validationMachine = stageCompiled == null ? candidate : stageCompiled.machine();
         var replacements = replacementsFor(validationMachine, stageCompiled, facing, rotatedPattern, candidatePattern.rollFacing());
+        boolean stateSensitive = stageCompiled != null && stageCompiled.stateSensitive();
         boolean matches = stageCompiled == null || facing.getAxis().isVertical()
-                ? StructureMatcher.matchesRotated(rotatedPattern, level, getBlockPos(), replacements)
-                : StructureMatcher.matchesCompiled(stageCompiled, facing, candidatePattern.rollFacing(), level, getBlockPos());
+                ? StructureMatcher.matchesRotated(rotatedPattern, level, getBlockPos(), replacements, stateSensitive)
+                : StructureMatcher.matchesCompiled(stageCompiled, facing, candidatePattern.rollFacing(), level, getBlockPos(), stateSensitive);
         if (!matches) {
-            recordStructureMismatch(candidate, facing, rotatedPattern, replacements);
+            recordStructureMismatch(candidate, facing, rotatedPattern, replacements, stateSensitive);
             return false;
         }
 
@@ -1130,8 +1165,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void recordStructureMismatch(Machine candidate, Direction facing, BlockArray rotatedPattern,
-                                         Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
-        String diagnostic = structureMismatchDiagnostic(candidate, facing, rotatedPattern, level, getBlockPos(), replacements);
+                                         Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
+                                         boolean stateSensitive) {
+        String diagnostic = structureMismatchDiagnostic(candidate, facing, rotatedPattern, level, getBlockPos(), replacements,
+                stateSensitive);
         if (diagnostic.equals(lastStructureMismatchDiagnostic)) return;
         lastStructureMismatchDiagnostic = diagnostic;
     }
@@ -1148,7 +1185,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     static String structureMismatchDiagnostic(Machine candidate, Direction facing, BlockArray rotatedPattern, Level level, BlockPos ctrlPos,
-                                              Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
+                                               Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
+        return structureMismatchDiagnostic(candidate, facing, rotatedPattern, level, ctrlPos, replacements, true);
+    }
+
+    static String structureMismatchDiagnostic(Machine candidate, Direction facing, BlockArray rotatedPattern, Level level, BlockPos ctrlPos,
+                                               Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
+                                               boolean stateSensitive) {
         if (rotatedPattern.isEmpty()) {
             return "machine=" + candidate.registryName()
                     + " facing=" + facing.name()
@@ -1156,7 +1199,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     + " reason=emptyPattern";
         }
 
-        var mismatch = StructureMatcher.firstMismatch(rotatedPattern, level, ctrlPos, replacements);
+        var mismatch = StructureMatcher.firstMismatch(rotatedPattern, level, ctrlPos, replacements, stateSensitive);
         if (mismatch.isPresent()) {
             StructureMatcher.Mismatch first = mismatch.get();
             BlockEntity actualBlockEntity = level.getBlockEntity(first.worldPos());

@@ -53,6 +53,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private PreviewFactory previewFactory;
     private int selectedStage;
     private final LongSupplier clock = System::currentTimeMillis;
+    private long compileAnimationStart = -1L;
     private boolean previewDragActive;
     private boolean closed;
 
@@ -137,7 +138,9 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     public void drawWidget(GuiGraphicsExtractor graphics, double mouseX, double mouseY) {
         ensurePreviewStarted();
         if (preview == null) {
-            graphics.text(Minecraft.getInstance().font, Component.literal("Render compile... " + compilation.progressPercent() + "%"),
+            if (compileAnimationStart < 0L) compileAnimationStart = clock.getAsLong();
+            long elapsed = Math.max(0L, clock.getAsLong() - compileAnimationStart);
+            graphics.text(Minecraft.getInstance().font, Component.literal(compileStatus(elapsed)),
                     0, height / 2, 0xFF404040, false);
             return;
         }
@@ -200,6 +203,11 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
             schema = completed;
             preview = createPreview(completed);
         }
+    }
+
+    static String compileStatus(long elapsedMillis) {
+        int dotCount = (int) (Math.max(0L, elapsedMillis) / 1_000L % 3L) + 1;
+        return "Render compile" + ".".repeat(dotCount);
     }
 
     private boolean hasMultipleStages() {

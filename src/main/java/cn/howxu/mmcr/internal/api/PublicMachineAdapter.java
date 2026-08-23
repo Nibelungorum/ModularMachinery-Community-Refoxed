@@ -171,7 +171,7 @@ public final class PublicMachineAdapter {
             cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure,
             Map<Identifier, ModifierDefinition> modifiers) {
         return new MachineStructureDefinition(structure.machineId(), structure.stages().stream()
-                .map(stage -> toDeclaration(stage, modifiers)).toList());
+                .map(stage -> toDeclaration(stage, modifiers, structure.stateSensitive())).toList());
     }
 
     public static MachineStructureDefinition.Declaration toDeclaration(StructureStage stage) {
@@ -180,9 +180,14 @@ public final class PublicMachineAdapter {
 
     private static MachineStructureDefinition.Declaration toDeclaration(StructureStage stage,
             Map<Identifier, ModifierDefinition> modifiers) {
+        return toDeclaration(stage, modifiers, false);
+    }
+
+    private static MachineStructureDefinition.Declaration toDeclaration(StructureStage stage,
+            Map<Identifier, ModifierDefinition> modifiers, boolean stateSensitive) {
         return new MachineStructureDefinition.Declaration(toDeclarationKind(stage.kind()), toBlockArray(stage.pattern()),
                 toPortRequirementSpec(stage.portRequirements()), toPortTierRequirementSpec(stage.portTiers()),
-                List.of(), toStructureRequirements(stage.requirements(), modifiers));
+                List.of(), toStructureRequirements(stage.requirements(), modifiers), stateSensitive);
     }
 
     private static cn.howxu.mmcr.api.machine.BlockPredicate toBlockPredicate(BlockPredicate predicate) {

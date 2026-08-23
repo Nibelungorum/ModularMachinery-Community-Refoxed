@@ -76,7 +76,8 @@ public final class MachinePatternCompiler {
         }
 
         return new CompiledMachinePattern(stage.number() == 1 ? parent : machine, stage.number(), rotatedPatterns, boundingBoxes, componentPositions, portPositions,
-                couplerPositions, interfacePositions, dynamicPatterns(machine.dynamicPatterns(), cache), modifierReplacements);
+                couplerPositions, interfacePositions, dynamicPatterns(machine.dynamicPatterns(), cache), modifierReplacements,
+                stage.stateSensitive());
     }
 
     private static Map<BlockPos, List<SingleBlockModifierReplacement>> rotatedModifierReplacements(

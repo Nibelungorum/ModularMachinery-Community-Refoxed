@@ -38,6 +38,10 @@ public final class MultiblockAssemblyService {
         public boolean matches(BlockState current) {
             return predicate.matches(current);
         }
+
+        public boolean matches(BlockState current, boolean stateSensitive) {
+            return predicate.matches(current, stateSensitive);
+        }
     }
 
     public record Removal(BlockPos pos, BlockState state, ItemStack drop) {}
@@ -107,6 +111,7 @@ public final class MultiblockAssemblyService {
             return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.no_machine"));
         }
         BlockArray pattern = controller.assemblyPattern(machine.get());
+        boolean stateSensitive = controller.assemblyStateSensitive(machine.get());
         List<Placement> template = createTemplatePlacements(controller.getBlockPos(), pattern);
         int removed = 0;
         maxBlocks = Math.min(maxBlocks, MAX_BLOCKS_PER_OPERATION);
@@ -114,7 +119,7 @@ public final class MultiblockAssemblyService {
             if (removed >= maxBlocks) break;
             BlockState current = player.level().getBlockState(placement.pos());
             if (current.isAir()) continue;
-            if (!placement.matches(current)) continue;
+            if (!placement.matches(current, stateSensitive)) continue;
             ItemStack drop = current.getBlock().asItem().getDefaultInstance();
             player.level().removeBlock(placement.pos(), false);
             if (!drop.isEmpty()) sink.accept(drop);

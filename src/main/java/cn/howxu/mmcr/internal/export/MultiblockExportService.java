@@ -9,6 +9,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
@@ -31,6 +32,7 @@ import java.util.concurrent.ThreadFactory;
 public final class MultiblockExportService {
 
     private static final DateTimeFormatter FILE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss");
+    private static final String UNICODE_SYMBOLS = createUnicodeSymbols();
     private static final ExecutorService EXPORT_EXECUTOR = Executors.newSingleThreadExecutor(new ExportThreadFactory());
 
     private MultiblockExportService() {}
@@ -181,7 +183,7 @@ public final class MultiblockExportService {
         String text = kubeJs ? renderKubeJS(entries, controllerFace, rollFacing) : renderJava(entries, controllerFace, rollFacing);
         Path path = nextExportPath(gameDir, timestamp);
         Files.createDirectories(path.getParent());
-        Files.writeString(path, text);
+        Files.writeString(path, text, StandardCharsets.UTF_8);
         return path;
     }
 
@@ -205,7 +207,7 @@ public final class MultiblockExportService {
             }
         }
         if (casing != null && !symbols.containsKey(casing)) symbols.put(casing, 'X');
-        String available = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        String available = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789" + UNICODE_SYMBOLS;
         for (RenderedEntry entry : rendered) {
             if (symbols.containsKey(entry.predicate())) continue;
             for (int i = 0; i < available.length(); i++) {
@@ -217,6 +219,12 @@ public final class MultiblockExportService {
             if (!symbols.containsKey(entry.predicate())) throw new IllegalArgumentException("Too many unique blocks to export as single-character pattern symbols");
         }
         return symbols;
+    }
+
+    private static String createUnicodeSymbols() {
+        StringBuilder symbols = new StringBuilder(4096);
+        for (char symbol = '\u4E00'; symbol <= '\u5DFF'; symbol++) symbols.append(symbol);
+        return symbols.toString();
     }
 
     private static String predicateExpression(PredicateKey key) {

@@ -235,7 +235,7 @@ public final class ModuleConnectionCoordinator {
         CompiledMachinePattern compiled = compiled(controller);
         Direction facing = facing(controller);
         return compiled != null && facing != null
-                && StructureMatcher.matchesCompiled(compiled, facing, level, controller.getBlockPos());
+                && StructureMatcher.matchesCompiled(compiled, facing, level, controller.getBlockPos(), compiled.stateSensitive());
     }
 
     private static Set<BlockPos> couplerWorldPositions(MachineControllerBlockEntity controller) {

@@ -5,6 +5,7 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 public final class Config {
     public static final ModConfigSpec SPEC;
     public static final int DEFAULT_MACHINE_CHECK_INTERVAL_TICKS = 20;
+    public static final int DEFAULT_TERMINAL_MAX_DEMOLISH_BLOCKS = 131072;
     public static final ModConfigSpec.IntValue MACHINE_CHECK_INTERVAL_TICKS;
     public static final ModConfigSpec.IntValue TERMINAL_MAX_DEMOLISH_BLOCKS;
     public static final ModConfigSpec.DoubleValue ENERGY_CONSUMPTION_MULTIPLIER;
@@ -16,7 +17,7 @@ public final class Config {
                 .defineInRange("machine_check_interval_ticks", DEFAULT_MACHINE_CHECK_INTERVAL_TICKS, 1, 600);
         TERMINAL_MAX_DEMOLISH_BLOCKS = b
                 .comment("Maximum blocks removed by one terminal demolish operation")
-                .defineInRange("terminal_max_demolish_blocks", 163840, 1, 1_000_000);
+                .defineInRange("terminal_max_demolish_blocks", DEFAULT_TERMINAL_MAX_DEMOLISH_BLOCKS, 1, 1_000_000);
         ENERGY_CONSUMPTION_MULTIPLIER = b
                 .comment("Global multiplier on energy consumption")
                 .defineInRange("energy_consumption_multiplier", 1.0, 0.0, 100.0);

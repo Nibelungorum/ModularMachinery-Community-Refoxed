@@ -95,10 +95,17 @@ public record MachineStructureDefinition(Identifier machineId, List<Declaration>
         private final PortTierRequirementSpec portTierRequirements;
         private final List<DynamicPatternSpec> dynamicPatterns;
         private final MachineStructureRequirements requirements;
+        private final boolean stateSensitive;
 
         public Declaration(Kind kind, BlockArray pattern, PortRequirementSpec portRequirements,
                 PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
                 MachineStructureRequirements requirements) {
+            this(kind, pattern, portRequirements, portTierRequirements, dynamicPatterns, requirements, false);
+        }
+
+        public Declaration(Kind kind, BlockArray pattern, PortRequirementSpec portRequirements,
+                PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
+                MachineStructureRequirements requirements, boolean stateSensitive) {
             this.kind = Objects.requireNonNull(kind, "kind");
             Objects.requireNonNull(pattern, "pattern");
             this.pattern = new BlockArray(pattern.pattern(), copyStringMap(pattern.tagsByPosition()), pattern.symbolsByPosition());
@@ -106,6 +113,7 @@ public record MachineStructureDefinition(Identifier machineId, List<Declaration>
             this.portTierRequirements = portTierRequirements;
             this.dynamicPatterns = List.copyOf(dynamicPatterns == null ? List.of() : dynamicPatterns);
             this.requirements = (requirements == null ? MachineStructureRequirements.EMPTY : requirements).validate(this.pattern);
+            this.stateSensitive = stateSensitive;
         }
 
         public Kind kind() {
@@ -132,6 +140,10 @@ public record MachineStructureDefinition(Identifier machineId, List<Declaration>
             return requirements;
         }
 
+        public boolean stateSensitive() {
+            return stateSensitive;
+        }
+
         @Override
         public boolean equals(Object obj) {
             if (this == obj) return true;
@@ -141,12 +153,14 @@ public record MachineStructureDefinition(Identifier machineId, List<Declaration>
                     && Objects.equals(portRequirements, other.portRequirements)
                     && Objects.equals(portTierRequirements, other.portTierRequirements)
                     && dynamicPatterns.equals(other.dynamicPatterns)
-                    && requirements.equals(other.requirements);
+                    && requirements.equals(other.requirements)
+                    && stateSensitive == other.stateSensitive;
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(kind, pattern, portRequirements, portTierRequirements, dynamicPatterns, requirements);
+            return Objects.hash(kind, pattern, portRequirements, portTierRequirements, dynamicPatterns, requirements,
+                    stateSensitive);
         }
 
         public static Declaration full(BlockArray pattern) {

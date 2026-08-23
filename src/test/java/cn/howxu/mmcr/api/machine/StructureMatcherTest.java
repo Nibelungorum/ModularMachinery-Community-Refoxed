@@ -74,6 +74,20 @@ class StructureMatcherTest {
     }
 
     @Test
+    void structure_matching_can_ignore_or_require_block_state() {
+        BlockPos position = new BlockPos(1, 0, 0);
+        BlockState expected = Blocks.DISPENSER.defaultBlockState()
+                .setValue(DirectionalBlock.FACING, Direction.NORTH);
+        BlockState actual = Blocks.DISPENSER.defaultBlockState()
+                .setValue(DirectionalBlock.FACING, Direction.SOUTH);
+        BlockArray pattern = new BlockArray(Map.of(position, new BlockPredicate.OfBlockState(expected)));
+        Level level = cn.howxu.mmcr.LevelStub.createStates(Map.of(position, actual));
+
+        assertThat(StructureMatcher.matchesRotated(pattern, level, BlockPos.ZERO, Map.of(), false)).isTrue();
+        assertThat(StructureMatcher.matchesRotated(pattern, level, BlockPos.ZERO, Map.of(), true)).isFalse();
+    }
+
+    @Test
     void firstMismatchReportsWorldPositionExpectedPredicateAndActualState() {
         BlockPos controller = new BlockPos(10, 64, -3);
         Block expectedBlock = Blocks.IRON_BLOCK;

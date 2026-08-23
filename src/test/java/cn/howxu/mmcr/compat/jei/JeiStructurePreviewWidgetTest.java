@@ -50,6 +50,14 @@ class JeiStructurePreviewWidgetTest {
     }
 
     @Test
+    void compileStatusCyclesOneToThreeDotsEverySecond() {
+        assertThat(JeiStructurePreviewWidget.compileStatus(0)).isEqualTo("Render compile.");
+        assertThat(JeiStructurePreviewWidget.compileStatus(1_000)).isEqualTo("Render compile..");
+        assertThat(JeiStructurePreviewWidget.compileStatus(2_000)).isEqualTo("Render compile...");
+        assertThat(JeiStructurePreviewWidget.compileStatus(3_000)).isEqualTo("Render compile.");
+    }
+
+    @Test
     void widgetTranslatesLocalPreviewInputAndForwardsReleaseOnlyAfterAnInsidePress() {
         RecordingPreviewWidget preview = new RecordingPreviewWidget();
         JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 0, 0, 160, 92);

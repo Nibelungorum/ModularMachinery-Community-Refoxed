@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.ArrayList;
 
 import io.netty.buffer.Unpooled;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -82,5 +83,18 @@ class PktMultiblockPreviewPayloadTest {
         assertEquals(new BlockPos(1, 2, 3), decoded.controllerPos());
         assertEquals(List.of(), decoded.entries());
         assertEquals(0, decoded.durationTicks());
+    }
+
+    @Test
+    void payload_allows_up_to_131072_preview_entries() {
+        List<MultiblockPreviewSnapshot.Entry> entries = new ArrayList<>();
+        for (int i = 0; i < 131073; i++) {
+            entries.add(new MultiblockPreviewSnapshot.Entry(new BlockPos(i, 0, 0), Blocks.STONE.defaultBlockState()));
+        }
+
+        var payload = new PktMultiblockPreviewPayload(Level.OVERWORLD, BlockPos.ZERO, entries, 200);
+
+        assertEquals(131072, payload.entries().size());
+        assertEquals(new BlockPos(131071, 0, 0), payload.entries().getLast().relativePos());
     }
 }

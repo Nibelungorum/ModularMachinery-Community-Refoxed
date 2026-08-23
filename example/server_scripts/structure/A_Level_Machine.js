@@ -11,7 +11,6 @@ MMCREvents.server(event => {
             api.anyOfItemInput(),
             api.anyOfItemOutput(),
             api.anyOfEnergyInput(),
-            api.anyOfEnergyInput(),
             api.parallelControllers(),
             api.block('minecraft:smooth_basalt')
         ))

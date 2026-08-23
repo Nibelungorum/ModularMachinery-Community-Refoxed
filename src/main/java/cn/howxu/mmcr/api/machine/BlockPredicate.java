@@ -30,6 +30,15 @@ public sealed interface BlockPredicate {
 
     boolean matches(BlockState state);
 
+    default boolean matches(BlockState state, boolean stateSensitive) {
+        if (stateSensitive) return matches(state);
+        return switch (this) {
+            case OfBlockState ofState -> ofState.state().getBlock() == state.getBlock();
+            case AnyOf anyOf -> anyOf.children().stream().anyMatch(child -> child.matches(state, false));
+            default -> matches(state);
+        };
+    }
+
     /**
      * Returns the preferred concrete block state for this predicate, when one is directly representable.
      */

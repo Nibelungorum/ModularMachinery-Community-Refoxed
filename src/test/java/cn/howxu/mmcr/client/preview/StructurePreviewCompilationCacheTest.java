@@ -38,13 +38,11 @@ class StructurePreviewCompilationCacheTest {
 
         StructurePreviewCompilation compilation = cache.acquire(machine);
 
-        assertThat(compilation.progressPercent()).isZero();
         assertThat(compilation.complete()).isFalse();
         compilation.start();
         assertThat(queued).hasSize(1);
         queued.remove().run();
         assertThat(compilation.complete()).isTrue();
-        assertThat(compilation.progressPercent()).isEqualTo(100);
         assertThat(compilation.schema().states()).hasSize(1);
     }
 

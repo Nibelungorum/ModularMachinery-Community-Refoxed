@@ -27,12 +27,13 @@ public final class MachineStructureStage {
     private final MachineStructureRequirements requirements;
     private final Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements;
     private final Map<BlockPos, Identifier> levelSlots;
+    private final boolean stateSensitive;
 
     public MachineStructureStage(int number, BlockArray pattern, PortRequirementSpec portRequirements,
             PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
             MachineStructureRequirements requirements) {
         this(number, Declaration.Kind.FULL, pattern, portRequirements, portTierRequirements, dynamicPatterns,
-                requirements, Map.of(), Map.of());
+                requirements, Map.of(), Map.of(), false);
     }
 
     static MachineStructureStage withCompiledRequirements(int number, BlockArray pattern, PortRequirementSpec portRequirements,
@@ -48,14 +49,23 @@ public final class MachineStructureStage {
             List<DynamicPatternSpec> dynamicPatterns, MachineStructureRequirements requirements,
             Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
             Map<BlockPos, Identifier> levelSlots) {
+        return withCompiledRequirements(number, kind, pattern, portRequirements, portTierRequirements, dynamicPatterns,
+                requirements, modifierReplacements, levelSlots, false);
+    }
+
+    static MachineStructureStage withCompiledRequirements(int number, Declaration.Kind kind, BlockArray pattern,
+            PortRequirementSpec portRequirements, PortTierRequirementSpec portTierRequirements,
+            List<DynamicPatternSpec> dynamicPatterns, MachineStructureRequirements requirements,
+            Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
+            Map<BlockPos, Identifier> levelSlots, boolean stateSensitive) {
         return new MachineStructureStage(number, kind, pattern, portRequirements, portTierRequirements, dynamicPatterns,
-                requirements, modifierReplacements, levelSlots);
+                requirements, modifierReplacements, levelSlots, stateSensitive);
     }
 
     private MachineStructureStage(int number, Declaration.Kind kind, BlockArray pattern, PortRequirementSpec portRequirements,
             PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
             MachineStructureRequirements requirements, Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
-            Map<BlockPos, Identifier> levelSlots) {
+            Map<BlockPos, Identifier> levelSlots, boolean stateSensitive) {
         if (number < 1) throw new IllegalArgumentException("stage number must be positive");
         Objects.requireNonNull(kind, "kind");
         Objects.requireNonNull(pattern, "pattern");
@@ -72,6 +82,7 @@ public final class MachineStructureStage {
                 MachineStructureRequirementCompiler.compile(this.pattern, this.requirements);
         this.modifierReplacements = mergeNestedMaps(modifierReplacements, compiled.modifierReplacements());
         this.levelSlots = Collections.unmodifiableMap(mergeMaps(levelSlots, compiled.levelSlots()));
+        this.stateSensitive = stateSensitive;
     }
 
     public int number() {
@@ -110,6 +121,10 @@ public final class MachineStructureStage {
         return levelSlots;
     }
 
+    public boolean stateSensitive() {
+        return stateSensitive;
+    }
+
     @Override
     public boolean equals(Object obj) {
         if (this == obj) return true;
@@ -121,6 +136,7 @@ public final class MachineStructureStage {
                 && portTierRequirements.equals(other.portTierRequirements)
                 && dynamicPatterns.equals(other.dynamicPatterns)
                 && requirements.equals(other.requirements)
+                && stateSensitive == other.stateSensitive
                 && modifierReplacements.equals(other.modifierReplacements)
                 && levelSlots.equals(other.levelSlots);
     }
@@ -128,7 +144,7 @@ public final class MachineStructureStage {
     @Override
     public int hashCode() {
         return Objects.hash(number, kind, pattern, portRequirements, portTierRequirements, dynamicPatterns,
-                requirements, modifierReplacements, levelSlots);
+                requirements, stateSensitive, modifierReplacements, levelSlots);
     }
 
     private static <T> Map<BlockPos, List<T>> copyNestedMap(Map<BlockPos, List<T>> source) {

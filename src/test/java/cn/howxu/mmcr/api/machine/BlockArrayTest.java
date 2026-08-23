@@ -97,6 +97,23 @@ class BlockArrayTest {
         assertThat(arr.get(new BlockPos(0, 0, -1))).isNull();
     }
 
+    @Test void unicode_symbol_survives_build_and_structure_matching() {
+        var casing = new BlockPredicate.OfBlock(Blocks.STONE);
+        var controller = new BlockPredicate.OfBlock(Blocks.DIRT);
+        var pattern = BlockArray.builder()
+                .pattern("中C")
+                .set('中', casing)
+                .set('C', controller)
+                .build();
+        BlockPos controllerPos = new BlockPos(5, 5, 5);
+
+        assertThat(pattern.symbolsByPosition().values()).contains('中');
+        assertThat(StructureMatcher.matches(pattern, LevelStub.create(Map.of(
+                controllerPos, Blocks.DIRT,
+                controllerPos.offset(-1, 0, 0), Blocks.STONE)),
+                controllerPos, Direction.SOUTH)).isTrue();
+    }
+
     @Test void builder_accepts_arbitrary_width_height_and_depth() {
         var x = new BlockPredicate.OfBlock(Blocks.STONE);
         var c = new BlockPredicate.OfBlock(Blocks.DIRT);

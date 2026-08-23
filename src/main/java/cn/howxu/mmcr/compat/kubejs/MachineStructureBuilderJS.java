@@ -47,6 +47,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     private boolean slicePatternPending;
     private PatternApiMode patternApiMode;
     private StructureApiMode structureApiMode;
+    private boolean stateSensitive;
 
     public MachineStructureBuilderJS(Identifier id) {
         super(id);
@@ -55,6 +56,16 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
 
     public MachineStructureBuilderJS(String id) {
         this(Identifier.parse(id));
+    }
+
+    public MachineStructureBuilderJS stateSensitive() {
+        stateSensitive = true;
+        return this;
+    }
+
+    public MachineStructureBuilderJS stateInsensitive() {
+        stateSensitive = false;
+        return this;
     }
 
     public MachineStructureBuilderJS pattern(String grid, Map<String, Object> keys) {
@@ -302,14 +313,18 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         syncSlicePattern();
         if (declarations.isEmpty()) {
             return new MachineStructureDefinition(id, List.of(new Declaration(Declaration.Kind.FULL, pattern,
-                    portRequirements, portTierRequirements, dynamicPatterns, requirements)));
+                    portRequirements, portTierRequirements, dynamicPatterns, requirements, stateSensitive)));
         }
         applyPendingPatternMetadata();
-        if (!classMetadataChanged) return new MachineStructureDefinition(id, declarations);
-        List<Declaration> result = new ArrayList<>(declarations);
+        List<Declaration> result = declarations.stream()
+                .map(declaration -> new Declaration(declaration.kind(), declaration.pattern(),
+                        declaration.portRequirements(), declaration.portTierRequirements(), declaration.dynamicPatterns(),
+                        declaration.requirements(), stateSensitive))
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        if (!classMetadataChanged) return new MachineStructureDefinition(id, result);
         Declaration first = result.getFirst();
         result.set(0, new Declaration(first.kind(), first.pattern(), portRequirements, portTierRequirements,
-                dynamicPatterns, requirements));
+                dynamicPatterns, requirements, stateSensitive));
         return new MachineStructureDefinition(id, result);
     }
 

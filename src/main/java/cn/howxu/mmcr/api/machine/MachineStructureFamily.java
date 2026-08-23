@@ -70,7 +70,7 @@ public record MachineStructureFamily(List<MachineStructureStage> stages) {
             rejectMultipleControllers(pattern, stageNumber);
             stages.add(MachineStructureStage.withCompiledRequirements(stageNumber, declaration.kind(),
                     new BlockArray(pattern, tags, symbols), portRequirements, portTierRequirements, dynamicPatterns,
-                    requirements, modifierReplacements, levelSlots));
+                    requirements, modifierReplacements, levelSlots, declaration.stateSensitive()));
         }
         return new MachineStructureFamily(stages);
     }

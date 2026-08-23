@@ -39,7 +39,7 @@ import java.util.Map;
 public final class MachineStructureSyncCodec {
 
     private static final int MAX_DECLARATIONS = 1024;
-    private static final int MAX_BLOCKS = 65536;
+    private static final int MAX_BLOCKS = 131072;
     private static final int MAX_TAGS = 1024;
     private static final int MAX_PORT_REQUIREMENTS = 1024;
     private static final int MAX_TIER_REQUIREMENTS = 1024;
@@ -81,6 +81,7 @@ public final class MachineStructureSyncCodec {
         writePortTierRequirements(buf, declaration.portTierRequirements());
         writeDynamicPatterns(buf, declaration.dynamicPatterns());
         writeRequirements(buf, declaration.requirements());
+        buf.writeBoolean(declaration.stateSensitive());
     }
 
     private static MachineStructureDefinition.Declaration readDeclaration(RegistryFriendlyByteBuf buf) {
@@ -91,7 +92,7 @@ public final class MachineStructureSyncCodec {
         List<DynamicPatternSpec> dynamicPatterns = readDynamicPatterns(buf);
         MachineStructureRequirements requirements = readRequirements(buf);
         return new MachineStructureDefinition.Declaration(kind, pattern, portRequirements, portTierRequirements,
-                dynamicPatterns, requirements);
+                dynamicPatterns, requirements, buf.readBoolean());
     }
 
     private static void writeBlockArray(RegistryFriendlyByteBuf buf, BlockArray value) {

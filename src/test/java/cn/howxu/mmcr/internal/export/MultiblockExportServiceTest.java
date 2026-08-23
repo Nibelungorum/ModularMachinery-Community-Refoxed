@@ -9,6 +9,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -83,6 +84,24 @@ class MultiblockExportServiceTest {
         assertThat(java).doesNotContain(".where('C'");
         assertThat(java).doesNotContain(".controller(");
         assertThat(java).doesNotContain("minecraft:air");
+    }
+
+    @Test
+    void renderersUseUnicodeSymbolsAfterAsciiSymbolsAreExhausted() {
+        List<MultiblockExportService.SnapshotEntry> entries = new ArrayList<>();
+        entries.add(new MultiblockExportService.SnapshotEntry(
+                BlockPos.ZERO, Blocks.CRAFTING_TABLE.defaultBlockState(), false, true));
+        BuiltInRegistries.BLOCK.entrySet().stream()
+                .filter(entry -> entry.getValue() != Blocks.AIR)
+                .limit(62)
+                .forEach(entry -> entries.add(new MultiblockExportService.SnapshotEntry(
+                        new BlockPos(entries.size(), 0, 0), entry.getValue().defaultBlockState(), false)));
+
+        String java = MultiblockExportService.renderJava(entries, Direction.SOUTH);
+        String kubeJs = MultiblockExportService.renderKubeJS(entries, Direction.SOUTH);
+
+        assertThat(java).contains("'\u4e00'");
+        assertThat(kubeJs).contains(".set('\u4e00'");
     }
 
     @Test
