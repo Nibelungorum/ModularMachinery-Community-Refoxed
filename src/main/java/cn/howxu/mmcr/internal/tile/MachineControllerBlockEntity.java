@@ -681,14 +681,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
             cancelBuildTask();
             return true;
         }
-        buildTaskRegistry().advance(getBlockPos(), placement -> {
-            if (!level.getBlockState(placement.pos()).isAir()) return;
-            level.setBlock(placement.pos(), placement.state(), 3);
-        });
+        buildTaskRegistry().advance(getBlockPos(), placement -> level.getBlockState(placement.pos()).isAir()
+                && level.setBlock(placement.pos(), placement.state(), 3));
         var task = buildTaskRegistry().cancel(getBlockPos());
         if (task != null && !task.isComplete()) {
             buildTaskRegistry().submit(task);
         } else if (task != null) {
+            task.refundRequirements().forEach(stack -> new PlayerInventoryStructureItemSink(owner).accept(stack));
+            if (owner.connection != null) task.takeCompletionReport().ifPresent(owner::sendSystemMessage);
             buildTaskOwner = null;
             buildTaskAge = 0;
             structureDirty = true;
@@ -702,9 +702,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
         ServerPlayer owner = buildTaskOwner;
         if (owner != null && owner.level() == level) {
             PlayerInventoryStructureItemSink sink = new PlayerInventoryStructureItemSink(owner);
-            task.unconsumedRequirements().forEach(sink::accept);
+            task.refundRequirements().forEach(sink::accept);
         } else {
-            task.unconsumedRequirements().forEach(stack -> {
+            task.refundRequirements().forEach(stack -> {
                 if (!stack.isEmpty()) level.addFreshEntity(new net.minecraft.world.entity.item.ItemEntity(
                         level, worldPosition.getX() + 0.5, worldPosition.getY() + 0.5, worldPosition.getZ() + 0.5, stack));
             });

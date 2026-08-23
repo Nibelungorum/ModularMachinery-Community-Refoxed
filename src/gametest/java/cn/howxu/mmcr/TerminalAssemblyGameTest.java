@@ -148,7 +148,7 @@ public class TerminalAssemblyGameTest {
         helper.succeed();
     }
 
-    public void survivalBuildPartiallyWhenStageOneMaterialsAreMissing(GameTestHelper helper) {
+    public void survivalBuildRejectsWhenStageOneMaterialsAreMissing(GameTestHelper helper) {
         BlockPos controllerPos = new BlockPos(4, 1, 4);
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
@@ -159,20 +159,15 @@ public class TerminalAssemblyGameTest {
 
         MultiblockAssemblyService.Result result = MultiblockAssemblyService.build(player, controller, false);
 
-        helper.assertTrue(result.interactionResult() == InteractionResult.SUCCESS, "Build succeeds with partial materials");
-        helper.assertTrue(result.changedBlocks() == template.size() - 1, "All affordable structure blocks are placed");
-        int airBlocks = 0;
+        helper.assertTrue(result.interactionResult() == InteractionResult.FAIL, "Build rejects partial materials");
+        helper.assertTrue(result.changedBlocks() == 0, "No structure blocks are placed");
         for (MultiblockAssemblyService.Placement placement : template) {
-            if (helper.getLevel().getBlockState(placement.pos()).isAir()) {
-                airBlocks++;
-            } else {
-                helper.assertTrue(helper.getLevel().getBlockState(placement.pos()).is(ModBlocks.CASING.get()),
-                        "Placed structure blocks are casings");
-            }
+            helper.assertTrue(helper.getLevel().getBlockState(placement.pos()).isAir(),
+                    "Structure remains unchanged");
         }
-        helper.assertTrue(airBlocks == 1, "Exactly one structure position remains air");
-        helper.assertTrue(new PlayerInventoryStructureItemSource(player).canExtractAll(List.of(new ItemStack(ModBlocks.CASING.get()))) == false,
-                "Placed blocks consume all available materials");
+        helper.assertTrue(new PlayerInventoryStructureItemSource(player).canExtractAll(
+                        List.of(new ItemStack(ModBlocks.CASING.get(), template.size() - 1))),
+                "Missing-material failure does not consume available materials");
         helper.succeed();
     }
 
@@ -240,16 +235,19 @@ public class TerminalAssemblyGameTest {
 
         MultiblockAssemblyService.Result first = MultiblockAssemblyService.build(player, controller, false);
 
-        helper.assertTrue(first.changedBlocks() == 2, "First build places both affordable positions");
-        helper.assertTrue(helper.getLevel().getBlockState(firstPosition).is(firstPlacement.state().getBlock()), "First placement is built");
+        helper.assertTrue(first.interactionResult() == InteractionResult.FAIL, "First build rejects incomplete materials");
+        helper.assertTrue(first.changedBlocks() == 0, "First build places no affordable subset");
+        helper.assertTrue(helper.getLevel().getBlockState(firstPosition).isAir(), "First placement remains air");
         helper.assertTrue(helper.getLevel().getBlockState(missingPosition).isAir(), "Missing input bus remains air");
-        helper.assertTrue(helper.getLevel().getBlockState(laterAffordablePosition).is(laterPlacement.state().getBlock()), "Later placement is built");
+        helper.assertTrue(helper.getLevel().getBlockState(laterAffordablePosition).isAir(), "Later placement remains air");
 
         player.getInventory().add(missingPlacement.requirement().copy());
         MultiblockAssemblyService.Result second = MultiblockAssemblyService.build(player, controller, false);
 
-        helper.assertTrue(second.changedBlocks() == 1, "Second build places only the replenished input bus");
+        helper.assertTrue(second.changedBlocks() == 3, "Second build places all replenished placements");
+        helper.assertTrue(helper.getLevel().getBlockState(firstPosition).is(firstPlacement.state().getBlock()), "First placement is built");
         helper.assertTrue(helper.getLevel().getBlockState(missingPosition).is(missingPlacement.state().getBlock()), "Missing placement is built");
+        helper.assertTrue(helper.getLevel().getBlockState(laterAffordablePosition).is(laterPlacement.state().getBlock()), "Later placement is built");
         helper.succeed();
     }
 

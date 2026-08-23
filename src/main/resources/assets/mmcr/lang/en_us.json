@@ -307,6 +307,7 @@
   "message.mmcr.terminal.build.none": "Structure already formed",
   "message.mmcr.terminal.build.success": "Built %s blocks",
   "message.mmcr.terminal.build.accepted": "Build task accepted for %s blocks",
+  "message.mmcr.terminal.build.completed": "Build task completed: %s blocks placed",
   "message.mmcr.terminal.build.busy": "A build task is already active",
   "message.mmcr.terminal.demolish.limit": "Demolished %s blocks, hit the per-use limit %s",
   "message.mmcr.terminal.demolish.none": "No matching structure blocks to demolish",

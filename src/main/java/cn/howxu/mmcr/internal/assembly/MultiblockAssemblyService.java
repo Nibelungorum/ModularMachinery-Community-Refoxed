@@ -3,11 +3,13 @@ package cn.howxu.mmcr.internal.assembly;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
@@ -20,7 +22,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Consumer;
+import java.util.stream.Stream;
+import java.util.function.Predicate;
 
 /**
  * Shared synchronous executor for multiblock build and demolish operations.
@@ -57,7 +60,10 @@ public final class MultiblockAssemblyService {
         private final BlockPos controllerKey;
         private final List<Placement> placements;
         private final int budget;
+        private final List<Placement> skippedPlacements = new ArrayList<>();
         private int nextIndex;
+        private int placedCount;
+        private boolean completionReported;
 
         private BuildTask(BlockPos controllerKey, List<Placement> placements, int budget) {
             this.controllerKey = controllerKey.immutable();
@@ -76,10 +82,14 @@ public final class MultiblockAssemblyService {
             return controllerKey;
         }
 
-        public int advance(Consumer<Placement> placementAction) {
+        public int advance(Predicate<Placement> placementAction) {
             int end = Math.min(nextIndex + budget, placements.size());
             int advanced = end - nextIndex;
-            while (nextIndex < end) placementAction.accept(placements.get(nextIndex++));
+            while (nextIndex < end) {
+                Placement placement = placements.get(nextIndex++);
+                if (placementAction.test(placement)) placedCount++;
+                else skippedPlacements.add(placement);
+            }
             return advanced;
         }
 
@@ -94,6 +104,22 @@ public final class MultiblockAssemblyService {
         public List<ItemStack> unconsumedRequirements() {
             return unconsumedPlacements().stream().map(placement -> placement.requirement().copy()).toList();
         }
+
+        public List<ItemStack> refundRequirements() {
+            return Stream.concat(skippedPlacements.stream(), unconsumedPlacements().stream())
+                    .map(placement -> placement.requirement().copy())
+                    .toList();
+        }
+
+        public int placedCount() {
+            return placedCount;
+        }
+
+        public Optional<Component> takeCompletionReport() {
+            if (!isComplete() || completionReported) return Optional.empty();
+            completionReported = true;
+            return Optional.of(Component.translatable("message.mmcr.terminal.build.completed", placedCount));
+        }
     }
 
     public static final class BuildTaskRegistry {
@@ -103,7 +129,7 @@ public final class MultiblockAssemblyService {
             return tasks.putIfAbsent(task.controllerKey(), task) == null;
         }
 
-        public int advance(BlockPos controllerKey, Consumer<Placement> placementAction) {
+        public int advance(BlockPos controllerKey, Predicate<Placement> placementAction) {
             BuildTask task = tasks.get(controllerKey);
             return task == null ? 0 : task.advance(placementAction);
         }
@@ -166,7 +192,7 @@ public final class MultiblockAssemblyService {
             source.extractAll(aggregateRequirements(placements));
         }
         BuildTask task = BuildTask.create(controller.getBlockPos(), placements,
-                cn.howxu.mmcr.config.Config.BUILD_BLOCKS_PER_TICK.get());
+                Config.BUILD_BLOCKS_PER_TICK.get());
         if (!controller.startBuildTask(task, player)) {
             return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.busy"));
         }
@@ -217,7 +243,7 @@ public final class MultiblockAssemblyService {
                     .findFirst()
                     .ifPresent(selected::add);
         }
-        return selected;
+        return selected.size() == placements.size() ? selected : List.of();
     }
 
     private static ItemStack requirementFor(BlockState state) {

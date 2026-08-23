@@ -307,6 +307,7 @@
   "message.mmcr.terminal.build.none": "结构已成型",
   "message.mmcr.terminal.build.success": "已搭建 %s 个方块",
   "message.mmcr.terminal.build.accepted": "已接受搭建任务，共 %s 个方块",
+  "message.mmcr.terminal.build.completed": "搭建任务已完成，共放置 %s 个方块",
   "message.mmcr.terminal.build.busy": "已有搭建任务正在进行",
   "message.mmcr.terminal.demolish.limit": "已拆除 %s 个方块，达到单次上限 %s",
   "message.mmcr.terminal.demolish.none": "没有可拆除的结构方块",

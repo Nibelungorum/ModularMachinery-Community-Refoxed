@@ -100,7 +100,7 @@ class MultiblockAssemblyServiceTest {
     }
 
     @Test
-    void selectsAllAffordablePlacementsAndSkipsMissingMaterials() {
+    void rejectsAllPlacementsWhenAnyMaterialIsMissing() {
         StructureItemSource source = PlayerInventoryStructureItemSource.forStacks(List.of(
                 itemStack(Items.STONE, 2), itemStack(Items.DIRT, 1)));
         List<MultiblockAssemblyService.Placement> placements = List.of(
@@ -109,10 +109,7 @@ class MultiblockAssemblyServiceTest {
                 new MultiblockAssemblyService.Placement(BlockPos.ZERO.above(2), Blocks.STONE.defaultBlockState(), itemStack(Items.STONE, 1)),
                 new MultiblockAssemblyService.Placement(BlockPos.ZERO.above(3), Blocks.STONE.defaultBlockState(), itemStack(Items.STONE, 1)));
 
-        assertEquals(List.of(BlockPos.ZERO, BlockPos.ZERO.above(), BlockPos.ZERO.above(2)),
-                MultiblockAssemblyService.extractAvailablePlacements(placements, source).stream()
-                        .map(MultiblockAssemblyService.Placement::pos)
-                        .toList());
+        assertTrue(MultiblockAssemblyService.extractAvailablePlacements(placements, source).isEmpty());
     }
 
     @Test
@@ -150,9 +147,9 @@ class MultiblockAssemblyServiceTest {
         MultiblockAssemblyService.BuildTask task = MultiblockAssemblyService.BuildTask.create(
                 BlockPos.ZERO, placements, 2);
 
-        assertEquals(2, task.advance(placement -> placed.add(placement.pos())));
-        assertEquals(2, task.advance(placement -> placed.add(placement.pos())));
-        assertEquals(1, task.advance(placement -> placed.add(placement.pos())));
+         assertEquals(2, task.advance(placement -> placed.add(placement.pos()) || true));
+         assertEquals(2, task.advance(placement -> placed.add(placement.pos()) || true));
+         assertEquals(1, task.advance(placement -> placed.add(placement.pos()) || true));
         assertTrue(task.isComplete());
         assertEquals(5, placed.size());
     }
@@ -164,9 +161,9 @@ class MultiblockAssemblyServiceTest {
                 BlockPos.ZERO, List.of(new MultiblockAssemblyService.Placement(
                         BlockPos.ZERO, Blocks.STONE.defaultBlockState(), itemStack(Items.STONE, 1))), 4);
 
-        task.advance(placement -> placed.add(placement.pos()));
+        task.advance(placement -> placed.add(placement.pos()) || true);
 
-        assertEquals(0, task.advance(placement -> placed.add(placement.pos())));
+        assertEquals(0, task.advance(placement -> placed.add(placement.pos()) || true));
         assertEquals(1, placed.size());
     }
 
@@ -190,10 +187,33 @@ class MultiblockAssemblyServiceTest {
         MultiblockAssemblyService.BuildTask task = MultiblockAssemblyService.BuildTask.create(
                 BlockPos.ZERO, placements, 1);
 
-        task.advance(ignored -> {});
+        task.advance(ignored -> true);
 
         assertEquals(List.of(BlockPos.ZERO.east(), BlockPos.ZERO.east(2)),
                 task.unconsumedPlacements().stream().map(MultiblockAssemblyService.Placement::pos).toList());
+    }
+
+    @Test
+    void skippedPlacementsAreRefundableAfterTaskCompletion() {
+        MultiblockAssemblyService.BuildTask task = MultiblockAssemblyService.BuildTask.create(
+                BlockPos.ZERO, List.of(new MultiblockAssemblyService.Placement(
+                        BlockPos.ZERO, Blocks.STONE.defaultBlockState(), itemStack(Items.STONE, 1))), 1);
+
+        assertEquals(1, task.advance(ignored -> false));
+        assertTrue(task.isComplete());
+        assertEquals(List.of(Items.STONE), task.refundRequirements().stream().map(ItemStack::getItem).toList());
+    }
+
+    @Test
+    void completionReportIsAvailableOnlyOnce() {
+        MultiblockAssemblyService.BuildTask task = MultiblockAssemblyService.BuildTask.create(
+                BlockPos.ZERO, List.of(new MultiblockAssemblyService.Placement(
+                        BlockPos.ZERO, Blocks.STONE.defaultBlockState(), itemStack(Items.STONE, 1))), 1);
+
+        task.advance(ignored -> true);
+
+        assertTrue(task.takeCompletionReport().isPresent());
+        assertTrue(task.takeCompletionReport().isEmpty());
     }
 
     private static ItemStack itemStack(Item item, int count) {
