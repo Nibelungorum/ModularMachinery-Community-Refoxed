@@ -45,6 +45,9 @@ dependencies {
     // runtimeOnly "curse.maven:forgematica-912441:8385300"
     // runtimeOnly "curse.maven:mafglib-910766:8533026"
     // runtimeOnly "maven.modrinth:bsJhdceD:jJ23wJ7U"
+
+    // sodium
+    localRuntime "curse.maven:sodium-394468:8396481"
 }
 
 dependencies {
