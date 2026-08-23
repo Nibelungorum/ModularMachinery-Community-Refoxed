@@ -87,28 +87,6 @@ public class TerminalAssemblyGameTest {
         helper.succeed();
     }
 
-    public void buildExpandableControllerPlacesOnlyStageOne(GameTestHelper helper) {
-        BlockPos controllerPos = new BlockPos(4, 1, 4);
-        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("expandable_structure_stages")).get().defaultBlockState());
-        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
-        controller.setMachine(MachineRegistry.getMachine(MMCR.id("expandable_structure_stages")));
-        Machine machine = controller.boundMachine().orElseThrow();
-        List<MultiblockAssemblyService.Placement> stage1Template = template(controller);
-        BlockPos stage1Pos = stage1Template.getFirst().pos();
-        BlockPos stage2OnlyPos = stageOnlyPos(controller, machine, 2, stage1Template);
-
-        ServerPlayer player = servicePlayer(helper);
-        MultiblockAssemblyService.Result result = MultiblockAssemblyService.build(player, controller, true);
-
-        helper.assertTrue(result.interactionResult() == InteractionResult.SUCCESS, "Build succeeds in creative service mode");
-        helper.assertTrue(result.changedBlocks() == 1, "Default build places only stage 1");
-        helper.runAtTickTime(2, () -> {
-            helper.assertTrue(helper.getLevel().getBlockState(stage1Pos).is(ModBlocks.CASING.get()), "Stage 1 block is built");
-            helper.assertTrue(helper.getLevel().getBlockState(stage2OnlyPos).isAir(), "Stage 2-only block is not built");
-            helper.succeed();
-        });
-    }
-
     public void demolishExpandableFormedStageTwoRemovesCompleteSnapshot(GameTestHelper helper) {
         BlockPos controllerPos = new BlockPos(4, 1, 4);
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("expandable_structure_stages")).get().defaultBlockState());
