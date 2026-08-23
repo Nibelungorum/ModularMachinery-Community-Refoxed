@@ -7,14 +7,15 @@ import cn.howxu.mmcr.client.preview.world.WorldPreviewMesh;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshCache;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshCompiler;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshKey;
-import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshSubmitter;
-import cn.howxu.mmcr.client.preview.world.UploadedWorldPreviewMesh;
-import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshUploader;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.block.BlockModelRenderState;
 import net.minecraft.client.renderer.block.model.BlockDisplayContext;
 import net.minecraft.client.renderer.block.model.BlockModel;
+import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
+import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
@@ -26,7 +27,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 
 import java.util.Comparator;
@@ -104,13 +105,15 @@ public final class MultiblockPreviewClientHandler {
     }
 
     @SubscribeEvent
-    public static void onSubmitCustomGeometry(SubmitCustomGeometryEvent event) {
+    public static void onRenderLevelStage(RenderLevelStageEvent event) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level == null || controllerPos == null || !minecraft.level.dimension().equals(dimension)) return;
         if (!isActive(minecraft.level.getGameTime())) {
             clear();
             return;
         }
+        if (!(event instanceof RenderLevelStageEvent.AfterOpaqueBlocks)
+                && !(event instanceof RenderLevelStageEvent.AfterTranslucentBlocks)) return;
         render(event, minecraft);
     }
 
@@ -244,24 +247,36 @@ public final class MultiblockPreviewClientHandler {
         return new WorldPreviewMeshKey(dimension, controllerPos, selectedLayer, visibleEntriesCameraCell);
     }
 
-    private static void render(SubmitCustomGeometryEvent event, Minecraft minecraft) {
-        PoseStack poseStack = event.getPoseStack();
+    private static void render(RenderLevelStageEvent event, Minecraft minecraft) {
         Vec3 camera = event.getLevelRenderState().cameraRenderState.pos;
         rebuildVisibleEntries(camera);
         if (visibleEntries.isEmpty()) return;
         WorldPreviewMeshKey key = worldMeshKey();
-        UploadedWorldPreviewMesh mesh = worldMeshCache.current(key) instanceof UploadedWorldPreviewMesh current
+        WorldPreviewMesh mesh = worldMeshCache.current(key) instanceof WorldPreviewMesh current
                 ? current : null;
         if (mesh == null) {
             WorldPreviewMesh compiled = WorldPreviewMeshCompiler.compile(minecraft.level, controllerPos,
                     visibleEntries, selectedLayer, camera, new AtomicBoolean());
-            UploadedWorldPreviewMesh uploaded = WorldPreviewMeshUploader.upload(compiled);
             if (worldMeshRequest == null) worldMeshRequest = worldMeshCache.requestToken(key);
-            worldMeshCache.publish(worldMeshRequest, uploaded);
-            mesh = worldMeshCache.current(key) instanceof UploadedWorldPreviewMesh ready ? ready : null;
+            worldMeshCache.publish(worldMeshRequest, compiled);
+            mesh = worldMeshCache.current(key) instanceof WorldPreviewMesh ready ? ready : null;
             if (mesh == null) return;
         }
-        WorldPreviewMeshSubmitter.submit(mesh, poseStack, event.getSubmitNodeCollector(), camera, controllerPos);
+
+        RenderSystem.getModelViewStack().pushMatrix();
+        RenderSystem.getModelViewStack().set(event.getModelViewMatrix());
+        if (event instanceof RenderLevelStageEvent.AfterOpaqueBlocks) {
+            draw(mesh, ChunkSectionLayer.SOLID, RenderTypes.solidMovingBlock());
+            draw(mesh, ChunkSectionLayer.CUTOUT, RenderTypes.cutoutMovingBlock());
+        } else {
+            draw(mesh, ChunkSectionLayer.TRANSLUCENT, RenderTypes.translucentMovingBlock());
+        }
+        RenderSystem.getModelViewStack().popMatrix();
+    }
+
+    private static void draw(WorldPreviewMesh mesh, ChunkSectionLayer layer, RenderType renderType) {
+        var data = mesh.meshes().get(layer);
+        if (data != null) renderType.draw(data);
     }
 
     private static CachedModel resolveModelForState(BlockState state, Function<BlockState, BlockModel> resolver) {
