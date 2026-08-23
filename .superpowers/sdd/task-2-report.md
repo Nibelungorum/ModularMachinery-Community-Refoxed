@@ -46,6 +46,7 @@ The compiler batches block and fluid output by `ChunkSectionLayer`, resolves eac
 - Connected `CompilationPlan` to production compilation. The compiler now uses planned entry filtering and planned solid/cutout/translucent routing for block output, while planned fluid routing always targets translucent output.
 - Added an independent air-filter test where air is present on the selected layer.
 - Added a real `compile` failure-path test that allocates the builder pack, injects a non-empty intermediate mesh, fails through compilation cleanup, and verifies both resources are closed.
+- Added a client-runtime test for translucent sort metadata through the public production compile path; it is skipped by the headless unit-test runtime when no `Minecraft` instance exists.
 - Changed the idempotence test to close a non-empty mesh resource and verify its buffer becomes invalid after the first close.
 - Kept full-bright lighting, block entity position tracking, final event submission, JEI, and PiP behavior unchanged.
 

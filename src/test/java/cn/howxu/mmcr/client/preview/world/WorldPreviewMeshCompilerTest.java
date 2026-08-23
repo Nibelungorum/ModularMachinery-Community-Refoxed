@@ -5,12 +5,14 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Assumptions;
 
 import java.util.List;
 import java.util.ArrayList;
@@ -118,6 +120,20 @@ class WorldPreviewMeshCompilerTest {
         assertThat(resources.get()).isNotNull();
         assertThat(resources.get().closed()).isTrue();
         assertThatThrownBy(intermediateMesh.get()::vertexBuffer).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void productionCompileCreatesTranslucentSortMetadata() {
+        Assumptions.assumeTrue(Minecraft.getInstance() != null);
+        WorldPreviewMesh mesh = WorldPreviewMeshCompiler.compile(null, BlockPos.ZERO,
+                List.of(entry(0, Blocks.WATER)), Integer.MAX_VALUE,
+                new net.minecraft.world.phys.Vec3(0, 0, 0), new AtomicBoolean());
+        try {
+            assertThat(mesh.meshes()).containsKey(ChunkSectionLayer.TRANSLUCENT);
+            assertThat(mesh.translucentSortState()).isNotNull();
+        } finally {
+            mesh.close();
+        }
     }
 
     @Test
