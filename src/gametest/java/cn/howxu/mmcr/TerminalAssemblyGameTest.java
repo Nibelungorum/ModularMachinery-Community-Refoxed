@@ -10,9 +10,6 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestInfo;
-import net.minecraft.gametest.framework.GameTestListener;
-import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
@@ -271,8 +268,9 @@ public class TerminalAssemblyGameTest {
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(MachineRegistry.getMachine(MMCR.id("test_cube")));
         List<MultiblockAssemblyService.Placement> template = template(controller);
-        new ConfigFixture(helper, 1, null);
+        controller.setBuildBlocksPerTickForTesting(1);
         controller.setStructureCheckIntervalForTesting(1);
+        controller.setStructureScanBatchesForTesting(Config.DEFAULT_STRUCTURE_SCAN_BATCHES);
         long acceptedAt = helper.getLevel().getGameTime();
         ServerPlayer player = servicePlayer(helper);
         MultiblockAssemblyService.Result accepted = MultiblockAssemblyService.build(player, controller, true);
@@ -311,7 +309,7 @@ public class TerminalAssemblyGameTest {
         List<MultiblockAssemblyService.Placement> template = template(controller);
         MultiblockAssemblyService.Placement changedPlacement = template.getLast();
         BlockPos changedPos = changedPlacement.pos();
-        new ConfigFixture(helper, null, null);
+        controller.setStructureScanBatchesForTesting(Config.DEFAULT_STRUCTURE_SCAN_BATCHES);
         controller.setStructureCheckIntervalForTesting(1);
         for (MultiblockAssemblyService.Placement placement : template) {
             helper.getLevel().setBlock(placement.pos(), placement.state(), 3);
@@ -345,6 +343,7 @@ public class TerminalAssemblyGameTest {
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(MachineRegistry.getMachine(MMCR.id("expandable_structure_stages")));
         controller.setStructureCheckIntervalForTesting(1);
+        controller.setStructureScanBatchesForTesting(Config.DEFAULT_STRUCTURE_SCAN_BATCHES);
         ServerPlayer player = servicePlayer(helper);
         int[] diagnostics = {0};
         controller.setStructureDiagnosticCallbackForTesting(() -> diagnostics[0]++);
@@ -353,7 +352,6 @@ public class TerminalAssemblyGameTest {
         helper.assertTrue(controller.isStructureDiagnosticRequestedForTesting(),
                 "Shift-right-click diagnostic request is recorded before the ticker runs");
         helper.runAtTickTime(2, () -> {
-            controller.serverTick();
             helper.assertTrue(!controller.isStructureDiagnosticRequestedForTesting(),
                     "Small-structure mismatch diagnostic is delivered by the scan result: requested="
                             + controller.isStructureDiagnosticRequestedForTesting() + " deliveries=" + diagnostics[0]
@@ -370,7 +368,7 @@ public class TerminalAssemblyGameTest {
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(MachineRegistry.getMachine(MMCR.id("test_cube")));
         List<MultiblockAssemblyService.Placement> template = template(controller);
-        new ConfigFixture(helper, 1, null);
+        controller.setBuildBlocksPerTickForTesting(1);
         ServerPlayer player = servicePlayer(helper);
         for (MultiblockAssemblyService.Placement placement : template) {
             player.getInventory().add(placement.requirement().copy());
@@ -424,40 +422,4 @@ public class TerminalAssemblyGameTest {
                 ClientInformation.createDefault());
     }
 
-    private static final class ConfigFixture implements GameTestListener {
-        private final int previousBudget = Config.BUILD_BLOCKS_PER_TICK.get();
-        private final int previousInterval = Config.MACHINE_CHECK_INTERVAL_TICKS.get();
-        private boolean restored;
-
-        private ConfigFixture(GameTestHelper helper, Integer budget, Integer interval) {
-            helper.testInfo.addListener(this);
-            if (budget != null) Config.BUILD_BLOCKS_PER_TICK.set(budget);
-            if (interval != null) Config.MACHINE_CHECK_INTERVAL_TICKS.set(interval);
-        }
-
-        @Override
-        public void testPassed(GameTestInfo testInfo, GameTestRunner runner) {
-            restore();
-        }
-
-        @Override
-        public void testFailed(GameTestInfo testInfo, GameTestRunner runner) {
-            restore();
-        }
-
-        private void restore() {
-            if (restored) return;
-            restored = true;
-            Config.BUILD_BLOCKS_PER_TICK.set(previousBudget);
-            Config.MACHINE_CHECK_INTERVAL_TICKS.set(previousInterval);
-        }
-
-        @Override
-        public void testStructureLoaded(GameTestInfo testInfo) {
-        }
-
-        @Override
-        public void testAddedForRerun(GameTestInfo originalTest, GameTestInfo newTest, GameTestRunner runner) {
-        }
-    }
 }

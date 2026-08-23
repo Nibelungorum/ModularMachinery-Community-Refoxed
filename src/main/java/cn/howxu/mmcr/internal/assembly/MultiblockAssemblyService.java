@@ -3,7 +3,6 @@ package cn.howxu.mmcr.internal.assembly;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.BlockPos;
@@ -205,7 +204,7 @@ public final class MultiblockAssemblyService {
             source.extractAll(aggregateRequirements(placements));
         }
         BuildTask task = BuildTask.create(controller.getBlockPos(), placements,
-                Config.BUILD_BLOCKS_PER_TICK.get(), !creative);
+                controller.buildBlocksPerTick(), !creative);
         if (!controller.startBuildTask(task, player)) {
             return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.busy"));
         }

@@ -152,6 +152,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private int scanBatchCountForTesting;
     private final Map<Long, Integer> scanBatchesPerTickForTesting = new LinkedHashMap<>();
     private @Nullable Integer structureCheckIntervalOverrideForTesting;
+    private @Nullable Integer structureScanBatchesOverrideForTesting;
+    private @Nullable Integer buildBlocksPerTickOverrideForTesting;
     private boolean clientActive;
     private Boolean lastBroadcastFormed;
     private boolean lastBroadcastActive;
@@ -285,6 +287,16 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public int structureScanCursorForTesting() { return structureScan == null ? -1 : structureScan.cursor(); }
     public void setStructureCheckIntervalForTesting(@Nullable Integer interval) {
         structureCheckIntervalOverrideForTesting = interval;
+    }
+    public void setStructureScanBatchesForTesting(@Nullable Integer batches) {
+        structureScanBatchesOverrideForTesting = batches;
+    }
+    public void setBuildBlocksPerTickForTesting(@Nullable Integer budget) {
+        buildBlocksPerTickOverrideForTesting = budget;
+    }
+    public int buildBlocksPerTick() {
+        if (buildBlocksPerTickOverrideForTesting != null) return buildBlocksPerTickOverrideForTesting;
+        return Config.BUILD_BLOCKS_PER_TICK.get();
     }
 
     public void onMachineDestroyed() {
@@ -1501,7 +1513,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return true;
     }
 
-    private static int structureScanBatches() {
+    private int structureScanBatches() {
+        if (structureScanBatchesOverrideForTesting != null) return structureScanBatchesOverrideForTesting;
         try { return Config.STRUCTURE_SCAN_BATCHES.get(); }
         catch (IllegalStateException ignored) { return Config.DEFAULT_STRUCTURE_SCAN_BATCHES; }
     }
@@ -2679,6 +2692,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public void setRemoved() {
         invalidateStructureScan(StructureMatcher.InvalidationReason.REMOVED);
         if (level != null && !level.isClientSide()) cancelBuildTask();
+        structureCheckIntervalOverrideForTesting = null;
+        structureScanBatchesOverrideForTesting = null;
+        buildBlocksPerTickOverrideForTesting = null;
         super.setRemoved();
         if (level != null && !level.isClientSide()) resetMachine(true, false);
     }
