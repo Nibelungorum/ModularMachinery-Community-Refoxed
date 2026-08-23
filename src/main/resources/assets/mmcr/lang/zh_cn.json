@@ -60,7 +60,7 @@
 
   "command.mmcr.build.default": "(默认)",
   "command.mmcr.build.no_machine": "[DEBUG MMCR] 未注册机器 %s。请使用 /mmcr reload 或检查 KubeJS 绑定。",
-  "command.mmcr.build.success": "MMCR 已构建 %s, 位置 %s%s",
+  "command.mmcr.build.accepted": "MMCR 已接受搭建任务，共 %s 个方块，位置 %s%s",
   "command.mmcr.export.controller_outside": "[DEBUG MMCR] 所选区域未包含控制器。",
   "command.mmcr.export.failed": "[DEBUG MMCR] 导出失败: %s",
   "command.mmcr.export.incomplete_selection": "[DEBUG MMCR] 检测器选择不完整。请依次选择控制器、第一个点和第二个点。",
@@ -306,6 +306,8 @@
   "message.mmcr.terminal.build.missing": "缺少搭建所需方块",
   "message.mmcr.terminal.build.none": "结构已成型",
   "message.mmcr.terminal.build.success": "已搭建 %s 个方块",
+  "message.mmcr.terminal.build.accepted": "已接受搭建任务，共 %s 个方块",
+  "message.mmcr.terminal.build.busy": "已有搭建任务正在进行",
   "message.mmcr.terminal.demolish.limit": "已拆除 %s 个方块，达到单次上限 %s",
   "message.mmcr.terminal.demolish.none": "没有可拆除的结构方块",
   "message.mmcr.terminal.demolish.success": "已拆除 %s 个方块",

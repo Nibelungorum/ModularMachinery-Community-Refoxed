@@ -60,7 +60,7 @@
 
   "command.mmcr.build.default": "(Default)",
   "command.mmcr.build.no_machine": "[DEBUG MMCR] No machine %s registered. Use /mmcr reload or check KubeJS bindings.",
-  "command.mmcr.build.success": "MMCR built %s at %s%s",
+  "command.mmcr.build.accepted": "MMCR build task accepted for %s blocks at %s%s",
   "command.mmcr.export.controller_outside": "[DEBUG MMCR] Selected region does not contain the controller.",
   "command.mmcr.export.failed": "[DEBUG MMCR] Export failed: %s",
   "command.mmcr.export.incomplete_selection": "[DEBUG MMCR] Detector selection incomplete. Pick controller, first point, and second point in order.",
@@ -306,6 +306,8 @@
   "message.mmcr.terminal.build.missing": "Missing required structure blocks",
   "message.mmcr.terminal.build.none": "Structure already formed",
   "message.mmcr.terminal.build.success": "Built %s blocks",
+  "message.mmcr.terminal.build.accepted": "Build task accepted for %s blocks",
+  "message.mmcr.terminal.build.busy": "A build task is already active",
   "message.mmcr.terminal.demolish.limit": "Demolished %s blocks, hit the per-use limit %s",
   "message.mmcr.terminal.demolish.none": "No matching structure blocks to demolish",
   "message.mmcr.terminal.demolish.success": "Demolished %s blocks",

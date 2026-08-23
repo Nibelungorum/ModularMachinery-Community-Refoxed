@@ -34,6 +34,8 @@ import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
+import cn.howxu.mmcr.internal.assembly.PlayerInventoryStructureItemSink;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionCoordinator;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
@@ -178,6 +180,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private Map<UUID, Long> previewReceivers = new LinkedHashMap<>();
     private @Nullable Runnable factoryCapacityInvalidationCallbackForTesting;
     private @Nullable ValueInput pendingFactorySchedulerInput;
+    private @Nullable MultiblockAssemblyService.BuildTaskRegistry buildTasks;
+    private @Nullable ServerPlayer buildTaskOwner;
+    private int buildTaskAge;
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
@@ -592,6 +597,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (level == null || level.isClientSide() || isRemoved()) {
             return;
         }
+        if (advanceBuildTask()) return;
         boolean activeBefore = isRuntimeActive();
         if (machine == null) bindDefaultMachine();
 
@@ -653,6 +659,63 @@ public class MachineControllerBlockEntity extends BlockEntity {
             }
         }
         broadcastStateIfChanged(activeBefore);
+    }
+
+    public boolean hasActiveBuildTask() {
+        return buildTaskRegistry().hasActiveTask(getBlockPos());
+    }
+
+    public boolean startBuildTask(MultiblockAssemblyService.BuildTask task, ServerPlayer owner) {
+        if (!buildTaskRegistry().submit(task)) return false;
+        buildTaskOwner = owner;
+        buildTaskAge = 0;
+        return true;
+    }
+
+    private boolean advanceBuildTask() {
+        if (!hasActiveBuildTask()) return false;
+        buildTaskAge++;
+        ServerPlayer owner = buildTaskOwner;
+        if (owner == null || owner.isRemoved() || owner.level() != level
+                || buildTaskAge > Config.BUILD_TASK_TIMEOUT_TICKS.get()) {
+            cancelBuildTask();
+            return true;
+        }
+        buildTaskRegistry().advance(getBlockPos(), placement -> {
+            if (!level.getBlockState(placement.pos()).isAir()) return;
+            level.setBlock(placement.pos(), placement.state(), 3);
+        });
+        var task = buildTaskRegistry().cancel(getBlockPos());
+        if (task != null && !task.isComplete()) {
+            buildTaskRegistry().submit(task);
+        } else if (task != null) {
+            buildTaskOwner = null;
+            buildTaskAge = 0;
+            structureDirty = true;
+        }
+        return true;
+    }
+
+    private void cancelBuildTask() {
+        var task = buildTaskRegistry().cancel(getBlockPos());
+        if (task == null) return;
+        ServerPlayer owner = buildTaskOwner;
+        if (owner != null && owner.level() == level) {
+            PlayerInventoryStructureItemSink sink = new PlayerInventoryStructureItemSink(owner);
+            task.unconsumedRequirements().forEach(sink::accept);
+        } else {
+            task.unconsumedRequirements().forEach(stack -> {
+                if (!stack.isEmpty()) level.addFreshEntity(new net.minecraft.world.entity.item.ItemEntity(
+                        level, worldPosition.getX() + 0.5, worldPosition.getY() + 0.5, worldPosition.getZ() + 0.5, stack));
+            });
+        }
+        buildTaskOwner = null;
+        buildTaskAge = 0;
+    }
+
+    private MultiblockAssemblyService.BuildTaskRegistry buildTaskRegistry() {
+        if (buildTasks == null) buildTasks = new MultiblockAssemblyService.BuildTaskRegistry();
+        return buildTasks;
     }
 
     private void tickSingleActiveRecipe() {
@@ -2291,6 +2354,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     @Override
     public void setRemoved() {
+        if (level != null && !level.isClientSide()) cancelBuildTask();
         super.setRemoved();
         if (level != null && !level.isClientSide()) resetMachine(true, false);
     }

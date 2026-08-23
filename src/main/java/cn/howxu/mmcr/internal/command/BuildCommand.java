@@ -87,7 +87,7 @@ public final class BuildCommand {
         ctx.getSource().sendSuccess(() -> Component.translatable(serviceResult.message().key(), serviceResult.message().args())
                         .append(Component.literal(" "))
                         .append(Component.translatable(
-                                "command.mmcr.build.success", machine.displayName(), controller.toShortString(),
+                                "command.mmcr.build.accepted", serviceResult.changedBlocks(), machine.displayName(), controller.toShortString(),
                                 selection.isFallback() ? Component.translatable("command.mmcr.build.default")
                                         : Component.empty())),
                 true);

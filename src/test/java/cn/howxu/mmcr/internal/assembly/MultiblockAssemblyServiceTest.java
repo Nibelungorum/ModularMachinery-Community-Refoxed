@@ -140,6 +140,62 @@ class MultiblockAssemblyServiceTest {
         assertEquals(163840, MultiblockAssemblyService.limitOperation(placements).size());
     }
 
+    @Test
+    void buildTaskConsumesOnlyItsTickBudget() {
+        List<BlockPos> placed = new java.util.ArrayList<>();
+        List<MultiblockAssemblyService.Placement> placements = IntStream.range(0, 5)
+                .mapToObj(index -> new MultiblockAssemblyService.Placement(
+                        new BlockPos(index, 0, 0), Blocks.STONE.defaultBlockState(), itemStack(Items.STONE, 1)))
+                .toList();
+        MultiblockAssemblyService.BuildTask task = MultiblockAssemblyService.BuildTask.create(
+                BlockPos.ZERO, placements, 2);
+
+        assertEquals(2, task.advance(placement -> placed.add(placement.pos())));
+        assertEquals(2, task.advance(placement -> placed.add(placement.pos())));
+        assertEquals(1, task.advance(placement -> placed.add(placement.pos())));
+        assertTrue(task.isComplete());
+        assertEquals(5, placed.size());
+    }
+
+    @Test
+    void completedTaskCannotBeAdvancedTwice() {
+        List<BlockPos> placed = new java.util.ArrayList<>();
+        MultiblockAssemblyService.BuildTask task = MultiblockAssemblyService.BuildTask.create(
+                BlockPos.ZERO, List.of(new MultiblockAssemblyService.Placement(
+                        BlockPos.ZERO, Blocks.STONE.defaultBlockState(), itemStack(Items.STONE, 1))), 4);
+
+        task.advance(placement -> placed.add(placement.pos()));
+
+        assertEquals(0, task.advance(placement -> placed.add(placement.pos())));
+        assertEquals(1, placed.size());
+    }
+
+    @Test
+    void registryRejectsDuplicateControllerTasks() {
+        MultiblockAssemblyService.BuildTaskRegistry registry = new MultiblockAssemblyService.BuildTaskRegistry();
+        MultiblockAssemblyService.BuildTask task = MultiblockAssemblyService.BuildTask.create(
+                BlockPos.ZERO, List.of(), 1);
+
+        assertTrue(registry.submit(task));
+        assertFalse(registry.submit(MultiblockAssemblyService.BuildTask.create(BlockPos.ZERO, List.of(), 1)));
+        assertTrue(registry.hasActiveTask(BlockPos.ZERO));
+    }
+
+    @Test
+    void cancelledTaskExposesOnlyUnconsumedPlacementsForRefund() {
+        List<MultiblockAssemblyService.Placement> placements = IntStream.range(0, 3)
+                .mapToObj(index -> new MultiblockAssemblyService.Placement(
+                        new BlockPos(index, 0, 0), Blocks.STONE.defaultBlockState(), itemStack(Items.STONE, 1)))
+                .toList();
+        MultiblockAssemblyService.BuildTask task = MultiblockAssemblyService.BuildTask.create(
+                BlockPos.ZERO, placements, 1);
+
+        task.advance(ignored -> {});
+
+        assertEquals(List.of(BlockPos.ZERO.east(), BlockPos.ZERO.east(2)),
+                task.unconsumedPlacements().stream().map(MultiblockAssemblyService.Placement::pos).toList());
+    }
+
     private static ItemStack itemStack(Item item, int count) {
         return new ItemStack(Holder.direct(item, DataComponentMap.EMPTY), count);
     }
