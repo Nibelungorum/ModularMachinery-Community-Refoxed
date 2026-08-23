@@ -72,7 +72,11 @@ public final class MultiblockPreviewClientHandler {
 
     public static void show(ResourceKey<Level> newDimension, BlockPos newControllerPos,
                             List<MultiblockPreviewSnapshot.Entry> newEntries, int durationTicks) {
+        MMCR.LOG.debug("Client preview show request: dimension={}, controller={}, entries={}, durationTicks={}, currentLevel={}",
+                newDimension, newControllerPos, newEntries.size(), durationTicks,
+                Minecraft.getInstance().level == null ? "null" : Minecraft.getInstance().level.dimension());
         if (newEntries.isEmpty()) {
+            MMCR.LOG.debug("Client preview show request is empty; clearing matching preview");
             clearPreview(newDimension, newControllerPos);
             return;
         }
@@ -101,6 +105,8 @@ public final class MultiblockPreviewClientHandler {
         worldMeshRequest = worldMeshCache.requestToken(worldMeshKey());
         expiresAtTick = now + Math.max(1, durationTicks);
         rebuildVisibleEntries();
+        MMCR.LOG.debug("Client preview state updated: entries={}, layers={}, selectedLayer={}, expiresAtTick={}, visibleEntries={}",
+                entries.size(), layers, selectedLayer, expiresAtTick, visibleEntries.size());
     }
 
     @SubscribeEvent
@@ -115,10 +121,37 @@ public final class MultiblockPreviewClientHandler {
     }
 
     @SubscribeEvent
-    public static void onRenderLevelStage(RenderLevelStageEvent event) {
+    public static void onRenderLevelAfterOpaqueBlocks(RenderLevelStageEvent.AfterOpaqueBlocks event) {
+        onRenderLevelStage(event);
+    }
+
+    @SubscribeEvent
+    public static void onRenderLevelAfterTranslucentBlocks(RenderLevelStageEvent.AfterTranslucentBlocks event) {
+        onRenderLevelStage(event);
+    }
+
+    private static void onRenderLevelStage(RenderLevelStageEvent event) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null || controllerPos == null || !minecraft.level.dimension().equals(dimension)) return;
+        MMCR.LOG.debug("Client preview render stage: stage={}, level={}, dimension={}, controller={}, active={}",
+                event.getClass().getSimpleName(), minecraft.level == null ? "null" : "present",
+                minecraft.level == null ? "null" : minecraft.level.dimension(), controllerPos,
+                minecraft.level != null && isActive(minecraft.level.getGameTime()));
+        if (minecraft.level == null) {
+            MMCR.LOG.debug("Skipping preview render: client level is null");
+            return;
+        }
+        if (controllerPos == null) {
+            MMCR.LOG.debug("Skipping preview render: controller position is null");
+            return;
+        }
+        if (!minecraft.level.dimension().equals(dimension)) {
+            MMCR.LOG.debug("Skipping preview render: dimension mismatch, current={}, preview={}",
+                    minecraft.level.dimension(), dimension);
+            return;
+        }
         if (!isActive(minecraft.level.getGameTime())) {
+            MMCR.LOG.debug("Skipping preview render: preview expired at tick {}, current tick={}",
+                    expiresAtTick, minecraft.level.getGameTime());
             clear();
             return;
         }
@@ -267,7 +300,11 @@ public final class MultiblockPreviewClientHandler {
     private static void render(RenderLevelStageEvent event, Minecraft minecraft) {
         Vec3 camera = event.getLevelRenderState().cameraRenderState.pos;
         rebuildVisibleEntries(camera);
-        if (visibleEntries.isEmpty()) return;
+        if (visibleEntries.isEmpty()) {
+            MMCR.LOG.debug("Skipping preview render: no visible entries, totalEntries={}, selectedLayer={}, camera={}",
+                    entries.size(), selectedLayer, camera);
+            return;
+        }
         WorldPreviewMeshKey key = worldMeshKey();
         WorldPreviewGpuMesh mesh = gpuMeshKey != null && gpuMeshKey.equals(key) ? gpuMesh : null;
         if (mesh == null) {
@@ -278,10 +315,13 @@ public final class MultiblockPreviewClientHandler {
             }
             AutoCloseable pending = worldMeshCache.takeCurrent(key);
             if (pending instanceof WorldPreviewMesh compiled) {
+                MMCR.LOG.debug("Uploading compiled preview mesh: key={}, visibleEntries={}", key, visibleEntries.size());
                 gpuMesh = WorldPreviewGpuMesh.upload(compiled);
                 gpuMeshKey = key;
                 mesh = gpuMesh;
             } else {
+                MMCR.LOG.debug("Preview mesh not ready; starting compilation: key={}, visibleEntries={}",
+                        key, visibleEntries.size());
                 startCompilation(key, minecraft, camera);
                 return;
             }
@@ -317,6 +357,7 @@ public final class MultiblockPreviewClientHandler {
         compilingWorldMeshRequest = request;
         compilingWorldMeshCancelled = cancelled;
         compilingWorldMesh = WORLD_MESH_COMPILER.submit(() -> {
+            MMCR.LOG.debug("Compiling preview mesh asynchronously: key={}, entries={}", key, compileEntries.size());
             WorldPreviewMesh result = null;
             try {
                 result = WorldPreviewMeshCompiler.compileSnapshot(input, compileController, compileEntries,
@@ -331,7 +372,12 @@ public final class MultiblockPreviewClientHandler {
                     compilingWorldMeshRequest = null;
                     compilingWorldMeshCancelled = null;
                 }
-                if (compiled != null) worldMeshCache.publish(request, compiled);
+                if (compiled != null) {
+                    MMCR.LOG.debug("Publishing compiled preview mesh: key={}", request.key());
+                    worldMeshCache.publish(request, compiled);
+                } else {
+                    MMCR.LOG.debug("Preview mesh compilation produced no mesh: key={}", request.key());
+                }
             });
         });
     }
