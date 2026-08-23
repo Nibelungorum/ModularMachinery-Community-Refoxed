@@ -82,6 +82,7 @@ public final class StructureMatcher {
         private final ScanOptions options;
         private final List<Integer> sentinelIndexes;
         private final Set<Integer> checkedSentinelIndexes = new HashSet<>();
+        private int sentinelCursor;
         private boolean sentinelsChecked;
         private int scanIndex;
         private @Nullable ScanResult result;
@@ -141,8 +142,8 @@ public final class StructureMatcher {
                 previousMismatch = null;
             }
             if (options.sentinelEnabled() && !sentinelsChecked) {
-                for (int index : sentinelIndexes) {
-                    if (checked >= budget) break;
+                while (sentinelCursor < sentinelIndexes.size() && checked < budget) {
+                    int index = sentinelIndexes.get(sentinelCursor++);
                     Map.Entry<BlockPos, BlockPredicate> entry = entries.get(index);
                     Mismatch mismatch = mismatchAt(entry.getKey(), entry.getValue(), level, ctrlPos,
                             structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity);
@@ -154,7 +155,7 @@ public final class StructureMatcher {
                         return result = new ScanResult(ScanStatus.MISMATCH, checked, mismatch, null);
                     }
                 }
-                sentinelsChecked = true;
+                sentinelsChecked = sentinelCursor == sentinelIndexes.size();
             }
             while (scanIndex < entries.size() && checked < budget) {
                 if (checkedSentinelIndexes.contains(scanIndex)) {
