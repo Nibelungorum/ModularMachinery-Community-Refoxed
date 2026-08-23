@@ -51,6 +51,8 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.Identifier;
+import com.mojang.authlib.GameProfile;
+import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.ProblemReporter;
@@ -104,6 +106,8 @@ import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MachineControllerBlockEntityTest {
@@ -3005,8 +3009,37 @@ class MachineControllerBlockEntityTest {
         tickController(controller, 10);
         controller.requestImmediateStructureCheck();
         assertThat(checks).hasValue(0);
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "structureScan")).isNull();
         tickController(controller, 1);
         assertThat(checks).hasValue(1);
+    }
+
+    @Test
+    void shift_right_click_requests_scan_without_running_it_in_the_interaction_callback() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        DynamicMachine machine = new DynamicMachine(MMCR.id("interaction_request_machine"),
+                "Interaction Request", onePortPattern(Blocks.IRON_BLOCK));
+        MachineControllerBlock block = testControllerBlock(machine);
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        setField(BlockEntity.class, controller, "worldPosition", controllerPos);
+        setField(BlockEntity.class, controller, "blockState", block.defaultBlockState());
+        ServerLevel level = serverLevel(Map.of(controllerPos, block), List.of(controller));
+        setField(BlockEntity.class, controller, "level", level);
+        setField(MachineControllerBlockEntity.class, controller, "structureDirty", false);
+        setField(MachineControllerBlockEntity.class, controller, "nextStructureCheckTick", 40L);
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+        ServerPlayer player = (ServerPlayer) unsafe.allocateInstance(InteractionServerPlayer.class);
+
+        Method interaction = MachineControllerBlock.class.getDeclaredMethod("useWithoutItem", BlockState.class,
+                Level.class, BlockPos.class, net.minecraft.world.entity.player.Player.class, BlockHitResult.class);
+        interaction.setAccessible(true);
+        interaction.invoke(block, block.defaultBlockState(), level, controllerPos, player,
+                new BlockHitResult(Vec3.ZERO, Direction.UP, controllerPos, false));
+
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "structureDirty")).isEqualTo(true);
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "structureScan")).isNull();
     }
 
     @Test
@@ -4355,6 +4388,28 @@ class MachineControllerBlockEntityTest {
         unsafeField.setAccessible(true);
         return (TestSoundController) ((sun.misc.Unsafe) unsafeField.get(null))
                 .allocateInstance(TestSoundController.class);
+    }
+
+    private static final class InteractionServerPlayer extends ServerPlayer {
+        private InteractionServerPlayer() {
+            super(null, null, new GameProfile(UUID.randomUUID(), "interaction-test"),
+                    ClientInformation.createDefault());
+        }
+
+        @Override
+        public boolean isShiftKeyDown() {
+            return true;
+        }
+
+        @Override
+        public ItemStack getMainHandItem() {
+            return ItemStack.EMPTY;
+        }
+
+        @Override
+        public ItemStack getOffhandItem() {
+            return ItemStack.EMPTY;
+        }
     }
 
     /** Test seam for counting finish sound dispatches. */

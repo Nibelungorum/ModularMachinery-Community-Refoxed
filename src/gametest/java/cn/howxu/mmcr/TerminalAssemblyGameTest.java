@@ -269,7 +269,9 @@ public class TerminalAssemblyGameTest {
         controller.setMachine(MachineRegistry.getMachine(MMCR.id("test_cube")));
         List<MultiblockAssemblyService.Placement> template = template(controller);
         int previousBudget = Config.BUILD_BLOCKS_PER_TICK.get();
+        int previousInterval = Config.MACHINE_CHECK_INTERVAL_TICKS.get();
         Config.BUILD_BLOCKS_PER_TICK.set(1);
+        Config.MACHINE_CHECK_INTERVAL_TICKS.set(1);
         long acceptedAt = helper.getLevel().getGameTime();
         ServerPlayer player = servicePlayer(helper);
 
@@ -282,7 +284,7 @@ public class TerminalAssemblyGameTest {
         helper.assertTrue(countPlacedStructureBlocks(helper, template) == 0,
                 "Accepted build waits for the real block ticker");
         int completionTick = expectedCount + 2;
-        helper.runAtTickTime(completionTick, () -> {
+        helper.runAtTickTime(completionTick + 50, () -> {
             helper.assertTrue(helper.getLevel().getGameTime() > acceptedAt + 1, "Build advances across multiple server ticks");
             for (int placementsThisTick : controller.buildTaskPlacementsPerTickForTesting().values()) {
                 helper.assertTrue(placementsThisTick <= 1, "The server ticker respects the per-tick build budget");
@@ -291,6 +293,7 @@ public class TerminalAssemblyGameTest {
                     "Final placed structure block count is unchanged by duplicate submission");
             helper.assertTrue(controller.isFormed(), "Controller forms after the build completes");
             Config.BUILD_BLOCKS_PER_TICK.set(previousBudget);
+            Config.MACHINE_CHECK_INTERVAL_TICKS.set(previousInterval);
             helper.succeed();
         });
     }

@@ -194,6 +194,7 @@ public class MachineControllerBlock extends Block implements EntityBlock {
                 && player instanceof ServerPlayer serverPlayer) {
             controller.sendStructurePreview(serverPlayer);
             controller.diagnoseFirstStructureMismatch(serverPlayer);
+            controller.requestImmediateStructureCheck();
             return InteractionResult.SUCCESS;
         }
 
