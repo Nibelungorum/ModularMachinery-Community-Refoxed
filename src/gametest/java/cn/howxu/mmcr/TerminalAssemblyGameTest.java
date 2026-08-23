@@ -1,6 +1,7 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
 import cn.howxu.mmcr.internal.assembly.PlayerInventoryStructureItemSource;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -251,10 +252,51 @@ public class TerminalAssemblyGameTest {
         helper.succeed();
     }
 
+    public void buildCompletesAcrossTicksAndRejectsDuplicateSubmission(GameTestHelper helper) {
+        BlockPos controllerPos = new BlockPos(4, 1, 4);
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("test_cube")));
+        List<MultiblockAssemblyService.Placement> template = template(controller);
+        int previousBudget = Config.BUILD_BLOCKS_PER_TICK.get();
+        Config.BUILD_BLOCKS_PER_TICK.set(1);
+        long acceptedAt = helper.getLevel().getGameTime();
+        ServerPlayer player = servicePlayer(helper);
+
+        MultiblockAssemblyService.Result accepted = MultiblockAssemblyService.build(player, controller, true);
+        MultiblockAssemblyService.Result duplicate = MultiblockAssemblyService.build(player, controller, true);
+
+        helper.assertTrue(accepted.interactionResult() == InteractionResult.SUCCESS, "Large build request is accepted");
+        helper.assertTrue(duplicate.interactionResult() == InteractionResult.FAIL, "Duplicate build request is rejected while active");
+        int expectedCount = template.size();
+        int completionTick = expectedCount + 2;
+        for (int tick = 1; tick <= completionTick; tick++) {
+            int scheduledTick = tick;
+            helper.runAtTickTime(scheduledTick, controller::serverTick);
+        }
+        helper.runAtTickTime(completionTick, () -> {
+            helper.assertTrue(helper.getLevel().getGameTime() > acceptedAt + 1, "Build advances across multiple server ticks");
+            helper.assertTrue(countPlacedStructureBlocks(helper, template) == expectedCount,
+                    "Final placed structure block count is unchanged by duplicate submission");
+            helper.assertTrue(controller.isFormed(), "Controller forms after the build completes");
+            Config.BUILD_BLOCKS_PER_TICK.set(previousBudget);
+            helper.succeed();
+        });
+    }
+
     private static List<MultiblockAssemblyService.Placement> template(MachineControllerBlockEntity controller) {
         var machine = controller.boundMachine().orElseThrow();
         return MultiblockAssemblyService.createTemplatePlacements(controller.getBlockPos(),
                 controller.assemblyPattern(machine));
+    }
+
+    private static int countPlacedStructureBlocks(GameTestHelper helper,
+                                                   List<MultiblockAssemblyService.Placement> template) {
+        int count = 0;
+        for (MultiblockAssemblyService.Placement placement : template) {
+            if (placement.matches(helper.getLevel().getBlockState(placement.pos()))) count++;
+        }
+        return count;
     }
 
     private static BlockPos stageOnlyPos(MachineControllerBlockEntity controller, Machine machine, int stageNumber,
