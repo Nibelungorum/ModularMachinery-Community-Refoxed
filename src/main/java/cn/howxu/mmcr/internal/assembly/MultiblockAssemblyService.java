@@ -233,7 +233,6 @@ public final class MultiblockAssemblyService {
             if (!drop.isEmpty()) sink.accept(drop);
             removed++;
         }
-        controller.serverTick();
         if (removed == 0) {
             return new Result(InteractionResult.SUCCESS, 0, new ComponentKey("message.mmcr.terminal.demolish.none"));
         }

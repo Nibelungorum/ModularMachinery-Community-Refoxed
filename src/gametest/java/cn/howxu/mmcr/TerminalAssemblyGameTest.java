@@ -102,7 +102,7 @@ public class TerminalAssemblyGameTest {
 
         helper.assertTrue(result.interactionResult() == InteractionResult.SUCCESS, "Build succeeds in creative service mode");
         helper.assertTrue(result.changedBlocks() == 1, "Default build places only stage 1");
-        helper.runAtTickTime(1, () -> {
+        helper.runAtTickTime(2, () -> {
             helper.assertTrue(helper.getLevel().getBlockState(stage1Pos).is(ModBlocks.CASING.get()), "Stage 1 block is built");
             helper.assertTrue(helper.getLevel().getBlockState(stage2OnlyPos).isAir(), "Stage 2-only block is not built");
             helper.succeed();
@@ -123,7 +123,7 @@ public class TerminalAssemblyGameTest {
             helper.getLevel().setBlock(placement.pos(), placement.state(), 3);
         }
         ServerPlayer player = servicePlayer(helper);
-        helper.runAtTickTime(1, () -> {
+        helper.runAtTickTime(8, () -> {
             helper.assertTrue(controller.isFormed(), "Stage 2 structure forms before demolish");
             helper.assertTrue(controller.getMatchedStructureStage() == 2, "Controller matched stage 2 before demolish");
 
@@ -254,7 +254,7 @@ public class TerminalAssemblyGameTest {
         MultiblockAssemblyService.Result second = MultiblockAssemblyService.build(player, controller, false);
 
         helper.assertTrue(second.changedBlocks() == 3, "Second build places all replenished placements");
-        helper.runAtTickTime(1, () -> {
+        helper.runAtTickTime(2, () -> {
             helper.assertTrue(helper.getLevel().getBlockState(firstPosition).is(firstPlacement.state().getBlock()), "First placement is built");
             helper.assertTrue(helper.getLevel().getBlockState(missingPosition).is(missingPlacement.state().getBlock()), "Missing placement is built");
             helper.assertTrue(helper.getLevel().getBlockState(laterAffordablePosition).is(laterPlacement.state().getBlock()), "Later placement is built");
