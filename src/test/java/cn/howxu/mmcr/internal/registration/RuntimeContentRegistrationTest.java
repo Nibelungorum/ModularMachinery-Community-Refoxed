@@ -30,17 +30,13 @@ class RuntimeContentRegistrationTest {
     }
 
     @Test
-    void startup_then_builtin_reload_then_cache_rebuild() {
+    void startup_then_cache_rebuild() {
         List<String> order = new ArrayList<>();
         RuntimeContentRegistration.registerBuiltins(
                 () -> order.add("startup"),
-                () -> {
-                    order.add("reload");
-                    return null;
-                },
                 () -> order.add("cache-rebuild"));
 
-        assertThat(order).containsExactly("startup", "reload", "cache-rebuild");
+        assertThat(order).containsExactly("startup", "cache-rebuild");
     }
 
     @Test

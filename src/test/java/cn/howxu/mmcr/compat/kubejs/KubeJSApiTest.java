@@ -107,12 +107,19 @@ class KubeJSApiTest {
 
     @Test
     void interface_predicate_factories_expose_all_port_categories() {
-        assertThat(api.anyItemInput().children()).hasSize(7);
-        assertThat(api.anyItemOutput().children()).hasSize(7);
-        assertThat(api.anyFluidInput().children()).hasSize(8);
-        assertThat(api.anyFluidOutput().children()).hasSize(8);
-        assertThat(api.anyEnergyInput().children()).hasSize(8);
-        assertThat(api.anyEnergyOutput().children()).hasSize(8);
+        assertThat(api.anyOfItemInput().children()).hasSize(7);
+        assertThat(api.anyOfItemOutput().children()).hasSize(7);
+        assertThat(api.anyOfFluidInput().children()).hasSize(8);
+        assertThat(api.anyOfFluidOutput().children()).hasSize(8);
+        assertThat(api.anyOfEnergyInput().children()).hasSize(8);
+        assertThat(api.anyOfEnergyOutput().children()).hasSize(8);
+    }
+
+    @Test
+    void interface_predicate_factories_expose_controller_shortcuts() {
+        assertThat(api.parallelControllers().children()).hasSize(8);
+        assertThat(api.smartInterface()).isInstanceOf(BlockPredicate.DeferredBlock.class);
+        assertThat(api.factoryController()).isInstanceOf(BlockPredicate.DeferredBlock.class);
     }
 
     @Test
@@ -146,7 +153,7 @@ class KubeJSApiTest {
 
         context.evaluateString(scope, """
                 api.anyOf(api.block('minecraft:stone'), api.block('minecraft:dirt'));
-                api.anyOf(api.anyItemInput(), api.anyFluidOutput());
+                api.anyOf(api.anyOfItemInput(), api.anyOfFluidOutput());
                 api.portRequirements({item_input_bus: [1, 2]});
                 api.portTierRequirements(['item_input_bus>=small']);
                 """, "api-test", 1, null);

@@ -15,6 +15,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.Item;
+import net.neoforged.bus.api.IEventBus;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.common.NeoForge;
@@ -28,50 +29,82 @@ import java.util.function.Consumer;
 public final class StartupContentRegistration {
     private static StartupPhase startupPhase = StartupPhase.NOT_STARTED;
     private static boolean structureCollectionDeferred;
+    private static MMCRMachineDefinationsEvent pendingProductionDefinitions;
 
     private StartupContentRegistration() {
     }
 
     public static void registerProduction() {
-        registerProduction(true, true);
+        registerProduction(true, true, NeoForge.EVENT_BUS);
     }
 
     public static void registerProductionForModStartup() {
+        registerProductionForModStartup(NeoForge.EVENT_BUS);
+    }
+
+    public static void registerProductionForModStartup(IEventBus eventBus) {
+        startupPhase = StartupPhase.COLLECTING;
+        PublicApiBootstrap.begin();
+        ContentRegistrationCoordinator.beginStartup();
+        MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
+        registerGameTestBuiltins("registerMachineDefinitions",
+                new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions);
+        MMCR.LOG.info("[MMCR/Temp] Posting MMCR machine definitions event with {} definitions", definitions.definitions().size());
+        eventBus.post(definitions);
+        registerDynamicControllers(definitions.definitions().keySet());
+        definitions.freeze();
+        ContentRegistrationCoordinator.collectMachines(definitions);
+        pendingProductionDefinitions = definitions;
+    }
+
+    public static void completeProductionForModStartup(IEventBus eventBus) {
+        if (pendingProductionDefinitions == null) return;
         boolean deferStructures = ModList.get() != null && ModList.get().isLoaded("kubejs")
                 && !Plugin.startupScriptsLoaded();
-        registerProduction(false, !deferStructures, deferStructures);
+        MMCRMachineStructuresEvent structures = MMCRMachineStructuresEvent.prepare(
+                pendingProductionDefinitions.definitions().keySet());
+        registerGameTestBuiltins("registerMachineStructures",
+                new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
+        MMCR.LOG.info("[MMCR/Temp] Posting MMCR machine structures event with {} structures", structures.structures().size());
+        eventBus.post(structures);
+        structureCollectionDeferred = deferStructures;
+        if (!deferStructures) {
+            structures.freeze();
+            ContentRegistrationCoordinator.collectStructures(structures);
+        }
+        bindVanillaItemComponents();
+        MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
+        registerGameTestBuiltins("registerRecipes",
+                new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
+        MMCR.LOG.info("[MMCR/Temp] Posting MMCR machine recipes event with {} recipes", recipes.recipes().size());
+        eventBus.post(recipes);
+        recipes.freeze();
+        ContentRegistrationCoordinator.collectRecipes(recipes);
+        if (!deferStructures) {
+            ContentRegistrationCoordinator.commitStartup();
+            startupPhase = StartupPhase.COMMITTED;
+        }
+        pendingProductionDefinitions = null;
     }
 
-    private static void registerProduction(boolean begin, boolean commit) {
-        registerProduction(begin, commit, false);
+    private static void registerProduction(boolean begin, boolean commit, IEventBus eventBus) {
+        registerProduction(begin, commit, false, eventBus);
     }
 
-    private static void registerProduction(boolean begin, boolean commit, boolean deferStructures) {
+    private static void registerProduction(boolean begin, boolean commit, boolean deferStructures, IEventBus eventBus) {
         registerStartupContent(
                 definitions -> {
-                    OptionalSourceRegistration.invokeDevelopmentSource(
-                            "org.nibelungorum.builtin.PublicBuiltinMachineDefinitions", "registerDefinitions",
-                            new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions);
                     registerGameTestBuiltins("registerMachineDefinitions",
                             new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions);
                 },
                 structures -> {
-                    OptionalSourceRegistration.invokeDevelopmentSource(
-                            "org.nibelungorum.builtin.PublicBuiltinLevelDefinitions", "register",
-                            new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
-                    OptionalSourceRegistration.invokeDevelopmentSource(
-                            "org.nibelungorum.builtin.PublicBuiltinMachineDefinitions", "registerStructures",
-                            new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
                     registerGameTestBuiltins("registerMachineStructures",
                             new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
                 },
                 recipes -> {
-                    OptionalSourceRegistration.invokeDevelopmentSource(
-                            "org.nibelungorum.builtin.PublicBuiltinRecipeDefinitions", "register",
-                            new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
                     registerGameTestBuiltins("registerRecipes",
                             new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
-                }, begin, commit, deferStructures);
+                }, begin, commit, deferStructures, eventBus);
     }
 
     public static void registerForTesting() {
@@ -81,11 +114,12 @@ public final class StartupContentRegistration {
     public static void registerForTesting(Consumer<MMCRMachineDefinationsEvent> definitionsSource,
                                           Consumer<MMCRMachineStructuresEvent> structuresSource,
                                           Consumer<MMCRMachineRecipesEvent> recipesSource) {
-        registerStartupContent(definitionsSource, structuresSource, recipesSource);
+        registerStartupContent(definitionsSource, structuresSource, recipesSource, NeoForge.EVENT_BUS);
     }
 
     public static void completeKubeJSStartup() {
         if (ContentRegistrationCoordinator.isCommitted()) return;
+        if (pendingProductionDefinitions != null) return;
         if (structureCollectionDeferred) {
             ContentRegistrationCoordinator.collectStructures(MMCRMachineStructuresEvent.current());
             structureCollectionDeferred = false;
@@ -128,7 +162,15 @@ public final class StartupContentRegistration {
             Consumer<MMCRMachineDefinationsEvent> definitionsSource,
             Consumer<MMCRMachineStructuresEvent> structuresSource,
             Consumer<MMCRMachineRecipesEvent> recipesSource) {
-        registerStartupContent(definitionsSource, structuresSource, recipesSource, true, true, false);
+        registerStartupContent(definitionsSource, structuresSource, recipesSource, NeoForge.EVENT_BUS);
+    }
+
+    private static void registerStartupContent(
+            Consumer<MMCRMachineDefinationsEvent> definitionsSource,
+            Consumer<MMCRMachineStructuresEvent> structuresSource,
+            Consumer<MMCRMachineRecipesEvent> recipesSource,
+            IEventBus eventBus) {
+        registerStartupContent(definitionsSource, structuresSource, recipesSource, true, true, false, eventBus);
     }
 
     private static void registerStartupContent(
@@ -137,24 +179,27 @@ public final class StartupContentRegistration {
             Consumer<MMCRMachineRecipesEvent> recipesSource,
             boolean begin,
             boolean commit,
-            boolean deferStructures) {
+            boolean deferStructures,
+            IEventBus eventBus) {
         startupPhase = StartupPhase.COLLECTING;
         PublicApiBootstrap.begin();
         if (begin) ContentRegistrationCoordinator.beginStartup();
         MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
         PublicMachineDefinitionProviders.registerAll(definitions);
         definitionsSource.accept(definitions);
+        MMCR.LOG.info("[MMCR/Temp] Posting MMCR machine definitions event with {} definitions", definitions.definitions().size());
+        eventBus.post(definitions);
         registerDynamicControllers(definitions.definitions().keySet());
-        NeoForge.EVENT_BUS.post(definitions);
         definitions.freeze();
         ContentRegistrationCoordinator.collectMachines(definitions);
 
         MMCRMachineStructuresEvent structures = MMCRMachineStructuresEvent.prepare(definitions.definitions().keySet());
         structuresSource.accept(structures);
-        MMCR.LOG.debug("Collected {} machine structures from startup sources before event dispatch",
+        MMCR.LOG.info("[MMCR/Temp] Posting MMCR machine structures event with {} structures", structures.structures().size());
+        MMCR.LOG.info("[MMCR/Temp] Collected {} machine structures from startup sources before event dispatch",
                 structures.structures().size());
-        NeoForge.EVENT_BUS.post(structures);
-        MMCR.LOG.debug("Collected {} machine structures after event dispatch", structures.structures().size());
+        eventBus.post(structures);
+        MMCR.LOG.info("[MMCR/Temp] Collected {} machine structures after event dispatch", structures.structures().size());
         structureCollectionDeferred = deferStructures;
         if (!deferStructures) {
             structures.freeze();
@@ -163,7 +208,8 @@ public final class StartupContentRegistration {
         bindVanillaItemComponents();
         MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
         recipesSource.accept(recipes);
-        NeoForge.EVENT_BUS.post(recipes);
+        MMCR.LOG.info("[MMCR/Temp] Posting MMCR machine recipes event with {} recipes", recipes.recipes().size());
+        eventBus.post(recipes);
         recipes.freeze();
         ContentRegistrationCoordinator.collectRecipes(recipes);
         if (commit) {

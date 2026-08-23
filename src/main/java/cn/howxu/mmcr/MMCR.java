@@ -15,6 +15,8 @@ import net.minecraft.core.registries.Registries;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.event.lifecycle.FMLConstructModEvent;
+import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 import java.util.function.Consumer;
@@ -33,8 +35,11 @@ public class MMCR {
         PublicApiBootstrap.begin();
         MachineDefinitions.beginRegistryPhase();
         MachineDefinitions.bootstrapBuiltins();
-        StartupContentRegistration.registerProductionForModStartup();
         ModEventRegistration.register(modBus, modContainer);
+        modBus.addListener((FMLConstructModEvent event) ->
+                StartupContentRegistration.registerProductionForModStartup(modBus));
+        modBus.addListener((FMLCommonSetupEvent event) ->
+                StartupContentRegistration.completeProductionForModStartup(modBus));
     }
 
     public static Identifier id(String path) {

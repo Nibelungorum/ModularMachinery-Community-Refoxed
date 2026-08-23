@@ -16,6 +16,7 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 
 /** Verifies atomic startup content collection and commit behavior.
  * @author howxu <dev@howxu.cn>
@@ -255,6 +257,15 @@ class ContentRegistrationCoordinatorTest {
         assertThat(ContentRegistrationCoordinator.startupSnapshotForTesting().machines()).isNotEmpty();
         assertThat(ContentRegistrationCoordinator.startupSnapshotForTesting().structures()).isNotEmpty();
         assertThat(ContentRegistrationCoordinator.startupSnapshotForTesting().recipes()).isNotEmpty();
+    }
+
+    @Test
+    void definition_subscribers_have_controller_blocks_before_structure_subscribers_run() {
+        Identifier machineId = id("subscriber_controller_machine");
+        assertThatCode(() -> StartupContentRegistration.registerForTesting(
+                definitions -> definitions.registerMachine(machineId, builder -> builder),
+                structures -> assertThat(ModBlocks.BLOCKS.containsKey(machineId.getPath() + "_controller")).isTrue(),
+                recipes -> { })).doesNotThrowAnyException();
     }
 
     @Test

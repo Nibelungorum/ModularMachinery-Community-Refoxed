@@ -4,11 +4,8 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.internal.api.PublicBuiltinRuntime;
-import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 /** Owns runtime builtin registration and the runtime recipe hook.
  * @author howxu <dev@howxu.cn>
@@ -19,14 +16,11 @@ public final class RuntimeContentRegistration {
 
     public static void registerBuiltins() {
         registerBuiltins(RuntimeContentRegistration::ensureStartupContentRegistered,
-                () -> DynamicContentReloadService.reload(PublicBuiltinRuntime::registerStructures),
                 MachineRegistry::rebuildCompiledCache);
     }
 
-    static void registerBuiltins(Runnable startup, Supplier<DynamicContentReloadService.ReloadResult> reload,
-                                 Runnable rebuildCache) {
+    static void registerBuiltins(Runnable startup, Runnable rebuildCache) {
         startup.run();
-        reload.get();
         rebuildCache.run();
     }
 

@@ -9,13 +9,10 @@ import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.world.level.block.Blocks;
-import net.neoforged.neoforge.common.NeoForge;
-import org.junit.jupiter.api.AfterEach;
+import net.neoforged.fml.event.IModBusEvent;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,58 +22,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class PublicEventSubscribersTest {
-    private boolean lifecycleListenersActive;
-
     @BeforeAll
     static void bootstrapMinecraft() throws Exception { TestBootstrap.bootstrap(); }
 
-    @AfterEach
-    void disableManualListeners() {
-        lifecycleListenersActive = false;
-    }
-
     @Test
-    void events_register_real_definition_structure_and_recipe_ids() {
-        var machineId = MMCR.id("event_machine");
-        var recipeId = MMCR.id("event_recipe");
-        var definitionReceives = new AtomicInteger();
-        var structureReceives = new AtomicInteger();
-        var recipeReceives = new AtomicInteger();
-        var definitions = new AtomicReference<MMCRMachineDefinationsEvent>();
-        var structures = new AtomicReference<MMCRMachineStructuresEvent>();
-        var recipes = new AtomicReference<MMCRMachineRecipesEvent>();
-
-        lifecycleListenersActive = true;
-        NeoForge.EVENT_BUS.addListener(MMCRMachineDefinationsEvent.class, event -> {
-            if (!lifecycleListenersActive) return;
-            definitionReceives.incrementAndGet();
-            event.registerMachine(machineId, builder -> builder.displayNameKey("machine.mmcr.event_machine"));
-            definitions.set(event);
-        });
-        NeoForge.EVENT_BUS.addListener(MMCRMachineStructuresEvent.class, event -> {
-            if (!lifecycleListenersActive) return;
-            structureReceives.incrementAndGet();
-            event.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage.pattern(pattern -> pattern
-                    .layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))));
-            structures.set(event);
-        });
-        NeoForge.EVENT_BUS.addListener(MMCRMachineRecipesEvent.class, event -> {
-            if (!lifecycleListenersActive) return;
-            recipeReceives.incrementAndGet();
-            event.registerRecipe(MachineRecipeBuilder.recipe(recipeId, machineId).duration(1).build());
-            recipes.set(event);
-        });
-
-        NeoForge.EVENT_BUS.post(new MMCRMachineDefinationsEvent());
-        NeoForge.EVENT_BUS.post(new MMCRMachineStructuresEvent(Set.of(machineId)));
-        NeoForge.EVENT_BUS.post(new MMCRMachineRecipesEvent());
-
-        assertThat(definitionReceives).hasValue(1);
-        assertThat(structureReceives).hasValue(1);
-        assertThat(recipeReceives).hasValue(1);
-        assertThat(definitions.get().definitions()).containsOnlyKeys(machineId);
-        assertThat(structures.get().structures()).containsOnlyKeys(machineId);
-        assertThat(recipes.get().recipes()).containsOnlyKeys(recipeId);
+    void public_registration_events_are_mod_bus_events() {
+        assertThat(new MMCRMachineDefinationsEvent()).isInstanceOf(IModBusEvent.class);
+        assertThat(new MMCRMachineStructuresEvent(Set.of())).isInstanceOf(IModBusEvent.class);
+        assertThat(new MMCRMachineRecipesEvent()).isInstanceOf(IModBusEvent.class);
     }
 
     @Test

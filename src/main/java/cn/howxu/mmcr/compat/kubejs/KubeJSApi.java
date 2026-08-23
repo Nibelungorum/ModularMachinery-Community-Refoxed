@@ -49,12 +49,15 @@ public final class KubeJSApi {
     public BlockPredicate air() { return new BlockPredicate.Air(); }
     public BlockPredicate any() { return new BlockPredicate.Any(); }
     public BlockPredicate coupler() { return BlockPredicate.machineCoupler(); }
-    public BlockPredicate anyItemInput() { return KubeJSInterfaceHelpers.anyOfItemInput(); }
-    public BlockPredicate anyItemOutput() { return KubeJSInterfaceHelpers.anyOfItemOutput(); }
-    public BlockPredicate anyFluidInput() { return KubeJSInterfaceHelpers.anyOfFluidInput(); }
-    public BlockPredicate anyFluidOutput() { return KubeJSInterfaceHelpers.anyOfFluidOutput(); }
-    public BlockPredicate anyEnergyInput() { return KubeJSInterfaceHelpers.anyOfEnergyInput(); }
-    public BlockPredicate anyEnergyOutput() { return KubeJSInterfaceHelpers.anyOfEnergyOutput(); }
+    public BlockPredicate anyOfItemInput() { return KubeJSInterfaceHelpers.anyOfItemInput(); }
+    public BlockPredicate anyOfItemOutput() { return KubeJSInterfaceHelpers.anyOfItemOutput(); }
+    public BlockPredicate anyOfFluidInput() { return KubeJSInterfaceHelpers.anyOfFluidInput(); }
+    public BlockPredicate anyOfFluidOutput() { return KubeJSInterfaceHelpers.anyOfFluidOutput(); }
+    public BlockPredicate anyOfEnergyInput() { return KubeJSInterfaceHelpers.anyOfEnergyInput(); }
+    public BlockPredicate anyOfEnergyOutput() { return KubeJSInterfaceHelpers.anyOfEnergyOutput(); }
+    public BlockPredicate parallelControllers() { return KubeJSInterfaceHelpers.parallelControllers(); }
+    public BlockPredicate smartInterface() { return KubeJSInterfaceHelpers.smartInterface(); }
+    public BlockPredicate factoryController() { return KubeJSInterfaceHelpers.factoryController(); }
 
     public BlockPredicate block(String blockId) {
         return new BlockPredicate.OfBlock(requireBlock(blockId));

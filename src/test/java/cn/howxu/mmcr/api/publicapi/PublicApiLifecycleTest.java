@@ -24,7 +24,6 @@ import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
-import net.neoforged.neoforge.common.NeoForge;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -159,34 +158,25 @@ class PublicApiLifecycleTest {
     void lifecycle_events_are_ordered_and_each_phase_freezes_before_the_next() {
         List<String> observedEvents = new ArrayList<>();
         Identifier machineId = id("ordered_machine");
-        boolean[] active = {true};
         var definitions = new java.util.concurrent.atomic.AtomicReference<MMCRMachineDefinationsEvent>();
         var structures = new java.util.concurrent.atomic.AtomicReference<MMCRMachineStructuresEvent>();
         var recipes = new java.util.concurrent.atomic.AtomicReference<MMCRMachineRecipesEvent>();
-        NeoForge.EVENT_BUS.addListener(MMCRMachineDefinationsEvent.class,
+        MMCR.registerPublicApiLifecycleForTesting(
                 event -> {
-                    if (!active[0]) return;
                     observedEvents.add("MMCRMachineDefinationsEvent");
                     event.registerMachine(machineId, builder -> builder.displayNameKey("machine.mmcr.ordered_machine"));
                     definitions.set(event);
-                });
-        NeoForge.EVENT_BUS.addListener(MMCRMachineStructuresEvent.class,
+                },
                 event -> {
-                    if (!active[0]) return;
                     observedEvents.add("MMCRMachineStructuresEvent");
                     event.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage.pattern(pattern -> pattern
                             .layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))));
                     structures.set(event);
-                });
-        NeoForge.EVENT_BUS.addListener(MMCRMachineRecipesEvent.class,
+                },
                 event -> {
-                    if (!active[0]) return;
                     observedEvents.add("MMCRMachineRecipesEvent");
                     recipes.set(event);
                 });
-
-        MMCR.registerPublicApiLifecycleForTesting();
-        active[0] = false;
 
         assertThatThrownBy(() -> definitions.get().registerMachine(id("late_definition"), builder -> builder))
                 .isInstanceOf(IllegalStateException.class);

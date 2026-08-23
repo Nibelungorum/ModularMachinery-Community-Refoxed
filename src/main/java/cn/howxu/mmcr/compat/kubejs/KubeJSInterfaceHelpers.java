@@ -44,6 +44,10 @@ public final class KubeJSInterfaceHelpers {
         return convert(InterfacePredicates.parallelControllers());
     }
 
+    public static BlockPredicate factoryController() {
+        return convert(InterfacePredicates.factoryController());
+    }
+
     public static BlockPredicate smartInterface() { return convert(InterfacePredicates.smartInterface()); }
 
     public static BlockPredicate port(String id) {
