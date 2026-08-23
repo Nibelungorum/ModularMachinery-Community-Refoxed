@@ -60,6 +60,7 @@ public final class MultiblockPreviewClientHandler {
     private static WorldPreviewMeshCache.Request compilingWorldMeshRequest;
     private static Future<?> compilingWorldMesh;
     private static AtomicBoolean compilingWorldMeshCancelled;
+    private static WorldPreviewCompileInput worldMeshCompileInput;
     private static WorldPreviewGpuMesh gpuMesh;
     private static WorldPreviewMeshKey gpuMeshKey;
     private static final BlockDisplayContext BLOCK_DISPLAY_CONTEXT = BlockDisplayContext.create();
@@ -94,6 +95,7 @@ public final class MultiblockPreviewClientHandler {
         dimension = newDimension;
         controllerPos = newControllerPos.immutable();
         entries = List.copyOf(newEntries);
+        worldMeshCompileInput = null;
         modelCache.clear();
         visibleEntriesCameraCell = null;
         layers = entries.stream().map(entry -> entry.relativePos().getY()).distinct().sorted().toList();
@@ -189,6 +191,7 @@ public final class MultiblockPreviewClientHandler {
     public static void invalidateWorldPreviewForReload() {
         Minecraft.getInstance().execute(() -> {
             worldMeshRequest = null;
+            worldMeshCompileInput = null;
             worldMeshCache.clear();
         });
     }
@@ -263,6 +266,7 @@ public final class MultiblockPreviewClientHandler {
         layers = List.of();
         modelCache.clear();
         worldMeshCache.clear();
+        worldMeshCompileInput = null;
         visibleEntriesCameraCell = null;
         visibleEntriesRadius = -1.0;
         selectedLayer = Integer.MAX_VALUE;
@@ -319,8 +323,11 @@ public final class MultiblockPreviewClientHandler {
         BlockPos compileController = controllerPos;
         int compileLayer = selectedLayer;
         Vec3 compileCamera = camera;
-        WorldPreviewCompileInput input = WorldPreviewCompileInput.capture(minecraft.level, controllerPos,
-                compileEntries, compileLayer, minecraft);
+        if (worldMeshCompileInput == null) {
+            worldMeshCompileInput = WorldPreviewCompileInput.capture(minecraft.level, compileController,
+                    entries, compileLayer, minecraft);
+        }
+        WorldPreviewCompileInput input = worldMeshCompileInput;
         compilingWorldMeshRequest = request;
         compilingWorldMeshCancelled = cancelled;
         compilingWorldMesh = WORLD_MESH_COMPILER.submit(() -> {
