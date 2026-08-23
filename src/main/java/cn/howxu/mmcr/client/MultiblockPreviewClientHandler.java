@@ -3,6 +3,8 @@ package cn.howxu.mmcr.client;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
+import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshCache;
+import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshKey;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.block.BlockModelRenderState;
@@ -41,6 +43,7 @@ public final class MultiblockPreviewClientHandler {
     private static List<MultiblockPreviewSnapshot.Entry> visibleEntries = List.of();
     private static List<Integer> layers = List.of();
     private static final Map<BlockState, CachedModel> modelCache = new HashMap<>();
+    private static final WorldPreviewMeshCache worldMeshCache = new WorldPreviewMeshCache();
     private static final BlockDisplayContext BLOCK_DISPLAY_CONTEXT = BlockDisplayContext.create();
     private static BlockPos visibleEntriesCameraCell;
     private static double visibleEntriesRadius = -1.0;
@@ -77,6 +80,7 @@ public final class MultiblockPreviewClientHandler {
         visibleEntriesCameraCell = null;
         layers = entries.stream().map(entry -> entry.relativePos().getY()).distinct().sorted().toList();
         selectedLayer = sameActiveController ? nextLayer() : Integer.MAX_VALUE;
+        worldMeshCache.request(worldMeshKey());
         expiresAtTick = now + Math.max(1, durationTicks);
         rebuildVisibleEntries();
     }
@@ -175,6 +179,9 @@ public final class MultiblockPreviewClientHandler {
         }
         BlockPos cameraCell = camera == null ? null : BlockPos.containing(camera);
         if (camera != null && cameraCell.equals(visibleEntriesCameraCell) && radius == visibleEntriesRadius) return;
+        if (camera != null && !cameraCell.equals(visibleEntriesCameraCell)) {
+            worldMeshCache.request(new WorldPreviewMeshKey(dimension, controllerPos, selectedLayer, cameraCell));
+        }
 
         var candidates = selectedLayer == Integer.MAX_VALUE ? entries : entries.stream()
                 .filter(entry -> entry.relativePos().getY() == selectedLayer)
@@ -206,10 +213,15 @@ public final class MultiblockPreviewClientHandler {
         visibleEntries = List.of();
         layers = List.of();
         modelCache.clear();
+        worldMeshCache.clear();
         visibleEntriesCameraCell = null;
         visibleEntriesRadius = -1.0;
         selectedLayer = Integer.MAX_VALUE;
         expiresAtTick = -1L;
+    }
+
+    private static WorldPreviewMeshKey worldMeshKey() {
+        return new WorldPreviewMeshKey(dimension, controllerPos, selectedLayer, visibleEntriesCameraCell);
     }
 
     private static void render(SubmitCustomGeometryEvent event, Minecraft minecraft) {
