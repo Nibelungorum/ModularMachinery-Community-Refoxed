@@ -20,11 +20,14 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.Projection;
 import net.minecraft.client.renderer.ProjectionMatrixBuffer;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.Lightmap;
 import net.minecraft.client.renderer.state.gui.GuiRenderState;
 import net.minecraft.client.renderer.state.gui.BlitRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.client.renderer.state.LightmapRenderState;
 
 import net.minecraft.world.phys.Vec3;
+import org.joml.Vector3f;
 
 /**
  * Vanilla PiP target used to render cached preview geometry off-screen.
@@ -36,7 +39,7 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
     private GpuTextureView colorTextureView;
     private GpuTexture depthTexture;
     private GpuTextureView depthTextureView;
-    private GpuTexture previewLightmap;
+    private Lightmap previewLightmap;
     private GpuTextureView previewLightmapView;
     private final Projection projection = new Projection();
     private final ProjectionMatrixBuffer projectionMatrixBuffer = new ProjectionMatrixBuffer("MMCR structure preview");
@@ -132,12 +135,21 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
 
     private void ensurePreviewLightmap() {
         if (previewLightmap != null) return;
-        var device = RenderSystem.getDevice();
-        previewLightmap = device.createTexture(() -> "MMCR preview full-bright lightmap",
-                GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_COPY_DST,
-                TextureFormat.RGBA8, 16, 16, 1, 1);
-        previewLightmapView = device.createTextureView(previewLightmap);
-        device.createCommandEncoder().clearColorTexture(previewLightmap, -1);
+        previewLightmap = new Lightmap();
+        LightmapRenderState state = new LightmapRenderState();
+        state.needsUpdate = true;
+        state.blockFactor = 1.4F;
+        state.blockLightTint = new Vector3f(1.0F, 1.0F, 1.0F);
+        state.skyFactor = 1.0F;
+        state.skyLightColor = new Vector3f(1.0F, 1.0F, 1.0F);
+        state.ambientColor = new Vector3f(1.0F, 1.0F, 1.0F);
+        state.brightness = Minecraft.getInstance().options.gamma().get().floatValue();
+        state.darknessEffectScale = 0.0F;
+        state.nightVisionEffectIntensity = 0.0F;
+        state.nightVisionColor = new Vector3f(1.0F, 1.0F, 1.0F);
+        state.bossOverlayWorldDarkening = 0.0F;
+        previewLightmap.render(state);
+        previewLightmapView = previewLightmap.getTextureView();
     }
 
     @Override
