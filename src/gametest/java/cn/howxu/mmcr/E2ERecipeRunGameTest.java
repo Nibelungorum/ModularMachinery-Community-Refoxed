@@ -57,10 +57,7 @@ public class E2ERecipeRunGameTest {
 
         var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(machine);
-        for (int tick = 1; tick <= 80; tick++) {
-            helper.runAtTickTime(tick, controller::serverTick);
-        }
-        helper.runAtTickTime(80, () -> {
+        helper.runAtTickTime(120, () -> {
             helper.assertTrue(controller.isFormed(), "Structure formed");
             ItemStack input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
             ItemStack input1 = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null).getStackInSlot(1);
@@ -136,28 +133,38 @@ public class E2ERecipeRunGameTest {
 
         var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(machine);
-        controller.serverTick();
-        helper.assertTrue(controller.isFormed(), "Distillation tower forms before recipe starts");
-
-        runDistillationBatch(helper, controller, inputPos);
-        assertDistillationStage(helper, controller, 1);
-
-        helper.setBlock(secondOutputPos, ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState());
-        controller.onStructureBlockChanged(helper.absolutePos(secondOutputPos));
-        runDistillationBatch(helper, controller, inputPos);
-        assertDistillationStage(helper, controller, 2);
-
-        helper.setBlock(thirdOutputPos, ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState());
-        controller.onStructureBlockChanged(helper.absolutePos(thirdOutputPos));
-        runDistillationBatch(helper, controller, inputPos);
-        assertDistillationStage(helper, controller, 3);
-        helper.succeed();
+        helper.runAtTickTime(10, () -> {
+            helper.assertTrue(controller.isFormed(), "Distillation tower forms before recipe starts");
+            insertCoal(helper, inputPos);
+        });
+        helper.runAtTickTime(35, () -> {
+            assertDistillationBatchComplete(helper, controller, inputPos);
+            assertDistillationStage(helper, controller, 1);
+            helper.setBlock(secondOutputPos, ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState());
+            controller.onStructureBlockChanged(helper.absolutePos(secondOutputPos));
+            insertCoal(helper, inputPos);
+        });
+        helper.runAtTickTime(60, () -> {
+            assertDistillationBatchComplete(helper, controller, inputPos);
+            assertDistillationStage(helper, controller, 2);
+            helper.setBlock(thirdOutputPos, ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState());
+            controller.onStructureBlockChanged(helper.absolutePos(thirdOutputPos));
+            insertCoal(helper, inputPos);
+        });
+        helper.runAtTickTime(150, () -> {
+            assertDistillationBatchComplete(helper, controller, inputPos);
+            assertDistillationStage(helper, controller, 3);
+            helper.succeed();
+        });
     }
 
-    private static void runDistillationBatch(GameTestHelper helper, MachineControllerBlockEntity controller, BlockPos inputPos) {
+    private static void insertCoal(GameTestHelper helper, BlockPos inputPos) {
         helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null)
                 .insertItem(0, new ItemStack(Items.COAL), false);
-        for (int tick = 0; tick < 25; tick++) controller.serverTick();
+    }
+
+    private static void assertDistillationBatchComplete(GameTestHelper helper,
+                                                         MachineControllerBlockEntity controller, BlockPos inputPos) {
         helper.assertTrue(controller.getActiveRecipe() == null, "Distillation recipe completed");
         ItemStack input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
         helper.assertTrue(input.isEmpty(), "Distillation recipe consumed input");

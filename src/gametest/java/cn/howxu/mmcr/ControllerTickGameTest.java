@@ -40,9 +40,10 @@ public class ControllerTickGameTest {
         controller.serverTick();
         helper.assertTrue(controller.boundMachine().isPresent(), "Controller binds the startup machine");
         controller.setMachine(MachineRegistry.getMachine(machineId));
-        controller.serverTick();
-        helper.assertTrue(controller.isFormed(), "Structure formed");
-        helper.succeed();
+        helper.runAtTickTime(10, () -> {
+            helper.assertTrue(controller.isFormed(), "Structure formed after bounded scan");
+            helper.succeed();
+        });
     }
 
     public void redstonePausesAndResumesControllerRecipeProgress(GameTestHelper helper) {

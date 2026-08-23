@@ -21,9 +21,9 @@ public class BlockArrayMatchGameTest {
 
         var be = helper.getBlockEntity(ctrlPos, MachineControllerBlockEntity.class);
         be.setMachine(machine);
-        be.serverTick();
-
-        helper.assertTrue(be.isFormed(), "Structure formed");
-        helper.succeed();
+        helper.runAtTickTime(10, () -> {
+            helper.assertTrue(be.isFormed(), "Structure formed after bounded scan");
+            helper.succeed();
+        });
     }
 }

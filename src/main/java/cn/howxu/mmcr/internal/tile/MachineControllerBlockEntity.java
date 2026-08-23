@@ -873,8 +873,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 return;
             }
             if (isFormed()) {
+                Machine retryMachine = foundMachine != null ? foundMachine : machine;
                 resetMachine(true, true, false);
-                tryFormMachine(machine, facing);
+                if (retryMachine != null) tryFormMachine(retryMachine, facing);
             }
             return;
         }
@@ -1267,7 +1268,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         scanBatchCountForTesting++;
         scanBatchesPerTickForTesting.merge(level.getGameTime(), 1, Integer::sum);
         StructureMatcher.ScanResult scanResult = structureScan.step(level, getBlockPos());
-        if (scanResult.inProgress()) return false;
+        if (scanResult.inProgress()) {
+            nextStructureCheckTick = level.getGameTime() + 1L;
+            return false;
+        }
         if (scanResult.status() == StructureMatcher.ScanStatus.INVALIDATED) {
             clearStructureDiagnosticRequest();
             clearStructureScan();
@@ -1312,7 +1316,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         scanBatchCountForTesting++;
         scanBatchesPerTickForTesting.merge(level.getGameTime(), 1, Integer::sum);
         StructureMatcher.ScanResult scanResult = structureScan.step(level, getBlockPos());
-        if (scanResult.inProgress()) return;
+        if (scanResult.inProgress()) {
+            nextStructureCheckTick = level.getGameTime() + 1L;
+            return;
+        }
         CandidatePattern candidatePattern = scanCandidate;
         Machine candidate = scanMachine;
         if (scanResult.status() == StructureMatcher.ScanStatus.INVALIDATED || candidate == null || candidatePattern == null) {
@@ -1539,6 +1546,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private void recordStructureMismatch(Machine candidate, Direction facing, BlockArray rotatedPattern,
                                          Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
                                          boolean stateSensitive) {
+        if (candidate == null) return;
         String diagnostic = structureMismatchDiagnostic(candidate, facing, rotatedPattern, level, getBlockPos(), replacements,
                 stateSensitive);
         if (diagnostic.equals(lastStructureMismatchDiagnostic)) return;
