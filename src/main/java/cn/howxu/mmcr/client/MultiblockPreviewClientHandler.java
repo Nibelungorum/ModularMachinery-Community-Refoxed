@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
@@ -11,6 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -20,7 +22,9 @@ import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Renders the active multiblock ghost preview for the local player.
@@ -36,6 +40,9 @@ public final class MultiblockPreviewClientHandler {
     private static List<MultiblockPreviewSnapshot.Entry> entries = List.of();
     private static List<MultiblockPreviewSnapshot.Entry> visibleEntries = List.of();
     private static List<Integer> layers = List.of();
+    private static final Map<BlockState, BlockModelRenderState> renderStateCache = new HashMap<>();
+    private static BlockPos visibleEntriesCameraCell;
+    private static double visibleEntriesRadius = -1.0;
     private static int selectedLayer = Integer.MAX_VALUE;
     private static long expiresAtTick = -1L;
 
@@ -65,6 +72,8 @@ public final class MultiblockPreviewClientHandler {
         dimension = newDimension;
         controllerPos = newControllerPos.immutable();
         entries = List.copyOf(newEntries);
+        renderStateCache.clear();
+        visibleEntriesCameraCell = null;
         layers = entries.stream().map(entry -> entry.relativePos().getY()).distinct().sorted().toList();
         selectedLayer = sameActiveController ? nextLayer() : Integer.MAX_VALUE;
         expiresAtTick = now + Math.max(1, durationTicks);
@@ -105,6 +114,18 @@ public final class MultiblockPreviewClientHandler {
         clear();
     }
 
+    static void rebuildVisibleEntriesForTesting(Vec3 camera) {
+        rebuildVisibleEntries(camera);
+    }
+
+    static void cacheRenderStateForTesting(BlockState state) {
+        renderStateCache.put(state, new BlockModelRenderState());
+    }
+
+    static int renderStateCacheSizeForTesting() {
+        return renderStateCache.size();
+    }
+
     static boolean rendersPreviewOutlineForTesting() {
         return false;
     }
@@ -122,15 +143,41 @@ public final class MultiblockPreviewClientHandler {
     }
 
     private static void rebuildVisibleEntries() {
-        if (selectedLayer == Integer.MAX_VALUE) {
-            visibleEntries = entries;
-            return;
+        visibleEntriesCameraCell = null;
+        rebuildVisibleEntries(null);
+    }
+
+    private static void rebuildVisibleEntries(Vec3 camera) {
+        double radius;
+        try {
+            radius = Config.PREVIEW_RENDER_RADIUS.get();
+        } catch (IllegalStateException ignored) {
+            radius = Config.DEFAULT_PREVIEW_RENDER_RADIUS;
         }
-        visibleEntries = entries.stream()
+        BlockPos cameraCell = camera == null ? null : BlockPos.containing(camera);
+        if (camera != null && cameraCell.equals(visibleEntriesCameraCell) && radius == visibleEntriesRadius) return;
+
+        var candidates = selectedLayer == Integer.MAX_VALUE ? entries : entries.stream()
                 .filter(entry -> entry.relativePos().getY() == selectedLayer)
                 .sorted(Comparator.comparingInt((MultiblockPreviewSnapshot.Entry entry) -> entry.relativePos().getX())
                         .thenComparingInt(entry -> entry.relativePos().getZ()))
                 .toList();
+        if (camera == null) {
+            visibleEntries = candidates;
+            visibleEntriesRadius = radius;
+            return;
+        }
+
+        double radiusSquared = radius * radius;
+        visibleEntries = candidates.stream().filter(entry -> {
+            BlockPos worldPos = controllerPos.offset(entry.relativePos());
+            double dx = worldPos.getX() + 0.5 - camera.x;
+            double dy = worldPos.getY() + 0.5 - camera.y;
+            double dz = worldPos.getZ() + 0.5 - camera.z;
+            return dx * dx + dy * dy + dz * dz <= radiusSquared;
+        }).toList();
+        visibleEntriesCameraCell = cameraCell;
+        visibleEntriesRadius = radius;
     }
 
     private static void clear() {
@@ -139,14 +186,18 @@ public final class MultiblockPreviewClientHandler {
         entries = List.of();
         visibleEntries = List.of();
         layers = List.of();
+        renderStateCache.clear();
+        visibleEntriesCameraCell = null;
+        visibleEntriesRadius = -1.0;
         selectedLayer = Integer.MAX_VALUE;
         expiresAtTick = -1L;
     }
 
     private static void render(SubmitCustomGeometryEvent event, Minecraft minecraft) {
-        if (visibleEntries.isEmpty()) return;
         PoseStack poseStack = event.getPoseStack();
         Vec3 camera = event.getLevelRenderState().cameraRenderState.pos;
+        rebuildVisibleEntries(camera);
+        if (visibleEntries.isEmpty()) return;
         var collector = event.getSubmitNodeCollector();
         var resolver = minecraft.getBlockModelResolver();
 
@@ -155,8 +206,11 @@ public final class MultiblockPreviewClientHandler {
             poseStack.pushPose();
             poseStack.translate(worldPos.getX() - camera.x, worldPos.getY() - camera.y, worldPos.getZ() - camera.z);
 
-            BlockModelRenderState renderState = new BlockModelRenderState();
-            resolver.update(renderState, entry.state(), BLOCK_DISPLAY_CONTEXT);
+            BlockModelRenderState renderState = renderStateCache.computeIfAbsent(entry.state(), state -> {
+                BlockModelRenderState resolved = new BlockModelRenderState();
+                resolver.update(resolved, state, BLOCK_DISPLAY_CONTEXT);
+                return resolved;
+            });
             renderState.submitMultiLayer(poseStack, collector, LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
 
             poseStack.popPose();

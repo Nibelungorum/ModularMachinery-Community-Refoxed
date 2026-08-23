@@ -8,10 +8,12 @@ public final class Config {
     public static final int DEFAULT_TERMINAL_MAX_DEMOLISH_BLOCKS = 131072;
     public static final int DEFAULT_BUILD_BLOCKS_PER_TICK = 256;
     public static final int DEFAULT_BUILD_TASK_TIMEOUT_TICKS = 20 * 60;
+    public static final double DEFAULT_PREVIEW_RENDER_RADIUS = 64.0;
     public static final ModConfigSpec.IntValue MACHINE_CHECK_INTERVAL_TICKS;
     public static final ModConfigSpec.IntValue TERMINAL_MAX_DEMOLISH_BLOCKS;
     public static final ModConfigSpec.IntValue BUILD_BLOCKS_PER_TICK;
     public static final ModConfigSpec.IntValue BUILD_TASK_TIMEOUT_TICKS;
+    public static final ModConfigSpec.DoubleValue PREVIEW_RENDER_RADIUS;
     public static final ModConfigSpec.DoubleValue ENERGY_CONSUMPTION_MULTIPLIER;
 
     static {
@@ -28,6 +30,9 @@ public final class Config {
         BUILD_TASK_TIMEOUT_TICKS = b
                 .comment("Maximum age of a pending structure build task")
                 .defineInRange("build_task_timeout_ticks", DEFAULT_BUILD_TASK_TIMEOUT_TICKS, 1, 1_000_000);
+        PREVIEW_RENDER_RADIUS = b
+                .comment("Maximum distance at which multiblock preview blocks are rendered")
+                .defineInRange("preview_render_radius", DEFAULT_PREVIEW_RENDER_RADIUS, 1.0, 512.0);
         ENERGY_CONSUMPTION_MULTIPLIER = b
                 .comment("Global multiplier on energy consumption")
                 .defineInRange("energy_consumption_multiplier", 1.0, 0.0, 100.0);

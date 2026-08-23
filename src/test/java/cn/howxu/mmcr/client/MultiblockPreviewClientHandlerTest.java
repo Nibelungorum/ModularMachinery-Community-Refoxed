@@ -5,6 +5,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -58,5 +59,31 @@ class MultiblockPreviewClientHandlerTest {
 
         MultiblockPreviewClientHandler.clearPreview(Level.OVERWORLD, BlockPos.ZERO);
         assertEquals(0, MultiblockPreviewClientHandler.visibleEntryCountForTesting());
+    }
+
+    @Test
+    void visibleEntriesAreCulledByPreviewRadius() {
+        MultiblockPreviewClientHandler.clearForTesting();
+        var entries = List.of(
+                new MultiblockPreviewSnapshot.Entry(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState()),
+                new MultiblockPreviewSnapshot.Entry(new BlockPos(65, 0, 0), Blocks.GOLD_BLOCK.defaultBlockState()));
+
+        MultiblockPreviewClientHandler.showAtTick(Level.OVERWORLD, BlockPos.ZERO, entries, 200, 0L);
+        MultiblockPreviewClientHandler.rebuildVisibleEntriesForTesting(Vec3.ZERO);
+
+        assertEquals(1, MultiblockPreviewClientHandler.visibleEntryCountForTesting());
+    }
+
+    @Test
+    void replacingPreviewClearsCachedRenderStates() {
+        MultiblockPreviewClientHandler.clearForTesting();
+        var state = Blocks.IRON_BLOCK.defaultBlockState();
+        MultiblockPreviewClientHandler.cacheRenderStateForTesting(state);
+        assertEquals(1, MultiblockPreviewClientHandler.renderStateCacheSizeForTesting());
+
+        MultiblockPreviewClientHandler.showAtTick(Level.NETHER, BlockPos.ZERO,
+                List.of(new MultiblockPreviewSnapshot.Entry(BlockPos.ZERO, state)), 200, 0L);
+
+        assertEquals(0, MultiblockPreviewClientHandler.renderStateCacheSizeForTesting());
     }
 }
