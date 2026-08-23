@@ -7,6 +7,7 @@ import cn.howxu.mmcr.client.preview.world.WorldPreviewMesh;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshCache;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshCompiler;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshKey;
+import cn.howxu.mmcr.client.preview.world.WorldPreviewGpuMesh;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
@@ -14,8 +15,6 @@ import net.minecraft.client.renderer.block.BlockModelRenderState;
 import net.minecraft.client.renderer.block.model.BlockDisplayContext;
 import net.minecraft.client.renderer.block.model.BlockModel;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
-import net.minecraft.client.renderer.rendertype.RenderType;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
@@ -252,31 +251,27 @@ public final class MultiblockPreviewClientHandler {
         rebuildVisibleEntries(camera);
         if (visibleEntries.isEmpty()) return;
         WorldPreviewMeshKey key = worldMeshKey();
-        WorldPreviewMesh mesh = worldMeshCache.current(key) instanceof WorldPreviewMesh current
+        WorldPreviewGpuMesh mesh = worldMeshCache.current(key) instanceof WorldPreviewGpuMesh current
                 ? current : null;
         if (mesh == null) {
             WorldPreviewMesh compiled = WorldPreviewMeshCompiler.compile(minecraft.level, controllerPos,
                     visibleEntries, selectedLayer, camera, new AtomicBoolean());
+            WorldPreviewGpuMesh uploaded = WorldPreviewGpuMesh.upload(compiled);
             if (worldMeshRequest == null) worldMeshRequest = worldMeshCache.requestToken(key);
-            worldMeshCache.publish(worldMeshRequest, compiled);
-            mesh = worldMeshCache.current(key) instanceof WorldPreviewMesh ready ? ready : null;
+            worldMeshCache.publish(worldMeshRequest, uploaded);
+            mesh = worldMeshCache.current(key) instanceof WorldPreviewGpuMesh ready ? ready : null;
             if (mesh == null) return;
         }
 
         RenderSystem.getModelViewStack().pushMatrix();
         RenderSystem.getModelViewStack().set(event.getModelViewMatrix());
         if (event instanceof RenderLevelStageEvent.AfterOpaqueBlocks) {
-            draw(mesh, ChunkSectionLayer.SOLID, RenderTypes.solidMovingBlock());
-            draw(mesh, ChunkSectionLayer.CUTOUT, RenderTypes.cutoutMovingBlock());
+            mesh.draw(ChunkSectionLayer.SOLID, event.getModelViewMatrix());
+            mesh.draw(ChunkSectionLayer.CUTOUT, event.getModelViewMatrix());
         } else {
-            draw(mesh, ChunkSectionLayer.TRANSLUCENT, RenderTypes.translucentMovingBlock());
+            mesh.draw(ChunkSectionLayer.TRANSLUCENT, event.getModelViewMatrix());
         }
         RenderSystem.getModelViewStack().popMatrix();
-    }
-
-    private static void draw(WorldPreviewMesh mesh, ChunkSectionLayer layer, RenderType renderType) {
-        var data = mesh.meshes().get(layer);
-        if (data != null) renderType.draw(data);
     }
 
     private static CachedModel resolveModelForState(BlockState state, Function<BlockState, BlockModel> resolver) {

@@ -8,7 +8,9 @@
     "GuiGraphicsExtractorAccessor",
     "GlBufferAccessor",
     "GlCommandEncoderMixin",
-    "GameRendererMixin"
+    "GameRendererMixin",
+    "RenderTypeAccessor",
+    "RenderSetupAccessor"
   ],
   "injectors": {
     "defaultRequire": 1
