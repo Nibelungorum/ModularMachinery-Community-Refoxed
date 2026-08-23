@@ -65,6 +65,19 @@ class WorldPreviewMeshCacheTest {
     }
 
     @Test
+    void takingCurrentTransfersOwnershipWithoutClosingIt() {
+        WorldPreviewMeshCache cache = new WorldPreviewMeshCache();
+        WorldPreviewMeshKey key = key(0, 0);
+        TrackingMesh mesh = new TrackingMesh();
+        WorldPreviewMeshCache.Request request = cache.requestToken(key);
+        cache.publish(request, mesh);
+
+        assertThat(cache.takeCurrent(key)).isSameAs(mesh);
+        assertThat(mesh.closed).isFalse();
+        assertThat(cache.current()).isNull();
+    }
+
+    @Test
     void stalePublishIsRejectedAndClosed() {
         WorldPreviewMeshCache cache = new WorldPreviewMeshCache();
         WorldPreviewMeshKey firstKey = key(0, 0);

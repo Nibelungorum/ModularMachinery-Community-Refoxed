@@ -8,6 +8,7 @@ import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshCache;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshCompiler;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshKey;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewGpuMesh;
+import cn.howxu.mmcr.client.preview.world.WorldPreviewCompileInput;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
@@ -34,6 +35,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.Function;
 
 /**
@@ -50,7 +54,14 @@ public final class MultiblockPreviewClientHandler {
     private static List<Integer> layers = List.of();
     private static final Map<BlockState, CachedModel> modelCache = new HashMap<>();
     private static final WorldPreviewMeshCache worldMeshCache = new WorldPreviewMeshCache();
+    private static final ExecutorService WORLD_MESH_COMPILER = Executors.newSingleThreadExecutor(
+            Thread.ofPlatform().daemon().name("mmcr-world-preview-compiler-").factory());
     private static WorldPreviewMeshCache.Request worldMeshRequest;
+    private static WorldPreviewMeshCache.Request compilingWorldMeshRequest;
+    private static Future<?> compilingWorldMesh;
+    private static AtomicBoolean compilingWorldMeshCancelled;
+    private static WorldPreviewGpuMesh gpuMesh;
+    private static WorldPreviewMeshKey gpuMeshKey;
     private static final BlockDisplayContext BLOCK_DISPLAY_CONTEXT = BlockDisplayContext.create();
     private static BlockPos visibleEntriesCameraCell;
     private static double visibleEntriesRadius = -1.0;
@@ -202,6 +213,7 @@ public final class MultiblockPreviewClientHandler {
         if (camera != null && !cameraCell.equals(visibleEntriesCameraCell)) {
             worldMeshRequest = worldMeshCache.requestToken(
                     new WorldPreviewMeshKey(dimension, controllerPos, selectedLayer, cameraCell));
+            cancelCompilation();
         }
 
         var candidates = selectedLayer == Integer.MAX_VALUE ? entries : entries.stream()
@@ -228,6 +240,12 @@ public final class MultiblockPreviewClientHandler {
     }
 
     private static void clear() {
+        cancelCompilation();
+        if (gpuMesh != null) {
+            gpuMesh.close();
+            gpuMesh = null;
+            gpuMeshKey = null;
+        }
         worldMeshRequest = null;
         dimension = null;
         controllerPos = null;
@@ -251,16 +269,22 @@ public final class MultiblockPreviewClientHandler {
         rebuildVisibleEntries(camera);
         if (visibleEntries.isEmpty()) return;
         WorldPreviewMeshKey key = worldMeshKey();
-        WorldPreviewGpuMesh mesh = worldMeshCache.current(key) instanceof WorldPreviewGpuMesh current
-                ? current : null;
+        WorldPreviewGpuMesh mesh = gpuMeshKey != null && gpuMeshKey.equals(key) ? gpuMesh : null;
         if (mesh == null) {
-            WorldPreviewMesh compiled = WorldPreviewMeshCompiler.compile(minecraft.level, controllerPos,
-                    visibleEntries, selectedLayer, camera, new AtomicBoolean());
-            WorldPreviewGpuMesh uploaded = WorldPreviewGpuMesh.upload(compiled);
-            if (worldMeshRequest == null) worldMeshRequest = worldMeshCache.requestToken(key);
-            worldMeshCache.publish(worldMeshRequest, uploaded);
-            mesh = worldMeshCache.current(key) instanceof WorldPreviewGpuMesh ready ? ready : null;
-            if (mesh == null) return;
+            if (gpuMesh != null) {
+                gpuMesh.close();
+                gpuMesh = null;
+                gpuMeshKey = null;
+            }
+            AutoCloseable pending = worldMeshCache.takeCurrent(key);
+            if (pending instanceof WorldPreviewMesh compiled) {
+                gpuMesh = WorldPreviewGpuMesh.upload(compiled);
+                gpuMeshKey = key;
+                mesh = gpuMesh;
+            } else {
+                startCompilation(key, minecraft, camera);
+                return;
+            }
         }
 
         RenderSystem.getModelViewStack().pushMatrix();
@@ -276,6 +300,48 @@ public final class MultiblockPreviewClientHandler {
         } finally {
             RenderSystem.getModelViewStack().popMatrix();
         }
+    }
+
+    private static void startCompilation(WorldPreviewMeshKey key, Minecraft minecraft, Vec3 camera) {
+        if (compilingWorldMeshRequest != null && compilingWorldMeshRequest.key().equals(key)) return;
+        cancelCompilation();
+        if (worldMeshRequest == null) worldMeshRequest = worldMeshCache.requestToken(key);
+        WorldPreviewMeshCache.Request request = worldMeshRequest;
+        AtomicBoolean cancelled = new AtomicBoolean(false);
+        List<MultiblockPreviewSnapshot.Entry> compileEntries = List.copyOf(visibleEntries);
+        BlockPos compileController = controllerPos;
+        int compileLayer = selectedLayer;
+        Vec3 compileCamera = camera;
+        WorldPreviewCompileInput input = WorldPreviewCompileInput.capture(minecraft.level, controllerPos,
+                compileEntries, compileLayer, minecraft);
+        compilingWorldMeshRequest = request;
+        compilingWorldMeshCancelled = cancelled;
+        compilingWorldMesh = WORLD_MESH_COMPILER.submit(() -> {
+            WorldPreviewMesh result = null;
+            try {
+                result = WorldPreviewMeshCompiler.compileSnapshot(input, compileController, compileEntries,
+                        compileLayer, compileCamera, cancelled);
+            } catch (RuntimeException exception) {
+                if (!cancelled.get()) MMCR.LOG.error("Cannot compile world preview mesh", exception);
+            }
+            WorldPreviewMesh compiled = result;
+            minecraft.execute(() -> {
+                if (request == compilingWorldMeshRequest) {
+                    compilingWorldMesh = null;
+                    compilingWorldMeshRequest = null;
+                    compilingWorldMeshCancelled = null;
+                }
+                if (compiled != null) worldMeshCache.publish(request, compiled);
+            });
+        });
+    }
+
+    private static void cancelCompilation() {
+        if (compilingWorldMeshCancelled != null) compilingWorldMeshCancelled.set(true);
+        if (compilingWorldMesh != null) compilingWorldMesh.cancel(false);
+        compilingWorldMesh = null;
+        compilingWorldMeshRequest = null;
+        compilingWorldMeshCancelled = null;
     }
 
     private static CachedModel resolveModelForState(BlockState state, Function<BlockState, BlockModel> resolver) {

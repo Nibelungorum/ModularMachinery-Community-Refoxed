@@ -41,6 +41,16 @@ public final class WorldPreviewMeshCache implements AutoCloseable {
         return key.equals(currentKey) ? current : null;
     }
 
+    /** Transfers the current mesh to a render-thread owner without closing it. */
+    public synchronized AutoCloseable takeCurrent(WorldPreviewMeshKey key) {
+        Objects.requireNonNull(key, "key");
+        if (!key.equals(currentKey)) return null;
+        AutoCloseable result = current;
+        current = null;
+        currentKey = null;
+        return result;
+    }
+
     /**
      * Returns an immutable request token for an asynchronous compilation.
      * Repeating the pending key returns the same token.

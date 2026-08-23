@@ -9,6 +9,9 @@ import com.mojang.blaze3d.vertex.VertexSorting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SectionBufferBuilderPack;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
+import net.minecraft.client.color.block.BlockColors;
+import net.minecraft.client.renderer.block.BlockStateModelSet;
+import net.minecraft.client.renderer.block.FluidStateModelSet;
 import net.minecraft.client.renderer.block.BlockQuadOutput;
 import net.minecraft.client.renderer.block.FluidRenderer;
 import net.minecraft.client.renderer.block.ModelBlockRenderer;
@@ -90,6 +93,31 @@ public final class WorldPreviewMeshCompiler {
             List<MultiblockPreviewSnapshot.Entry> entries, int selectedLayer, Vec3 camera,
             AtomicBoolean cancelled, Consumer<CompilationResources> failureInjector) {
         Minecraft minecraft = Minecraft.getInstance();
+        if (cancelled.get()) throw new CancelledCompilation();
+        CompilationPlan plan = plan(controllerPos, entries, selectedLayer);
+        if (minecraft == null) {
+            return compileInternal(null, null, null, false, null, plan, camera, cancelled, failureInjector);
+        }
+        Map<BlockPos, BlockState> visibleStates = new LinkedHashMap<>();
+        plan.entries().forEach(entry -> visibleStates.put(entry.position(), entry.state()));
+        return compileInternal(minecraft.getModelManager().getBlockStateModelSet(),
+                minecraft.getModelManager().getFluidStateModelSet(), minecraft.getBlockColors(),
+                minecraft.options.ambientOcclusion().get(), region(level, visibleStates), plan,
+                camera, cancelled, failureInjector);
+    }
+
+    public static WorldPreviewMesh compileSnapshot(WorldPreviewCompileInput input, BlockPos controllerPos,
+            List<MultiblockPreviewSnapshot.Entry> entries, int selectedLayer, Vec3 camera,
+            AtomicBoolean cancelled) {
+        return compileInternal(input.blockModels(), input.fluidModels(), input.blockColors(),
+                input.ambientOcclusion(), input.region(), plan(controllerPos, entries, selectedLayer),
+                camera, cancelled, ignored -> { });
+    }
+
+    private static WorldPreviewMesh compileInternal(BlockStateModelSet modelSet, FluidStateModelSet fluidSet,
+            BlockColors blockColors, boolean ambientOcclusion, BlockAndTintGetter region,
+            CompilationPlan plan, Vec3 camera, AtomicBoolean cancelled,
+            Consumer<CompilationResources> failureInjector) {
         SectionBufferBuilderPack builders = new SectionBufferBuilderPack();
         Map<ChunkSectionLayer, BufferBuilder> started = new EnumMap<>(ChunkSectionLayer.class);
         Map<ChunkSectionLayer, MeshData> meshes = new EnumMap<>(ChunkSectionLayer.class);
@@ -98,16 +126,10 @@ public final class WorldPreviewMeshCompiler {
         try {
             failureInjector.accept(resources);
             if (cancelled.get()) throw new CancelledCompilation();
-            var modelSet = minecraft.getModelManager().getBlockStateModelSet();
-            var fluidSet = minecraft.getModelManager().getFluidStateModelSet();
             ModelBlockRenderer blockRenderer = new ModelBlockRenderer(
-                    minecraft.options.ambientOcclusion().get(), true, minecraft.getBlockColors());
+                    ambientOcclusion, true, blockColors);
             FluidRenderer fluidRenderer = new FluidRenderer(fluidSet);
-            CompilationPlan plan = plan(controllerPos, entries, selectedLayer);
-            Map<BlockPos, BlockState> visibleStates = new LinkedHashMap<>();
-            plan.entries().forEach(entry -> visibleStates.put(entry.position(), entry.state()));
             blockEntities.addAll(plan.blockEntityPositions());
-            BlockAndTintGetter region = region(level, visibleStates);
             Map<BlockState, BlockStateModel> models = new HashMap<>();
             for (PlannedEntry planned : plan.entries()) {
                 if (cancelled.get()) throw new CancelledCompilation();
