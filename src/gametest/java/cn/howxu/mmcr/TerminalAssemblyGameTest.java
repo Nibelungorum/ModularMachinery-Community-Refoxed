@@ -271,31 +271,89 @@ public class TerminalAssemblyGameTest {
         int previousBudget = Config.BUILD_BLOCKS_PER_TICK.get();
         int previousInterval = Config.MACHINE_CHECK_INTERVAL_TICKS.get();
         Config.BUILD_BLOCKS_PER_TICK.set(1);
-        Config.MACHINE_CHECK_INTERVAL_TICKS.set(1);
+        controller.setStructureCheckIntervalForTesting(1);
         long acceptedAt = helper.getLevel().getGameTime();
         ServerPlayer player = servicePlayer(helper);
+        try {
+            MultiblockAssemblyService.Result accepted = MultiblockAssemblyService.build(player, controller, true);
+            MultiblockAssemblyService.Result duplicate = MultiblockAssemblyService.build(player, controller, true);
 
-        MultiblockAssemblyService.Result accepted = MultiblockAssemblyService.build(player, controller, true);
-        MultiblockAssemblyService.Result duplicate = MultiblockAssemblyService.build(player, controller, true);
-
-        helper.assertTrue(accepted.interactionResult() == InteractionResult.SUCCESS, "Large build request is accepted");
-        helper.assertTrue(duplicate.interactionResult() == InteractionResult.FAIL, "Duplicate build request is rejected while active");
-        int expectedCount = template.size();
-        helper.assertTrue(countPlacedStructureBlocks(helper, template) == 0,
-                "Accepted build waits for the real block ticker");
-        int completionTick = expectedCount + 2;
-        helper.runAtTickTime(completionTick + 50, () -> {
-            helper.assertTrue(helper.getLevel().getGameTime() > acceptedAt + 1, "Build advances across multiple server ticks");
-            for (int placementsThisTick : controller.buildTaskPlacementsPerTickForTesting().values()) {
-                helper.assertTrue(placementsThisTick <= 1, "The server ticker respects the per-tick build budget");
-            }
-            helper.assertTrue(countPlacedStructureBlocks(helper, template) == expectedCount,
-                    "Final placed structure block count is unchanged by duplicate submission");
-            helper.assertTrue(controller.isFormed(), "Controller forms after the build completes");
+            helper.assertTrue(accepted.interactionResult() == InteractionResult.SUCCESS, "Large build request is accepted");
+            helper.assertTrue(duplicate.interactionResult() == InteractionResult.FAIL, "Duplicate build request is rejected while active");
+            int expectedCount = template.size();
+            helper.assertTrue(countPlacedStructureBlocks(helper, template) == 0,
+                    "Accepted build waits for the real block ticker");
+            int completionTick = expectedCount + 2;
+            int scanWaitTicks = 150 - completionTick;
+            helper.runAtTickTime(completionTick + 1, controller::requestImmediateStructureCheck);
+            helper.runAtTickTime(completionTick + scanWaitTicks, () -> {
+                try {
+                    helper.assertTrue(helper.getLevel().getGameTime() > acceptedAt + 1, "Build advances across multiple server ticks");
+                    for (int placementsThisTick : controller.buildTaskPlacementsPerTickForTesting().values()) {
+                        helper.assertTrue(placementsThisTick <= 1, "The server ticker respects the per-tick build budget");
+                    }
+                    for (int batchesThisTick : controller.scanBatchesPerTickForTesting().values()) {
+                        helper.assertTrue(batchesThisTick <= 1, "The structure scanner performs at most one batch per tick");
+                    }
+                    helper.assertTrue(controller.scanBatchCountForTesting() >= Config.DEFAULT_STRUCTURE_SCAN_BATCHES,
+                            "All five structure scan batches execute");
+                    helper.assertTrue(countPlacedStructureBlocks(helper, template) == expectedCount,
+                            "Final placed structure block count is unchanged by duplicate submission");
+                    helper.assertTrue(controller.isFormed(), "Controller forms after the build completes");
+                    helper.succeed();
+                } finally {
+                    Config.BUILD_BLOCKS_PER_TICK.set(previousBudget);
+                    Config.MACHINE_CHECK_INTERVAL_TICKS.set(previousInterval);
+                }
+            });
+        } catch (RuntimeException | Error failure) {
             Config.BUILD_BLOCKS_PER_TICK.set(previousBudget);
             Config.MACHINE_CHECK_INTERVAL_TICKS.set(previousInterval);
-            helper.succeed();
-        });
+            throw failure;
+        }
+    }
+
+    public void incrementalScanRestartsAfterPendingInvalidation(GameTestHelper helper) {
+        BlockPos controllerPos = new BlockPos(4, 1, 4);
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("test_cube")));
+        List<MultiblockAssemblyService.Placement> template = template(controller);
+        BlockPos changedPos = template.getLast().pos();
+        int previousInterval = Config.MACHINE_CHECK_INTERVAL_TICKS.get();
+        controller.setStructureCheckIntervalForTesting(1);
+        try {
+            for (MultiblockAssemblyService.Placement placement : template) {
+                helper.getLevel().setBlock(placement.pos(), placement.state(), 3);
+            }
+            helper.runAtTickTime(1, controller::requestImmediateStructureCheck);
+            helper.runAtTickTime(2, () -> {
+                helper.assertTrue(controller.scanBatchCountForTesting() >= 2,
+                        "The first two scan batches complete before the mutation");
+                int cursorBeforeMutation = controller.structureScanCursorForTesting();
+                helper.getLevel().setBlock(changedPos, Blocks.AIR.defaultBlockState(), 3);
+                controller.onStructureBlockChanged(changedPos);
+                helper.assertTrue(controller.isPendingStructureInvalidationForTesting(),
+                        "A block change during the scan records pending invalidation");
+                helper.getLevel().setBlock(changedPos, template.getFirst().state(), 3);
+                controller.onStructureBlockChanged(changedPos);
+                helper.runAtTickTime(12, () -> {
+                    try {
+                        helper.assertTrue(controller.scanBatchCountForTesting() >= 10,
+                                "A fresh scan runs after the pending invalidation");
+                        helper.assertTrue(controller.scanBatchCountForTesting() > cursorBeforeMutation,
+                                "The invalidated scan does not reuse its old cursor as the final result");
+                        helper.assertTrue(controller.isFormed(), "The restored structure forms after a fresh scan");
+                        helper.succeed();
+                    } finally {
+                        Config.MACHINE_CHECK_INTERVAL_TICKS.set(previousInterval);
+                    }
+                });
+            });
+        } catch (RuntimeException | Error failure) {
+            Config.MACHINE_CHECK_INTERVAL_TICKS.set(previousInterval);
+            throw failure;
+        }
     }
 
     public void disconnectedBuilderDropsReservedMaterials(GameTestHelper helper) {

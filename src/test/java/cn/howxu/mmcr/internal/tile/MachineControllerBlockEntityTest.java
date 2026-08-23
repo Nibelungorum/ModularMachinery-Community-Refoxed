@@ -3040,6 +3040,16 @@ class MachineControllerBlockEntityTest {
 
         assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "structureDirty")).isEqualTo(true);
         assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "structureScan")).isNull();
+        assertThat(controller.matcherInvocationCountForTesting()).isZero();
+        assertThat(controller.isStructureDiagnosticRequestedForTesting()).isTrue();
+    }
+
+    @Test
+    void incremental_scan_reports_one_batch_per_tick() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+
+        assertThat(controller.scanBatchCountForTesting()).isZero();
+        assertThat(controller.matcherInvocationCountForTesting()).isZero();
     }
 
     @Test

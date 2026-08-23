@@ -145,6 +145,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private long structureScanSteppedTick = Long.MIN_VALUE;
     private long structureScanStartedTick = Long.MIN_VALUE;
     private boolean structureCheckActive;
+    private boolean structureDiagnosticRequested;
+    private @Nullable ServerPlayer structureDiagnosticPlayer;
+    private int matcherInvocationCountForTesting;
+    private int scanBatchCountForTesting;
+    private final Map<Long, Integer> scanBatchesPerTickForTesting = new LinkedHashMap<>();
+    private @Nullable Integer structureCheckIntervalOverrideForTesting;
     private boolean clientActive;
     private Boolean lastBroadcastFormed;
     private boolean lastBroadcastActive;
@@ -255,8 +261,26 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void requestImmediateStructureCheck() {
+        requestImmediateStructureCheck(null);
+    }
+
+    public void requestImmediateStructureCheck(@Nullable ServerPlayer diagnosticPlayer) {
         structureDirty = true;
         nextStructureCheckTick = -1L;
+        if (diagnosticPlayer != null) {
+            structureDiagnosticRequested = true;
+            structureDiagnosticPlayer = diagnosticPlayer;
+        }
+    }
+
+    public int matcherInvocationCountForTesting() { return matcherInvocationCountForTesting; }
+    public int scanBatchCountForTesting() { return scanBatchCountForTesting; }
+    public Map<Long, Integer> scanBatchesPerTickForTesting() { return Map.copyOf(scanBatchesPerTickForTesting); }
+    public boolean isStructureDiagnosticRequestedForTesting() { return structureDiagnosticRequested; }
+    public boolean isPendingStructureInvalidationForTesting() { return pendingStructureInvalidation; }
+    public int structureScanCursorForTesting() { return structureScan == null ? -1 : structureScan.cursor(); }
+    public void setStructureCheckIntervalForTesting(@Nullable Integer interval) {
+        structureCheckIntervalOverrideForTesting = interval;
     }
 
     public void onMachineDestroyed() {
@@ -829,6 +853,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             Machine validationMachine = foundCompiledPattern == null ? foundMachine : foundCompiledPattern.machine();
             var replacements = replacementsFor(validationMachine, foundCompiledPattern, facing, foundPattern, matchedRollFacing);
             boolean stateSensitive = foundCompiledPattern != null && foundCompiledPattern.stateSensitive();
+            matcherInvocationCountForTesting++;
             boolean stillMatches = hasCompiledFacing(foundCompiledPattern, facing)
                     ? StructureMatcher.matchesCompiledLoaded(foundCompiledPattern, facing, matchedRollFacing,
                     level, getBlockPos(), replacements, stateSensitive)
@@ -918,7 +943,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return StructureMatcher.isAreaLoaded(foundCompiledPattern, controllerFacing, level, getBlockPos());
     }
 
-    private static int structureCheckIntervalTicks() {
+    private int structureCheckIntervalTicks() {
+        if (structureCheckIntervalOverrideForTesting != null) return structureCheckIntervalOverrideForTesting;
         try {
             return Config.MACHINE_CHECK_INTERVAL_TICKS.get();
         } catch (IllegalStateException ignored) {
@@ -957,6 +983,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             Machine validationMachine = compiled == null ? machine : compiled.machine();
             Map<BlockPos, List<SingleBlockModifierReplacement>> replacements = replacementsFor(validationMachine, compiled, facing, rotatedPattern, candidatePattern.rollFacing());
             boolean stateSensitive = compiled != null && compiled.stateSensitive();
+            matcherInvocationCountForTesting++;
             var mismatch = StructureMatcher.firstMismatch(rotatedPattern, level, getBlockPos(), replacements, stateSensitive);
             if (mismatch.isPresent()) {
                 sendStructureMismatchDiagnostic(player, mismatch.get());
@@ -1231,6 +1258,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         var replacements = replacementsFor(validationMachine, stageCompiled, facing, rotatedPattern, candidatePattern.rollFacing());
         boolean stateSensitive = stageCompiled != null && stageCompiled.stateSensitive();
         if (!structureCheckActive || rotatedPattern.pattern().size() <= structureScanBatches()) {
+            matcherInvocationCountForTesting++;
             boolean matches = stageCompiled != null && hasCompiledFacing(stageCompiled, facing)
                     ? StructureMatcher.matchesCompiled(stageCompiled, facing, candidatePattern.rollFacing(), level,
                     getBlockPos(), replacements, stateSensitive)
@@ -1258,6 +1286,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
             clearStructureScan();
             return false;
         }
+        scanBatchCountForTesting++;
+        scanBatchesPerTickForTesting.merge(level.getGameTime(), 1, Integer::sum);
         StructureMatcher.ScanResult scanResult = structureScan.step(level, getBlockPos());
         if (scanResult.inProgress()) return false;
         if (scanResult.status() == StructureMatcher.ScanStatus.INVALIDATED) {
@@ -1268,7 +1298,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (scanResult.status() == StructureMatcher.ScanStatus.MISMATCH) {
             previousStructureMismatch = scanResult.mismatch().orElse(null);
             previousStructureMismatchPattern = rotatedPattern;
-            recordStructureMismatch(candidate, facing, rotatedPattern, replacements, stateSensitive);
+            if (scanResult.mismatch().isPresent()) {
+                sendRequestedStructureDiagnostic(scanResult.mismatch().get());
+            } else {
+                recordStructureMismatch(candidate, facing, rotatedPattern, replacements, stateSensitive);
+            }
             clearStructureScan();
             pendingStructureInvalidation = false;
             nextStructureCheckTick = level.getGameTime() + structureCheckIntervalTicks();
@@ -1295,6 +1329,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (!identityChanged && level.getGameTime() - structureScanStartedTick > structureScanTimeoutTicks()) {
             structureScan.invalidate(StructureMatcher.InvalidationReason.TIMEOUT);
         }
+        scanBatchCountForTesting++;
+        scanBatchesPerTickForTesting.merge(level.getGameTime(), 1, Integer::sum);
         StructureMatcher.ScanResult scanResult = structureScan.step(level, getBlockPos());
         if (scanResult.inProgress()) return;
         CandidatePattern candidatePattern = scanCandidate;
@@ -1313,8 +1349,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
             var validationMachine = candidatePattern.compiled() == null ? candidate : candidatePattern.compiled().machine();
             var replacements = replacementsFor(validationMachine, candidatePattern.compiled(),
                     getBlockState().getValue(MachineControllerBlock.FACING), candidatePattern.pattern(), candidatePattern.rollFacing());
-            recordStructureMismatch(candidate, getBlockState().getValue(MachineControllerBlock.FACING),
-                    candidatePattern.pattern(), replacements, candidatePattern.compiled() != null && candidatePattern.compiled().stateSensitive());
+            if (scanResult.mismatch().isPresent()) {
+                sendRequestedStructureDiagnostic(scanResult.mismatch().get());
+            } else {
+                recordStructureMismatch(candidate, getBlockState().getValue(MachineControllerBlock.FACING),
+                        candidatePattern.pattern(), replacements, candidatePattern.compiled() != null && candidatePattern.compiled().stateSensitive());
+            }
             pendingStructureInvalidation = false;
             nextStructureCheckTick = level.getGameTime() + structureCheckIntervalTicks();
             return;
@@ -1359,18 +1399,21 @@ public class MachineControllerBlockEntity extends BlockEntity {
         var failure = validationMachine.portRequirements().validate(countPorts(rotatedPattern, stageCompiled, facing));
         if (failure.isPresent()) {
             recordFormationFailure(candidate, failure.get());
+            sendRequestedStructureDiagnostic(null);
             return false;
         }
 
         failure = validatePortTiers(validationMachine, rotatedPattern, stageCompiled, facing);
         if (failure.isPresent()) {
             recordFormationFailure(candidate, failure.get());
+            sendRequestedStructureDiagnostic(null);
             return false;
         }
 
         failure = validateFactoryControllerCount(validationMachine, rotatedPattern, stageCompiled, facing);
         if (failure.isPresent()) {
             recordFormationFailure(candidate, failure.get());
+            sendRequestedStructureDiagnostic(null);
             return false;
         }
 
@@ -1401,6 +1444,17 @@ public class MachineControllerBlockEntity extends BlockEntity {
         scanMachine = null;
         scanCandidate = null;
         structureScanStartedTick = Long.MIN_VALUE;
+    }
+
+    private void sendRequestedStructureDiagnostic(@Nullable StructureMatcher.Mismatch mismatch) {
+        if (!structureDiagnosticRequested || structureDiagnosticPlayer == null) return;
+        if (mismatch != null) {
+            sendStructureMismatchDiagnostic(structureDiagnosticPlayer, mismatch);
+        } else if (lastFormationFailure != null) {
+            sendFormationFailureDiagnostic(structureDiagnosticPlayer, lastFormationFailure);
+        }
+        structureDiagnosticRequested = false;
+        structureDiagnosticPlayer = null;
     }
 
     private void invalidateStructureScan(StructureMatcher.InvalidationReason reason) {
@@ -1446,7 +1500,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         catch (IllegalStateException ignored) { return Config.DEFAULT_STRUCTURE_SCAN_BATCHES; }
     }
 
-    private static long structureScanTimeoutTicks() {
+    private long structureScanTimeoutTicks() {
         return (long) structureCheckIntervalTicks() * structureScanBatches();
     }
 
