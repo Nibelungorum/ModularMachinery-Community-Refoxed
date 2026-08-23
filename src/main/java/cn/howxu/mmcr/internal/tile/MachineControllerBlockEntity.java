@@ -846,7 +846,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 lastStructureError = null;
                 return;
             }
-            resetMachine();
+            resetMachine(true, true, false);
             tryFormMachine(machine, facing);
             return;
         }
@@ -1779,10 +1779,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void resetMachine(boolean clearFormationFailure) {
-        resetMachine(clearFormationFailure, true);
+        resetMachine(clearFormationFailure, true, true);
     }
 
     private void resetMachine(boolean clearFormationFailure, boolean updateBlockState) {
+        resetMachine(clearFormationFailure, updateBlockState, true);
+    }
+
+    private void resetMachine(boolean clearFormationFailure, boolean updateBlockState, boolean invalidateScheduledCheck) {
         boolean wasFormed = isFormed();
         if (wasFormed && level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.clearConnectionsFor(serverLevel, this);
         Identifier dropped = foundMachine == null ? null : foundMachine.registryName();
@@ -1804,7 +1808,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         FORMED_CONTROLLERS.remove(this);
         components.clear();
         structureDirty = false;
-        if (wasFormed) nextStructureCheckTick = -1L;
+        if (wasFormed && invalidateScheduledCheck) nextStructureCheckTick = -1L;
         if (active != null) {
             returnContext(context);
             active = null;

@@ -2899,6 +2899,53 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void formed_mismatch_waits_full_interval_after_becoming_unformed() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        DynamicMachine machine = new DynamicMachine(MMCR.id("schedule_mismatch_machine"), "Schedule Mismatch",
+                onePortPattern(Blocks.IRON_BLOCK));
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, Blocks.IRON_BLOCK);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        AtomicInteger checks = new AtomicInteger();
+        controller.setStructureCheckCallbackForTesting(checks::incrementAndGet);
+
+        BlockPos structurePos = controllerPos.offset(1, 0, 0);
+        levelOf(controller).setBlock(structurePos, Blocks.AIR.defaultBlockState(), 3);
+        controller.onStructureBlockChanged(structurePos);
+        tickController(controller, 1);
+
+        assertThat(checks).hasValue(1);
+        assertThat(controller.isFormed()).isFalse();
+        tickController(controller, Config.DEFAULT_MACHINE_CHECK_INTERVAL_TICKS - 1);
+        assertThat(checks).hasValue(1);
+        tickController(controller, 1);
+        assertThat(checks).hasValue(2);
+    }
+
+    @Test
+    void configured_interval_above_default_is_not_capped() throws Exception {
+        int configuredInterval = Config.DEFAULT_MACHINE_CHECK_INTERVAL_TICKS + 40;
+        setConfigIntervalForTesting(configuredInterval);
+        try {
+            BlockPos controllerPos = new BlockPos(10, 4, 10);
+            DynamicMachine machine = new DynamicMachine(MMCR.id("schedule_configured_interval_machine"),
+                    "Schedule Configured Interval", onePortPattern(Blocks.IRON_BLOCK));
+            MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, Blocks.IRON_BLOCK);
+            assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+            AtomicInteger checks = new AtomicInteger();
+            controller.setStructureCheckCallbackForTesting(checks::incrementAndGet);
+            setField(MachineControllerBlockEntity.class, controller, "structureDirty", false);
+            setField(MachineControllerBlockEntity.class, controller, "nextStructureCheckTick", (long) configuredInterval);
+
+            tickController(controller, configuredInterval - 1);
+            assertThat(checks).hasValue(0);
+            tickController(controller, 1);
+            assertThat(checks).hasValue(1);
+        } finally {
+            setConfigIntervalForTesting(Config.DEFAULT_MACHINE_CHECK_INTERVAL_TICKS);
+        }
+    }
+
+    @Test
     void explicit_request_runs_on_next_tick_without_synchronous_full_scan() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         DynamicMachine machine = new DynamicMachine(MMCR.id("schedule_request_machine"), "Schedule Request",
@@ -4144,6 +4191,12 @@ class MachineControllerBlockEntityTest {
         Field field = declaringClass.getDeclaredField(name);
         field.setAccessible(true);
         field.set(target, value);
+    }
+
+    private static void setConfigIntervalForTesting(int interval) throws ReflectiveOperationException {
+        Field field = Config.MACHINE_CHECK_INTERVAL_TICKS.getClass().getSuperclass().getDeclaredField("cachedValue");
+        field.setAccessible(true);
+        field.set(Config.MACHINE_CHECK_INTERVAL_TICKS, interval);
     }
 
     private static Object fieldValue(Class<?> declaringClass, Object target, String name) throws ReflectiveOperationException {
