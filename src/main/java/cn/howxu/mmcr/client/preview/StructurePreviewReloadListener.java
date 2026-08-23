@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.client.preview;
 
+import cn.howxu.mmcr.client.MultiblockPreviewClientHandler;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
 
 import java.lang.ref.WeakReference;
@@ -29,6 +30,7 @@ public final class StructurePreviewReloadListener implements PreparableReloadLis
                                           PreparationBarrier preparationBarrier, Executor reloadExecutor) {
         return CompletableFuture.completedFuture(null).thenCompose(preparationBarrier::wait).thenRunAsync(() -> {
             StructurePreviewCompilationCache.instance().clear();
+            MultiblockPreviewClientHandler.invalidateWorldPreviewForReload();
             synchronized (StructurePreviewReloadListener.class) {
                 RENDERERS.removeIf(reference -> {
                     StructurePreviewRenderer renderer = reference.get();

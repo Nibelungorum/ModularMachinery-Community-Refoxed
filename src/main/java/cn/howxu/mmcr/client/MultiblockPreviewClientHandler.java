@@ -162,6 +162,13 @@ public final class MultiblockPreviewClientHandler {
         clear();
     }
 
+    public static void invalidateWorldPreviewForReload() {
+        Minecraft.getInstance().execute(() -> {
+            worldMeshRequest = null;
+            worldMeshCache.clear();
+        });
+    }
+
     private static boolean isActive(long now) {
         return controllerPos != null && expiresAtTick > now;
     }

@@ -1026,6 +1026,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return true;
     }
 
+    public void clearStructurePreview(ServerPlayer player) {
+        previewReceivers().remove(player.getUUID());
+        if (level instanceof ServerLevel serverLevel) {
+            PacketDistributor.sendToPlayer(player, PktMultiblockPreviewPayload.clear(serverLevel.dimension(), getBlockPos()));
+        }
+    }
+
     void rememberPreviewReceiverForTesting(UUID playerId, long now, int durationTicks) {
         rememberPreviewReceiver(playerId, now, durationTicks);
     }

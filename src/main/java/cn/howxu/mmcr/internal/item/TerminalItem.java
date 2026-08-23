@@ -58,10 +58,17 @@ public class TerminalItem extends Item {
         if (!(blockEntity instanceof MachineControllerBlockEntity controller)) return InteractionResult.SUCCESS;
 
         TerminalMode mode = mode(context.getItemInHand());
-        MultiblockAssemblyService.Result result = mode == TerminalMode.BUILD
-                ? MultiblockAssemblyService.build(serverPlayer, controller, serverPlayer.isCreative())
-                : MultiblockAssemblyService.demolish(serverPlayer, controller, Config.TERMINAL_MAX_DEMOLISH_BLOCKS.get(),
-                        serverPlayer.isCreative() ? stack -> {} : new PlayerInventoryStructureItemSink(serverPlayer));
+        MultiblockAssemblyService.Result result;
+        if (mode == TerminalMode.BUILD) {
+            try {
+                result = MultiblockAssemblyService.build(serverPlayer, controller, serverPlayer.isCreative());
+            } finally {
+                controller.clearStructurePreview(serverPlayer);
+            }
+        } else {
+            result = MultiblockAssemblyService.demolish(serverPlayer, controller, Config.TERMINAL_MAX_DEMOLISH_BLOCKS.get(),
+                    serverPlayer.isCreative() ? stack -> {} : new PlayerInventoryStructureItemSink(serverPlayer));
+        }
         serverPlayer.sendSystemMessage(Component.translatable(result.message().key(), result.message().args()));
         return result.interactionResult();
     }
