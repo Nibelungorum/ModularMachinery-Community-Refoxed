@@ -76,6 +76,10 @@ public final class WorldPreviewMeshCompiler {
         return layer == ChunkSectionLayer.TRANSLUCENT;
     }
 
+    static boolean needsTranslucentResort(Vec3 previousCamera, Vec3 camera) {
+        return previousCamera == null || !previousCamera.equals(camera);
+    }
+
     public static WorldPreviewMesh compile(Level level, BlockPos controllerPos,
             List<MultiblockPreviewSnapshot.Entry> entries, int selectedLayer, Vec3 camera,
             AtomicBoolean cancelled) {

@@ -16,6 +16,7 @@ import net.minecraft.client.renderer.rendertype.RenderTypes;
 import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.EnumMap;
 import java.util.Map;
@@ -34,9 +35,11 @@ public final class WorldPreviewGpuMesh implements AutoCloseable {
             ChunkSectionLayer.TRANSLUCENT, RenderTypes.translucentMovingBlock());
 
     private final Map<ChunkSectionLayer, Layer> layers;
+    private final WorldPreviewMesh source;
     private boolean closed;
 
-    private WorldPreviewGpuMesh(Map<ChunkSectionLayer, Layer> layers) {
+    private WorldPreviewGpuMesh(WorldPreviewMesh source, Map<ChunkSectionLayer, Layer> layers) {
+        this.source = source;
         this.layers = Map.copyOf(layers);
     }
 
@@ -47,9 +50,7 @@ public final class WorldPreviewGpuMesh implements AutoCloseable {
             for (Map.Entry<ChunkSectionLayer, MeshData> entry : mesh.meshes().entrySet()) {
                 uploaded.put(entry.getKey(), Layer.upload(entry.getValue()));
             }
-            WorldPreviewGpuMesh result = new WorldPreviewGpuMesh(uploaded);
-            mesh.close();
-            return result;
+            return new WorldPreviewGpuMesh(mesh, uploaded);
         } catch (RuntimeException exception) {
             uploaded.values().forEach(layer -> layer.closeSuppressing(exception));
             mesh.close();
@@ -78,6 +79,10 @@ public final class WorldPreviewGpuMesh implements AutoCloseable {
         try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
                 () -> "MMCR world preview " + layer, color, OptionalInt.empty(), depth, OptionalDouble.empty())) {
             pass.setPipeline(setupAccessor.mmcr$getPipeline());
+            var scissor = RenderSystem.getScissorStateForRenderTypeDraws();
+            if (scissor.enabled()) {
+                pass.enableScissor(scissor.x(), scissor.y(), scissor.width(), scissor.height());
+            }
             RenderSystem.bindDefaultUniforms(pass);
             pass.setUniform("DynamicTransforms", transforms);
             pass.setVertexBuffer(0, gpuLayer.vertices());
@@ -95,18 +100,51 @@ public final class WorldPreviewGpuMesh implements AutoCloseable {
         if (closed) return;
         closed = true;
         layers.values().forEach(Layer::close);
+        source.close();
     }
 
-    private record Layer(GpuBuffer vertices, GpuBuffer indices, VertexFormat.IndexType indexType, int indexCount)
-            implements AutoCloseable {
+    public void resortTranslucent(Vec3 camera) {
+        RenderSystem.assertOnRenderThread();
+        Layer layer = layers.get(ChunkSectionLayer.TRANSLUCENT);
+        if (layer == null || !WorldPreviewMeshCompiler.needsTranslucentResort(layer.camera(), camera)) return;
+        layer.replaceIndices(source.sortedTranslucentIndex(camera), camera);
+    }
+
+    private static final class Layer implements AutoCloseable {
+        private final GpuBuffer vertices;
+        private GpuBuffer indices;
+        private final boolean ownsIndices;
+        private final VertexFormat.IndexType indexType;
+        private final int indexCount;
+        private Vec3 camera;
+
+        private Layer(GpuBuffer vertices, GpuBuffer indices, boolean ownsIndices,
+                VertexFormat.IndexType indexType, int indexCount) {
+            this.vertices = vertices;
+            this.indices = indices;
+            this.ownsIndices = ownsIndices;
+            this.indexType = indexType;
+            this.indexCount = indexCount;
+        }
+
+        private GpuBuffer vertices() { return vertices; }
+        private GpuBuffer indices() { return indices; }
+        private VertexFormat.IndexType indexType() { return indexType; }
+        private int indexCount() { return indexCount; }
+
         private static Layer upload(MeshData mesh) {
             MeshData.DrawState drawState = mesh.drawState();
             GpuBuffer vertices = RenderSystem.getDevice().createBuffer(
                     () -> "MMCR preview vertices", GpuBuffer.USAGE_VERTEX, mesh.vertexBuffer());
             try {
+                if (mesh.indexBuffer() == null) {
+                    var sequential = RenderSystem.getSequentialBuffer(drawState.mode());
+                    return new Layer(vertices, sequential.getBuffer(drawState.indexCount()), false,
+                            sequential.type(), drawState.indexCount());
+                }
                 GpuBuffer indices = RenderSystem.getDevice().createBuffer(
                         () -> "MMCR preview indices", GpuBuffer.USAGE_INDEX, mesh.indexBuffer());
-                return new Layer(vertices, indices, drawState.indexType(), drawState.indexCount());
+                return new Layer(vertices, indices, true, drawState.indexType(), drawState.indexCount());
             } catch (RuntimeException exception) {
                 vertices.close();
                 throw exception;
@@ -115,8 +153,19 @@ public final class WorldPreviewGpuMesh implements AutoCloseable {
 
         @Override
         public void close() {
-            indices.close();
+            if (ownsIndices) indices.close();
             vertices.close();
+        }
+
+        private Vec3 camera() { return camera; }
+
+        private void replaceIndices(com.mojang.blaze3d.vertex.ByteBufferBuilder.Result sorted, Vec3 camera) {
+            if (sorted == null) return;
+            GpuBuffer replacement = RenderSystem.getDevice().createBuffer(
+                    () -> "MMCR preview translucent indices", GpuBuffer.USAGE_INDEX, sorted.byteBuffer());
+            if (ownsIndices) indices.close();
+            indices = replacement;
+            this.camera = camera;
         }
 
         private void closeSuppressing(RuntimeException failure) {

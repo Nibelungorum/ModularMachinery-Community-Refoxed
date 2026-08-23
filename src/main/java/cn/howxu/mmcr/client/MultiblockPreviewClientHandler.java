@@ -264,14 +264,18 @@ public final class MultiblockPreviewClientHandler {
         }
 
         RenderSystem.getModelViewStack().pushMatrix();
-        RenderSystem.getModelViewStack().set(event.getModelViewMatrix());
-        if (event instanceof RenderLevelStageEvent.AfterOpaqueBlocks) {
-            mesh.draw(ChunkSectionLayer.SOLID, event.getModelViewMatrix());
-            mesh.draw(ChunkSectionLayer.CUTOUT, event.getModelViewMatrix());
-        } else {
-            mesh.draw(ChunkSectionLayer.TRANSLUCENT, event.getModelViewMatrix());
+        try {
+            RenderSystem.getModelViewStack().set(event.getModelViewMatrix());
+            if (event instanceof RenderLevelStageEvent.AfterOpaqueBlocks) {
+                mesh.draw(ChunkSectionLayer.SOLID, event.getModelViewMatrix());
+                mesh.draw(ChunkSectionLayer.CUTOUT, event.getModelViewMatrix());
+            } else {
+                mesh.resortTranslucent(camera);
+                mesh.draw(ChunkSectionLayer.TRANSLUCENT, event.getModelViewMatrix());
+            }
+        } finally {
+            RenderSystem.getModelViewStack().popMatrix();
         }
-        RenderSystem.getModelViewStack().popMatrix();
     }
 
     private static CachedModel resolveModelForState(BlockState state, Function<BlockState, BlockModel> resolver) {

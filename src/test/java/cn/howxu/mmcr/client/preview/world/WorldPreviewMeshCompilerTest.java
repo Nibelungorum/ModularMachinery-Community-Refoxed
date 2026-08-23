@@ -100,6 +100,16 @@ class WorldPreviewMeshCompilerTest {
     }
 
     @Test
+    void translucentSortIsRebuiltWhenCameraMovesWithinTheSameBlock() {
+        var camera = new net.minecraft.world.phys.Vec3(1.25, 2.5, 3.75);
+
+        assertThat(WorldPreviewMeshCompiler.needsTranslucentResort(null, camera)).isTrue();
+        assertThat(WorldPreviewMeshCompiler.needsTranslucentResort(camera,
+                new net.minecraft.world.phys.Vec3(1.5, 2.5, 3.75))).isTrue();
+        assertThat(WorldPreviewMeshCompiler.needsTranslucentResort(camera, camera)).isFalse();
+    }
+
+    @Test
     void compileClosesIntermediateBuildersAndMeshDataOnFailure() {
         AtomicReference<WorldPreviewMeshCompiler.CompilationResources> resources = new AtomicReference<>();
         AtomicReference<MeshData> intermediateMesh = new AtomicReference<>();
