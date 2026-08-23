@@ -412,6 +412,46 @@ class StructurePreviewSchemaFactoryTest {
     }
 
     @Test
+    void factory_uses_vertical_facing_for_required_vertical_machines() {
+        Block controller = ModBlocks.controllerFor(MMCR.id("test_cube")).get();
+        BlockPos rawStructureBlock = new BlockPos(0, 0, 1);
+        BlockArray pattern = new BlockArray(Map.of(
+                BlockPos.ZERO, new BlockPredicate.OfBlock(controller),
+                rawStructureBlock, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+        MachineStructureStage stage = new MachineStructureStage(1, pattern, PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
+        Machine machine = new Machine() {
+            @Override
+            public Identifier registryName() {
+                return MMCR.id("vertical_preview");
+            }
+
+            @Override
+            public BlockArray pattern() {
+                return pattern;
+            }
+
+            @Override
+            public MachineControllerSpec controller() {
+                MachineControllerSpec defaults = MachineControllerSpec.defaultsFor(registryName());
+                return new MachineControllerSpec(defaults.id(), defaults.frontTexture(), defaults.sideTexture(),
+                        defaults.topTexture(), defaults.bottomTexture(), true, false, true);
+            }
+
+            @Override
+            public List<MachineStructureStage> structureStages() {
+                return List.of(stage);
+            }
+        };
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(machine);
+
+        assertThat(schema.stateAt(BlockPos.ZERO).getValue(MachineControllerBlock.FACING)).isEqualTo(Direction.UP);
+        assertThat(schema.stateAt(new BlockPos(0, 1, 0))).isEqualTo(Blocks.IRON_BLOCK.defaultBlockState());
+        assertThat(schema.stateAt(rawStructureBlock)).isNull();
+    }
+
+    @Test
     void factory_uses_one_shared_highest_level_for_all_slots() {
         Identifier coil = MMCR.id("preview_coil");
         registerLevels(Map.of(coil, List.of(Blocks.COPPER_BLOCK, Blocks.IRON_BLOCK)));

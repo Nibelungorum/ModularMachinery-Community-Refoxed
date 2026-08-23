@@ -40,7 +40,8 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         Objects.requireNonNull(machine, "machine");
         List<MachineStructureStage> stages = machine.structureStages();
         if (stages.isEmpty()) throw new IllegalArgumentException("machine structure stages empty");
-        return create(stages.getFirst(), machine.registryName(), Direction.SOUTH);
+        Direction facing = machine.controller().requireVerticalFacing() ? Direction.UP : Direction.SOUTH;
+        return create(stages.getFirst(), machine.registryName(), facing);
     }
 
     public StructurePreviewSchema create(MachineStructureStage stage, Identifier machineId) {
@@ -157,10 +158,15 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
                                           Map<BlockPos, BlockPredicate> pattern) {
         if (!hasController(pattern)) return state;
         Direction correctedFacing = correctedControllerFacing(pattern);
-        if (correctedFacing == null || !facing.getAxis().isHorizontal()) return state;
         if (state.getBlock() instanceof MachineControllerBlock && position.equals(BlockPos.ZERO)) {
-            return state.setValue(MachineControllerBlock.FACING, correctedFacing);
+            if (facing.getAxis().isVertical()) {
+                return state.setValue(MachineControllerBlock.FACING, facing);
+            }
+            if (correctedFacing == null) return state;
+            Direction controllerFacing = correctedFacing;
+            return state.setValue(MachineControllerBlock.FACING, controllerFacing);
         }
+        if (correctedFacing == null || !facing.getAxis().isHorizontal()) return state;
         return state.rotate(rotationBetween(facing, correctedFacing));
     }
 

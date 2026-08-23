@@ -16,5 +16,7 @@ public final class BuiltInProvider implements MachineDefinitionProvider {
         THERMAL_SMELTING_FURNACE.registerDefinitions(event);
         PURPUR_FURNACE.registerDefinitions(event);
         DISTILLATION_TOWER.registerDefinitions(event);
+        SPACE.registerDefinitions(event);
+        MONSTER_FARM.registerDefinitions(event);
     }
 }

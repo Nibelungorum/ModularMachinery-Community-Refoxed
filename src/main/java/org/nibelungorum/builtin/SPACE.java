@@ -5,11 +5,17 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.*;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
+import cn.howxu.mmcr.api.publicapi.recipe.component.ComponentPredicate;
+import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
+import com.google.gson.JsonObject;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+
+import java.util.Map;
 
 import static cn.howxu.mmcr.api.publicapi.PublicBuiltinRegistration.id;
 import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.*;
@@ -115,16 +121,39 @@ public class SPACE {
         }
     }
 
+    private static DataComponentPredicateSet potion(String potionId) {
+        JsonObject contents = new JsonObject();
+        contents.addProperty("potion", potionId);
+
+        return new DataComponentPredicateSet(Map.of(
+                Identifier.parse("minecraft:potion_contents"),
+                ComponentPredicate.exact(contents)));
+    }
+
     // recipe has multiple id use, do not use event.recipes().containsKey(BLAST_FURNACE)
     @SubscribeEvent
     public static void register(MMCRMachineRecipesEvent event) {
         var recipe = MachineRecipeBuilder
-                .recipe(SPACE_REASSEMBLER.withSuffix("_recipe_1"), SPACE_REASSEMBLER)
-                .inputItem(Ingredient.of(Items.GOLD_INGOT), 1)
-                .outputItem(Items.GOLD_NUGGET, 10)
-                .inputEnergy(20)
-                .duration(200)
+                .recipe(SPACE_REASSEMBLER.withSuffix("_space_reassembler_1"), SPACE_REASSEMBLER)
+                .inputItem(Ingredient.of(Items.POTION), 1, potion("minecraft:water"), 1F)
+                .outputItem(new ItemStack(Items.POTION), potion("minecraft:healing"))
+                .inputEnergy(100)
+                .parallelized(true)
+                .duration(100)
+                .requiredHost(SPACE_ELEVATOR)
                 .build();
+
+        event.registerRecipe(recipe);
+
+        recipe = MachineRecipeBuilder
+                .recipe(SPACE_ELEVATOR.withSuffix("_recipe_1"), SPACE_ELEVATOR)
+                .inputItem(Items.APPLE, 1)
+                .outputItem(Items.GOLDEN_APPLE, 3)
+                .inputEnergy(100)
+                .parallelized(true)
+                .duration(1000)
+                .build();
+
         event.registerRecipe(recipe);
 
     }
