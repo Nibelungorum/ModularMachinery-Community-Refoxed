@@ -185,7 +185,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable MultiblockAssemblyService.BuildTaskRegistry buildTasks;
     private @Nullable ServerPlayer buildTaskOwner;
     private int buildTaskAge;
-    private final List<Integer> buildTaskPlacementsPerTickForTesting = new ArrayList<>();
+    private final Map<Long, Integer> buildTaskPlacementsPerTickForTesting = new LinkedHashMap<>();
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
@@ -679,8 +679,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return true;
     }
 
-    public List<Integer> buildTaskPlacementsPerTickForTesting() {
-        return List.copyOf(buildTaskPlacementsPerTickForTesting);
+    public Map<Long, Integer> buildTaskPlacementsPerTickForTesting() {
+        return Map.copyOf(buildTaskPlacementsPerTickForTesting);
     }
 
     private boolean advanceBuildTask() {
@@ -689,7 +689,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         ServerPlayer owner = buildTaskOwner;
         if (owner == null || owner.isRemoved() || owner.level() != level
                 || buildTaskAge > Config.BUILD_TASK_TIMEOUT_TICKS.get()) {
-            buildTaskPlacementsPerTickForTesting.add(0);
+            buildTaskPlacementsPerTickForTesting.merge(level.getGameTime(), 0, Integer::sum);
             cancelBuildTask();
             return true;
         }
@@ -697,7 +697,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         buildTaskRegistry().advance(getBlockPos(), placement -> level.getBlockState(placement.pos()).isAir()
                 && level.setBlock(placement.pos(), placement.state(), 3));
         int placedThisTick = buildTaskRegistry().placedCount(getBlockPos()) - placedBefore;
-        buildTaskPlacementsPerTickForTesting.add(placedThisTick);
+        buildTaskPlacementsPerTickForTesting.merge(level.getGameTime(), placedThisTick, Integer::sum);
         var task = buildTaskRegistry().cancel(getBlockPos());
         if (task != null && !task.isComplete()) {
             buildTaskRegistry().submit(task);

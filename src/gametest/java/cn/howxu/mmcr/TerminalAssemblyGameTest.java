@@ -48,10 +48,12 @@ public class TerminalAssemblyGameTest {
         MultiblockAssemblyService.Result result = MultiblockAssemblyService.build(player, controller, true);
 
         helper.assertTrue(result.interactionResult() == InteractionResult.SUCCESS, "Build succeeds in creative service mode");
-        helper.assertTrue(helper.getLevel().getBlockState(missingPos).is(ModBlocks.CASING.get()), "Missing block is built");
-        helper.assertTrue(helper.getLevel().getBlockState(occupiedPos).is(preexistingBlock), "Occupied block is preserved");
         helper.assertTrue(result.changedBlocks() == template.size() - 1, "Build places only missing structure blocks");
-        helper.succeed();
+        helper.runAtTickTime(1, () -> {
+            helper.assertTrue(helper.getLevel().getBlockState(missingPos).is(ModBlocks.CASING.get()), "Missing block is built");
+            helper.assertTrue(helper.getLevel().getBlockState(occupiedPos).is(preexistingBlock), "Occupied block is preserved");
+            helper.succeed();
+        });
     }
 
     public void demolishSkipsAirAndNonMatchingBlocks(GameTestHelper helper) {
@@ -100,9 +102,11 @@ public class TerminalAssemblyGameTest {
 
         helper.assertTrue(result.interactionResult() == InteractionResult.SUCCESS, "Build succeeds in creative service mode");
         helper.assertTrue(result.changedBlocks() == 1, "Default build places only stage 1");
-        helper.assertTrue(helper.getLevel().getBlockState(stage1Pos).is(ModBlocks.CASING.get()), "Stage 1 block is built");
-        helper.assertTrue(helper.getLevel().getBlockState(stage2OnlyPos).isAir(), "Stage 2-only block is not built");
-        helper.succeed();
+        helper.runAtTickTime(1, () -> {
+            helper.assertTrue(helper.getLevel().getBlockState(stage1Pos).is(ModBlocks.CASING.get()), "Stage 1 block is built");
+            helper.assertTrue(helper.getLevel().getBlockState(stage2OnlyPos).isAir(), "Stage 2-only block is not built");
+            helper.succeed();
+        });
     }
 
     public void demolishExpandableFormedStageTwoRemovesCompleteSnapshot(GameTestHelper helper) {
@@ -118,18 +122,19 @@ public class TerminalAssemblyGameTest {
         for (MultiblockAssemblyService.Placement placement : stage2Template) {
             helper.getLevel().setBlock(placement.pos(), placement.state(), 3);
         }
-        controller.serverTick();
-        helper.assertTrue(controller.isFormed(), "Stage 2 structure forms before demolish");
-        helper.assertTrue(controller.getMatchedStructureStage() == 2, "Controller matched stage 2 before demolish");
-
         ServerPlayer player = servicePlayer(helper);
-        MultiblockAssemblyService.Result result = MultiblockAssemblyService.demolish(player, controller, 16, stack -> {});
+        helper.runAtTickTime(1, () -> {
+            helper.assertTrue(controller.isFormed(), "Stage 2 structure forms before demolish");
+            helper.assertTrue(controller.getMatchedStructureStage() == 2, "Controller matched stage 2 before demolish");
 
-        helper.assertTrue(result.interactionResult() == InteractionResult.SUCCESS, "Demolish succeeds in service mode");
-        helper.assertTrue(result.changedBlocks() == 2, "Demolish removes the complete stage 2 snapshot");
-        helper.assertTrue(helper.getLevel().getBlockState(stage1Pos).isAir(), "Stage 1 block is removed");
-        helper.assertTrue(helper.getLevel().getBlockState(stage2Pos).isAir(), "Stage 2-only block is removed");
-        helper.succeed();
+            MultiblockAssemblyService.Result result = MultiblockAssemblyService.demolish(player, controller, 16, stack -> {});
+
+            helper.assertTrue(result.interactionResult() == InteractionResult.SUCCESS, "Demolish succeeds in service mode");
+            helper.assertTrue(result.changedBlocks() == 2, "Demolish removes the complete stage 2 snapshot");
+            helper.assertTrue(helper.getLevel().getBlockState(stage1Pos).isAir(), "Stage 1 block is removed");
+            helper.assertTrue(helper.getLevel().getBlockState(stage2Pos).isAir(), "Stage 2-only block is removed");
+            helper.succeed();
+        });
     }
 
     public void defaultBuildMissingMaterialsExcludeStageTwo(GameTestHelper helper) {
@@ -249,10 +254,12 @@ public class TerminalAssemblyGameTest {
         MultiblockAssemblyService.Result second = MultiblockAssemblyService.build(player, controller, false);
 
         helper.assertTrue(second.changedBlocks() == 3, "Second build places all replenished placements");
-        helper.assertTrue(helper.getLevel().getBlockState(firstPosition).is(firstPlacement.state().getBlock()), "First placement is built");
-        helper.assertTrue(helper.getLevel().getBlockState(missingPosition).is(missingPlacement.state().getBlock()), "Missing placement is built");
-        helper.assertTrue(helper.getLevel().getBlockState(laterAffordablePosition).is(laterPlacement.state().getBlock()), "Later placement is built");
-        helper.succeed();
+        helper.runAtTickTime(1, () -> {
+            helper.assertTrue(helper.getLevel().getBlockState(firstPosition).is(firstPlacement.state().getBlock()), "First placement is built");
+            helper.assertTrue(helper.getLevel().getBlockState(missingPosition).is(missingPlacement.state().getBlock()), "Missing placement is built");
+            helper.assertTrue(helper.getLevel().getBlockState(laterAffordablePosition).is(laterPlacement.state().getBlock()), "Later placement is built");
+            helper.succeed();
+        });
     }
 
     public void buildCompletesAcrossTicksAndRejectsDuplicateSubmission(GameTestHelper helper) {
@@ -272,10 +279,12 @@ public class TerminalAssemblyGameTest {
         helper.assertTrue(accepted.interactionResult() == InteractionResult.SUCCESS, "Large build request is accepted");
         helper.assertTrue(duplicate.interactionResult() == InteractionResult.FAIL, "Duplicate build request is rejected while active");
         int expectedCount = template.size();
+        helper.assertTrue(countPlacedStructureBlocks(helper, template) == 0,
+                "Accepted build waits for the real block ticker");
         int completionTick = expectedCount + 2;
         helper.runAtTickTime(completionTick, () -> {
             helper.assertTrue(helper.getLevel().getGameTime() > acceptedAt + 1, "Build advances across multiple server ticks");
-            for (int placementsThisTick : controller.buildTaskPlacementsPerTickForTesting()) {
+            for (int placementsThisTick : controller.buildTaskPlacementsPerTickForTesting().values()) {
                 helper.assertTrue(placementsThisTick <= 1, "The server ticker respects the per-tick build budget");
             }
             helper.assertTrue(countPlacedStructureBlocks(helper, template) == expectedCount,
@@ -302,14 +311,14 @@ public class TerminalAssemblyGameTest {
         MultiblockAssemblyService.Result accepted = MultiblockAssemblyService.build(player, controller, false);
         helper.assertTrue(accepted.interactionResult() == InteractionResult.SUCCESS, "Survival build reserves materials");
         player.setRemoved(RemovalReason.DISCARDED);
-        helper.runAfterDelay(1, () -> {
+        helper.runAtTickTime(2, () -> {
             long dropped = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
                             new AABB(helper.absolutePos(controllerPos)).inflate(1))
                     .stream()
                     .filter(entity -> entity.getItem().is(ModBlocks.CASING.get().asItem()))
                     .mapToLong(entity -> entity.getItem().getCount())
                     .sum();
-            helper.assertTrue(dropped == template.size() - 1,
+            helper.assertTrue(dropped == template.size(),
                     "A disconnected builder receives every unplaced reserved material as drops");
             Config.BUILD_BLOCKS_PER_TICK.set(previousBudget);
             helper.succeed();

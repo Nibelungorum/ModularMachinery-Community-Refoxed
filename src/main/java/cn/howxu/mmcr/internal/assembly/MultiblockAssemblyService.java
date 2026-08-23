@@ -209,7 +209,6 @@ public final class MultiblockAssemblyService {
         if (!controller.startBuildTask(task, player)) {
             return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.busy"));
         }
-        controller.serverTick();
         return new Result(InteractionResult.SUCCESS, placements.size(),
                 new ComponentKey("message.mmcr.terminal.build.accepted", placements.size()));
     }

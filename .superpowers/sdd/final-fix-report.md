@@ -86,3 +86,23 @@
 ### Commit
 
 - `d7782b2 fix: address final multiblock review findings`
+
+## 预算漏洞修复
+
+### 根因
+
+`MultiblockAssemblyService.build()` 在任务提交成功后主动调用 `controller.serverTick()`，使一次提交在真实 block ticker 之外额外推进一批结构方块；当该调用与同一游戏 tick 的真实 ticker 叠加时，单 tick 总放置量可能超过 `BUILD_BLOCKS_PER_TICK`。
+
+### 修改
+
+- `build()` 现在只提交任务并立即返回 accepted 结果，不再主动推进控制器 ticker。
+- 控制器测试记录按 `level.getGameTime()` 聚合的实际放置数，覆盖同一游戏 tick 的多次推进。
+- GameTest 不再手动调用 `controller.serverTick()`；构建断言等待真实游戏 tick，并保留跨 tick、最终块数、重复提交和每游戏 tick预算断言。
+- 构建完成仍设置 `structureDirty`，由后续真实 ticker 执行结构检查。
+
+### 验证
+
+- 修复前新增 accepted 后零放置断言按预期失败。
+- `./gradlew test --no-daemon`: 通过。
+- `./gradlew runGameTestServer --no-daemon`: 通过。
+- 未运行 `runClient`。
