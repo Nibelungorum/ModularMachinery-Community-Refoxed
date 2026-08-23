@@ -143,18 +143,21 @@ public class E2ERecipeRunGameTest {
             helper.setBlock(secondOutputPos, ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState());
             controller.onStructureBlockChanged(helper.absolutePos(secondOutputPos));
             insertCoal(helper, inputPos);
-        });
-        helper.runAtTickTime(60, () -> {
-            assertDistillationBatchComplete(helper, controller, inputPos);
-            assertDistillationStage(helper, controller, 2);
-            helper.setBlock(thirdOutputPos, ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState());
-            controller.onStructureBlockChanged(helper.absolutePos(thirdOutputPos));
-            insertCoal(helper, inputPos);
-        });
-        helper.runAtTickTime(150, () -> {
-            assertDistillationBatchComplete(helper, controller, inputPos);
-            assertDistillationStage(helper, controller, 3);
-            helper.succeed();
+            helper.startSequence()
+                    .thenWaitUntil(() -> {
+                        assertDistillationBatchComplete(helper, controller, inputPos);
+                        assertDistillationStage(helper, controller, 2);
+                    })
+                    .thenExecute(() -> {
+                        helper.setBlock(thirdOutputPos, ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState());
+                        controller.onStructureBlockChanged(helper.absolutePos(thirdOutputPos));
+                        insertCoal(helper, inputPos);
+                    })
+                    .thenWaitUntil(() -> {
+                        assertDistillationBatchComplete(helper, controller, inputPos);
+                        assertDistillationStage(helper, controller, 3);
+                    })
+                    .thenExecute(helper::succeed);
         });
     }
 
