@@ -44,7 +44,7 @@ MMCREvents.server(event => {
         .set('Z', api.state('minecraft:purpur_stairs[facing=north,half=bottom,shape=outer_left,waterlogged=false]'))
         .set('a', api.state('minecraft:end_stone_brick_stairs[facing=east,half=bottom,shape=outer_left,waterlogged=false]'))
         .set('b', api.state('minecraft:end_stone_brick_stairs[facing=north,half=bottom,shape=straight,waterlogged=false]'))
-
+        .controller('C')
         // Build the structure.
         .build()
 
