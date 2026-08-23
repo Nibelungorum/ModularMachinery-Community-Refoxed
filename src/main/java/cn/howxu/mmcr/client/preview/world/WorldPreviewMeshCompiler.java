@@ -29,11 +29,14 @@ import net.minecraft.world.phys.Vec3;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 
 /**
  * Compiles visible world preview blocks into one reusable mesh per render layer.
@@ -41,7 +44,37 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author howxu <dev@howxu.cn>
  */
 public final class WorldPreviewMeshCompiler {
+    /** Full-bright preview lighting is deliberately independent of the source level light. */
+    static final int FULL_BRIGHT_LEVEL = 15;
+
     private WorldPreviewMeshCompiler() { }
+
+    static CompilationPlan plan(BlockPos controllerPos, List<MultiblockPreviewSnapshot.Entry> entries,
+            int selectedLayer, Function<BlockState, ChunkSectionLayer> blockLayerResolver) {
+        Objects.requireNonNull(controllerPos, "controllerPos");
+        Objects.requireNonNull(entries, "entries");
+        Objects.requireNonNull(blockLayerResolver, "blockLayerResolver");
+        List<PlannedEntry> planned = new ArrayList<>();
+        Set<BlockPos> blockEntities = new HashSet<>();
+        for (MultiblockPreviewSnapshot.Entry entry : entries) {
+            if (selectedLayer != Integer.MAX_VALUE && entry.relativePos().getY() != selectedLayer) continue;
+            BlockState state = entry.state();
+            if (state.isAir()) continue;
+            BlockPos position = controllerPos.offset(entry.relativePos()).immutable();
+            if (state.hasBlockEntity()) blockEntities.add(position);
+            ChunkSectionLayer fluidLayer = state.getFluidState().isEmpty() ? null : ChunkSectionLayer.TRANSLUCENT;
+            planned.add(new PlannedEntry(position, state, blockLayerResolver.apply(state), fluidLayer));
+        }
+        return new CompilationPlan(planned, blockEntities);
+    }
+
+    static int previewLight(LightLayer lightLayer, BlockPos position) {
+        return FULL_BRIGHT_LEVEL;
+    }
+
+    static boolean hasSortMetadata(ChunkSectionLayer layer) {
+        return layer == ChunkSectionLayer.TRANSLUCENT;
+    }
 
     public static WorldPreviewMesh compile(Level level, BlockPos controllerPos,
             List<MultiblockPreviewSnapshot.Entry> entries, int selectedLayer, Vec3 camera,
@@ -58,22 +91,19 @@ public final class WorldPreviewMeshCompiler {
             ModelBlockRenderer blockRenderer = new ModelBlockRenderer(
                     minecraft.options.ambientOcclusion().get(), true, minecraft.getBlockColors());
             FluidRenderer fluidRenderer = new FluidRenderer(fluidSet);
+            CompilationPlan plan = plan(controllerPos, entries, selectedLayer, ignored -> null);
             Map<BlockPos, BlockState> visibleStates = new LinkedHashMap<>();
-            for (MultiblockPreviewSnapshot.Entry entry : entries) {
-                if (selectedLayer != Integer.MAX_VALUE && entry.relativePos().getY() != selectedLayer) continue;
-                BlockPos position = controllerPos.offset(entry.relativePos());
-                if (!entry.state().isAir()) visibleStates.put(position, entry.state());
-            }
+            plan.entries().forEach(entry -> visibleStates.put(entry.position(), entry.state()));
+            blockEntities.addAll(plan.blockEntityPositions());
             BlockAndTintGetter region = region(level, visibleStates);
             Map<BlockState, BlockStateModel> models = new HashMap<>();
             BlockQuadOutput blockOutput = (x, y, z, quad, instance) -> builderFor(started, builders,
                     quad.materialInfo().layer()).putBlockBakedQuad(x, y, z, quad, instance);
-            FluidRenderer.Output fluidOutput = layer -> builderFor(started, builders, layer);
+            FluidRenderer.Output fluidOutput = layer -> builderFor(started, builders, ChunkSectionLayer.TRANSLUCENT);
             for (Map.Entry<BlockPos, BlockState> entry : visibleStates.entrySet()) {
                 if (cancelled.get()) throw new CancelledCompilation();
                 BlockPos position = entry.getKey();
                 BlockState state = entry.getValue();
-                if (state.hasBlockEntity()) blockEntities.add(position.immutable());
                 if (!state.getFluidState().isEmpty()) {
                     fluidRenderer.tesselate(region, position, offset(fluidOutput, position), state,
                             state.getFluidState());
@@ -90,17 +120,36 @@ public final class WorldPreviewMeshCompiler {
             for (Map.Entry<ChunkSectionLayer, BufferBuilder> entry : started.entrySet()) {
                 MeshData mesh = entry.getValue().build();
                 if (mesh == null) continue;
-                if (entry.getKey() == ChunkSectionLayer.TRANSLUCENT) {
+                if (hasSortMetadata(entry.getKey())) {
                     sortState = mesh.sortQuads(builders.buffer(entry.getKey()), sorting);
                 }
                 meshes.put(entry.getKey(), mesh);
             }
             return new WorldPreviewMesh(builders, meshes, sortState, blockEntities);
         } catch (RuntimeException exception) {
-            meshes.values().forEach(MeshData::close);
-            builders.close();
+            List<AutoCloseable> resources = new ArrayList<>(meshes.values());
+            resources.add(builders);
+            try {
+                closeResources(resources);
+            } catch (RuntimeException cleanupFailure) {
+                exception.addSuppressed(cleanupFailure);
+            }
             throw exception;
         }
+    }
+
+    static void closeResources(Iterable<? extends AutoCloseable> resources) {
+        RuntimeException failure = null;
+        for (AutoCloseable resource : resources) {
+            try {
+                resource.close();
+            } catch (Exception exception) {
+                RuntimeException runtime = exception instanceof RuntimeException
+                        ? (RuntimeException) exception : new IllegalStateException("resource cleanup failed", exception);
+                if (failure == null) failure = runtime;
+            }
+        }
+        if (failure != null) throw failure;
     }
 
     private static BufferBuilder builderFor(Map<ChunkSectionLayer, BufferBuilder> started,
@@ -120,7 +169,9 @@ public final class WorldPreviewMeshCompiler {
             @Override public BlockEntity getBlockEntity(BlockPos position) { return level.getBlockEntity(position); }
             @Override public int getHeight() { return level.getHeight(); }
             @Override public int getMinY() { return level.getMinY(); }
-            @Override public int getBrightness(LightLayer lightLayer, BlockPos position) { return 15; }
+            @Override public int getBrightness(LightLayer lightLayer, BlockPos position) {
+                return previewLight(lightLayer, position);
+            }
             @Override public CardinalLighting cardinalLighting() { return CardinalLighting.DEFAULT; }
             @Override public LevelLightEngine getLightEngine() { return level.getLightEngine(); }
             @Override public int getBlockTint(BlockPos position, ColorResolver resolver) {
@@ -156,4 +207,14 @@ public final class WorldPreviewMeshCompiler {
     }
 
     static final class CancelledCompilation extends RuntimeException { }
+
+    record CompilationPlan(List<PlannedEntry> entries, Set<BlockPos> blockEntityPositions) {
+        CompilationPlan {
+            entries = List.copyOf(entries);
+            blockEntityPositions = Set.copyOf(blockEntityPositions);
+        }
+    }
+
+    record PlannedEntry(BlockPos position, BlockState state, ChunkSectionLayer blockLayer,
+            ChunkSectionLayer fluidLayer) { }
 }
