@@ -36,6 +36,8 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
     private GpuTextureView colorTextureView;
     private GpuTexture depthTexture;
     private GpuTextureView depthTextureView;
+    private GpuTexture previewLightmap;
+    private GpuTextureView previewLightmapView;
     private final Projection projection = new Projection();
     private final ProjectionMatrixBuffer projectionMatrixBuffer = new ProjectionMatrixBuffer("MMCR structure preview");
     private PreviewSceneCamera preparedCamera;
@@ -123,7 +125,19 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
     public void close() {
         super.close();
         releaseTargets();
+        if (previewLightmapView != null) previewLightmapView.close();
+        if (previewLightmap != null) previewLightmap.close();
         projectionMatrixBuffer.close();
+    }
+
+    private void ensurePreviewLightmap() {
+        if (previewLightmap != null) return;
+        var device = RenderSystem.getDevice();
+        previewLightmap = device.createTexture(() -> "MMCR preview full-bright lightmap",
+                GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_COPY_DST,
+                TextureFormat.RGBA8, 16, 16, 1, 1);
+        previewLightmapView = device.createTextureView(previewLightmap);
+        device.createCommandEncoder().clearColorTexture(previewLightmap, -1);
     }
 
     @Override
@@ -145,8 +159,10 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
             RenderSystem.setProjectionMatrix(projectionMatrixBuffer.getBuffer(camera.projection()), ProjectionType.PERSPECTIVE);
             modelView.identity();
             modelView.mul(camera.view());
-            PreviewSceneCameraContext.with(camera.viewRotation(), camera.projection(),
-                    () -> state.owner().renderScene(context, state.camera()));
+            ensurePreviewLightmap();
+            PreviewLightmapScope.with(previewLightmapView, () -> PreviewSceneCameraContext.with(
+                    camera.viewRotation(), camera.projection(),
+                    () -> state.owner().renderScene(context, state.camera())));
         } finally {
             modelView.popMatrix();
             RenderSystem.restoreProjectionMatrix();

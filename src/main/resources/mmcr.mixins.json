@@ -7,7 +7,8 @@
     "MeshDataAccessor",
     "GuiGraphicsExtractorAccessor",
     "GlBufferAccessor",
-    "GlCommandEncoderMixin"
+    "GlCommandEncoderMixin",
+    "GameRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1
