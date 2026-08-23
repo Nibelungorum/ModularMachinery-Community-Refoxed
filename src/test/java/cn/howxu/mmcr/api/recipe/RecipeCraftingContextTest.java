@@ -38,13 +38,17 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
+import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.storage.TagValueInput;
@@ -63,6 +67,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.util.ProblemReporter;
+import net.minecraft.data.registries.VanillaRegistries;
 
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
@@ -333,6 +338,38 @@ class RecipeCraftingContextTest {
         assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
         assertThat(output.getItemStackHandler(null).getStackInSlot(1).isEmpty()).isTrue();
+    }
+
+    @Test
+    void commitOutputsMergesLegacyEnchantedStacksUsingItemDefaultCapacity() {
+        bindItemComponents(Items.IRON_NUGGET);
+        ItemStack legacyOutput = new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1);
+        ItemEnchantments.Mutable enchantments = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
+        enchantments.set(enchantment("minecraft:sharpness"), 2);
+        legacyOutput.set(DataComponents.ENCHANTMENTS, enchantments.toImmutable());
+        assertThat(legacyOutput.getMaxStackSize()).isEqualTo(1);
+
+        ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(1, 0, 0));
+        output.getItemStackHandler(null).setStackInSlot(0, legacyOutput.copy());
+        MachineControllerBlockEntity controller = controllerWithComponents(output);
+        MachineRecipe recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr", "legacy_enchanted_output_stack"),
+                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                20,
+                List.of(),
+                List.of(legacyOutput.copy())
+        );
+        RecipeCraftingContext context = new RecipeCraftingContext(controller);
+
+        assertThat(context.simulateOutputs(recipe)).isTrue();
+        assertThat(context.commitSynchronousOutputs(recipe, 1)).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
+        assertThat(output.getItemStackHandler(null).getStackInSlot(1).isEmpty()).isTrue();
+    }
+
+    private static Holder<Enchantment> enchantment(String id) {
+        return VanillaRegistries.createLookup().lookupOrThrow(Registries.ENCHANTMENT)
+                .getOrThrow(ResourceKey.create(Registries.ENCHANTMENT, Identifier.parse(id)));
     }
 
     @Test

@@ -1960,9 +1960,10 @@ public final class RecipeCraftingContext {
 
     private static ItemStack normalizeRecipeOutput(ItemStack stack) {
         if (stack.isEmpty()) return stack;
-        if (!stack.getComponents().isEmpty()) return stack.copy();
         ItemStack normalized = stack.getItem().getDefaultInstance();
-        if (normalized.isEmpty() || stack.getMaxStackSize() >= normalized.getMaxStackSize()) return stack.copy();
+        if (normalized.isEmpty()) return stack.copy();
+        normalized.applyComponents(stack.getComponentsPatch());
+        if (stack.getMaxStackSize() >= normalized.getMaxStackSize()) return stack.copy();
         normalized.setCount(stack.getCount());
         return normalized;
     }
