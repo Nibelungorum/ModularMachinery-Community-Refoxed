@@ -3045,6 +3045,42 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void requested_diagnostic_is_cleared_when_async_scan_forms_structure() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        DynamicMachine machine = new DynamicMachine(MMCR.id("diagnostic_form_success_machine"),
+                "Diagnostic Form Success", onePortPattern(Blocks.IRON_BLOCK));
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, Blocks.IRON_BLOCK);
+        AtomicInteger diagnostics = new AtomicInteger();
+        controller.setStructureDiagnosticCallbackForTesting(diagnostics::incrementAndGet);
+        controller.requestImmediateStructureCheck(interactionPlayerForTesting());
+
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+
+        assertThat(controller.isFormed()).isTrue();
+        assertThat(controller.isStructureDiagnosticRequestedForTesting()).isFalse();
+        assertThat(diagnostics).hasValue(0);
+    }
+
+    @Test
+    void requested_diagnostic_still_reports_a_completed_scan_mismatch() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        DynamicMachine machine = new DynamicMachine(MMCR.id("diagnostic_mismatch_machine"),
+                "Diagnostic Mismatch", onePortPattern(Blocks.IRON_BLOCK));
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, Blocks.AIR);
+        AtomicInteger diagnostics = new AtomicInteger();
+        controller.setStructureDiagnosticCallbackForTesting(diagnostics::incrementAndGet);
+        setField(MachineControllerBlockEntity.class, controller, "structureCheckActive", true);
+        controller.requestImmediateStructureCheck(interactionPlayerForTesting());
+
+        StructureMatcher.Mismatch mismatch = StructureMatcher.firstMismatch(onePortPattern(Blocks.IRON_BLOCK),
+                levelOf(controller), controllerPos).orElseThrow();
+        invokeSendRequestedStructureDiagnostic(controller, mismatch);
+
+        assertThat(diagnostics).hasValue(1);
+        assertThat(controller.isStructureDiagnosticRequestedForTesting()).isFalse();
+    }
+
+    @Test
     void incremental_scan_reports_one_batch_per_tick() throws Exception {
         MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
 
@@ -4194,6 +4230,14 @@ class MachineControllerBlockEntityTest {
         method.invoke(controller);
     }
 
+    private static void invokeSendRequestedStructureDiagnostic(MachineControllerBlockEntity controller,
+                                                               StructureMatcher.Mismatch mismatch) throws Exception {
+        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("sendRequestedStructureDiagnostic",
+                StructureMatcher.Mismatch.class);
+        method.setAccessible(true);
+        method.invoke(controller, mismatch);
+    }
+
     private static void invokeTickActiveRecipe(MachineControllerBlockEntity controller) throws Exception {
         Method method = MachineControllerBlockEntity.class.getDeclaredMethod("tickActiveRecipe");
         method.setAccessible(true);
@@ -4274,6 +4318,13 @@ class MachineControllerBlockEntityTest {
             LevelStub.setGameTime(level, level.getGameTime() + 1);
             controller.serverTick();
         }
+    }
+
+    private static ServerPlayer interactionPlayerForTesting() throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+        return (ServerPlayer) unsafe.allocateInstance(InteractionServerPlayer.class);
     }
 
     private static void setField(Class<?> declaringClass, Object target, String name, Object value) throws ReflectiveOperationException {

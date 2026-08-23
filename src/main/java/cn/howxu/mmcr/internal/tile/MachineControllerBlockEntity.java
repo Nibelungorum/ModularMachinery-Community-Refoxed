@@ -72,6 +72,7 @@ import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -146,7 +147,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private long structureScanStartedTick = Long.MIN_VALUE;
     private boolean structureCheckActive;
     private boolean structureDiagnosticRequested;
-    private @Nullable ServerPlayer structureDiagnosticPlayer;
+    private @Nullable UUID structureDiagnosticPlayerId;
+    private @Nullable ResourceKey<Level> structureDiagnosticDimension;
     private @Nullable Runnable structureDiagnosticCallbackForTesting;
     private int matcherInvocationCountForTesting;
     private int scanBatchCountForTesting;
@@ -272,7 +274,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         nextStructureCheckTick = -1L;
         if (diagnosticPlayer != null) {
             structureDiagnosticRequested = true;
-            structureDiagnosticPlayer = diagnosticPlayer;
+            structureDiagnosticPlayerId = diagnosticPlayer.getUUID();
+            structureDiagnosticDimension = level instanceof ServerLevel serverLevel ? serverLevel.dimension() : null;
         }
     }
 
@@ -1464,18 +1467,39 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void sendRequestedStructureDiagnostic(@Nullable StructureMatcher.Mismatch mismatch) {
-        if (!structureDiagnosticRequested || structureDiagnosticPlayer == null) return;
+        if (!structureDiagnosticRequested) return;
+        UUID playerId = structureDiagnosticPlayerId;
+        ResourceKey<Level> dimension = structureDiagnosticDimension;
+        clearStructureDiagnosticRequest();
         if (mismatch != null) {
-            if (structureDiagnosticCallbackForTesting != null) structureDiagnosticCallbackForTesting.run();
-            else sendStructureMismatchDiagnostic(structureDiagnosticPlayer, mismatch);
+            if (structureDiagnosticCallbackForTesting != null) {
+                structureDiagnosticCallbackForTesting.run();
+            } else if (playerId != null && dimension != null && level instanceof ServerLevel serverLevel
+                    && serverLevel.dimension().equals(dimension)) {
+                ServerPlayer player = serverLevel.getServer().getPlayerList().getPlayer(playerId);
+                if (player != null && player.level().dimension().equals(dimension)) {
+                    sendStructureMismatchDiagnostic(player, mismatch);
+                }
+            }
         } else if (lastFormationFailure != null) {
-            sendFormationFailureDiagnostic(structureDiagnosticPlayer, lastFormationFailure);
+            if (playerId != null && dimension != null && level instanceof ServerLevel serverLevel
+                    && serverLevel.dimension().equals(dimension)) {
+                ServerPlayer player = serverLevel.getServer().getPlayerList().getPlayer(playerId);
+                if (player != null && player.level().dimension().equals(dimension)) {
+                    sendFormationFailureDiagnostic(player, lastFormationFailure);
+                }
+            }
         }
+    }
+
+    private void clearStructureDiagnosticRequest() {
         structureDiagnosticRequested = false;
-        structureDiagnosticPlayer = null;
+        structureDiagnosticPlayerId = null;
+        structureDiagnosticDimension = null;
     }
 
     private void invalidateStructureScan(StructureMatcher.InvalidationReason reason) {
+        clearStructureDiagnosticRequest();
         if (structureScan != null) structureScan.invalidate(reason);
     }
 
@@ -1652,6 +1676,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private void onStructureFormed(Machine matchedMachine, BlockArray rotatedPattern, CompiledMachinePattern compiledPattern,
                                    Direction facing, Direction rollFacing, Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
                                    Map<Identifier, MachineLevel> levels) {
+        clearStructureDiagnosticRequest();
         Machine previousMachine = machine;
         long previousStructureVersion = structureVersion;
         foundMachine = matchedMachine;
