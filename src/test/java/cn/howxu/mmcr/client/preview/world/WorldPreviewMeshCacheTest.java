@@ -43,7 +43,8 @@ class WorldPreviewMeshCacheTest {
         WorldPreviewMeshCache cache = new WorldPreviewMeshCache();
         WorldPreviewMeshKey key = key(0, 0);
         cache.request(key);
-        cache.publish(key, () -> {});
+        WorldPreviewMeshCache.Request request = cache.requestToken(key);
+        cache.publish(request, () -> {});
         cache.clear();
 
         assertThat(cache.current()).isNull();

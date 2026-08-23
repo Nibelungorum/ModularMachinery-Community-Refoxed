@@ -55,13 +55,6 @@ public final class WorldPreviewMeshCache implements AutoCloseable {
         return new Request(pendingKey, pendingGeneration);
     }
 
-    /** Compatibility publication path for callers that do not need same-key generation checks. */
-    public synchronized void publish(WorldPreviewMeshKey key, AutoCloseable mesh) {
-        Objects.requireNonNull(key, "key");
-        Objects.requireNonNull(mesh, "mesh");
-        publish(new Request(key, pendingGeneration), mesh);
-    }
-
     public synchronized void publish(Request request, AutoCloseable mesh) {
         Objects.requireNonNull(request, "request");
         Objects.requireNonNull(mesh, "mesh");
@@ -91,7 +84,22 @@ public final class WorldPreviewMeshCache implements AutoCloseable {
         closed = true;
     }
 
-    public record Request(WorldPreviewMeshKey key, long generation) {
+    public static final class Request {
+        private final WorldPreviewMeshKey key;
+        private final long generation;
+
+        private Request(WorldPreviewMeshKey key, long generation) {
+            this.key = key;
+            this.generation = generation;
+        }
+
+        public WorldPreviewMeshKey key() {
+            return key;
+        }
+
+        public long generation() {
+            return generation;
+        }
     }
 
     private void ensureOpen() {

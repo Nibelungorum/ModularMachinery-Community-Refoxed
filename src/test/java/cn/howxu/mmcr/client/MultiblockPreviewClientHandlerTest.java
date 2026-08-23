@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client;
 
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
+import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshKey;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
@@ -70,6 +71,45 @@ class MultiblockPreviewClientHandlerTest {
     }
 
     @Test
+    void replacingPayloadRequestsTheNewLayerWithoutDroppingVisibleEntries() {
+        MultiblockPreviewClientHandler.clearForTesting();
+        var first = List.of(new MultiblockPreviewSnapshot.Entry(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState()));
+        var replacement = List.of(new MultiblockPreviewSnapshot.Entry(new BlockPos(0, 1, 0), Blocks.GOLD_BLOCK.defaultBlockState()));
+
+        MultiblockPreviewClientHandler.showAtTick(Level.OVERWORLD, BlockPos.ZERO, first, 200, 0L);
+        MultiblockPreviewClientHandler.showAtTick(Level.OVERWORLD, BlockPos.ZERO, replacement, 200, 1L);
+
+        assertEquals(1, MultiblockPreviewClientHandler.visibleEntryCountForTesting());
+        assertEquals(new WorldPreviewMeshKey(Level.OVERWORLD, BlockPos.ZERO, 1, null),
+                MultiblockPreviewClientHandler.worldMeshRequestForTesting().key());
+    }
+
+    @Test
+    void layerChangeRequestsAReplacementMesh() {
+        MultiblockPreviewClientHandler.clearForTesting();
+        var entries = List.of(
+                new MultiblockPreviewSnapshot.Entry(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState()),
+                new MultiblockPreviewSnapshot.Entry(new BlockPos(0, 1, 0), Blocks.GOLD_BLOCK.defaultBlockState()));
+
+        MultiblockPreviewClientHandler.showAtTick(Level.OVERWORLD, BlockPos.ZERO, entries, 200, 0L);
+        MultiblockPreviewClientHandler.showAtTick(Level.OVERWORLD, BlockPos.ZERO, entries, 200, 1L);
+
+        assertEquals(0, MultiblockPreviewClientHandler.worldMeshRequestForTesting().key().selectedLayer());
+    }
+
+    @Test
+    void cameraCellChangeRequestsAReplacementMesh() {
+        MultiblockPreviewClientHandler.clearForTesting();
+        MultiblockPreviewClientHandler.showAtTick(Level.OVERWORLD, BlockPos.ZERO,
+                List.of(new MultiblockPreviewSnapshot.Entry(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState())), 200, 0L);
+
+        MultiblockPreviewClientHandler.rebuildVisibleEntriesForTesting(new Vec3(0.5, 0.5, 0.5));
+        MultiblockPreviewClientHandler.rebuildVisibleEntriesForTesting(new Vec3(2.5, 0.5, 0.5));
+
+        assertEquals(new BlockPos(2, 0, 0), MultiblockPreviewClientHandler.worldMeshRequestForTesting().key().cameraCell());
+    }
+
+    @Test
     void visibleEntriesAreCulledByPreviewRadius() {
         MultiblockPreviewClientHandler.clearForTesting();
         var entries = List.of(
@@ -122,6 +162,7 @@ class MultiblockPreviewClientHandlerTest {
 
         assertEquals(0, MultiblockPreviewClientHandler.visibleEntryCountForTesting());
         assertEquals(0, MultiblockPreviewClientHandler.resolvedModelCacheSizeForTesting());
+        org.junit.jupiter.api.Assertions.assertNull(MultiblockPreviewClientHandler.worldMeshRequestForTesting());
     }
 
     @Test
@@ -136,6 +177,7 @@ class MultiblockPreviewClientHandlerTest {
 
         assertEquals(0, MultiblockPreviewClientHandler.visibleEntryCountForTesting());
         assertEquals(0, MultiblockPreviewClientHandler.resolvedModelCacheSizeForTesting());
+        org.junit.jupiter.api.Assertions.assertNull(MultiblockPreviewClientHandler.worldMeshRequestForTesting());
     }
 
     @Test

@@ -44,6 +44,7 @@ public final class MultiblockPreviewClientHandler {
     private static List<Integer> layers = List.of();
     private static final Map<BlockState, CachedModel> modelCache = new HashMap<>();
     private static final WorldPreviewMeshCache worldMeshCache = new WorldPreviewMeshCache();
+    private static WorldPreviewMeshCache.Request worldMeshRequest;
     private static final BlockDisplayContext BLOCK_DISPLAY_CONTEXT = BlockDisplayContext.create();
     private static BlockPos visibleEntriesCameraCell;
     private static double visibleEntriesRadius = -1.0;
@@ -80,7 +81,7 @@ public final class MultiblockPreviewClientHandler {
         visibleEntriesCameraCell = null;
         layers = entries.stream().map(entry -> entry.relativePos().getY()).distinct().sorted().toList();
         selectedLayer = sameActiveController ? nextLayer() : Integer.MAX_VALUE;
-        worldMeshCache.request(worldMeshKey());
+        worldMeshRequest = worldMeshCache.requestToken(worldMeshKey());
         expiresAtTick = now + Math.max(1, durationTicks);
         rebuildVisibleEntries();
     }
@@ -117,6 +118,10 @@ public final class MultiblockPreviewClientHandler {
 
     static void clearForTesting() {
         clear();
+    }
+
+    static WorldPreviewMeshCache.Request worldMeshRequestForTesting() {
+        return worldMeshRequest;
     }
 
     static void rebuildVisibleEntriesForTesting(Vec3 camera) {
@@ -180,7 +185,8 @@ public final class MultiblockPreviewClientHandler {
         BlockPos cameraCell = camera == null ? null : BlockPos.containing(camera);
         if (camera != null && cameraCell.equals(visibleEntriesCameraCell) && radius == visibleEntriesRadius) return;
         if (camera != null && !cameraCell.equals(visibleEntriesCameraCell)) {
-            worldMeshCache.request(new WorldPreviewMeshKey(dimension, controllerPos, selectedLayer, cameraCell));
+            worldMeshRequest = worldMeshCache.requestToken(
+                    new WorldPreviewMeshKey(dimension, controllerPos, selectedLayer, cameraCell));
         }
 
         var candidates = selectedLayer == Integer.MAX_VALUE ? entries : entries.stream()
@@ -207,6 +213,7 @@ public final class MultiblockPreviewClientHandler {
     }
 
     private static void clear() {
+        worldMeshRequest = null;
         dimension = null;
         controllerPos = null;
         entries = List.of();
