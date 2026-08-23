@@ -314,6 +314,21 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void clearStructurePreview_removes_only_requested_receiver() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        ServerPlayer first = receiverPlayer(FIRST_RECEIVER);
+        ServerPlayer second = receiverPlayer(SECOND_RECEIVER);
+        UUID firstId = first.getUUID();
+        UUID secondId = second.getUUID();
+        controller.rememberPreviewReceiverForTesting(firstId, 100L, 160);
+        controller.rememberPreviewReceiverForTesting(secondId, 100L, 160);
+
+        controller.clearStructurePreview(first);
+
+        assertThat(controller.consumeActivePreviewReceiverIdsForTesting(101L)).containsExactly(secondId);
+    }
+
+    @Test
     void max_parallelism_uses_parallel_controller_only_for_parallelizable_machines() throws Exception {
         MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
         var parallelMachine = new DynamicMachine(
@@ -4327,6 +4342,14 @@ class MachineControllerBlockEntityTest {
         return (ServerPlayer) unsafe.allocateInstance(InteractionServerPlayer.class);
     }
 
+    private static ServerPlayer receiverPlayer(UUID uuid) throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+        return (ServerPlayer) unsafe.allocateInstance(uuid.equals(FIRST_RECEIVER)
+                ? FirstReceiverPlayer.class : SecondReceiverPlayer.class);
+    }
+
     private static void setField(Class<?> declaringClass, Object target, String name, Object value) throws ReflectiveOperationException {
         Field field = declaringClass.getDeclaredField(name);
         field.setAccessible(true);
@@ -4471,6 +4494,19 @@ class MachineControllerBlockEntityTest {
         public ItemStack getOffhandItem() {
             return ItemStack.EMPTY;
         }
+    }
+
+    private static final UUID FIRST_RECEIVER = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID SECOND_RECEIVER = UUID.fromString("00000000-0000-0000-0000-000000000002");
+
+    private static final class FirstReceiverPlayer extends ServerPlayer {
+        private FirstReceiverPlayer() { super(null, null, null, null); }
+        @Override public UUID getUUID() { return FIRST_RECEIVER; }
+    }
+
+    private static final class SecondReceiverPlayer extends ServerPlayer {
+        private SecondReceiverPlayer() { super(null, null, null, null); }
+        @Override public UUID getUUID() { return SECOND_RECEIVER; }
     }
 
     /** Test seam for counting finish sound dispatches. */

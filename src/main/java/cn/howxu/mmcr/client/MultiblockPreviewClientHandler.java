@@ -8,6 +8,8 @@ import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshCache;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshCompiler;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshKey;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshSubmitter;
+import cn.howxu.mmcr.client.preview.world.UploadedWorldPreviewMesh;
+import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshUploader;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.block.BlockModelRenderState;
@@ -248,17 +250,18 @@ public final class MultiblockPreviewClientHandler {
         rebuildVisibleEntries(camera);
         if (visibleEntries.isEmpty()) return;
         WorldPreviewMeshKey key = worldMeshKey();
-        WorldPreviewMesh mesh = worldMeshCache.current(key) instanceof WorldPreviewMesh current
+        UploadedWorldPreviewMesh mesh = worldMeshCache.current(key) instanceof UploadedWorldPreviewMesh current
                 ? current : null;
         if (mesh == null) {
             WorldPreviewMesh compiled = WorldPreviewMeshCompiler.compile(minecraft.level, controllerPos,
                     visibleEntries, selectedLayer, camera, new AtomicBoolean());
+            UploadedWorldPreviewMesh uploaded = WorldPreviewMeshUploader.upload(compiled);
             if (worldMeshRequest == null) worldMeshRequest = worldMeshCache.requestToken(key);
-            worldMeshCache.publish(worldMeshRequest, compiled);
-            mesh = worldMeshCache.current(key) instanceof WorldPreviewMesh ready ? ready : null;
+            worldMeshCache.publish(worldMeshRequest, uploaded);
+            mesh = worldMeshCache.current(key) instanceof UploadedWorldPreviewMesh ready ? ready : null;
             if (mesh == null) return;
         }
-        WorldPreviewMeshSubmitter.submit(mesh, poseStack, event.getSubmitNodeCollector(), camera);
+        WorldPreviewMeshSubmitter.submit(mesh, poseStack, event.getSubmitNodeCollector(), camera, controllerPos);
     }
 
     private static CachedModel resolveModelForState(BlockState state, Function<BlockState, BlockModel> resolver) {
