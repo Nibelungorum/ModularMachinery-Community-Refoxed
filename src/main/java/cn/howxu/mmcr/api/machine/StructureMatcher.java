@@ -80,6 +80,9 @@ public final class StructureMatcher {
         private final Map<BlockPos, List<SingleBlockModifierReplacement>> replacements;
         private final boolean stateSensitive;
         private final ScanOptions options;
+        private final List<Integer> sentinelIndexes;
+        private final Set<Integer> checkedSentinelIndexes = new HashSet<>();
+        private boolean sentinelsChecked;
         private int scanIndex;
         private @Nullable ScanResult result;
         private @Nullable Mismatch previousMismatch;
@@ -98,6 +101,7 @@ public final class StructureMatcher {
             this.replacements = Map.copyOf(replacements);
             this.stateSensitive = stateSensitive;
             this.options = options;
+            this.sentinelIndexes = sentinelIndexes(entries.size(), Math.min(options.sentinelCount(), batchSize()));
             this.previousMismatch = previousMismatch != null && previousMismatch.matchesIdentity(
                     structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity)
                     ? previousMismatch : null;
@@ -136,22 +140,27 @@ public final class StructureMatcher {
                 }
                 previousMismatch = null;
             }
-            if (options.sentinelEnabled()) {
-                int sentinelBudget = Math.min(options.sentinelCount(), Math.max(0, budget - checked - 1));
-                for (int index : sentinelIndexes(entries.size(), sentinelBudget)) {
+            if (options.sentinelEnabled() && !sentinelsChecked) {
+                for (int index : sentinelIndexes) {
+                    if (checked >= budget) break;
                     Map.Entry<BlockPos, BlockPredicate> entry = entries.get(index);
                     Mismatch mismatch = mismatchAt(entry.getKey(), entry.getValue(), level, ctrlPos,
                             structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity);
                     checked++;
+                    checkedSentinelIndexes.add(index);
                     if (!matchesEntry(entry.getValue(), mismatch.actualState(),
                             replacements.getOrDefault(entry.getKey(), List.of()), stateSensitive)) {
                         previousMismatch = mismatch;
                         return result = new ScanResult(ScanStatus.MISMATCH, checked, mismatch, null);
                     }
                 }
+                sentinelsChecked = true;
             }
-            int end = Math.min(entries.size(), scanIndex + Math.max(0, budget - checked));
-            while (scanIndex < end) {
+            while (scanIndex < entries.size() && checked < budget) {
+                if (checkedSentinelIndexes.contains(scanIndex)) {
+                    scanIndex++;
+                    continue;
+                }
                 Map.Entry<BlockPos, BlockPredicate> entry = entries.get(scanIndex++);
                 Mismatch mismatch = mismatchAt(entry.getKey(), entry.getValue(), level, ctrlPos,
                         structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity);

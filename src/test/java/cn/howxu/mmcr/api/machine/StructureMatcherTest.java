@@ -393,6 +393,26 @@ class StructureMatcherTest {
     }
 
     @Test
+    void sentinel_is_checked_once_and_five_steps_complete_the_scan() {
+        Map<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
+        for (int index = 0; index < 10; index++) {
+            entries.put(new BlockPos(index, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE));
+        }
+        Level level = LevelStub.create(entries.keySet().stream()
+                .collect(java.util.stream.Collectors.toMap(pos -> pos, pos -> Blocks.STONE)));
+        StructureMatcher.ScanState scan = StructureMatcher.beginScan(new BlockArray(entries), Map.of(), true,
+                StructureMatcher.ScanOptions.of(5, true, 2));
+
+        for (int step = 0; step < 5; step++) {
+            StructureMatcher.ScanResult result = scan.step(level, BlockPos.ZERO);
+            assertThat(result.checkedEntries()).isLessThanOrEqualTo(scan.batchSize());
+            if (step < 4) assertThat(result.status()).isEqualTo(StructureMatcher.ScanStatus.IN_PROGRESS);
+        }
+
+        assertThat(scan.cursor()).isEqualTo(entries.size());
+    }
+
+    @Test
     void air_fast_path_still_checks_replacements() {
         BlockPos position = new BlockPos(1, 0, 0);
         BlockArray pattern = new BlockArray(Map.of(position, new BlockPredicate.Air()));

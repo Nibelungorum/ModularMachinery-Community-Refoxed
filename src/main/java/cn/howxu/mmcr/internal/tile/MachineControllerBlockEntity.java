@@ -863,61 +863,19 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     if (structureScan != null) return;
                 }
             }
+            CandidatePattern currentPattern = new CandidatePattern(foundCompiledPattern, foundPattern, matchedRollFacing);
+            if (tryFormMachine(foundMachine, facing, currentPattern)) return;
+            if (structureScan != null) return;
             boolean compiledAreaLoaded = !hasCompiledFacing(foundCompiledPattern, facing)
                     || StructureMatcher.isAreaLoaded(foundCompiledPattern, facing, level, getBlockPos());
             if (!compiledAreaLoaded) {
                 pauseActiveForUnloadedStructure();
                 return;
             }
-            Machine validationMachine = foundCompiledPattern == null ? foundMachine : foundCompiledPattern.machine();
-            var replacements = replacementsFor(validationMachine, foundCompiledPattern, facing, foundPattern, matchedRollFacing);
-            boolean stateSensitive = foundCompiledPattern != null && foundCompiledPattern.stateSensitive();
-            matcherInvocationCountForTesting++;
-            boolean stillMatches = hasCompiledFacing(foundCompiledPattern, facing)
-                    ? StructureMatcher.matchesCompiledLoaded(foundCompiledPattern, facing, matchedRollFacing,
-                    level, getBlockPos(), replacements, stateSensitive)
-                    : StructureMatcher.matchesRotated(foundPattern, level, getBlockPos(), replacements, stateSensitive);
-            if (stillMatches) {
-                var levels = resolveLevels(validationMachine, facing, matchedRollFacing);
-                if (levels.mismatch() != null) {
-                    recordLevelMismatch(levels.mismatch());
-                    resetMachine(false);
-                    tryFormMachine(machine, facing);
-                    return;
-                }
-                collectFoundModifiers(replacements);
-                var failure = validationMachine.portRequirements().validate(countPorts(foundPattern, foundCompiledPattern, facing));
-                if (failure.isPresent()) {
-                    recordFormationFailure(foundMachine, failure.get());
-                    resetMachine(false);
-                    tryFormMachine(machine, facing);
-                    return;
-                }
-                failure = validatePortTiers(validationMachine, foundPattern, foundCompiledPattern, facing);
-                if (failure.isPresent()) {
-                    recordFormationFailure(foundMachine, failure.get());
-                    resetMachine(false);
-                    tryFormMachine(machine, facing);
-                    return;
-                }
-                failure = validateFactoryControllerCount(validationMachine, foundPattern, foundCompiledPattern, facing);
-                if (failure.isPresent()) {
-                    recordFormationFailure(foundMachine, failure.get());
-                    resetMachine(false);
-                    tryFormMachine(machine, facing);
-                    return;
-                }
-                if (!isFormed()) setFormed(true);
-                foundLevels = levels.foundLevels();
-                updateComponents();
-                resumePausedRecipeAfterStructureCheck();
-                lastFormationFailure = null;
-                lastStructureMismatchDiagnostic = null;
-                lastStructureError = null;
-                return;
+            if (isFormed()) {
+                resetMachine(true, true, false);
+                tryFormMachine(machine, facing);
             }
-            resetMachine(true, true, false);
-            tryFormMachine(machine, facing);
             return;
         }
 
@@ -1311,6 +1269,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         StructureMatcher.ScanResult scanResult = structureScan.step(level, getBlockPos());
         if (scanResult.inProgress()) return false;
         if (scanResult.status() == StructureMatcher.ScanStatus.INVALIDATED) {
+            clearStructureDiagnosticRequest();
             clearStructureScan();
             pendingStructureInvalidation = false;
             return false;
@@ -1325,6 +1284,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             }
             clearStructureScan();
             pendingStructureInvalidation = false;
+            if (isFormed()) resetMachine(true, true, false);
             nextStructureCheckTick = level.getGameTime() + structureCheckIntervalTicks();
             return false;
         }
