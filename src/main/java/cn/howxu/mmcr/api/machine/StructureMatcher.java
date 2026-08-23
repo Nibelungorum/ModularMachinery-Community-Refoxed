@@ -124,6 +124,7 @@ public final class StructureMatcher {
         public ScanResult step(Level level, BlockPos ctrlPos) {
             if (invalidated != null) return result = new ScanResult(ScanStatus.INVALIDATED, 0, null, invalidated);
             int checked = 0;
+            int budget = batchSize();
             if (previousMismatch != null) {
                 Mismatch refreshed = mismatchAt(previousMismatch.relativePos(), previousMismatch.expected(), level, ctrlPos,
                         structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity);
@@ -136,7 +137,8 @@ public final class StructureMatcher {
                 previousMismatch = null;
             }
             if (options.sentinelEnabled()) {
-                for (int index : sentinelIndexes(entries.size(), options.sentinelCount())) {
+                int sentinelBudget = Math.min(options.sentinelCount(), Math.max(0, budget - checked - 1));
+                for (int index : sentinelIndexes(entries.size(), sentinelBudget)) {
                     Map.Entry<BlockPos, BlockPredicate> entry = entries.get(index);
                     Mismatch mismatch = mismatchAt(entry.getKey(), entry.getValue(), level, ctrlPos,
                             structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity);
@@ -148,7 +150,7 @@ public final class StructureMatcher {
                     }
                 }
             }
-            int end = Math.min(entries.size(), scanIndex + batchSize());
+            int end = Math.min(entries.size(), scanIndex + Math.max(0, budget - checked));
             while (scanIndex < end) {
                 Map.Entry<BlockPos, BlockPredicate> entry = entries.get(scanIndex++);
                 Mismatch mismatch = mismatchAt(entry.getKey(), entry.getValue(), level, ctrlPos,

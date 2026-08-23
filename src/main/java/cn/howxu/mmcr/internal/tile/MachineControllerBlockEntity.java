@@ -316,6 +316,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void onStructureBlockChanged(BlockPos changedPos) {
+        if (structureScan != null) pendingStructureInvalidation = true;
         if (!isFormed()) {
             if (machine != null) requestImmediateStructureCheck();
             return;
@@ -1290,9 +1291,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void advanceStructureScan() {
         structureScanSteppedTick = level.getGameTime();
-        if (invalidateActiveStructureScanIfIdentityChanged()) {
-            structureScan.step(level, getBlockPos());
-        } else if (level.getGameTime() - structureScanStartedTick > structureScanTimeoutTicks()) {
+        boolean identityChanged = invalidateActiveStructureScanIfIdentityChanged();
+        if (!identityChanged && level.getGameTime() - structureScanStartedTick > structureScanTimeoutTicks()) {
             structureScan.invalidate(StructureMatcher.InvalidationReason.TIMEOUT);
         }
         StructureMatcher.ScanResult scanResult = structureScan.step(level, getBlockPos());

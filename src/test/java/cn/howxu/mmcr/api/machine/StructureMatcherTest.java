@@ -368,8 +368,28 @@ class StructureMatcherTest {
         StructureMatcher.ScanResult result = scan.step(LevelStub.create(blocks), BlockPos.ZERO);
 
         assertThat(result.status()).isEqualTo(StructureMatcher.ScanStatus.MISMATCH);
-        assertThat(result.checkedEntries()).isLessThanOrEqualTo(16);
+        assertThat(result.checkedEntries()).isLessThanOrEqualTo(scan.batchSize());
         assertThat(scan.cursor()).isZero();
+    }
+
+    @Test
+    void sentinel_reads_share_the_batch_budget_while_scan_progresses() {
+        Map<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
+        for (int index = 0; index < 20; index++) {
+            entries.put(new BlockPos(index, 0, 0), new BlockPredicate.Air());
+        }
+        StructureMatcher.ScanState scan = StructureMatcher.beginScan(new BlockArray(entries), Map.of(), true,
+                StructureMatcher.ScanOptions.of(5, true, 16));
+        Level level = LevelStub.create(Map.of());
+
+        StructureMatcher.ScanResult result;
+        do {
+            result = scan.step(level, BlockPos.ZERO);
+            assertThat(result.checkedEntries()).isLessThanOrEqualTo(scan.batchSize());
+        } while (result.inProgress());
+
+        assertThat(result.status()).isEqualTo(StructureMatcher.ScanStatus.VALID);
+        assertThat(scan.cursor()).isEqualTo(entries.size());
     }
 
     @Test
