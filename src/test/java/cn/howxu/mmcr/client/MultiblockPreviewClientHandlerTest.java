@@ -5,6 +5,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.client.renderer.block.model.BlockModel;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -156,13 +157,19 @@ class MultiblockPreviewClientHandlerTest {
         var entries = List.of(
                 new MultiblockPreviewSnapshot.Entry(new BlockPos(0, 0, 0), Blocks.IRON_BLOCK.defaultBlockState()),
                 new MultiblockPreviewSnapshot.Entry(new BlockPos(65, 1, 0), Blocks.GOLD_BLOCK.defaultBlockState()));
+        var resolutions = new AtomicInteger();
 
         MultiblockPreviewClientHandler.showAtTick(Level.OVERWORLD, BlockPos.ZERO, entries, 200, 0L);
         MultiblockPreviewClientHandler.showAtTick(Level.OVERWORLD, BlockPos.ZERO, entries, 200, 1L);
         MultiblockPreviewClientHandler.showAtTick(Level.OVERWORLD, BlockPos.ZERO, entries, 200, 2L);
         MultiblockPreviewClientHandler.rebuildVisibleEntriesForTesting(Vec3.ZERO);
+        MultiblockPreviewClientHandler.resolveVisibleModelsForTesting(ignored -> {
+            resolutions.incrementAndGet();
+            return null;
+        });
 
         assertEquals(0, MultiblockPreviewClientHandler.visibleEntryCountForTesting());
+        assertEquals(0, resolutions.get());
     }
 
 }

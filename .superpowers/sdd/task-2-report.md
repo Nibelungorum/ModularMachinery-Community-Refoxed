@@ -61,3 +61,14 @@ PASS. Task 2 client preview caching, distance culling, layer-aware visibility re
 
 - `./gradlew test --no-daemon --tests '*MultiblockPreviewClientHandler*'` PASS, 10 tests.
 - `./gradlew compileJava --no-daemon` PASS.
+
+## Latest Important Fix
+
+- Changed the preview cache to retain the immutable resolved `BlockModel`, rather than unused translucency metadata. Production rendering now consumes that cached model through a fresh `BlockModelRenderState` and `BlockModel.update(...)` for every submission, preserving special-model rendering and avoiding cross-frame mutable state.
+- Added a production-visible resolution seam to the layer/culling test. The test places the unselected layer inside the radius and the selected layer outside it, then asserts the selected layer produces neither visible entries nor model resolution side effects.
+
+## Latest Verification
+
+- `./gradlew test --no-daemon --tests '*MultiblockPreviewClientHandler*'` PASS.
+- `./gradlew compileJava --no-daemon` PASS.
+- Client was not launched; forbidden `runClient` was not run.

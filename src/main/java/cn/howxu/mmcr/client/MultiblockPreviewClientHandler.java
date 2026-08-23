@@ -7,14 +7,11 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.block.BlockModelRenderState;
 import net.minecraft.client.renderer.block.model.BlockDisplayContext;
-import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
-import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
+import net.minecraft.client.renderer.block.model.BlockModel;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.util.LightCoordsUtil;
-import net.minecraft.util.RandomSource;
-import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -25,7 +22,6 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -127,8 +123,14 @@ public final class MultiblockPreviewClientHandler {
         resolveModelForState(state, ignored -> null);
     }
 
-    static void resolveModelForTesting(BlockState state, Function<BlockState, BlockStateModel> resolver) {
+    static void resolveModelForTesting(BlockState state, Function<BlockState, BlockModel> resolver) {
         resolveModelForState(state, resolver);
+    }
+
+    static void resolveVisibleModelsForTesting(Function<BlockState, BlockModel> resolver) {
+        for (MultiblockPreviewSnapshot.Entry entry : visibleEntries) {
+            resolveModelForState(entry.state(), resolver);
+        }
     }
 
     static int resolvedModelCacheSizeForTesting() {
@@ -222,29 +224,26 @@ public final class MultiblockPreviewClientHandler {
             poseStack.pushPose();
             poseStack.translate(worldPos.getX() - camera.x, worldPos.getY() - camera.y, worldPos.getZ() - camera.z);
 
-            resolveModelForState(entry.state(), state ->
-                    minecraft.getModelManager().getBlockStateModelSet().get(state));
+            CachedModel model = resolveModelForState(entry.state(), state ->
+                    minecraft.getModelManager().getBlockModelSet().get(state));
             BlockModelRenderState renderState = new BlockModelRenderState();
-            minecraft.getBlockModelResolver().update(renderState, entry.state(), BLOCK_DISPLAY_CONTEXT);
+            if (model.model() != null) {
+                model.model().update(renderState, entry.state(), BLOCK_DISPLAY_CONTEXT, 42L);
+            }
             renderState.submitMultiLayer(poseStack, collector, LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
 
             poseStack.popPose();
         }
     }
 
-    private static CachedModel resolveModelForState(BlockState state, Function<BlockState, BlockStateModel> resolver) {
+    private static CachedModel resolveModelForState(BlockState state, Function<BlockState, BlockModel> resolver) {
         return modelCache.computeIfAbsent(state, currentState -> resolveModel(resolver.apply(currentState)));
     }
 
-    private static CachedModel resolveModel(BlockStateModel model) {
-        if (model == null) return new CachedModel(false);
-        List<BlockStateModelPart> parts = new ArrayList<>();
-        model.collectParts(RandomSource.create(42L), parts);
-        boolean translucent = parts.stream().anyMatch(part ->
-                (part.materialFlags() & BakedQuad.FLAG_TRANSLUCENT) != 0);
-        return new CachedModel(translucent);
+    private static CachedModel resolveModel(BlockModel model) {
+        return new CachedModel(model);
     }
 
-    private record CachedModel(boolean translucent) {
+    private record CachedModel(BlockModel model) {
     }
 }
