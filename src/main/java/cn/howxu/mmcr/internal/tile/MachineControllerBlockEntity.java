@@ -147,6 +147,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private boolean structureCheckActive;
     private boolean structureDiagnosticRequested;
     private @Nullable ServerPlayer structureDiagnosticPlayer;
+    private @Nullable Runnable structureDiagnosticCallbackForTesting;
     private int matcherInvocationCountForTesting;
     private int scanBatchCountForTesting;
     private final Map<Long, Integer> scanBatchesPerTickForTesting = new LinkedHashMap<>();
@@ -277,6 +278,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public int scanBatchCountForTesting() { return scanBatchCountForTesting; }
     public Map<Long, Integer> scanBatchesPerTickForTesting() { return Map.copyOf(scanBatchesPerTickForTesting); }
     public boolean isStructureDiagnosticRequestedForTesting() { return structureDiagnosticRequested; }
+    public void setStructureDiagnosticCallbackForTesting(@Nullable Runnable callback) {
+        structureDiagnosticCallbackForTesting = callback;
+    }
     public boolean isPendingStructureInvalidationForTesting() { return pendingStructureInvalidation; }
     public int structureScanCursorForTesting() { return structureScan == null ? -1 : structureScan.cursor(); }
     public void setStructureCheckIntervalForTesting(@Nullable Integer interval) {
@@ -1257,7 +1261,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         Machine validationMachine = stageCompiled == null ? candidate : stageCompiled.machine();
         var replacements = replacementsFor(validationMachine, stageCompiled, facing, rotatedPattern, candidatePattern.rollFacing());
         boolean stateSensitive = stageCompiled != null && stageCompiled.stateSensitive();
-        if (!structureCheckActive || rotatedPattern.pattern().size() <= structureScanBatches()) {
+        if (!structureCheckActive || (rotatedPattern.pattern().size() <= structureScanBatches()
+                && !structureDiagnosticRequested)) {
             matcherInvocationCountForTesting++;
             boolean matches = stageCompiled != null && hasCompiledFacing(stageCompiled, facing)
                     ? StructureMatcher.matchesCompiled(stageCompiled, facing, candidatePattern.rollFacing(), level,
@@ -1449,7 +1454,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private void sendRequestedStructureDiagnostic(@Nullable StructureMatcher.Mismatch mismatch) {
         if (!structureDiagnosticRequested || structureDiagnosticPlayer == null) return;
         if (mismatch != null) {
-            sendStructureMismatchDiagnostic(structureDiagnosticPlayer, mismatch);
+            if (structureDiagnosticCallbackForTesting != null) structureDiagnosticCallbackForTesting.run();
+            else sendStructureMismatchDiagnostic(structureDiagnosticPlayer, mismatch);
         } else if (lastFormationFailure != null) {
             sendFormationFailureDiagnostic(structureDiagnosticPlayer, lastFormationFailure);
         }

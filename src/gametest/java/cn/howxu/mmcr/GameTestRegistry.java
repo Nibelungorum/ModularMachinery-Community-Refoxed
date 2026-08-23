@@ -82,6 +82,8 @@ public final class GameTestRegistry {
                 helper -> new TerminalAssemblyGameTest().buildCompletesAcrossTicksAndRejectsDuplicateSubmission(helper));
         register(event, "terminal_incremental_invalidation", 200,
                 helper -> new TerminalAssemblyGameTest().incrementalScanRestartsAfterPendingInvalidation(helper));
+        register(event, "terminal_small_structure_diagnostic", 100,
+                helper -> new TerminalAssemblyGameTest().smallStructureDiagnosticIsDeliveredAfterNextScan(helper));
         register(event, "terminal_build_disconnect_refund", 100,
                 helper -> new TerminalAssemblyGameTest().disconnectedBuilderDropsReservedMaterials(helper));
         register(event, "module_connection_host_empty", 100, helper -> new ModuleConnectionGameTest().hostFormsWithNoInstalledModules(helper));
