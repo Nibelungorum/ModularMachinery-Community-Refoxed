@@ -7,7 +7,7 @@ Implemented and committed.
 ## Commit
 
 - `50bde94` `perf: scan large structures across ticks`
-- `pending` report commit
+- `005a926` `docs: report incremental task 2`
 
 ## Files
 
