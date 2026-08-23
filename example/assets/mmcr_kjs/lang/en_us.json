@@ -9,6 +9,7 @@
     "block.mmcr.kubejs_space_elevator_controller": "Space Elevator Controller",
     "block.mmcr.kubejs_space_reassembler_controller": "Space Reassembler Controller",
     "block.mmcr.kubejs_monster_farm_controller": "Monster Farm Controller",
+    "block.mmcr.gzr_controller": "Four Mete Regret Building Site Controller",
 
     "item.mmcr.kubejs_alloy_furnace_controller": "Alloy Furnace Controller",
     "item.mmcr.kubejs_blast_furnace_controller": "Blast Furnace Controller",
@@ -20,6 +21,7 @@
     "item.mmcr.kubejs_space_elevator_controller": "Space Elevator Controller",
     "item.mmcr.kubejs_space_reassembler_controller": "Space Reassembler Controller",
     "item.mmcr.kubejs_monster_farm_controller": "Monster Farm Controller",
+    "item.mmcr.gzr_controller": "Four Mete Regret Building Site Controller",
 
     "machine.mmcr_kubejs.kubejs_alloy_furnace": "Alloy Furnace",
     "machine.mmcr_kubejs.kubejs_blast_furnace": "Blast Furnace",
@@ -31,6 +33,7 @@
     "machine.mmcr_kubejs.kubejs_space_elevator": "Space Elevator",
     "machine.mmcr_kubejs.kubejs_space_reassembler": "Space Reassembler",
     "machine.mmcr_kubejs.kubejs_monster_farm": "Monster Farm",
+    "machine.mmcr_kubejs.gzr": "Four Mete Regret Building Site",
 
     "level.mmcr_kubejs.thermal_smelting_coil": "Coil Level",
     
