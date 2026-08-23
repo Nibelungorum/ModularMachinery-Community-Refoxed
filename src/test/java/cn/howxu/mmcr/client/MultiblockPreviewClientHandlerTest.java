@@ -75,15 +75,73 @@ class MultiblockPreviewClientHandlerTest {
     }
 
     @Test
-    void replacingPreviewClearsCachedRenderStates() {
+    void replacingPreviewClearsResolvedModelCache() {
         MultiblockPreviewClientHandler.clearForTesting();
         var state = Blocks.IRON_BLOCK.defaultBlockState();
-        MultiblockPreviewClientHandler.cacheRenderStateForTesting(state);
-        assertEquals(1, MultiblockPreviewClientHandler.renderStateCacheSizeForTesting());
+        MultiblockPreviewClientHandler.cacheResolvedModelForTesting(state);
+        MultiblockPreviewClientHandler.cacheResolvedModelForTesting(state);
+        assertEquals(1, MultiblockPreviewClientHandler.resolvedModelCacheSizeForTesting());
 
         MultiblockPreviewClientHandler.showAtTick(Level.NETHER, BlockPos.ZERO,
                 List.of(new MultiblockPreviewSnapshot.Entry(BlockPos.ZERO, state)), 200, 0L);
 
-        assertEquals(0, MultiblockPreviewClientHandler.renderStateCacheSizeForTesting());
+        assertEquals(0, MultiblockPreviewClientHandler.resolvedModelCacheSizeForTesting());
     }
+
+    @Test
+    void clearRemovesPreviewAndResolvedModels() {
+        MultiblockPreviewClientHandler.clearForTesting();
+        var state = Blocks.IRON_BLOCK.defaultBlockState();
+        MultiblockPreviewClientHandler.showAtTick(Level.OVERWORLD, BlockPos.ZERO,
+                List.of(new MultiblockPreviewSnapshot.Entry(BlockPos.ZERO, state)), 200, 0L);
+        MultiblockPreviewClientHandler.cacheResolvedModelForTesting(state);
+
+        MultiblockPreviewClientHandler.clearForTesting();
+
+        assertEquals(0, MultiblockPreviewClientHandler.visibleEntryCountForTesting());
+        assertEquals(0, MultiblockPreviewClientHandler.resolvedModelCacheSizeForTesting());
+    }
+
+    @Test
+    void expiredPreviewRemovesResolvedModels() {
+        MultiblockPreviewClientHandler.clearForTesting();
+        var state = Blocks.IRON_BLOCK.defaultBlockState();
+        MultiblockPreviewClientHandler.showAtTick(Level.OVERWORLD, BlockPos.ZERO,
+                List.of(new MultiblockPreviewSnapshot.Entry(BlockPos.ZERO, state)), 1, 0L);
+        MultiblockPreviewClientHandler.cacheResolvedModelForTesting(state);
+
+        MultiblockPreviewClientHandler.expireForTesting(1L);
+
+        assertEquals(0, MultiblockPreviewClientHandler.visibleEntryCountForTesting());
+        assertEquals(0, MultiblockPreviewClientHandler.resolvedModelCacheSizeForTesting());
+    }
+
+    @Test
+    void unloadingClientLevelRemovesResolvedModels() {
+        MultiblockPreviewClientHandler.clearForTesting();
+        var state = Blocks.IRON_BLOCK.defaultBlockState();
+        MultiblockPreviewClientHandler.showAtTick(Level.OVERWORLD, BlockPos.ZERO,
+                List.of(new MultiblockPreviewSnapshot.Entry(BlockPos.ZERO, state)), 200, 0L);
+        MultiblockPreviewClientHandler.cacheResolvedModelForTesting(state);
+
+        MultiblockPreviewClientHandler.unloadClientLevelForTesting();
+
+        assertEquals(0, MultiblockPreviewClientHandler.visibleEntryCountForTesting());
+        assertEquals(0, MultiblockPreviewClientHandler.resolvedModelCacheSizeForTesting());
+    }
+
+    @Test
+    void selectedLayerIsFilteredBeforeDistanceCulling() {
+        MultiblockPreviewClientHandler.clearForTesting();
+        var entries = List.of(
+                new MultiblockPreviewSnapshot.Entry(new BlockPos(0, 0, 0), Blocks.IRON_BLOCK.defaultBlockState()),
+                new MultiblockPreviewSnapshot.Entry(new BlockPos(65, 1, 0), Blocks.GOLD_BLOCK.defaultBlockState()));
+
+        MultiblockPreviewClientHandler.showAtTick(Level.OVERWORLD, BlockPos.ZERO, entries, 200, 0L);
+        MultiblockPreviewClientHandler.showAtTick(Level.OVERWORLD, BlockPos.ZERO, entries, 200, 1L);
+        MultiblockPreviewClientHandler.rebuildVisibleEntriesForTesting(Vec3.ZERO);
+
+        assertEquals(1, MultiblockPreviewClientHandler.visibleEntryCountForTesting());
+    }
+
 }
