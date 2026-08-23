@@ -50,3 +50,14 @@ PASS. Task 2 client preview caching, distance culling, layer-aware visibility re
 ## Review Fix Concerns
 
 - `BlockStateModel.collectParts` is the public 26.1.2 geometry-resolution seam used here. Special-model-only renderers are not represented by `BlockStateModelPart`; if previews must support those blocks, the renderer needs a separate per-submit special-model path rather than sharing render state.
+
+## Follow-up Fix
+
+- Removed the test-only direct cache write. The cache reuse test now calls the package-private seam that executes the production `computeIfAbsent -> resolveModel` path and counts the supplied state-model resolution function.
+- Made layer-order coverage distinguish filtering from culling: the selected layer is outside the render radius while an unselected layer is inside, and the expected visible result is empty.
+- Reworked rendering to create a fresh `BlockModelRenderState` for every submission and call the 26.1.2 `BlockModelResolver.update` with a `BlockDisplayContext`. This preserves resolver-populated special renderer state without sharing mutable render state across frames; only immutable cache metadata is retained.
+
+## Follow-up Verification
+
+- `./gradlew test --no-daemon --tests '*MultiblockPreviewClientHandler*'` PASS, 10 tests.
+- `./gradlew compileJava --no-daemon` PASS.

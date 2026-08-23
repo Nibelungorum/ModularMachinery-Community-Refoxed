@@ -6,6 +6,7 @@ import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.block.BlockModelRenderState;
+import net.minecraft.client.renderer.block.model.BlockDisplayContext;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.renderer.texture.OverlayTexture;
@@ -29,7 +30,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.joml.Matrix4f;
+import java.util.function.Function;
 
 /**
  * Renders the active multiblock ghost preview for the local player.
@@ -44,6 +45,7 @@ public final class MultiblockPreviewClientHandler {
     private static List<MultiblockPreviewSnapshot.Entry> visibleEntries = List.of();
     private static List<Integer> layers = List.of();
     private static final Map<BlockState, CachedModel> modelCache = new HashMap<>();
+    private static final BlockDisplayContext BLOCK_DISPLAY_CONTEXT = BlockDisplayContext.create();
     private static BlockPos visibleEntriesCameraCell;
     private static double visibleEntriesRadius = -1.0;
     private static int selectedLayer = Integer.MAX_VALUE;
@@ -121,8 +123,12 @@ public final class MultiblockPreviewClientHandler {
         rebuildVisibleEntries(camera);
     }
 
-    static void cacheResolvedModelForTesting(BlockState state) {
-        modelCache.putIfAbsent(state, new CachedModel(List.of(), false));
+    static void resolveModelForTesting(BlockState state) {
+        resolveModelForState(state, ignored -> null);
+    }
+
+    static void resolveModelForTesting(BlockState state, Function<BlockState, BlockStateModel> resolver) {
+        resolveModelForState(state, resolver);
     }
 
     static int resolvedModelCacheSizeForTesting() {
@@ -216,25 +222,29 @@ public final class MultiblockPreviewClientHandler {
             poseStack.pushPose();
             poseStack.translate(worldPos.getX() - camera.x, worldPos.getY() - camera.y, worldPos.getZ() - camera.z);
 
-            CachedModel model = modelCache.computeIfAbsent(entry.state(), state -> resolveModel(
-                    minecraft.getModelManager().getBlockStateModelSet().get(state)));
+            resolveModelForState(entry.state(), state ->
+                    minecraft.getModelManager().getBlockStateModelSet().get(state));
             BlockModelRenderState renderState = new BlockModelRenderState();
-            List<BlockStateModelPart> parts = renderState.setupModel(new Matrix4f(), model.translucent());
-            parts.addAll(model.parts());
+            minecraft.getBlockModelResolver().update(renderState, entry.state(), BLOCK_DISPLAY_CONTEXT);
             renderState.submitMultiLayer(poseStack, collector, LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
 
             poseStack.popPose();
         }
     }
 
+    private static CachedModel resolveModelForState(BlockState state, Function<BlockState, BlockStateModel> resolver) {
+        return modelCache.computeIfAbsent(state, currentState -> resolveModel(resolver.apply(currentState)));
+    }
+
     private static CachedModel resolveModel(BlockStateModel model) {
+        if (model == null) return new CachedModel(false);
         List<BlockStateModelPart> parts = new ArrayList<>();
         model.collectParts(RandomSource.create(42L), parts);
         boolean translucent = parts.stream().anyMatch(part ->
                 (part.materialFlags() & BakedQuad.FLAG_TRANSLUCENT) != 0);
-        return new CachedModel(List.copyOf(parts), translucent);
+        return new CachedModel(translucent);
     }
 
-    private record CachedModel(List<BlockStateModelPart> parts, boolean translucent) {
+    private record CachedModel(boolean translucent) {
     }
 }

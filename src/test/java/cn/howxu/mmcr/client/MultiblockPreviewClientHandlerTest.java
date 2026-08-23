@@ -10,6 +10,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -78,8 +79,8 @@ class MultiblockPreviewClientHandlerTest {
     void replacingPreviewClearsResolvedModelCache() {
         MultiblockPreviewClientHandler.clearForTesting();
         var state = Blocks.IRON_BLOCK.defaultBlockState();
-        MultiblockPreviewClientHandler.cacheResolvedModelForTesting(state);
-        MultiblockPreviewClientHandler.cacheResolvedModelForTesting(state);
+        MultiblockPreviewClientHandler.resolveModelForTesting(state);
+        MultiblockPreviewClientHandler.resolveModelForTesting(state);
         assertEquals(1, MultiblockPreviewClientHandler.resolvedModelCacheSizeForTesting());
 
         MultiblockPreviewClientHandler.showAtTick(Level.NETHER, BlockPos.ZERO,
@@ -94,7 +95,7 @@ class MultiblockPreviewClientHandlerTest {
         var state = Blocks.IRON_BLOCK.defaultBlockState();
         MultiblockPreviewClientHandler.showAtTick(Level.OVERWORLD, BlockPos.ZERO,
                 List.of(new MultiblockPreviewSnapshot.Entry(BlockPos.ZERO, state)), 200, 0L);
-        MultiblockPreviewClientHandler.cacheResolvedModelForTesting(state);
+        MultiblockPreviewClientHandler.resolveModelForTesting(state);
 
         MultiblockPreviewClientHandler.clearForTesting();
 
@@ -108,7 +109,7 @@ class MultiblockPreviewClientHandlerTest {
         var state = Blocks.IRON_BLOCK.defaultBlockState();
         MultiblockPreviewClientHandler.showAtTick(Level.OVERWORLD, BlockPos.ZERO,
                 List.of(new MultiblockPreviewSnapshot.Entry(BlockPos.ZERO, state)), 1, 0L);
-        MultiblockPreviewClientHandler.cacheResolvedModelForTesting(state);
+        MultiblockPreviewClientHandler.resolveModelForTesting(state);
 
         MultiblockPreviewClientHandler.expireForTesting(1L);
 
@@ -122,12 +123,31 @@ class MultiblockPreviewClientHandlerTest {
         var state = Blocks.IRON_BLOCK.defaultBlockState();
         MultiblockPreviewClientHandler.showAtTick(Level.OVERWORLD, BlockPos.ZERO,
                 List.of(new MultiblockPreviewSnapshot.Entry(BlockPos.ZERO, state)), 200, 0L);
-        MultiblockPreviewClientHandler.cacheResolvedModelForTesting(state);
+        MultiblockPreviewClientHandler.resolveModelForTesting(state);
 
         MultiblockPreviewClientHandler.unloadClientLevelForTesting();
 
         assertEquals(0, MultiblockPreviewClientHandler.visibleEntryCountForTesting());
         assertEquals(0, MultiblockPreviewClientHandler.resolvedModelCacheSizeForTesting());
+    }
+
+    @Test
+    void sameBlockStateResolvesThroughProductionCachePathOnlyOnce() {
+        MultiblockPreviewClientHandler.clearForTesting();
+        var state = Blocks.IRON_BLOCK.defaultBlockState();
+        var resolutions = new AtomicInteger();
+
+        MultiblockPreviewClientHandler.resolveModelForTesting(state, ignored -> {
+            resolutions.incrementAndGet();
+            return null;
+        });
+        MultiblockPreviewClientHandler.resolveModelForTesting(state, ignored -> {
+            resolutions.incrementAndGet();
+            return null;
+        });
+
+        assertEquals(1, resolutions.get());
+        assertEquals(1, MultiblockPreviewClientHandler.resolvedModelCacheSizeForTesting());
     }
 
     @Test
@@ -139,9 +159,10 @@ class MultiblockPreviewClientHandlerTest {
 
         MultiblockPreviewClientHandler.showAtTick(Level.OVERWORLD, BlockPos.ZERO, entries, 200, 0L);
         MultiblockPreviewClientHandler.showAtTick(Level.OVERWORLD, BlockPos.ZERO, entries, 200, 1L);
+        MultiblockPreviewClientHandler.showAtTick(Level.OVERWORLD, BlockPos.ZERO, entries, 200, 2L);
         MultiblockPreviewClientHandler.rebuildVisibleEntriesForTesting(Vec3.ZERO);
 
-        assertEquals(1, MultiblockPreviewClientHandler.visibleEntryCountForTesting());
+        assertEquals(0, MultiblockPreviewClientHandler.visibleEntryCountForTesting());
     }
 
 }
