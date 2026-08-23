@@ -88,6 +88,7 @@ import java.util.TreeMap;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
+import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
@@ -2738,6 +2739,27 @@ class MachineControllerBlockEntityTest {
         controller.onStructureBlockChanged(portPos);
 
         assertThat((boolean) fieldValue(MachineControllerBlockEntity.class, controller, "structureDirty")).isTrue();
+    }
+
+    @Test
+    void ordinary_block_change_during_scan_sets_pending_without_invalidating_cursor() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockPos portPos = controllerPos.offset(1, 0, 0);
+        BlockArray pattern = onePortPattern(ModBlocks.BLOCKS.get("item_input_bus").get());
+        DynamicMachine machine = new DynamicMachine(MMCR.id("pending_scan_machine"), "Pending Scan", pattern);
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, itemInputBus(portPos));
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        StructureMatcher.ScanState scan = StructureMatcher.beginScan(pattern, Map.of(), true,
+                StructureMatcher.ScanOptions.of(5, false, 0));
+        setField(MachineControllerBlockEntity.class, controller, "structureScan", scan);
+
+        controller.onStructureBlockChanged(portPos);
+
+        assertThat(scan.invalidated()).isNull();
+        assertThat(scan.cursor()).isZero();
+        assertThat((boolean) fieldValue(MachineControllerBlockEntity.class, controller,
+                "pendingStructureInvalidation")).isTrue();
     }
 
     @Test

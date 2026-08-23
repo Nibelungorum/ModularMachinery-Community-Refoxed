@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.LinkedHashMap;
 
 import net.minecraft.resources.Identifier;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -297,5 +298,90 @@ class StructureMatcherTest {
 
         assertThat(compiled.couplerPositions(Direction.WEST)).containsExactly(new BlockPos(0, 0, 1));
         assertThat(compiled.interfacePositions(Direction.WEST)).containsExactly(new BlockPos(-1, 0, 0));
+    }
+
+    @Test
+    void bounded_scan_advances_one_of_five_batches_until_valid() {
+        Map<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
+        for (int index = 0; index < 10; index++) {
+            entries.put(new BlockPos(index, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE));
+        }
+        BlockArray pattern = new BlockArray(entries);
+        Map<BlockPos, Block> blocks = entries.keySet().stream()
+                .collect(java.util.stream.Collectors.toMap(pos -> pos, pos -> Blocks.STONE));
+        Level level = LevelStub.create(blocks);
+        StructureMatcher.ScanState scan = StructureMatcher.beginScan(pattern, Map.of(), true,
+                StructureMatcher.ScanOptions.of(5, false, 0));
+
+        for (int index = 0; index < 4; index++) {
+            StructureMatcher.ScanResult result = scan.step(level, BlockPos.ZERO);
+            assertThat(result.checkedEntries()).isLessThanOrEqualTo(scan.batchSize());
+            assertThat(result.inProgress()).isTrue();
+        }
+        StructureMatcher.ScanResult result = scan.step(level, BlockPos.ZERO);
+
+        assertThat(result.status()).isEqualTo(StructureMatcher.ScanStatus.VALID);
+        assertThat(scan.cursor()).isEqualTo(entries.size());
+    }
+
+    @Test
+    void bounded_scan_prioritizes_previous_mismatch_and_continues_when_fixed() {
+        BlockPos mismatchPos = BlockPos.ZERO;
+        Map<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
+        for (int index = 0; index < 10; index++) {
+            entries.put(new BlockPos(index, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE));
+        }
+        BlockArray pattern = new BlockArray(entries);
+        Map<BlockPos, Block> wrong = new LinkedHashMap<>();
+        entries.keySet().forEach(pos -> wrong.put(pos, Blocks.STONE));
+        wrong.put(mismatchPos, Blocks.DIRT);
+        StructureMatcher.ScanState first = StructureMatcher.beginScan(pattern, Map.of(), true,
+                StructureMatcher.ScanOptions.of(5, false, 0));
+        StructureMatcher.ScanResult mismatch = first.step(LevelStub.create(wrong), BlockPos.ZERO);
+
+        assertThat(mismatch.status()).isEqualTo(StructureMatcher.ScanStatus.MISMATCH);
+        assertThat(mismatch.mismatch().orElseThrow().relativePos()).isEqualTo(mismatchPos);
+
+        StructureMatcher.ScanState retry = StructureMatcher.beginScan(pattern, Map.of(), true,
+                StructureMatcher.ScanOptions.of(5, false, 0), mismatch.mismatch().orElseThrow());
+        StructureMatcher.ScanResult fixed = retry.step(LevelStub.create(wrong), BlockPos.ZERO);
+        assertThat(fixed.status()).isEqualTo(StructureMatcher.ScanStatus.MISMATCH);
+
+        wrong.put(mismatchPos, Blocks.STONE);
+        StructureMatcher.ScanState resumed = StructureMatcher.beginScan(pattern, Map.of(), true,
+                StructureMatcher.ScanOptions.of(5, false, 0), mismatch.mismatch().orElseThrow());
+        assertThat(resumed.step(LevelStub.create(wrong), BlockPos.ZERO).inProgress()).isTrue();
+    }
+
+    @Test
+    void bounded_scan_uses_air_fast_path_and_sentinels() {
+        Map<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
+        for (int index = 0; index < 20; index++) {
+            entries.put(new BlockPos(index, 0, 0), new BlockPredicate.Air());
+        }
+        BlockArray pattern = new BlockArray(entries);
+        Map<BlockPos, Block> blocks = new LinkedHashMap<>();
+        blocks.put(new BlockPos(0, 0, 0), Blocks.STONE);
+        StructureMatcher.ScanState scan = StructureMatcher.beginScan(pattern, Map.of(), true,
+                StructureMatcher.ScanOptions.of(5, true, 16));
+
+        StructureMatcher.ScanResult result = scan.step(LevelStub.create(blocks), BlockPos.ZERO);
+
+        assertThat(result.status()).isEqualTo(StructureMatcher.ScanStatus.MISMATCH);
+        assertThat(result.checkedEntries()).isLessThanOrEqualTo(16);
+        assertThat(scan.cursor()).isZero();
+    }
+
+    @Test
+    void invalidated_scan_fails_without_reading_world() {
+        BlockArray pattern = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.Any()));
+        StructureMatcher.ScanState scan = StructureMatcher.beginScan(pattern, Map.of(), true,
+                StructureMatcher.ScanOptions.of(5, false, 0));
+        scan.invalidate(StructureMatcher.InvalidationReason.ORIENTATION);
+
+        StructureMatcher.ScanResult result = scan.step(LevelStub.create(Map.of()), BlockPos.ZERO);
+
+        assertThat(result.status()).isEqualTo(StructureMatcher.ScanStatus.INVALIDATED);
+        assertThat(result.checkedEntries()).isZero();
     }
 }

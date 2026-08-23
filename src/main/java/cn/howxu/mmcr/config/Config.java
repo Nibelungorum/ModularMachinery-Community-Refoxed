@@ -8,12 +8,17 @@ public final class Config {
     public static final int DEFAULT_TERMINAL_MAX_DEMOLISH_BLOCKS = 131072;
     public static final int DEFAULT_BUILD_BLOCKS_PER_TICK = 256;
     public static final int DEFAULT_BUILD_TASK_TIMEOUT_TICKS = 20 * 60;
+    public static final int DEFAULT_STRUCTURE_SCAN_BATCHES = 5;
+    public static final int DEFAULT_STRUCTURE_SENTINEL_COUNT = 16;
     public static final double DEFAULT_PREVIEW_RENDER_RADIUS = 64.0;
     public static final ModConfigSpec.IntValue MACHINE_CHECK_INTERVAL_TICKS;
     public static final ModConfigSpec.IntValue TERMINAL_MAX_DEMOLISH_BLOCKS;
     public static final ModConfigSpec.IntValue BUILD_BLOCKS_PER_TICK;
     public static final ModConfigSpec.IntValue BUILD_TASK_TIMEOUT_TICKS;
     public static final ModConfigSpec.DoubleValue PREVIEW_RENDER_RADIUS;
+    public static final ModConfigSpec.IntValue STRUCTURE_SCAN_BATCHES;
+    public static final ModConfigSpec.IntValue STRUCTURE_SENTINEL_COUNT;
+    public static final ModConfigSpec.BooleanValue STRUCTURE_SENTINEL_ENABLED;
     public static final ModConfigSpec.DoubleValue ENERGY_CONSUMPTION_MULTIPLIER;
 
     static {
@@ -33,6 +38,15 @@ public final class Config {
         PREVIEW_RENDER_RADIUS = b
                 .comment("Maximum distance at which multiblock preview blocks are rendered")
                 .defineInRange("preview_render_radius", DEFAULT_PREVIEW_RENDER_RADIUS, 1.0, 512.0);
+        STRUCTURE_SCAN_BATCHES = b
+                .comment("Number of batches used to scan a structure across server ticks")
+                .defineInRange("structure_scan_batches", DEFAULT_STRUCTURE_SCAN_BATCHES, 1, 32);
+        STRUCTURE_SENTINEL_COUNT = b
+                .comment("Number of deterministic structure entries checked before each scan batch")
+                .defineInRange("structure_sentinel_count", DEFAULT_STRUCTURE_SENTINEL_COUNT, 0, 128);
+        STRUCTURE_SENTINEL_ENABLED = b
+                .comment("Whether deterministic structure sentinel checks are enabled")
+                .define("structure_sentinel_enabled", true);
         ENERGY_CONSUMPTION_MULTIPLIER = b
                 .comment("Global multiplier on energy consumption")
                 .defineInRange("energy_consumption_multiplier", 1.0, 0.0, 100.0);
