@@ -600,6 +600,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (advanceBuildTask()) return;
         boolean activeBefore = isRuntimeActive();
         if (machine == null) bindDefaultMachine();
+        invalidateForControllerRotation();
 
         // 1.21+ exposes the old strong-power query through SignalGetter's direct signal helper.
         boolean powered = level.getDirectSignalTo(getBlockPos()) > 0;
@@ -623,7 +624,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 context = null;
                 syncRuntimeStateIfChanged();
             }
-            structureDirty = true;
             if (shouldCheckStructure()) checkStructure();
             setChanged();
             broadcastStateIfChanged(activeBefore);
@@ -642,7 +642,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
             context.refreshController(this);
             pausedActive = null;
             pausedContext = null;
-            structureDirty = true;
             markRecipeDirty();
             setActiveState(true);
             syncRuntimeStateIfChanged();
@@ -765,8 +764,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
                             && tryFormMachine(foundMachine, facing, candidatePattern)) return;
                 }
             }
-            if (hasCompiledFacing(foundCompiledPattern, facing)
-                    && !StructureMatcher.isAreaLoaded(foundCompiledPattern, facing, level, getBlockPos())) {
+            boolean compiledAreaLoaded = !hasCompiledFacing(foundCompiledPattern, facing)
+                    || StructureMatcher.isAreaLoaded(foundCompiledPattern, facing, level, getBlockPos());
+            if (!compiledAreaLoaded) {
                 pauseActiveForUnloadedStructure();
                 structureDirty = true;
                 return;
@@ -774,9 +774,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
             Machine validationMachine = foundCompiledPattern == null ? foundMachine : foundCompiledPattern.machine();
             var replacements = replacementsFor(validationMachine, foundCompiledPattern, facing, foundPattern, matchedRollFacing);
             boolean stateSensitive = foundCompiledPattern != null && foundCompiledPattern.stateSensitive();
-            boolean stillMatches = !hasCompiledFacing(foundCompiledPattern, facing) || !replacements.isEmpty()
-                    ? StructureMatcher.matchesRotated(foundPattern, level, getBlockPos(), replacements, stateSensitive)
-                    : StructureMatcher.matchesCompiled(foundCompiledPattern, facing, matchedRollFacing, level, getBlockPos(), stateSensitive);
+            boolean stillMatches = hasCompiledFacing(foundCompiledPattern, facing)
+                    ? StructureMatcher.matchesCompiledLoaded(foundCompiledPattern, facing, matchedRollFacing,
+                    level, getBlockPos(), replacements, stateSensitive)
+                    : StructureMatcher.matchesRotated(foundPattern, level, getBlockPos(), replacements, stateSensitive);
             if (stillMatches) {
                 var levels = resolveLevels(validationMachine, facing, matchedRollFacing);
                 if (levels.mismatch() != null) {
@@ -840,6 +841,16 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (!isFormed()) return true;
         structureCheckCounter++;
         return structureCheckCounter >= structureCheckIntervalTicks();
+    }
+
+    private void invalidateForControllerRotation() {
+        if (controllerFacing == null || level == null) return;
+        Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
+        Direction rollFacing = getBlockState().getValue(MachineControllerBlock.ROLL_FACING);
+        Direction normalizedRoll = BlockRotator.normalizedRoll(facing, rollFacing);
+        if (controllerFacing != facing || (facing.getAxis().isVertical() && matchedRollFacing != normalizedRoll)) {
+            structureDirty = true;
+        }
     }
 
     private boolean isStructureAreaLoaded() {
@@ -1159,9 +1170,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         Machine validationMachine = stageCompiled == null ? candidate : stageCompiled.machine();
         var replacements = replacementsFor(validationMachine, stageCompiled, facing, rotatedPattern, candidatePattern.rollFacing());
         boolean stateSensitive = stageCompiled != null && stageCompiled.stateSensitive();
-        boolean matches = stageCompiled == null || facing.getAxis().isVertical()
-                ? StructureMatcher.matchesRotated(rotatedPattern, level, getBlockPos(), replacements, stateSensitive)
-                : StructureMatcher.matchesCompiled(stageCompiled, facing, candidatePattern.rollFacing(), level, getBlockPos(), stateSensitive);
+        boolean matches = stageCompiled != null && hasCompiledFacing(stageCompiled, facing)
+                ? StructureMatcher.matchesCompiled(stageCompiled, facing, candidatePattern.rollFacing(), level,
+                getBlockPos(), replacements, stateSensitive)
+                : StructureMatcher.matchesRotated(rotatedPattern, level, getBlockPos(), replacements, stateSensitive);
         if (!matches) {
             recordStructureMismatch(candidate, facing, rotatedPattern, replacements, stateSensitive);
             return false;
@@ -1350,7 +1362,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
             stopFactoryController();
         }
         structureDirty = false;
-        structureCheckCounter = 0;
         if (!isFormed()) setFormed(true);
         updateComponents();
         resumePausedRecipeAfterStructureCheck();
@@ -1763,7 +1774,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         FORMED_CONTROLLERS.remove(this);
         components.clear();
         structureDirty = true;
-        structureCheckCounter = 0;
         if (active != null) {
             returnContext(context);
             active = null;

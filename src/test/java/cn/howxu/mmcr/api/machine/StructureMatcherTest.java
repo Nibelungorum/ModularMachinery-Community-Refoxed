@@ -43,6 +43,24 @@ class StructureMatcherTest {
     }
 
     @Test
+    void matches_compiled_keeps_the_compiled_path_with_modifier_replacements() {
+        BlockPos rawPos = new BlockPos(1, 0, 0);
+        BlockArray pattern = new BlockArray(Map.of(rawPos, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+        DynamicMachine machine = new DynamicMachine(
+                Identifier.fromNamespaceAndPath("mmcr", "matcher_compiled_replacement"),
+                "Matcher Compiled Replacement", pattern);
+        CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
+        BlockPos controllerPos = new BlockPos(32, 64, 32);
+        BlockPos rotatedPos = controllerPos.offset(BlockRotator.rotateSouthTo(rawPos, Direction.WEST));
+        var replacement = new SingleBlockModifierReplacement("speed",
+                new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), ItemStack.EMPTY);
+        Level level = LevelStub.create(Map.of(rotatedPos, Blocks.GOLD_BLOCK));
+
+        assertThat(StructureMatcher.matchesCompiled(compiled, Direction.WEST, Direction.SOUTH, level, controllerPos,
+                Map.of(BlockRotator.rotateSouthTo(rawPos, Direction.WEST), List.of(replacement)), true)).isTrue();
+    }
+
+    @Test
     void first_mismatch_returns_relative_position_and_actual_state() {
         BlockArray pattern = new BlockArray(Map.of(
                 BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE),

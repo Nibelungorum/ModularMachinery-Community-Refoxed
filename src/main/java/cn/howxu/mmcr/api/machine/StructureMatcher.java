@@ -58,8 +58,26 @@ public final class StructureMatcher {
     public static boolean matchesCompiled(CompiledMachinePattern compiled, Direction facing, Direction rollFacing,
                                           Level level, BlockPos ctrlPos, boolean stateSensitive) {
         if (!isAreaLoaded(compiled, facing, level, ctrlPos)) return false;
+        return matchesCompiledLoaded(compiled, facing, rollFacing, level, ctrlPos, Map.of(), stateSensitive);
+    }
+
+    public static boolean matchesCompiled(CompiledMachinePattern compiled, Direction facing, Direction rollFacing,
+                                          Level level, BlockPos ctrlPos,
+                                          Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
+                                          boolean stateSensitive) {
+        if (!isAreaLoaded(compiled, facing, level, ctrlPos)) return false;
+        return matchesCompiledLoaded(compiled, facing, rollFacing, level, ctrlPos, replacements, stateSensitive);
+    }
+
+    public static boolean matchesCompiledLoaded(CompiledMachinePattern compiled, Direction facing, Direction rollFacing,
+                                                Level level, BlockPos ctrlPos,
+                                                Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
+                                                boolean stateSensitive) {
+        if (compiled.rotatedPattern(facing) == null) return false;
+        Map<BlockPos, List<SingleBlockModifierReplacement>> effectiveReplacements =
+                replacements.isEmpty() ? compiled.modifierReplacements(facing, rollFacing) : replacements;
         return matchesRotated(compiled.rotatedPattern(facing), level, ctrlPos,
-                compiled.modifierReplacements(facing, rollFacing), stateSensitive);
+                effectiveReplacements, stateSensitive);
     }
 
     public static boolean matchesRotated(BlockArray pattern, Level level, BlockPos ctrlPos) {

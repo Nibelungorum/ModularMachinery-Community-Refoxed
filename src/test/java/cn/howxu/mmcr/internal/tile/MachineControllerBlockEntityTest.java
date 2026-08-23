@@ -2834,6 +2834,57 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void clean_formed_controller_waits_for_structure_check_interval() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        setField(MachineControllerBlockEntity.class, controller, "structureDirty", false);
+        setField(MachineControllerBlockEntity.class, controller, "structureCheckCounter", 0);
+        setField(BlockEntity.class, controller, "blockState", testControllerState(testControllerBlock(
+                new DynamicMachine(MMCR.id("schedule_clean_machine"), "Schedule Clean", onePortPattern(Blocks.IRON_BLOCK))))
+                .setValue(MachineControllerBlock.FORMED, true));
+
+        Method shouldCheck = MachineControllerBlockEntity.class.getDeclaredMethod("shouldCheckStructure");
+        shouldCheck.setAccessible(true);
+        assertThat((boolean) shouldCheck.invoke(controller)).isFalse();
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "structureCheckCounter")).isEqualTo(1);
+    }
+
+    @Test
+    void multiple_dirty_notifications_are_consumed_by_one_check_start() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockArray pattern = onePortPattern(ModBlocks.BLOCKS.get("item_input_bus").get());
+        DynamicMachine machine = new DynamicMachine(MMCR.id("schedule_dirty_machine"), "Schedule Dirty", pattern);
+        MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos,
+                itemInputBus(controllerPos.offset(1, 0, 0)));
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        controller.onStructureBlockChanged(controllerPos.offset(1, 0, 0));
+        controller.onStructureBlockChanged(controllerPos.offset(1, 0, 0));
+
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "structureDirty")).isEqualTo(true);
+        invokeCheckStructure(controller);
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "structureCheckCounter")).isEqualTo(0);
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "structureDirty")).isEqualTo(false);
+    }
+
+    @Test
+    void controller_rotation_invalidates_the_cached_structure_path() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        DynamicMachine machine = new DynamicMachine(MMCR.id("schedule_rotation_machine"), "Schedule Rotation",
+                onePortPattern(Blocks.IRON_BLOCK));
+        MachineControllerBlockEntity controller = controllerForFormation(machine, controllerPos, Blocks.IRON_BLOCK);
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        setField(MachineControllerBlockEntity.class, controller, "structureDirty", false);
+        setField(BlockEntity.class, controller, "blockState", controller.getBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.WEST));
+
+        Method invalidate = MachineControllerBlockEntity.class.getDeclaredMethod("invalidateForControllerRotation");
+        invalidate.setAccessible(true);
+        invalidate.invoke(controller);
+
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "structureDirty")).isEqualTo(true);
+    }
+
+    @Test
     void modifier_only_refresh_updates_active_total_tick() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         DynamicMachine machine = machineWithReplacements(replacementAt(
