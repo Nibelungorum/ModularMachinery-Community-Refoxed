@@ -1253,6 +1253,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         scanCandidate = candidatePattern;
         structureScanSteppedTick = level.getGameTime();
         structureScanStartedTick = level.getGameTime();
+        if (invalidateActiveStructureScanIfIdentityChanged()) {
+            clearStructureScan();
+            return false;
+        }
         StructureMatcher.ScanResult scanResult = structureScan.step(level, getBlockPos());
         if (scanResult.inProgress()) return false;
         if (scanResult.status() == StructureMatcher.ScanStatus.INVALIDATED) {
@@ -1286,21 +1290,24 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void advanceStructureScan() {
         structureScanSteppedTick = level.getGameTime();
-        if (level.getGameTime() - structureScanStartedTick > structureCheckIntervalTicks()) {
+        if (invalidateActiveStructureScanIfIdentityChanged()) {
+            structureScan.step(level, getBlockPos());
+        } else if (level.getGameTime() - structureScanStartedTick > structureScanTimeoutTicks()) {
             structureScan.invalidate(StructureMatcher.InvalidationReason.TIMEOUT);
         }
         StructureMatcher.ScanResult scanResult = structureScan.step(level, getBlockPos());
         if (scanResult.inProgress()) return;
         CandidatePattern candidatePattern = scanCandidate;
         Machine candidate = scanMachine;
-        clearStructureScan();
         if (scanResult.status() == StructureMatcher.ScanStatus.INVALIDATED || candidate == null || candidatePattern == null) {
+            clearStructureScan();
             pendingStructureInvalidation = false;
             structureDirty = true;
             nextStructureCheckTick = -1L;
             return;
         }
         if (scanResult.status() == StructureMatcher.ScanStatus.MISMATCH) {
+            clearStructureScan();
             previousStructureMismatch = scanResult.mismatch().orElse(null);
             previousStructureMismatchPattern = candidatePattern.pattern();
             var validationMachine = candidatePattern.compiled() == null ? candidate : candidatePattern.compiled().machine();
@@ -1312,7 +1319,16 @@ public class MachineControllerBlockEntity extends BlockEntity {
             nextStructureCheckTick = level.getGameTime() + structureCheckIntervalTicks();
             return;
         }
+        if (scanResult.status() == StructureMatcher.ScanStatus.VALID
+                && invalidateActiveStructureScanIfIdentityChanged()) {
+            clearStructureScan();
+            pendingStructureInvalidation = false;
+            structureDirty = true;
+            nextStructureCheckTick = -1L;
+            return;
+        }
         if (pendingStructureInvalidation) {
+            clearStructureScan();
             pendingStructureInvalidation = false;
             structureDirty = true;
             nextStructureCheckTick = -1L;
@@ -1321,6 +1337,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         previousStructureMismatch = null;
         previousStructureMismatchPattern = null;
         pendingStructureInvalidation = false;
+        clearStructureScan();
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
         CompiledMachinePattern compiled = candidatePattern.compiled();
         Machine validationMachine = compiled == null ? candidate : compiled.machine();
@@ -1390,9 +1407,47 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (structureScan != null) structureScan.invalidate(reason);
     }
 
+    private boolean invalidateActiveStructureScanIfIdentityChanged() {
+        if (structureScan == null) return false;
+        if (isRemoved()) {
+            structureScan.invalidate(StructureMatcher.InvalidationReason.REMOVED);
+            return true;
+        }
+        Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
+        Direction rollFacing = getBlockState().getValue(MachineControllerBlock.ROLL_FACING);
+        Direction normalizedRoll = BlockRotator.normalizedRoll(facing, rollFacing);
+        CandidatePattern candidatePattern = scanCandidate;
+        boolean loaded = candidatePattern == null || candidatePattern.compiled() == null
+                || !hasCompiledFacing(candidatePattern.compiled(), facing)
+                || StructureMatcher.isAreaLoaded(candidatePattern.compiled(), facing, level, getBlockPos());
+        boolean changed = structureScan.structureVersion() != structureVersion
+                || structureScan.frontFacing() != facing
+                || structureScan.rollFacing() != normalizedRoll
+                || candidatePattern == null
+                || structureScan.stageNumber() != candidatePattern.stageNumber()
+                || structureScan.patternIdentity() != candidatePattern.pattern()
+                || !loaded;
+        if (!changed) return false;
+        StructureMatcher.InvalidationReason reason = !loaded
+                ? StructureMatcher.InvalidationReason.UNLOADED
+                : structureScan.structureVersion() != structureVersion
+                ? StructureMatcher.InvalidationReason.VERSION
+                : structureScan.frontFacing() != facing || structureScan.rollFacing() != normalizedRoll
+                ? StructureMatcher.InvalidationReason.ORIENTATION
+                : structureScan.stageNumber() != candidatePattern.stageNumber()
+                ? StructureMatcher.InvalidationReason.STAGE
+                : StructureMatcher.InvalidationReason.PATTERN;
+        structureScan.invalidate(reason);
+        return true;
+    }
+
     private static int structureScanBatches() {
         try { return Config.STRUCTURE_SCAN_BATCHES.get(); }
         catch (IllegalStateException ignored) { return Config.DEFAULT_STRUCTURE_SCAN_BATCHES; }
+    }
+
+    private static long structureScanTimeoutTicks() {
+        return (long) structureCheckIntervalTicks() * structureScanBatches();
     }
 
     private static int structureSentinelCount() {

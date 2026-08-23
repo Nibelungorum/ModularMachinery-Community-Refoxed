@@ -373,6 +373,40 @@ class StructureMatcherTest {
     }
 
     @Test
+    void air_fast_path_still_checks_replacements() {
+        BlockPos position = new BlockPos(1, 0, 0);
+        BlockArray pattern = new BlockArray(Map.of(position, new BlockPredicate.Air()));
+        var replacement = new SingleBlockModifierReplacement(
+                "air_replacement", new BlockPredicate.OfBlock(Blocks.STONE), List.of(), ItemStack.EMPTY);
+
+        StructureMatcher.ScanState scan = StructureMatcher.beginScan(pattern,
+                Map.of(position, List.of(replacement)), true,
+                StructureMatcher.ScanOptions.of(5, false, 0));
+
+        assertThat(scan.step(LevelStub.create(Map.of(position, Blocks.STONE)), BlockPos.ZERO).status())
+                .isEqualTo(StructureMatcher.ScanStatus.VALID);
+    }
+
+    @Test
+    void previous_mismatch_is_not_reused_for_a_different_scan_identity() {
+        BlockArray pattern = new BlockArray(Map.of(
+                BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE)));
+        StructureMatcher.ScanState first = StructureMatcher.beginScan(1L, Direction.SOUTH, Direction.SOUTH,
+                1, "first", pattern, Map.of(), true,
+                StructureMatcher.ScanOptions.of(5, false, 0), null);
+        StructureMatcher.Mismatch mismatch = first.step(LevelStub.create(Map.of()), BlockPos.ZERO)
+                .mismatch().orElseThrow();
+
+        StructureMatcher.ScanState retry = StructureMatcher.beginScan(2L, Direction.SOUTH, Direction.SOUTH,
+                1, "second", pattern, Map.of(), true,
+                StructureMatcher.ScanOptions.of(5, false, 0), mismatch);
+
+        assertThat(mismatch.structureVersion()).isEqualTo(1L);
+        assertThat(mismatch.patternIdentity()).isEqualTo("first");
+        assertThat(retry.previousMismatch()).isNull();
+    }
+
+    @Test
     void invalidated_scan_fails_without_reading_world() {
         BlockArray pattern = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.Any()));
         StructureMatcher.ScanState scan = StructureMatcher.beginScan(pattern, Map.of(), true,

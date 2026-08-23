@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -97,7 +98,9 @@ public final class StructureMatcher {
             this.replacements = Map.copyOf(replacements);
             this.stateSensitive = stateSensitive;
             this.options = options;
-            this.previousMismatch = previousMismatch;
+            this.previousMismatch = previousMismatch != null && previousMismatch.matchesIdentity(
+                    structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity)
+                    ? previousMismatch : null;
         }
 
         public int batchSize() {
@@ -122,7 +125,8 @@ public final class StructureMatcher {
             if (invalidated != null) return result = new ScanResult(ScanStatus.INVALIDATED, 0, null, invalidated);
             int checked = 0;
             if (previousMismatch != null) {
-                Mismatch refreshed = mismatchAt(previousMismatch.relativePos(), previousMismatch.expected(), level, ctrlPos);
+                Mismatch refreshed = mismatchAt(previousMismatch.relativePos(), previousMismatch.expected(), level, ctrlPos,
+                        structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity);
                 checked++;
                 if (!matchesEntry(refreshed.expected(), refreshed.actualState(),
                         replacements.getOrDefault(refreshed.relativePos(), List.of()), stateSensitive)) {
@@ -134,7 +138,8 @@ public final class StructureMatcher {
             if (options.sentinelEnabled()) {
                 for (int index : sentinelIndexes(entries.size(), options.sentinelCount())) {
                     Map.Entry<BlockPos, BlockPredicate> entry = entries.get(index);
-                    Mismatch mismatch = mismatchAt(entry.getKey(), entry.getValue(), level, ctrlPos);
+                    Mismatch mismatch = mismatchAt(entry.getKey(), entry.getValue(), level, ctrlPos,
+                            structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity);
                     checked++;
                     if (!matchesEntry(entry.getValue(), mismatch.actualState(),
                             replacements.getOrDefault(entry.getKey(), List.of()), stateSensitive)) {
@@ -146,7 +151,8 @@ public final class StructureMatcher {
             int end = Math.min(entries.size(), scanIndex + batchSize());
             while (scanIndex < end) {
                 Map.Entry<BlockPos, BlockPredicate> entry = entries.get(scanIndex++);
-                Mismatch mismatch = mismatchAt(entry.getKey(), entry.getValue(), level, ctrlPos);
+                Mismatch mismatch = mismatchAt(entry.getKey(), entry.getValue(), level, ctrlPos,
+                        structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity);
                 checked++;
                 if (!matchesEntry(entry.getValue(), mismatch.actualState(),
                         replacements.getOrDefault(entry.getKey(), List.of()), stateSensitive)) {
@@ -158,9 +164,12 @@ public final class StructureMatcher {
             return result = new ScanResult(status, checked, null, null);
         }
 
-        private static Mismatch mismatchAt(BlockPos relativePos, BlockPredicate expected, Level level, BlockPos ctrlPos) {
+        private static Mismatch mismatchAt(BlockPos relativePos, BlockPredicate expected, Level level, BlockPos ctrlPos,
+                                            long structureVersion, Direction frontFacing, Direction rollFacing,
+                                            int stageNumber, Object patternIdentity) {
             BlockPos worldPos = ctrlPos.offset(relativePos);
-            return new Mismatch(relativePos, worldPos, expected, level.getBlockState(worldPos));
+            return new Mismatch(relativePos, worldPos, expected, level.getBlockState(worldPos),
+                    structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity);
         }
     }
 
@@ -267,7 +276,8 @@ public final class StructureMatcher {
             BlockPos worldPos = ctrlPos.offset(entry.getKey());
             BlockState actualState = level.getBlockState(worldPos);
             if (!matchesEntry(entry.getValue(), actualState, replacements.getOrDefault(entry.getKey(), List.of()), stateSensitive)) {
-                return Optional.of(new Mismatch(entry.getKey(), worldPos, entry.getValue(), actualState));
+                return Optional.of(new Mismatch(entry.getKey(), worldPos, entry.getValue(), actualState,
+                        0L, Direction.SOUTH, Direction.SOUTH, 0, pattern));
             }
         }
         return Optional.empty();
@@ -299,13 +309,12 @@ public final class StructureMatcher {
             BlockState actual,
             List<SingleBlockModifierReplacement> replacements,
             boolean stateSensitive) {
-        if (expected instanceof BlockPredicate.Air) return actual.isAir();
         if (expected.matches(actual, stateSensitive)) return true;
         for (SingleBlockModifierReplacement replacement : replacements) {
             if (replacement.getReplacement() instanceof BlockPredicate.Air && actual.isAir()) return true;
             if (replacement.getReplacement().matches(actual, stateSensitive)) return true;
         }
-        return false;
+        return expected instanceof BlockPredicate.Air && actual.isAir();
     }
 
     public static boolean isAreaLoaded(CompiledMachinePattern compiled, Direction facing, Level level, BlockPos ctrlPos) {
@@ -323,7 +332,21 @@ public final class StructureMatcher {
         return true;
     }
 
-    public record Mismatch(BlockPos relativePos, BlockPos worldPos, BlockPredicate expected, BlockState actualState) {
+    public record Mismatch(BlockPos relativePos, BlockPos worldPos, BlockPredicate expected, BlockState actualState,
+                           long structureVersion, Direction frontFacing, Direction rollFacing, int stageNumber,
+                           Object patternIdentity) {
+        public Mismatch(BlockPos relativePos, BlockPos worldPos, BlockPredicate expected, BlockState actualState) {
+            this(relativePos, worldPos, expected, actualState, 0L, Direction.SOUTH, Direction.SOUTH, 0, null);
+        }
+
+        private boolean matchesIdentity(long structureVersion, Direction frontFacing, Direction rollFacing,
+                                        int stageNumber, Object patternIdentity) {
+            return this.structureVersion == structureVersion
+                    && this.frontFacing == frontFacing
+                    && this.rollFacing == rollFacing
+                    && this.stageNumber == stageNumber
+                    && Objects.equals(this.patternIdentity, patternIdentity);
+        }
     }
 
     public record LevelResolution(Map<Identifier, MachineLevel> foundLevels, LevelMismatch mismatch) {
