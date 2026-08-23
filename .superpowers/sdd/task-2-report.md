@@ -40,3 +40,21 @@ The compiler batches block and fluid output by `ChunkSectionLayer`, resolves eac
 ## Review Fix Commit
 
 - Pending commit after verification: `fix: cover task 2 mesh compiler contracts`.
+
+## Latest Review Fixes
+
+- Connected `CompilationPlan` to production compilation. The compiler now uses planned entry filtering and planned solid/cutout/translucent routing for block output, while planned fluid routing always targets translucent output.
+- Added an independent air-filter test where air is present on the selected layer.
+- Added a real `compile` failure-path test that allocates the builder pack, injects a non-empty intermediate mesh, fails through compilation cleanup, and verifies both resources are closed.
+- Changed the idempotence test to close a non-empty mesh resource and verify its buffer becomes invalid after the first close.
+- Kept full-bright lighting, block entity position tracking, final event submission, JEI, and PiP behavior unchanged.
+
+## Latest Verification
+
+- `./gradlew test --no-daemon --tests cn.howxu.mmcr.client.preview.world.WorldPreviewMeshCompilerTest`: `BUILD SUCCESSFUL`.
+- `./gradlew test --no-daemon`: `BUILD SUCCESSFUL`.
+- `./gradlew runGameTestServer --no-daemon`: `BUILD SUCCESSFUL`.
+
+## Latest Concerns
+
+- The headless unit-test runtime does not create a live `Minecraft` model manager, so direct GPU/model tessellation cannot execute in that focused JVM. Production `compile` now consumes the shared plan; actual client model rendering remains runtime-dependent.

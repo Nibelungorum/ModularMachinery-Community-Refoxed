@@ -13,8 +13,11 @@ import net.minecraft.client.renderer.block.BlockQuadOutput;
 import net.minecraft.client.renderer.block.FluidRenderer;
 import net.minecraft.client.renderer.block.ModelBlockRenderer;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
+import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.CardinalLighting;
 import net.minecraft.world.level.ColorResolver;
 import net.minecraft.world.level.Level;
@@ -36,6 +39,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -79,36 +83,44 @@ public final class WorldPreviewMeshCompiler {
     public static WorldPreviewMesh compile(Level level, BlockPos controllerPos,
             List<MultiblockPreviewSnapshot.Entry> entries, int selectedLayer, Vec3 camera,
             AtomicBoolean cancelled) {
-        if (cancelled.get()) throw new CancelledCompilation();
+        return compile(level, controllerPos, entries, selectedLayer, camera, cancelled, ignored -> { });
+    }
+
+    static WorldPreviewMesh compile(Level level, BlockPos controllerPos,
+            List<MultiblockPreviewSnapshot.Entry> entries, int selectedLayer, Vec3 camera,
+            AtomicBoolean cancelled, Consumer<CompilationResources> failureInjector) {
         Minecraft minecraft = Minecraft.getInstance();
         SectionBufferBuilderPack builders = new SectionBufferBuilderPack();
         Map<ChunkSectionLayer, BufferBuilder> started = new EnumMap<>(ChunkSectionLayer.class);
         Map<ChunkSectionLayer, MeshData> meshes = new EnumMap<>(ChunkSectionLayer.class);
         Set<BlockPos> blockEntities = new HashSet<>();
+        CompilationResources resources = new CompilationResources(builders, meshes);
         try {
+            failureInjector.accept(resources);
+            if (cancelled.get()) throw new CancelledCompilation();
             var modelSet = minecraft.getModelManager().getBlockStateModelSet();
             var fluidSet = minecraft.getModelManager().getFluidStateModelSet();
             ModelBlockRenderer blockRenderer = new ModelBlockRenderer(
                     minecraft.options.ambientOcclusion().get(), true, minecraft.getBlockColors());
             FluidRenderer fluidRenderer = new FluidRenderer(fluidSet);
-            CompilationPlan plan = plan(controllerPos, entries, selectedLayer, ignored -> null);
+            CompilationPlan plan = plan(controllerPos, entries, selectedLayer,
+                    state -> blockLayer(modelSet.get(state)));
             Map<BlockPos, BlockState> visibleStates = new LinkedHashMap<>();
             plan.entries().forEach(entry -> visibleStates.put(entry.position(), entry.state()));
             blockEntities.addAll(plan.blockEntityPositions());
             BlockAndTintGetter region = region(level, visibleStates);
             Map<BlockState, BlockStateModel> models = new HashMap<>();
-            BlockQuadOutput blockOutput = (x, y, z, quad, instance) -> builderFor(started, builders,
-                    quad.materialInfo().layer()).putBlockBakedQuad(x, y, z, quad, instance);
-            FluidRenderer.Output fluidOutput = layer -> builderFor(started, builders, ChunkSectionLayer.TRANSLUCENT);
-            for (Map.Entry<BlockPos, BlockState> entry : visibleStates.entrySet()) {
+            for (PlannedEntry planned : plan.entries()) {
                 if (cancelled.get()) throw new CancelledCompilation();
-                BlockPos position = entry.getKey();
-                BlockState state = entry.getValue();
-                if (!state.getFluidState().isEmpty()) {
-                    fluidRenderer.tesselate(region, position, offset(fluidOutput, position), state,
-                            state.getFluidState());
+                BlockPos position = planned.position();
+                BlockState state = planned.state();
+                if (planned.fluidLayer() != null) {
+                    FluidRenderer.Output fluidOutput = layer -> builderFor(started, builders, planned.fluidLayer());
+                    fluidRenderer.tesselate(region, position, offset(fluidOutput, position), state, state.getFluidState());
                 }
                 if (state.getRenderShape() == RenderShape.MODEL) {
+                    BlockQuadOutput blockOutput = (x, y, z, quad, instance) -> builderFor(started, builders,
+                            planned.blockLayer()).putBlockBakedQuad(x, y, z, quad, instance);
                     blockRenderer.tesselateBlock(blockOutput, position.getX(), position.getY(), position.getZ(),
                             region, position, state, models.computeIfAbsent(state, modelSet::get),
                             state.getSeed(position));
@@ -127,15 +139,29 @@ public final class WorldPreviewMeshCompiler {
             }
             return new WorldPreviewMesh(builders, meshes, sortState, blockEntities);
         } catch (RuntimeException exception) {
-            List<AutoCloseable> resources = new ArrayList<>(meshes.values());
-            resources.add(builders);
+            List<AutoCloseable> closeables = new ArrayList<>(meshes.values());
+            closeables.add(builders);
             try {
-                closeResources(resources);
+                closeResources(closeables);
             } catch (RuntimeException cleanupFailure) {
                 exception.addSuppressed(cleanupFailure);
+            } finally {
+                resources.markClosed();
             }
             throw exception;
         }
+    }
+
+    private static ChunkSectionLayer blockLayer(BlockStateModel model) {
+        List<BlockStateModelPart> parts = new ArrayList<>();
+        model.collectParts(RandomSource.create(0), parts);
+        for (BlockStateModelPart part : parts) {
+            for (Direction direction : Direction.values()) {
+                if (!part.getQuads(direction).isEmpty()) return part.getQuads(direction).getFirst().materialInfo().layer();
+            }
+            if (!part.getQuads(null).isEmpty()) return part.getQuads(null).getFirst().materialInfo().layer();
+        }
+        return ChunkSectionLayer.SOLID;
     }
 
     static void closeResources(Iterable<? extends AutoCloseable> resources) {
@@ -207,6 +233,22 @@ public final class WorldPreviewMeshCompiler {
     }
 
     static final class CancelledCompilation extends RuntimeException { }
+
+    static final class CompilationResources {
+        private final SectionBufferBuilderPack builders;
+        private final Map<ChunkSectionLayer, MeshData> meshes;
+        private boolean closed;
+
+        private CompilationResources(SectionBufferBuilderPack builders, Map<ChunkSectionLayer, MeshData> meshes) {
+            this.builders = builders;
+            this.meshes = meshes;
+        }
+
+        SectionBufferBuilderPack builders() { return builders; }
+        Map<ChunkSectionLayer, MeshData> meshes() { return meshes; }
+        boolean closed() { return closed; }
+        void markClosed() { closed = true; }
+    }
 
     record CompilationPlan(List<PlannedEntry> entries, Set<BlockPos> blockEntityPositions) {
         CompilationPlan {

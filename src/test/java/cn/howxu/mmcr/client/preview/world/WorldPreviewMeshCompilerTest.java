@@ -2,6 +2,9 @@ package cn.howxu.mmcr.client.preview.world;
 
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
 import cn.howxu.mmcr.test.TestBootstrap;
+import com.mojang.blaze3d.vertex.MeshData;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.LightLayer;
@@ -12,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -54,6 +58,16 @@ class WorldPreviewMeshCompilerTest {
     }
 
     @Test
+    void compilerFiltersAirEvenWhenAirIsOnTheSelectedLayer() {
+        var plan = WorldPreviewMeshCompiler.plan(BlockPos.ZERO,
+                List.of(entry(1, Blocks.AIR), entry(1, Blocks.IRON_BLOCK)), 1,
+                state -> ChunkSectionLayer.SOLID);
+
+        assertThat(plan.entries()).extracting(WorldPreviewMeshCompiler.PlannedEntry::state)
+                .containsExactly(Blocks.IRON_BLOCK.defaultBlockState());
+    }
+
+    @Test
     void cancelledCompilationDoesNotReturnUsableMesh() {
         AtomicBoolean cancelled = new AtomicBoolean(true);
 
@@ -86,6 +100,27 @@ class WorldPreviewMeshCompilerTest {
     }
 
     @Test
+    void compileClosesIntermediateBuildersAndMeshDataOnFailure() {
+        AtomicReference<WorldPreviewMeshCompiler.CompilationResources> resources = new AtomicReference<>();
+        AtomicReference<MeshData> intermediateMesh = new AtomicReference<>();
+        assertThatThrownBy(() -> WorldPreviewMeshCompiler.compile(null, BlockPos.ZERO,
+                List.of(entry(0, Blocks.GLASS)), Integer.MAX_VALUE, new net.minecraft.world.phys.Vec3(0, 0, 0),
+                new AtomicBoolean(), captured -> {
+                    resources.set(captured);
+                    MeshData mesh = nonEmptyMeshData();
+                    intermediateMesh.set(mesh);
+                    captured.meshes().put(ChunkSectionLayer.CUTOUT, mesh);
+                    throw new IllegalStateException("injected compile failure");
+                }))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("injected compile failure");
+
+        assertThat(resources.get()).isNotNull();
+        assertThat(resources.get().closed()).isTrue();
+        assertThatThrownBy(intermediateMesh.get()::vertexBuffer).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     void planTracksBlockEntityPositionsWithoutClientModels() {
         var plan = WorldPreviewMeshCompiler.plan(BlockPos.ZERO,
                 List.of(entry(0, Blocks.CHEST)), Integer.MAX_VALUE, state -> ChunkSectionLayer.SOLID);
@@ -108,12 +143,22 @@ class WorldPreviewMeshCompilerTest {
     @Test
     void worldPreviewMeshCloseIsIdempotent() {
         var owner = new CloseCounter();
-        var mesh = new WorldPreviewMesh(owner, java.util.Map.of(), null, java.util.Set.of());
+        var meshData = nonEmptyMeshData();
+        var mesh = new WorldPreviewMesh(owner, java.util.Map.of(ChunkSectionLayer.SOLID, meshData), null, java.util.Set.of());
 
         mesh.close();
         mesh.close();
 
         assertThat(owner.closes).isEqualTo(1);
+        assertThatThrownBy(meshData::vertexBuffer).isInstanceOf(IllegalStateException.class);
+    }
+
+    private static MeshData nonEmptyMeshData() {
+        var buffer = new com.mojang.blaze3d.vertex.ByteBufferBuilder(64);
+        buffer.reserve(1);
+        return new MeshData(buffer.build(),
+                new MeshData.DrawState(DefaultVertexFormat.BLOCK, 1, 0, VertexFormat.Mode.QUADS,
+                        VertexFormat.IndexType.SHORT));
     }
 
     private static MultiblockPreviewSnapshot.Entry entry(int y, net.minecraft.world.level.block.Block block) {
