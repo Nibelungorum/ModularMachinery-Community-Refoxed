@@ -3,8 +3,11 @@ package cn.howxu.mmcr.client;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
+import cn.howxu.mmcr.client.preview.world.WorldPreviewMesh;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshCache;
+import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshCompiler;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshKey;
+import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshSubmitter;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.block.BlockModelRenderState;
@@ -28,6 +31,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 /**
@@ -236,23 +240,18 @@ public final class MultiblockPreviewClientHandler {
         Vec3 camera = event.getLevelRenderState().cameraRenderState.pos;
         rebuildVisibleEntries(camera);
         if (visibleEntries.isEmpty()) return;
-        var collector = event.getSubmitNodeCollector();
-
-        for (MultiblockPreviewSnapshot.Entry entry : visibleEntries) {
-            BlockPos worldPos = controllerPos.offset(entry.relativePos());
-            poseStack.pushPose();
-            poseStack.translate(worldPos.getX() - camera.x, worldPos.getY() - camera.y, worldPos.getZ() - camera.z);
-
-            CachedModel model = resolveModelForState(entry.state(), state ->
-                    minecraft.getModelManager().getBlockModelSet().get(state));
-            BlockModelRenderState renderState = new BlockModelRenderState();
-            if (model.model() != null) {
-                updateRenderState(renderState, model.model(), entry.state());
-            }
-            renderState.submitMultiLayer(poseStack, collector, LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
-
-            poseStack.popPose();
+        WorldPreviewMeshKey key = worldMeshKey();
+        WorldPreviewMesh mesh = worldMeshCache.current(key) instanceof WorldPreviewMesh current
+                ? current : null;
+        if (mesh == null) {
+            WorldPreviewMesh compiled = WorldPreviewMeshCompiler.compile(minecraft.level, controllerPos,
+                    visibleEntries, selectedLayer, camera, new AtomicBoolean());
+            if (worldMeshRequest == null) worldMeshRequest = worldMeshCache.requestToken(key);
+            worldMeshCache.publish(worldMeshRequest, compiled);
+            mesh = worldMeshCache.current(key) instanceof WorldPreviewMesh ready ? ready : null;
+            if (mesh == null) return;
         }
+        WorldPreviewMeshSubmitter.submit(mesh, poseStack, event.getSubmitNodeCollector(), camera);
     }
 
     private static CachedModel resolveModelForState(BlockState state, Function<BlockState, BlockModel> resolver) {
