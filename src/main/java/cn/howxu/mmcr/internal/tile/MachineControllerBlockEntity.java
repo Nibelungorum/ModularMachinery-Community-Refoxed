@@ -101,6 +101,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -184,6 +185,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable MultiblockAssemblyService.BuildTaskRegistry buildTasks;
     private @Nullable ServerPlayer buildTaskOwner;
     private int buildTaskAge;
+    private final List<Integer> buildTaskPlacementsPerTickForTesting = new ArrayList<>();
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
@@ -673,7 +675,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (!buildTaskRegistry().submit(task)) return false;
         buildTaskOwner = owner;
         buildTaskAge = 0;
+        buildTaskPlacementsPerTickForTesting.clear();
         return true;
+    }
+
+    public List<Integer> buildTaskPlacementsPerTickForTesting() {
+        return List.copyOf(buildTaskPlacementsPerTickForTesting);
     }
 
     private boolean advanceBuildTask() {
@@ -682,11 +689,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
         ServerPlayer owner = buildTaskOwner;
         if (owner == null || owner.isRemoved() || owner.level() != level
                 || buildTaskAge > Config.BUILD_TASK_TIMEOUT_TICKS.get()) {
+            buildTaskPlacementsPerTickForTesting.add(0);
             cancelBuildTask();
             return true;
         }
+        int placedBefore = buildTaskRegistry().placedCount(getBlockPos());
         buildTaskRegistry().advance(getBlockPos(), placement -> level.getBlockState(placement.pos()).isAir()
                 && level.setBlock(placement.pos(), placement.state(), 3));
+        int placedThisTick = buildTaskRegistry().placedCount(getBlockPos()) - placedBefore;
+        buildTaskPlacementsPerTickForTesting.add(placedThisTick);
         var task = buildTaskRegistry().cancel(getBlockPos());
         if (task != null && !task.isComplete()) {
             buildTaskRegistry().submit(task);
@@ -704,7 +715,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         var task = buildTaskRegistry().cancel(getBlockPos());
         if (task == null) return;
         ServerPlayer owner = buildTaskOwner;
-        if (owner != null && owner.level() == level) {
+        if (owner != null && !owner.isRemoved() && owner.level() == level) {
             PlayerInventoryStructureItemSink sink = new PlayerInventoryStructureItemSink(owner);
             task.refundRequirements().forEach(sink::accept);
         } else {

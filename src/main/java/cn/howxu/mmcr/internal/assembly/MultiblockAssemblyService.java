@@ -60,22 +60,29 @@ public final class MultiblockAssemblyService {
         private final BlockPos controllerKey;
         private final List<Placement> placements;
         private final int budget;
+        private final boolean reservedMaterial;
         private final List<Placement> skippedPlacements = new ArrayList<>();
         private int nextIndex;
         private int placedCount;
         private boolean completionReported;
 
-        private BuildTask(BlockPos controllerKey, List<Placement> placements, int budget) {
+        private BuildTask(BlockPos controllerKey, List<Placement> placements, int budget, boolean reservedMaterial) {
             this.controllerKey = controllerKey.immutable();
             this.placements = placements.stream()
                     .map(placement -> new Placement(placement.pos(), placement.state(), placement.requirement().copy(), placement.predicate()))
                     .toList();
             this.budget = budget;
+            this.reservedMaterial = reservedMaterial;
         }
 
         public static BuildTask create(BlockPos controllerKey, List<Placement> placements, int budget) {
+            return create(controllerKey, placements, budget, true);
+        }
+
+        public static BuildTask create(BlockPos controllerKey, List<Placement> placements, int budget,
+                                       boolean reservedMaterial) {
             if (budget < 1) throw new IllegalArgumentException("budget must be positive");
-            return new BuildTask(controllerKey, placements, budget);
+            return new BuildTask(controllerKey, placements, budget, reservedMaterial);
         }
 
         public BlockPos controllerKey() {
@@ -106,6 +113,7 @@ public final class MultiblockAssemblyService {
         }
 
         public List<ItemStack> refundRequirements() {
+            if (!reservedMaterial) return List.of();
             return Stream.concat(skippedPlacements.stream(), unconsumedPlacements().stream())
                     .map(placement -> placement.requirement().copy())
                     .toList();
@@ -132,6 +140,11 @@ public final class MultiblockAssemblyService {
         public int advance(BlockPos controllerKey, Predicate<Placement> placementAction) {
             BuildTask task = tasks.get(controllerKey);
             return task == null ? 0 : task.advance(placementAction);
+        }
+
+        public int placedCount(BlockPos controllerKey) {
+            BuildTask task = tasks.get(controllerKey);
+            return task == null ? 0 : task.placedCount();
         }
 
         public BuildTask cancel(BlockPos controllerKey) {
@@ -192,7 +205,7 @@ public final class MultiblockAssemblyService {
             source.extractAll(aggregateRequirements(placements));
         }
         BuildTask task = BuildTask.create(controller.getBlockPos(), placements,
-                Config.BUILD_BLOCKS_PER_TICK.get());
+                Config.BUILD_BLOCKS_PER_TICK.get(), !creative);
         if (!controller.startBuildTask(task, player)) {
             return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.busy"));
         }

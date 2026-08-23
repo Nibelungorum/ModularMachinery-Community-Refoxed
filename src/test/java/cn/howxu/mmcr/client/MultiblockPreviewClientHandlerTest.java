@@ -7,6 +7,12 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.client.renderer.block.model.BlockModel;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.special.SpecialModelRenderer;
+import com.mojang.blaze3d.vertex.PoseStack;
+import org.joml.Matrix4f;
+import org.joml.Vector3fc;
+import net.minecraft.world.item.ItemStack;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -170,6 +176,37 @@ class MultiblockPreviewClientHandlerTest {
 
         assertEquals(0, MultiblockPreviewClientHandler.visibleEntryCountForTesting());
         assertEquals(0, resolutions.get());
+    }
+
+    @Test
+    void cached_preview_resolution_uses_the_complete_model_update_path() {
+        MultiblockPreviewClientHandler.clearForTesting();
+        var state = Blocks.IRON_BLOCK.defaultBlockState();
+        var updates = new AtomicInteger();
+        SpecialModelRenderer<Object> specialRenderer = new SpecialModelRenderer<>() {
+            @Override
+            public void submit(Object argument, PoseStack poseStack, SubmitNodeCollector collector, int light,
+                               int overlay, boolean outline, int color) {
+            }
+
+            @Override
+            public void getExtents(java.util.function.Consumer<Vector3fc> consumer) {
+            }
+
+            @Override
+            public Object extractArgument(ItemStack stack) {
+                return null;
+            }
+        };
+        BlockModel model = (renderState, blockState, context, seed) -> {
+            updates.incrementAndGet();
+            renderState.setupSpecialModel(specialRenderer, new Matrix4f());
+        };
+
+        assertEquals(true, MultiblockPreviewClientHandler.updateRenderStateForTesting(state, model));
+        assertEquals(true, MultiblockPreviewClientHandler.updateRenderStateForTesting(state, model));
+
+        assertEquals(2, updates.get(), "Each render state is independently populated through BlockModel.update");
     }
 
 }

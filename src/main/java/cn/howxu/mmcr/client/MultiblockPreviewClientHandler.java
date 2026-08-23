@@ -228,7 +228,7 @@ public final class MultiblockPreviewClientHandler {
                     minecraft.getModelManager().getBlockModelSet().get(state));
             BlockModelRenderState renderState = new BlockModelRenderState();
             if (model.model() != null) {
-                model.model().update(renderState, entry.state(), BLOCK_DISPLAY_CONTEXT, 42L);
+                updateRenderState(renderState, model.model(), entry.state());
             }
             renderState.submitMultiLayer(poseStack, collector, LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
 
@@ -242,6 +242,18 @@ public final class MultiblockPreviewClientHandler {
 
     private static CachedModel resolveModel(BlockModel model) {
         return new CachedModel(model);
+    }
+
+    static boolean updateRenderStateForTesting(BlockState state, BlockModel model) {
+        BlockModelRenderState renderState = new BlockModelRenderState();
+        updateRenderState(renderState, model, state);
+        return !renderState.isEmpty();
+    }
+
+    private static void updateRenderState(BlockModelRenderState renderState, BlockModel model, BlockState state) {
+        // BlockModel.update is the complete 26.1.2 resolver path, including special renderers.
+        renderState.clear();
+        model.update(renderState, state, BLOCK_DISPLAY_CONTEXT, 42L);
     }
 
     private record CachedModel(BlockModel model) {

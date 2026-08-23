@@ -205,6 +205,17 @@ class MultiblockAssemblyServiceTest {
     }
 
     @Test
+    void creativeTaskDoesNotRefundUnreservedMaterials() {
+        MultiblockAssemblyService.BuildTask task = MultiblockAssemblyService.BuildTask.create(
+                BlockPos.ZERO, List.of(new MultiblockAssemblyService.Placement(
+                        BlockPos.ZERO, Blocks.STONE.defaultBlockState(), itemStack(Items.STONE, 1))), 1, false);
+
+        task.advance(ignored -> false);
+
+        assertTrue(task.refundRequirements().isEmpty());
+    }
+
+    @Test
     void completionReportIsAvailableOnlyOnce() {
         MultiblockAssemblyService.BuildTask task = MultiblockAssemblyService.BuildTask.create(
                 BlockPos.ZERO, List.of(new MultiblockAssemblyService.Placement(

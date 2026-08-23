@@ -16,6 +16,9 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.Entity.RemovalReason;
+import net.minecraft.world.phys.AABB;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
@@ -270,15 +273,44 @@ public class TerminalAssemblyGameTest {
         helper.assertTrue(duplicate.interactionResult() == InteractionResult.FAIL, "Duplicate build request is rejected while active");
         int expectedCount = template.size();
         int completionTick = expectedCount + 2;
-        for (int tick = 1; tick <= completionTick; tick++) {
-            int scheduledTick = tick;
-            helper.runAtTickTime(scheduledTick, controller::serverTick);
-        }
         helper.runAtTickTime(completionTick, () -> {
             helper.assertTrue(helper.getLevel().getGameTime() > acceptedAt + 1, "Build advances across multiple server ticks");
+            for (int placementsThisTick : controller.buildTaskPlacementsPerTickForTesting()) {
+                helper.assertTrue(placementsThisTick <= 1, "The server ticker respects the per-tick build budget");
+            }
             helper.assertTrue(countPlacedStructureBlocks(helper, template) == expectedCount,
                     "Final placed structure block count is unchanged by duplicate submission");
             helper.assertTrue(controller.isFormed(), "Controller forms after the build completes");
+            Config.BUILD_BLOCKS_PER_TICK.set(previousBudget);
+            helper.succeed();
+        });
+    }
+
+    public void disconnectedBuilderDropsReservedMaterials(GameTestHelper helper) {
+        BlockPos controllerPos = new BlockPos(4, 1, 4);
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("test_cube")));
+        List<MultiblockAssemblyService.Placement> template = template(controller);
+        int previousBudget = Config.BUILD_BLOCKS_PER_TICK.get();
+        Config.BUILD_BLOCKS_PER_TICK.set(1);
+        ServerPlayer player = servicePlayer(helper);
+        for (MultiblockAssemblyService.Placement placement : template) {
+            player.getInventory().add(placement.requirement().copy());
+        }
+
+        MultiblockAssemblyService.Result accepted = MultiblockAssemblyService.build(player, controller, false);
+        helper.assertTrue(accepted.interactionResult() == InteractionResult.SUCCESS, "Survival build reserves materials");
+        player.setRemoved(RemovalReason.DISCARDED);
+        helper.runAfterDelay(1, () -> {
+            long dropped = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                            new AABB(helper.absolutePos(controllerPos)).inflate(1))
+                    .stream()
+                    .filter(entity -> entity.getItem().is(ModBlocks.CASING.get().asItem()))
+                    .mapToLong(entity -> entity.getItem().getCount())
+                    .sum();
+            helper.assertTrue(dropped == template.size() - 1,
+                    "A disconnected builder receives every unplaced reserved material as drops");
             Config.BUILD_BLOCKS_PER_TICK.set(previousBudget);
             helper.succeed();
         });
