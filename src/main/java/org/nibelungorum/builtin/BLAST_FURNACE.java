@@ -86,6 +86,7 @@ public class BLAST_FURNACE {
                 .inputItem(Ingredient.of(Items.IRON_INGOT),9)
                 .outputItem(Items.IRON_NUGGET,10)
                 .inputEnergy(20)
+                .duration(240)
                 .build();
         event.registerRecipe(recipe);
 

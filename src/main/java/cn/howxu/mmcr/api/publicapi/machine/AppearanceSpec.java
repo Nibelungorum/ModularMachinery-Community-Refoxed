@@ -33,6 +33,10 @@ public record AppearanceSpec(
             return this;
         }
 
+        public Builder machineBasicBlock(String machineBasicBlock) {
+            return machineBasicBlock(Identifier.parse(machineBasicBlock));
+        }
+
         public Builder controllerBaseTexture(Identifier controllerBaseTexture) {
             this.controllerBaseTexture = Objects.requireNonNull(controllerBaseTexture, "controllerBaseTexture");
             return this;

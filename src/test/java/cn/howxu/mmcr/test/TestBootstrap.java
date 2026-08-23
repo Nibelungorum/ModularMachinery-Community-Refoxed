@@ -217,7 +217,7 @@ public final class TestBootstrap {
     }
 
     private static List<String> testMachineNames() {
-        return List.of("test_cube", "test_machine_name", "cracker", "runtime_test_machine", "runtime_test_machine_new",
+        return List.of("test_cube", "test_machine_name", "runtime_test_machine", "runtime_test_machine_new",
                 "controller_tick", "iron_compressor", "distillation_tower_test",
                 "expandable_structure_stages", "expandable_structure_vertical_roll");
     }

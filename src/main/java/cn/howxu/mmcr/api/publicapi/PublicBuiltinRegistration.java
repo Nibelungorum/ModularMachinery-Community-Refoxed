@@ -40,4 +40,5 @@ public final class PublicBuiltinRegistration {
         if (MOD_ID.equals(id.getNamespace())) return block(id.getPath());
         return () -> BuiltInRegistries.BLOCK.getValue(id);
     }
+
 }

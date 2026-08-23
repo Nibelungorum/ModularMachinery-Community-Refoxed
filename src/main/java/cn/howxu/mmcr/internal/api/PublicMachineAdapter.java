@@ -140,7 +140,7 @@ public final class PublicMachineAdapter {
                 .controllerSpec(toControllerSpec(definition.id(), definition.controller()))
                 .appearance(toAppearanceSpec(definition.appearance()))
                 .allowParallelism(definition.parallelizable())
-                .maxParallelAmount(definition.maxParallelAmount())
+                .maxParallelAmount(definition.maxParallelism())
                 .allowModifiers(definition.allowModifiers())
                 .allowMultithreading(definition.allowMultithreading())
                 .shareSmartInterfaces(definition.shareSmartInterfaces());

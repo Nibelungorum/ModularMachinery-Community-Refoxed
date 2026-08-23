@@ -146,4 +146,33 @@ class InterfaceHelpersTest {
         assertThat(cn.howxu.mmcr.api.publicapi.PublicBuiltinRegistration.block(
                 Identifier.parse("minecraft:stone")).get()).isSameAs(Blocks.STONE);
     }
+
+    @Test
+    void block_predicate_accepts_string_identifier() {
+        assertThat(BlockPredicate.block("minecraft:end_stone_bricks")
+                .blockSupplier().orElseThrow().get()).isSameAs(Blocks.END_STONE_BRICKS);
+    }
+
+    @Test
+    void block_predicate_exposes_coupler_alias() {
+        assertThat(BlockPredicate.coupler().isMachineCoupler()).isTrue();
+    }
+
+    @Test
+    void state_lookup_resolves_default_and_explicit_properties() {
+        assertThat(BlockPredicate.state("minecraft:stone").blockState().orElseThrow())
+                .isEqualTo(Blocks.STONE.defaultBlockState());
+        assertThat(BlockPredicate.state("minecraft:oak_log[axis=x]").blockState().orElseThrow())
+                .isEqualTo(Blocks.OAK_LOG.defaultBlockState()
+                        .setValue(net.minecraft.world.level.block.RotatedPillarBlock.AXIS,
+                                net.minecraft.core.Direction.Axis.X));
+    }
+
+    @Test
+    void state_lookup_rejects_invalid_properties() {
+        assertThatThrownBy(() -> BlockPredicate.state("minecraft:oak_log[missing=value]"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> BlockPredicate.state("minecraft:oak_log[axis=invalid]"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 }

@@ -119,6 +119,20 @@ class PublicRecipeBuilderTest {
     }
 
     @Test
+    void smart_interface_requirement_is_added_to_derived_io_requirements() {
+        MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("smart_interface"), id("machine"))
+                .inputItem(Items.IRON_INGOT, 1)
+                .inputEnergy(20)
+                .outputItem(Items.GOLD_NUGGET, 1)
+                .smartInterface(SmartInterfaceRequirement.input("Mode", 1F))
+                .build();
+
+        assertThat(recipe.requirements()).hasSize(4);
+        assertThat(recipe.requirements()).anyMatch(SmartInterfaceRequirement.class::isInstance);
+        assertThat(recipe.requirements()).filteredOn(ItemRequirement.class::isInstance).hasSize(2);
+    }
+
+    @Test
     void adapts_public_recipe_values_to_internal_recipe_semantics() {
         ItemStack itemOutput = new ItemStack(Items.GOLD_INGOT, 2);
         FluidStack fluidOutput = new FluidStack(net.minecraft.world.level.material.Fluids.WATER, 250);

@@ -94,6 +94,7 @@ class PublicApiAdapterTest {
         assertThat(converted.hasFactory()).isTrue();
         assertThat(converted.factoryThreadLimit()).isEqualTo(4);
         assertThat(converted.factoryThreads()).hasSize(1);
+        assertThat(PublicMachineAdapter.toStartupRegistration(definition, structure).maxParallelAmount()).isEqualTo(8);
         assertThat(converted.role()).isEqualTo(cn.howxu.mmcr.api.machine.MachineRole.HOST);
         assertThat(converted.acceptedModuleIds()).containsExactly(moduleId);
         assertThat(converted.structureStages()).hasSize(1);
