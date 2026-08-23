@@ -1501,7 +1501,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private long structureScanTimeoutTicks() {
-        return (long) structureCheckIntervalTicks() * structureScanBatches();
+        if (structureScan == null) return (long) structureCheckIntervalTicks() * structureScanBatches();
+        int batchSize = structureScan.batchSize();
+        int sentinelBudget = Math.min(structureSentinelCount(), Math.max(0, batchSize - 1));
+        int entriesPerTick = Math.max(1, batchSize - sentinelBudget);
+        long scanTicks = (structureScan.entries().size() + entriesPerTick - 1L) / entriesPerTick;
+        return (long) structureCheckIntervalTicks() * Math.max(structureScanBatches(), (int) scanTicks);
     }
 
     private static int structureSentinelCount() {

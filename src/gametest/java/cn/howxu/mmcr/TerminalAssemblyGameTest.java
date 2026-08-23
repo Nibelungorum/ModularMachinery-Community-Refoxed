@@ -286,7 +286,7 @@ public class TerminalAssemblyGameTest {
             int completionTick = expectedCount + 2;
             int scanWaitTicks = 150 - completionTick;
             helper.runAtTickTime(completionTick + 1, controller::requestImmediateStructureCheck);
-            helper.runAtTickTime(completionTick + scanWaitTicks, () -> {
+            helper.runAtTickTime(completionTick + scanWaitTicks + 1, () -> {
                 try {
                     helper.assertTrue(helper.getLevel().getGameTime() > acceptedAt + 1, "Build advances across multiple server ticks");
                     for (int placementsThisTick : controller.buildTaskPlacementsPerTickForTesting().values()) {
@@ -319,7 +319,8 @@ public class TerminalAssemblyGameTest {
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(MachineRegistry.getMachine(MMCR.id("test_cube")));
         List<MultiblockAssemblyService.Placement> template = template(controller);
-        BlockPos changedPos = template.getLast().pos();
+        MultiblockAssemblyService.Placement changedPlacement = template.getLast();
+        BlockPos changedPos = changedPlacement.pos();
         int previousInterval = Config.MACHINE_CHECK_INTERVAL_TICKS.get();
         controller.setStructureCheckIntervalForTesting(1);
         try {
@@ -335,9 +336,10 @@ public class TerminalAssemblyGameTest {
                 controller.onStructureBlockChanged(changedPos);
                 helper.assertTrue(controller.isPendingStructureInvalidationForTesting(),
                         "A block change during the scan records pending invalidation");
-                helper.getLevel().setBlock(changedPos, template.getFirst().state(), 3);
+                helper.getLevel().setBlock(changedPos, changedPlacement.state(), 3);
                 controller.onStructureBlockChanged(changedPos);
-                helper.runAtTickTime(12, () -> {
+                // The nine-entry test pattern needs nine real ticker batches with its sentinel budget.
+                helper.runAtTickTime(19, () -> {
                     try {
                         helper.assertTrue(controller.scanBatchCountForTesting() >= 10,
                                 "A fresh scan runs after the pending invalidation");
