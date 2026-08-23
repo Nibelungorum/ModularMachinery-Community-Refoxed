@@ -13,11 +13,9 @@ import net.minecraft.client.renderer.block.BlockQuadOutput;
 import net.minecraft.client.renderer.block.FluidRenderer;
 import net.minecraft.client.renderer.block.ModelBlockRenderer;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
-import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
+import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.CardinalLighting;
 import net.minecraft.world.level.ColorResolver;
 import net.minecraft.world.level.Level;
@@ -40,7 +38,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 /**
  * Compiles visible world preview blocks into one reusable mesh per render layer.
@@ -54,10 +51,9 @@ public final class WorldPreviewMeshCompiler {
     private WorldPreviewMeshCompiler() { }
 
     static CompilationPlan plan(BlockPos controllerPos, List<MultiblockPreviewSnapshot.Entry> entries,
-            int selectedLayer, Function<BlockState, ChunkSectionLayer> blockLayerResolver) {
+            int selectedLayer) {
         Objects.requireNonNull(controllerPos, "controllerPos");
         Objects.requireNonNull(entries, "entries");
-        Objects.requireNonNull(blockLayerResolver, "blockLayerResolver");
         List<PlannedEntry> planned = new ArrayList<>();
         Set<BlockPos> blockEntities = new HashSet<>();
         for (MultiblockPreviewSnapshot.Entry entry : entries) {
@@ -67,7 +63,7 @@ public final class WorldPreviewMeshCompiler {
             BlockPos position = controllerPos.offset(entry.relativePos()).immutable();
             if (state.hasBlockEntity()) blockEntities.add(position);
             ChunkSectionLayer fluidLayer = state.getFluidState().isEmpty() ? null : ChunkSectionLayer.TRANSLUCENT;
-            planned.add(new PlannedEntry(position, state, blockLayerResolver.apply(state), fluidLayer));
+            planned.add(new PlannedEntry(position, state, fluidLayer));
         }
         return new CompilationPlan(planned, blockEntities);
     }
@@ -103,8 +99,7 @@ public final class WorldPreviewMeshCompiler {
             ModelBlockRenderer blockRenderer = new ModelBlockRenderer(
                     minecraft.options.ambientOcclusion().get(), true, minecraft.getBlockColors());
             FluidRenderer fluidRenderer = new FluidRenderer(fluidSet);
-            CompilationPlan plan = plan(controllerPos, entries, selectedLayer,
-                    state -> blockLayer(modelSet.get(state)));
+            CompilationPlan plan = plan(controllerPos, entries, selectedLayer);
             Map<BlockPos, BlockState> visibleStates = new LinkedHashMap<>();
             plan.entries().forEach(entry -> visibleStates.put(entry.position(), entry.state()));
             blockEntities.addAll(plan.blockEntityPositions());
@@ -119,11 +114,11 @@ public final class WorldPreviewMeshCompiler {
                     fluidRenderer.tesselate(region, position, offset(fluidOutput, position), state, state.getFluidState());
                 }
                 if (state.getRenderShape() == RenderShape.MODEL) {
+                    BlockStateModel model = models.computeIfAbsent(state, modelSet::get);
                     BlockQuadOutput blockOutput = (x, y, z, quad, instance) -> builderFor(started, builders,
-                            planned.blockLayer()).putBlockBakedQuad(x, y, z, quad, instance);
+                            quad.materialInfo().layer()).putBlockBakedQuad(x, y, z, quad, instance);
                     blockRenderer.tesselateBlock(blockOutput, position.getX(), position.getY(), position.getZ(),
-                            region, position, state, models.computeIfAbsent(state, modelSet::get),
-                            state.getSeed(position));
+                            region, position, state, model, state.getSeed(position));
                 }
             }
             if (cancelled.get()) throw new CancelledCompilation();
@@ -152,17 +147,6 @@ public final class WorldPreviewMeshCompiler {
         }
     }
 
-    private static ChunkSectionLayer blockLayer(BlockStateModel model) {
-        List<BlockStateModelPart> parts = new ArrayList<>();
-        model.collectParts(RandomSource.create(0), parts);
-        for (BlockStateModelPart part : parts) {
-            for (Direction direction : Direction.values()) {
-                if (!part.getQuads(direction).isEmpty()) return part.getQuads(direction).getFirst().materialInfo().layer();
-            }
-            if (!part.getQuads(null).isEmpty()) return part.getQuads(null).getFirst().materialInfo().layer();
-        }
-        return ChunkSectionLayer.SOLID;
-    }
 
     static void closeResources(Iterable<? extends AutoCloseable> resources) {
         RuntimeException failure = null;
@@ -257,6 +241,5 @@ public final class WorldPreviewMeshCompiler {
         }
     }
 
-    record PlannedEntry(BlockPos position, BlockState state, ChunkSectionLayer blockLayer,
-            ChunkSectionLayer fluidLayer) { }
+    record PlannedEntry(BlockPos position, BlockState state, ChunkSectionLayer fluidLayer) { }
 }

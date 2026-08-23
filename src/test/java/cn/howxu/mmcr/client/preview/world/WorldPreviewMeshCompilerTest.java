@@ -39,11 +39,10 @@ class WorldPreviewMeshCompilerTest {
                 entry(0, Blocks.IRON_BLOCK),
                 entry(1, Blocks.GLASS));
 
-        var plan = WorldPreviewMeshCompiler.plan(BlockPos.ZERO, entries, Integer.MAX_VALUE,
-                state -> state.is(Blocks.GLASS) ? ChunkSectionLayer.CUTOUT : ChunkSectionLayer.SOLID);
+        var plan = WorldPreviewMeshCompiler.plan(BlockPos.ZERO, entries, Integer.MAX_VALUE);
 
-        assertThat(plan.entries()).extracting(WorldPreviewMeshCompiler.PlannedEntry::blockLayer)
-                .containsExactly(ChunkSectionLayer.SOLID, ChunkSectionLayer.CUTOUT);
+        assertThat(plan.entries()).extracting(WorldPreviewMeshCompiler.PlannedEntry::state)
+                .containsExactly(Blocks.IRON_BLOCK.defaultBlockState(), Blocks.GLASS.defaultBlockState());
     }
 
     @Test
@@ -53,7 +52,7 @@ class WorldPreviewMeshCompilerTest {
                 entry(1, Blocks.GOLD_BLOCK),
                 entry(2, Blocks.AIR));
 
-        var plan = WorldPreviewMeshCompiler.plan(BlockPos.ZERO, entries, 1, state -> ChunkSectionLayer.SOLID);
+        var plan = WorldPreviewMeshCompiler.plan(BlockPos.ZERO, entries, 1);
 
         assertThat(plan.entries()).extracting(WorldPreviewMeshCompiler.PlannedEntry::position)
                 .containsExactly(new BlockPos(0, 1, 0));
@@ -62,8 +61,7 @@ class WorldPreviewMeshCompilerTest {
     @Test
     void compilerFiltersAirEvenWhenAirIsOnTheSelectedLayer() {
         var plan = WorldPreviewMeshCompiler.plan(BlockPos.ZERO,
-                List.of(entry(1, Blocks.AIR), entry(1, Blocks.IRON_BLOCK)), 1,
-                state -> ChunkSectionLayer.SOLID);
+                List.of(entry(1, Blocks.AIR), entry(1, Blocks.IRON_BLOCK)), 1);
 
         assertThat(plan.entries()).extracting(WorldPreviewMeshCompiler.PlannedEntry::state)
                 .containsExactly(Blocks.IRON_BLOCK.defaultBlockState());
@@ -82,7 +80,7 @@ class WorldPreviewMeshCompilerTest {
     @Test
     void fluidEntriesRouteToTranslucentLayer() {
         var plan = WorldPreviewMeshCompiler.plan(BlockPos.ZERO,
-                List.of(entry(0, Blocks.WATER)), Integer.MAX_VALUE, state -> ChunkSectionLayer.SOLID);
+                List.of(entry(0, Blocks.WATER)), Integer.MAX_VALUE);
 
         assertThat(plan.entries().getFirst().fluidLayer()).isEqualTo(ChunkSectionLayer.TRANSLUCENT);
     }
@@ -139,7 +137,7 @@ class WorldPreviewMeshCompilerTest {
     @Test
     void planTracksBlockEntityPositionsWithoutClientModels() {
         var plan = WorldPreviewMeshCompiler.plan(BlockPos.ZERO,
-                List.of(entry(0, Blocks.CHEST)), Integer.MAX_VALUE, state -> ChunkSectionLayer.SOLID);
+                List.of(entry(0, Blocks.CHEST)), Integer.MAX_VALUE);
 
         assertThat(plan.blockEntityPositions()).containsExactly(new BlockPos(0, 0, 0));
     }
