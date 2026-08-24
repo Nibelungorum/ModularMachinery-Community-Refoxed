@@ -22,7 +22,7 @@ import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
-import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
+import cn.howxu.mmcr.api.recipe.CraftingContextPool;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
@@ -1453,7 +1453,7 @@ class MachineControllerBlockEntityTest {
         bindItemComponents(Items.IRON_INGOT);
         bindItemComponents(Items.IRON_NUGGET);
         FactoryRuntimeFixture fixture = formedFactoryRuntimeFixture(MMCR.id("factory_lane_reset_machine"), 2, 2);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         setField(MachineControllerBlockEntity.class, fixture.controller(), "contextPool", pool);
         MachineRecipe recipe = registerItemRecipe("factory_lane_reset", fixture.machine().registryName(), 20, 0);
         fixture.controller().serverTick();
@@ -1470,7 +1470,7 @@ class MachineControllerBlockEntityTest {
         bindItemComponents(Items.IRON_INGOT);
         bindItemComponents(Items.IRON_NUGGET);
         FactoryRuntimeFixture fixture = formedFactoryRuntimeFixture(MMCR.id("factory_lane_removed_machine"), 2, 2);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         setField(MachineControllerBlockEntity.class, fixture.controller(), "contextPool", pool);
         MachineRecipe recipe = registerItemRecipe("factory_lane_removed", fixture.machine().registryName(), 20, 0);
         fixture.controller().serverTick();
@@ -1504,7 +1504,7 @@ class MachineControllerBlockEntityTest {
         bindItemComponents(Items.IRON_INGOT);
         bindItemComponents(Items.IRON_NUGGET);
         FactoryRuntimeFixture fixture = formedFactoryRuntimeFixture(MMCR.id("factory_lane_unload_machine"), 2, 2);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         setField(MachineControllerBlockEntity.class, fixture.controller(), "contextPool", pool);
         MachineRecipe recipe = registerItemRecipe("factory_lane_unload", fixture.machine().registryName(), 20, 0);
         fixture.controller().serverTick();
@@ -3596,7 +3596,7 @@ class MachineControllerBlockEntityTest {
         return count;
     }
 
-    private static void assertReturnedContexts(RecipeCraftingContextPool pool,
+    private static void assertReturnedContexts(CraftingContextPool pool,
                                                MachineControllerBlockEntity controller,
                                                MachineRecipe recipe,
                                                int expected) {

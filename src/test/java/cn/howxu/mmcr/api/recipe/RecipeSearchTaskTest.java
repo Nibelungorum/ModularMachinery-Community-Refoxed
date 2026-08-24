@@ -57,7 +57,7 @@ class RecipeSearchTaskTest {
         ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
         bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(2));
         MachineControllerBlockEntity controller = controllerWithComponents(bus);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         MachineRecipe blocked = inputRecipe("blocked", machineId, Items.GOLD_INGOT, 1);
         MachineRecipe startable = inputRecipe("startable", machineId, Items.IRON_INGOT, 2);
 
@@ -75,7 +75,7 @@ class RecipeSearchTaskTest {
         ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
         bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance());
         MachineControllerBlockEntity controller = controllerWithComponents(bus);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         MachineRecipe noMatchingComponent = inputRecipe("gold", machineId, Items.GOLD_INGOT, 1);
         MachineRecipe closerFailure = inputRecipe("iron", machineId, Items.IRON_INGOT, 3);
 
@@ -96,7 +96,7 @@ class RecipeSearchTaskTest {
         bus.getItemStackHandler(null).setStackInSlot(0, Items.GOLD_INGOT.getDefaultInstance());
         bus.getItemStackHandler(null).setStackInSlot(1, Items.NETHERITE_SCRAP.getDefaultInstance());
         MachineControllerBlockEntity controller = controllerWithComponents(bus);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         MachineRecipe single = inputRecipe("aaa_single_gold", machineId, Items.GOLD_INGOT, 1);
         MachineRecipe multi = inputRecipe("zzz_gold_scrap", machineId,
                 List.of(itemInput(Items.GOLD_INGOT, 1), itemInput(Items.NETHERITE_SCRAP, 1)));
@@ -114,7 +114,7 @@ class RecipeSearchTaskTest {
         ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
         bus.getItemStackHandler(null).setStackInSlot(0, Items.GOLD_INGOT.getDefaultInstance());
         MachineControllerBlockEntity controller = controllerWithComponents(bus);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         MachineRecipe single = inputRecipe("single_gold", machineId, Items.GOLD_INGOT, 1);
         MachineRecipe multi = inputRecipe("gold_scrap", machineId,
                 List.of(itemInput(Items.GOLD_INGOT, 1), itemInput(Items.NETHERITE_SCRAP, 1)));
@@ -132,7 +132,7 @@ class RecipeSearchTaskTest {
         ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
         bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(8));
         MachineControllerBlockEntity controller = controllerWithComponents(bus);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         MachineRecipe specific = inputRecipe("specific_iron", machineId, List.of(itemInput(Items.IRON_INGOT, 9)), true);
         MachineRecipe startable = inputRecipe("startable_iron", machineId, List.of(itemInput(Items.IRON_INGOT, 2)), true);
 
@@ -153,7 +153,7 @@ class RecipeSearchTaskTest {
         ItemOutputBusBlockEntity output = itemOutputBus(new BlockPos(2, 0, 0));
         output.getItemStackHandler(null).setStackInSlot(0, Items.GOLD_INGOT.getDefaultInstance().copyWithCount(44));
         MachineControllerBlockEntity controller = controllerWithComponents(input, output);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         MachineRecipe recipe = partialOutputRecipe("partial_output_parallel", machineId,
                 List.of(itemInput(Items.IRON_INGOT, 2)),
                 List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
@@ -172,7 +172,7 @@ class RecipeSearchTaskTest {
         ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
         bus.getItemStackHandler(null).setStackInSlot(0, Items.IRON_INGOT.getDefaultInstance().copyWithCount(6));
         MachineControllerBlockEntity controller = controllerWithComponents(bus);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         MachineRecipe recipe = inputRecipe("parallelized_iron_exact", machineId, List.of(itemInput(Items.IRON_INGOT, 2)), true);
 
         RecipeSearchResult result = new RecipeSearchTask(controller, machineId, 16, 3, List.of(recipe), pool).compute();
@@ -204,7 +204,7 @@ class RecipeSearchTaskTest {
         MachineRecipe lowerPriority = recipeWithLevels("lower_priority", machineId, Items.IRON_INGOT, 1, List.of());
 
         RecipeSearchResult result = new RecipeSearchTask(controller, machineId, 17, 1,
-                List.of(lowerPriority, highPriority), new RecipeCraftingContextPool()).compute();
+                List.of(lowerPriority, highPriority), new CraftingContextPool()).compute();
 
         assertThat(result.success()).isFalse();
         assertThat(result.levelFailure()).isEqualTo(new LevelInsufficientFailure(typeId, kanthal.id(), copper.id()));
@@ -221,7 +221,7 @@ class RecipeSearchTaskTest {
         RecipeCandidateIndex index = RecipeCandidateIndex.build(List.of(iron, gold));
 
         RecipeSearchResult result = new RecipeSearchTask(controller, machineId, 18, 1,
-                index.allCandidates(), new RecipeCraftingContextPool(), index).compute();
+                index.allCandidates(), new CraftingContextPool(), index).compute();
 
         assertThat(result.success()).isTrue();
         assertThat(result.activeRecipe().getRecipe()).isEqualTo(iron);

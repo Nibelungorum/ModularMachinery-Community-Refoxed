@@ -10,14 +10,14 @@ import java.util.Map;
 /**
  * @author howxu <dev@howxu.cn>
  */
-public final class RecipeCraftingContextPool {
+public final class CraftingContextPool {
 
-    private static final RecipeCraftingContextPool GLOBAL = new RecipeCraftingContextPool();
+    private static final CraftingContextPool GLOBAL = new CraftingContextPool();
 
     private final Map<Identifier, ArrayDeque<PooledContext>> contexts = new HashMap<>();
     private long reloadCounter;
 
-    public static RecipeCraftingContextPool global() {
+    public static CraftingContextPool global() {
         return GLOBAL;
     }
 

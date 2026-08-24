@@ -31,7 +31,7 @@ public final class RecipeSearchTask {
     private final long structureVersion;
     private final int maxParallelism;
     private final List<MachineRecipe> candidates;
-    private final RecipeCraftingContextPool contextPool;
+    private final CraftingContextPool contextPool;
     private final @Nullable RecipeCandidateIndex candidateIndex;
     private final @Nullable Identifier lockedRecipeId;
 
@@ -40,7 +40,7 @@ public final class RecipeSearchTask {
                             long structureVersion,
                             int maxParallelism,
                             List<MachineRecipe> candidates,
-                            RecipeCraftingContextPool contextPool) {
+                            CraftingContextPool contextPool) {
         this(controller, machineId, structureVersion, maxParallelism, candidates, contextPool, null, null);
     }
 
@@ -49,7 +49,7 @@ public final class RecipeSearchTask {
                             long structureVersion,
                             int maxParallelism,
                             List<MachineRecipe> candidates,
-                            RecipeCraftingContextPool contextPool,
+                            CraftingContextPool contextPool,
                             @Nullable RecipeCandidateIndex candidateIndex,
                             @Nullable Identifier lockedRecipeId) {
         this.controller = controller;
@@ -67,7 +67,7 @@ public final class RecipeSearchTask {
                             long structureVersion,
                             int maxParallelism,
                             List<MachineRecipe> candidates,
-                            RecipeCraftingContextPool contextPool,
+                            CraftingContextPool contextPool,
                             RecipeCandidateIndex candidateIndex) {
         this(controller, machineId, structureVersion, maxParallelism, candidates, contextPool, candidateIndex, null);
     }

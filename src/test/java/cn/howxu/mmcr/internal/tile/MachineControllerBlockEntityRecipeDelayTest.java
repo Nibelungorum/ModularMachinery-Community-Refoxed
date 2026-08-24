@@ -11,7 +11,7 @@ import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
-import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
+import cn.howxu.mmcr.api.recipe.CraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
@@ -83,7 +83,7 @@ class MachineControllerBlockEntityRecipeDelayTest {
         ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
         bus.getItemStackHandler(null).setStackInSlot(0, Items.GOLD_INGOT.getDefaultInstance());
         MachineControllerBlockEntity controller = controllerWithComponents(bus);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         MachineRecipe single = inputRecipe("single_gold", machineId, Items.GOLD_INGOT, 1);
         MachineRecipe multi = inputRecipe("gold_scrap", machineId,
                 List.of(itemInput(Items.GOLD_INGOT, 1), itemInput(Items.NETHERITE_SCRAP, 1)));
@@ -109,7 +109,7 @@ class MachineControllerBlockEntityRecipeDelayTest {
         ItemInputBusBlockEntity bus = itemInputBus(new BlockPos(1, 0, 0));
         bus.getItemStackHandler(null).setStackInSlot(0, Items.GOLD_INGOT.getDefaultInstance());
         MachineControllerBlockEntity controller = controllerWithComponents(bus);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         MachineRecipe single = inputRecipe("single_gold", machineId, Items.GOLD_INGOT, 1);
 
         RecipeSearchResult result = new RecipeSearchTask(controller, machineId, 22, 1, List.of(single), pool).compute();

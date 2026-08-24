@@ -3,7 +3,7 @@ package cn.howxu.mmcr.internal.recipe;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
-import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
+import cn.howxu.mmcr.api.recipe.CraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.resources.Identifier;
@@ -36,7 +36,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     private long lastRecipeModifierSnapshotVersion = Long.MIN_VALUE;
     private Runnable finishContinuation = () -> { };
 
-    private FactoryRecipeThread(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool,
+    private FactoryRecipeThread(MachineControllerBlockEntity controller, CraftingContextPool contextPool,
                                   boolean coreThread, boolean baseThread, String threadName) {
         super(controller, contextPool);
         this.coreThread = coreThread;
@@ -46,19 +46,19 @@ public final class FactoryRecipeThread extends RecipeThread {
                 : this.threadName.startsWith("factory-") ? this.threadName : "factory";
     }
 
-    public static FactoryRecipeThread simple(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
+    public static FactoryRecipeThread simple(MachineControllerBlockEntity controller, CraftingContextPool contextPool) {
         return simple(controller, contextPool, "factory");
     }
 
-    public static FactoryRecipeThread simple(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool, String laneId) {
+    public static FactoryRecipeThread simple(MachineControllerBlockEntity controller, CraftingContextPool contextPool, String laneId) {
         return new FactoryRecipeThread(controller, contextPool, false, false, laneId);
     }
 
-    public static FactoryRecipeThread base(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
+    public static FactoryRecipeThread base(MachineControllerBlockEntity controller, CraftingContextPool contextPool) {
         return new FactoryRecipeThread(controller, contextPool, false, true, "");
     }
 
-    public static FactoryRecipeThread core(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool,
+    public static FactoryRecipeThread core(MachineControllerBlockEntity controller, CraftingContextPool contextPool,
                                            String threadName, Set<MachineRecipe> recipes) {
         FactoryRecipeThread thread = new FactoryRecipeThread(controller, contextPool, true, false, threadName);
         thread.recipeSet.addAll(recipes == null ? Set.of() : recipes);
@@ -175,7 +175,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     public static FactoryRecipeThread load(ValueInput input, MachineControllerBlockEntity controller,
-                                           RecipeCraftingContextPool contextPool) {
+                                           CraftingContextPool contextPool) {
         FactoryRecipeThread thread = new FactoryRecipeThread(controller, contextPool,
                 input.getBooleanOr("core", false), input.getBooleanOr("base", false), input.getStringOr("name", ""));
         thread.idleTicks = input.getIntOr("idle_ticks", 0);

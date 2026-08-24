@@ -3,7 +3,6 @@ package cn.howxu.mmcr.api.recipe.requirement;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
-import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -35,22 +34,6 @@ public interface MachineRequirement {
 
     default List<String> tags() {
         return List.of();
-    }
-
-    default boolean simulate(RecipeCraftingContext context, int requirementIndex) {
-        return RequirementHandlerRegistry.simulate(this, context, requirementIndex);
-    }
-
-    default boolean commit(RecipeCraftingContext context, int requirementIndex) {
-        return RequirementHandlerRegistry.commit(this, context, requirementIndex);
-    }
-
-    default int maxInputParallelism(RecipeCraftingContext context, int limit) {
-        return RequirementHandlerRegistry.maxInputParallelism(this, context, limit);
-    }
-
-    default boolean ioTick(RecipeCraftingContext context, int requirementIndex) {
-        return RequirementHandlerRegistry.ioTick(this, context, requirementIndex);
     }
 
     static MachineRequirement fromInput(MachineIngredient ingredient) {

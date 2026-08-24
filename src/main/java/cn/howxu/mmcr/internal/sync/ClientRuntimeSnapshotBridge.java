@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.internal.sync;
 
-import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
+import cn.howxu.mmcr.api.recipe.CraftingContextPool;
 import java.lang.reflect.Method;
 import java.util.Map;
 
@@ -37,7 +37,7 @@ public final class ClientRuntimeSnapshotBridge {
     }
 
     public static synchronized void resetForConnection() {
-        RecipeCraftingContextPool.onGlobalReload();
+        CraftingContextPool.onGlobalReload();
         resetClientCaches();
         lastAppliedVersion = -1L;
     }

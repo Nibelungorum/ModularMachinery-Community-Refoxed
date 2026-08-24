@@ -48,9 +48,9 @@ class SmartInterfaceRequirementTest {
         assertThat(smartInterface.bind(controller.getBlockPos(), MMCR.id("test_machine"), "mode", 1.5F)).isTrue();
         var context = new RecipeCraftingContext(controller);
 
-        assertThat(input.simulate(context, 0)).isTrue();
-        assertThat(output.simulate(context, 1)).isTrue();
-        assertThat(output.commit(context, 1)).isTrue();
+        assertThat(RequirementHandlerRegistry.simulate(input, context, 0)).isTrue();
+        assertThat(RequirementHandlerRegistry.simulate(output, context, 1)).isTrue();
+        assertThat(RequirementHandlerRegistry.commit(output, context, 1)).isTrue();
         assertThat(smartInterface.binding(0).orElseThrow().value()).isEqualTo(9F);
     }
 
@@ -59,7 +59,7 @@ class SmartInterfaceRequirementTest {
         var controller = controllerWith();
         var context = new RecipeCraftingContext(controller);
 
-        assertThat(SmartInterfaceRequirement.output("mode", 9F).simulate(context, 0)).isFalse();
+        assertThat(RequirementHandlerRegistry.simulate(SmartInterfaceRequirement.output("mode", 9F), context, 0)).isFalse();
     }
 
     @Test
@@ -75,7 +75,8 @@ class SmartInterfaceRequirementTest {
         ), false)).isTrue();
         RecipeCraftingContext context = new RecipeCraftingContext(controllerWith(smart));
 
-        boolean result = SmartInterfaceRequirement.input("temperature", 30F).simulate(context, 0);
+        boolean result = RequirementHandlerRegistry.simulate(
+                SmartInterfaceRequirement.input("temperature", 30F), context, 0);
 
         assertThat(result).isFalse();
         assertThat(context.getLastFailureUnloc()).isEqualTo(RecipeCraftingContext.FAILURE_MISSING_INPUT);
@@ -104,8 +105,10 @@ class SmartInterfaceRequirementTest {
         assertThat(smartInterface.setValue("ConversionRate", 0F)).isTrue();
         var context = new RecipeCraftingContext(controller);
 
-        assertThat(SmartInterfaceRequirement.input("Temperature", 3200F).simulate(context, 0)).isTrue();
-        assertThat(SmartInterfaceRequirement.input("Temperature", 1600F).simulate(context, 0)).isFalse();
+        assertThat(RequirementHandlerRegistry.simulate(
+                SmartInterfaceRequirement.input("Temperature", 3200F), context, 0)).isTrue();
+        assertThat(RequirementHandlerRegistry.simulate(
+                SmartInterfaceRequirement.input("Temperature", 1600F), context, 0)).isFalse();
     }
 
     @Test

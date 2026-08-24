@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
+import cn.howxu.mmcr.api.recipe.CraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import net.minecraft.resources.Identifier;
 
@@ -44,7 +44,7 @@ public record RuntimeContentSnapshot(
                 MachineStructureRegistry.replaceClientSnapshot(structures);
                 RecipeRegistry.replaceClientSnapshot(recipes);
             }
-            RecipeCraftingContextPool.onGlobalReload();
+            CraftingContextPool.onGlobalReload();
             ClientRuntimeSnapshotBridge.apply(this);
             ClientRuntimeSnapshotBridge.markApplied(contentVersion);
             return true;

@@ -11,7 +11,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class RecipeCraftingContextPoolTest {
+class CraftingContextPoolTest {
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -20,7 +20,7 @@ class RecipeCraftingContextPoolTest {
 
     @Test
     void returnAndBorrowReusesContextAfterClearingTransientFailure() throws Exception {
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         MachineRecipe recipe = recipe("pooled");
         MachineControllerBlockEntity first = controller();
         MachineControllerBlockEntity second = controller();
@@ -40,7 +40,7 @@ class RecipeCraftingContextPoolTest {
 
     @Test
     void reloadClearsPreviouslyReturnedContexts() throws Exception {
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         MachineRecipe recipe = recipe("reload");
         ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, 1);
         RecipeCraftingContext first = pool.borrow(active, controller());

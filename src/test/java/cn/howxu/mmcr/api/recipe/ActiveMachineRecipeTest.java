@@ -235,7 +235,7 @@ class ActiveMachineRecipeTest {
                         Ingredient.of(HolderSet.direct(Items.WOODEN_SWORD.builtInRegistryHolder(),
                                 Items.DIAMOND_SWORD.builtInRegistryHolder())), 1,
                         ItemStack.EMPTY)), true);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
 
         bus.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.WOODEN_SWORD));
         ActiveMachineRecipe first = new ActiveMachineRecipe(recipe);

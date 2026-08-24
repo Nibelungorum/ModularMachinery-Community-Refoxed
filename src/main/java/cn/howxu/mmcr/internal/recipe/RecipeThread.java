@@ -3,7 +3,7 @@ package cn.howxu.mmcr.internal.recipe;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
-import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
+import cn.howxu.mmcr.api.recipe.CraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -32,7 +32,7 @@ public abstract class RecipeThread {
     public enum Status { IDLE, WORKING, WAITING, FAILED }
 
     protected @Nullable MachineControllerBlockEntity controller;
-    protected final RecipeCraftingContextPool contextPool;
+    protected final CraftingContextPool contextPool;
     protected @Nullable ActiveMachineRecipe activeRecipe;
     protected @Nullable RecipeCraftingContext context;
     protected Status status = Status.IDLE;
@@ -46,7 +46,7 @@ public abstract class RecipeThread {
     private boolean tickPending;
     private @Nullable StructureClaimRegistry.ResourceDomain pendingTickDomain;
 
-    protected RecipeThread(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
+    protected RecipeThread(MachineControllerBlockEntity controller, CraftingContextPool contextPool) {
         this.controller = controller;
         this.contextPool = contextPool;
     }

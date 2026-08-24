@@ -8,7 +8,7 @@ import cn.howxu.mmcr.api.machine.MachineRoleValidator;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
+import cn.howxu.mmcr.api.recipe.CraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.internal.network.ControllerSpecSync;
@@ -53,7 +53,7 @@ public final class RuntimeContentCoordinator {
         try {
             MachineStructureRegistry.replaceDynamic(structureReplacement);
             RecipeRegistry.replaceDynamic(recipeReplacement);
-            RecipeCraftingContextPool.onGlobalReload();
+            CraftingContextPool.onGlobalReload();
         } catch (RuntimeException | Error failure) {
             try {
                 MachineStructureRegistry.replaceDynamic(oldStructures);

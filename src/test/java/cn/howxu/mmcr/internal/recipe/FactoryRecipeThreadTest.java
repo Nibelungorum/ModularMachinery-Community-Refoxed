@@ -2,7 +2,7 @@ package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
+import cn.howxu.mmcr.api.recipe.CraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.HolderLookup;
@@ -41,7 +41,7 @@ class FactoryRecipeThreadTest {
     @Test
     void togglingUsesActiveRecipeAndSecondClickUnlocks() {
         MachineRecipe recipe = recipe("mmcr:locked_recipe");
-        FactoryRecipeThread thread = FactoryRecipeThread.base(null, new RecipeCraftingContextPool());
+        FactoryRecipeThread thread = FactoryRecipeThread.base(null, new CraftingContextPool());
         thread.setActiveRecipeForTesting(new ActiveMachineRecipe(recipe));
 
         assertThat(thread.toggleRecipeLock()).isTrue();
@@ -54,7 +54,7 @@ class FactoryRecipeThreadTest {
 
     @Test
     void noContextAndNoLockDoesNothing() {
-        FactoryRecipeThread thread = FactoryRecipeThread.base(null, new RecipeCraftingContextPool());
+        FactoryRecipeThread thread = FactoryRecipeThread.base(null, new CraftingContextPool());
 
         assertThat(thread.toggleRecipeLock()).isFalse();
         assertThat(thread.lockedRecipeId()).isNull();
@@ -64,7 +64,7 @@ class FactoryRecipeThreadTest {
     void validLockPersistsWithoutAnActiveRecipe() {
         MachineRecipe recipe = recipe("mmcr:persisted_lock");
         RecipeRegistry.register(recipe);
-        FactoryRecipeThread thread = FactoryRecipeThread.base(null, new RecipeCraftingContextPool());
+        FactoryRecipeThread thread = FactoryRecipeThread.base(null, new CraftingContextPool());
         thread.setLockedRecipeId(recipe.id());
 
         FactoryRecipeThread restored = saveAndLoad(thread);
@@ -74,7 +74,7 @@ class FactoryRecipeThreadTest {
 
     @Test
     void missingRecipeClearsPersistedLock() {
-        FactoryRecipeThread thread = FactoryRecipeThread.base(null, new RecipeCraftingContextPool());
+        FactoryRecipeThread thread = FactoryRecipeThread.base(null, new CraftingContextPool());
         thread.setLockedRecipeId(Identifier.parse("mmcr:removed_recipe"));
 
         FactoryRecipeThread restored = saveAndLoad(thread);
@@ -86,7 +86,7 @@ class FactoryRecipeThreadTest {
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
         thread.save(output);
         return FactoryRecipeThread.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP,
-                output.buildResult()), null, new RecipeCraftingContextPool());
+                output.buildResult()), null, new CraftingContextPool());
     }
 
     private static MachineRecipe recipe(String id) {

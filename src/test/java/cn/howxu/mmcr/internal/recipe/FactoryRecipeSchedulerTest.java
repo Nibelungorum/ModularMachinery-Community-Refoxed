@@ -11,7 +11,7 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
+import cn.howxu.mmcr.api.recipe.CraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
@@ -182,14 +182,14 @@ class FactoryRecipeSchedulerTest {
     @Test
     void per_thread_parallelism_is_not_reduced_by_other_active_threads() {
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(4);
-        FactoryRecipeThread first = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());
-        FactoryRecipeThread second = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());
+        FactoryRecipeThread first = FactoryRecipeThread.simple(null, new CraftingContextPool());
+        FactoryRecipeThread second = FactoryRecipeThread.simple(null, new CraftingContextPool());
         first.setActiveRecipeForTesting(activeRecipeWithParallelism(16));
         second.setActiveRecipeForTesting(activeRecipeWithParallelism(16));
         scheduler.addThreadForTesting(first);
         scheduler.addThreadForTesting(second);
 
-        scheduler.tickThreads(null, List.of(), 1L, 16, new RecipeCraftingContextPool());
+        scheduler.tickThreads(null, List.of(), 1L, 16, new CraftingContextPool());
 
         assertThat(scheduler.perThreadParallelLimit()).isEqualTo(16);
         assertThat(scheduler.availableParallelism()).isEqualTo(16);
@@ -201,9 +201,9 @@ class FactoryRecipeSchedulerTest {
         MachineRecipe limited = recipe("factory_limited", 1);
         MachineRecipe unlimited = recipe("factory_unlimited", 0);
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(4);
-        FactoryRecipeThread activeLimited = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());
+        FactoryRecipeThread activeLimited = FactoryRecipeThread.simple(null, new CraftingContextPool());
         activeLimited.setActiveRecipeForTesting(new ActiveMachineRecipe(limited, 1));
-        FactoryRecipeThread activeUnlimited = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());
+        FactoryRecipeThread activeUnlimited = FactoryRecipeThread.simple(null, new CraftingContextPool());
         activeUnlimited.setActiveRecipeForTesting(new ActiveMachineRecipe(unlimited, 1));
         scheduler.addThreadForTesting(activeLimited);
         scheduler.addThreadForTesting(activeUnlimited);
@@ -214,11 +214,11 @@ class FactoryRecipeSchedulerTest {
     @Test
     void scheduler_ticks_recipe_threads_and_removes_timed_out_dynamic_threads() {
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(4);
-        FactoryRecipeThread thread = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(null, new CraftingContextPool());
         scheduler.addThreadForTesting(thread);
 
         for (int i = 0; i < FactoryRecipeThread.IDLE_TIMEOUT_TICKS; i++) {
-            scheduler.tickThreads(null, List.of(), 1L, 4, new RecipeCraftingContextPool());
+            scheduler.tickThreads(null, List.of(), 1L, 4, new CraftingContextPool());
         }
 
         assertThat(scheduler.activeThreadCount()).isZero();
@@ -229,15 +229,15 @@ class FactoryRecipeSchedulerTest {
         MachineRecipe firstRecipe = recipe("factory_locked_idle_first", 0);
         MachineRecipe secondRecipe = recipe("factory_locked_idle_second", 0);
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(4);
-        FactoryRecipeThread first = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool(), "factory-1");
-        FactoryRecipeThread second = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool(), "factory-2");
+        FactoryRecipeThread first = FactoryRecipeThread.simple(null, new CraftingContextPool(), "factory-1");
+        FactoryRecipeThread second = FactoryRecipeThread.simple(null, new CraftingContextPool(), "factory-2");
         first.setLockedRecipeId(firstRecipe.id());
         second.setLockedRecipeId(secondRecipe.id());
         scheduler.addThreadForTesting(first);
         scheduler.addThreadForTesting(second);
 
         for (int i = 0; i < FactoryRecipeThread.IDLE_TIMEOUT_TICKS; i++) {
-            scheduler.tickThreads(null, List.of(), 1L, 4, new RecipeCraftingContextPool());
+            scheduler.tickThreads(null, List.of(), 1L, 4, new CraftingContextPool());
         }
 
         assertThat(scheduler.threadSnapshots())
@@ -250,8 +250,8 @@ class FactoryRecipeSchedulerTest {
         MachineRecipe firstRecipe = recipe("factory_unlocked_idle_first", 0);
         MachineRecipe secondRecipe = recipe("factory_unlocked_idle_second", 0);
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(4);
-        FactoryRecipeThread first = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool(), "factory-1");
-        FactoryRecipeThread second = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool(), "factory-2");
+        FactoryRecipeThread first = FactoryRecipeThread.simple(null, new CraftingContextPool(), "factory-1");
+        FactoryRecipeThread second = FactoryRecipeThread.simple(null, new CraftingContextPool(), "factory-2");
         first.setLockedRecipeId(firstRecipe.id());
         second.setLockedRecipeId(secondRecipe.id());
         scheduler.addThreadForTesting(first);
@@ -259,7 +259,7 @@ class FactoryRecipeSchedulerTest {
 
         assertThat(scheduler.toggleRecipeLock(1)).isTrue();
         for (int i = 0; i < FactoryRecipeThread.IDLE_TIMEOUT_TICKS; i++) {
-            scheduler.tickThreads(null, List.of(), 1L, 4, new RecipeCraftingContextPool());
+            scheduler.tickThreads(null, List.of(), 1L, 4, new CraftingContextPool());
         }
 
         assertThat(scheduler.allThreads())
@@ -275,7 +275,7 @@ class FactoryRecipeSchedulerTest {
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1);
 
         for (int i = 0; i <= FactoryRecipeThread.IDLE_TIMEOUT_TICKS; i++) {
-            scheduler.tickThreads(null, List.of(), 1L, 1, new RecipeCraftingContextPool());
+            scheduler.tickThreads(null, List.of(), 1L, 1, new CraftingContextPool());
         }
 
         assertThat(scheduler.threadSnapshots()).containsExactly(FactoryRecipeScheduler.ThreadSnapshot.idleBase());
@@ -294,7 +294,7 @@ class FactoryRecipeSchedulerTest {
     @Test
     void active_thread_count_excludes_idle_cached_threads() {
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2);
-        scheduler.addThreadForTesting(FactoryRecipeThread.simple(null, new RecipeCraftingContextPool()));
+        scheduler.addThreadForTesting(FactoryRecipeThread.simple(null, new CraftingContextPool()));
 
         assertThat(scheduler.activeThreadCount()).isZero();
     }
@@ -302,14 +302,14 @@ class FactoryRecipeSchedulerTest {
     @Test
     void parallel_limit_does_not_cap_thread_count() {
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(4);
-        FactoryRecipeThread first = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());
-        FactoryRecipeThread second = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());
+        FactoryRecipeThread first = FactoryRecipeThread.simple(null, new CraftingContextPool());
+        FactoryRecipeThread second = FactoryRecipeThread.simple(null, new CraftingContextPool());
         first.setActiveRecipeForTesting(activeRecipeWithParallelism(2));
         second.setActiveRecipeForTesting(activeRecipeWithParallelism(1));
         scheduler.addThreadForTesting(first);
         scheduler.addThreadForTesting(second);
 
-        scheduler.tickThreads(null, List.of(), 1L, 2, new RecipeCraftingContextPool());
+        scheduler.tickThreads(null, List.of(), 1L, 2, new CraftingContextPool());
 
         assertThat(scheduler.threadLimit()).isEqualTo(4);
     }
@@ -317,8 +317,8 @@ class FactoryRecipeSchedulerTest {
     @Test
     void set_thread_limit_stops_threads_above_new_capacity() {
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(3);
-        FactoryRecipeThread first = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());
-        FactoryRecipeThread second = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());
+        FactoryRecipeThread first = FactoryRecipeThread.simple(null, new CraftingContextPool());
+        FactoryRecipeThread second = FactoryRecipeThread.simple(null, new CraftingContextPool());
         first.setActiveRecipeForTesting(activeRecipeWithParallelism(1));
         second.setActiveRecipeForTesting(activeRecipeWithParallelism(1));
         scheduler.addThreadForTesting(first);
@@ -335,7 +335,7 @@ class FactoryRecipeSchedulerTest {
         MachineControllerBlockEntity controller = controller(MMCR.id("factory_cache_machine"));
         MachineRecipe cached = recipe("factory_cached", 0);
         MachineRecipe fallback = recipe("factory_fallback", 0);
-        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new CraftingContextPool());
         thread.rememberLastRecipe(cached, controller.getStructureVersion(), controller.getModifierSnapshotVersion());
 
         assertThat(thread.tryRestartLastRecipe(List.of(fallback, cached), 1,
@@ -349,7 +349,7 @@ class FactoryRecipeSchedulerTest {
         MachineControllerBlockEntity controller = controller(MMCR.id("factory_stale_cache_machine"));
         MachineRecipe stale = recipe("factory_stale", 0);
         MachineRecipe fallback = recipe("factory_cache_fallback", 0);
-        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new CraftingContextPool());
         thread.rememberLastRecipe(stale, controller.getStructureVersion() + 1, controller.getModifierSnapshotVersion());
 
         assertThat(thread.tryRestartLastRecipe(List.of(fallback), 1,
@@ -364,7 +364,7 @@ class FactoryRecipeSchedulerTest {
         MachineControllerBlockEntity controller = controller(MMCR.id("factory_locked_candidate_machine"));
         MachineRecipe locked = recipe("factory_locked_z", 0);
         MachineRecipe unlocked = recipe("factory_locked_a", 0);
-        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new CraftingContextPool());
         thread.setLockedRecipeId(locked.id());
 
         assertThat(thread.searchAndStartRecipe(List.of(locked, unlocked), 1, controller.getStructureVersion())).isTrue();
@@ -379,7 +379,7 @@ class FactoryRecipeSchedulerTest {
                 20, List.of(), List.of(), List.of(), 0, 0, false, List.of(),
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)), true);
         MachineRecipe unlocked = recipe("factory_locked_missing_input_a", 0);
-        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new CraftingContextPool());
         thread.setLockedRecipeId(locked.id());
 
         assertThat(thread.searchAndStartRecipe(List.of(locked, unlocked), 1, controller.getStructureVersion())).isFalse();
@@ -393,7 +393,7 @@ class FactoryRecipeSchedulerTest {
         MachineControllerBlockEntity controller = controller(MMCR.id("factory_locked_cache_machine"));
         MachineRecipe locked = recipe("factory_locked_cache_target", 0);
         MachineRecipe cached = recipe("factory_locked_cache_other", 0);
-        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new CraftingContextPool());
         thread.rememberLastRecipe(cached, controller.getStructureVersion(), controller.getModifierSnapshotVersion());
         thread.setLockedRecipeId(locked.id());
 
@@ -403,7 +403,7 @@ class FactoryRecipeSchedulerTest {
 
     @Test
     void threadSnapshotsExposeLockStateAndKeepIdlePlaceholdersUnlocked() {
-        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2, new RecipeCraftingContextPool());
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2, new CraftingContextPool());
         FactoryRecipeThread baseThread = scheduler.allThreads().getFirst();
         baseThread.setLockedRecipeId(MMCR.id("snapshot_locked_recipe"));
 
@@ -438,7 +438,7 @@ class FactoryRecipeSchedulerTest {
         MachineRecipe fallback = new MachineRecipe(MMCR.id("factory_cached_shared_iron"), MMCR.id("factory_cached_shared_failure"),
                 20, List.of(), List.of(), List.of(), 0, 0, false, List.of(),
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)), true);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1, pool);
         FactoryRecipeThread baseThread = scheduler.allThreads().getFirst();
         baseThread.rememberLastRecipe(cached, controller.getStructureVersion(), controller.getModifierSnapshotVersion());
@@ -459,9 +459,9 @@ class FactoryRecipeSchedulerTest {
     void thread_zero_starts_recipe_without_a_thread_disperser() throws Exception {
         MachineControllerBlockEntity controller = controller(MMCR.id("factory_base_thread_machine"));
         MachineRecipe recipe = recipe("factory_base_thread_recipe", 0);
-        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1, new RecipeCraftingContextPool());
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1, new CraftingContextPool());
 
-        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 1, new RecipeCraftingContextPool());
+        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 1, new CraftingContextPool());
 
         assertThat(scheduler.threadSnapshots()).singleElement()
                 .satisfies(snapshot -> {
@@ -476,7 +476,7 @@ class FactoryRecipeSchedulerTest {
         MachineControllerBlockEntity controller = controller(MMCR.id("factory_thread_finish_machine"));
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_thread_finish_recipe"),
                 MMCR.id("factory_thread_finish_machine"), 1, List.of(), List.of());
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1, pool);
         AtomicInteger finished = new AtomicInteger();
 
@@ -492,7 +492,7 @@ class FactoryRecipeSchedulerTest {
         MachineControllerBlockEntity controller = controller(MMCR.id("factory_sync_continuation_machine"));
         MachineRecipe lockedRecipe = new MachineRecipe(MMCR.id("factory_sync_continuation_locked"),
                 MMCR.id("factory_sync_continuation_machine"), 2, List.of(), List.of(), List.of(), 0, 1);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2, pool);
         AtomicInteger finished = new AtomicInteger();
 
@@ -532,7 +532,7 @@ class FactoryRecipeSchedulerTest {
                 MMCR.id("factory_shared_continuation"), 1, List.of(), List.of(), List.of(), 0, 1);
         MachineRecipe unlockedRecipe = new MachineRecipe(MMCR.id("factory_shared_continuation_unlocked_recipe"),
                 MMCR.id("factory_shared_continuation"), 1, List.of(), List.of());
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1, pool);
         AtomicInteger finished = new AtomicInteger();
 
@@ -559,7 +559,7 @@ class FactoryRecipeSchedulerTest {
         MachineControllerBlockEntity controller = controller(MMCR.id("factory_finish_continuation_machine"));
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_finish_continuation_recipe"),
                 MMCR.id("factory_finish_continuation_machine"), 1, List.of(), List.of());
-        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new CraftingContextPool());
         AtomicReference<RecipeThread.Status> statusAtCompletion = new AtomicReference<>();
         AtomicReference<ActiveMachineRecipe> activeAtCompletion = new AtomicReference<>();
         thread.setFinishContinuation(() -> {
@@ -579,10 +579,10 @@ class FactoryRecipeSchedulerTest {
         MachineControllerBlockEntity controller = controller(MMCR.id("factory_reuse_machine"));
         MachineRecipe first = recipe("factory_reuse_first", 0);
         MachineRecipe second = recipe("factory_reuse_second", 0);
-        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2, new RecipeCraftingContextPool());
-        scheduler.addThreadForTesting(FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool()));
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2, new CraftingContextPool());
+        scheduler.addThreadForTesting(FactoryRecipeThread.simple(controller, new CraftingContextPool()));
 
-        scheduler.tickThreads(controller, List.of(first, second), controller.getStructureVersion(), 2, new RecipeCraftingContextPool());
+        scheduler.tickThreads(controller, List.of(first, second), controller.getStructureVersion(), 2, new CraftingContextPool());
 
         assertThat(scheduler.threadSnapshots()).extracting(FactoryRecipeScheduler.ThreadSnapshot::index)
                 .containsExactly(0, 1);
@@ -593,9 +593,9 @@ class FactoryRecipeSchedulerTest {
     void factory_threads_each_receive_full_parallelism_limit() throws Exception {
         MachineControllerBlockEntity controller = controller(MMCR.id("factory_multi_thread_machine"));
         MachineRecipe recipe = parallelizedRecipe("factory_multi_thread_recipe", 0);
-        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(4, new RecipeCraftingContextPool());
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(4, new CraftingContextPool());
 
-        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 16, new RecipeCraftingContextPool());
+        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 16, new CraftingContextPool());
 
         assertThat(scheduler.threadSnapshots()).filteredOn(FactoryRecipeScheduler.ThreadSnapshot::active)
                 .hasSize(4)
@@ -606,9 +606,9 @@ class FactoryRecipeSchedulerTest {
     void factoryLaneIdsAreStableAndDistinct() throws Exception {
         MachineControllerBlockEntity controller = controller(MMCR.id("factory_lane_id_machine"));
         MachineRecipe recipe = parallelizedRecipe("factory_lane_id_recipe", 0);
-        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(3, new RecipeCraftingContextPool());
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(3, new CraftingContextPool());
 
-        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 1, new RecipeCraftingContextPool());
+        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 1, new CraftingContextPool());
 
         assertThat(scheduler.allThreads()).extracting(FactoryRecipeThread::laneId)
                 .containsExactly("base", "factory-0", "factory-1");
@@ -616,20 +616,20 @@ class FactoryRecipeSchedulerTest {
 
     @Test
     void loadedFactoryLanesAdvanceTheGeneratedLaneId() throws Exception {
-        FactoryRecipeScheduler saved = new FactoryRecipeScheduler(4, new RecipeCraftingContextPool());
-        saved.addThreadForTesting(FactoryRecipeThread.simple(null, new RecipeCraftingContextPool(), "factory-4"));
-        saved.addThreadForTesting(FactoryRecipeThread.simple(null, new RecipeCraftingContextPool(), "factory-9"));
+        FactoryRecipeScheduler saved = new FactoryRecipeScheduler(4, new CraftingContextPool());
+        saved.addThreadForTesting(FactoryRecipeThread.simple(null, new CraftingContextPool(), "factory-4"));
+        saved.addThreadForTesting(FactoryRecipeThread.simple(null, new CraftingContextPool(), "factory-9"));
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
                 HolderLookup.Provider.create(Stream.empty()));
         saved.save(output);
         MachineControllerBlockEntity controller = controller(MMCR.id("factory_loaded_lanes"));
-        FactoryRecipeScheduler loaded = new FactoryRecipeScheduler(4, new RecipeCraftingContextPool());
+        FactoryRecipeScheduler loaded = new FactoryRecipeScheduler(4, new CraftingContextPool());
         loaded.load(TagValueInput.create(ProblemReporter.DISCARDING,
                 HolderLookup.Provider.create(Stream.empty()), output.buildResult()), controller,
-                new RecipeCraftingContextPool());
+                new CraftingContextPool());
 
         loaded.tickThreads(controller, List.of(parallelizedRecipe("factory_loaded_lane_recipe", 0)),
-                controller.getStructureVersion(), 1, new RecipeCraftingContextPool());
+                controller.getStructureVersion(), 1, new CraftingContextPool());
 
         assertThat(loaded.allThreads()).extracting(FactoryRecipeThread::laneId)
                 .containsExactly("base", "factory-4", "factory-9", "factory-10");
@@ -653,12 +653,12 @@ class FactoryRecipeSchedulerTest {
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_shared_start_recipe"), MMCR.id("factory_shared_start"),
                 20, List.of(), List.of(), List.of(), 0, 0, false, List.of(),
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)), true);
-        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2, new RecipeCraftingContextPool());
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2, new CraftingContextPool());
 
-        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 8, new RecipeCraftingContextPool());
+        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 8, new CraftingContextPool());
         assertThat(scheduler.allThreads()).hasSize(2);
         assertThat(scheduler.allThreads()).allSatisfy(thread -> assertThat(thread.isStartPending()).isTrue());
-        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 8, new RecipeCraftingContextPool());
+        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 8, new CraftingContextPool());
         assertThat(scheduler.allThreads()).allSatisfy(thread -> assertThat(thread.isStartPending()).isTrue());
 
         SharedIoCoordinator.get(level).resolve(domain);
@@ -693,9 +693,9 @@ class FactoryRecipeSchedulerTest {
         StructureClaimRegistry.ResourceDomain domain = registry.domainFor(firstControllerPos);
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_shared_enchanted_recipe"), MMCR.id("factory_shared_enchanted"),
                 20, List.of(), List.of(), List.of(), 0, 0, false, List.of(), List.of(enchantedInput(2)), true);
-        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1, new RecipeCraftingContextPool());
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1, new CraftingContextPool());
 
-        scheduler.tickThreads(firstController, List.of(recipe), firstController.getStructureVersion(), 1, new RecipeCraftingContextPool());
+        scheduler.tickThreads(firstController, List.of(recipe), firstController.getStructureVersion(), 1, new CraftingContextPool());
         SharedIoCoordinator.get(level).resolve(domain);
 
         FactoryRecipeScheduler.ThreadSnapshot snapshot = scheduler.threadSnapshots().getFirst();
@@ -703,7 +703,7 @@ class FactoryRecipeSchedulerTest {
         assertThat(snapshot.active()).isTrue();
         assertThat(snapshot.recipeId()).isEqualTo(recipe.id().toString());
         for (int tick = 0; tick < recipe.getRecipeTotalTickTime(); tick++) {
-            scheduler.tickThreads(firstController, List.of(), firstController.getStructureVersion(), 1, new RecipeCraftingContextPool());
+            scheduler.tickThreads(firstController, List.of(), firstController.getStructureVersion(), 1, new CraftingContextPool());
             SharedIoCoordinator.get(level).resolve(domain);
         }
 
@@ -730,9 +730,9 @@ class FactoryRecipeSchedulerTest {
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_shared_failure_recipe"), MMCR.id("factory_shared_failure"),
                 20, List.of(), List.of(), List.of(), 0, 0, false, List.of(),
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)), true);
-        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2, new RecipeCraftingContextPool());
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2, new CraftingContextPool());
 
-        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 1, new RecipeCraftingContextPool());
+        scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 1, new CraftingContextPool());
         SharedIoCoordinator.get(level).resolve(domain);
 
         assertThat(scheduler.threadSnapshots()).allSatisfy(snapshot -> {
@@ -759,7 +759,7 @@ class FactoryRecipeSchedulerTest {
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
                         ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0F)
         ), true);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2, pool);
 
         scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 1, pool);
@@ -795,7 +795,7 @@ class FactoryRecipeSchedulerTest {
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)), true);
         MachineRecipe newRecipe = new MachineRecipe(MMCR.id("factory_stale_start_new"), MMCR.id("factory_stale_start"),
                 20, List.of(), List.of(), List.of(), 0, 0, false, List.of(), List.of(), true);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, pool);
 
         assertThat(thread.searchAndStartRecipe(List.of(oldRecipe), 1, controller.getStructureVersion())).isTrue();
@@ -830,7 +830,7 @@ class FactoryRecipeSchedulerTest {
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_domain_rebuild_recipe"), MMCR.id("factory_domain_rebuild"),
                 20, List.of(), List.of(), List.of(), 0, 0, false, List.of(),
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)), true);
-        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new CraftingContextPool());
 
         assertThat(thread.searchAndStartRecipe(List.of(recipe), 1, controller.getStructureVersion())).isTrue();
         assertThat(thread.isStartPending()).isTrue();
@@ -894,7 +894,7 @@ class FactoryRecipeSchedulerTest {
         ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
         active.setTick(active.getTotalTick() - 1);
         input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 1));
-        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new CraftingContextPool());
         thread.setActiveRecipeForTesting(active);
         setField(RecipeThread.class, thread, "context", new RecipeCraftingContext(controller));
 
@@ -968,7 +968,7 @@ class FactoryRecipeSchedulerTest {
         RecipeRegistry.register(recipe);
         ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
         active.setTick(active.getTotalTick() - 1);
-        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new CraftingContextPool());
         thread.setActiveRecipeForTesting(active);
         setField(RecipeThread.class, thread, "context", new RecipeCraftingContext(controller));
 
@@ -983,7 +983,7 @@ class FactoryRecipeSchedulerTest {
         thread.save(saved);
         FactoryRecipeThread restored = FactoryRecipeThread.load(TagValueInput.create(ProblemReporter.DISCARDING,
                 HolderLookup.Provider.create(Stream.empty()), saved.buildResult()), controller,
-                new RecipeCraftingContextPool());
+                new CraftingContextPool());
         output.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
         ((TestServerLevel) level).gameTime = 10L;
 
@@ -1035,7 +1035,7 @@ class FactoryRecipeSchedulerTest {
                 new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.IRON_INGOT))
         ));
         ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
-        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new CraftingContextPool());
         thread.setActiveRecipeForTesting(active);
         setField(RecipeThread.class, thread, "context", new RecipeCraftingContext(controller));
 
@@ -1126,7 +1126,7 @@ class FactoryRecipeSchedulerTest {
         MachineRecipe cached = recipe("factory_cache_invalidation_cached", 0);
         MachineRecipe fallback = new MachineRecipe(MMCR.id("factory_cache_invalidation_fallback"),
                 MMCR.id("factory_machine"), 20, List.of(), List.of(), List.of(), -1, 0);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1, pool);
 
         scheduler.tickThreads(controller, List.of(cached), controller.getStructureVersion(), 1, pool);
@@ -1147,7 +1147,7 @@ class FactoryRecipeSchedulerTest {
         MachineControllerBlockEntity controller = controller(MMCR.id("factory_core_filter_machine"));
         MachineRecipe allowed = recipe("factory_core_allowed", 0);
         MachineRecipe denied = recipe("factory_core_denied", 0);
-        FactoryRecipeThread thread = FactoryRecipeThread.core(controller, new RecipeCraftingContextPool(),
+        FactoryRecipeThread thread = FactoryRecipeThread.core(controller, new CraftingContextPool(),
                 "allowed_only", Set.of(allowed));
 
         assertThat(thread.candidatesFor(List.of(denied, allowed))).containsExactly(allowed);
@@ -1165,9 +1165,9 @@ class FactoryRecipeSchedulerTest {
                 new BlockArray(java.util.Map.of()), MachineControllerSpec.defaultsFor(machineId),
                 MachineAppearanceSpec.defaults(), PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), java.util.Map.of(),
                 1, false, true, 3, List.of(new FactoryThreadSpec("core", List.of(first.id()))));
-        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(3, new RecipeCraftingContextPool());
+        FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(3, new CraftingContextPool());
 
-        scheduler.syncCoreThreads(controller, machine, List.of(first, second), new RecipeCraftingContextPool());
+        scheduler.syncCoreThreads(controller, machine, List.of(first, second), new CraftingContextPool());
         FactoryRecipeThread original = scheduler.allThreads().stream()
                 .filter(FactoryRecipeThread::isCoreThread)
                 .findFirst().orElseThrow();
@@ -1176,7 +1176,7 @@ class FactoryRecipeSchedulerTest {
                 new BlockArray(java.util.Map.of()), MachineControllerSpec.defaultsFor(machineId),
                 MachineAppearanceSpec.defaults(), PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), java.util.Map.of(),
                 1, false, true, 3, List.of(new FactoryThreadSpec("core", List.of(second.id()))));
-        scheduler.syncCoreThreads(controller, updatedMachine, List.of(first, second), new RecipeCraftingContextPool());
+        scheduler.syncCoreThreads(controller, updatedMachine, List.of(first, second), new CraftingContextPool());
 
         assertThat(scheduler.allThreads()).contains(original);
         assertThat(original.recipeSet()).containsExactly(second);
@@ -1190,7 +1190,7 @@ class FactoryRecipeSchedulerTest {
         MachineRecipe secondRecipe = recipe("paused_factory_second", 0);
         RecipeRegistry.register(firstRecipe);
         RecipeRegistry.register(secondRecipe);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(3, pool);
         FactoryRecipeThread first = FactoryRecipeThread.simple(controller, pool);
         FactoryRecipeThread second = FactoryRecipeThread.simple(controller, pool);
@@ -1247,7 +1247,7 @@ class FactoryRecipeSchedulerTest {
         StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_paused_shared_finish_recipe"),
                 MMCR.id("factory_paused_shared_finish"), 1, List.of(), List.of(), List.of(), 0, 1);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1, pool);
 
         scheduler.tickThreads(controller, List.of(recipe), controller.getStructureVersion(), 1, pool);
@@ -1278,7 +1278,7 @@ class FactoryRecipeSchedulerTest {
         StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controllerPos);
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_paused_shared_continuation_recipe"),
                 MMCR.id("factory_paused_shared_continuation"), 1, List.of(), List.of(), List.of(), 0, 1);
-        RecipeCraftingContextPool pool = new RecipeCraftingContextPool();
+        CraftingContextPool pool = new CraftingContextPool();
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1, pool);
         AtomicInteger staleContinuations = new AtomicInteger();
         AtomicInteger latestContinuations = new AtomicInteger();
@@ -1310,7 +1310,7 @@ class FactoryRecipeSchedulerTest {
     @Test
     void thread_snapshot_exposes_waiting_failure_without_marking_thread_running() throws Exception {
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(1);
-        FactoryRecipeThread thread = FactoryRecipeThread.base(null, RecipeCraftingContextPool.global());
+        FactoryRecipeThread thread = FactoryRecipeThread.base(null, CraftingContextPool.global());
         setField(RecipeThread.class, thread, "status", RecipeThread.Status.FAILED);
         setField(RecipeThread.class, thread, "lastFailureUnloc", "gui.mmcr.controller.failure.missing_output");
         scheduler.addThreadForTesting(thread);
@@ -1324,8 +1324,8 @@ class FactoryRecipeSchedulerTest {
     @Test
     void activeThreadCountOnlyCountsThreadsWithAnActiveRecipe() throws Exception {
         FactoryRecipeScheduler scheduler = new FactoryRecipeScheduler(2);
-        FactoryRecipeThread pendingThread = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());
-        FactoryRecipeThread workingThread = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());
+        FactoryRecipeThread pendingThread = FactoryRecipeThread.simple(null, new CraftingContextPool());
+        FactoryRecipeThread workingThread = FactoryRecipeThread.simple(null, new CraftingContextPool());
         setField(RecipeThread.class, pendingThread, "startPending", true);
         workingThread.setActiveRecipeForTesting(activeRecipeWithParallelism(1));
         scheduler.addThreadForTesting(pendingThread);
@@ -1336,7 +1336,7 @@ class FactoryRecipeSchedulerTest {
 
     @Test
     void tickClearsStartPendingWhenContextHasBeenReleasedWithoutClearingTheFlag() throws Exception {
-        FactoryRecipeThread thread = FactoryRecipeThread.simple(null, new RecipeCraftingContextPool());
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(null, new CraftingContextPool());
         setField(RecipeThread.class, thread, "startPending", true);
         setField(RecipeThread.class, thread, "pendingStartDomain",
                 new StructureClaimRegistry.ResourceDomain(1L, 1L, Set.of()));
@@ -1367,7 +1367,7 @@ class FactoryRecipeSchedulerTest {
         MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_async_failure_recipe"), MMCR.id("factory_async_failure"),
                 20, List.of(), List.of(), List.of(), 0, 0, false, List.of(),
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)), true);
-        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new RecipeCraftingContextPool());
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, new CraftingContextPool());
 
         assertThat(thread.searchAndStartRecipe(List.of(recipe), 1, controller.getStructureVersion())).isTrue();
         assertThat(thread.isStartPending()).isTrue();

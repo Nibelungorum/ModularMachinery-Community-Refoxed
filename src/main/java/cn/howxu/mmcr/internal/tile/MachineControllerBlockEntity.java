@@ -23,7 +23,7 @@ import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.LevelInsufficientFailure;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
-import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
+import cn.howxu.mmcr.api.recipe.CraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeCandidateIndex;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
@@ -176,7 +176,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable ActiveMachineRecipe pausedActive;
     private @Nullable RecipeCraftingContext pausedContext;
     private boolean restoredRecipeContext;
-    private RecipeCraftingContextPool contextPool = RecipeCraftingContextPool.global();
+    private CraftingContextPool contextPool = CraftingContextPool.global();
     private @Nullable FactoryRecipeScheduler factoryScheduler;
     private Set<BlockPos> linkedPortPositions = new HashSet<>();
     private int recipeSearchRetryCounter;
@@ -817,7 +817,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private void tickFactoryRecipes() {
         int maxParallelism = getMaxParallelism();
         List<MachineRecipe> candidates = recipesForMachine();
-        RecipeCraftingContextPool pool = contextPool();
+        CraftingContextPool pool = contextPool();
         FactoryRecipeScheduler scheduler = factoryScheduler();
         scheduler.setThreadLimit(effectiveFactoryThreadLimit());
         scheduler.tick();
@@ -2790,8 +2790,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         contextPool().returnContext(returnedContext);
     }
 
-    private RecipeCraftingContextPool contextPool() {
-        if (contextPool == null) contextPool = RecipeCraftingContextPool.global();
+    private CraftingContextPool contextPool() {
+        if (contextPool == null) contextPool = CraftingContextPool.global();
         return contextPool;
     }
 

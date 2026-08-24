@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.internal.recipe;
 
-import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
+import cn.howxu.mmcr.api.recipe.CraftingContextPool;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 
 /**
@@ -9,7 +9,7 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
  * @author howxu <dev@howxu.cn>
  */
 public final class MachineRecipeThread extends RecipeThread {
-    public MachineRecipeThread(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
+    public MachineRecipeThread(MachineControllerBlockEntity controller, CraftingContextPool contextPool) {
         super(controller, contextPool);
     }
 

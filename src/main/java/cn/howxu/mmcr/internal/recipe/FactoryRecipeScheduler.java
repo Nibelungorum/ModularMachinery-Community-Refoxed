@@ -2,7 +2,7 @@ package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.api.recipe.RecipeCraftingContextPool;
+import cn.howxu.mmcr.api.recipe.CraftingContextPool;
 import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -34,14 +34,14 @@ public final class FactoryRecipeScheduler {
     private final List<FactoryRecipeThread> threads = new ArrayList<>();
     private final Map<FactoryRecipeThread, Boolean> threadWasActive = new IdentityHashMap<>();
     private final Map<FactoryRecipeThread, Identifier> startReservations = new IdentityHashMap<>();
-    private final RecipeCraftingContextPool contextPool;
+    private final CraftingContextPool contextPool;
     private long nextFactoryLaneId;
 
     public FactoryRecipeScheduler(int threadLimit) {
-        this(threadLimit, RecipeCraftingContextPool.global());
+        this(threadLimit, CraftingContextPool.global());
     }
 
-    public FactoryRecipeScheduler(int threadLimit, RecipeCraftingContextPool contextPool) {
+    public FactoryRecipeScheduler(int threadLimit, CraftingContextPool contextPool) {
         this.threadLimit = Math.max(1, threadLimit);
         this.perThreadParallelLimit = this.threadLimit;
         this.contextPool = contextPool;
@@ -151,7 +151,7 @@ public final class FactoryRecipeScheduler {
         return threads.get(index).toggleRecipeLock();
     }
 
-    public void ensureBaseThread(MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
+    public void ensureBaseThread(MachineControllerBlockEntity controller, CraftingContextPool contextPool) {
         if (!threads.isEmpty() && threads.getFirst().isBaseThread()) return;
         threads.removeIf(thread -> {
             if (!thread.isBaseThread()) return false;
@@ -211,7 +211,7 @@ public final class FactoryRecipeScheduler {
     }
 
     public void syncCoreThreads(MachineControllerBlockEntity controller, Machine machine, List<MachineRecipe> candidates,
-                                 RecipeCraftingContextPool contextPool) {
+                                 CraftingContextPool contextPool) {
         ensureBaseThread(controller, contextPool);
         Map<Identifier, MachineRecipe> byId = new LinkedHashMap<>();
         for (MachineRecipe recipe : candidates == null ? List.<MachineRecipe>of() : candidates) {
@@ -255,12 +255,12 @@ public final class FactoryRecipeScheduler {
     }
 
     public void tickThreads(MachineControllerBlockEntity controller, List<MachineRecipe> candidates,
-                            long structureVersion, int parallelLimit, RecipeCraftingContextPool contextPool) {
+                            long structureVersion, int parallelLimit, CraftingContextPool contextPool) {
         tickThreads(controller, candidates, structureVersion, parallelLimit, contextPool, () -> { });
     }
 
     public void tickThreads(MachineControllerBlockEntity controller, List<MachineRecipe> candidates,
-                            long structureVersion, int parallelLimit, RecipeCraftingContextPool contextPool,
+                            long structureVersion, int parallelLimit, CraftingContextPool contextPool,
                             Runnable onFinished) {
         if (paused) {
             return;
@@ -360,7 +360,7 @@ public final class FactoryRecipeScheduler {
         for (int i = 0; i < threads.size(); i++) threads.get(i).save(output.child("thread_" + i));
     }
 
-    public void load(ValueInput input, MachineControllerBlockEntity controller, RecipeCraftingContextPool contextPool) {
+    public void load(ValueInput input, MachineControllerBlockEntity controller, CraftingContextPool contextPool) {
         threads.clear();
         threadWasActive.clear();
         startReservations.clear();

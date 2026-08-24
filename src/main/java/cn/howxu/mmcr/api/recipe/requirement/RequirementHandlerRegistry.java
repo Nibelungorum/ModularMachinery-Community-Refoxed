@@ -1,8 +1,11 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.helper.EnergyRecipeIo;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -48,19 +51,19 @@ public final class RequirementHandlerRegistry {
         registerBuiltIn(new SmartInterfaceHandler());
     }
 
-    static boolean simulate(MachineRequirement requirement, RecipeCraftingContext context, int requirementIndex) {
+    public static boolean simulate(MachineRequirement requirement, RecipeCraftingContext context, int requirementIndex) {
         return legacyHandler(requirement).simulate(requirement, context, requirementIndex);
     }
 
-    static boolean commit(MachineRequirement requirement, RecipeCraftingContext context, int requirementIndex) {
+    public static boolean commit(MachineRequirement requirement, RecipeCraftingContext context, int requirementIndex) {
         return legacyHandler(requirement).commit(requirement, context, requirementIndex);
     }
 
-    static int maxInputParallelism(MachineRequirement requirement, RecipeCraftingContext context, int limit) {
+    public static int maxInputParallelism(MachineRequirement requirement, RecipeCraftingContext context, int limit) {
         return legacyHandler(requirement).maxInputParallelism(requirement, context, limit);
     }
 
-    static boolean ioTick(MachineRequirement requirement, RecipeCraftingContext context, int requirementIndex) {
+    public static boolean ioTick(MachineRequirement requirement, RecipeCraftingContext context, int requirementIndex) {
         return legacyHandler(requirement).ioTick(requirement, context, requirementIndex);
     }
 
@@ -94,8 +97,20 @@ public final class RequirementHandlerRegistry {
 
         @Override
         default RequirementPlan plan(R requirement, List<MachineCapability> capabilities, PlanningContext context) {
-            return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
+            if (capabilities.isEmpty()) {
+                return new RequirementPlan(context.requirementIndex(), 0, List.of(),
+                        new ExecutionStatus(requirement.type().id(), StatusSeverity.BLOCKED,
+                                requirement.type().id(), Map.of("direction", requirement.io().name().toLowerCase())));
+            }
+            return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(),
+                    capabilities.stream().map(capability -> capability.prepare(new BasicRequest(
+                            capability.view().type(), capability.view().ioType(), context.requestedParallelism())))
+                            .toList(), null);
         }
+    }
+
+    private record BasicRequest(cn.howxu.mmcr.api.capability.CapabilityType type,
+                                cn.howxu.mmcr.util.IOType ioType, int parallelism) implements CapabilityRequest {
     }
 
     private static final class ItemHandler implements LegacyHandler<ItemRequirement> {
@@ -189,6 +204,12 @@ public final class RequirementHandlerRegistry {
         @Override
         public RequirementType<SmartInterfaceRequirement> type() {
             return SmartInterfaceRequirement.TYPE;
+        }
+
+        @Override
+        public RequirementPlan plan(SmartInterfaceRequirement requirement, List<MachineCapability> capabilities,
+                                    PlanningContext context) {
+            return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
         }
 
         @Override

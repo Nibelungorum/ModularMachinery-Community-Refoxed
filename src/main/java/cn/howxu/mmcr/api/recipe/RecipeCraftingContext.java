@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
@@ -682,7 +683,7 @@ public final class RecipeCraftingContext {
                         && consumedAtStart != null
                         && !consumedAtStart.consumedInputBatches().isEmpty()
                         ? simulateItemInput(requirementIndex, item, false)
-                        : requirement.simulate(this, requirementIndex);
+                        : RequirementHandlerRegistry.simulate(requirement, this, requirementIndex);
                 if (!matched) return false;
             }
         }
@@ -773,7 +774,7 @@ public final class RecipeCraftingContext {
         lastFailureUnloc = null;
         lastRequirementFailure = null;
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
-            if (!requirements.get(requirementIndex).ioTick(this, requirementIndex)) return false;
+            if (!RequirementHandlerRegistry.ioTick(requirements.get(requirementIndex), this, requirementIndex)) return false;
         }
         return true;
     }
@@ -803,7 +804,8 @@ public final class RecipeCraftingContext {
                 if (!simulateItemInput(requirementIndex, item, consume)) return false;
                 continue;
             }
-            if (requirement.io() == RecipeModifier.IOType.INPUT && !requirement.simulate(this, requirementIndex)) return false;
+            if (requirement.io() == RecipeModifier.IOType.INPUT
+                    && !RequirementHandlerRegistry.simulate(requirement, this, requirementIndex)) return false;
         }
         return true;
     }
@@ -822,7 +824,7 @@ public final class RecipeCraftingContext {
         int best = max;
         for (MachineRequirement requirement : runtimeRequirements(recipe)) {
             if (requirement.io() != RecipeModifier.IOType.INPUT) continue;
-            int requirementMax = requirement.maxInputParallelism(this, max);
+            int requirementMax = RequirementHandlerRegistry.maxInputParallelism(requirement, this, max);
             if (requirementMax < 0) return -1;
             best = Math.min(best, requirementMax);
         }
@@ -851,7 +853,8 @@ public final class RecipeCraftingContext {
                 MachineRequirement requirement = requirements.get(requirementIndex);
                 if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT && item.chance() <= 0F) continue;
                 if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT && fluid.chance() <= 0F) continue;
-                if (requirement.io() == RecipeModifier.IOType.OUTPUT && !requirement.simulate(this, requirementIndex)) return false;
+                if (requirement.io() == RecipeModifier.IOType.OUTPUT
+                        && !RequirementHandlerRegistry.simulate(requirement, this, requirementIndex)) return false;
             }
             return true;
         } finally {
@@ -882,7 +885,8 @@ public final class RecipeCraftingContext {
                     hasPositiveCapacity |= simulatePartialFluidOutput(requirementIndex, fluid);
                     continue;
                 }
-                if (requirement.io() == RecipeModifier.IOType.OUTPUT && !requirement.simulate(this, requirementIndex)) return false;
+                if (requirement.io() == RecipeModifier.IOType.OUTPUT
+                        && !RequirementHandlerRegistry.simulate(requirement, this, requirementIndex)) return false;
             }
             if (!hasPositiveCapacity) setFailure(FAILURE_MISSING_OUTPUT);
             return hasPositiveCapacity;
@@ -1155,7 +1159,7 @@ public final class RecipeCraftingContext {
             MachineRequirement requirement = requirements.get(requirementIndex);
             if (requirement instanceof SmartInterfaceRequirement smartInterface
                     && smartInterface.io() == RecipeModifier.IOType.OUTPUT
-                    && !smartInterface.simulate(this, requirementIndex)) return false;
+                    && !RequirementHandlerRegistry.simulate(smartInterface, this, requirementIndex)) return false;
         }
         return true;
     }
@@ -1285,7 +1289,8 @@ public final class RecipeCraftingContext {
                     && consumedAtStart != null && consumedAtStart.consumedBatches(requirementIndex) > 0) continue;
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT
                     && consumedAtStart != null && consumedAtStart.consumedBatches(requirementIndex) > 0) continue;
-            if (requirement.io() == RecipeModifier.IOType.INPUT && !requirement.commit(this, requirementIndex)) return false;
+            if (requirement.io() == RecipeModifier.IOType.INPUT
+                    && !RequirementHandlerRegistry.commit(requirement, this, requirementIndex)) return false;
         }
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             MachineRequirement requirement = requirements.get(requirementIndex);
@@ -1411,7 +1416,7 @@ public final class RecipeCraftingContext {
                 if (oldValue.isEmpty()) return false;
                 smartCommits.add(new SmartInterfaceCommit(
                         binding.get().interfaceEntity(), smartInterface.interfaceType(), oldValue.get(), smartInterface.minValue()));
-            } else if (!requirement.commit(this, requirementIndex)) {
+            } else if (!RequirementHandlerRegistry.commit(requirement, this, requirementIndex)) {
                 return false;
             }
         }
