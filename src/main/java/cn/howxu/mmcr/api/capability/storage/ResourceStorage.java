@@ -3,6 +3,9 @@ package cn.howxu.mmcr.api.capability.storage;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Long-backed transactional storage for a resource type.
  *
@@ -29,6 +32,17 @@ public interface ResourceStorage<R> extends CapabilityStorage {
         return resourceType().isInstance(resource) ? capacity(slot, resourceType().cast(resource)) : 0;
     }
 
+    @Override
+    default Object contentFingerprint() {
+        List<SlotFingerprint> slots = new ArrayList<>(size());
+        for (int slot = 0; slot < size(); slot++) {
+            R resource = resource(slot);
+            long capacity = capacity(slot, resource);
+            slots.add(new SlotFingerprint(resource, amount(slot), capacity));
+        }
+        return new ResourceStorageFingerprint(resourceType().getName(), List.copyOf(slots));
+    }
+
     default boolean isValidResource(int slot, Object resource) {
         return resourceType().isInstance(resource) && isValid(slot, resourceType().cast(resource));
     }
@@ -42,4 +56,8 @@ public interface ResourceStorage<R> extends CapabilityStorage {
         return resourceType().isInstance(resource)
                 ? extract(slot, resourceType().cast(resource), amount, transaction) : 0;
     }
+
+    record ResourceStorageFingerprint(String resourceType, List<SlotFingerprint> slots) { }
+
+    record SlotFingerprint(Object resource, long amount, long capacity) { }
 }

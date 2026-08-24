@@ -29,7 +29,6 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
-import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
@@ -62,9 +61,7 @@ import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
-import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
 import cn.howxu.mmcr.internal.runtime.MachineControllerRuntime;
-import cn.howxu.mmcr.internal.runtime.StructureRuntime;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import net.minecraft.ChatFormatting;
@@ -135,6 +132,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable Integer structureScanBatchesOverrideForTesting;
     private @Nullable Integer buildBlocksPerTickOverrideForTesting;
     private boolean clientActive;
+    private @Nullable Identifier clientRecipeId;
     private Boolean lastBroadcastFormed;
     private boolean lastBroadcastActive;
     private boolean lastBroadcastRecipeLocked;
@@ -187,47 +185,39 @@ public class MachineControllerBlockEntity extends BlockEntity {
         runtime = new MachineControllerRuntime(this);
     }
 
-    public MachineControllerRuntime runtime() {
-        return runtime;
-    }
-
     public ControllerRuntimeSnapshot runtimeSnapshot() {
-        return runtime().snapshot();
+        return runtime.snapshot();
     }
 
     public StructureSnapshot structureSnapshot() {
-        return runtime().structure().snapshot();
-    }
-
-    public List<MachineCapability> getCapabilities() {
-        return runtimeSnapshot().capabilities();
-    }
-
-    public long getCapabilityVersion() {
-        return runtimeSnapshot().capabilityVersion();
+        return runtimeSnapshot().structure();
     }
 
     public void tickStructure(ServerLevel level, BlockPos controllerPos) {
         validateRuntimeBoundary(level, controllerPos);
         if (level.isClientSide() || isRemoved()) return;
-        if (runtime.structure().machine() == null) bindDefaultMachine();
+        if (runtimeSnapshot().structure().configuredMachine() == null) bindDefaultMachine();
         invalidateForControllerRotation();
         if (shouldCheckStructure()) checkStructure();
     }
 
     private void publishRuntimeState() {
-        ComponentRuntime componentState = runtime.components();
+        ControllerRuntimeSnapshot current = runtimeSnapshot();
         runtime.publishStructureState(isStructureAreaLoaded());
-        runtime.publishComponentState(componentState.components(), componentState.foundModifiers(),
-                componentState.foundLevels(), componentState.linkedPortPositions());
-        StructureSnapshot structure = runtime.structure().snapshot();
+        runtime.publishComponentState(current.components(), current.foundModifiers(),
+                current.foundLevels(), current.linkedPortPositions());
+        StructureSnapshot structure = runtimeSnapshot().structure();
+        boolean client = level != null && level.isClientSide();
+        boolean activeState = client ? clientActive : active != null
+                || (factoryScheduler != null && factoryScheduler.activeLaneCount() > 0);
+        Identifier recipeId = client ? clientRecipeId : active == null ? null : active.getRecipe().id();
         CraftingStatus status = !structure.formed()
                 ? CraftingStatus.MISSING_STRUCTURE
                 : !structure.structureAreaLoaded() ? CraftingStatus.CHUNK_UNLOADED
-                : active != null || (factoryScheduler != null && factoryScheduler.activeLaneCount() > 0)
+                : activeState
                 ? CraftingStatus.working()
                 : lastFailureUnloc == null ? CraftingStatus.IDLE : CraftingStatus.failure(lastFailureUnloc);
-        runtime.publishCraftingState(active == null ? null : active.getRecipe().id(), status, null);
+        runtime.publishCraftingState(recipeId, status, null);
     }
 
     private void validateRuntimeBoundary(ServerLevel runtimeLevel, BlockPos runtimePos) {
@@ -249,8 +239,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         throw new IllegalArgumentException("MachineControllerBlockEntity requires a MachineControllerBlock state");
     }
 
-    public Machine getMachine() { return runtimeSnapshot().structure().configuredMachine(); }
-
     public @Nullable Identifier machineId() {
         Machine currentMachine = runtimeSnapshot().structure().configuredMachine();
         return currentMachine == null ? null : currentMachine.registryName();
@@ -260,33 +248,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
         stopFactoryController();
         invalidateStructureScan(StructureMatcher.InvalidationReason.PATTERN);
         clearFoundModifiers();
-        runtime.structure().setMachine(m);
-        runtime.components().replaceLevels(Map.of());
+        runtime.setConfiguredMachine(m);
+        runtime.replaceLevels(Map.of());
         markRecipeDirty();
         setChanged();
         publishRuntimeState();
     }
 
-    public Machine getFoundMachine() { return structureSnapshot().machine(); }
-    public BlockArray getFoundPattern() { return structureSnapshot().pattern(); }
-    public @Nullable CompiledMachinePattern getFoundCompiledPattern() { return structureSnapshot().compiledPattern(); }
-    public @Nullable Direction getControllerFacing() { return structureSnapshot().facing(); }
-
-    public Map<String, List<RecipeModifier>> getFoundModifiers() {
-        return runtimeSnapshot().foundModifiers();
-    }
-
-    public Map<Identifier, MachineLevel> getFoundLevels() {
-        return runtimeSnapshot().foundLevels();
-    }
-
-    public @Nullable Object getLastStructureError() {
-        return structureSnapshot().lastStructureError();
-    }
-
     public void invalidateFormedStructure() {
         resetMachine();
-        runtime.structure().requestCheck();
         publishRuntimeState();
     }
 
@@ -295,12 +265,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void requestImmediateStructureCheck(@Nullable ServerPlayer diagnosticPlayer) {
-        runtime.structure().requestCheck();
+        runtime.requestStructureCheck();
         if (diagnosticPlayer != null) {
-            StructureRuntime structure = runtime.structure();
-            structure.setDiagnosticRequested(true);
-            structure.setDiagnosticPlayerId(diagnosticPlayer.getUUID());
-            structure.setDiagnosticDimension(level instanceof ServerLevel serverLevel ? serverLevel.dimension() : null);
+            runtime.setStructureDiagnosticRequest(true, diagnosticPlayer.getUUID(),
+                    level instanceof ServerLevel serverLevel ? serverLevel.dimension() : null);
         }
         publishRuntimeState();
     }
@@ -308,12 +276,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public int matcherInvocationCountForTesting() { return matcherInvocationCountForTesting; }
     public int scanBatchCountForTesting() { return scanBatchCountForTesting; }
     public Map<Long, Integer> scanBatchesPerTickForTesting() { return Map.copyOf(scanBatchesPerTickForTesting); }
-    public boolean isStructureDiagnosticRequestedForTesting() { return runtime.structure().diagnosticRequested(); }
+    public boolean isStructureDiagnosticRequestedForTesting() { return runtime.structureDiagnosticRequested(); }
     public void setStructureDiagnosticCallbackForTesting(@Nullable Runnable callback) {
         structureDiagnosticCallbackForTesting = callback;
     }
-    public boolean isPendingStructureInvalidationForTesting() { return runtime.structure().pendingInvalidation(); }
-    public int structureScanCursorForTesting() { return runtime.structure().scan() == null ? -1 : runtime.structure().scan().cursor(); }
+    public boolean isPendingStructureInvalidationForTesting() { return runtime.structurePendingInvalidation(); }
+    public int structureScanCursorForTesting() { return runtime.structureScanCursor(); }
     public void setStructureCheckIntervalForTesting(@Nullable Integer interval) {
         structureCheckIntervalOverrideForTesting = interval;
     }
@@ -333,14 +301,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
         resetMachine(true, false);
     }
 
-    public List<RecipeModifier> foundModifierList() {
-        return runtimeSnapshot().foundModifiers().values().stream().flatMap(List::stream).toList();
-    }
-
-    public boolean isFormed() { return structureSnapshot().formed(); }
     public void setFormed(boolean f) {
         boolean before = physicalFormed();
-        runtime.structure().setFormed(f);
+        runtime.setStructureFormed(f);
         if (before == f) {
             publishRuntimeState();
             return;
@@ -357,7 +320,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public void onStructureChunkChanged(ServerLevel changedLevel) {
         validateRuntimeBoundary(changedLevel, getBlockPos());
-        runtime().structure().onChunkStateChanged(changedLevel, getBlockPos());
+        runtime.onStructureChunkChanged(changedLevel, getBlockPos());
     }
 
     private boolean physicalFormed() {
@@ -381,12 +344,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public ActiveMachineRecipe getActive() { return active; }
 
-    public long getStructureVersion() { return structureSnapshot().version(); }
-
-    public int getMatchedStructureStage() { return structureSnapshot().matchedStage(); }
-
-    public long getModifierSnapshotVersion() { return runtimeSnapshot().modifierVersion(); }
-
     public @Nullable String getLastFailureUnloc() { return lastFailureUnloc; }
 
     public @Nullable LevelInsufficientFailure getRecipeFailure() { return recipeFailure; }
@@ -402,32 +359,23 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return null;
     }
 
-    public ModuleConnectionStatus moduleConnectionStatus() {
-        return runtimeSnapshot().moduleConnectionStatus();
-    }
-
-    public int installedModuleCount() {
-        return runtimeSnapshot().installedModuleCount();
-    }
-
-    public Optional<Identifier> connectedHostId() {
-        ModuleConnectionStatus status = runtimeSnapshot().moduleConnectionStatus();
-        return status.connected() ? Optional.of(status.connectedHostId()) : Optional.empty();
+    public void refreshModuleConnectionState() {
+        runtime.refreshModuleConnectionState();
     }
 
     public void onStructureBlockChanged(BlockPos changedPos) {
-        runtime().structure().onBlockChanged(changedPos);
+        runtime.onStructureBlockChanged(changedPos);
     }
 
     public void handleStructureBlockChanged(BlockPos changedPos) {
-        StructureRuntime structure = runtime.structure();
-        if (structure.scan() != null) structure.setPendingInvalidation(true);
-        if (!isFormed()) {
-            if (structure.machine() != null) requestImmediateStructureCheck();
+        if (runtime.hasStructureScan()) runtime.setStructurePendingInvalidation(true);
+        StructureSnapshot structure = runtimeSnapshot().structure();
+        if (!structure.formed()) {
+            if (structure.configuredMachine() != null) requestImmediateStructureCheck();
             publishRuntimeState();
             return;
         }
-        if (structure.foundPattern() == null || structure.controllerFacing() == null) {
+        if (structure.pattern() == null || structure.facing() == null) {
             publishRuntimeState();
             return;
         }
@@ -435,8 +383,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
             publishRuntimeState();
             return;
         }
-        structure.requestCheck();
-        if (structure.scan() != null) structure.setPendingInvalidation(true);
+        runtime.requestStructureCheck();
+        if (runtime.hasStructureScan()) runtime.setStructurePendingInvalidation(true);
         if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
         markRecipeDirty();
         setChanged();
@@ -484,21 +432,21 @@ public class MachineControllerBlockEntity extends BlockEntity {
             level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.ACTIVE, active), 3);
         }
         this.clientActive = active;
+        this.clientRecipeId = recipeName == null || recipeName.isEmpty() ? null : Identifier.parse(recipeName);
         Map<Identifier, MachineLevel> levels = new LinkedHashMap<>();
         for (String id : foundLevelIds) {
             MachineLevel foundLevel = MachineLevelRegistry.getLevel(Identifier.parse(id));
             if (foundLevel != null) levels.put(foundLevel.typeId(), foundLevel);
         }
         Machine resolvedMachine = machineId == null ? null : MachineRegistry.effectiveSnapshot().get(machineId);
-        runtime.structure().publishClientState(resolvedMachine, formed);
-        runtime.components().replaceLevels(levels);
+        runtime.publishClientStructureState(resolvedMachine, formed);
         boolean module = controllerRole == 2 || (resolvedMachine != null && resolvedMachine.isModule());
         ModuleConnectionStatus moduleStatus = module
                 ? (moduleConnected && connectedHostId != null
                 ? ModuleConnectionStatus.connected(connectedHostId)
                 : ModuleConnectionStatus.disconnected())
                 : ModuleConnectionStatus.notRequired();
-        runtime.publishModuleConnectionState(moduleStatus, installedModuleCount);
+        runtime.publishClientComponentState(levels, moduleStatus, installedModuleCount);
         this.clientRecipeLocked = recipeLocked;
         this.clientLockedRecipeId = recipeLocked && lockedRecipeId != null ? lockedRecipeId : "";
         publishRuntimeState();
@@ -517,7 +465,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public boolean isRuntimeActive() {
         if (level != null && level.isClientSide()) return clientActive || getBlockState().getValue(MachineControllerBlock.ACTIVE);
-        if (!isFormed() || redstonePaused || !structureSnapshot().structureAreaLoaded()) return false;
+        if (!runtimeSnapshot().structure().formed() || redstonePaused || !structureSnapshot().structureAreaLoaded()) return false;
         if (active != null) return true;
         return hasFactoryController() && factoryScheduler().activeLaneCount() > 0;
     }
@@ -530,8 +478,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return hasFactoryController() ? factoryScheduler().activeLaneCount() : 0;
     }
 
-    public List<ProcessingComponent> getComponents() { return runtimeSnapshot().components(); }
-
     public boolean isPortUsedByActiveRecipe(BlockPos pos) {
         return active != null && runtimeSnapshot().components().stream().anyMatch(component -> component.getPos().equals(pos));
     }
@@ -540,17 +486,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
         recipeDirty = true;
     }
 
-    public boolean hasLinkedPort(BlockPos portPos) {
-        return runtimeSnapshot().linkedPortPositions().contains(portPos);
-    }
-
     public void resetLinkedPortAppearances() {
         unlinkLinkedPorts();
     }
 
     public int getMaxParallelism() {
-        Machine configuredMachine = runtime.structure().machine();
-        return runtime().components().maxParallelism(configuredMachine);
+        Machine configuredMachine = runtimeSnapshot().structure().configuredMachine();
+        return runtime.maxParallelism(configuredMachine);
     }
 
     public int parallelControllerCount() {
@@ -562,14 +504,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public int maxParallelControllerCount() {
-        Machine configuredMachine = runtime.structure().machine();
+        Machine configuredMachine = runtimeSnapshot().structure().configuredMachine();
         if (configuredMachine == null || !configuredMachine.parallelizable()) return 0;
         int maxParallelism = Math.max(1, configuredMachine.maxParallelism());
         return maxParallelism == Integer.MAX_VALUE ? Integer.MAX_VALUE : maxParallelism;
     }
 
     public @Nullable FactorySchedulerBlockEntity getFactoryController() {
-        Machine configuredMachine = runtime.structure().machine();
+        Machine configuredMachine = runtimeSnapshot().structure().configuredMachine();
         if (configuredMachine == null || !configuredMachine.hasFactory()) return null;
         return factoryComponents().stream().findFirst().orElse(null);
     }
@@ -600,13 +542,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public boolean hasFactoryController() {
-        Machine configuredMachine = runtime.structure().machine();
+        Machine configuredMachine = runtimeSnapshot().structure().configuredMachine();
         if (configuredMachine == null || !configuredMachine.hasFactory()) return false;
         return runtimeSnapshot().components().stream().anyMatch(component -> component.getContainer() instanceof FactorySchedulerBlockEntity);
     }
 
     public int effectiveFactoryThreadLimit() {
-        Machine configuredMachine = runtime.structure().machine();
+        Machine configuredMachine = runtimeSnapshot().structure().configuredMachine();
         if (configuredMachine == null || !configuredMachine.hasFactory()) return 1;
         int aggregatedThreads = factorySchedulerThreadCount();
         int levelBonus = runtimeSnapshot().foundLevels().entrySet().stream()
@@ -630,7 +572,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
             }
         }
         factoryScheduler.ensureBaseThread(this, contextPool());
-        if (runtime.structure().machine() != null && runtime.structure().machine().hasFactory()) {
+        Machine configuredMachine = runtimeSnapshot().structure().configuredMachine();
+        if (configuredMachine != null && configuredMachine.hasFactory()) {
             factoryScheduler.setThreadLimit(effectiveFactoryThreadLimit());
         }
         return factoryScheduler;
@@ -645,9 +588,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public FactoryControllerSnapshot factoryControllerSnapshot() {
         if (!hasFactoryController()) return FactoryControllerSnapshot.empty(getBlockPos());
         FactoryRecipeScheduler scheduler = factoryScheduler();
-        return new FactoryControllerSnapshot(getBlockPos(), isFormed(), isRedstonePaused(),
+        StructureSnapshot structure = runtimeSnapshot().structure();
+        return new FactoryControllerSnapshot(getBlockPos(), structure.formed(), isRedstonePaused(),
                 scheduler.activeThreadCount(), scheduler.threadLimit(), scheduler.usedParallelism(),
-                getMaxParallelism(), runtime.structure().machine() == null ? "" : runtime.structure().machine().displayNameKey(), parallelControllerCount(),
+                getMaxParallelism(), structure.machine() == null ? "" : structure.machine().displayNameKey(), parallelControllerCount(),
                 getLastFailureUnloc(), scheduler.threadSnapshots());
     }
 
@@ -701,7 +645,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (level == null || level.isClientSide() || isRemoved()) {
             return;
         }
-        if (level instanceof ServerLevel serverLevel) runtime().serverTick(serverLevel, getBlockPos());
+        if (level instanceof ServerLevel serverLevel) runtime.serverTick(serverLevel, getBlockPos());
     }
 
     public void tickRuntimeWork(ServerLevel runtimeLevel, BlockPos controllerPos) {
@@ -759,7 +703,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             pausedContext = null;
         }
 
-        if (isFormed() && structureSnapshot().structureAreaLoaded()) {
+        if (runtimeSnapshot().structure().formed() && structureSnapshot().structureAreaLoaded()) {
             if (hasFactoryController()) {
                 tickFactoryRecipes();
             } else {
@@ -811,7 +755,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (owner.connection != null) task.takeCompletionReport().ifPresent(owner::sendSystemMessage);
             buildTaskOwner = null;
             buildTaskAge = 0;
-            runtime.structure().requestCheck();
+            runtime.requestStructureCheck();
         }
         return true;
     }
@@ -858,8 +802,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
         FactoryRecipeScheduler scheduler = factoryScheduler();
         scheduler.setThreadLimit(effectiveFactoryThreadLimit());
         scheduler.tick();
-        scheduler.syncCoreThreads(this, runtime.structure().machine(), candidates, pool);
-        scheduler.tickThreads(this, candidates, getStructureVersion(), maxParallelism, pool, this::playFinishSound);
+        StructureSnapshot structure = runtimeSnapshot().structure();
+        scheduler.syncCoreThreads(this, structure.machine(), candidates, pool);
+        scheduler.tickThreads(this, candidates, structure.version(), maxParallelism, pool, this::playFinishSound);
         setActiveState(scheduler.activeThreadCount() > 0);
         syncRuntimeStateIfChanged();
         if (scheduler.activeThreadCount() > 0) {
@@ -874,54 +819,53 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void runStructureCheckPass() {
-        StructureRuntime structure = runtime.structure();
-        structure.setCheckActive(true);
+        runtime.setStructureCheckActive(true);
         try {
             checkStructurePass();
         } finally {
-            structure.setCheckActive(false);
+            runtime.setStructureCheckActive(false);
             publishRuntimeState();
         }
     }
 
     private void checkStructurePass() {
-        StructureRuntime structure = runtime.structure();
+        StructureSnapshot structure = runtimeSnapshot().structure();
         if (structureCheckCallbackForTesting != null) structureCheckCallbackForTesting.run();
-        structure.setDirty(false);
-        structure.setCheckCounter(0);
-        structure.setNextCheckTick(level.getGameTime() + structureCheckIntervalTicks());
-        if (structure.scan() != null) {
+        runtime.setStructureDirty(false);
+        runtime.setStructureCheckCounter(0);
+        runtime.setNextStructureCheckTick(level.getGameTime() + structureCheckIntervalTicks());
+        if (runtime.hasStructureScan()) {
             advanceStructureScan();
             return;
         }
-        structure.setFormationFailure(null);
+        runtime.setStructureFormationFailure(null);
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
-        Machine configuredMachine = structure.machine();
+        Machine configuredMachine = structure.configuredMachine();
         if (facing.getAxis().isVertical() && configuredMachine != null && !configuredMachine.controller().allowVerticalFacing()) {
             resetMachine();
             return;
         }
-        Machine matchedMachine = structure.foundMachine();
-        BlockArray matchedPattern = structure.foundPattern();
-        if (matchedMachine != null && matchedPattern != null && structure.controllerFacing() == facing) {
-            if (structure.matchedStructureStage() > 0) {
+        Machine matchedMachine = structure.machine();
+        BlockArray matchedPattern = structure.pattern();
+        if (matchedMachine != null && matchedPattern != null && structure.facing() == facing) {
+            if (structure.matchedStage() > 0) {
                 for (CandidatePattern candidatePattern : candidatePatterns(matchedMachine, facing)) {
-                    if (candidatePattern.stageNumber() > structure.matchedStructureStage()
+                    if (candidatePattern.stageNumber() > structure.matchedStage()
                             && tryFormMachine(matchedMachine, facing, candidatePattern)) return;
-                    if (structure.scan() != null) return;
+                    if (runtime.hasStructureScan()) return;
                 }
             }
-            CandidatePattern currentPattern = new CandidatePattern(structure.foundCompiledPattern(), matchedPattern,
-                    structure.matchedRollFacing());
+            CandidatePattern currentPattern = new CandidatePattern(structure.compiledPattern(), matchedPattern,
+                    structure.rollFacing());
             if (tryFormMachine(matchedMachine, facing, currentPattern)) return;
-            if (structure.scan() != null) return;
-            boolean compiledAreaLoaded = !hasCompiledFacing(structure.foundCompiledPattern(), facing)
-                    || StructureMatcher.isAreaLoaded(structure.foundCompiledPattern(), facing, level, getBlockPos());
+            if (runtime.hasStructureScan()) return;
+            boolean compiledAreaLoaded = !hasCompiledFacing(structure.compiledPattern(), facing)
+                    || StructureMatcher.isAreaLoaded(structure.compiledPattern(), facing, level, getBlockPos());
             if (!compiledAreaLoaded) {
                 pauseActiveForUnloadedStructure();
                 return;
             }
-            if (isFormed()) {
+            if (structure.formed()) {
                 Machine retryMachine = matchedMachine != null ? matchedMachine : configuredMachine;
                 resetMachine(true, true, false);
                 if (retryMachine != null) tryFormMachine(retryMachine, facing);
@@ -933,36 +877,36 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (tryFormMachine(configuredMachine, facing)) {
                 return;
             }
-            if (structure.scan() != null) return;
+            if (runtime.hasStructureScan()) return;
             Identifier stateMachineId = machineIdFromState(getBlockState());
             if (configuredMachine.registryName().equals(stateMachineId) || configuredMachine.controller().id().equals(stateMachineId)) {
-                resetMachine(structure.formationFailure() == null);
+                resetMachine(structure.lastFormationFailure() == null);
                 return;
             }
         }
         checkAllPatterns(facing);
-        if (structure.scan() != null) return;
-        if (!isFormed()) resetMachine(structure.formationFailure() == null);
+        if (runtime.hasStructureScan()) return;
+        if (!structure.formed()) resetMachine(structure.lastFormationFailure() == null);
     }
 
     private boolean shouldCheckStructure() {
-        StructureRuntime structure = runtime.structure();
+        StructureSnapshot structure = runtimeSnapshot().structure();
         if (structure.dirty()) return true;
-        if (!isFormed() && structure.nextCheckTick() < 0L) return true;
-        structure.setCheckCounter(structure.checkCounter() + 1);
-        return level.getGameTime() >= structure.nextCheckTick();
+        if (!structure.formed() && runtime.nextStructureCheckTick() < 0L) return true;
+        runtime.setStructureCheckCounter(runtime.structureCheckCounter() + 1);
+        return level.getGameTime() >= runtime.nextStructureCheckTick();
     }
 
     private void invalidateForControllerRotation() {
-        StructureRuntime structure = runtime.structure();
-        if (structure.controllerFacing() == null || level == null) return;
+        StructureSnapshot structure = runtimeSnapshot().structure();
+        if (structure.facing() == null || level == null) return;
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
         Direction rollFacing = getBlockState().getValue(MachineControllerBlock.ROLL_FACING);
         Direction normalizedRoll = BlockRotator.normalizedRoll(facing, rollFacing);
-        if (structure.controllerFacing() != facing
-                || (facing.getAxis().isVertical() && structure.matchedRollFacing() != normalizedRoll)) {
+        if (structure.facing() != facing
+                || (facing.getAxis().isVertical() && structure.rollFacing() != normalizedRoll)) {
             invalidateStructureScan(StructureMatcher.InvalidationReason.ORIENTATION);
-            structure.requestCheck();
+            runtime.requestStructureCheck();
         }
     }
 
@@ -976,7 +920,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void checkAllPatterns(Direction facing) {
-        Machine configuredMachine = runtime.structure().machine();
+        Machine configuredMachine = runtimeSnapshot().structure().configuredMachine();
         for (Machine candidate : MachineRegistry.effectiveSnapshot().values()) {
             if (candidate == configuredMachine) continue;
             if (tryFormMachine(candidate, facing)) {
@@ -996,10 +940,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public boolean diagnoseFirstStructureMismatch(ServerPlayer player) {
-        Machine configuredMachine = runtime.structure().machine();
-        if (level == null || level.isClientSide() || isFormed()) return false;
+        Machine configuredMachine = runtimeSnapshot().structure().configuredMachine();
+        if (level == null || level.isClientSide() || runtimeSnapshot().structure().formed()) return false;
         if (configuredMachine == null) bindDefaultMachine();
-        configuredMachine = runtime.structure().machine();
+        configuredMachine = runtimeSnapshot().structure().configuredMachine();
         if (configuredMachine == null) return false;
 
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
@@ -1016,18 +960,19 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 return true;
             }
         }
-        if (runtime.structure().formationFailure() != null) {
-            sendFormationFailureDiagnostic(player, runtime.structure().formationFailure());
+        PortRequirementSpec.Failure formationFailure = runtimeSnapshot().structure().lastFormationFailure();
+        if (formationFailure != null) {
+            sendFormationFailureDiagnostic(player, formationFailure);
             return true;
         }
         return false;
     }
 
     public Optional<MultiblockPreviewSnapshot> createStructurePreviewSnapshot(int maxEntries) {
-        Machine configuredMachine = runtime.structure().machine();
-        if (level == null || level.isClientSide() || isFormed()) return Optional.empty();
+        Machine configuredMachine = runtimeSnapshot().structure().configuredMachine();
+        if (level == null || level.isClientSide() || runtimeSnapshot().structure().formed()) return Optional.empty();
         if (configuredMachine == null) bindDefaultMachine();
-        configuredMachine = runtime.structure().machine();
+        configuredMachine = runtimeSnapshot().structure().configuredMachine();
         if (configuredMachine == null) return Optional.empty();
 
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
@@ -1039,14 +984,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public Optional<Machine> boundMachine() {
-        if (runtime.structure().machine() == null) bindDefaultMachine();
-        return Optional.ofNullable(runtime.structure().machine());
+        if (runtimeSnapshot().structure().configuredMachine() == null) bindDefaultMachine();
+        return Optional.ofNullable(runtimeSnapshot().structure().configuredMachine());
     }
 
     public BlockArray assemblyPattern(Machine candidate) {
-        if (runtime.structure().foundPattern() != null) return runtime.structure().foundPattern();
-        return assemblyPattern(candidate, isFormed() && runtime.structure().matchedStructureStage() > 0
-                ? runtime.structure().matchedStructureStage() : 1);
+        StructureSnapshot structure = runtimeSnapshot().structure();
+        if (structure.pattern() != null) return structure.pattern();
+        return assemblyPattern(candidate, structure.formed() && structure.matchedStage() > 0
+                ? structure.matchedStage() : 1);
     }
 
     public BlockArray assemblyPattern(Machine candidate, int stageNumber) {
@@ -1061,8 +1007,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public boolean assemblyStateSensitive(Machine candidate) {
-        int stageNumber = isFormed() && runtime.structure().matchedStructureStage() > 0
-                ? runtime.structure().matchedStructureStage() : 1;
+        StructureSnapshot structure = runtimeSnapshot().structure();
+        int stageNumber = structure.formed() && structure.matchedStage() > 0
+                ? structure.matchedStage() : 1;
         return candidate.structureStages().stream()
                 .filter(stage -> stage.number() == stageNumber)
                 .findFirst()
@@ -1289,14 +1236,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private boolean tryFormMachine(Machine candidate, Direction facing, CandidatePattern candidatePattern) {
-        StructureRuntime structure = runtime.structure();
         BlockArray rotatedPattern = candidatePattern.pattern();
         CompiledMachinePattern stageCompiled = candidatePattern.compiled();
         Machine validationMachine = stageCompiled == null ? candidate : stageCompiled.machine();
         var replacements = replacementsFor(validationMachine, stageCompiled, facing, rotatedPattern, candidatePattern.rollFacing());
         boolean stateSensitive = stageCompiled != null && stageCompiled.stateSensitive();
-        if (!structure.checkActive() || (rotatedPattern.pattern().size() <= structureScanBatches()
-                && !structure.diagnosticRequested())) {
+        if (!runtime.structureCheckActive() || (rotatedPattern.pattern().size() <= structureScanBatches()
+                && !runtime.structureDiagnosticRequested())) {
             matcherInvocationCountForTesting++;
             boolean matches = stageCompiled != null && hasCompiledFacing(stageCompiled, facing)
                     ? StructureMatcher.matchesCompiled(stageCompiled, facing, candidatePattern.rollFacing(), level,
@@ -1311,87 +1257,80 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         if (stageCompiled != null && hasCompiledFacing(stageCompiled, facing)
                 && !StructureMatcher.isAreaLoaded(stageCompiled, facing, level, getBlockPos())) return false;
-        if (structure.scanSteppedTick() == level.getGameTime()) return false;
+        if (runtime.structureScanSteppedTick() == level.getGameTime()) return false;
         StructureMatcher.ScanOptions options = StructureMatcher.ScanOptions.of(structureScanBatches(),
                 structureSentinelEnabled(), structureSentinelCount());
-        structure.setScan(StructureMatcher.beginScan(structure.version(), facing, candidatePattern.rollFacing(),
+        StructureMatcher.ScanState scan = StructureMatcher.beginScan(runtimeSnapshot().structure().version(), facing, candidatePattern.rollFacing(),
                 candidatePattern.stageNumber(), rotatedPattern, rotatedPattern, replacements, stateSensitive,
-                options, rotatedPattern == structure.previousMismatchPattern() ? structure.previousMismatch() : null));
-        structure.setScanMachine(candidate);
-        structure.setScanCandidate(candidatePattern);
-        structure.setScanSteppedTick(level.getGameTime());
-        structure.setScanStartedTick(level.getGameTime());
+                options, rotatedPattern == runtime.structurePreviousMismatchPattern() ? runtime.structurePreviousMismatch() : null);
+        runtime.startStructureScan(scan, candidate, candidatePattern, level.getGameTime(), level.getGameTime());
         if (invalidateActiveStructureScanIfIdentityChanged()) {
             clearStructureScan();
             return false;
         }
         scanBatchCountForTesting++;
         scanBatchesPerTickForTesting.merge(level.getGameTime(), 1, Integer::sum);
-        StructureMatcher.ScanResult scanResult = structure.scan().step(level, getBlockPos());
+        StructureMatcher.ScanResult scanResult = runtime.stepStructureScan(level, getBlockPos());
         if (scanResult.inProgress()) {
-            structure.setNextCheckTick(level.getGameTime() + 1L);
+            runtime.setNextStructureCheckTick(level.getGameTime() + 1L);
             return false;
         }
         if (scanResult.status() == StructureMatcher.ScanStatus.INVALIDATED) {
             clearStructureDiagnosticRequest();
             clearStructureScan();
-            structure.setPendingInvalidation(false);
+            runtime.setStructurePendingInvalidation(false);
             return false;
         }
         if (scanResult.status() == StructureMatcher.ScanStatus.MISMATCH) {
-            structure.setPreviousMismatch(scanResult.mismatch().orElse(null));
-            structure.setPreviousMismatchPattern(rotatedPattern);
+            runtime.setStructurePreviousMismatch(scanResult.mismatch().orElse(null), rotatedPattern);
             if (scanResult.mismatch().isPresent()) {
                 sendRequestedStructureDiagnostic(scanResult.mismatch().get());
             } else {
                 recordStructureMismatch(candidate, facing, rotatedPattern, replacements, stateSensitive);
             }
             clearStructureScan();
-            structure.setPendingInvalidation(false);
-            if (isFormed()) resetMachine(true, true, false);
-            structure.setNextCheckTick(level.getGameTime() + structureCheckIntervalTicks());
+            runtime.setStructurePendingInvalidation(false);
+            if (runtimeSnapshot().structure().formed()) resetMachine(true, true, false);
+            runtime.setNextStructureCheckTick(level.getGameTime() + structureCheckIntervalTicks());
             return false;
         }
-        if (structure.pendingInvalidation()) {
+        if (runtime.structurePendingInvalidation()) {
             clearStructureScan();
-            structure.setPendingInvalidation(false);
-            structure.requestCheck();
+            runtime.setStructurePendingInvalidation(false);
+            runtime.requestStructureCheck();
             return false;
         }
         clearStructureScan();
-        structure.setPendingInvalidation(false);
-        structure.setPreviousMismatch(null);
-        structure.setPreviousMismatchPattern(null);
+        runtime.setStructurePendingInvalidation(false);
+        runtime.setStructurePreviousMismatch(null, null);
         return validateAndFormMachine(candidate, facing, candidatePattern, validationMachine, rotatedPattern,
                 stageCompiled, replacements);
     }
 
     private void advanceStructureScan() {
-        StructureRuntime structure = runtime.structure();
-        structure.setScanSteppedTick(level.getGameTime());
+        runtime.setStructureScanSteppedTick(level.getGameTime());
         boolean identityChanged = invalidateActiveStructureScanIfIdentityChanged();
-        if (!identityChanged && level.getGameTime() - structure.scanStartedTick() > structureScanTimeoutTicks()) {
-            structure.scan().invalidate(StructureMatcher.InvalidationReason.TIMEOUT);
+        if (!identityChanged && level.getGameTime() - runtime.structureScanStartedTick() > structureScanTimeoutTicks()) {
+            runtime.invalidateStructureScan(StructureMatcher.InvalidationReason.TIMEOUT);
         }
         scanBatchCountForTesting++;
         scanBatchesPerTickForTesting.merge(level.getGameTime(), 1, Integer::sum);
-        StructureMatcher.ScanResult scanResult = structure.scan().step(level, getBlockPos());
+        StructureMatcher.ScanResult scanResult = runtime.stepStructureScan(level, getBlockPos());
         if (scanResult.inProgress()) {
-            structure.setNextCheckTick(level.getGameTime() + 1L);
+            runtime.setNextStructureCheckTick(level.getGameTime() + 1L);
             return;
         }
-        CandidatePattern candidatePattern = structure.scanCandidate() instanceof CandidatePattern candidate ? candidate : null;
-        Machine candidate = structure.scanMachine();
+        CandidatePattern candidatePattern = runtime.structureScanCandidate() instanceof CandidatePattern candidate ? candidate : null;
+        Machine candidate = runtime.structureScanMachine();
         if (scanResult.status() == StructureMatcher.ScanStatus.INVALIDATED || candidate == null || candidatePattern == null) {
             clearStructureScan();
-            structure.setPendingInvalidation(false);
-            structure.requestCheck();
+            runtime.setStructurePendingInvalidation(false);
+            runtime.requestStructureCheck();
             return;
         }
         if (scanResult.status() == StructureMatcher.ScanStatus.MISMATCH) {
             clearStructureScan();
-            structure.setPreviousMismatch(scanResult.mismatch().orElse(null));
-            structure.setPreviousMismatchPattern(candidatePattern.pattern());
+            runtime.setStructurePreviousMismatch(scanResult.mismatch().orElse(null), candidatePattern.pattern());
             var validationMachine = candidatePattern.compiled() == null ? candidate : candidatePattern.compiled().machine();
             var replacements = replacementsFor(validationMachine, candidatePattern.compiled(),
                     getBlockState().getValue(MachineControllerBlock.FACING), candidatePattern.pattern(), candidatePattern.rollFacing());
@@ -1401,26 +1340,25 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 recordStructureMismatch(candidate, getBlockState().getValue(MachineControllerBlock.FACING),
                         candidatePattern.pattern(), replacements, candidatePattern.compiled() != null && candidatePattern.compiled().stateSensitive());
             }
-            structure.setPendingInvalidation(false);
-            structure.setNextCheckTick(level.getGameTime() + structureCheckIntervalTicks());
+            runtime.setStructurePendingInvalidation(false);
+            runtime.setNextStructureCheckTick(level.getGameTime() + structureCheckIntervalTicks());
             return;
         }
         if (scanResult.status() == StructureMatcher.ScanStatus.VALID
                 && invalidateActiveStructureScanIfIdentityChanged()) {
             clearStructureScan();
-            structure.setPendingInvalidation(false);
-            structure.requestCheck();
+            runtime.setStructurePendingInvalidation(false);
+            runtime.requestStructureCheck();
             return;
         }
-        if (structure.pendingInvalidation()) {
+        if (runtime.structurePendingInvalidation()) {
             clearStructureScan();
-            structure.setPendingInvalidation(false);
-            structure.requestCheck();
+            runtime.setStructurePendingInvalidation(false);
+            runtime.requestStructureCheck();
             return;
         }
-        structure.setPreviousMismatch(null);
-        structure.setPreviousMismatchPattern(null);
-        structure.setPendingInvalidation(false);
+        runtime.setStructurePreviousMismatch(null, null);
+        runtime.setStructurePendingInvalidation(false);
         clearStructureScan();
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
         CompiledMachinePattern compiled = candidatePattern.compiled();
@@ -1466,7 +1404,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     .claim(getBlockPos(), componentClaims(rotatedPattern, stageCompiled, facing));
             if (!result.accepted()) {
                 StructureClaimRegistry.Conflict conflict = result.conflict();
-                structure.setFormationFailure(new PortRequirementSpec.Failure(
+                runtime.setStructureFormationFailure(new PortRequirementSpec.Failure(
                         "component_claim_conflict component=" + conflict.componentPos() + " owner=" + conflict.ownerPos(),
                         0, 1, OptionalInt.empty(), PortRequirementSpec.FailureReason.MISSING));
                 return false;
@@ -1477,25 +1415,21 @@ public class MachineControllerBlockEntity extends BlockEntity {
             }
         }
 
-        structure.setFormationFailure(null);
-        structure.setMismatchDiagnostic(null);
+        runtime.setStructureFormationFailure(null);
+        runtime.setStructureMismatchDiagnostic(null);
         onStructureFormed(candidate, rotatedPattern, stageCompiled, facing, candidatePattern.rollFacing(), replacements, levels.foundLevels());
         return true;
     }
 
     private void clearStructureScan() {
-        StructureRuntime structure = runtime.structure();
-        structure.setScan(null);
-        structure.setScanMachine(null);
-        structure.setScanCandidate(null);
-        structure.setScanStartedTick(Long.MIN_VALUE);
+        runtime.clearStructureScan();
     }
 
     private void sendRequestedStructureDiagnostic(@Nullable StructureMatcher.Mismatch mismatch) {
-        StructureRuntime structure = runtime.structure();
-        if (!structure.diagnosticRequested()) return;
-        UUID playerId = structure.diagnosticPlayerId();
-        ResourceKey<Level> dimension = structure.diagnosticDimension();
+        if (!runtime.structureDiagnosticRequested()) return;
+        StructureSnapshot structure = runtimeSnapshot().structure();
+        UUID playerId = runtime.structureDiagnosticPlayerId();
+        ResourceKey<Level> dimension = runtime.structureDiagnosticDimension();
         clearStructureDiagnosticRequest();
         if (mismatch != null) {
             if (structureDiagnosticCallbackForTesting != null) {
@@ -1507,61 +1441,57 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     sendStructureMismatchDiagnostic(player, mismatch);
                 }
             }
-        } else if (structure.formationFailure() != null) {
+        } else if (structure.lastFormationFailure() != null) {
             if (playerId != null && dimension != null && level instanceof ServerLevel serverLevel
                     && serverLevel.dimension().equals(dimension)) {
                 ServerPlayer player = serverLevel.getServer().getPlayerList().getPlayer(playerId);
                 if (player != null && player.level().dimension().equals(dimension)) {
-                    sendFormationFailureDiagnostic(player, structure.formationFailure());
+                    sendFormationFailureDiagnostic(player, structure.lastFormationFailure());
                 }
             }
         }
     }
 
     private void clearStructureDiagnosticRequest() {
-        StructureRuntime structure = runtime.structure();
-        structure.setDiagnosticRequested(false);
-        structure.setDiagnosticPlayerId(null);
-        structure.setDiagnosticDimension(null);
+        runtime.setStructureDiagnosticRequest(false, null, null);
     }
 
     private void invalidateStructureScan(StructureMatcher.InvalidationReason reason) {
         clearStructureDiagnosticRequest();
-        if (runtime.structure().scan() != null) runtime.structure().scan().invalidate(reason);
+        runtime.invalidateStructureScan(reason);
     }
 
     private boolean invalidateActiveStructureScanIfIdentityChanged() {
-        StructureRuntime structure = runtime.structure();
-        if (structure.scan() == null) return false;
+        if (!runtime.hasStructureScan()) return false;
         if (isRemoved()) {
-            structure.scan().invalidate(StructureMatcher.InvalidationReason.REMOVED);
+            runtime.invalidateStructureScan(StructureMatcher.InvalidationReason.REMOVED);
             return true;
         }
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
         Direction rollFacing = getBlockState().getValue(MachineControllerBlock.ROLL_FACING);
         Direction normalizedRoll = BlockRotator.normalizedRoll(facing, rollFacing);
-        CandidatePattern candidatePattern = structure.scanCandidate() instanceof CandidatePattern candidate ? candidate : null;
+        CandidatePattern candidatePattern = runtime.structureScanCandidate() instanceof CandidatePattern candidate ? candidate : null;
         boolean loaded = candidatePattern == null || candidatePattern.compiled() == null
                 || !hasCompiledFacing(candidatePattern.compiled(), facing)
                 || StructureMatcher.isAreaLoaded(candidatePattern.compiled(), facing, level, getBlockPos());
-        boolean changed = structure.scan().structureVersion() != structure.version()
-                || structure.scan().frontFacing() != facing
-                || structure.scan().rollFacing() != normalizedRoll
+        boolean changed = !runtime.structureScanVersionMatches(runtimeSnapshot().structure().version())
+                || runtime.structureScanFacing() != facing
+                || runtime.structureScanRollFacing() != normalizedRoll
                 || candidatePattern == null
-                || structure.scan().stageNumber() != candidatePattern.stageNumber()
-                || structure.scan().patternIdentity() != candidatePattern.pattern()
+                || runtime.structureScanStage() != candidatePattern.stageNumber()
+                || runtime.structureScanPattern() != candidatePattern.pattern()
                 || !loaded;
         if (!changed) return false;
         StructureMatcher.InvalidationReason reason = !loaded
                 ? StructureMatcher.InvalidationReason.UNLOADED
-                : structure.scan().structureVersion() != structure.version()
+                : !runtime.structureScanVersionMatches(runtimeSnapshot().structure().version())
                 ? StructureMatcher.InvalidationReason.VERSION
-                : structure.scan().frontFacing() != facing || structure.scan().rollFacing() != normalizedRoll
+                : runtime.structureScanFacing() != facing || runtime.structureScanRollFacing() != normalizedRoll
                 ? StructureMatcher.InvalidationReason.ORIENTATION
-                : structure.scan().stageNumber() != candidatePattern.stageNumber()
+                : runtime.structureScanStage() != candidatePattern.stageNumber()
                 ? StructureMatcher.InvalidationReason.STAGE
                 : StructureMatcher.InvalidationReason.PATTERN;
-        structure.scan().invalidate(reason);
+        runtime.invalidateStructureScan(reason);
         return true;
     }
 
@@ -1572,12 +1502,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private long structureScanTimeoutTicks() {
-        StructureMatcher.ScanState scan = runtime.structure().scan();
-        if (scan == null) return (long) structureCheckIntervalTicks() * structureScanBatches();
-        int batchSize = scan.batchSize();
+        if (!runtime.hasStructureScan()) return (long) structureCheckIntervalTicks() * structureScanBatches();
+        int batchSize = runtime.structureScanBatchSize();
         int sentinelBudget = Math.min(structureSentinelCount(), Math.max(0, batchSize - 1));
         int entriesPerTick = Math.max(1, batchSize - sentinelBudget);
-        long scanTicks = (scan.entries().size() + entriesPerTick - 1L) / entriesPerTick;
+        long scanTicks = (runtime.structureScanEntryCount() + entriesPerTick - 1L) / entriesPerTick;
         return (long) structureCheckIntervalTicks() * Math.max(structureScanBatches(), (int) scanTicks);
     }
 
@@ -1611,9 +1540,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (candidate == null) return;
         String diagnostic = structureMismatchDiagnostic(candidate, facing, rotatedPattern, level, getBlockPos(), replacements,
                 stateSensitive);
-        StructureRuntime structure = runtime.structure();
-        if (diagnostic.equals(structure.mismatchDiagnostic())) return;
-        structure.setMismatchDiagnostic(diagnostic);
+        if (diagnostic.equals(runtime.structureMismatchDiagnostic())) return;
+        runtime.setStructureMismatchDiagnostic(diagnostic);
     }
 
     private @Nullable CompiledMachinePattern compiledFor(Machine candidate, BlockArray rotatedPattern, Direction facing) {
@@ -1678,12 +1606,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void recordFormationFailure(Machine candidate, PortRequirementSpec.Failure failure) {
-        StructureRuntime structure = runtime.structure();
-        if (failure.equals(structure.formationFailure())) return;
-        structure.setFormationFailure(failure);
+        if (failure.equals(runtime.structureFormationFailure())) return;
+        runtime.setStructureFormationFailure(failure);
         String diagnostic = formationFailureDiagnostic(candidate,
                 getBlockState().getValue(MachineControllerBlock.FACING), getBlockPos(), failure);
-        structure.setMismatchDiagnostic(diagnostic);
+        runtime.setStructureMismatchDiagnostic(diagnostic);
     }
 
     private StructureMatcher.LevelResolution resolveLevels(Machine candidate, Direction facing, Direction rollFacing) {
@@ -1700,21 +1627,20 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void recordLevelMismatch(LevelMismatch mismatch) {
-        StructureRuntime structure = runtime.structure();
-        structure.setLastStructureError(mismatch);
-        structure.setFormationFailure(null);
-        structure.setMismatchDiagnostic(null);
+        runtime.setLastStructureError(mismatch);
+        runtime.setStructureFormationFailure(null);
+        runtime.setStructureMismatchDiagnostic(null);
     }
 
     private void onStructureFormed(Machine matchedMachine, BlockArray rotatedPattern, CompiledMachinePattern compiledPattern,
                                    Direction facing, Direction rollFacing, Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
-                                   Map<Identifier, MachineLevel> levels) {
+        Map<Identifier, MachineLevel> levels) {
         clearStructureDiagnosticRequest();
-        StructureRuntime structure = runtime.structure();
-        Machine previousMachine = structure.machine();
-        boolean structureChanged = structure.publishFormationState(matchedMachine, rotatedPattern, compiledPattern,
+        StructureSnapshot previousStructure = runtimeSnapshot().structure();
+        Machine previousMachine = previousStructure.machine();
+        boolean structureChanged = runtime.publishFormationState(matchedMachine, rotatedPattern, compiledPattern,
                 facing, rollFacing, compiledPattern == null ? 1 : compiledPattern.stageNumber());
-        runtime.components().replaceLevels(levels);
+        runtime.replaceLevels(levels);
         collectFoundModifiers(replacements);
         refreshCriticalStructureChunks();
         FORMED_CONTROLLERS.add(this);
@@ -1722,7 +1648,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if ((previousMachine != null && previousMachine != matchedMachine) || structureChanged) {
             stopFactoryController();
         }
-        structure.setDirty(false);
+        runtime.setStructureDirty(false);
         if (!physicalFormed()) {
             updatePhysicalFormedState(true);
             notifyPreviewReceiversStructureFormed();
@@ -1730,8 +1656,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         updateComponents();
         resumePausedRecipeAfterStructureCheck();
         clearCandidateCache();
-        structure.setFormationFailure(null);
-        structure.setLastStructureError(null);
+        runtime.setStructureFormationFailure(null);
+        runtime.setLastStructureError(null);
         setChanged();
         syncLevelState();
         publishRuntimeState();
@@ -1759,8 +1685,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void collectFoundModifiers(Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
-        ComponentRuntime componentState = runtime.components();
-        List<RecipeModifier> before = componentState.modifierList();
+        ControllerRuntimeSnapshot current = runtimeSnapshot();
+        List<RecipeModifier> before = current.foundModifiers().values().stream().flatMap(List::stream).toList();
         Map<String, List<RecipeModifier>> nextModifiers = new LinkedHashMap<>();
         if (level != null) {
             for (var entry : replacements.entrySet()) {
@@ -1772,22 +1698,24 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 }
             }
         }
-        componentState.replaceModifiers(nextModifiers);
-        if (!before.equals(componentState.modifierList())) {
+        runtime.replaceModifiers(nextModifiers);
+        List<RecipeModifier> after = runtimeSnapshot().foundModifiers().values().stream().flatMap(List::stream).toList();
+        if (!before.equals(after)) {
             markRecipeDirty();
         }
     }
 
     private void clearFoundModifiers() {
-        if (runtime.components().foundModifiers().isEmpty()) return;
-        runtime.components().replaceModifiers(Map.of());
+        if (runtimeSnapshot().foundModifiers().isEmpty()) return;
+        runtime.replaceModifiers(Map.of());
         markRecipeDirty();
     }
 
     private void updateComponents() {
-        StructureRuntime structure = runtime.structure();
-        Machine matchedMachine = structure.foundMachine();
-        BlockArray matchedPattern = structure.foundPattern();
+        ControllerRuntimeSnapshot current = runtimeSnapshot();
+        StructureSnapshot structure = current.structure();
+        Machine matchedMachine = structure.machine();
+        BlockArray matchedPattern = structure.pattern();
         List<FactorySchedulerBlockEntity> previousFactories = factoryComponents();
         for (FactorySchedulerBlockEntity factory : previousFactories) factory.bindOwner(null);
         List<SmartInterfaceBlockEntity> previousSmartInterfaces = runtimeSnapshot().components().stream()
@@ -1796,8 +1724,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 .map(SmartInterfaceBlockEntity.class::cast)
                 .toList();
         if (level == null || matchedMachine == null || matchedPattern == null) {
-            runtime.publishComponentState(List.of(), runtime.components().foundModifiers(),
-                    runtime.components().foundLevels(), Set.of());
+            runtime.publishComponentState(List.of(), current.foundModifiers(), current.foundLevels(), Set.of());
             return;
         }
 
@@ -1853,18 +1780,19 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (!(tile instanceof BlockEntity container)) continue;
             nextComponents.add(new ProcessingComponent(component, container, worldPos, relativePos, matchedPattern.tagsAt(relativePos)));
         }
-        runtime.publishComponentState(nextComponents, runtime.components().foundModifiers(),
-                runtime.components().foundLevels(), nextLinkedPortPositions);
+        current = runtimeSnapshot();
+        runtime.publishComponentState(nextComponents, current.foundModifiers(),
+                current.foundLevels(), nextLinkedPortPositions);
         invalidateFactoryCapacity();
     }
 
     private void unlinkLinkedPorts() {
-        Set<BlockPos> linkedPortPositions = runtime.components().linkedPortPositions();
+        Set<BlockPos> linkedPortPositions = runtimeSnapshot().linkedPortPositions();
         if (level == null) {
-            runtime.components().replaceLinkedPortPositions(Set.of());
+            runtime.replaceLinkedPortPositions(Set.of());
             return;
         }
-        if (runtime.structure().foundPattern() != null) {
+        if (runtimeSnapshot().structure().pattern() != null) {
             for (BlockPos relativePos : componentPositions()) {
                 BlockEntity entity = level.getBlockEntity(getBlockPos().offset(relativePos));
                 if (entity instanceof LinkedAppearanceBlockEntity linkedAppearance) {
@@ -1877,15 +1805,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 linkedAppearance.unlinkControllerAppearance(getBlockPos());
             }
         }
-        runtime.components().replaceLinkedPortPositions(Set.of());
+        runtime.replaceLinkedPortPositions(Set.of());
     }
 
     private List<BlockPos> componentPositions() {
-        StructureRuntime structure = runtime.structure();
-        if (hasCompiledFacing(structure.foundCompiledPattern(), structure.controllerFacing())) {
-            return structure.foundCompiledPattern().componentPositions(structure.controllerFacing());
+        StructureSnapshot structure = runtimeSnapshot().structure();
+        if (hasCompiledFacing(structure.compiledPattern(), structure.facing())) {
+            return structure.compiledPattern().componentPositions(structure.facing());
         }
-        return new ArrayList<>(structure.foundPattern().pattern().keySet());
+        return new ArrayList<>(structure.pattern().pattern().keySet());
     }
 
     private static List<BlockPos> componentPositions(BlockArray pattern, @Nullable CompiledMachinePattern compiled, Direction facing) {
@@ -1973,18 +1901,18 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private boolean isInsideCompiledBounds(BlockPos worldPos) {
-        StructureRuntime structure = runtime.structure();
-        if (structure.controllerFacing() == null) return false;
-        Machine candidate = structure.foundMachine() == null ? structure.machine() : structure.foundMachine();
+        StructureSnapshot structure = runtimeSnapshot().structure();
+        if (structure.facing() == null) return false;
+        Machine candidate = structure.machine() == null ? structure.configuredMachine() : structure.machine();
         BlockPos relative = worldPos.subtract(getBlockPos());
         if (candidate != null) {
-            for (CandidatePattern pattern : candidatePatterns(candidate, structure.controllerFacing())) {
+            for (CandidatePattern pattern : candidatePatterns(candidate, structure.facing())) {
                 if (contains(boundingBox(pattern.pattern()), relative)) return true;
             }
         }
-        BoundingBox box = hasCompiledFacing(structure.foundCompiledPattern(), structure.controllerFacing())
-                ? structure.foundCompiledPattern().boundingBox(structure.controllerFacing())
-                : boundingBox(structure.foundPattern());
+        BoundingBox box = hasCompiledFacing(structure.compiledPattern(), structure.facing())
+                ? structure.compiledPattern().boundingBox(structure.facing())
+                : boundingBox(structure.pattern());
         return contains(box, relative);
     }
 
@@ -1998,12 +1926,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void onStructureChunkStateChanged() {
-        StructureRuntime structure = runtime.structure();
-        if (structure.scan() != null) invalidateStructureScan(StructureMatcher.InvalidationReason.UNLOADED);
+        StructureSnapshot structure = runtimeSnapshot().structure();
+        if (runtime.hasStructureScan()) invalidateStructureScan(StructureMatcher.InvalidationReason.UNLOADED);
         boolean wasLoaded = structure.structureAreaLoaded();
         boolean loaded = isStructureAreaLoaded();
-        if (!isFormed() || structure.foundPattern() == null || structure.controllerFacing() == null) {
-            structure.setStructureAreaLoaded(loaded);
+        if (!structure.formed() || structure.pattern() == null || structure.facing() == null) {
+            runtime.publishStructureState(loaded);
             publishRuntimeState();
             return;
         }
@@ -2011,8 +1939,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
             publishRuntimeState();
             return;
         }
-        structure.setStructureAreaLoaded(loaded);
-        structure.requestCheck();
+        runtime.publishStructureState(loaded);
+        runtime.requestStructureCheck();
         if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
         if (!loaded) pauseActiveForUnloadedStructure();
         setChanged();
@@ -2038,11 +1966,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void refreshCriticalStructureChunks() {
-        StructureRuntime structure = runtime.structure();
+        StructureSnapshot structure = runtimeSnapshot().structure();
         Set<ChunkPos> criticalChunks = new HashSet<>();
         criticalChunks.add(new ChunkPos(getBlockPos().getX() >> 4, getBlockPos().getZ() >> 4));
-        if (level == null || structure.foundPattern() == null || structure.controllerFacing() == null) {
-            structure.setCriticalChunks(criticalChunks);
+        if (level == null || structure.pattern() == null || structure.facing() == null) {
+            runtime.setCriticalStructureChunks(criticalChunks);
             return;
         }
         for (BlockPos relativePos : componentPositions()) {
@@ -2054,13 +1982,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 criticalChunks.add(new ChunkPos(blockPos.getX() >> 4, blockPos.getZ() >> 4));
             }
         }
-        structure.setCriticalChunks(criticalChunks);
+        runtime.setCriticalStructureChunks(criticalChunks);
     }
 
     private boolean isStructureAreaLoaded() {
         if (level == null) return true;
         ChunkPos controllerChunk = new ChunkPos(getBlockPos().getX() >> 4, getBlockPos().getZ() >> 4);
-        for (ChunkPos chunkPos : runtime.structure().criticalChunks()) {
+        for (ChunkPos chunkPos : runtimeSnapshot().structure().criticalChunks()) {
             if (chunkPos.equals(controllerChunk)) continue;
             if (!level.hasChunk(chunkPos.x(), chunkPos.z())) return false;
         }
@@ -2161,10 +2089,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void resetMachine(boolean clearFormationFailure, boolean updateBlockState, boolean invalidateScheduledCheck) {
-        StructureRuntime structure = runtime.structure();
+        StructureSnapshot structure = runtimeSnapshot().structure();
         invalidateStructureScan(StructureMatcher.InvalidationReason.VERSION);
-        Machine configuredMachine = structure.machine();
-        PortRequirementSpec.Failure previousFormationFailure = structure.formationFailure();
+        Machine configuredMachine = structure.configuredMachine();
+        PortRequirementSpec.Failure previousFormationFailure = structure.lastFormationFailure();
         Object previousStructureError = structure.lastStructureError();
         boolean wasFormed = structure.formed() || physicalFormed();
         if (wasFormed && level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.clearConnectionsFor(serverLevel, this);
@@ -2174,14 +2102,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
         unlinkLinkedPorts();
         stopFactoryController();
         for (FactorySchedulerBlockEntity factory : factoryComponents()) factory.bindOwner(null);
-        structure.reset(configuredMachine, hadActive);
+        runtime.resetStructure(configuredMachine, wasFormed || hadActive);
         if (!clearFormationFailure) {
-            structure.setFormationFailure(previousFormationFailure);
-            structure.setLastStructureError(previousStructureError);
+            runtime.setStructureFormationFailure(previousFormationFailure);
+            runtime.setLastStructureError(previousStructureError);
         }
         FORMED_CONTROLLERS.remove(this);
-        runtime.components().clear();
-        if (wasFormed && invalidateScheduledCheck) structure.setNextCheckTick(-1L);
+        runtime.clearComponents();
+        if (wasFormed && invalidateScheduledCheck) runtime.setNextStructureCheckTick(-1L);
         if (active != null) {
             returnContext(context);
             active = null;
@@ -2208,7 +2136,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void unbindSmartInterfaces() {
-        if (level == null || runtime.structure().foundPattern() == null) return;
+        if (level == null || runtimeSnapshot().structure().pattern() == null) return;
         List<SmartInterfaceBlockEntity> smartInterfaces = new ArrayList<>();
         for (BlockPos relativePos : componentPositions()) {
             if (level.getBlockEntity(getBlockPos().offset(relativePos)) instanceof SmartInterfaceBlockEntity smartInterface) {
@@ -2243,7 +2171,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void broadcastStateIfChanged(boolean activeBeforeTick) {
-        boolean formed = isFormed();
+        ControllerRuntimeSnapshot runtimeState = runtimeSnapshot();
+        boolean formed = runtimeState.structure().formed();
         boolean activeNow = isRuntimeActive();
         var thread = hasFactoryController() ? factoryThreadSnapshots().getFirst() : null;
         boolean recipeLocked = thread == null ? lockedRecipeId != null : thread.locked();
@@ -2251,10 +2180,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         Identifier machineId = machineId();
         String machineIdValue = machineId == null ? "" : machineId.toString();
         int controllerRole = MachineControllerMenu.controllerRoleSyncValue(this);
-        int installedModuleCount = installedModuleCount();
-        Optional<Identifier> connectedHostId = connectedHostId();
-        boolean moduleConnected = connectedHostId.isPresent();
-        String connectedHostIdValue = connectedHostId.map(Identifier::toString).orElse("");
+        ModuleConnectionStatus moduleStatus = runtimeState.moduleConnectionStatus();
+        int installedModuleCount = runtimeState.installedModuleCount();
+        boolean moduleConnected = moduleStatus.connected();
+        String connectedHostIdValue = moduleConnected ? moduleStatus.connectedHostId().toString() : "";
         if (lastBroadcastFormed != null && !PktMachineStatePayload.stateChanged(formed, activeNow, recipeLocked, lockedRecipe,
                 machineIdValue, controllerRole, installedModuleCount, moduleConnected, connectedHostIdValue,
                 lastBroadcastFormed, lastBroadcastActive, lastBroadcastRecipeLocked, lastBroadcastLockedRecipeId,
@@ -2287,11 +2216,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
         Identifier machineId = machineId();
         String machineIdValue = machineId == null ? "" : machineId.toString();
         int controllerRole = MachineControllerMenu.controllerRoleSyncValue(this);
-        int installedModuleCount = installedModuleCount();
-        Optional<Identifier> connectedHostId = connectedHostId();
-        boolean moduleConnected = connectedHostId.isPresent();
-        String connectedHostIdValue = connectedHostId.map(Identifier::toString).orElse("");
-        return machineStatePayload(activeNow, isFormed(), recipeLocked, lockedRecipe, machineIdValue, controllerRole,
+        ControllerRuntimeSnapshot runtimeState = runtimeSnapshot();
+        int installedModuleCount = runtimeState.installedModuleCount();
+        ModuleConnectionStatus moduleStatus = runtimeState.moduleConnectionStatus();
+        boolean moduleConnected = moduleStatus.connected();
+        String connectedHostIdValue = moduleConnected ? moduleStatus.connectedHostId().toString() : "";
+        return machineStatePayload(activeNow, runtimeState.structure().formed(), recipeLocked, lockedRecipe, machineIdValue, controllerRole,
                 installedModuleCount, moduleConnected, connectedHostIdValue);
     }
 
@@ -2308,7 +2238,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private boolean tryStartNewRecipe() {
         if (!shouldSearchRecipe()) return false;
         recipeSearchAttemptCounter++;
-        Machine matchedMachine = runtime.structure().foundMachine();
+        Machine matchedMachine = runtimeSnapshot().structure().machine();
         Identifier machineId = matchedMachine == null ? null : matchedMachine.registryName();
         if (machineId == null) return false;
         if (tryRestartLastRecipe(machineId)) return true;
@@ -2316,7 +2246,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         int maxParallelism = getMaxParallelism();
         RecipeSearchResult result;
         try {
-            result = new RecipeSearchTask(this, machineId, getStructureVersion(), maxParallelism, candidates,
+            result = new RecipeSearchTask(this, machineId, runtimeSnapshot().structure().version(), maxParallelism, candidates,
                     contextPool(), cachedCandidateIndex, lockedRecipeId).compute();
         } catch (RuntimeException e) {
             LOG.warn("[Ctrl#{}] tryStartNewRecipe: recipe search failed at pos={}; retrying later", instanceId, getBlockPos(), e);
@@ -2425,20 +2355,22 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private boolean isSearchResultCurrent(RecipeSearchResult result) {
-        Machine matchedMachine = runtime.structure().foundMachine();
-        return isFormed()
+        ControllerRuntimeSnapshot runtimeState = runtimeSnapshot();
+        Machine matchedMachine = runtimeState.structure().machine();
+        return runtimeState.structure().formed()
                 && matchedMachine != null
                 && matchedMachine.registryName().equals(result.machineId())
-                && getStructureVersion() == result.structureVersion()
+                && runtimeState.structure().version() == result.structureVersion()
                 && active == null;
     }
 
     private boolean tryRestartLastRecipe(Identifier machineId) {
-        if (recipeDirty || lastRecipe == null || active != null || runtime.structure().foundMachine() == null) return false;
+        ControllerRuntimeSnapshot runtimeState = runtimeSnapshot();
+        if (recipeDirty || lastRecipe == null || active != null || runtimeState.structure().machine() == null) return false;
         if (!machineId.equals(lastRecipe.machineId())) return false;
         if (lockedRecipeId != null && !lockedRecipeId.equals(lastRecipe.id())) return false;
-        if (lastRecipeStructureVersion != getStructureVersion()
-                || lastRecipeModifierSnapshotVersion != getModifierSnapshotVersion()) return false;
+        if (lastRecipeStructureVersion != runtimeState.structure().version()
+                || lastRecipeModifierSnapshotVersion != runtimeState.modifierVersion()) return false;
         ActiveMachineRecipe next = new ActiveMachineRecipe(lastRecipe, getMaxParallelism());
         RecipeCraftingContext nextContext = contextPool().borrow(next, this);
         try {
@@ -2471,17 +2403,19 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void rememberLastRecipe(MachineRecipe recipe) {
         lastRecipe = recipe;
-        lastRecipeStructureVersion = getStructureVersion();
-        lastRecipeModifierSnapshotVersion = getModifierSnapshotVersion();
+        ControllerRuntimeSnapshot runtimeState = runtimeSnapshot();
+        lastRecipeStructureVersion = runtimeState.structure().version();
+        lastRecipeModifierSnapshotVersion = runtimeState.modifierVersion();
         recipeDirty = false;
     }
 
     private boolean isSearchResultCurrentForFactory(RecipeSearchResult result) {
-        Machine matchedMachine = runtime.structure().foundMachine();
-        return isFormed()
+        ControllerRuntimeSnapshot runtimeState = runtimeSnapshot();
+        Machine matchedMachine = runtimeState.structure().machine();
+        return runtimeState.structure().formed()
                 && matchedMachine != null
                 && matchedMachine.registryName().equals(result.machineId())
-                && getStructureVersion() == result.structureVersion();
+                && runtimeState.structure().version() == result.structureVersion();
     }
 
     private boolean tickActiveRecipe() {
@@ -2491,11 +2425,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 context.refreshStructureVersion();
                 restoredRecipeContext = false;
             } else if (context.isStructureVersionOnlyCurrent()) {
-                context.refreshModifierSnapshot(foundModifierList());
+                context.refreshModifierSnapshot(runtimeSnapshot().foundModifiers().values().stream().flatMap(List::stream).toList());
                 active.refreshTotalTick(context);
             } else {
                 context = new RecipeCraftingContext(this);
-                context.setStructureModifiers(foundModifierList());
+                context.setStructureModifiers(runtimeSnapshot().foundModifiers().values().stream().flatMap(List::stream).toList());
             }
         }
         if (!active.canRunOnConnectedHost(context)) {
@@ -2573,7 +2507,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void failActiveRecipeForInvalidModuleConnection() {
         if (active == null || context == null) return;
-        Machine matchedMachine = runtime.structure().foundMachine();
+        Machine matchedMachine = runtimeSnapshot().structure().machine();
         active.doFailureAction(matchedMachine == null ? null : matchedMachine.failureAction());
         lastFailureUnloc = RecipeCraftingContext.FAILURE_MODULE_CONNECTION;
         if (active.getRecipe().doesCancelRecipeOnPerTickFailure()) {
@@ -2759,7 +2693,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     void playFinishSound() {
-        Machine matchedMachine = runtime.structure().foundMachine();
+        Machine matchedMachine = runtimeSnapshot().structure().machine();
         if (!(level instanceof ServerLevel serverLevel) || matchedMachine == null) return;
         MachineRegistration registration = MachineDefinitions.effectiveSnapshot().get(matchedMachine.registryName());
         SoundEvent sound = registration == null ? null : MachineSoundRegistry.get(registration.finishSoundId());
@@ -2808,7 +2742,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private List<MachineRecipe> recipesForMachine() {
-        Machine configuredMachine = runtime.structure().machine();
+        Machine configuredMachine = runtimeSnapshot().structure().configuredMachine();
         Identifier machineId = configuredMachine == null ? null : configuredMachine.registryName();
         if (machineId == null) return List.of();
         int datapackCount = datapackRecipeCount();
@@ -2842,11 +2776,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private int datapackRecipeCount() {
         if (!(level instanceof ServerLevel sl)) return 0;
+        Machine configuredMachine = runtimeSnapshot().structure().configuredMachine();
         int count = 0;
         for (RecipeHolder<?> holder : sl.recipeAccess().getRecipes()) {
             if (holder.value() instanceof MachineRecipe recipe
-                    && runtime.structure().machine() != null
-                    && recipe.machineId().equals(runtime.structure().machine().registryName())) {
+                    && configuredMachine != null
+                    && recipe.machineId().equals(configuredMachine.registryName())) {
                 count++;
             }
         }
@@ -2874,7 +2809,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
-        output.putInt("matched_structure_stage", runtime.structure().matchedStructureStage());
+        output.putInt("matched_structure_stage", runtimeSnapshot().structure().matchedStage());
         ValueOutput.TypedOutputList<String> levels = output.list("found_levels", Codec.STRING);
         for (MachineLevel foundLevel : runtimeSnapshot().foundLevels().values()) {
             levels.add(foundLevel.id().toString());
@@ -2899,8 +2834,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         super.loadAdditional(input);
         try {
             pendingFactorySchedulerInput = input.childOrEmpty("factory_scheduler");
-            runtime.structure().setMatchedStructureStage(Math.max(0, input.getIntOr("matched_structure_stage", 0)));
-            runtime.structure().requestCheck();
+            runtime.setMatchedStructureStage(Math.max(0, input.getIntOr("matched_structure_stage", 0)));
+            runtime.requestStructureCheck();
             setChanged();
             pausedActive = null;
             pausedContext = null;
@@ -2914,7 +2849,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 MachineLevel foundLevel = MachineLevelRegistry.getLevel(Identifier.parse(id));
                 if (foundLevel != null) restoredLevels.put(foundLevel.typeId(), foundLevel);
             });
-            runtime.components().replaceLevels(restoredLevels);
+            runtime.replaceLevels(restoredLevels);
             lastFailureUnloc = null;
             String lockedRecipeName = input.getStringOr("locked_recipe", "");
             if (!lockedRecipeName.isEmpty()) {
@@ -2945,7 +2880,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             }
             restored.refreshTotalTick(pausedContext == null ? context : pausedContext);
             restoredRecipeContext = true;
-            runtime.structure().requestCheck();
+            runtime.requestStructureCheck();
             setChanged();
         } finally {
             publishRuntimeState();

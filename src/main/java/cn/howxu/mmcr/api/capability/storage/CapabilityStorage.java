@@ -6,4 +6,9 @@ package cn.howxu.mmcr.api.capability.storage;
  * @author howxu <dev@howxu.cn>
  */
 public interface CapabilityStorage {
+    /**
+     * Returns the stable content representation used when publishing capability state.
+     * Mutable storage implementations must include all content that affects capability behavior.
+     */
+    Object contentFingerprint();
 }

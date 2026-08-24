@@ -33,6 +33,11 @@ public final class LongValueStorage extends SnapshotJournal<Long> implements Cap
         return transferLimit;
     }
 
+    @Override
+    public Object contentFingerprint() {
+        return new LongStorageFingerprint(capacity, transferLimit, amount);
+    }
+
     public long insert(long requested, boolean simulate) {
         return insertInternal(requested, simulate, true);
     }
@@ -91,4 +96,6 @@ public final class LongValueStorage extends SnapshotJournal<Long> implements Cap
         if (value < 0) return 0L;
         return Math.min(value, capacity);
     }
+
+    private record LongStorageFingerprint(long capacity, long transferLimit, long amount) { }
 }

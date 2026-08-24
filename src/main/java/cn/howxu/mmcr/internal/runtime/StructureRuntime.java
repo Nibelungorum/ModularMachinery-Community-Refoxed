@@ -90,7 +90,7 @@ public final class StructureRuntime {
         reset(null, false);
     }
 
-    public void reset(@Nullable Machine configuredMachine, boolean forceVersion) {
+    void reset(@Nullable Machine configuredMachine, boolean forceVersion) {
         boolean hadState = foundMachine != null || foundPattern != null || foundCompiledPattern != null
                 || controllerFacing != null || matchedStructureStage != 0 || formed || scan != null
                 || !Objects.equals(machine, configuredMachine);
@@ -140,197 +140,197 @@ public final class StructureRuntime {
                 mismatchDiagnostic, formationFailure, dirty, structureAreaLoaded, criticalChunks);
     }
 
-    public Machine machine() {
+    Machine machine() {
         return machine;
     }
 
-    public void setMachine(@Nullable Machine machine) {
+    void setMachine(@Nullable Machine machine) {
         if (Objects.equals(this.machine, machine)) return;
         this.machine = machine;
         version++;
     }
 
-    public @Nullable Machine foundMachine() {
+    @Nullable Machine foundMachine() {
         return foundMachine;
     }
 
-    public @Nullable BlockArray foundPattern() {
+    @Nullable BlockArray foundPattern() {
         return foundPattern;
     }
 
-    public @Nullable CompiledMachinePattern foundCompiledPattern() {
+    @Nullable CompiledMachinePattern foundCompiledPattern() {
         return foundCompiledPattern;
     }
 
-    public @Nullable Direction controllerFacing() {
+    @Nullable Direction controllerFacing() {
         return controllerFacing;
     }
 
-    public Direction matchedRollFacing() {
+    Direction matchedRollFacing() {
         return matchedRollFacing;
     }
 
-    public int matchedStructureStage() {
+    int matchedStructureStage() {
         return matchedStructureStage;
     }
 
-    public void setMatchedStructureStage(int matchedStructureStage) {
+    void setMatchedStructureStage(int matchedStructureStage) {
         if (this.matchedStructureStage == matchedStructureStage) return;
         this.matchedStructureStage = matchedStructureStage;
         version++;
     }
 
-    public boolean dirty() {
+    boolean dirty() {
         return dirty;
     }
 
-    public void setDirty(boolean dirty) {
+    void setDirty(boolean dirty) {
         this.dirty = dirty;
     }
 
-    public int checkCounter() {
+    int checkCounter() {
         return checkCounter;
     }
 
-    public void setCheckCounter(int checkCounter) {
+    void setCheckCounter(int checkCounter) {
         this.checkCounter = checkCounter;
     }
 
-    public long nextCheckTick() {
+    long nextCheckTick() {
         return nextCheckTick;
     }
 
-    public void setNextCheckTick(long nextCheckTick) {
+    void setNextCheckTick(long nextCheckTick) {
         this.nextCheckTick = nextCheckTick;
     }
 
-    public @Nullable StructureMatcher.ScanState scan() {
+    @Nullable StructureMatcher.ScanState scan() {
         return scan;
     }
 
-    public void setScan(@Nullable StructureMatcher.ScanState scan) {
+    void setScan(@Nullable StructureMatcher.ScanState scan) {
         this.scan = scan;
     }
 
-    public @Nullable Machine scanMachine() {
+    @Nullable Machine scanMachine() {
         return scanMachine;
     }
 
-    public void setScanMachine(@Nullable Machine scanMachine) {
+    void setScanMachine(@Nullable Machine scanMachine) {
         this.scanMachine = scanMachine;
     }
 
-    public @Nullable Object scanCandidate() {
+    @Nullable Object scanCandidate() {
         return scanCandidate;
     }
 
-    public void setScanCandidate(@Nullable Object scanCandidate) {
+    void setScanCandidate(@Nullable Object scanCandidate) {
         this.scanCandidate = scanCandidate;
     }
 
-    public @Nullable StructureMatcher.Mismatch previousMismatch() {
+    @Nullable StructureMatcher.Mismatch previousMismatch() {
         return previousMismatch;
     }
 
-    public void setPreviousMismatch(@Nullable StructureMatcher.Mismatch previousMismatch) {
+    void setPreviousMismatch(@Nullable StructureMatcher.Mismatch previousMismatch) {
         this.previousMismatch = previousMismatch;
     }
 
-    public @Nullable Object previousMismatchPattern() {
+    @Nullable Object previousMismatchPattern() {
         return previousMismatchPattern;
     }
 
-    public void setPreviousMismatchPattern(@Nullable Object previousMismatchPattern) {
+    void setPreviousMismatchPattern(@Nullable Object previousMismatchPattern) {
         this.previousMismatchPattern = previousMismatchPattern;
     }
 
-    public boolean pendingInvalidation() {
+    boolean pendingInvalidation() {
         return pendingInvalidation;
     }
 
-    public void setPendingInvalidation(boolean pendingInvalidation) {
+    void setPendingInvalidation(boolean pendingInvalidation) {
         this.pendingInvalidation = pendingInvalidation;
     }
 
-    public long scanSteppedTick() {
+    long scanSteppedTick() {
         return scanSteppedTick;
     }
 
-    public void setScanSteppedTick(long scanSteppedTick) {
+    void setScanSteppedTick(long scanSteppedTick) {
         this.scanSteppedTick = scanSteppedTick;
     }
 
-    public long scanStartedTick() {
+    long scanStartedTick() {
         return scanStartedTick;
     }
 
-    public void setScanStartedTick(long scanStartedTick) {
+    void setScanStartedTick(long scanStartedTick) {
         this.scanStartedTick = scanStartedTick;
     }
 
-    public boolean checkActive() {
+    boolean checkActive() {
         return checkActive;
     }
 
-    public void setCheckActive(boolean checkActive) {
+    void setCheckActive(boolean checkActive) {
         this.checkActive = checkActive;
     }
 
-    public boolean diagnosticRequested() {
+    boolean diagnosticRequested() {
         return diagnosticRequested;
     }
 
-    public void setDiagnosticRequested(boolean diagnosticRequested) {
+    void setDiagnosticRequested(boolean diagnosticRequested) {
         this.diagnosticRequested = diagnosticRequested;
     }
 
-    public @Nullable UUID diagnosticPlayerId() {
+    @Nullable UUID diagnosticPlayerId() {
         return diagnosticPlayerId;
     }
 
-    public void setDiagnosticPlayerId(@Nullable UUID diagnosticPlayerId) {
+    void setDiagnosticPlayerId(@Nullable UUID diagnosticPlayerId) {
         this.diagnosticPlayerId = diagnosticPlayerId;
     }
 
-    public @Nullable ResourceKey<Level> diagnosticDimension() {
+    @Nullable ResourceKey<Level> diagnosticDimension() {
         return diagnosticDimension;
     }
 
-    public void setDiagnosticDimension(@Nullable ResourceKey<Level> diagnosticDimension) {
+    void setDiagnosticDimension(@Nullable ResourceKey<Level> diagnosticDimension) {
         this.diagnosticDimension = diagnosticDimension;
     }
 
-    public @Nullable PortRequirementSpec.Failure formationFailure() {
+    @Nullable PortRequirementSpec.Failure formationFailure() {
         return formationFailure;
     }
 
-    public void setFormationFailure(@Nullable PortRequirementSpec.Failure formationFailure) {
+    void setFormationFailure(@Nullable PortRequirementSpec.Failure formationFailure) {
         this.formationFailure = formationFailure;
     }
 
-    public @Nullable String mismatchDiagnostic() {
+    @Nullable String mismatchDiagnostic() {
         return mismatchDiagnostic;
     }
 
-    public void setMismatchDiagnostic(@Nullable String mismatchDiagnostic) {
+    void setMismatchDiagnostic(@Nullable String mismatchDiagnostic) {
         this.mismatchDiagnostic = mismatchDiagnostic;
     }
 
-    public @Nullable Object lastStructureError() {
+    @Nullable Object lastStructureError() {
         return lastStructureError;
     }
 
-    public void setLastStructureError(@Nullable Object lastStructureError) {
+    void setLastStructureError(@Nullable Object lastStructureError) {
         this.lastStructureError = lastStructureError;
     }
 
-    public void setFormed(boolean formed) {
+    void setFormed(boolean formed) {
         if (this.formed == formed) return;
         this.formed = formed;
         version++;
     }
 
-    public boolean publishFormationState(Machine machine, BlockArray pattern,
+    boolean publishFormationState(Machine machine, BlockArray pattern,
                                          @Nullable CompiledMachinePattern compiledPattern,
                                          Direction facing, Direction rollFacing, int matchedStage) {
         Direction normalizedRoll = rollFacing == null ? Direction.SOUTH : rollFacing;
@@ -354,7 +354,7 @@ public final class StructureRuntime {
         return changed;
     }
 
-    public boolean publishClientState(@Nullable Machine machine, boolean formed) {
+    boolean publishClientState(@Nullable Machine machine, boolean formed) {
         boolean changed = !Objects.equals(this.machine, machine)
                 || !Objects.equals(this.foundMachine, machine)
                 || this.foundPattern != null
@@ -390,27 +390,79 @@ public final class StructureRuntime {
         return changed;
     }
 
-    public boolean structureAreaLoaded() {
+    boolean structureAreaLoaded() {
         return structureAreaLoaded;
     }
 
-    public void setStructureAreaLoaded(boolean structureAreaLoaded) {
+    void setStructureAreaLoaded(boolean structureAreaLoaded) {
         this.structureAreaLoaded = structureAreaLoaded;
     }
 
-    public Set<ChunkPos> criticalChunks() {
+    Set<ChunkPos> criticalChunks() {
         return criticalChunks;
     }
 
-    public void setCriticalChunks(Set<ChunkPos> criticalChunks) {
+    void setCriticalChunks(Set<ChunkPos> criticalChunks) {
         this.criticalChunks = Set.copyOf(criticalChunks == null ? Set.of() : criticalChunks);
     }
 
-    public List<ChunkPos> criticalChunkList() {
+    List<ChunkPos> criticalChunkList() {
         return criticalChunks.stream().toList();
     }
 
-    public UUID diagnosticPlayerOrNull() {
+    UUID diagnosticPlayerOrNull() {
         return diagnosticPlayerId;
+    }
+
+    boolean hasScan() {
+        return scan != null;
+    }
+
+    int scanCursor() {
+        return scan == null ? -1 : scan.cursor();
+    }
+
+    int scanBatchSize() {
+        return scan == null ? 0 : scan.batchSize();
+    }
+
+    int scanEntryCount() {
+        return scan == null ? 0 : scan.entries().size();
+    }
+
+    long scanVersion() {
+        return scan == null ? Long.MIN_VALUE : scan.structureVersion();
+    }
+
+    @Nullable Direction scanFacing() {
+        return scan == null ? null : scan.frontFacing();
+    }
+
+    Direction scanRollFacing() {
+        return scan == null ? Direction.SOUTH : scan.rollFacing();
+    }
+
+    int scanStage() {
+        return scan == null ? 0 : scan.stageNumber();
+    }
+
+    @Nullable Object scanPattern() {
+        return scan == null ? null : scan.patternIdentity();
+    }
+
+    StructureMatcher.ScanResult stepScan(ServerLevel level, BlockPos controllerPos) {
+        if (scan == null) throw new IllegalStateException("Structure scan is not active");
+        return scan.step(level, controllerPos);
+    }
+
+    void clearScan() {
+        scan = null;
+        scanMachine = null;
+        scanCandidate = null;
+        scanStartedTick = Long.MIN_VALUE;
+    }
+
+    void invalidateScan(StructureMatcher.InvalidationReason reason) {
+        if (scan != null) scan.invalidate(reason);
     }
 }

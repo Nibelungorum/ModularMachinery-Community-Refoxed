@@ -98,7 +98,7 @@ public final class ModuleConnectionCoordinator {
             controllersFor(level, couplerPos, false).forEach(affectedControllers::add);
             coupler.clearConnection();
         }
-        affectedControllers.forEach(affected -> affected.runtime().refreshModuleConnectionState());
+        affectedControllers.forEach(MachineControllerBlockEntity::refreshModuleConnectionState);
     }
 
     public static void enqueueCouplers(ServerLevel level, MachineControllerBlockEntity controller) {
@@ -231,8 +231,8 @@ public final class ModuleConnectionCoordinator {
     }
 
     private static void refreshRuntimeConnectionState(MachineConnection connection) {
-        connection.host().runtime().refreshModuleConnectionState();
-        connection.module().runtime().refreshModuleConnectionState();
+        connection.host().refreshModuleConnectionState();
+        connection.module().refreshModuleConnectionState();
     }
 
     private static void invalidateHost(ServerLevel level, MachineControllerBlockEntity host) {

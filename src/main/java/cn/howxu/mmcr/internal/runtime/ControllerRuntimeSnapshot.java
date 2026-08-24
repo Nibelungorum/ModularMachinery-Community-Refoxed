@@ -32,6 +32,7 @@ public record ControllerRuntimeSnapshot(
         Set<BlockPos> linkedPortPositions,
         ModuleConnectionStatus moduleConnectionStatus,
         int installedModuleCount,
+        ComponentRuntime.CapabilityAggregate capabilityAggregate,
         CraftingStateSnapshot crafting,
         FactorySnapshot factory) {
 
@@ -49,6 +50,8 @@ public record ControllerRuntimeSnapshot(
         moduleConnectionStatus = moduleConnectionStatus == null
                 ? ModuleConnectionStatus.disconnected() : moduleConnectionStatus;
         if (installedModuleCount < 0) throw new IllegalArgumentException("installedModuleCount must not be negative");
+        capabilityAggregate = capabilityAggregate == null
+                ? new ComponentRuntime.CapabilityAggregate(0L, 0L, null, null) : capabilityAggregate;
         crafting = crafting == null ? CraftingStateSnapshot.empty(structure.version(), capabilityVersion, modifierVersion) : crafting;
         factory = factory == null ? FactorySnapshot.empty() : factory;
     }
@@ -58,46 +61,18 @@ public record ControllerRuntimeSnapshot(
     }
 
     public long totalStoredEnergy() {
-        return capabilityAggregate().storedEnergy();
+        return capabilityAggregate.storedEnergy();
     }
 
     public long totalCapacityEnergy() {
-        return capabilityAggregate().energyCapacity();
+        return capabilityAggregate.energyCapacity();
     }
 
     public FluidStack primaryFluid() {
-        return capabilityAggregate().primaryFluid();
+        return capabilityAggregate.primaryFluid();
     }
 
     public FluidStack primaryOutputFluid() {
-        return capabilityAggregate().primaryOutputFluid();
-    }
-
-    private ComponentRuntime.CapabilityAggregate capabilityAggregate() {
-        long storedEnergy = 0L;
-        long energyCapacity = 0L;
-        FluidStack primaryFluid = FluidStack.EMPTY;
-        FluidStack primaryOutputFluid = FluidStack.EMPTY;
-        for (MachineCapability capability : capabilities) {
-            if (capability.storage() instanceof cn.howxu.mmcr.api.capability.storage.LongValueStorage energy) {
-                storedEnergy += energy.amount();
-                energyCapacity += energy.capacity();
-            } else if (capability.storage() instanceof cn.howxu.mmcr.api.capability.storage.ResourceStorage<?> resourceStorage
-                    && resourceStorage.resourceType() == net.neoforged.neoforge.transfer.fluid.FluidResource.class) {
-                for (int slot = 0; slot < resourceStorage.size(); slot++) {
-                    Object resource = resourceStorage.resource(slot);
-                    if (!(resource instanceof net.neoforged.neoforge.transfer.fluid.FluidResource fluidResource)
-                            || fluidResource.isEmpty()) continue;
-                    FluidStack stack = fluidResource.toStack((int) Math.min(resourceStorage.amount(slot), Integer.MAX_VALUE));
-                    if (stack.isEmpty()) continue;
-                    if (capability.ioType() == cn.howxu.mmcr.util.IOType.INPUT && primaryFluid.isEmpty()) {
-                        primaryFluid = stack;
-                    } else if (capability.ioType() == cn.howxu.mmcr.util.IOType.OUTPUT && primaryOutputFluid.isEmpty()) {
-                        primaryOutputFluid = stack;
-                    }
-                }
-            }
-        }
-        return new ComponentRuntime.CapabilityAggregate(storedEnergy, energyCapacity, primaryFluid, primaryOutputFluid);
+        return capabilityAggregate.primaryOutputFluid();
     }
 }

@@ -153,10 +153,10 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
         if (Math.floorMod(controllerLinkCheckCounter++ + worldPosition.asLong(), CONTROLLER_LINK_CHECK_INTERVAL_TICKS) != 0) return;
         boolean changed = linkedControllers.entrySet().removeIf(entry -> {
             BlockPos controllerPos = entry.getKey();
-            return !(level.getBlockState(controllerPos).getBlock() instanceof MachineControllerBlock)
-                    || !(level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller)
-                    || !controller.runtimeSnapshot().structure().formed()
-                    || !controller.hasLinkedPort(worldPosition);
+                    return !(level.getBlockState(controllerPos).getBlock() instanceof MachineControllerBlock)
+                            || !(level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller)
+                            || !controller.runtimeSnapshot().structure().formed()
+                    || !controller.runtimeSnapshot().linkedPortPositions().contains(worldPosition);
         });
         if (changed) {
             refreshLinkedAppearance();

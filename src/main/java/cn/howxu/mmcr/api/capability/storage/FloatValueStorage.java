@@ -23,6 +23,11 @@ public final class FloatValueStorage extends SnapshotJournal<Map<String, Float>>
         return Map.copyOf(values);
     }
 
+    @Override
+    public Object contentFingerprint() {
+        return Map.copyOf(values);
+    }
+
     public void set(String key, float value) {
         if (key == null || key.isBlank() || !Float.isFinite(value)) {
             throw new IllegalArgumentException("invalid value");

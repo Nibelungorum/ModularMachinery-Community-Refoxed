@@ -54,8 +54,8 @@ public final class ComponentRuntime {
         boolean capabilitiesChanged = !capabilityIdentity.equals(nextIdentity);
         this.components = nextComponents;
         if (componentsChanged) stateVersion++;
-        if (!capabilitiesChanged) return;
         this.capabilities = nextCapabilities;
+        if (!capabilitiesChanged) return;
         this.capabilityIdentity = nextIdentity;
         capabilityVersion++;
     }
@@ -148,7 +148,7 @@ public final class ComponentRuntime {
                 : Optional.empty();
     }
 
-    public CapabilityAggregate capabilityAggregate() {
+    CapabilityAggregate capabilityAggregate() {
         return capabilityAggregate(capabilities);
     }
 
@@ -239,40 +239,9 @@ public final class ComponentRuntime {
         }
 
         private static Object storageIdentity(CapabilityStorage storage) {
-            if (storage == null) return null;
-            if (storage instanceof LongValueStorage value) {
-                return new LongStorageIdentity(value.capacity(), value.transferLimit(), value.amount());
-            }
-            if (storage instanceof FloatValueStorage value) {
-                return new FloatStorageIdentity(value.values());
-            }
-            if (storage instanceof ResourceStorage<?> resourceStorage) {
-                List<StorageSlotIdentity> slots = new ArrayList<>();
-                for (int slot = 0; slot < resourceStorage.size(); slot++) {
-                    Object resource = resourceStorage.resource(slot);
-                    long capacity = resource == null
-                            ? resourceStorage.capacity(slot, null)
-                            : resourceStorage.capacityResource(slot, resource);
-                    slots.add(new StorageSlotIdentity(resource, resourceStorage.amount(slot),
-                            capacity));
-                }
-                return new ResourceStorageIdentity(resourceStorage.resourceType().getName(), List.copyOf(slots));
-            }
-            return null;
+            return storage == null ? "<none>" : storage.contentFingerprint();
         }
     }
-
-    private record LongStorageIdentity(long capacity, long transferLimit, long amount) { }
-
-    private record FloatStorageIdentity(Map<String, Float> values) {
-        private FloatStorageIdentity {
-            values = Map.copyOf(values);
-        }
-    }
-
-    private record ResourceStorageIdentity(String resourceType, List<StorageSlotIdentity> slots) { }
-
-    private record StorageSlotIdentity(Object resource, long amount, long capacity) { }
 
     /**
      * Immutable capability-level aggregate used by controller presentation callers.
