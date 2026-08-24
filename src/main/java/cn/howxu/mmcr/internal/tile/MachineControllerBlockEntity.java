@@ -63,6 +63,7 @@ import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.MachineControllerRuntime;
+import cn.howxu.mmcr.internal.runtime.StructureRuntime;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -287,12 +288,51 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 structureDirty, structureAreaLoaded, criticalStructureChunks());
     }
 
+    public StructureRuntime.ExecutionState captureStructureExecutionStateForRuntime() {
+        return new StructureRuntime.ExecutionState(captureStructureSnapshotForRuntime(), structureScan, scanMachine,
+                scanCandidate, previousStructureMismatch, previousStructureMismatchPattern, pendingStructureInvalidation,
+                structureScanSteppedTick, structureScanStartedTick, structureCheckCounter, nextStructureCheckTick,
+                lastFormationFailure, structureDiagnosticRequested, structureDiagnosticPlayerId,
+                structureDiagnosticDimension);
+    }
+
+    public void restoreStructureStateFromRuntime(StructureRuntime.ExecutionState executionState) {
+        if (executionState == null) return;
+        StructureSnapshot snapshot = executionState.snapshot();
+        foundMachine = snapshot.machine();
+        foundPattern = snapshot.pattern();
+        foundCompiledPattern = snapshot.compiledPattern();
+        controllerFacing = snapshot.facing();
+        matchedRollFacing = snapshot.rollFacing();
+        matchedStructureStage = snapshot.matchedStage();
+        structureVersion = snapshot.version();
+        structureDirty = snapshot.dirty();
+        lastStructureError = snapshot.lastStructureError();
+        lastStructureMismatchDiagnostic = snapshot.structureMismatchDiagnostic();
+        criticalStructureChunks().clear();
+        criticalStructureChunks().addAll(snapshot.criticalChunks());
+        structureScan = executionState.scan();
+        scanMachine = executionState.scanMachine();
+        scanCandidate = executionState.scanCandidate() instanceof CandidatePattern candidate ? candidate : null;
+        previousStructureMismatch = executionState.previousMismatch();
+        previousStructureMismatchPattern = executionState.previousMismatchPattern();
+        pendingStructureInvalidation = executionState.pendingInvalidation();
+        structureScanSteppedTick = executionState.scanSteppedTick();
+        structureScanStartedTick = executionState.scanStartedTick();
+        structureCheckCounter = executionState.checkCounter();
+        nextStructureCheckTick = executionState.nextCheckTick();
+        lastFormationFailure = executionState.formationFailure();
+        structureDiagnosticRequested = executionState.diagnosticRequested();
+        structureDiagnosticPlayerId = executionState.diagnosticPlayerId();
+        structureDiagnosticDimension = executionState.diagnosticDimension();
+    }
+
     public StructureSnapshot structureSnapshotFromRuntime() {
         return runtime().structure().snapshot();
     }
 
     private void publishStructureStateToRuntime() {
-        if (runtime != null) runtime.structure().publish(captureStructureSnapshotForRuntime());
+        if (runtime != null) runtime.structure().publish(captureStructureExecutionStateForRuntime());
     }
 
     private void validateRuntimeBoundary(ServerLevel runtimeLevel, BlockPos runtimePos) {

@@ -1,8 +1,16 @@
 package cn.howxu.mmcr.internal.runtime;
 
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.UUID;
 
 /**
  * Structure state boundary used by the controller runtime.
@@ -13,8 +21,39 @@ import net.minecraft.server.level.ServerLevel;
  * @author howxu <dev@howxu.cn>
  */
 public final class StructureRuntime {
+    /**
+     * State transferred across the Minecraft-facing scan bridge.
+     */
+    public record ExecutionState(
+            StructureSnapshot snapshot,
+            @Nullable StructureMatcher.ScanState scan,
+            @Nullable Machine scanMachine,
+            @Nullable Object scanCandidate,
+            @Nullable StructureMatcher.Mismatch previousMismatch,
+            @Nullable Object previousMismatchPattern,
+            boolean pendingInvalidation,
+            long scanSteppedTick,
+            long scanStartedTick,
+            int checkCounter,
+            long nextCheckTick,
+            @Nullable PortRequirementSpec.Failure formationFailure,
+            boolean diagnosticRequested,
+            @Nullable UUID diagnosticPlayerId,
+            @Nullable ResourceKey<Level> diagnosticDimension) {
+
+        public ExecutionState {
+            snapshot = snapshot == null ? StructureSnapshot.empty() : snapshot;
+        }
+
+        private static ExecutionState empty(StructureSnapshot snapshot) {
+            return new ExecutionState(snapshot, null, null, null, null, null,
+                    false, Long.MIN_VALUE, Long.MIN_VALUE, 0, -1L, null, false, null, null);
+        }
+    }
+
     private final MachineControllerBlockEntity controller;
     private StructureSnapshot state = StructureSnapshot.empty();
+    private ExecutionState executionState = ExecutionState.empty(state);
     private boolean authoritative;
 
     public StructureRuntime() {
@@ -23,7 +62,9 @@ public final class StructureRuntime {
 
     public StructureRuntime(MachineControllerBlockEntity controller) {
         this.controller = controller;
-        this.state = controller == null ? StructureSnapshot.empty() : controller.captureStructureSnapshotForRuntime();
+        this.executionState = controller == null
+                ? ExecutionState.empty(state) : controller.captureStructureExecutionStateForRuntime();
+        this.state = executionState.snapshot();
     }
 
     public void requestCheck() {
@@ -32,7 +73,7 @@ public final class StructureRuntime {
             return;
         }
         controller.requestImmediateStructureCheckFromRuntime();
-        publish(controller.captureStructureSnapshotForRuntime());
+        publish(controller.captureStructureExecutionStateForRuntime());
     }
 
     public void onBlockChanged(BlockPos position) {
@@ -41,7 +82,7 @@ public final class StructureRuntime {
             return;
         }
         controller.onStructureBlockChangedFromRuntime(position);
-        publish(controller.captureStructureSnapshotForRuntime());
+        publish(controller.captureStructureExecutionStateForRuntime());
     }
 
     public void tick(ServerLevel level, BlockPos controllerPos) {
@@ -50,11 +91,14 @@ public final class StructureRuntime {
         }
         if (controller == null) throw new IllegalStateException("Structure runtime tick requires a controller");
         controller.tickStructureRuntime(level, controllerPos);
-        publish(controller.captureStructureSnapshotForRuntime());
+        publish(controller.captureStructureExecutionStateForRuntime());
     }
 
     public void check() {
-        if (controller != null) controller.runStructureCheckPassFromRuntime();
+        if (controller == null) throw new IllegalStateException("Structure runtime check requires a controller");
+        controller.restoreStructureStateFromRuntime(executionState);
+        controller.runStructureCheckPassFromRuntime();
+        publish(controller.captureStructureExecutionStateForRuntime());
     }
 
     public boolean formed() {
@@ -70,13 +114,21 @@ public final class StructureRuntime {
     }
 
     public void accept(StructureSnapshot snapshot) {
-        state = snapshot == null ? StructureSnapshot.empty() : snapshot;
-        authoritative = true;
+        accept(ExecutionState.empty(snapshot));
     }
 
     public void publish(StructureSnapshot snapshot) {
-        state = snapshot == null ? StructureSnapshot.empty() : snapshot;
+        publish(ExecutionState.empty(snapshot));
+    }
+
+    public void publish(ExecutionState nextState) {
+        executionState = nextState == null ? ExecutionState.empty(StructureSnapshot.empty()) : nextState;
+        state = executionState.snapshot();
         authoritative = true;
+    }
+
+    private void accept(ExecutionState nextState) {
+        publish(nextState);
     }
 
     public boolean hasAuthoritativeState() {

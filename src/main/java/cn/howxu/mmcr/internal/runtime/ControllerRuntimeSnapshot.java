@@ -8,9 +8,9 @@ import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 
-import java.util.List;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
