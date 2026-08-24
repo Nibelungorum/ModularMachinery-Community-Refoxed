@@ -32,7 +32,7 @@ public final class CraftingStatus {
     }
 
     public static CraftingStatus paused() {
-        return new CraftingStatus(Status.PAUSED, "");
+        return new CraftingStatus(Status.PAUSED, "gui.mmcr.controller.redstone_stopped");
     }
 
     public static CraftingStatus failure(String unlocMessage) {
