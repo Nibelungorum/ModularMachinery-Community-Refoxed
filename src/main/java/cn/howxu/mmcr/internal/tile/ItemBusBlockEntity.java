@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.tile;
 
+import com.mojang.serialization.Codec;
 import cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.BulkItemStorage;
@@ -227,10 +228,22 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
 
         @Override
         public void deserialize(ValueInput input) {
+            if (input.read("Items", Codec.PASSTHROUGH).isEmpty()) {
+                suppressChanges = true;
+                try {
+                    clearStorage();
+                } finally {
+                    suppressChanges = false;
+                }
+                return;
+            }
+            var decodedItems = input.list("Items", ItemStackWithSlot.CODEC);
+            if (decodedItems.isEmpty()) return;
+
             ItemStack[] candidates = new ItemStack[getSlots()];
             boolean[] present = new boolean[getSlots()];
             boolean valid = true;
-            var entries = input.listOrEmpty("Items", ItemStackWithSlot.CODEC);
+            var entries = decodedItems.get();
             for (ItemStackWithSlot entry : entries) {
                 if (entry == null) {
                     valid = false;
@@ -248,13 +261,17 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
 
             suppressChanges = true;
             try {
-                for (int slot = 0; slot < getSlots(); slot++) replace(slot, ItemStack.EMPTY);
+                clearStorage();
                 for (int slot = 0; slot < getSlots(); slot++) {
                     if (present[slot]) replace(slot, candidates[slot]);
                 }
             } finally {
                 suppressChanges = false;
             }
+        }
+
+        private void clearStorage() {
+            for (int slot = 0; slot < getSlots(); slot++) replace(slot, ItemStack.EMPTY);
         }
 
         private boolean canDeserialize(int slot, ItemStack stack) {

@@ -1,8 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
-import cn.howxu.mmcr.registry.PortKinds;
-import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.internal.autoio.AutoIOConfig;
+import cn.howxu.mmcr.registry.ModBlockEntities;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -10,22 +9,19 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
-import net.neoforged.neoforge.items.ItemStackHandler;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Field;
-
-import java.util.TreeMap;
-
 import java.util.stream.Stream;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ItemBusBlockEntityTest {
 
@@ -49,37 +45,53 @@ class ItemBusBlockEntityTest {
         assertThat(normalized.get(DataComponents.CUSTOM_NAME)).isEqualTo(Component.literal("Migrated sword"));
     }
 
+    @Test
+    void handler_respects_item_max_stack_size() {
+        var handler = itemInputBus().getItemStackHandler(null);
+        int itemMax = Items.SNOWBALL.getDefaultInstance().getMaxStackSize();
+
+        ItemStack remainder = handler.insertItem(0, new ItemStack(Items.SNOWBALL, itemMax * 2), false);
+
+        assertThat(remainder.getCount()).isEqualTo(itemMax);
+        assertThat(handler.getStackInSlot(0).getCount()).isEqualTo(itemMax);
+    }
+
+    @Test
+    void setter_rejects_over_capacity_without_clearing_existing_contents() {
+        var handler = itemInputBus().getItemStackHandler(null);
+        ItemStack existing = new ItemStack(Items.IRON_INGOT, 5);
+        handler.setStackInSlot(0, existing);
+        int overCapacity = handler.getSlotLimit(0) + 1;
+
+        assertThatThrownBy(() -> handler.setStackInSlot(0, new ItemStack(Items.IRON_INGOT, overCapacity)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(handler.getStackInSlot(0).getItem()).isEqualTo(existing.getItem());
+        assertThat(handler.getStackInSlot(0).getCount()).isEqualTo(existing.getCount());
+    }
+
+    @Test
+    void malformed_items_input_preserves_existing_contents() {
+        var handler = itemInputBus().getItemStackHandler(null);
+        ItemStack existing = new ItemStack(Items.IRON_INGOT, 5);
+        handler.setStackInSlot(0, existing);
+        CompoundTag malformed = new CompoundTag();
+        malformed.putString("Items", "not an item list");
+
+        handler.deserialize(TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()), malformed));
+
+        assertThat(handler.getStackInSlot(0).getItem()).isEqualTo(existing.getItem());
+        assertThat(handler.getStackInSlot(0).getCount()).isEqualTo(existing.getCount());
+    }
+
     private static ItemInputBusBlockEntity itemInputBus() {
-        try {
-            Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
-            unsafeField.setAccessible(true);
-            sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
-            ItemInputBusBlockEntity bus = (ItemInputBusBlockEntity) unsafe.allocateInstance(ItemInputBusBlockEntity.class);
-            setField(BlockEntity.class, bus, "type", null);
-            setField(BlockEntity.class, bus, "worldPosition", BlockPos.ZERO);
-            setField(BlockEntity.class, bus, "blockState", Blocks.CHEST.defaultBlockState());
-            setField(ItemInputBusBlockEntity.class, bus, "kind", PortKinds.ITEM_INPUT);
-            setField(ItemBusBlockEntity.class, bus, "handler", new ItemStackHandler(1));
-            setField(IOPortBlockEntity.class, bus, "autoIOConfig", new AutoIOConfig());
-            setField(IOPortBlockEntity.class, bus, "autoIOCacheDirty", true);
-            setField(LinkedAppearanceBlockEntity.class, bus, "appearanceBaseTexture", MMCR.id("block/basic_casing"));
-            setField(LinkedAppearanceBlockEntity.class, bus, "linkedControllers", new TreeMap<>(BlockPos::compareTo));
-            setField(LinkedAppearanceBlockEntity.class, bus, "controllerLinkCheckCounter", 0);
-            return bus;
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError("Unable to allocate item input bus", e);
-        }
+        return (ItemInputBusBlockEntity) ModBlockEntities.BES.get("item_input_bus").get().create(
+                BlockPos.ZERO, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
     }
 
     private static void save(ItemBusBlockEntity bus) {
         var output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
                 HolderLookup.Provider.create(Stream.empty()));
         bus.saveAdditional(output);
-    }
-
-    private static void setField(Class<?> type, Object target, String name, Object value) throws ReflectiveOperationException {
-        Field field = type.getDeclaredField(name);
-        field.setAccessible(true);
-        field.set(target, value);
     }
 }
