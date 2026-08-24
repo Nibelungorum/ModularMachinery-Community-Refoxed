@@ -68,13 +68,6 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
         refreshLinkedAppearance();
     }
 
-    @Deprecated
-    public void bindControllerAppearance(BlockPos controllerPos, Identifier texture) {
-        if (controllerPos != null) {
-            linkControllerAppearance(controllerPos, texture);
-        }
-    }
-
     public void setAppearanceBaseTexture(Identifier texture) {
         Identifier resolvedTexture = texture == null ? DEFAULT_APPEARANCE_BASE_TEXTURE : texture;
         if (resolvedTexture.equals(appearanceBaseTexture)) {

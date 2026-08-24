@@ -102,7 +102,6 @@ import org.slf4j.LoggerFactory;
 import com.mojang.serialization.Codec;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -259,35 +258,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         publishStructureStateToRuntime();
     }
 
-    public void serverTickFromRuntime() {
-        serverTickInternal();
-        publishStructureStateToRuntime();
-    }
-
-    public void serverTickFromRuntime(ServerLevel level, BlockPos controllerPos) {
-        validateRuntimeBoundary(level, controllerPos);
-        serverTickFromRuntime();
-    }
-
-    public StructureSnapshot captureStructureSnapshotForRuntime() {
-        BlockState currentState = getBlockState();
-        boolean formed = currentState != null && currentState.hasProperty(MachineControllerBlock.FORMED)
-                && physicalFormed();
-        boolean structureAreaLoaded = getBlockPos() == null || isStructureAreaLoaded();
-        return new StructureSnapshot(foundMachine, foundPattern, foundCompiledPattern, controllerFacing,
-                matchedRollFacing, matchedStructureStage, formed, structureVersion, lastStructureError,
-                lastStructureMismatchDiagnostic, lastFormationFailure,
-                structureDirty, structureAreaLoaded, criticalStructureChunks());
-    }
-
-    public StructureRuntime.ExecutionState captureStructureExecutionStateForRuntime() {
-        return new StructureRuntime.ExecutionState(captureStructureSnapshotForRuntime(), structureScan, scanMachine,
-                scanCandidate, previousStructureMismatch, previousStructureMismatchPattern, pendingStructureInvalidation,
-                structureScanSteppedTick, structureScanStartedTick, structureCheckCounter, nextStructureCheckTick,
-                lastFormationFailure, structureDiagnosticRequested, structureDiagnosticPlayerId,
-                structureDiagnosticDimension);
-    }
-
     public void restoreStructureStateFromRuntime(StructureRuntime.ExecutionState executionState) {
         if (executionState == null) return;
         StructureSnapshot snapshot = executionState.snapshot();
@@ -320,10 +290,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         structureDiagnosticDimension = executionState.diagnosticDimension();
     }
 
-    public StructureSnapshot structureSnapshotFromRuntime() {
-        return runtime().structure().snapshot();
-    }
-
     private void publishStructureStateToRuntime() {
         runtime().structure().publish(captureStructureExecutionStateForRuntime());
     }
@@ -345,25 +311,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (getBlockPos() != null && !getBlockPos().equals(runtimePos)) {
             throw new IllegalArgumentException("Controller runtime position does not match the controller");
         }
-    }
-
-    public List<ProcessingComponent> legacyComponentsForRuntime() {
-        return components == null ? List.of() : List.copyOf(components);
-    }
-
-    public Map<String, List<RecipeModifier>> legacyModifiersForRuntime() {
-        Map<String, List<RecipeModifier>> snapshot = new LinkedHashMap<>();
-        if (foundModifiers == null) return Map.of();
-        for (var entry : foundModifiers.entrySet()) snapshot.put(entry.getKey(), List.copyOf(entry.getValue()));
-        return Collections.unmodifiableMap(snapshot);
-    }
-
-    public Map<Identifier, MachineLevel> legacyLevelsForRuntime() {
-        return foundLevels == null ? Map.of() : Map.copyOf(foundLevels);
-    }
-
-    public Set<BlockPos> legacyLinkedPortPositionsForRuntime() {
-        return Set.copyOf(linkedPortPositions());
     }
 
     private static Identifier machineIdFromState(BlockState state) {
@@ -796,12 +743,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (level == null || level.isClientSide() || isRemoved()) {
             return;
         }
-        if (level instanceof ServerLevel serverLevel) {
-            runtime().serverTick(serverLevel, getBlockPos());
-        } else {
-            // Test and compatibility levels do not expose the ServerLevel boundary.
-            serverTickFromRuntime();
-        }
+        if (level instanceof ServerLevel serverLevel) runtime().serverTick(serverLevel, getBlockPos());
     }
 
     private void serverTickInternal() {

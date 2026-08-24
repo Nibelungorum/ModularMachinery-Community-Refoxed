@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.network.RuntimeContentServerBridge;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
@@ -51,7 +50,7 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
         if (manager.scriptType == ScriptType.STARTUP) {
             MMCREvents.postStartup();
             startupScriptsLoaded = true;
-            MMCR.completeKubeJSStartupIfReady();
+            StartupContentRegistration.completeKubeJSStartupIfReady();
         }
     }
 

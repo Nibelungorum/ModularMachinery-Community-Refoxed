@@ -34,26 +34,6 @@ public final class RuntimeContentRegistration {
                 RuntimeContentRegistration::registerStructures, RuntimeContentRegistration::registerRecipesSource);
     }
 
-    /** @deprecated Use {@link #registerTestStartupContent()} for the pure test startup facade. */
-    @Deprecated
-    public static void registerPublicApiLifecycleForTesting() {
-        registerTestStartupContent();
-    }
-
-    /** Compatibility alias for the production startup test seam. */
-    public static void registerProductionStartupContentForTesting() {
-        registerTestStartupContent();
-    }
-
-    /** @deprecated Use {@link #registerTestStartupContent(Consumer, Consumer, Consumer)}. */
-    @Deprecated
-    public static void registerPublicApiLifecycleForTesting(
-            Consumer<MMCRMachineDefinationsEvent> definitionsSource,
-            Consumer<MMCRMachineStructuresEvent> structuresSource,
-            Consumer<MMCRMachineRecipesEvent> recipesSource) {
-        registerTestStartupContent(definitionsSource, structuresSource, recipesSource);
-    }
-
     /** Pure test startup facade with explicit declaration sources. */
     public static void registerTestStartupContent(
             Consumer<MMCRMachineDefinationsEvent> definitionsSource,
@@ -65,7 +45,7 @@ public final class RuntimeContentRegistration {
     private static void ensureStartupContentRegistered() {
         if (!ContentRegistrationCoordinator.isCommitted()
                 && "NOT_STARTED".equals(StartupContentRegistration.startupPhaseForTesting())) {
-            registerTestStartupContent();
+            StartupContentRegistration.registerProduction();
         }
     }
 

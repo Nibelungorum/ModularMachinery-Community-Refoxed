@@ -11,8 +11,6 @@ import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
-import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
-import cn.howxu.mmcr.api.recipe.helper.EnergyRecipeIo;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -26,13 +24,12 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Registry of requirement handlers used by recipe planning and runtime forwarding.
+ * Registry of requirement handlers used by recipe planning.
  *
  * @author howxu <dev@howxu.cn>
  */
 public final class RequirementHandlerRegistry {
     private static final Map<RequirementType<?>, RequirementHandler<?>> HANDLERS = new ConcurrentHashMap<>();
-    private static final Map<RequirementType<?>, LegacyHandler<?>> LEGACY_HANDLERS = new ConcurrentHashMap<>();
 
     static {
         registerBuiltIns();
@@ -62,35 +59,8 @@ public final class RequirementHandlerRegistry {
         registerBuiltIn(new SmartInterfaceHandler());
     }
 
-    public static boolean simulate(MachineRequirement requirement, RecipeCraftingContext context, int requirementIndex) {
-        return legacyHandler(requirement).simulate(requirement, context, requirementIndex);
-    }
-
-    public static boolean commit(MachineRequirement requirement, RecipeCraftingContext context, int requirementIndex) {
-        return legacyHandler(requirement).commit(requirement, context, requirementIndex);
-    }
-
-    public static int maxInputParallelism(MachineRequirement requirement, RecipeCraftingContext context, int limit) {
-        return legacyHandler(requirement).maxInputParallelism(requirement, context, limit);
-    }
-
-    public static boolean ioTick(MachineRequirement requirement, RecipeCraftingContext context, int requirementIndex) {
-        return legacyHandler(requirement).ioTick(requirement, context, requirementIndex);
-    }
-
-    private static void registerBuiltIn(LegacyHandler<?> handler) {
-        if (HANDLERS.putIfAbsent(handler.type(), handler) == null) {
-            LEGACY_HANDLERS.put(handler.type(), handler);
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private static LegacyHandler<MachineRequirement> legacyHandler(MachineRequirement requirement) {
-        LegacyHandler<?> handler = LEGACY_HANDLERS.get(requirement.type());
-        if (handler == null) {
-            throw new IllegalStateException("Requirement handler does not support runtime forwarding: " + requirement.type().id());
-        }
-        return (LegacyHandler<MachineRequirement>) handler;
+    private static void registerBuiltIn(RequirementHandler<?> handler) {
+        HANDLERS.putIfAbsent(handler.type(), handler);
     }
 
     private static ExecutionStatus blocked(MachineRequirement requirement, String reason) {
@@ -128,25 +98,6 @@ public final class RequirementHandlerRegistry {
     }
 
     private record EnergyAction(MachineCapability capability, long amount) {
-    }
-
-    private interface LegacyHandler<R extends MachineRequirement> extends RequirementHandler<R> {
-        boolean simulate(R requirement, RecipeCraftingContext context, int requirementIndex);
-
-        boolean commit(R requirement, RecipeCraftingContext context, int requirementIndex);
-
-        default int maxInputParallelism(R requirement, RecipeCraftingContext context, int limit) {
-            return -1;
-        }
-
-        default boolean ioTick(R requirement, RecipeCraftingContext context, int requirementIndex) {
-            return true;
-        }
-
-        @Override
-        default RequirementPlan plan(R requirement, List<MachineCapability> capabilities, PlanningContext context) {
-            return blockedPlan(requirement, context, "handler_did_not_prepare_operation");
-        }
     }
 
     private static RequirementPlan planEnergy(EnergyRequirement requirement,
@@ -523,7 +474,7 @@ public final class RequirementHandlerRegistry {
         return chance >= 1F || chance > 0F && Math.random() < chance;
     }
 
-    private static final class ItemHandler implements LegacyHandler<ItemRequirement> {
+    private static final class ItemHandler implements RequirementHandler<ItemRequirement> {
         @Override
         public RequirementType<ItemRequirement> type() {
             return ItemRequirement.TYPE;
@@ -535,36 +486,9 @@ public final class RequirementHandlerRegistry {
             return planItem(requirement, capabilities, context);
         }
 
-        @Override
-        public boolean simulate(ItemRequirement requirement, RecipeCraftingContext context, int requirementIndex) {
-            return requirement.io() == RecipeModifier.IOType.INPUT
-                    ? context.simulateItemInput(requirementIndex, requirement)
-                    : context.simulateItemOutput(requirementIndex, requirement);
-        }
-
-        @Override
-        public boolean commit(ItemRequirement requirement, RecipeCraftingContext context, int requirementIndex) {
-            return requirement.io() == RecipeModifier.IOType.INPUT
-                    ? context.collectItemInputRoute(requirementIndex)
-                    : context.collectItemOutputRoute(requirementIndex);
-        }
-
-        @Override
-        public int maxInputParallelism(ItemRequirement requirement, RecipeCraftingContext context, int limit) {
-            if (requirement.io() != RecipeModifier.IOType.INPUT || requirement.item() == null || requirement.count() <= 0) return -1;
-            if (requirement.consumeChance() == 0F) return Math.max(1, limit);
-            if (!requirement.tags().isEmpty() || !requirement.components().isEmpty()) return -1;
-            try {
-                if (requirement.item().items().count() != 1) return -1;
-            } catch (UnsupportedOperationException ignored) {
-                return -1;
-            }
-            int available = context.countMatchingItemInputs(requirement.item(), List.of());
-            return Math.min(Math.max(1, limit), available / requirement.count());
-        }
     }
 
-    private static final class FluidHandler implements LegacyHandler<FluidRequirement> {
+    private static final class FluidHandler implements RequirementHandler<FluidRequirement> {
         @Override
         public RequirementType<FluidRequirement> type() {
             return FluidRequirement.TYPE;
@@ -576,22 +500,9 @@ public final class RequirementHandlerRegistry {
             return planFluid(requirement, capabilities, context);
         }
 
-        @Override
-        public boolean simulate(FluidRequirement requirement, RecipeCraftingContext context, int requirementIndex) {
-            return requirement.io() == RecipeModifier.IOType.INPUT
-                    ? context.simulateFluidInput(requirementIndex, requirement)
-                    : context.simulateFluidOutput(requirementIndex, requirement);
-        }
-
-        @Override
-        public boolean commit(FluidRequirement requirement, RecipeCraftingContext context, int requirementIndex) {
-            return requirement.io() == RecipeModifier.IOType.INPUT
-                    ? context.collectFluidInputRoute(requirementIndex)
-                    : context.collectFluidOutputRoute(requirementIndex);
-        }
     }
 
-    private static final class EnergyHandler implements LegacyHandler<EnergyRequirement> {
+    private static final class EnergyHandler implements RequirementHandler<EnergyRequirement> {
         @Override
         public RequirementType<EnergyRequirement> type() {
             return EnergyRequirement.TYPE;
@@ -603,32 +514,9 @@ public final class RequirementHandlerRegistry {
             return planEnergy(requirement, capabilities, context);
         }
 
-        @Override
-        public boolean simulate(EnergyRequirement requirement, RecipeCraftingContext context, int requirementIndex) {
-            return requirement.io() == RecipeModifier.IOType.INPUT
-                    ? context.simulateEnergyInput(requirementIndex, requirement)
-                    : context.simulateEnergyOutput(requirementIndex, requirement);
-        }
-
-        @Override
-        public boolean commit(EnergyRequirement requirement, RecipeCraftingContext context, int requirementIndex) {
-            return requirement.io() == RecipeModifier.IOType.INPUT
-                    ? context.collectEnergyInputRoute(requirementIndex)
-                    : context.collectEnergyOutputRoute(requirementIndex);
-        }
-
-        @Override
-        public boolean ioTick(EnergyRequirement requirement, RecipeCraftingContext context, int requirementIndex) {
-            if (requirement.io() == RecipeModifier.IOType.INPUT) {
-                if (EnergyRecipeIo.consumeInputs(context.taggedEnergyStorages(requirement.tags()), requirement.fePerTick(), 1)) return true;
-                return context.simulateEnergyInput(requirementIndex, requirement);
-            }
-            if (EnergyRecipeIo.produceOutputs(context.taggedEnergyOutputs(requirement.tags()), requirement.fePerTick(), 1)) return true;
-            return context.simulateEnergyOutput(requirementIndex, requirement);
-        }
     }
 
-    private static final class SmartInterfaceHandler implements LegacyHandler<SmartInterfaceRequirement> {
+    private static final class SmartInterfaceHandler implements RequirementHandler<SmartInterfaceRequirement> {
         @Override
         public RequirementType<SmartInterfaceRequirement> type() {
             return SmartInterfaceRequirement.TYPE;
@@ -640,22 +528,5 @@ public final class RequirementHandlerRegistry {
             return planSmartInterface(requirement, capabilities, context);
         }
 
-        @Override
-        public boolean simulate(SmartInterfaceRequirement requirement, RecipeCraftingContext context, int requirementIndex) {
-            if (requirement.io() == RecipeModifier.IOType.INPUT) {
-                boolean matches = context.smartInterfaceValue(requirement.interfaceType())
-                        .filter(value -> value >= requirement.minValue() && value <= requirement.maxValue())
-                        .isPresent();
-                if (!matches) context.setRequirementFailure(context.smartInterfaceFailureMessage(requirement.interfaceType()), null);
-                return matches;
-            }
-            return context.hasSmartInterface(requirement.interfaceType());
-        }
-
-        @Override
-        public boolean commit(SmartInterfaceRequirement requirement, RecipeCraftingContext context, int requirementIndex) {
-            return requirement.io() == RecipeModifier.IOType.INPUT
-                    || context.setSmartInterfaceValue(requirement.interfaceType(), requirement.minValue());
-        }
     }
 }

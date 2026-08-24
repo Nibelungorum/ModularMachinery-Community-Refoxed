@@ -47,7 +47,7 @@ public final class ModCapabilities {
                 ITEM_BLOCK,
                 ModBlockEntities.BES.get("factory_controller").get(),
                 (be, side) -> be instanceof FactorySchedulerBlockEntity scheduler
-                        ? new LegacyItemHandlerAdapter(scheduler.getItemStackHandler(side), true, true)
+                        ? new ItemStackResourceHandler(scheduler.getItemStackHandler(side), true, true)
                         : null);
     }
 
@@ -76,7 +76,7 @@ public final class ModCapabilities {
                     ITEM_BLOCK,
                     ModBlockEntities.BES.get(kind.id()).get(),
                     (be, side) -> be instanceof ItemBusBlockEntity ib && ib.isAutoIOSideExposed(side)
-                            ? new LegacyItemHandlerAdapter(ib.getItemStackHandler(side), canInsert, true)
+                            ? new ItemStackResourceHandler(ib.getItemStackHandler(side), canInsert, true)
                             : null);
         } else if (kind.capabilityFactories().contains(CapabilityFactories.FLUID_HATCH)) {
             boolean canInsert = kind.ioType() == IOType.INPUT;
@@ -197,12 +197,12 @@ public final class ModCapabilities {
         }
     }
 
-    private static final class LegacyItemHandlerAdapter extends SnapshotJournal<List<ItemStack>> implements ResourceHandler<ItemResource> {
+    private static final class ItemStackResourceHandler extends SnapshotJournal<List<ItemStack>> implements ResourceHandler<ItemResource> {
         private final ItemStackHandler handler;
         private final boolean canInsert;
         private final boolean canExtract;
 
-        LegacyItemHandlerAdapter(ItemStackHandler handler, boolean canInsert, boolean canExtract) {
+        ItemStackResourceHandler(ItemStackHandler handler, boolean canInsert, boolean canExtract) {
             this.handler = handler;
             this.canInsert = canInsert;
             this.canExtract = canExtract;
