@@ -149,3 +149,10 @@
 - Shared start transaction failures clear `recipeFailure` while publishing the structured runtime failure; pending shared-start invalidation clears the runtime failure first and publishes the resulting idle state.
 - Recipe-thread shared-start transaction failures and pending-start invalidations now synchronize their lane runtime with the factory aggregate immediately. Invalidations clear pending tokens, invalidate the lane runtime, and publish the current controller failure boundary without relying on a later snapshot read.
 - Static verification: CodeGraph/source review, targeted `rg`, and `git diff --check` only; tests and Gradle commands were not run. Test sources and docs other than this report were untouched.
+
+## Wave B Current Re-review Closure
+
+- Factory lane removal, limit trimming, timeout cleanup, duplicate-base replacement, and factory clear now invalidate the owning `RecipeThread`, including pending start state and tokens, before removing the lane. Queued shared start requests therefore fail their existing lane validator and cannot commit after removal.
+- A successful factory lane shared start now synchronizes the lane runtime failure boundary and publishes the current runtime/factory snapshot after clearing the pending request and applying the lane start transition.
+- Factory failure recomputation tracks whether the current or previous aggregate was owned by a factory lane. An initial snapshot without factory failure no longer clears an unrelated single-recipe search fallback; factory-owned failures still synchronize and clear when their lane contribution disappears.
+- Static verification: CodeGraph/source review, targeted `rg`, and `git diff --check` only; tests and Gradle commands were not run.

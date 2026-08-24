@@ -145,11 +145,9 @@ public final class FactoryRuntime {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
         this.controller = controller;
         if (!lanes.isEmpty() && lanes.getFirst().isBaseThread()) return;
-        lanes.removeIf(lane -> {
-            if (!lane.isBaseThread()) return false;
-            removeLaneState(lane);
-            return true;
-        });
+        for (FactoryRecipeThread lane : List.copyOf(lanes)) {
+            if (lane.isBaseThread()) removeLane(lane);
+        }
         lanes.addFirst(FactoryRecipeThread.base(controller));
     }
 
@@ -257,12 +255,11 @@ public final class FactoryRuntime {
     }
 
     public void clear() {
-        for (FactoryRecipeThread lane : List.copyOf(lanes)) lane.runtime().invalidate();
-        lanes.clear();
+        for (FactoryRecipeThread lane : List.copyOf(lanes)) removeLane(lane);
         recipeLocks.clear();
         recipeLockUsed.clear();
         startReservations.clear();
-        failure = null;
+        recomputeFailure();
     }
 
     public void save(ValueOutput output) {
@@ -355,7 +352,7 @@ public final class FactoryRuntime {
     }
 
     private void removeLane(FactoryRecipeThread lane) {
-        lane.runtime().invalidate();
+        lane.invalidate();
         lanes.remove(lane);
         removeLaneState(lane);
     }
@@ -367,13 +364,16 @@ public final class FactoryRuntime {
     }
 
     public void recomputeFailure() {
+        ExecutionStatus previousFailure = failure;
         failure = lanes.stream()
                 .map(FactoryRecipeThread::runtime)
                 .map(CraftingRuntime::failure)
                 .filter(status -> status != null)
                 .findFirst()
                 .orElse(null);
-        if (controller != null) controller.syncFactoryFailure(failure);
+        if (controller != null && (previousFailure != null || failure != null)) {
+            controller.syncFactoryFailure(failure);
+        }
     }
 
     /** Immutable runtime-owned lane snapshot. */

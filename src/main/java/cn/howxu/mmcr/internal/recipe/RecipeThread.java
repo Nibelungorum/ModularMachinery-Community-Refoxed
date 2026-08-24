@@ -116,6 +116,7 @@ public abstract class RecipeThread {
                     if (!isPendingStart(token, next) || !runtime.active()) return;
                     clearPendingStart(token, next);
                     onStarted();
+                    controller.syncRecipeRuntimeFailure(runtime);
                 },
                 () -> isPendingStart(token, next) && domain.equals(controller.resourceDomain()),
                 () -> controller.runtimeSnapshot().structure().version(),
