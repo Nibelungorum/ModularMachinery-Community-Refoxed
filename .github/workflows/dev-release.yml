@@ -125,7 +125,7 @@ jobs:
           version: ${{ steps.version.outputs.version }}
           version-type: beta
           changelog: ${{ steps.notes.outputs.body }}
-          files: build/libs/!(*-@(dev|sources|javadoc)).jar
+          files: build/libs/!(*-@(dev|sources|javadoc|api)).jar
           loaders: neoforge
           environment: client | server
           game-versions: 26.1.2
