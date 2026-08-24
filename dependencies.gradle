@@ -46,15 +46,15 @@ dependencies {
     // sodium
     localRuntime "curse.maven:sodium-394468:8396481"
 
-    // mekanism from howxu maven
-    localRuntime "Mekanism:26.1.2-10.8.0.homebaked:all"
-    implementation "Mekanism:26.1.2-10.8.0.homebaked:api"
+    // mekanism from howxu maven, recently it's unusable
+    localRuntime "mekanism:Mekanism:26.1.2-10.8.0.homebaked"
+    implementation "mekanism:Mekanism:26.1.2-10.8.0.homebaked:api"
 
     // guide me
     implementation "curse.maven:guideme-1173950:8204880"
 
     // patchouli book
-    implementation "curse.maven:patchouli-306770:8404543"
+    // implementation "curse.maven:patchouli-306770:8404543"
 }
 
 dependencies {
