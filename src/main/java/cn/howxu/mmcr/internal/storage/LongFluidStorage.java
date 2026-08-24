@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.storage;
 
+import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.TransferPreconditions;
@@ -13,7 +14,8 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class LongFluidStorage extends SnapshotJournal<LongFluidStorage.Snapshot> implements ResourceHandler<FluidResource> {
+public final class LongFluidStorage extends SnapshotJournal<LongFluidStorage.Snapshot>
+        implements ResourceHandler<FluidResource>, ResourceStorage<FluidResource> {
 
     private final long capacity;
     private FluidResource resource;
@@ -77,7 +79,7 @@ public final class LongFluidStorage extends SnapshotJournal<LongFluidStorage.Sna
 
     public long forceInsert(FluidStack stack, boolean simulate) {
         if (stack == null || stack.isEmpty()) return 0L;
-        return forceInsertAmount(FluidResource.of(stack), stack.getAmount(), simulate);
+        return insertDirect(FluidResource.of(stack), stack.getAmount(), simulate);
     }
 
     public long forceExtract(long max, boolean simulate) {
@@ -94,7 +96,7 @@ public final class LongFluidStorage extends SnapshotJournal<LongFluidStorage.Sna
         return moved;
     }
 
-    private long forceInsertAmount(FluidResource incoming, long requested, boolean simulate) {
+    private long insertDirect(FluidResource incoming, long requested, boolean simulate) {
         if (requested <= 0) return 0L;
         if (incoming.isEmpty()) return 0L;
         long room;
@@ -140,6 +142,24 @@ public final class LongFluidStorage extends SnapshotJournal<LongFluidStorage.Sna
     }
 
     @Override
+    public FluidResource resource(int slot) {
+        checkSlot(slot);
+        return resource;
+    }
+
+    @Override
+    public long amount(int slot) {
+        checkSlot(slot);
+        return amount;
+    }
+
+    @Override
+    public long capacity(int slot, FluidResource resource) {
+        checkSlot(slot);
+        return capacity;
+    }
+
+    @Override
     public boolean isValid(int slot, FluidResource resource) {
         checkSlot(slot);
         TransferPreconditions.checkNonEmpty(resource);
@@ -147,10 +167,11 @@ public final class LongFluidStorage extends SnapshotJournal<LongFluidStorage.Sna
     }
 
     @Override
-    public int insert(int slot, FluidResource resource, int amount, TransactionContext tx) {
+    public long insert(int slot, FluidResource resource, long amount, TransactionContext tx) {
         checkSlot(slot);
-        TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
-        if (amount == 0) return 0;
+        TransferPreconditions.checkNonEmpty(resource);
+        checkNonNegative(amount);
+        if (amount == 0L) return 0L;
         if (!isValid(slot, resource)) return 0;
         long inserted = Math.min(amount, capacity - this.amount);
         if (inserted > 0) {
@@ -158,22 +179,33 @@ public final class LongFluidStorage extends SnapshotJournal<LongFluidStorage.Sna
             if (this.resource.isEmpty()) this.resource = resource;
             this.amount += inserted;
         }
-        return (int) inserted;
+        return inserted;
     }
 
     @Override
-    public int extract(int slot, FluidResource resource, int amount, TransactionContext tx) {
+    public long extract(int slot, FluidResource resource, long amount, TransactionContext tx) {
         checkSlot(slot);
-        TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
-        if (amount == 0 || isEmpty()) return 0;
+        TransferPreconditions.checkNonEmpty(resource);
+        checkNonNegative(amount);
+        if (amount == 0L || isEmpty()) return 0L;
         if (!this.resource.equals(resource)) return 0;
-        int extracted = (int) Math.min(amount, this.amount);
+        long extracted = Math.min(amount, this.amount);
         if (extracted > 0) {
             updateSnapshots(tx);
             this.amount -= extracted;
             if (this.amount == 0) this.resource = FluidResource.EMPTY;
         }
         return extracted;
+    }
+
+    @Override
+    public int insert(int slot, FluidResource resource, int amount, TransactionContext tx) {
+        return (int) insert(slot, resource, (long) amount, tx);
+    }
+
+    @Override
+    public int extract(int slot, FluidResource resource, int amount, TransactionContext tx) {
+        return (int) extract(slot, resource, (long) amount, tx);
     }
 
     @Override
@@ -202,6 +234,10 @@ public final class LongFluidStorage extends SnapshotJournal<LongFluidStorage.Sna
 
     private void checkSlot(int slot) {
         if (slot != 0) throw new IndexOutOfBoundsException(slot);
+    }
+
+    private void checkNonNegative(long amount) {
+        if (amount < 0L) throw new IllegalArgumentException("Expected value to be non-negative: " + amount);
     }
 
     public record Snapshot(FluidResource resource, long amount) {}

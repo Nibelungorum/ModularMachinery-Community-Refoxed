@@ -2,9 +2,12 @@ package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.storage.BulkItemStorage;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.ItemStackWithSlot;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.storage.ValueInput;
@@ -13,6 +16,9 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.ItemStackHandler;
+import net.neoforged.neoforge.transfer.item.ItemResource;
+
+import java.util.function.IntConsumer;
 
 public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
 
@@ -24,15 +30,14 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
         int slots = kind.itemBusSize()
                 .orElseThrow(() -> new IllegalStateException("Item bus missing item size: " + kind.id()))
                 .slots();
-        this.handler = new ItemStackHandler(slots) {
-            @Override
-            protected void onContentsChanged(int slot) {
-                inventoryEmpty = null;
-                markAutoIOCacheDirty();
-                setChanged();
-                notifyControllerOfInputChange();
-            }
-        };
+        this.handler = new StorageItemHandler(slots, this::onContentsChanged);
+    }
+
+    private void onContentsChanged(int slot) {
+        inventoryEmpty = null;
+        markAutoIOCacheDirty();
+        setChanged();
+        notifyControllerOfInputChange();
     }
 
     public IItemHandler getItemHandler(Direction side) { return handler; }
@@ -124,5 +129,108 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
         handler.deserialize(input.childOrEmpty("inventory"));
+    }
+
+    /**
+     * Legacy slot API view backed by long resource storage.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class StorageItemHandler extends ItemStackHandler {
+        private final BulkItemStorage[] storages;
+        private final IntConsumer onChange;
+        private boolean suppressChanges;
+
+        private StorageItemHandler(int slots, IntConsumer onChange) {
+            super(slots);
+            this.onChange = onChange;
+            this.storages = new BulkItemStorage[slots];
+            for (int slot = 0; slot < slots; slot++) {
+                int changedSlot = slot;
+                storages[slot] = new BulkItemStorage(Item.ABSOLUTE_MAX_STACK_SIZE,
+                        () -> storageChanged(changedSlot));
+            }
+        }
+
+        @Override
+        public void setStackInSlot(int slot, ItemStack stack) {
+            validateSlotIndex(slot);
+            replace(slot, stack);
+        }
+
+        @Override
+        public ItemStack getStackInSlot(int slot) {
+            validateSlotIndex(slot);
+            BulkItemStorage storage = storages[slot];
+            if (storage.resource(0).isEmpty()) return ItemStack.EMPTY;
+            return storage.resource(0).toStack((int) Math.min(storage.amount(0), Integer.MAX_VALUE));
+        }
+
+        @Override
+        public ItemStack insertItem(int slot, ItemStack stack, boolean simulate) {
+            if (stack.isEmpty()) return ItemStack.EMPTY;
+            validateSlotIndex(slot);
+            if (!isItemValid(slot, stack)) return stack;
+            ItemResource resource = ItemResource.of(stack);
+            long inserted = storages[slot].insert(resource, stack.getCount(), simulate);
+            return inserted == stack.getCount()
+                    ? ItemStack.EMPTY
+                    : stack.copyWithCount(stack.getCount() - (int) inserted);
+        }
+
+        @Override
+        public ItemStack extractItem(int slot, int amount, boolean simulate) {
+            if (amount <= 0) return ItemStack.EMPTY;
+            validateSlotIndex(slot);
+            ItemResource resource = storages[slot].resource(0);
+            if (resource.isEmpty()) return ItemStack.EMPTY;
+            long extracted = storages[slot].extract(resource, amount, simulate);
+            return extracted == 0L ? ItemStack.EMPTY : resource.toStack((int) extracted);
+        }
+
+        @Override
+        public int getSlotLimit(int slot) {
+            validateSlotIndex(slot);
+            return (int) Math.min(storages[slot].capacity(0, null), Integer.MAX_VALUE);
+        }
+
+        @Override
+        public boolean isItemValid(int slot, ItemStack stack) {
+            validateSlotIndex(slot);
+            return true;
+        }
+
+        @Override
+        public void serialize(ValueOutput output) {
+            ValueOutput.TypedOutputList<ItemStackWithSlot> itemList = output.list("Items", ItemStackWithSlot.CODEC);
+            for (int slot = 0; slot < getSlots(); slot++) {
+                ItemStack stack = getStackInSlot(slot);
+                if (!stack.isEmpty()) itemList.add(new ItemStackWithSlot(slot, stack));
+            }
+            output.putInt("Size", getSlots());
+        }
+
+        @Override
+        public void deserialize(ValueInput input) {
+            suppressChanges = true;
+            try {
+                for (int slot = 0; slot < getSlots(); slot++) replace(slot, ItemStack.EMPTY);
+                input.listOrEmpty("Items", ItemStackWithSlot.CODEC).forEach(slot -> {
+                    if (slot.isValidInContainer(getSlots())) replace(slot.slot(), slot.stack());
+                });
+            } finally {
+                suppressChanges = false;
+            }
+        }
+
+        private void replace(int slot, ItemStack stack) {
+            ItemResource current = storages[slot].resource(0);
+            if (!current.isEmpty()) storages[slot].extract(current, Long.MAX_VALUE, false);
+            if (!stack.isEmpty()) storages[slot].insert(ItemResource.of(stack), stack.getCount(), false);
+        }
+
+        private void storageChanged(int slot) {
+            if (!suppressChanges) onChange.accept(slot);
+        }
     }
 }

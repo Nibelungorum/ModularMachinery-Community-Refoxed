@@ -1,0 +1,102 @@
+package cn.howxu.mmcr.internal.storage;
+
+import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
+import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.transfer.energy.EnergyHandler;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class LongResourceStorageTest {
+    @BeforeAll
+    static void setup() throws Exception {
+        TestBootstrap.bootstrap();
+    }
+
+    @Test
+    void value_storage_clamps_to_capacity_and_transfer_limit() {
+        LongValueStorage storage = new LongValueStorage(50L, 100L, () -> {});
+
+        assertThat(storage.insert(100L, false)).isEqualTo(50L);
+        assertThat(storage.amount()).isEqualTo(50L);
+
+        LongValueStorage limited = new LongValueStorage(100L, 30L, () -> {});
+        assertThat(limited.insert(100L, false)).isEqualTo(30L);
+        assertThat(limited.amount()).isEqualTo(30L);
+    }
+
+    @Test
+    void value_storage_clamps_amount_to_capacity() {
+        LongValueStorage storage = new LongValueStorage(100L, 100L, () -> {});
+
+        storage.setAmount(150L);
+
+        assertThat(storage.amount()).isEqualTo(100L);
+    }
+
+    @Test
+    void transaction_rollback_restores_fluid_amount_and_resource() {
+        LongFluidStorage storage = new LongFluidStorage(100L, () -> {});
+        FluidResource water = FluidResource.of(Fluids.WATER);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(storage.insert(0, water, 40L, transaction)).isEqualTo(40L);
+            assertThat(storage.amount(0)).isEqualTo(40L);
+        }
+
+        assertThat(storage.amount(0)).isZero();
+        assertThat(storage.resource(0)).isEqualTo(FluidResource.EMPTY);
+    }
+
+    @Test
+    void transaction_commit_keeps_fluid_amount_and_resource() {
+        LongFluidStorage storage = new LongFluidStorage(100L, () -> {});
+        FluidResource water = FluidResource.of(Fluids.WATER);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(storage.insert(0, water, 40L, transaction)).isEqualTo(40L);
+            transaction.commit();
+        }
+
+        assertThat(storage.amount(0)).isEqualTo(40L);
+        assertThat(storage.resource(0)).isEqualTo(water);
+    }
+
+    @Test
+    void extracting_the_last_fluid_clears_the_resource() {
+        LongFluidStorage storage = new LongFluidStorage(100L, () -> {});
+        FluidResource water = FluidResource.of(Fluids.WATER);
+        storage.setContents(water, 40L);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(storage.extract(0, water, 40L, transaction)).isEqualTo(40L);
+            transaction.commit();
+        }
+        assertThat(storage.amount(0)).isZero();
+        assertThat(storage.resource(0)).isEqualTo(FluidResource.EMPTY);
+    }
+
+    @Test
+    void fluid_matching_uses_resource_identity_and_energy_has_no_resource_filter() {
+        LongFluidStorage fluids = new LongFluidStorage(100L, () -> {});
+        FluidResource water = FluidResource.of(Fluids.WATER);
+        fluids.setContents(water, 10L);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(fluids.insert(0, FluidResource.of(Fluids.WATER), 1L, transaction)).isEqualTo(1L);
+            transaction.commit();
+        }
+        assertThat(fluids.amount(0)).isEqualTo(11L);
+
+        EnergyHandler energy = new LongEnergyStorage(100L, 20L, () -> {});
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(energy.insert(100, transaction)).isEqualTo(20);
+            transaction.commit();
+        }
+        assertThat(energy.getAmountAsLong()).isEqualTo(20L);
+    }
+}

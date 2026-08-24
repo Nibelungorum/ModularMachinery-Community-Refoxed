@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.storage;
 
+import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import net.neoforged.neoforge.transfer.TransferPreconditions;
 import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
@@ -11,23 +12,18 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
  * @author howxu <dev@howxu.cn>
  */
 public final class LongEnergyStorage extends SnapshotJournal<Long> implements EnergyHandler {
-
-    private final long capacity;
+    private final LongValueStorage storage;
     private final long transferLimit;
-    private long amount;
     private final Runnable onChange;
 
     public LongEnergyStorage(long capacity, long transferLimit, Runnable onChange) {
-        if (capacity < 0) throw new IllegalArgumentException("capacity must be non-negative");
-        if (transferLimit < 0) throw new IllegalArgumentException("transferLimit must be non-negative");
-        this.capacity = capacity;
+        this.storage = new LongValueStorage(capacity, transferLimit, onChange);
         this.transferLimit = transferLimit;
-        this.amount = 0L;
         this.onChange = onChange == null ? () -> {} : onChange;
     }
 
     public long getCapacityAsLong() {
-        return capacity;
+        return storage.capacity();
     }
 
     public long getTransferLimit() {
@@ -35,32 +31,24 @@ public final class LongEnergyStorage extends SnapshotJournal<Long> implements En
     }
 
     public long getAmountAsLong() {
-        return amount;
+        return storage.amount();
     }
 
     public void setAmount(long value) {
-        amount = clamp(value);
-        onChange.run();
+        storage.setAmount(value);
     }
 
     public long forceInsert(long requested, boolean simulate) {
-        if (requested <= 0) return 0L;
-        long room = capacity - amount;
-        long moved = Math.min(requested, room);
-        if (!simulate && moved > 0) {
-            amount += moved;
-            onChange.run();
-        }
+        if (requested <= 0L) return 0L;
+        long moved = Math.min(requested, storage.capacity() - storage.amount());
+        if (!simulate && moved > 0L) storage.setAmount(storage.amount() + moved);
         return moved;
     }
 
     public long forceExtract(long requested, boolean simulate) {
-        if (requested <= 0) return 0L;
-        long moved = Math.min(requested, amount);
-        if (!simulate && moved > 0) {
-            amount -= moved;
-            onChange.run();
-        }
+        if (requested <= 0L) return 0L;
+        long moved = Math.min(requested, storage.amount());
+        if (!simulate && moved > 0L) storage.setAmount(storage.amount() - moved);
         return moved;
     }
 
@@ -69,7 +57,7 @@ public final class LongEnergyStorage extends SnapshotJournal<Long> implements En
         TransferPreconditions.checkNonNegative(amount);
         if (amount == 0) return 0;
         updateSnapshots(tx);
-        return (int) Math.min(Integer.MAX_VALUE, forceInsert(Math.min(amount, transferLimit), false));
+        return (int) storage.insert(amount, false);
     }
 
     @Override
@@ -77,30 +65,23 @@ public final class LongEnergyStorage extends SnapshotJournal<Long> implements En
         TransferPreconditions.checkNonNegative(amount);
         if (amount == 0) return 0;
         updateSnapshots(tx);
-        return (int) Math.min(Integer.MAX_VALUE, forceExtract(Math.min(amount, transferLimit), false));
+        return (int) storage.extract(amount, false);
     }
 
     @Override
     protected Long createSnapshot() {
-        return amount;
+        return storage.amount();
     }
 
     @Override
     protected void revertToSnapshot(Long snapshot) {
-        amount = snapshot == null ? 0L : snapshot;
-        onChange.run();
+        storage.setAmount(snapshot == null ? 0L : snapshot);
     }
 
     @Override
     protected void onRootCommit(Long originalState) {
-        if (originalState == null || originalState != amount) {
+        if (originalState == null || originalState != storage.amount()) {
             onChange.run();
         }
-    }
-
-    private long clamp(long value) {
-        if (value < 0) return 0;
-        if (value > capacity) return capacity;
-        return value;
     }
 }
