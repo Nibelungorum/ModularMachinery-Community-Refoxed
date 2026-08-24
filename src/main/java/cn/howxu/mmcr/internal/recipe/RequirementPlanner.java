@@ -57,18 +57,32 @@ public final class RequirementPlanner {
                             context.allowPartialOutputs(), context.reservations()));
             if (!requirementPlan.successful()) return new PlanningResult(null, requirementPlan.failure());
             parallelism = Math.min(parallelism, requirementPlan.maxParallelism());
-            plans.add(requirementPlan);
+            plans.add(requirementPlan.preparedAt(context.requestedParallelism()));
         }
         if (parallelism <= 0) {
             return new PlanningResult(null, failure(requirements.isEmpty() ? null : requirements.getFirst()));
         }
         ExecutionStatus materializationFailure = null;
         for (int candidate = parallelism; candidate > 0; candidate--) {
-            PlanningReservations reservations = new PlanningReservations();
+            PlanningReservations reservations = context.reservations().copy();
+            boolean reservationsAvailable = true;
+            for (int index = 0; index < plans.size(); index++) {
+                ExecutionStatus reservationFailure = plans.get(index).reserve(candidate, reservations);
+                if (reservationFailure != null) {
+                    materializationFailure = reservationFailure;
+                    reservationsAvailable = false;
+                    break;
+                }
+            }
+            if (!reservationsAvailable) continue;
+
+            PlanningReservations materializationReservations = context.reservations().copy();
             List<RequirementPlan> materialized = new ArrayList<>(plans.size());
             boolean successful = true;
-            for (RequirementPlan plan : plans) {
-                RequirementPlan resolved = plan.materialize(candidate, reservations);
+            for (int index = 0; index < plans.size(); index++) {
+                RequirementPlan plan = plans.get(index);
+                RequirementPlan resolved = plan.materialize(candidate, materializationReservations,
+                        failure(requirements.get(index), "unsafe_operation_parallelism"));
                 if (!resolved.successful()) {
                     materializationFailure = resolved.failure();
                     successful = false;
@@ -90,6 +104,8 @@ public final class RequirementPlanner {
         return capabilities.stream()
                 .filter(capability -> type.equals(capability.view().type()))
                 .filter(capability -> direction == capability.view().ioType())
+                .filter(capability -> requirement.tags().isEmpty()
+                        || requirement.tags().stream().anyMatch(capability.view()::matchesTag))
                 .toList();
     }
 
@@ -101,9 +117,13 @@ public final class RequirementPlanner {
     }
 
     private static @org.jetbrains.annotations.Nullable ExecutionStatus failure(MachineRequirement requirement) {
+        return failure(requirement, null);
+    }
+
+    private static @org.jetbrains.annotations.Nullable ExecutionStatus failure(MachineRequirement requirement, String reason) {
         if (requirement == null) return null;
         return new ExecutionStatus(requirement.type().id(),
                 cn.howxu.mmcr.api.capability.status.StatusSeverity.BLOCKED,
-                requirement.type().id(), java.util.Map.of());
+                requirement.type().id(), reason == null ? java.util.Map.of() : java.util.Map.of("reason", reason));
     }
 }

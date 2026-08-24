@@ -107,6 +107,13 @@ public final class RequirementHandlerRegistry {
         return new RequirementPlan(context.requirementIndex(), maxParallelism, List.of(), null, factory);
     }
 
+    private static RequirementPlan deferredPlan(MachineRequirement requirement, PlanningContext context,
+                                                int maxParallelism, RequirementPlan.OperationFactory factory,
+                                                RequirementPlan.ReservationFactory reservationFactory) {
+        return new RequirementPlan(context.requirementIndex(), maxParallelism, List.of(), null,
+                factory, reservationFactory);
+    }
+
     private static ResourceStorage<?> resourceStorage(MachineCapability capability, Class<?> resourceType) {
         return capability.storage() instanceof ResourceStorage<?> storage
                 && storage.resourceType().equals(resourceType) ? storage : null;
@@ -153,21 +160,10 @@ public final class RequirementHandlerRegistry {
         if (maximum <= 0) return blockedPlan(requirement, context, "insufficient_energy");
         return deferredPlan(requirement, context, maximum,
                 (parallelism, reservations) -> {
-                    List<CapabilityOperation> operations = new ArrayList<>();
-                    for (int batch = 0; batch < parallelism; batch++) {
-                        List<EnergyAction> actions = reserveEnergyBatch(requirement.fePerTick(), insert,
-                                capabilities, reservations);
-                        if (actions == null) {
-                            return new RequirementPlan.OperationPlan(List.of(), blocked(requirement, "insufficient_energy"));
-                        }
-                        for (EnergyAction action : actions) {
-                            operations.add(action.capability().prepare(new CapabilityRequests.ValueRequest(
-                                    action.capability().view().type(), action.capability().view().ioType(),
-                                    parallelism, action.amount(), insert)));
-                        }
-                    }
-                    return new RequirementPlan.OperationPlan(operations, null);
-                });
+                    return planEnergyOperations(requirement, capabilities, parallelism, reservations, insert, true);
+                },
+                (parallelism, reservations) -> planEnergyOperations(
+                        requirement, capabilities, parallelism, reservations, insert, false).failure());
     }
 
     private static RequirementPlan planItem(ItemRequirement requirement,
@@ -182,8 +178,12 @@ public final class RequirementHandlerRegistry {
         }
         boolean[] consumed = requirement.io() == RecipeModifier.IOType.INPUT
                 ? consumeDecisions(requirement.consumeChance(), parallelism) : new boolean[parallelism];
-        int maximum = itemMaximum(requirement, capabilities, parallelism, consumed);
-        if (maximum <= 0) return blockedPlan(requirement, context, "insufficient_resource");
+        int maximum = itemMaximum(requirement, capabilities, parallelism, consumed, context.allowPartialOutputs());
+        if (maximum <= 0) {
+            return blockedPlan(requirement, context,
+                    requirement.io() == RecipeModifier.IOType.OUTPUT && context.allowPartialOutputs()
+                            ? "no_output_capacity" : "insufficient_resource");
+        }
         if (requirement.io() == RecipeModifier.IOType.INPUT && requirement.consumeChance() <= 0F) {
             return new RequirementPlan(context.requirementIndex(), maximum, List.of(), null);
         }
@@ -192,7 +192,11 @@ public final class RequirementHandlerRegistry {
         }
         return deferredPlan(requirement, context, maximum,
                 (finalParallelism, reservations) -> planItemOperations(
-                        requirement, capabilities, finalParallelism, consumed, reservations));
+                        requirement, capabilities, finalParallelism, consumed, reservations,
+                        context.allowPartialOutputs(), true),
+                (finalParallelism, reservations) -> planItemOperations(
+                        requirement, capabilities, finalParallelism, consumed, reservations,
+                        context.allowPartialOutputs(), false).failure());
     }
 
     private static RequirementPlan planFluid(FluidRequirement requirement,
@@ -202,14 +206,22 @@ public final class RequirementHandlerRegistry {
         if (requirement.io() == RecipeModifier.IOType.OUTPUT && !shouldProduce(requirement.chance())) {
             return new RequirementPlan(context.requirementIndex(), parallelism, List.of(), null);
         }
-        int maximum = fluidMaximum(requirement, capabilities, parallelism);
-        if (maximum <= 0) return blockedPlan(requirement, context, "insufficient_resource");
+        int maximum = fluidMaximum(requirement, capabilities, parallelism, context.allowPartialOutputs());
+        if (maximum <= 0) {
+            return blockedPlan(requirement, context,
+                    requirement.io() == RecipeModifier.IOType.OUTPUT && context.allowPartialOutputs()
+                            ? "no_output_capacity" : "insufficient_resource");
+        }
         if (requirement.io() == RecipeModifier.IOType.OUTPUT && requirement.stack().isEmpty()) {
             return new RequirementPlan(context.requirementIndex(), maximum, List.of(), null);
         }
         return deferredPlan(requirement, context, maximum,
                 (finalParallelism, reservations) -> planFluidOperations(
-                        requirement, capabilities, finalParallelism, reservations));
+                        requirement, capabilities, finalParallelism, reservations,
+                        context.allowPartialOutputs(), true),
+                (finalParallelism, reservations) -> planFluidOperations(
+                        requirement, capabilities, finalParallelism, reservations,
+                        context.allowPartialOutputs(), false).failure());
     }
 
     private static RequirementPlan planSmartInterface(SmartInterfaceRequirement requirement,
@@ -236,7 +248,7 @@ public final class RequirementHandlerRegistry {
     }
 
     private static int itemMaximum(ItemRequirement requirement, List<MachineCapability> capabilities,
-                                   int requested, boolean[] consumed) {
+                                   int requested, boolean[] consumed, boolean allowPartialOutputs) {
         if (requirement.io() == RecipeModifier.IOType.INPUT) {
             long available = matchingItemAmount(requirement, capabilities);
             if (requirement.count() <= 0) return requested;
@@ -253,6 +265,7 @@ public final class RequirementHandlerRegistry {
             return maximum;
         }
         ItemStack stack = requirement.stack(null);
+        if (allowPartialOutputs && stack.isEmpty()) return 0;
         if (stack.isEmpty() || stack.getCount() <= 0) return requested;
         long capacity = 0L;
         ItemResource resource = ItemResource.of(stack);
@@ -264,13 +277,16 @@ public final class RequirementHandlerRegistry {
                 if (storage.amount(slot) > 0L && current instanceof ItemResource existing && !existing.equals(resource)) continue;
                 if (!storage.isValidResource(slot, resource)) continue;
                 long room = Math.max(0L, storage.capacityResource(slot, resource) - storage.amount(slot));
-                capacity = saturatingAdd(capacity, Math.min(room, resource.getMaxStackSize()));
+                capacity = saturatingAdd(capacity, room);
             }
         }
-        return (int) Math.min(requested, capacity / stack.getCount());
+        return allowPartialOutputs
+                ? capacity > 0L ? requested : 0
+                : (int) Math.min(requested, capacity / stack.getCount());
     }
 
-    private static int fluidMaximum(FluidRequirement requirement, List<MachineCapability> capabilities, int requested) {
+    private static int fluidMaximum(FluidRequirement requirement, List<MachineCapability> capabilities,
+                                    int requested, boolean allowPartialOutputs) {
         if (requirement.io() == RecipeModifier.IOType.INPUT) {
             if (requirement.fluid() == null || requirement.amount() <= 0) return 0;
             long available = 0L;
@@ -287,6 +303,7 @@ public final class RequirementHandlerRegistry {
             return (int) Math.min(requested, available / requirement.amount());
         }
         FluidStack stack = requirement.stack();
+        if (allowPartialOutputs && stack.isEmpty()) return 0;
         if (stack.isEmpty() || stack.getAmount() <= 0) return requested;
         FluidResource resource = FluidResource.of(stack);
         long capacity = 0L;
@@ -301,13 +318,17 @@ public final class RequirementHandlerRegistry {
                         Math.max(0L, storage.capacityResource(slot, resource) - storage.amount(slot)));
             }
         }
-        return (int) Math.min(requested, capacity / stack.getAmount());
+        return allowPartialOutputs
+                ? capacity > 0L ? requested : 0
+                : (int) Math.min(requested, capacity / stack.getAmount());
     }
 
     private static RequirementPlan.OperationPlan planItemOperations(ItemRequirement requirement,
-                                                                      List<MachineCapability> capabilities,
-                                                                      int parallelism, boolean[] consumed,
-                                                                      PlanningReservations reservations) {
+                                                                       List<MachineCapability> capabilities,
+                                                                       int parallelism, boolean[] consumed,
+                                                                       PlanningReservations reservations,
+                                                                       boolean allowPartialOutputs,
+                                                                       boolean materialize) {
         long batches = requirement.io() == RecipeModifier.IOType.INPUT
                 ? consumedPrefix(consumed, parallelism) : parallelism;
         long amount = requirement.io() == RecipeModifier.IOType.INPUT
@@ -336,7 +357,7 @@ public final class RequirementHandlerRegistry {
                 } else {
                     if (currentAmount > 0L && (! (current instanceof ItemResource resource) || !resource.equals(requested))) continue;
                     if (!storage.isValidResource(slot, requested)) continue;
-                    long capacity = Math.min(storage.capacityResource(slot, requested), requested.getMaxStackSize());
+                    long capacity = storage.capacityResource(slot, requested);
                     long moved = Math.min(remaining, Math.max(0L, capacity - currentAmount));
                     if (moved > 0L && reservations.reserveInsert(storage, slot, requested, moved)) {
                         actions.add(new CapabilityRequests.ResourceAction<>(slot, requested, moved, true));
@@ -347,14 +368,20 @@ public final class RequirementHandlerRegistry {
             if (!actions.isEmpty()) actionMap.put(capability, actions);
             if (remaining == 0L) break;
         }
-        if (remaining > 0L) return new RequirementPlan.OperationPlan(List.of(), blocked(requirement, "insufficient_resource"));
-        return resourceOperations(actionMap, parallelism);
+        if (remaining > 0L && !(allowPartialOutputs && requirement.io() == RecipeModifier.IOType.OUTPUT)) {
+            return new RequirementPlan.OperationPlan(List.of(), blocked(requirement, "insufficient_resource"));
+        }
+        if (actionMap.isEmpty()) return new RequirementPlan.OperationPlan(List.of(),
+                blocked(requirement, "no_output_capacity"));
+        return resourceOperations(actionMap, parallelism, materialize);
     }
 
     private static RequirementPlan.OperationPlan planFluidOperations(FluidRequirement requirement,
-                                                                      List<MachineCapability> capabilities,
-                                                                      int parallelism,
-                                                                      PlanningReservations reservations) {
+                                                                       List<MachineCapability> capabilities,
+                                                                       int parallelism,
+                                                                       PlanningReservations reservations,
+                                                                       boolean allowPartialOutputs,
+                                                                       boolean materialize) {
         long amount = requirement.io() == RecipeModifier.IOType.INPUT
                 ? scaled(requirement.amount(), parallelism)
                 : scaled(requirement.stack().getAmount(), parallelism);
@@ -393,16 +420,46 @@ public final class RequirementHandlerRegistry {
             if (!actions.isEmpty()) actionMap.put(capability, actions);
             if (remaining == 0L) break;
         }
-        if (remaining > 0L) return new RequirementPlan.OperationPlan(List.of(), blocked(requirement, "insufficient_resource"));
-        return resourceOperations(actionMap, parallelism);
+        if (remaining > 0L && !(allowPartialOutputs && requirement.io() == RecipeModifier.IOType.OUTPUT)) {
+            return new RequirementPlan.OperationPlan(List.of(), blocked(requirement, "insufficient_resource"));
+        }
+        if (actionMap.isEmpty()) return new RequirementPlan.OperationPlan(List.of(),
+                blocked(requirement, "no_output_capacity"));
+        return resourceOperations(actionMap, parallelism, materialize);
     }
 
     private static <R> RequirementPlan.OperationPlan resourceOperations(
-            Map<MachineCapability, List<CapabilityRequests.ResourceAction<R>>> actionMap, int parallelism) {
-        List<CapabilityOperation> operations = actionMap.entrySet().stream()
+            Map<MachineCapability, List<CapabilityRequests.ResourceAction<R>>> actionMap,
+            int parallelism, boolean materialize) {
+        List<CapabilityOperation> operations = materialize
+                ? actionMap.entrySet().stream()
                 .map(entry -> entry.getKey().prepare(new CapabilityRequests.ResourceRequest<>(
                         entry.getKey().view().type(), entry.getKey().view().ioType(), parallelism, entry.getValue())))
-                .toList();
+                .toList()
+                : List.of();
+        return new RequirementPlan.OperationPlan(operations, null);
+    }
+
+    private static RequirementPlan.OperationPlan planEnergyOperations(EnergyRequirement requirement,
+                                                                       List<MachineCapability> capabilities,
+                                                                       int parallelism,
+                                                                       PlanningReservations reservations,
+                                                                       boolean insert,
+                                                                       boolean materialize) {
+        List<CapabilityOperation> operations = new ArrayList<>();
+        for (int batch = 0; batch < parallelism; batch++) {
+            List<EnergyAction> actions = reserveEnergyBatch(requirement.fePerTick(), insert,
+                    capabilities, reservations);
+            if (actions == null) {
+                return new RequirementPlan.OperationPlan(List.of(), blocked(requirement, "insufficient_energy"));
+            }
+            if (!materialize) continue;
+            for (EnergyAction action : actions) {
+                operations.add(action.capability().prepare(new CapabilityRequests.ValueRequest(
+                        action.capability().view().type(), action.capability().view().ioType(),
+                        parallelism, action.amount(), insert)));
+            }
+        }
         return new RequirementPlan.OperationPlan(operations, null);
     }
 

@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
+import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
@@ -42,8 +43,18 @@ import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import net.minecraft.world.level.material.Fluids;
 import cn.howxu.mmcr.internal.storage.BulkItemStorage;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
+import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
+import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
+import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
+import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.PortKinds;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -58,6 +69,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RequirementPlannerTest {
     private static final RequirementType<TestRequirement> TYPE = new RequirementType<>(
             Identifier.fromNamespaceAndPath("mmcr_test", "planner_requirement"));
+    private static final RequirementType<TestRequirement> ROLLBACK_FAILURE_TYPE = new RequirementType<>(
+            Identifier.fromNamespaceAndPath("mmcr_test", "rollback_failure"));
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -76,9 +89,10 @@ class RequirementPlannerTest {
             public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
                                         PlanningContext context) {
                 int limit = capabilities.stream().mapToInt(capability -> ((TestCapability) capability).limit()).min().orElse(0);
-                return new RequirementPlan(context.requirementIndex(), limit,
-                        capabilities.stream().map(capability -> capability.prepare(new TestRequest(context.requestedParallelism())))
-                                .toList(), null);
+                return new RequirementPlan(context.requirementIndex(), limit, List.of(), null,
+                        (parallelism, reservations) -> new RequirementPlan.OperationPlan(
+                                capabilities.stream().map(capability -> capability.prepare(new TestRequest(parallelism)))
+                                        .toList(), null));
             }
         });
 
@@ -93,7 +107,7 @@ class RequirementPlannerTest {
 
         assertThat(result.successful()).isTrue();
         assertThat(result.plan().parallelism()).isEqualTo(3);
-        assertThat(matching.requestedParallelisms()).containsExactly(8);
+        assertThat(matching.requestedParallelisms()).containsExactly(3);
         assertThat(wrongDirection.requestedParallelisms()).isEmpty();
         assertThat(wrongType.requestedParallelisms()).isEmpty();
     }
@@ -141,6 +155,128 @@ class RequirementPlannerTest {
             assertThat(plan.maxParallelism()).isEqualTo(2);
             assertThat(plan.operations()).isNotEmpty();
         });
+    }
+
+    @Test
+    void rejects_opaque_direct_operations_when_global_parallelism_is_lowered() {
+        RequirementType<TestRequirement> unsafeType = new RequirementType<>(
+                Identifier.fromNamespaceAndPath("mmcr_test", "unsafe_direct_operation"));
+        RequirementHandlerRegistry.register(new RequirementHandler<TestRequirement>() {
+            @Override
+            public RequirementType<TestRequirement> type() {
+                return unsafeType;
+            }
+
+            @Override
+            public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
+                                        PlanningContext context) {
+                return new RequirementPlan(context.requirementIndex(), 1,
+                        List.of(transaction -> CapabilityResult.successful()), null);
+            }
+        });
+
+        var result = new RequirementPlanner().plan(
+                List.of(new TestRequirement(unsafeType, RecipeModifier.IOType.INPUT)),
+                List.of(new TestCapability(unsafeType.id(), IOType.INPUT, 1)),
+                new PlanningContext(4, 0));
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.failure().details()).containsEntry("reason", "unsafe_operation_parallelism");
+    }
+
+    @Test
+    void materializes_a_custom_operation_factory_once_after_reservation_selection() {
+        RequirementType<TestRequirement> factoryType = new RequirementType<>(
+                Identifier.fromNamespaceAndPath("mmcr_test", "single_operation_factory"));
+        AtomicInteger factoryCalls = new AtomicInteger();
+        AtomicInteger operationParallelism = new AtomicInteger();
+        TestCapability capability = new TestCapability(factoryType.id(), IOType.INPUT, 2);
+        RequirementHandlerRegistry.register(new RequirementHandler<TestRequirement>() {
+            @Override
+            public RequirementType<TestRequirement> type() {
+                return factoryType;
+            }
+
+            @Override
+            public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
+                                        PlanningContext context) {
+                return new RequirementPlan(context.requirementIndex(), 2, List.of(), null,
+                        (parallelism, reservations) -> {
+                            factoryCalls.incrementAndGet();
+                            operationParallelism.set(parallelism);
+                            return new RequirementPlan.OperationPlan(
+                                    List.of(capability.prepare(new TestRequest(parallelism))), null);
+                        },
+                        (parallelism, reservations) -> parallelism == 2
+                                ? new ExecutionStatus(factoryType.id(), StatusSeverity.BLOCKED, factoryType.id(),
+                                java.util.Map.of("reason", "shared_reservation"))
+                                : null);
+            }
+        });
+
+        var result = new RequirementPlanner().plan(
+                List.of(new TestRequirement(factoryType, RecipeModifier.IOType.INPUT)),
+                List.of(capability),
+                new PlanningContext(2, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(1);
+        assertThat(factoryCalls).hasValue(1);
+        assertThat(operationParallelism).hasValue(1);
+        assertThat(capability.requestedParallelisms()).containsExactly(1);
+    }
+
+    @Test
+    void shares_and_rolls_back_reservations_between_candidate_and_final_materialization() {
+        RequirementType<TestRequirement> reservationType = new RequirementType<>(
+                Identifier.fromNamespaceAndPath("mmcr_test", "shared_reservation_lifecycle"));
+        BulkItemStorage storage = new BulkItemStorage(2, null);
+        storage.insert(ItemResource.of(Items.IRON_INGOT), 2, false);
+        StorageCapability capability = new StorageCapability(reservationType.id(), IOType.INPUT, storage);
+        PlanningReservations shared = new PlanningReservations();
+        AtomicInteger factories = new AtomicInteger();
+        RequirementHandlerRegistry.register(new RequirementHandler<TestRequirement>() {
+            @Override
+            public RequirementType<TestRequirement> type() {
+                return reservationType;
+            }
+
+            @Override
+            public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
+                                        PlanningContext context) {
+                assertThat(context.reservations()).isSameAs(shared);
+                return new RequirementPlan(context.requirementIndex(), 2, List.of(), null,
+                        (parallelism, reservations) -> {
+                            factories.incrementAndGet();
+                            assertThat(reservations.reserveExtract(
+                                    storage, 0, ItemResource.of(Items.IRON_INGOT), parallelism)).isTrue();
+                            assertThat(reservations.amount(storage, 0)).isEqualTo(2 - parallelism * factories.get());
+                            CapabilityRequests.ResourceAction<ItemResource> action =
+                                    new CapabilityRequests.ResourceAction<>(0, ItemResource.of(Items.IRON_INGOT),
+                                            parallelism, false);
+                            return new RequirementPlan.OperationPlan(List.of(capability.prepare(
+                                    new CapabilityRequests.ResourceRequest<>(capability.type(), capability.ioType(),
+                                            parallelism, List.of(action)))), null);
+                        },
+                        (parallelism, reservations) -> reservations.reserveExtract(
+                                storage, 0, ItemResource.of(Items.IRON_INGOT), parallelism)
+                                ? null
+                                : new ExecutionStatus(reservationType.id(), StatusSeverity.BLOCKED, reservationType.id(),
+                                java.util.Map.of("reason", "shared_reservation")));
+            }
+        });
+
+        var result = new RequirementPlanner().plan(
+                List.of(new TestRequirement(reservationType, RecipeModifier.IOType.INPUT),
+                        new TestRequirement(reservationType, RecipeModifier.IOType.INPUT)),
+                List.of(capability), new PlanningContext(2, 0, false, shared));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(1);
+        assertThat(factories).hasValue(2);
+        assertThat(storage.amount(0)).isEqualTo(2);
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.amount(0)).isZero();
     }
 
     @Test
@@ -239,6 +375,106 @@ class RequirementPlannerTest {
                 assertThat(plan.operations()).isNotEmpty());
         assertThat(result.plan().commit()).isTrue();
         assertThat(storage.getAmountAsLong()).isZero();
+    }
+
+    @Test
+    void partial_item_output_commits_the_available_resource_amount() {
+        BulkItemStorage storage = new BulkItemStorage(2, null);
+        StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage);
+        ItemStack output = Items.IRON_INGOT.getDefaultInstance().copyWithCount(4);
+        assertThat(output.getCount()).isEqualTo(4);
+        assertThat(storage.capacityResource(0, ItemResource.of(output))).isEqualTo(2);
+        ItemRequirement requirement = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, output, 1F, List.of());
+        assertThat(requirement.stack(null).getCount()).isEqualTo(4);
+        var result = new RequirementPlanner().plan(
+                List.of(requirement),
+                List.of(capability),
+                new PlanningContext(1, 0, true));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(capability.lastResourceRequest.actions()).singleElement()
+                .extracting(CapabilityRequests.ResourceAction::amount).isEqualTo(2L);
+        assertThat(result.plan().requirements()).singleElement().satisfies(plan ->
+                assertThat(plan.operations()).isNotEmpty());
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.amount(0)).isEqualTo(2);
+    }
+
+    @Test
+    void partial_fluid_output_commits_the_available_resource_amount() {
+        LongFluidStorage storage = new LongFluidStorage(250, null);
+        var result = new RequirementPlanner().plan(
+                List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                        new FluidStack(Fluids.WATER, 1_000), 1F, List.of())),
+                List.of(new StorageCapability(FluidRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                new PlanningContext(1, 0, true));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().requirements()).singleElement().satisfies(plan ->
+                assertThat(plan.operations()).isNotEmpty());
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.getAmountAsLong()).isEqualTo(250);
+    }
+
+    @Test
+    void partial_outputs_without_any_capacity_are_structured_blocked_failures() {
+        var itemResult = new RequirementPlanner().plan(
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                        Items.IRON_INGOT.getDefaultInstance(), 1F, List.of())),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT,
+                        new BulkItemStorage(0, null))), new PlanningContext(1, 0, true));
+        var fluidResult = new RequirementPlanner().plan(
+                List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                        new FluidStack(Fluids.WATER, 1_000), 1F, List.of())),
+                List.of(new StorageCapability(FluidRequirement.TYPE.id(), IOType.OUTPUT,
+                        new LongFluidStorage(0, null))), new PlanningContext(1, 0, true));
+
+        assertThat(itemResult.successful()).isFalse();
+        assertThat(itemResult.failure().details()).containsEntry("reason", "no_output_capacity");
+        assertThat(fluidResult.successful()).isFalse();
+        assertThat(fluidResult.failure().details()).containsEntry("reason", "no_output_capacity");
+    }
+
+    @Test
+    void chance_zero_outputs_are_explicit_no_ops_even_in_partial_mode() {
+        var result = new RequirementPlanner().plan(
+                List.of(
+                        new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                                Items.IRON_INGOT.getDefaultInstance(), 0F, List.of()),
+                        new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                                new FluidStack(Fluids.WATER, 1_000), 0F, List.of())),
+                List.of(), new PlanningContext(1, 0, true));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().requirements()).allSatisfy(plan -> assertThat(plan.operations()).isEmpty());
+    }
+
+    @Test
+    void generic_matching_filters_tags_and_keeps_untagged_capabilities_matchable() {
+        RequirementType<TestRequirement> taggedType = new RequirementType<>(
+                Identifier.fromNamespaceAndPath("mmcr_test", "tagged_requirement"));
+        RequirementHandlerRegistry.register(new RequirementHandler<TestRequirement>() {
+            @Override
+            public RequirementType<TestRequirement> type() {
+                return taggedType;
+            }
+
+            @Override
+            public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
+                                        PlanningContext context) {
+                return new RequirementPlan(context.requirementIndex(), capabilities.size(), List.of(), null);
+            }
+        });
+
+        var result = new RequirementPlanner().plan(
+                List.of(new TestRequirement(taggedType, RecipeModifier.IOType.INPUT, List.of("blue"))),
+                List.of(new TestCapability(taggedType.id(), IOType.INPUT, 1, List.of("red")),
+                        new TestCapability(taggedType.id(), IOType.INPUT, 1, List.of("blue")),
+                        new TestCapability(taggedType.id(), IOType.INPUT, 1)),
+                new PlanningContext(2, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(2);
     }
 
     @Test
@@ -435,33 +671,50 @@ class RequirementPlannerTest {
     }
 
     @Test
-    void rolls_back_real_item_fluid_and_energy_operations_when_later_energy_operation_fails() {
-        BulkItemStorage item = new BulkItemStorage(64, null);
-        item.insert(ItemResource.of(Items.IRON_INGOT), 1, false);
-        LongFluidStorage fluid = new LongFluidStorage(2_000, null);
-        fluid.setFluid(new FluidStack(Fluids.WATER, 1_000));
-        LongValueStorage energy = new LongValueStorage(100, 100, null);
-        energy.setAmount(4);
+    void rolls_back_real_port_item_fluid_and_energy_operations_when_a_later_operation_fails() {
+        ItemBusCapability item = (ItemBusCapability) port("item_input_bus").capabilitySnapshot().capabilities().getFirst();
+        FluidHatchCapability fluid = (FluidHatchCapability) port("fluid_input_hatch").capabilitySnapshot().capabilities().getFirst();
+        EnergyHatchCapability energy = (EnergyHatchCapability) port("energy_input_hatch_tiny").capabilitySnapshot().capabilities().getFirst();
+        try (Transaction transaction = Transaction.openRoot()) {
+            item.storage().insert(0, ItemResource.of(Items.IRON_INGOT), 1, transaction);
+            transaction.commit();
+        }
+        ((LongFluidStorage) fluid.storage()).setFluid(new FluidStack(Fluids.WATER, 1_000));
+        energy.storage().setAmount(4);
+        RequirementHandlerRegistry.register(new RequirementHandler<TestRequirement>() {
+            @Override
+            public RequirementType<TestRequirement> type() {
+                return ROLLBACK_FAILURE_TYPE;
+            }
+
+            @Override
+            public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
+                                        PlanningContext context) {
+                return new RequirementPlan(context.requirementIndex(), 1,
+                        List.of(transaction -> CapabilityResult.failure(new ExecutionStatus(
+                                ROLLBACK_FAILURE_TYPE.id(), StatusSeverity.FAILURE, ROLLBACK_FAILURE_TYPE.id(),
+                                java.util.Map.of("reason", "forced_failure")))), null);
+            }
+        });
 
         var result = new RequirementPlanner().plan(
                 List.of(
                         new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
                         new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1_000,
-                                FluidStack.EMPTY),
-                        new EnergyRequirement(RecipeModifier.IOType.INPUT, 4)),
+                                 FluidStack.EMPTY),
+                        new EnergyRequirement(RecipeModifier.IOType.INPUT, 4),
+                        new TestRequirement(ROLLBACK_FAILURE_TYPE, RecipeModifier.IOType.INPUT)),
                 List.of(
-                        new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT, item),
-                        new StorageCapability(FluidRequirement.TYPE.id(), IOType.INPUT, fluid),
-                        new FailingStorageCapability(EnergyRequirement.TYPE.id(), IOType.INPUT, energy)),
+                        item, fluid, energy, new TestCapability(ROLLBACK_FAILURE_TYPE.id(), IOType.INPUT, 1)),
                 new PlanningContext(1, 0));
 
         assertThat(result.successful()).isTrue();
         assertThat(result.plan().requirements()).allSatisfy(plan ->
                 assertThat(plan.operations()).isNotEmpty());
         assertThat(result.plan().commit()).isFalse();
-        assertThat(item.amount(0)).isEqualTo(1);
-        assertThat(fluid.getAmountAsLong()).isEqualTo(1_000);
-        assertThat(energy.amount()).isEqualTo(4);
+        assertThat(item.storage().amount(0)).isEqualTo(1);
+        assertThat(fluid.storage().amount(0)).isEqualTo(1_000);
+        assertThat(energy.storage().amount()).isEqualTo(4);
     }
 
     @Test
@@ -486,8 +739,11 @@ class RequirementPlannerTest {
                 .extracting(RequirementPlan::requirementIndex).isEqualTo(1);
     }
 
-    private record TestRequirement(RequirementType<TestRequirement> type, RecipeModifier.IOType io)
+    private record TestRequirement(RequirementType<TestRequirement> type, RecipeModifier.IOType io, List<String> tags)
             implements MachineRequirement {
+        private TestRequirement(RequirementType<TestRequirement> type, RecipeModifier.IOType io) {
+            this(type, io, List.of());
+        }
     }
 
     private record TestRequest(int parallelism) implements CapabilityRequest {
@@ -506,12 +762,18 @@ class RequirementPlannerTest {
         private final CapabilityType type;
         private final IOType ioType;
         private final int limit;
+        private final List<String> tags;
         private final java.util.ArrayList<Integer> requestedParallelisms = new java.util.ArrayList<>();
 
         private TestCapability(Identifier type, IOType ioType, int limit) {
+            this(type, ioType, limit, List.of());
+        }
+
+        private TestCapability(Identifier type, IOType ioType, int limit, List<String> tags) {
             this.type = new CapabilityType(type);
             this.ioType = ioType;
             this.limit = limit;
+            this.tags = List.copyOf(tags);
         }
 
         private int limit() {
@@ -549,6 +811,11 @@ class RequirementPlannerTest {
                 public IOType ioType() {
                     return TestCapability.this.ioType;
                 }
+
+                @Override
+                public List<String> tags() {
+                    return TestCapability.this.tags;
+                }
             };
         }
 
@@ -573,8 +840,9 @@ class RequirementPlannerTest {
         public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
                                     PlanningContext context) {
             calls.incrementAndGet();
-            return new RequirementPlan(context.requirementIndex(), limit,
-                    List.of(transaction -> CapabilityResult.successful()), null);
+            return new RequirementPlan(context.requirementIndex(), limit, List.of(), null,
+                    (parallelism, reservations) -> new RequirementPlan.OperationPlan(
+                            List.of(transaction -> CapabilityResult.successful()), null));
         }
     }
 
@@ -583,6 +851,7 @@ class RequirementPlannerTest {
         private final IOType ioType;
         private final CapabilityStorage storage;
         private int prepareCalls;
+        private CapabilityRequests.ResourceRequest<?> lastResourceRequest;
 
         private StorageCapability(Identifier type, IOType ioType, CapabilityStorage storage) {
             this.type = new CapabilityType(type);
@@ -644,6 +913,7 @@ class RequirementPlannerTest {
                 };
             }
             CapabilityRequests.ResourceRequest<?> resourceRequest = (CapabilityRequests.ResourceRequest<?>) request;
+            lastResourceRequest = resourceRequest;
             if (!(storage instanceof ResourceStorage<?> resourceStorage)) {
                 return transaction -> CapabilityResult.failure(new ExecutionStatus(
                         type.id(), StatusSeverity.BLOCKED, type.id(), java.util.Map.of()));
@@ -661,16 +931,10 @@ class RequirementPlannerTest {
         }
     }
 
-    private static final class FailingStorageCapability extends StorageCapability {
-        private FailingStorageCapability(Identifier type, IOType ioType, CapabilityStorage storage) {
-            super(type, ioType, storage);
-        }
-
-        @Override
-        public CapabilityOperation prepare(cn.howxu.mmcr.api.capability.CapabilityRequest request) {
-            return transaction -> CapabilityResult.failure(new ExecutionStatus(
-                    request.type().id(), StatusSeverity.FAILURE, request.type().id(),
-                    java.util.Map.of("reason", "forced_failure")));
-        }
+    private static IOPortBlockEntity port(String id) {
+        IOPortKind kind = PortKinds.all().stream().filter(candidate -> candidate.id().equals(id)).findFirst().orElseThrow();
+        BlockState state = ModBlocks.BLOCKS.get(id).get().defaultBlockState();
+        return kind.entityFactory().create(BlockPos.ZERO, state);
     }
+
 }

@@ -65,6 +65,24 @@ public final class PlanningReservations {
         return true;
     }
 
+    public PlanningReservations copy() {
+        PlanningReservations copy = new PlanningReservations();
+        for (Map.Entry<ResourceStorage<?>, Map<Integer, ResourceReservation>> entry : resources.entrySet()) {
+            Map<Integer, ResourceReservation> copiedSlots = new java.util.HashMap<>();
+            for (Map.Entry<Integer, ResourceReservation> slot : entry.getValue().entrySet()) {
+                ResourceReservation source = slot.getValue();
+                ResourceReservation copied = new ResourceReservation();
+                copied.extracted = source.extracted;
+                copied.inserted = source.inserted;
+                copied.insertedResource = source.insertedResource;
+                copiedSlots.put(slot.getKey(), copied);
+            }
+            copy.resources.put(entry.getKey(), copiedSlots);
+        }
+        copy.values.putAll(values);
+        return copy;
+    }
+
     private ResourceReservation reservation(ResourceStorage<?> storage, int slot, boolean create) {
         Map<Integer, ResourceReservation> bySlot = resources.get(storage);
         if (bySlot == null) {
