@@ -20,7 +20,8 @@ public final class MenuSupport {
     }
 
     public static boolean controllerStillPresentAndFormed(MachineControllerBlockEntity controller) {
-        if (controller == null || controller.getLevel() == null || !controller.isFormed()) return false;
+        if (controller == null || controller.getLevel() == null
+                || !controller.runtimeSnapshot().structure().formed()) return false;
         BlockEntity blockEntity = controller.getLevel().getBlockEntity(controller.getBlockPos());
         return blockEntity == controller;
     }

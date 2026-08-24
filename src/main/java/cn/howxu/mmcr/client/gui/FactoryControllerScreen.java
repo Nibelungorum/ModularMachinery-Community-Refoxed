@@ -284,7 +284,7 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
         lineY = nextDetailY(lineY);
         var owner = menu.resolvedOwner();
         if (owner != null) {
-            for (Component levelLine : levelLines(owner.getFoundLevels())) {
+            for (Component levelLine : levelLines(owner.runtimeSnapshot().foundLevels())) {
                 graphics.text(font, levelLine, x, lineY, STATUS_LABEL_COLOR, true);
                 lineY = nextDetailY(lineY);
             }

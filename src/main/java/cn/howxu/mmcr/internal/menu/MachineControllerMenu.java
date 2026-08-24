@@ -51,9 +51,9 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.owner = owner;
         this.level = playerInv.player == null ? null : playerInv.player.level();
         this.pos = owner == null ? BlockPos.ZERO : owner.getBlockPos();
-        wasFormedDuringSession = owner != null && owner.isFormed();
+        wasFormedDuringSession = owner != null && owner.runtimeSnapshot().structure().formed();
         this.formed = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return owner.isFormed() ? 1 : 0; }
+            @Override public int get() { return owner.runtimeSnapshot().structure().formed() ? 1 : 0; }
             @Override public void set(int value) {}
         });
         this.active = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
@@ -110,7 +110,8 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.controllerRole = ControllerMenuState.addControllerRoleSlot(this, owner);
         this.clientControllerRole = controllerRoleSyncValue(owner);
         this.clientMachineId = machineIdFor(owner);
-        this.clientConnectedHostId = owner == null ? null : owner.connectedHostId().orElse(null);
+        this.clientConnectedHostId = owner == null ? null
+                : owner.runtimeSnapshot().moduleConnectionStatus().connectedHostId();
         addControllerPlayerSlots(playerInv);
     }
 
@@ -203,18 +204,18 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     public @Nullable Identifier machineId() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        Machine machine = controller == null ? null : controller.getMachine();
+        Machine machine = controller == null ? null : controller.runtimeSnapshot().structure().configuredMachine();
         Identifier id = machine == null ? null : machine.registryName();
         return id == null ? clientMachineId : id;
     }
 
     public boolean isFormed() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? formed.get() != 0 : controller.isFormed();
+        return controller == null ? formed.get() != 0 : controller.runtimeSnapshot().structure().formed();
     }
 
     boolean wasFormedDuringSession() {
-        if (owner != null && owner.isFormed()) wasFormedDuringSession = true;
+        if (owner != null && owner.runtimeSnapshot().structure().formed()) wasFormedDuringSession = true;
         return wasFormedDuringSession;
     }
 
@@ -314,13 +315,15 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     public int installedModuleCount() {
         if (owner == null) return installedModuleCount.get();
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? installedModuleCount.get() : controller.installedModuleCount();
+        return controller == null ? installedModuleCount.get() : controller.runtimeSnapshot().installedModuleCount();
     }
 
     public Optional<Identifier> connectedHostId() {
         if (owner == null) return moduleConnected.get() == 0 ? Optional.empty() : Optional.ofNullable(clientConnectedHostId);
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? Optional.ofNullable(clientConnectedHostId) : controller.connectedHostId();
+        if (controller == null) return Optional.ofNullable(clientConnectedHostId);
+        var status = controller.runtimeSnapshot().moduleConnectionStatus();
+        return status.connected() ? Optional.of(status.connectedHostId()) : Optional.empty();
     }
 
     public boolean isHostController() {
@@ -365,8 +368,9 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     public BlockPos controllerPos() { return pos; }
 
     public static int controllerRoleSyncValue(MachineControllerBlockEntity controller) {
-        Machine machine = controller == null ? null : controller.getMachine();
-        if (machine == null && controller != null) machine = controller.getFoundMachine();
+        var structure = controller == null ? null : controller.runtimeSnapshot().structure();
+        Machine machine = structure == null ? null : structure.configuredMachine();
+        if (machine == null && structure != null) machine = structure.machine();
         if (machine == null) return 0;
         if (machine.isHost()) return 1;
         if (machine.isModule()) return 2;
@@ -374,7 +378,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     }
 
     private static @Nullable Identifier machineIdFor(@Nullable MachineControllerBlockEntity controller) {
-        Machine machine = controller == null ? null : controller.getMachine();
+        Machine machine = controller == null ? null : controller.runtimeSnapshot().structure().configuredMachine();
         return machine == null ? null : machine.registryName();
     }
 

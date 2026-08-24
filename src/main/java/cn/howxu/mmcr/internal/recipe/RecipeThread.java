@@ -57,8 +57,8 @@ public abstract class RecipeThread {
 
     protected boolean searchAndStartRecipe(List<MachineRecipe> candidates, int availableParallelism,
                                            long structureVersion, @Nullable Identifier lockedRecipeId) {
-        Identifier machineId = controller == null || controller.getFoundMachine() == null
-                ? null : controller.getFoundMachine().registryName();
+        Identifier machineId = controller == null || controller.runtimeSnapshot().structure().machine() == null
+                ? null : controller.runtimeSnapshot().structure().machine().registryName();
         if (machineId == null || availableParallelism <= 0) return false;
         RecipeSearchResult result = new RecipeSearchTask(controller, machineId, structureVersion,
                 availableParallelism, candidates, contextPool, null, lockedRecipeId).compute();
@@ -75,10 +75,9 @@ public abstract class RecipeThread {
     }
 
     protected boolean startRecipe(ActiveMachineRecipe next, RecipeCraftingContext nextContext, long structureVersion) {
-        Identifier machineId = controller == null || controller.getFoundMachine() == null
-                ? null : controller.getFoundMachine().registryName();
-        if (controller != null && controller.getLevel() instanceof ServerLevel serverLevel && controller.resourceDomain() != null) {
-            return requestStart(serverLevel, controller.resourceDomain(), next, nextContext, structureVersion);
+        StructureClaimRegistry.ResourceDomain domain = resourceDomain();
+        if (controller != null && controller.getLevel() instanceof ServerLevel serverLevel && domain != null) {
+            return requestStart(serverLevel, domain, next, nextContext, structureVersion);
         }
         int granted = nextContext.commitStart(next, next.getMaxParallelism());
         if (granted <= 0) {
@@ -132,9 +131,8 @@ requested -> {
                     lastFailureUnloc = null;
                     onStarted();
                 },
-                () -> isPendingStart(startToken, nextContext) && controller != null
-                        && controller.resourceDomain() != null && controller.resourceDomain().equals(domain),
-                controller::getStructureVersion
+                () -> isPendingStart(startToken, nextContext) && domain.equals(resourceDomain()),
+                () -> controller.runtimeSnapshot().structure().version()
         ));
         return true;
     }
@@ -174,12 +172,13 @@ requested -> {
             pendingTickDomain = null;
         }
         if (tickPending) return;
-        if (controller != null && controller.getLevel() instanceof ServerLevel level && controller.resourceDomain() != null) {
+        StructureClaimRegistry.ResourceDomain domain = resourceDomain();
+        if (controller != null && controller.getLevel() instanceof ServerLevel level && domain != null) {
             if (activeRecipe.isFinishPending()) {
-                requestFinishIfReady(level, controller.resourceDomain(), activeRecipe, context, controller.getStructureVersion());
+                requestFinishIfReady(level, domain, activeRecipe, context, controller.runtimeSnapshot().structure().version());
                 return;
             }
-            requestTick(level, controller.resourceDomain(), activeRecipe, context, controller.getStructureVersion());
+            requestTick(level, domain, activeRecipe, context, controller.runtimeSnapshot().structure().version());
             return;
         }
         boolean resourcesGranted = context.commitSynchronousIoTick(activeRecipe.getRecipe(), activeRecipe.getParallelism(), activeRecipe.inputConsumptionPlan());
@@ -190,8 +189,8 @@ requested -> {
 
     private void failActiveRecipeForInvalidModuleConnection() {
         if (activeRecipe == null || context == null) return;
-        activeRecipe.doFailureAction(controller == null || controller.getFoundMachine() == null
-                ? null : controller.getFoundMachine().failureAction());
+        activeRecipe.doFailureAction(controller == null || controller.runtimeSnapshot().structure().machine() == null
+                ? null : controller.runtimeSnapshot().structure().machine().failureAction());
         lastFailureUnloc = RecipeCraftingContext.FAILURE_MODULE_CONNECTION;
         if (activeRecipe.getRecipe().doesCancelRecipeOnPerTickFailure()) {
             contextPool.returnContext(context);
@@ -240,7 +239,7 @@ requested -> {
                     return true;
                 },
                 () -> isActive(recipe, recipeContext, domain),
-                controller::getStructureVersion
+                () -> controller.runtimeSnapshot().structure().version()
         ));
     }
 
@@ -263,7 +262,7 @@ requested -> {
                     return true;
                 },
                 () -> isActive(recipe, recipeContext, domain),
-                controller::getStructureVersion
+                () -> controller.runtimeSnapshot().structure().version()
         ));
     }
 
@@ -281,8 +280,7 @@ requested -> {
 
     private boolean isActive(ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext,
                              StructureClaimRegistry.ResourceDomain domain) {
-        return activeRecipe == recipe && context == recipeContext && controller != null
-                && domain.equals(controller.resourceDomain());
+        return activeRecipe == recipe && context == recipeContext && domain.equals(resourceDomain());
     }
 
     private void applyTick(ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext,
@@ -366,6 +364,11 @@ requested -> {
     public int usedParallelism() { return activeRecipe == null ? 0 : activeRecipe.getParallelism(); }
 
     private boolean isCurrentDomain(@Nullable StructureClaimRegistry.ResourceDomain domain) {
-        return domain != null && controller != null && domain.equals(controller.resourceDomain());
+        return domain != null && domain.equals(resourceDomain());
+    }
+
+    private @Nullable StructureClaimRegistry.ResourceDomain resourceDomain() {
+        if (controller == null || !(controller.getLevel() instanceof ServerLevel level)) return null;
+        return StructureClaimRegistry.get(level).domainFor(controller.getBlockPos());
     }
 }

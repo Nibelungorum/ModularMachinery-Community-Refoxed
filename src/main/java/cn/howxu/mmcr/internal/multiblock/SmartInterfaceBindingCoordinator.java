@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.internal.multiblock;
 
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
 import net.minecraft.core.BlockPos;
@@ -31,13 +33,16 @@ public final class SmartInterfaceBindingCoordinator {
 
     public void reconcile(MachineControllerBlockEntity controller, Collection<SmartInterfaceBlockEntity> interfaces) {
         BlockPos controllerPos = controller.getBlockPos();
-        var controllerAppearance = controller.getFoundMachine().appearance().formedPortBaseTexture();
+        StructureSnapshot structure = controller.structureSnapshot();
+        Machine machine = structure.machine();
+        if (machine == null) return;
+        var controllerAppearance = machine.appearance().formedPortBaseTexture();
         var ordered = interfaces.stream().sorted(Comparator.comparing(SmartInterfaceBlockEntity::getBlockPos)).toList();
         for (SmartInterfaceBlockEntity smartInterface : ordered) {
-            if (smartInterface.machineId().isPresent() && !smartInterface.machineId().orElseThrow().equals(controller.getFoundMachine().registryName())) {
+            if (smartInterface.machineId().isPresent() && !smartInterface.machineId().orElseThrow().equals(machine.registryName())) {
                 continue;
             }
-            if (smartInterface.claimController(controllerPos, controller.getFoundMachine().registryName(), types, shared)) {
+            if (smartInterface.claimController(controllerPos, machine.registryName(), types, shared)) {
                 smartInterface.linkControllerAppearance(controllerPos, controllerAppearance);
                 return;
             }

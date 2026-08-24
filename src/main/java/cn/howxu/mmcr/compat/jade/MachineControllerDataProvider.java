@@ -24,12 +24,13 @@ public enum MachineControllerDataProvider implements IServerDataProvider<BlockAc
     public void appendServerData(CompoundTag data, BlockAccessor accessor) {
         if (!(accessor.getTarget() instanceof MachineControllerBlockEntity controller)) return;
 
-        var foundMachine = controller.getFoundMachine();
-        var boundMachine = controller.getMachine();
+        var runtime = controller.runtimeSnapshot();
+        var foundMachine = runtime.structure().machine();
+        var boundMachine = runtime.structure().configuredMachine();
         var machine = foundMachine != null ? foundMachine : boundMachine;
         ActiveMachineRecipe active = controller.getActive();
 
-        data.putBoolean("formed", controller.isFormed());
+        data.putBoolean("formed", runtime.structure().formed());
         data.putBoolean("active", controller.isRuntimeActive());
         data.putInt("parallelism", controller.currentParallelism());
         data.putInt("maxParallelism", active == null ? controller.getMaxParallelism() : active.getMaxParallelism());
@@ -51,7 +52,7 @@ public enum MachineControllerDataProvider implements IServerDataProvider<BlockAc
         int fluidOutputs = 0;
         int energyInputs = 0;
         int energyOutputs = 0;
-        for (ProcessingComponent processingComponent : controller.getComponents()) {
+        for (ProcessingComponent processingComponent : runtime.components()) {
             MachineComponent component = processingComponent.getComponent();
             if (component == null || component.kind() == null) continue;
             switch (component.kind().id()) {

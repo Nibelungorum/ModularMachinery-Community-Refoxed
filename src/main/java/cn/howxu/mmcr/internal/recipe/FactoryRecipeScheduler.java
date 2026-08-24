@@ -269,7 +269,7 @@ public final class FactoryRecipeScheduler {
         ensureBaseThread(controller, contextPool);
         this.perThreadParallelLimit = Math.max(1, parallelLimit);
         List<MachineRecipe> candidateSnapshot = List.copyOf(candidates == null ? List.of() : candidates);
-        long modifierSnapshotVersion = controller == null ? Long.MIN_VALUE : controller.getModifierSnapshotVersion();
+        long modifierSnapshotVersion = controller == null ? Long.MIN_VALUE : controller.runtimeSnapshot().modifierVersion();
         for (FactoryRecipeThread thread : List.copyOf(threads)) {
             if (!thread.isStartPending() && thread.getActiveRecipe() == null) startReservations.remove(thread);
             if (thread.getActiveRecipe() != null) startReservations.remove(thread);

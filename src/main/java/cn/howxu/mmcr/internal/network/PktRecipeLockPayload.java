@@ -46,7 +46,8 @@ public record PktRecipeLockPayload(BlockPos controllerPos, int threadIndex) impl
         if (!(player.level().getBlockEntity(payload.controllerPos()) instanceof MachineControllerBlockEntity controller)) {
             return false;
         }
-        if (!controller.isFormed() || !MenuSupport.stillValidWithin(player, payload.controllerPos())) return false;
+        if (!controller.runtimeSnapshot().structure().formed()
+                || !MenuSupport.stillValidWithin(player, payload.controllerPos())) return false;
         if (!hasAccessToMenu(player, controller, payload.controllerPos())) return false;
         if (!controller.toggleFactoryRecipeLock(payload.threadIndex())) return false;
         controller.setChanged();

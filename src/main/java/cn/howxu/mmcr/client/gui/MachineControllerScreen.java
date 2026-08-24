@@ -98,7 +98,7 @@ public final class MachineControllerScreen extends AbstractContainerScreen<Machi
         int lineY = y + DETAIL_LINE_SPACING;
         var owner = menu.resolvedOwner();
         if (owner != null) {
-            for (MachineLevel level : owner.getFoundLevels().values()) {
+            for (MachineLevel level : owner.runtimeSnapshot().foundLevels().values()) {
                 graphics.text(font, levelLine(level), x, lineY, STATUS_LABEL_COLOR, true);
                 lineY += DETAIL_LINE_SPACING;
             }

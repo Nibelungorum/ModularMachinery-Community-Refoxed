@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.CraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.storage.ValueInput;
@@ -105,7 +106,8 @@ public final class FactoryRecipeThread extends RecipeThread {
     @Override protected void onStarted() {
         idleTicks = 0;
         if (activeRecipe != null && controller != null) {
-            rememberLastRecipe(activeRecipe.getRecipe(), controller.getStructureVersion(), controller.getModifierSnapshotVersion());
+            ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
+            rememberLastRecipe(activeRecipe.getRecipe(), runtime.structure().version(), runtime.modifierVersion());
         }
     }
     @Override protected void onFinished() { idleTicks = 0; }

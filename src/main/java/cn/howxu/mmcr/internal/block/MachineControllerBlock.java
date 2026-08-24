@@ -190,7 +190,7 @@ public class MachineControllerBlock extends Block implements EntityBlock {
                 && player.getMainHandItem().isEmpty()
                 && player.getOffhandItem().isEmpty()
                 && level.getBlockEntity(pos) instanceof MachineControllerBlockEntity controller
-                && !controller.isFormed()
+                && !controller.runtimeSnapshot().structure().formed()
             && player instanceof ServerPlayer serverPlayer) {
             controller.sendStructurePreview(serverPlayer);
             controller.requestImmediateStructureCheck(serverPlayer);
@@ -201,11 +201,13 @@ public class MachineControllerBlock extends Block implements EntityBlock {
             MenuProvider provider = state.getMenuProvider(level, pos);
             if (provider != null) player.openMenu(provider, buffer -> {
                 MachineControllerBlockEntity controller = level.getBlockEntity(pos) instanceof MachineControllerBlockEntity mc ? mc : null;
+                var runtime = controller == null ? null : controller.runtimeSnapshot();
                 MachineControllerMenu.writeClientOpenData(buffer, pos, controller == null ? machineId : controller.machineId(),
-                        controller == null ? null : controller.connectedHostId().orElse(null),
+                        runtime == null || !runtime.moduleConnectionStatus().connected()
+                                ? null : runtime.moduleConnectionStatus().connectedHostId(),
                         MachineControllerMenu.controllerRoleSyncValue(controller),
-                        controller != null && controller.isFormed(),
-                        controller == null ? 0 : controller.installedModuleCount());
+                        runtime != null && runtime.structure().formed(),
+                        runtime == null ? 0 : runtime.installedModuleCount());
             });
         }
         return InteractionResult.SUCCESS;

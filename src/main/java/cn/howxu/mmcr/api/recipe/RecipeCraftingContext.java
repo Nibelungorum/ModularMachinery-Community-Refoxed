@@ -19,6 +19,7 @@ import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
+import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.util.IOType;
 
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
@@ -86,8 +87,9 @@ public final class RecipeCraftingContext {
 
     public RecipeCraftingContext(MachineControllerBlockEntity controller) {
         this.controller = controller;
-        this.structureVersion = controller.getStructureVersion();
-        this.modifierSnapshotVersion = controller.getModifierSnapshotVersion();
+        ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
+        this.structureVersion = runtime.structure().version();
+        this.modifierSnapshotVersion = runtime.modifierVersion();
     }
 
     void setItemMatchCache(Map<ItemMatchKey, Boolean> itemMatchCache) {
@@ -294,17 +296,19 @@ public final class RecipeCraftingContext {
     }
 
     public boolean isStructureVersionCurrent() {
-        return structureVersion == controller.getStructureVersion()
-                && modifierSnapshotVersion == controller.getModifierSnapshotVersion();
+        ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
+        return structureVersion == runtime.structure().version()
+                && modifierSnapshotVersion == runtime.modifierVersion();
     }
 
     public boolean isStructureVersionOnlyCurrent() {
-        return structureVersion == controller.getStructureVersion();
+        return structureVersion == controller.runtimeSnapshot().structure().version();
     }
 
     public void refreshStructureVersion() {
-        structureVersion = controller.getStructureVersion();
-        modifierSnapshotVersion = controller.getModifierSnapshotVersion();
+        ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
+        structureVersion = runtime.structure().version();
+        modifierSnapshotVersion = runtime.modifierVersion();
     }
 
     public void refreshController(MachineControllerBlockEntity controller) {
@@ -383,14 +387,15 @@ public final class RecipeCraftingContext {
     }
 
     public void refreshModifierSnapshot(List<RecipeModifier> modifiers) {
-        this.modifierSnapshotVersion = controller.getModifierSnapshotVersion();
+        this.modifierSnapshotVersion = controller.runtimeSnapshot().modifierVersion();
         setStructureModifiers(modifiers);
     }
 
     void resetFor(MachineControllerBlockEntity controller) {
         this.controller = controller;
-        this.structureVersion = controller.getStructureVersion();
-        this.modifierSnapshotVersion = controller.getModifierSnapshotVersion();
+        ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
+        this.structureVersion = runtime.structure().version();
+        this.modifierSnapshotVersion = runtime.modifierVersion();
         resetTransientState();
     }
 
@@ -450,7 +455,7 @@ public final class RecipeCraftingContext {
     }
 
     private List<MachineLevel> sortedLevels() {
-        Map<Identifier, MachineLevel> foundLevels = controller.getFoundLevels();
+        Map<Identifier, MachineLevel> foundLevels = controller.runtimeSnapshot().foundLevels();
         if (foundLevels == null || foundLevels.isEmpty()) return List.of();
         return foundLevels.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey(Comparator.comparing(Identifier::toString)))
@@ -488,7 +493,7 @@ public final class RecipeCraftingContext {
     }
 
     public RecipeFailureActions failureAction() {
-        Machine m = controller.getMachine();
+        Machine m = controller.runtimeSnapshot().structure().machine();
         return m == null ? RecipeFailureActions.getDefaultAction() : m.failureAction();
     }
 
@@ -514,7 +519,7 @@ public final class RecipeCraftingContext {
 
     public Map<String, Float> smartInterfaceValues() {
         Map<String, Float> result = new LinkedHashMap<>();
-        for (ProcessingComponent component : controller.getComponents()) {
+        for (ProcessingComponent component : controller.runtimeSnapshot().components()) {
             if (!(component.getContainer() instanceof SmartInterfaceBlockEntity smartInterface)) continue;
             if (!smartInterface.hasController(controller.getBlockPos())) continue;
             for (String type : smartInterface.parameterTypes()) {
@@ -529,7 +534,7 @@ public final class RecipeCraftingContext {
     }
 
     private Optional<SmartInterfaceBinding> smartInterface(String type) {
-        for (ProcessingComponent component : controller.getComponents()) {
+        for (ProcessingComponent component : controller.runtimeSnapshot().components()) {
             if (!(component.getContainer() instanceof SmartInterfaceBlockEntity smartInterface)) continue;
             if (smartInterface.hasController(controller.getBlockPos()) && smartInterface.value(type).isPresent()) {
                 return Optional.of(new SmartInterfaceBinding(smartInterface));
@@ -539,7 +544,7 @@ public final class RecipeCraftingContext {
     }
 
     private List<RecipeModifier> smartInterfaceModifiers() {
-        var machine = controller.getFoundMachine();
+        var machine = controller.runtimeSnapshot().structure().machine();
         var registration = machine == null ? null : MachineDefinitions.getRegistration(machine.registryName());
         if (registration == null || registration.smartInterfaceModifiers().isEmpty()) return List.of();
         Map<String, Float> values = smartInterfaceValues();
@@ -1235,7 +1240,7 @@ public final class RecipeCraftingContext {
     }
 
     public boolean canRunRecipeOnConnectedHost(MachineRecipe recipe) {
-        return recipe != null && controller.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds());
+        return recipe != null && controller.runtimeSnapshot().moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds());
     }
 
     public boolean canRestartCrafting(ActiveMachineRecipe activeRecipe) {
@@ -1756,7 +1761,7 @@ public final class RecipeCraftingContext {
         if (level == null) return List.of();
 
         List<T> matches = new ArrayList<>();
-        for (ProcessingComponent component : controller.getComponents()) {
+        for (ProcessingComponent component : controller.runtimeSnapshot().components()) {
             if (!type.isInstance(component.getContainer())) continue;
             if (!matchesIo(component.getContainer(), ioType)) continue;
             if (!tagsMatch(requiredTags, component.tags())) continue;
@@ -1774,7 +1779,7 @@ public final class RecipeCraftingContext {
         if (level == null) return List.of();
 
         List<T> matches = new ArrayList<>();
-        for (ProcessingComponent component : controller.getComponents()) {
+        for (ProcessingComponent component : controller.runtimeSnapshot().components()) {
             if (!type.isInstance(component.getContainer())) continue;
             if (!matchesIo(component.getContainer(), ioType)) continue;
             if (tagsMatch(requiredTags, component.tags())) continue;
@@ -1794,7 +1799,7 @@ public final class RecipeCraftingContext {
     }
 
     private @Nullable ItemBusBlockEntity itemBusAt(BlockPos pos, IOType ioType) {
-        for (ProcessingComponent component : controller.getComponents()) {
+        for (ProcessingComponent component : controller.runtimeSnapshot().components()) {
             if (!(component.getContainer() instanceof ItemBusBlockEntity bus)) continue;
             if (bus.ioType() == ioType && component.getPos().equals(pos)) return bus;
         }
@@ -1802,7 +1807,7 @@ public final class RecipeCraftingContext {
     }
 
     private @Nullable FluidHatchBlockEntity fluidHatchAt(BlockPos pos, IOType ioType) {
-        for (ProcessingComponent component : controller.getComponents()) {
+        for (ProcessingComponent component : controller.runtimeSnapshot().components()) {
             if (!(component.getContainer() instanceof FluidHatchBlockEntity hatch)) continue;
             if (hatch.ioType() == ioType && component.getPos().equals(pos)) return hatch;
         }
@@ -1842,7 +1847,7 @@ public final class RecipeCraftingContext {
         var level = controller.getLevel();
         if (level == null) return List.of();
         List<ItemOutputState> states = new ArrayList<>();
-        for (ProcessingComponent component : controller.getComponents()) {
+        for (ProcessingComponent component : controller.runtimeSnapshot().components()) {
             if (!(component.getContainer() instanceof ItemBusBlockEntity bus)) continue;
             if (!matchesIo(bus, IOType.OUTPUT)) continue;
             BlockEntity live = level.getBlockEntity(component.getPos());
@@ -1877,7 +1882,7 @@ public final class RecipeCraftingContext {
         var level = controller.getLevel();
         if (level == null) return List.of();
         List<FluidOutputState> states = new ArrayList<>();
-        for (ProcessingComponent component : controller.getComponents()) {
+        for (ProcessingComponent component : controller.runtimeSnapshot().components()) {
             if (!(component.getContainer() instanceof FluidHatchBlockEntity hatch)) continue;
             if (!matchesIo(hatch, IOType.OUTPUT)) continue;
             BlockEntity live = level.getBlockEntity(component.getPos());

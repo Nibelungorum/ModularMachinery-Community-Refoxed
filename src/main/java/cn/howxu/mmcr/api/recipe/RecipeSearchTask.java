@@ -115,9 +115,10 @@ public final class RecipeSearchTask {
     }
 
     private @Nullable LevelInsufficientFailure levelFailure(MachineRecipe recipe) {
+        var foundLevels = controller.runtimeSnapshot().foundLevels();
         for (LevelRequirement requirement : recipe.levelRequirements()) {
             MachineLevel required = MachineLevelRegistry.getLevel(requirement.levelId());
-            MachineLevel actual = controller.getFoundLevels().get(requirement.typeId());
+            MachineLevel actual = foundLevels.get(requirement.typeId());
             if (required == null || actual == null || actual.priority() < required.priority()) {
                 return new LevelInsufficientFailure(requirement.typeId(), requirement.levelId(),
                         actual == null ? null : actual.id());
@@ -144,7 +145,7 @@ public final class RecipeSearchTask {
         }
         if (candidateIndex == null) return candidates;
         LinkedHashSet<Item> inputItems = new LinkedHashSet<>();
-        for (ProcessingComponent component : controller.getComponents()) {
+        for (ProcessingComponent component : controller.runtimeSnapshot().components()) {
             if (!(component.getContainer() instanceof ItemInputBusBlockEntity bus)) continue;
             IItemHandler handler = bus.getItemHandler(null);
             for (int slot = 0; slot < handler.getSlots(); slot++) {

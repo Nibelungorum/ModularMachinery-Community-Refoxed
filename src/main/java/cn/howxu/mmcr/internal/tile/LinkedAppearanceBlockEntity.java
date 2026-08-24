@@ -155,7 +155,7 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
             BlockPos controllerPos = entry.getKey();
             return !(level.getBlockState(controllerPos).getBlock() instanceof MachineControllerBlock)
                     || !(level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller)
-                    || !controller.isFormed()
+                    || !controller.runtimeSnapshot().structure().formed()
                     || !controller.hasLinkedPort(worldPosition);
         });
         if (changed) {

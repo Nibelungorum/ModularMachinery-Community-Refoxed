@@ -21,7 +21,7 @@ final class ControllerMenuState {
     final DataSlot maxParallelism;
 
     ControllerMenuState(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {
-        formed = add(menu, owner, controller -> controller.isFormed() ? 1 : 0);
+        formed = add(menu, owner, controller -> controller.runtimeSnapshot().structure().formed() ? 1 : 0);
         active = add(menu, owner, controller -> controller.isRuntimeActive() ? 1 : 0);
         lastFailure = add(menu, owner, controller -> failureCode(controller.getLastFailureUnloc()));
         redstonePaused = add(menu, owner, controller -> controller.isRedstonePaused() ? 1 : 0);
@@ -55,11 +55,11 @@ final class ControllerMenuState {
     }
 
     static DataSlot addInstalledModuleCountSlot(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {
-        return add(menu, owner, MachineControllerBlockEntity::installedModuleCount);
+        return add(menu, owner, controller -> controller.runtimeSnapshot().installedModuleCount());
     }
 
     static DataSlot addModuleConnectedSlot(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {
-        return add(menu, owner, controller -> controller.connectedHostId().isPresent() ? 1 : 0);
+        return add(menu, owner, controller -> controller.runtimeSnapshot().moduleConnectionStatus().connected() ? 1 : 0);
     }
 
     static DataSlot addControllerRoleSlot(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {

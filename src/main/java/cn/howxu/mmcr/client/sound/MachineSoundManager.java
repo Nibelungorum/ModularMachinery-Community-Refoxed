@@ -111,8 +111,9 @@ public class MachineSoundManager {
     private static Identifier controllerMachineId(MachineControllerBlockEntity controller) {
         Identifier stateMachineId = machineIdFromState(controller.getBlockState());
         if (stateMachineId != null) return stateMachineId;
-        if (controller.getMachine() != null) return controller.getMachine().registryName();
-        if (controller.getFoundMachine() != null) return controller.getFoundMachine().registryName();
+        var structure = controller.runtimeSnapshot().structure();
+        if (structure.configuredMachine() != null) return structure.configuredMachine().registryName();
+        if (structure.machine() != null) return structure.machine().registryName();
         return null;
     }
 

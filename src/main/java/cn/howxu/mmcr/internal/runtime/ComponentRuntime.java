@@ -8,9 +8,7 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.internal.multiblock.ModuleConnectionCoordinator;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
-import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
@@ -19,8 +17,8 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,16 +26,17 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Owns the effective component, modifier, level, link, and capability views of a controller.
+ * Owns the effective component, modifier, level, link, module, and capability state of a controller.
  *
  * @author howxu <dev@howxu.cn>
  */
 public final class ComponentRuntime {
     private List<ProcessingComponent> components = List.of();
     private List<MachineCapability> capabilities = List.of();
+    private List<CapabilityIdentity> capabilityIdentity = List.of();
     private long capabilityVersion;
     private long modifierVersion;
-    private long craftingStateVersion;
+    private long stateVersion;
     private Map<String, List<RecipeModifier>> foundModifiers = Map.of();
     private Map<Identifier, MachineLevel> foundLevels = Map.of();
     private Set<BlockPos> linkedPortPositions = Set.of();
@@ -47,12 +46,15 @@ public final class ComponentRuntime {
     public void replaceComponents(List<ProcessingComponent> components) {
         List<ProcessingComponent> nextComponents = List.copyOf(components == null ? List.of() : components);
         List<MachineCapability> nextCapabilities = capabilitiesFor(nextComponents);
-        boolean capabilitiesChanged = !this.capabilities.equals(nextCapabilities);
+        List<CapabilityIdentity> nextIdentity = capabilityIdentity(nextCapabilities);
+        boolean componentsChanged = !this.components.equals(nextComponents);
+        boolean capabilitiesChanged = !capabilityIdentity.equals(nextIdentity);
         this.components = nextComponents;
+        if (componentsChanged) stateVersion++;
         if (!capabilitiesChanged) return;
         this.capabilities = nextCapabilities;
+        this.capabilityIdentity = nextIdentity;
         capabilityVersion++;
-        craftingStateVersion++;
     }
 
     public List<ProcessingComponent> components() {
@@ -71,8 +73,8 @@ public final class ComponentRuntime {
         return modifierVersion;
     }
 
-    public long craftingStateVersion() {
-        return craftingStateVersion;
+    public long stateVersion() {
+        return stateVersion;
     }
 
     public void replaceModifiers(Map<String, List<RecipeModifier>> modifiers) {
@@ -81,9 +83,9 @@ public final class ComponentRuntime {
             modifiers.forEach((key, value) -> next.put(key, List.copyOf(value == null ? List.of() : value)));
         }
         if (foundModifiers.equals(next)) return;
-        foundModifiers = Collections.unmodifiableMap(next);
+        foundModifiers = immutableMap(next);
         modifierVersion++;
-        craftingStateVersion++;
+        stateVersion++;
     }
 
     public Map<String, List<RecipeModifier>> foundModifiers() {
@@ -96,7 +98,9 @@ public final class ComponentRuntime {
 
     public void replaceLevels(Map<Identifier, MachineLevel> levels) {
         Map<Identifier, MachineLevel> next = new LinkedHashMap<>(levels == null ? Map.of() : levels);
-        foundLevels = Collections.unmodifiableMap(next);
+        if (foundLevels.equals(next)) return;
+        foundLevels = immutableMap(next);
+        stateVersion++;
     }
 
     public Map<Identifier, MachineLevel> foundLevels() {
@@ -104,7 +108,10 @@ public final class ComponentRuntime {
     }
 
     public void replaceLinkedPortPositions(Set<BlockPos> positions) {
-        linkedPortPositions = Set.copyOf(positions == null ? Set.of() : positions);
+        Set<BlockPos> next = Set.copyOf(positions == null ? Set.of() : positions);
+        if (linkedPortPositions.equals(next)) return;
+        linkedPortPositions = next;
+        stateVersion++;
     }
 
     public Set<BlockPos> linkedPortPositions() {
@@ -115,9 +122,13 @@ public final class ComponentRuntime {
         return position != null && linkedPortPositions.contains(position);
     }
 
-    public void refreshModuleConnectionState(MachineControllerBlockEntity controller) {
-        moduleConnectionStatus = ModuleConnectionCoordinator.connectionStatus(controller);
-        installedModuleCount = ModuleConnectionCoordinator.installedModuleCount(controller);
+    public void replaceModuleConnectionState(ModuleConnectionStatus status, int installedModuleCount) {
+        if (status == null) status = ModuleConnectionStatus.disconnected();
+        if (installedModuleCount < 0) throw new IllegalArgumentException("installedModuleCount must not be negative");
+        if (moduleConnectionStatus.equals(status) && this.installedModuleCount == installedModuleCount) return;
+        moduleConnectionStatus = status;
+        this.installedModuleCount = installedModuleCount;
+        stateVersion++;
     }
 
     public ModuleConnectionStatus moduleConnectionStatus() {
@@ -135,6 +146,58 @@ public final class ComponentRuntime {
     }
 
     public CapabilityAggregate capabilityAggregate() {
+        return capabilityAggregate(capabilities);
+    }
+
+    public int maxParallelism(Machine machine) {
+        if (machine == null || !machine.parallelizable()) return 1;
+        long max = 0L;
+        for (ProcessingComponent component : components) {
+            if (component.getContainer() instanceof ParallelControllerBlockEntity parallel) {
+                max += parallel.currentParallelism();
+            }
+        }
+        long levelBonus = foundLevels.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(Comparator.comparing(Identifier::toString)))
+                .map(Map.Entry::getValue)
+                .mapToLong(foundLevel -> foundLevel.modifier().parallelismBonus())
+                .sum();
+        long effective = Math.max(1L, max) + levelBonus;
+        long bounded = Math.min(Integer.MAX_VALUE, Math.max(1L, effective));
+        return (int) Math.min(Math.max(1, machine.maxParallelism()), bounded);
+    }
+
+    public void clear() {
+        replaceComponents(List.of());
+        replaceModifiers(Map.of());
+        replaceLevels(Map.of());
+        replaceLinkedPortPositions(Set.of());
+        replaceModuleConnectionState(ModuleConnectionStatus.disconnected(), 0);
+    }
+
+    private static List<MachineCapability> capabilitiesFor(List<ProcessingComponent> components) {
+        List<MachineCapability> result = new ArrayList<>();
+        for (ProcessingComponent component : components) {
+            if (component.getContainer() instanceof CapabilityHost host) {
+                try {
+                    result.addAll(host.capabilitySnapshot().capabilities());
+                } catch (RuntimeException ignored) {
+                    // A partially initialized port must not invalidate the controller runtime snapshot.
+                }
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static List<CapabilityIdentity> capabilityIdentity(List<MachineCapability> capabilities) {
+        return capabilities.stream().map(CapabilityIdentity::of).toList();
+    }
+
+    private static <K, V> Map<K, V> immutableMap(Map<K, V> values) {
+        return Collections.unmodifiableMap(new LinkedHashMap<>(values));
+    }
+
+    private static CapabilityAggregate capabilityAggregate(List<MachineCapability> capabilities) {
         long storedEnergy = 0L;
         long energyCapacity = 0L;
         FluidStack primaryFluid = FluidStack.EMPTY;
@@ -161,45 +224,12 @@ public final class ComponentRuntime {
         return new CapabilityAggregate(storedEnergy, energyCapacity, primaryFluid, primaryOutputFluid);
     }
 
-    public int maxParallelism(Machine machine) {
-        if (machine == null || !machine.parallelizable()) return 1;
-        long max = 0L;
-        for (ProcessingComponent component : components) {
-            if (component.getContainer() instanceof ParallelControllerBlockEntity parallel) {
-                max += parallel.currentParallelism();
-            }
+    private record CapabilityIdentity(Identifier type, IOType ioType, List<String> tags, String storageType) {
+        private static CapabilityIdentity of(MachineCapability capability) {
+            return new CapabilityIdentity(capability.type().id(), capability.ioType(),
+                    List.copyOf(capability.view().tags()), capability.storage() == null
+                            ? "" : capability.storage().getClass().getName());
         }
-        long levelBonus = foundLevels.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey(Comparator.comparing(Identifier::toString)))
-                .map(Map.Entry::getValue)
-                .mapToLong(foundLevel -> foundLevel.modifier().parallelismBonus())
-                .sum();
-        long effective = Math.max(1L, max) + levelBonus;
-        long bounded = Math.min(Integer.MAX_VALUE, Math.max(1L, effective));
-        return (int) Math.min(Math.max(1, machine.maxParallelism()), bounded);
-    }
-
-    public void clear() {
-        replaceComponents(List.of());
-        replaceModifiers(Map.of());
-        replaceLevels(Map.of());
-        replaceLinkedPortPositions(Set.of());
-        moduleConnectionStatus = ModuleConnectionStatus.disconnected();
-        installedModuleCount = 0;
-    }
-
-    private static List<MachineCapability> capabilitiesFor(List<ProcessingComponent> components) {
-        List<MachineCapability> result = new ArrayList<>();
-        for (ProcessingComponent component : components) {
-            if (component.getContainer() instanceof CapabilityHost host) {
-                try {
-                    result.addAll(host.capabilitySnapshot().capabilities());
-                } catch (RuntimeException ignored) {
-                    // A partially initialized port must not invalidate the controller runtime snapshot.
-                }
-            }
-        }
-        return List.copyOf(result);
     }
 
     /**
