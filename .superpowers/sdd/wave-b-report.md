@@ -136,3 +136,9 @@
 - CodeGraph and source review covered shared runtime validation, factory lane removal/limit/timeout paths, controller failure publication, and both invalidate overloads.
 - Targeted `rg` scans confirmed the new sync and transient-state cleanup call sites; no tests or Gradle commands were run.
 - `git diff --check`: passed with no whitespace errors.
+
+## Wave B Final Important Re-review Closure: Shared Start Failure Boundary
+
+- Shared start success now synchronizes through `syncCraftingFailure()`, clearing both the controller fallback and stale `recipeFailure` after the runtime start commits.
+- Shared pending start pause, resource-domain, and structure/capability/modifier/state-version invalidation paths now synchronize the same failure boundary immediately instead of leaving a prior level failure visible through `getRecipeFailure()`.
+- Static verification: CodeGraph/source review and `git diff --check` only; tests and Gradle commands were not run.

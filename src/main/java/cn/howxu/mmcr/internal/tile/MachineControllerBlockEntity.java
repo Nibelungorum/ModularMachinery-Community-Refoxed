@@ -2497,7 +2497,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     syncRuntimeStateIfChanged();
                     rememberLastRecipe(next);
                     recipeSearchRetryCounter = 0;
-                    lastFailureUnloc = null;
+                    syncCraftingFailure();
                     setChanged();
                 },
                  () -> isPendingSharedStart(token, next, domain),
@@ -2512,10 +2512,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 || pendingSharedStartDomain == null || !pendingSharedStartDomain.equals(domain)) return false;
         if (redstonePaused) {
             clearPendingSharedStart();
+            syncCraftingFailure();
             return false;
         }
         if (!isCurrentSharedDomain(domain)) {
             clearPendingSharedStart();
+            syncCraftingFailure();
             return false;
         }
         ControllerRuntimeSnapshot snapshot = runtimeSnapshot();
@@ -2524,6 +2526,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 || snapshot.modifierVersion() != pendingSharedStartModifierVersion
                 || snapshot.stateVersion() != pendingSharedStartComponentStateVersion) {
             clearPendingSharedStart();
+            syncCraftingFailure();
             recipeSearchRetryCounter++;
             return false;
         }
