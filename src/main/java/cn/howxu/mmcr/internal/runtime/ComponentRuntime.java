@@ -24,6 +24,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -36,6 +37,7 @@ public final class ComponentRuntime {
     private List<ProcessingComponent> components = List.of();
     private List<MachineCapability> capabilities = List.of();
     private List<CapabilityIdentity> capabilityIdentity = List.of();
+    private CapabilityAggregate capabilityAggregate = new CapabilityAggregate(0L, 0L, null, null);
     private long capabilityVersion;
     private long modifierVersion;
     private long stateVersion;
@@ -55,6 +57,7 @@ public final class ComponentRuntime {
         this.components = nextComponents;
         if (componentsChanged) stateVersion++;
         this.capabilities = nextCapabilities;
+        this.capabilityAggregate = capabilityAggregate(nextCapabilities);
         if (!capabilitiesChanged) return;
         this.capabilityIdentity = nextIdentity;
         capabilityVersion++;
@@ -85,7 +88,18 @@ public final class ComponentRuntime {
         if (modifiers != null) {
             modifiers.forEach((key, value) -> next.put(key, List.copyOf(value == null ? List.of() : value)));
         }
-        if (foundModifiers.equals(next)) return;
+        if (foundModifiers.size() == next.size()) {
+            var current = foundModifiers.entrySet().iterator();
+            var candidate = next.entrySet().iterator();
+            boolean orderedEqual = true;
+            while (current.hasNext()) {
+                if (!Objects.equals(current.next(), candidate.next())) {
+                    orderedEqual = false;
+                    break;
+                }
+            }
+            if (orderedEqual) return;
+        }
         foundModifiers = immutableMap(next);
         modifierVersion++;
         stateVersion++;
@@ -149,7 +163,7 @@ public final class ComponentRuntime {
     }
 
     CapabilityAggregate capabilityAggregate() {
-        return capabilityAggregate(capabilities);
+        return capabilityAggregate;
     }
 
     public int maxParallelism(Machine machine) {
