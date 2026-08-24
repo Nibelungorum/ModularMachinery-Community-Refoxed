@@ -107,6 +107,7 @@ public abstract class RecipeThread {
                     if (!state.isCrafting()) {
                         clearPendingStart(token, next);
                         onStartFailed();
+                        controller.syncRecipeRuntimeFailure(runtime);
                         return 0;
                     }
                     return runtime.parallelism();
@@ -126,11 +127,11 @@ public abstract class RecipeThread {
     private boolean isPendingStart(long token, MachineRecipe recipe) {
         if (!startPending || pendingStartToken != token || pendingStartRecipe != recipe) return false;
         if (controller.isRedstonePaused()) {
-            clearPendingStart(token, recipe);
+            invalidatePendingStart(token, recipe);
             return false;
         }
         if (pendingStartDomain == null || !pendingStartDomain.equals(controller.resourceDomain())) {
-            clearPendingStart(token, recipe);
+            invalidatePendingStart(token, recipe);
             return false;
         }
         ControllerRuntimeSnapshot snapshot = controller.runtimeSnapshot();
@@ -138,10 +139,16 @@ public abstract class RecipeThread {
                 || snapshot.capabilityVersion() != pendingStartCapabilityVersion
                 || snapshot.modifierVersion() != pendingStartModifierVersion
                 || snapshot.stateVersion() != pendingStartComponentStateVersion) {
-            clearPendingStart(token, recipe);
+            invalidatePendingStart(token, recipe);
             return false;
         }
         return true;
+    }
+
+    private void invalidatePendingStart(long token, MachineRecipe recipe) {
+        clearPendingStart(token, recipe);
+        runtime.invalidate();
+        controller.syncRecipeRuntimeFailure(runtime);
     }
 
     private void clearPendingStart(long token, MachineRecipe recipe) {

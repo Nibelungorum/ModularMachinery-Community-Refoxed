@@ -366,7 +366,7 @@ public final class FactoryRuntime {
         startReservations.remove(lane);
     }
 
-    private void recomputeFailure() {
+    public void recomputeFailure() {
         failure = lanes.stream()
                 .map(FactoryRecipeThread::runtime)
                 .map(CraftingRuntime::failure)

@@ -60,6 +60,7 @@ import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
+import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
@@ -223,7 +224,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         runtime.publishComponentState(current.components(), current.foundModifiers(),
                 current.foundLevels(), current.linkedPortPositions());
         ControllerRuntimeSnapshot published = runtimeSnapshot();
-        if (runtime.craftingRuntime().active() || runtime.craftingRuntime().failure() != null) {
+        if (published.crafting().recipeId() != null || published.crafting().failure() != null) {
             syncCraftingFailure();
         }
         StructureSnapshot structure = published.structure();
@@ -248,14 +249,27 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void syncCraftingFailure() {
-        String runtimeFailure = runtime.craftingRuntime().failureUnloc();
-        lastFailureUnloc = runtimeFailure;
+        runtime.publishSnapshot();
+        ExecutionStatus runtimeFailure = runtime.snapshot().crafting().failure();
+        lastFailureUnloc = runtimeFailure == null ? null : failureUnloc(runtimeFailure);
         recipeFailure = null;
     }
 
-    void syncFactoryFailure(@Nullable ExecutionStatus factoryFailure) {
+    public void syncFactoryFailure(@Nullable ExecutionStatus factoryFailure) {
         lastFailureUnloc = factoryFailure == null ? null : failureUnloc(factoryFailure);
         recipeFailure = null;
+    }
+
+    public void syncRecipeRuntimeFailure(CraftingRuntime recipeRuntime) {
+        if (recipeRuntime == runtime.craftingRuntime()) {
+            syncCraftingFailure();
+            syncRuntimeStateIfChanged();
+            return;
+        }
+        if (!runtime.factoryRuntime().contains(recipeRuntime)) return;
+        runtime.factoryRuntime().recomputeFailure();
+        runtime.publishSnapshot();
+        syncRuntimeStateIfChanged();
     }
 
     private void validateRuntimeBoundary(ServerLevel runtimeLevel, BlockPos runtimePos) {
@@ -2484,7 +2498,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     if (!state.isCrafting()) {
                         clearPendingSharedStart();
                         recipeSearchRetryCounter++;
-                        lastFailureUnloc = runtime.craftingRuntime().failureUnloc();
+                        syncCraftingFailure();
                         syncRuntimeStateIfChanged();
                         return 0;
                     }
@@ -2511,13 +2525,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (!sharedStartPending || pendingSharedStartToken != token || pendingSharedStartRecipe != next
                 || pendingSharedStartDomain == null || !pendingSharedStartDomain.equals(domain)) return false;
         if (redstonePaused) {
-            clearPendingSharedStart();
-            syncCraftingFailure();
+            invalidatePendingSharedStart();
             return false;
         }
         if (!isCurrentSharedDomain(domain)) {
-            clearPendingSharedStart();
-            syncCraftingFailure();
+            invalidatePendingSharedStart();
             return false;
         }
         ControllerRuntimeSnapshot snapshot = runtimeSnapshot();
@@ -2525,12 +2537,18 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 || snapshot.capabilityVersion() != pendingSharedStartCapabilityVersion
                 || snapshot.modifierVersion() != pendingSharedStartModifierVersion
                 || snapshot.stateVersion() != pendingSharedStartComponentStateVersion) {
-            clearPendingSharedStart();
-            syncCraftingFailure();
+            invalidatePendingSharedStart();
             recipeSearchRetryCounter++;
             return false;
         }
         return true;
+    }
+
+    private void invalidatePendingSharedStart() {
+        clearPendingSharedStart();
+        runtime.craftingRuntime().invalidate();
+        syncCraftingFailure();
+        syncRuntimeStateIfChanged();
     }
 
     private void clearPendingSharedStart() {

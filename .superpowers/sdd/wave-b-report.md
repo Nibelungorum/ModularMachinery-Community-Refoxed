@@ -142,3 +142,10 @@
 - Shared start success now synchronizes through `syncCraftingFailure()`, clearing both the controller fallback and stale `recipeFailure` after the runtime start commits.
 - Shared pending start pause, resource-domain, and structure/capability/modifier/state-version invalidation paths now synchronize the same failure boundary immediately instead of leaving a prior level failure visible through `getRecipeFailure()`.
 - Static verification: CodeGraph/source review and `git diff --check` only; tests and Gradle commands were not run.
+
+## Wave B Final Important: Unified Shared-Start Failure Cleanup
+
+- `syncCraftingFailure()` now republishes the current crafting runtime before deriving the controller failure, so success and invalidation cannot copy a stale runtime failure back into controller state.
+- Shared start transaction failures clear `recipeFailure` while publishing the structured runtime failure; pending shared-start invalidation clears the runtime failure first and publishes the resulting idle state.
+- Recipe-thread shared-start transaction failures and pending-start invalidations now synchronize their lane runtime with the factory aggregate immediately. Invalidations clear pending tokens, invalidate the lane runtime, and publish the current controller failure boundary without relying on a later snapshot read.
+- Static verification: CodeGraph/source review, targeted `rg`, and `git diff --check` only; tests and Gradle commands were not run. Test sources and docs other than this report were untouched.
