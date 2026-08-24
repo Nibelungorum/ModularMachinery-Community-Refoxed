@@ -40,7 +40,7 @@ public final class RequirementPlanner {
             RequirementHandler<MachineRequirement> handler = handler(requirement.type());
             List<MachineCapability> matching = matchingCapabilities(requirement, capabilities);
             RequirementPlan requirementPlan = handler.plan(requirement, matching,
-                    new PlanningContext(parallelism, index));
+                    new PlanningContext(parallelism, index, context.allowPartialOutputs()));
             if (!requirementPlan.successful()) return new PlanningResult(null, requirementPlan.failure());
             parallelism = Math.min(parallelism, requirementPlan.maxParallelism());
             prepared.add(new PreparedRequirement(requirement, matching, handler));
@@ -53,7 +53,7 @@ public final class RequirementPlanner {
         for (int index = 0; index < prepared.size(); index++) {
             PreparedRequirement value = prepared.get(index);
             RequirementPlan requirementPlan = value.handler().plan(value.requirement(), value.capabilities(),
-                    new PlanningContext(parallelism, index));
+                    new PlanningContext(parallelism, index, context.allowPartialOutputs()));
             if (!requirementPlan.successful()) return new PlanningResult(null, requirementPlan.failure());
             plans.add(requirementPlan);
         }

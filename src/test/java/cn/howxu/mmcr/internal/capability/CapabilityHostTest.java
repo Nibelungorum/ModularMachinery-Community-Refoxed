@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
@@ -112,6 +113,12 @@ class CapabilityHostTest {
     }
 
     private static CapabilityRequest request(MachineCapability capability) {
+        if (capability.storage() instanceof ResourceStorage<?>) {
+            return new CapabilityRequests.ResourceRequest<>(capability.type(), capability.ioType(), 1, List.of());
+        }
+        if (capability.storage() instanceof LongValueStorage) {
+            return new CapabilityRequests.ValueRequest(capability.type(), capability.ioType(), 1, 1, false);
+        }
         return new TestRequest(capability.type(), capability.ioType(), 1);
     }
 

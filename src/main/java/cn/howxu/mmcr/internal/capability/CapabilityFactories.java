@@ -7,11 +7,16 @@ import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
+import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
+import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
+import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.util.IOType;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 /**
  * Built-in capability factories and shared capability contract helpers.
@@ -48,11 +53,61 @@ public final class CapabilityFactories {
     }
 
     static CapabilityOperation operation(CapabilityType type, IOType ioType, CapabilityRequest request) {
+        return operation(type, ioType, request, null);
+    }
+
+    static CapabilityOperation operation(CapabilityType type, IOType ioType, CapabilityRequest request,
+                                         Object storage) {
         if (request == null) throw new IllegalArgumentException("request must not be null");
         if (!type.equals(request.type())) throw new IllegalArgumentException("Capability request type does not match");
         if (ioType != request.ioType()) throw new IllegalArgumentException("Capability request IO type does not match");
         if (request.parallelism() <= 0) throw new IllegalArgumentException("parallelism must be positive");
-        return transaction -> CapabilityResult.successful();
+        if (request instanceof CapabilityRequests.ResourceRequest<?> resourceRequest
+                && storage instanceof ResourceStorage<?> resourceStorage) {
+            return resourceOperation(resourceStorage, resourceRequest);
+        }
+        if (request instanceof CapabilityRequests.ValueRequest valueRequest
+                && storage instanceof LongValueStorage valueStorage) {
+            return valueOperation(valueStorage, valueRequest);
+        }
+        if (request instanceof CapabilityRequests.SmartValueRequest smartRequest
+                && storage instanceof FloatValueStorage valueStorage) {
+            return transaction -> valueStorage.set(smartRequest.interfaceType(), smartRequest.value(), transaction)
+                    ? CapabilityResult.successful() : CapabilityResult.failure(failure(type, "smart_value"));
+        }
+        return transaction -> CapabilityResult.failure(failure(type, "unsupported_request"));
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static CapabilityOperation resourceOperation(ResourceStorage<?> storage,
+                                                         CapabilityRequests.ResourceRequest<?> request) {
+        ResourceStorage typedStorage = storage;
+        return transaction -> {
+            for (CapabilityRequests.ResourceAction<?> action : request.actions()) {
+                long moved = action.insert()
+                        ? typedStorage.insert(action.slot(), action.resource(), action.amount(), transaction)
+                        : typedStorage.extract(action.slot(), action.resource(), action.amount(), transaction);
+                if (moved != action.amount()) return CapabilityResult.failure(failure(request.type(), "insufficient_resource"));
+            }
+            return CapabilityResult.successful();
+        };
+    }
+
+    private static CapabilityOperation valueOperation(LongValueStorage storage, CapabilityRequests.ValueRequest request) {
+        return transaction -> {
+            storage.updateSnapshots(transaction);
+            long moved = request.insert()
+                    ? storage.insert(request.amount(), false)
+                    : storage.extract(request.amount(), false);
+            return moved == request.amount()
+                    ? CapabilityResult.successful()
+                    : CapabilityResult.failure(failure(request.type(), "insufficient_value"));
+        };
+    }
+
+    private static cn.howxu.mmcr.api.capability.status.ExecutionStatus failure(CapabilityType type, String reason) {
+        return new cn.howxu.mmcr.api.capability.status.ExecutionStatus(type.id(),
+                cn.howxu.mmcr.api.capability.status.StatusSeverity.BLOCKED, type.id(), java.util.Map.of("reason", reason));
     }
 
     private static <T> T require(IOPortBlockEntity port, Class<T> type) {

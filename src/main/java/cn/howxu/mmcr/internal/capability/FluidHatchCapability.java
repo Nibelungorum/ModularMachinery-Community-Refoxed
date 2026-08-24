@@ -48,6 +48,6 @@ public final class FluidHatchCapability implements MachineCapability {
 
     @Override
     public CapabilityOperation prepare(CapabilityRequest request) {
-        return CapabilityFactories.operation(type(), ioType, request);
+        return CapabilityFactories.operation(type(), ioType, request, storage);
     }
 }

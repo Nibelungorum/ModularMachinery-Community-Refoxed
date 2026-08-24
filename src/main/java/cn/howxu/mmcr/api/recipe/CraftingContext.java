@@ -17,7 +17,7 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public final class CraftingContext {
-    private final List<MachineCapability> capabilities;
+    private List<MachineCapability> capabilities;
     private List<RecipeModifier> modifiers;
 
     public CraftingContext(CapabilitySnapshot snapshot) {
@@ -47,11 +47,18 @@ public final class CraftingContext {
         this.modifiers = modifiers == null ? List.of() : List.copyOf(modifiers);
     }
 
+    void resetFor(CapabilitySnapshot snapshot, List<RecipeModifier> modifiers) {
+        if (snapshot == null) throw new IllegalArgumentException("snapshot must not be null");
+        capabilities = snapshot.capabilities();
+        setModifiers(modifiers);
+    }
+
     private PlanningResult plan(MachineRecipe recipe, int parallelism, RecipeModifier.IOType direction) {
         if (recipe == null) throw new IllegalArgumentException("recipe must not be null");
         List<MachineRequirement> requirements = recipe.runtimeRequirements(modifiers).stream()
                 .filter(requirement -> direction == null || requirement.io() == direction)
                 .toList();
-        return new RequirementPlanner().plan(requirements, capabilities, new PlanningContext(parallelism, 0));
+        return new RequirementPlanner().plan(requirements, capabilities,
+                new PlanningContext(parallelism, 0, direction == RecipeModifier.IOType.OUTPUT && recipe.allowPartialOutputs()));
     }
 }

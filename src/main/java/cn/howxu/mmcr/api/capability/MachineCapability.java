@@ -15,5 +15,14 @@ public interface MachineCapability {
 
     CapabilityView view();
 
+    /**
+     * Returns the capability's generic backing storage for requirement handlers.
+     *
+     * @return the backing storage, or {@code null} for non-storage capabilities
+     */
+    default Object storage() {
+        return null;
+    }
+
     CapabilityOperation prepare(CapabilityRequest request);
 }
