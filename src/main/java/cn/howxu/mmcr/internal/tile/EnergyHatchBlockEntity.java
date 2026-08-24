@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.tile;
 
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -16,6 +17,7 @@ import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
 
     private final LongEnergyStorage storage;
+    private CapabilitySnapshot capabilitySnapshot;
 
     protected EnergyHatchBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state, IOPortKind kind) {
         super(type, pos, state);
@@ -30,6 +32,16 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
 
     public LongEnergyStorage getMutableEnergyStorage() {
         return storage;
+    }
+
+    @Override
+    public CapabilitySnapshot capabilitySnapshot() {
+        if (capabilitySnapshot == null) {
+            capabilitySnapshot = new CapabilitySnapshot(kind().capabilityFactories().stream()
+                    .map(factory -> factory.create(this))
+                    .toList());
+        }
+        return capabilitySnapshot;
     }
 
     @Override

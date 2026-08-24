@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.autoio;
 
 import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.ModBlockEntities;
@@ -195,6 +196,7 @@ class AutoIOTransferHandlersTest {
 
         @Override public IOType ioType() { return ioType; }
         @Override public IOPortKind kind() { return kind; }
+        @Override public CapabilitySnapshot capabilitySnapshot() { return new CapabilitySnapshot(List.of()); }
         @Override public AutoIOCapabilityType autoIOCapabilityType() { return AutoIOCapabilityType.ITEM; }
         @Override protected AutoIOTransferHandler autoIOTransferHandler() { return handler; }
         @Override protected boolean hasAutoIOTransferWork() { return hasTransferWork; }

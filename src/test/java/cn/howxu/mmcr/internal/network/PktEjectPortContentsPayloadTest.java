@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
@@ -166,6 +167,7 @@ class PktEjectPortContentsPayloadTest {
 
         @Override public IOType ioType() { return ioType; }
         @Override public IOPortKind kind() { return kind; }
+        @Override public CapabilitySnapshot capabilitySnapshot() { return new CapabilitySnapshot(List.of()); }
         @Override public AutoIOCapabilityType autoIOCapabilityType() { return AutoIOCapabilityType.ITEM; }
         @Override public boolean ejectContents() {
             ejectCalls++;

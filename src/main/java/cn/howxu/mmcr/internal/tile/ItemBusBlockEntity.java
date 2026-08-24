@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.tile;
 
 import com.mojang.serialization.Codec;
 import cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.BulkItemStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
@@ -27,6 +28,7 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
 
     private final ItemStackHandler handler;
     private Boolean inventoryEmpty;
+    private CapabilitySnapshot capabilitySnapshot;
 
     protected ItemBusBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state, IOPortKind kind) {
         super(type, pos, state);
@@ -54,6 +56,16 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
         @SuppressWarnings("unchecked")
         ResourceStorage<ItemResource> itemStorage = (ResourceStorage<ItemResource>) storage;
         return itemStorage;
+    }
+
+    @Override
+    public CapabilitySnapshot capabilitySnapshot() {
+        if (capabilitySnapshot == null) {
+            capabilitySnapshot = new CapabilitySnapshot(kind().capabilityFactories().stream()
+                    .map(factory -> factory.create(this))
+                    .toList());
+        }
+        return capabilitySnapshot;
     }
 
     public void dropContents() {

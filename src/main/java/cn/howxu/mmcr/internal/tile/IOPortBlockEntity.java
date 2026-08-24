@@ -42,7 +42,6 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     private int autoIODelay = AUTO_IO_MAX_DELAY;
     private int autoIOTicksUntilTransfer;
     private EnumSet<Direction> autoIOCandidateSides = EnumSet.noneOf(Direction.class);
-    private CapabilitySnapshot capabilitySnapshot;
 
     protected IOPortBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
         super(type, pos, state);
@@ -75,14 +74,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     public abstract IOPortKind kind();
 
     @Override
-    public CapabilitySnapshot capabilitySnapshot() {
-        if (capabilitySnapshot == null) {
-            capabilitySnapshot = new CapabilitySnapshot(kind().capabilityFactories().stream()
-                    .map(factory -> factory.create(this))
-                    .toList());
-        }
-        return capabilitySnapshot;
-    }
+    public abstract CapabilitySnapshot capabilitySnapshot();
 
     public AutoIOConfig autoIOConfig() {
         return autoIOConfig;

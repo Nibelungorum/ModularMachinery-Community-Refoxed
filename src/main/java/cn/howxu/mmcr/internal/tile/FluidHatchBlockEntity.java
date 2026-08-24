@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.tile;
 
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
@@ -16,6 +17,7 @@ import net.neoforged.neoforge.transfer.fluid.FluidResource;
 public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
 
     private final LongFluidStorage storage;
+    private CapabilitySnapshot capabilitySnapshot;
 
     protected FluidHatchBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state, IOPortKind kind) {
         super(type, pos, state);
@@ -31,6 +33,16 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
 
     public LongFluidStorage getMutableFluidStorage() {
         return storage;
+    }
+
+    @Override
+    public CapabilitySnapshot capabilitySnapshot() {
+        if (capabilitySnapshot == null) {
+            capabilitySnapshot = new CapabilitySnapshot(kind().capabilityFactories().stream()
+                    .map(factory -> factory.create(this))
+                    .toList());
+        }
+        return capabilitySnapshot;
     }
 
     public boolean isTankEmpty() {

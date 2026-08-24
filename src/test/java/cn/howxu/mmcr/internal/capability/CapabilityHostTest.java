@@ -26,6 +26,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.lang.reflect.Modifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -54,6 +55,11 @@ class CapabilityHostTest {
         assertThat(first.capabilities()).hasSize(2);
         assertThat(first.capabilities().get(0)).isSameAs(second.capabilities().get(0));
         assertThatThrownBy(() -> first.capabilities().clear()).isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void port_base_declares_capability_snapshot_as_abstract() throws NoSuchMethodException {
+        assertThat(Modifier.isAbstract(IOPortBlockEntity.class.getMethod("capabilitySnapshot").getModifiers())).isTrue();
     }
 
     @Test
@@ -134,8 +140,18 @@ class CapabilityHostTest {
                     state);
         }
 
+        private CapabilitySnapshot capabilitySnapshot;
+
         @Override public IOType ioType() { return IOType.INPUT; }
         @Override public IOPortKind kind() { return KIND; }
+        @Override public CapabilitySnapshot capabilitySnapshot() {
+            if (capabilitySnapshot == null) {
+                capabilitySnapshot = new CapabilitySnapshot(kind().capabilityFactories().stream()
+                        .map(factory -> factory.create(this))
+                        .toList());
+            }
+            return capabilitySnapshot;
+        }
         @Override public cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType autoIOCapabilityType() {
             return cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType.ITEM;
         }
