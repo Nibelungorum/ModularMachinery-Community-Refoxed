@@ -177,6 +177,11 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
         }
 
         @Override
+        public Class<ItemResource> resourceType() {
+            return ItemResource.class;
+        }
+
+        @Override
         public void setStackInSlot(int slot, ItemStack stack) {
             validateSlotIndex(slot);
             boolean wasSuppressingChanges = suppressChanges;

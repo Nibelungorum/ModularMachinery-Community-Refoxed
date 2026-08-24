@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -55,10 +56,17 @@ public final class CraftingContext {
 
     private PlanningResult plan(MachineRecipe recipe, int parallelism, RecipeModifier.IOType direction) {
         if (recipe == null) throw new IllegalArgumentException("recipe must not be null");
-        List<MachineRequirement> requirements = recipe.runtimeRequirements(modifiers).stream()
-                .filter(requirement -> direction == null || requirement.io() == direction)
-                .toList();
+        List<MachineRequirement> requirements = new ArrayList<>();
+        List<Integer> requirementIndexes = new ArrayList<>();
+        List<MachineRequirement> recipeRequirements = recipe.runtimeRequirements(modifiers);
+        for (int index = 0; index < recipeRequirements.size(); index++) {
+            MachineRequirement requirement = recipeRequirements.get(index);
+            if (direction != null && requirement.io() != direction) continue;
+            requirements.add(requirement);
+            requirementIndexes.add(index);
+        }
         return new RequirementPlanner().plan(requirements, capabilities,
-                new PlanningContext(parallelism, 0, direction == RecipeModifier.IOType.OUTPUT && recipe.allowPartialOutputs()));
+                new PlanningContext(parallelism, 0, direction == RecipeModifier.IOType.OUTPUT && recipe.allowPartialOutputs()),
+                requirementIndexes);
     }
 }

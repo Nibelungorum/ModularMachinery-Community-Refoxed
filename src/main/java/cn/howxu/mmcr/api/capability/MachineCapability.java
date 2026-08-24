@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.capability;
 
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
 import cn.howxu.mmcr.util.IOType;
 
 /**
@@ -16,11 +17,11 @@ public interface MachineCapability {
     CapabilityView view();
 
     /**
-     * Returns the capability's generic backing storage for requirement handlers.
+     * Returns the capability's backing storage protocol for requirement handlers.
      *
      * @return the backing storage, or {@code null} for non-storage capabilities
      */
-    default Object storage() {
+    default CapabilityStorage storage() {
         return null;
     }
 

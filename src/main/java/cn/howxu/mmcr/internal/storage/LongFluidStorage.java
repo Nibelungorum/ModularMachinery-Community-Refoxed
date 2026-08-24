@@ -30,6 +30,11 @@ public final class LongFluidStorage extends SnapshotJournal<LongFluidStorage.Sna
         this.onChange = onChange == null ? () -> {} : onChange;
     }
 
+    @Override
+    public Class<FluidResource> resourceType() {
+        return FluidResource.class;
+    }
+
     public long getCapacityAsLong() {
         return capacity;
     }

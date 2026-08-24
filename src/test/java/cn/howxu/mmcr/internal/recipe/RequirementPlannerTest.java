@@ -3,6 +3,8 @@ package cn.howxu.mmcr.internal.recipe;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -14,6 +16,9 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.CraftingContext;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -87,7 +92,7 @@ class RequirementPlannerTest {
 
         assertThat(result.successful()).isTrue();
         assertThat(result.plan().parallelism()).isEqualTo(3);
-        assertThat(matching.requestedParallelisms()).containsExactly(8, 3);
+        assertThat(matching.requestedParallelisms()).containsExactly(8);
         assertThat(wrongDirection.requestedParallelisms()).isEmpty();
         assertThat(wrongType.requestedParallelisms()).isEmpty();
     }
@@ -140,7 +145,7 @@ class RequirementPlannerTest {
         storage.setAmount(10);
         MachineCapability capability = new TestCapability(EnergyRequirement.TYPE.id(), IOType.INPUT, 1) {
             @Override
-            public Object storage() {
+            public CapabilityStorage storage() {
                 return storage;
             }
 
@@ -209,6 +214,67 @@ class RequirementPlannerTest {
         assertThat(storage.value("mode")).contains(9F);
     }
 
+    @Test
+    void built_in_chance_decision_prepares_the_operation_once() {
+        BulkItemStorage storage = new BulkItemStorage(64, null);
+        StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage);
+        var result = new RequirementPlanner().plan(
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                        Items.IRON_INGOT.getDefaultInstance(), 1F, List.of())),
+                List.of(capability), new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(capability.prepareCalls).isEqualTo(1);
+        assertThat(result.plan().commit()).isTrue();
+    }
+
+    @Test
+    void zero_consume_chance_still_requires_the_full_input_inventory() {
+        BulkItemStorage storage = new BulkItemStorage(64, null);
+        var result = new RequirementPlanner().plan(
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2,
+                        ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0F)),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT, storage)),
+                new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isFalse();
+    }
+
+    @Test
+    void smart_output_with_missing_interface_is_blocked_during_planning() {
+        FloatValueStorage storage = new FloatValueStorage();
+        var result = new RequirementPlanner().plan(
+                List.of(cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.output("missing", 9F)),
+                List.of(new StorageCapability(cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.TYPE.id(),
+                        IOType.OUTPUT, storage)),
+                new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.failure().details()).containsEntry("reason", "missing_smart_interface");
+    }
+
+    @Test
+    void filtered_context_plans_keep_the_original_recipe_requirement_index() {
+        MachineRequirement output = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                Items.IRON_INGOT.getDefaultInstance());
+        MachineRequirement input = new ItemRequirement(RecipeModifier.IOType.INPUT,
+                Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY);
+        BulkItemStorage storage = new BulkItemStorage(64, null);
+        storage.insert(ItemResource.of(Items.IRON_INGOT), 1, false);
+        MachineRecipe recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr_test", "indexed_requirements"),
+                Identifier.fromNamespaceAndPath("mmcr_test", "machine"), 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(output, input), true);
+
+        var result = new CraftingContext(new CapabilitySnapshot(List.of(
+                new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT, storage))))
+                .planInputs(recipe, 1);
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().requirements()).singleElement()
+                .extracting(RequirementPlan::requirementIndex).isEqualTo(1);
+    }
+
     private record TestRequirement(RequirementType<TestRequirement> type, RecipeModifier.IOType io)
             implements MachineRequirement {
     }
@@ -246,7 +312,7 @@ class RequirementPlannerTest {
         }
 
         @Override
-        public Object storage() {
+        public CapabilityStorage storage() {
             return null;
         }
 
@@ -293,9 +359,10 @@ class RequirementPlannerTest {
     private static final class StorageCapability implements MachineCapability {
         private final CapabilityType type;
         private final IOType ioType;
-        private final Object storage;
+        private final CapabilityStorage storage;
+        private int prepareCalls;
 
-        private StorageCapability(Identifier type, IOType ioType, Object storage) {
+        private StorageCapability(Identifier type, IOType ioType, CapabilityStorage storage) {
             this.type = new CapabilityType(type);
             this.ioType = ioType;
             this.storage = storage;
@@ -327,13 +394,13 @@ class RequirementPlannerTest {
         }
 
         @Override
-        public Object storage() {
+        public CapabilityStorage storage() {
             return storage;
         }
 
         @Override
-        @SuppressWarnings({"unchecked", "rawtypes"})
         public CapabilityOperation prepare(cn.howxu.mmcr.api.capability.CapabilityRequest request) {
+            prepareCalls++;
             if (request instanceof CapabilityRequests.SmartValueRequest smartRequest
                     && storage instanceof FloatValueStorage floatStorage) {
                 return transaction -> floatStorage.set(smartRequest.interfaceType(), smartRequest.value(), transaction)
@@ -341,14 +408,16 @@ class RequirementPlannerTest {
                         : CapabilityResult.failure(new ExecutionStatus(type.id(), StatusSeverity.BLOCKED,
                                 type.id(), java.util.Map.of()));
             }
-            CapabilityRequests.ResourceRequest resourceRequest = (CapabilityRequests.ResourceRequest) request;
-            ResourceStorage resourceStorage = (ResourceStorage) storage;
+            CapabilityRequests.ResourceRequest<?> resourceRequest = (CapabilityRequests.ResourceRequest<?>) request;
+            if (!(storage instanceof ResourceStorage<?> resourceStorage)) {
+                return transaction -> CapabilityResult.failure(new ExecutionStatus(
+                        type.id(), StatusSeverity.BLOCKED, type.id(), java.util.Map.of()));
+            }
             return transaction -> {
-                for (Object actionValue : resourceRequest.actions()) {
-                    CapabilityRequests.ResourceAction action = (CapabilityRequests.ResourceAction) actionValue;
+                for (CapabilityRequests.ResourceAction<?> action : resourceRequest.actions()) {
                     long moved = action.insert()
-                            ? resourceStorage.insert(action.slot(), action.resource(), action.amount(), transaction)
-                            : resourceStorage.extract(action.slot(), action.resource(), action.amount(), transaction);
+                            ? resourceStorage.insertResource(action.slot(), action.resource(), action.amount(), transaction)
+                            : resourceStorage.extractResource(action.slot(), action.resource(), action.amount(), transaction);
                     if (moved != action.amount()) return CapabilityResult.failure(new ExecutionStatus(
                             type.id(), StatusSeverity.BLOCKED, type.id(), java.util.Map.of()));
                 }

@@ -7,7 +7,7 @@ import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class LongValueStorage extends SnapshotJournal<Long> {
+public final class LongValueStorage extends SnapshotJournal<Long> implements CapabilityStorage {
     private final long capacity;
     private final long transferLimit;
     private final Runnable onChange;

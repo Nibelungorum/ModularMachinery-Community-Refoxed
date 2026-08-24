@@ -12,7 +12,7 @@ import java.util.Optional;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class FloatValueStorage extends SnapshotJournal<Map<String, Float>> {
+public final class FloatValueStorage extends SnapshotJournal<Map<String, Float>> implements CapabilityStorage {
     private final Map<String, Float> values = new LinkedHashMap<>();
 
     public Optional<Float> value(String key) {

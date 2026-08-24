@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
+import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
 import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
@@ -57,7 +58,7 @@ public final class CapabilityFactories {
     }
 
     static CapabilityOperation operation(CapabilityType type, IOType ioType, CapabilityRequest request,
-                                         Object storage) {
+                                         CapabilityStorage storage) {
         if (request == null) throw new IllegalArgumentException("request must not be null");
         if (!type.equals(request.type())) throw new IllegalArgumentException("Capability request type does not match");
         if (ioType != request.ioType()) throw new IllegalArgumentException("Capability request IO type does not match");
@@ -78,15 +79,16 @@ public final class CapabilityFactories {
         return transaction -> CapabilityResult.failure(failure(type, "unsupported_request"));
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     private static CapabilityOperation resourceOperation(ResourceStorage<?> storage,
                                                          CapabilityRequests.ResourceRequest<?> request) {
-        ResourceStorage typedStorage = storage;
         return transaction -> {
             for (CapabilityRequests.ResourceAction<?> action : request.actions()) {
+                if (!storage.resourceType().isInstance(action.resource())) {
+                    return CapabilityResult.failure(failure(request.type(), "wrong_resource_type"));
+                }
                 long moved = action.insert()
-                        ? typedStorage.insert(action.slot(), action.resource(), action.amount(), transaction)
-                        : typedStorage.extract(action.slot(), action.resource(), action.amount(), transaction);
+                        ? storage.insertResource(action.slot(), action.resource(), action.amount(), transaction)
+                        : storage.extractResource(action.slot(), action.resource(), action.amount(), transaction);
                 if (moved != action.amount()) return CapabilityResult.failure(failure(request.type(), "insufficient_resource"));
             }
             return CapabilityResult.successful();

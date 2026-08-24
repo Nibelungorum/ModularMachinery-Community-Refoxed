@@ -25,6 +25,11 @@ public final class BulkItemStorage extends SnapshotJournal<BulkItemStorage.Snaps
         this.onChange = onChange == null ? () -> {} : onChange;
     }
 
+    @Override
+    public Class<ItemResource> resourceType() {
+        return ItemResource.class;
+    }
+
     public long insert(ItemResource resource, long amount, boolean simulate) {
         if (amount <= 0 || resource == null || resource.isEmpty()) return 0L;
         if (!this.resource.isEmpty() && !this.resource.equals(resource)) return 0L;
