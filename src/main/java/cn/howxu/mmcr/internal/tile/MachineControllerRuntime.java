@@ -1,4 +1,4 @@
-package cn.howxu.mmcr.internal.runtime;
+package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
@@ -13,7 +13,10 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionCoordinator;
-import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
+import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
+import cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot;
+import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
@@ -40,7 +43,7 @@ public final class MachineControllerRuntime {
     private long contextModifierVersion = Long.MIN_VALUE;
     private long contextStateVersion = Long.MIN_VALUE;
 
-    public MachineControllerRuntime(MachineControllerBlockEntity controller) {
+    MachineControllerRuntime(MachineControllerBlockEntity controller) {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
         this.controller = controller;
         this.structure = new StructureRuntime(controller);
@@ -72,36 +75,36 @@ public final class MachineControllerRuntime {
         return craftingContext;
     }
 
-    public void publishStructureState(boolean structureAreaLoaded, boolean formed,
-                                     @Nullable Machine configuredMachine, int matchedStage) {
+    void publishStructureState(boolean structureAreaLoaded, boolean formed,
+                               @Nullable Machine configuredMachine, int matchedStage) {
         structure.setStructureAreaLoaded(structureAreaLoaded);
         structure.setFormed(formed);
         structure.setMachine(configuredMachine);
         structure.setMatchedStructureStage(matchedStage);
     }
 
-    public void requestStructureCheck() {
+    void requestStructureCheck() {
         structure.requestCheck();
     }
 
-    public void onStructureBlockChanged(BlockPos changedPos) {
+    void onStructureBlockChanged(BlockPos changedPos) {
         structure.onBlockChanged(changedPos);
     }
 
-    public void onStructureChunkChanged(ServerLevel level, BlockPos controllerPos) {
+    void onStructureChunkChanged(ServerLevel level, BlockPos controllerPos) {
         structure.onChunkStateChanged(level, controllerPos);
     }
 
-    public StructureRuntime.StructureWorkSnapshot structureWorkSnapshot() {
+    StructureRuntime.StructureWorkSnapshot structureWorkSnapshot() {
         return structure.workSnapshot();
     }
 
-    public void publishStructureWork(StructureRuntime.StructureWorkSnapshot state) {
+    void publishStructureWork(StructureRuntime.StructureWorkSnapshot state) {
         structure.publishWork(state);
     }
 
-    public void startStructureScan(StructureMatcher.ScanState scan, Machine scanMachine,
-                                   Object scanCandidate, long steppedTick, long startedTick) {
+    void startStructureScan(StructureMatcher.ScanState scan, Machine scanMachine,
+                            Object scanCandidate, long steppedTick, long startedTick) {
         structure.setScan(scan);
         structure.setScanMachine(scanMachine);
         structure.setScanCandidate(scanCandidate);
@@ -109,51 +112,51 @@ public final class MachineControllerRuntime {
         structure.setScanStartedTick(startedTick);
     }
 
-    public StructureMatcher.ScanResult stepStructureScan(ServerLevel level, BlockPos controllerPos) {
+    StructureMatcher.ScanResult stepStructureScan(ServerLevel level, BlockPos controllerPos) {
         return structure.stepScan(level, controllerPos);
     }
 
-    public void clearStructureScan() {
+    void clearStructureScan() {
         structure.clearScan();
     }
 
-    public void invalidateStructureScan(StructureMatcher.InvalidationReason reason) {
+    void invalidateStructureScan(StructureMatcher.InvalidationReason reason) {
         structure.invalidateScan(reason);
     }
 
-    public boolean publishFormationState(Machine machine, BlockArray pattern,
-                                         @Nullable CompiledMachinePattern compiledPattern,
-                                         Direction facing, Direction rollFacing, int matchedStage) {
+    boolean publishFormationState(Machine machine, BlockArray pattern,
+                                  @Nullable CompiledMachinePattern compiledPattern,
+                                  Direction facing, Direction rollFacing, int matchedStage) {
         return structure.publishFormationState(machine, pattern, compiledPattern, facing, rollFacing, matchedStage);
     }
 
-    public boolean publishClientStructureState(@Nullable Machine machine, boolean formed,
-                                               boolean structureAreaLoaded) {
+    boolean publishClientStructureState(@Nullable Machine machine, boolean formed,
+                                        boolean structureAreaLoaded) {
         return structure.publishClientState(machine, formed, structureAreaLoaded);
     }
 
-    public void resetStructure(@Nullable Machine configuredMachine, boolean forceVersion) {
+    void resetStructure(@Nullable Machine configuredMachine, boolean forceVersion) {
         structure.reset(configuredMachine, forceVersion);
     }
 
-    public void publishCriticalStructureChunks(Set<ChunkPos> criticalChunks) {
+    void publishCriticalStructureChunks(Set<ChunkPos> criticalChunks) {
         structure.setCriticalChunks(criticalChunks);
     }
 
-    public int maxParallelism(@Nullable Machine machine) {
+    int maxParallelism(@Nullable Machine machine) {
         return components.maxParallelism(machine);
     }
 
-    public void publishClientComponentState(Map<Identifier, MachineLevel> levels,
-                                            ModuleConnectionStatus status, int installedModuleCount) {
+    void publishClientComponentState(Map<Identifier, MachineLevel> levels,
+                                     ModuleConnectionStatus status, int installedModuleCount) {
         components.replaceLevels(levels);
         components.replaceModuleConnectionState(status, installedModuleCount);
     }
 
-    public void publishComponentState(List<ProcessingComponent> nextComponents,
-                                      Map<String, List<RecipeModifier>> modifiers,
-                                      Map<Identifier, MachineLevel> levels,
-                                      Set<BlockPos> linkedPositions) {
+    void publishComponentState(List<ProcessingComponent> nextComponents,
+                               Map<String, List<RecipeModifier>> modifiers,
+                               Map<Identifier, MachineLevel> levels,
+                               Set<BlockPos> linkedPositions) {
         components.replaceComponents(nextComponents);
         components.replaceModifiers(modifiers);
         components.replaceLevels(levels);
@@ -161,11 +164,11 @@ public final class MachineControllerRuntime {
         refreshCraftingContext();
     }
 
-    public void publishModuleConnectionState(ModuleConnectionStatus status, int installedModuleCount) {
+    void publishModuleConnectionState(ModuleConnectionStatus status, int installedModuleCount) {
         components.replaceModuleConnectionState(status, installedModuleCount);
     }
 
-    public void refreshModuleConnectionState() {
+    void refreshModuleConnectionState() {
         if (!(controller.getLevel() instanceof ServerLevel)) {
             publishModuleConnectionState(ModuleConnectionStatus.notRequired(), 0);
             return;
@@ -174,8 +177,8 @@ public final class MachineControllerRuntime {
                 ModuleConnectionCoordinator.installedModuleCount(controller));
     }
 
-    public void publishCraftingState(@Nullable Identifier recipeId, CraftingStatus status,
-                                     @Nullable ExecutionStatus failure) {
+    void publishCraftingState(@Nullable Identifier recipeId, CraftingStatus status,
+                              @Nullable ExecutionStatus failure) {
         refreshCraftingContext();
         craftingState = new CraftingStateSnapshot(recipeId, status, failure,
                 structure.version(), components.capabilityVersion(), components.modifierVersion());

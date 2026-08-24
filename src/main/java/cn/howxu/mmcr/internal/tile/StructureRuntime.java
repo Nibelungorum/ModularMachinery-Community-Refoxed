@@ -1,11 +1,11 @@
-package cn.howxu.mmcr.internal.runtime;
+package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
-import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceKey;
@@ -57,7 +57,7 @@ public final class StructureRuntime {
     private boolean structureAreaLoaded = true;
     private Set<ChunkPos> criticalChunks = Set.of();
 
-    public StructureRuntime(MachineControllerBlockEntity controller) {
+    StructureRuntime(MachineControllerBlockEntity controller) {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
         this.controller = controller;
     }
@@ -501,7 +501,7 @@ public final class StructureRuntime {
      *
      * @author howxu <dev@howxu.cn>
      */
-    public record StructureWorkSnapshot(
+    record StructureWorkSnapshot(
             boolean dirty,
             int checkCounter,
             long nextCheckTick,
@@ -526,81 +526,81 @@ public final class StructureRuntime {
          *
          * @author howxu <dev@howxu.cn>
          */
-        public record ScanView(int cursor, int batchSize, int entryCount, long version,
-                               @Nullable Direction facing, Direction rollFacing, int stage, @Nullable Object pattern) { }
+        record ScanView(int cursor, int batchSize, int entryCount, long version,
+                        @Nullable Direction facing, Direction rollFacing, int stage, @Nullable Object pattern) { }
 
-        public StructureWorkSnapshot withDirty(boolean value) {
+        StructureWorkSnapshot withDirty(boolean value) {
             return new StructureWorkSnapshot(value, checkCounter, nextCheckTick, scan, scanMachine, scanCandidate,
                     previousMismatch, previousMismatchPattern, pendingInvalidation, scanSteppedTick, scanStartedTick,
                     checkActive, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, formationFailure,
                     mismatchDiagnostic, lastStructureError);
         }
 
-        public StructureWorkSnapshot withCheckCounter(int value) {
+        StructureWorkSnapshot withCheckCounter(int value) {
             return new StructureWorkSnapshot(dirty, value, nextCheckTick, scan, scanMachine, scanCandidate,
                     previousMismatch, previousMismatchPattern, pendingInvalidation, scanSteppedTick, scanStartedTick,
                     checkActive, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, formationFailure,
                     mismatchDiagnostic, lastStructureError);
         }
 
-        public StructureWorkSnapshot withNextCheckTick(long value) {
+        StructureWorkSnapshot withNextCheckTick(long value) {
             return new StructureWorkSnapshot(dirty, checkCounter, value, scan, scanMachine, scanCandidate,
                     previousMismatch, previousMismatchPattern, pendingInvalidation, scanSteppedTick, scanStartedTick,
                     checkActive, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, formationFailure,
                     mismatchDiagnostic, lastStructureError);
         }
 
-        public StructureWorkSnapshot withPendingInvalidation(boolean value) {
+        StructureWorkSnapshot withPendingInvalidation(boolean value) {
             return new StructureWorkSnapshot(dirty, checkCounter, nextCheckTick, scan, scanMachine, scanCandidate,
                     previousMismatch, previousMismatchPattern, value, scanSteppedTick, scanStartedTick,
                     checkActive, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, formationFailure,
                     mismatchDiagnostic, lastStructureError);
         }
 
-        public StructureWorkSnapshot withPreviousMismatch(@Nullable StructureMatcher.Mismatch mismatch,
-                                                           @Nullable Object pattern) {
+        StructureWorkSnapshot withPreviousMismatch(@Nullable StructureMatcher.Mismatch mismatch,
+                                                   @Nullable Object pattern) {
             return new StructureWorkSnapshot(dirty, checkCounter, nextCheckTick, scan, scanMachine, scanCandidate,
                     mismatch, pattern, pendingInvalidation, scanSteppedTick, scanStartedTick,
                     checkActive, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, formationFailure,
                     mismatchDiagnostic, lastStructureError);
         }
 
-        public StructureWorkSnapshot withScanSteppedTick(long value) {
+        StructureWorkSnapshot withScanSteppedTick(long value) {
             return new StructureWorkSnapshot(dirty, checkCounter, nextCheckTick, scan, scanMachine, scanCandidate,
                     previousMismatch, previousMismatchPattern, pendingInvalidation, value, scanStartedTick,
                     checkActive, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, formationFailure,
                     mismatchDiagnostic, lastStructureError);
         }
 
-        public StructureWorkSnapshot withCheckActive(boolean value) {
+        StructureWorkSnapshot withCheckActive(boolean value) {
             return new StructureWorkSnapshot(dirty, checkCounter, nextCheckTick, scan, scanMachine, scanCandidate,
                     previousMismatch, previousMismatchPattern, pendingInvalidation, scanSteppedTick, scanStartedTick,
                     value, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, formationFailure,
                     mismatchDiagnostic, lastStructureError);
         }
 
-        public StructureWorkSnapshot withDiagnostic(boolean requested, @Nullable UUID playerId,
-                                                     @Nullable ResourceKey<Level> dimension) {
+        StructureWorkSnapshot withDiagnostic(boolean requested, @Nullable UUID playerId,
+                                             @Nullable ResourceKey<Level> dimension) {
             return new StructureWorkSnapshot(dirty, checkCounter, nextCheckTick, scan, scanMachine, scanCandidate,
                     previousMismatch, previousMismatchPattern, pendingInvalidation, scanSteppedTick, scanStartedTick,
                     checkActive, requested, playerId, dimension, formationFailure, mismatchDiagnostic, lastStructureError);
         }
 
-        public StructureWorkSnapshot withFormationFailure(@Nullable PortRequirementSpec.Failure value) {
+        StructureWorkSnapshot withFormationFailure(@Nullable PortRequirementSpec.Failure value) {
             return new StructureWorkSnapshot(dirty, checkCounter, nextCheckTick, scan, scanMachine, scanCandidate,
                     previousMismatch, previousMismatchPattern, pendingInvalidation, scanSteppedTick, scanStartedTick,
                     checkActive, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, value,
                     mismatchDiagnostic, lastStructureError);
         }
 
-        public StructureWorkSnapshot withMismatchDiagnostic(@Nullable String value) {
+        StructureWorkSnapshot withMismatchDiagnostic(@Nullable String value) {
             return new StructureWorkSnapshot(dirty, checkCounter, nextCheckTick, scan, scanMachine, scanCandidate,
                     previousMismatch, previousMismatchPattern, pendingInvalidation, scanSteppedTick, scanStartedTick,
                     checkActive, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, formationFailure,
                     value, lastStructureError);
         }
 
-        public StructureWorkSnapshot withLastStructureError(@Nullable Object value) {
+        StructureWorkSnapshot withLastStructureError(@Nullable Object value) {
             return new StructureWorkSnapshot(dirty, checkCounter, nextCheckTick, scan, scanMachine, scanCandidate,
                     previousMismatch, previousMismatchPattern, pendingInvalidation, scanSteppedTick, scanStartedTick,
                     checkActive, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, formationFailure,
