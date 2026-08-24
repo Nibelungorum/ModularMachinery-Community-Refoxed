@@ -15,6 +15,7 @@ import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -62,6 +63,7 @@ public final class StructureRuntime {
     }
 
     public void requestCheck() {
+        if (!dirty || nextCheckTick >= 0L) version++;
         dirty = true;
         nextCheckTick = -1L;
     }
@@ -85,9 +87,15 @@ public final class StructureRuntime {
     }
 
     public void reset() {
-        boolean hadState = foundMachine != null || foundPattern != null || foundCompiledPattern != null || formed || scan != null;
-        long nextVersion = hadState ? version + 1L : version;
-        machine = null;
+        reset(null, false);
+    }
+
+    public void reset(@Nullable Machine configuredMachine, boolean forceVersion) {
+        boolean hadState = foundMachine != null || foundPattern != null || foundCompiledPattern != null
+                || controllerFacing != null || matchedStructureStage != 0 || formed || scan != null
+                || !Objects.equals(machine, configuredMachine);
+        long nextVersion = hadState || forceVersion ? version + 1L : version;
+        machine = configuredMachine;
         foundMachine = null;
         foundPattern = null;
         foundCompiledPattern = null;
@@ -137,47 +145,29 @@ public final class StructureRuntime {
     }
 
     public void setMachine(@Nullable Machine machine) {
+        if (Objects.equals(this.machine, machine)) return;
         this.machine = machine;
+        version++;
     }
 
     public @Nullable Machine foundMachine() {
         return foundMachine;
     }
 
-    public void setFoundMachine(@Nullable Machine foundMachine) {
-        this.foundMachine = foundMachine;
-    }
-
     public @Nullable BlockArray foundPattern() {
         return foundPattern;
-    }
-
-    public void setFoundPattern(@Nullable BlockArray foundPattern) {
-        this.foundPattern = foundPattern;
     }
 
     public @Nullable CompiledMachinePattern foundCompiledPattern() {
         return foundCompiledPattern;
     }
 
-    public void setFoundCompiledPattern(@Nullable CompiledMachinePattern foundCompiledPattern) {
-        this.foundCompiledPattern = foundCompiledPattern;
-    }
-
     public @Nullable Direction controllerFacing() {
         return controllerFacing;
     }
 
-    public void setControllerFacing(@Nullable Direction controllerFacing) {
-        this.controllerFacing = controllerFacing;
-    }
-
     public Direction matchedRollFacing() {
         return matchedRollFacing;
-    }
-
-    public void setMatchedRollFacing(Direction matchedRollFacing) {
-        this.matchedRollFacing = matchedRollFacing == null ? Direction.SOUTH : matchedRollFacing;
     }
 
     public int matchedStructureStage() {
@@ -185,11 +175,9 @@ public final class StructureRuntime {
     }
 
     public void setMatchedStructureStage(int matchedStructureStage) {
+        if (this.matchedStructureStage == matchedStructureStage) return;
         this.matchedStructureStage = matchedStructureStage;
-    }
-
-    public void setVersion(long version) {
-        this.version = version;
+        version++;
     }
 
     public boolean dirty() {
@@ -340,6 +328,66 @@ public final class StructureRuntime {
         if (this.formed == formed) return;
         this.formed = formed;
         version++;
+    }
+
+    public boolean publishFormationState(Machine machine, BlockArray pattern,
+                                         @Nullable CompiledMachinePattern compiledPattern,
+                                         Direction facing, Direction rollFacing, int matchedStage) {
+        Direction normalizedRoll = rollFacing == null ? Direction.SOUTH : rollFacing;
+        boolean changed = !Objects.equals(this.machine, machine)
+                || !Objects.equals(this.foundMachine, machine)
+                || !Objects.equals(this.foundPattern, pattern)
+                || !Objects.equals(this.foundCompiledPattern, compiledPattern)
+                || !Objects.equals(this.controllerFacing, facing)
+                || this.matchedRollFacing != normalizedRoll
+                || this.matchedStructureStage != matchedStage
+                || !formed;
+        this.machine = machine;
+        this.foundMachine = machine;
+        this.foundPattern = pattern;
+        this.foundCompiledPattern = compiledPattern;
+        this.controllerFacing = facing;
+        this.matchedRollFacing = normalizedRoll;
+        this.matchedStructureStage = matchedStage;
+        this.formed = true;
+        if (changed) version++;
+        return changed;
+    }
+
+    public boolean publishClientState(@Nullable Machine machine, boolean formed) {
+        boolean changed = !Objects.equals(this.machine, machine)
+                || !Objects.equals(this.foundMachine, machine)
+                || this.foundPattern != null
+                || this.foundCompiledPattern != null
+                || this.controllerFacing != null
+                || this.matchedStructureStage != 0
+                || this.lastStructureError != null
+                || this.mismatchDiagnostic != null
+                || this.formationFailure != null
+                || !this.criticalChunks.isEmpty()
+                || this.scan != null
+                || !this.structureAreaLoaded
+                || this.formed != formed;
+        this.machine = machine;
+        this.foundMachine = machine;
+        this.foundPattern = null;
+        this.foundCompiledPattern = null;
+        this.controllerFacing = null;
+        this.matchedRollFacing = Direction.SOUTH;
+        this.matchedStructureStage = 0;
+        this.lastStructureError = null;
+        this.mismatchDiagnostic = null;
+        this.formationFailure = null;
+        this.criticalChunks = Set.of();
+        this.structureAreaLoaded = true;
+        this.scan = null;
+        this.scanMachine = null;
+        this.scanCandidate = null;
+        this.pendingInvalidation = false;
+        this.formed = formed;
+        this.dirty = false;
+        if (changed) version++;
+        return changed;
     }
 
     public boolean structureAreaLoaded() {

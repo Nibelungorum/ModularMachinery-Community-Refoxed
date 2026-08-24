@@ -86,9 +86,19 @@ public final class ModuleConnectionCoordinator {
 
     public static void clearConnectionsFor(ServerLevel level, MachineControllerBlockEntity controller) {
         if (level == null || controller == null) return;
+        Set<MachineControllerBlockEntity> affectedControllers = new LinkedHashSet<>();
+        affectedControllers.add(controller);
         for (BlockPos couplerPos : couplerWorldPositions(controller)) {
-            if (level.getBlockEntity(couplerPos) instanceof ModuleCouplerBlockEntity coupler) coupler.clearConnection();
+            if (!(level.getBlockEntity(couplerPos) instanceof ModuleCouplerBlockEntity coupler)) continue;
+            existingConnection(level, coupler).ifPresent(connection -> {
+                affectedControllers.add(connection.host());
+                affectedControllers.add(connection.module());
+            });
+            controllersFor(level, couplerPos, true).forEach(affectedControllers::add);
+            controllersFor(level, couplerPos, false).forEach(affectedControllers::add);
+            coupler.clearConnection();
         }
+        affectedControllers.forEach(affected -> affected.runtime().refreshModuleConnectionState());
     }
 
     public static void enqueueCouplers(ServerLevel level, MachineControllerBlockEntity controller) {

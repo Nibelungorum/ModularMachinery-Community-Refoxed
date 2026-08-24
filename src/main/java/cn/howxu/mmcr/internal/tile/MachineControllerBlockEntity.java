@@ -260,9 +260,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         stopFactoryController();
         invalidateStructureScan(StructureMatcher.InvalidationReason.PATTERN);
         clearFoundModifiers();
-        Machine previousMachine = runtime.structure().machine();
         runtime.structure().setMachine(m);
-        if (previousMachine != m) runtime.structure().setVersion(runtime.structure().version() + 1L);
         runtime.components().replaceLevels(Map.of());
         markRecipeDirty();
         setChanged();
@@ -354,7 +352,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public void handleStructureChunkChanged(ServerLevel changedLevel, BlockPos controllerPos) {
         validateRuntimeBoundary(changedLevel, controllerPos);
-        onStructureChunkUnloaded(new ChunkPos(controllerPos.getX() >> 4, controllerPos.getZ() >> 4));
+        onStructureChunkStateChanged();
+    }
+
+    public void onStructureChunkChanged(ServerLevel changedLevel) {
+        validateRuntimeBoundary(changedLevel, getBlockPos());
+        runtime().structure().onChunkStateChanged(changedLevel, getBlockPos());
     }
 
     private boolean physicalFormed() {
@@ -451,8 +454,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public static void markStructureChunkDirty(LevelAccessor level, ChunkPos chunkPos) {
         if (level == null || level.isClientSide()) return;
         FORMED_CONTROLLERS.removeIf(controller -> controller.isRemoved() || controller.level == null);
+        if (!(level instanceof ServerLevel serverLevel)) return;
         for (MachineControllerBlockEntity controller : FORMED_CONTROLLERS) {
-            if (controller.level == level) controller.onStructureChunkUnloaded(chunkPos);
+            if (controller.level == level && controller.structureSnapshot().criticalChunks().contains(chunkPos)) {
+                controller.onStructureChunkChanged(serverLevel);
+            }
         }
     }
 
@@ -467,7 +473,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public boolean isRedstonePaused() { return redstonePaused; }
 
     public void applyClientState(String recipeName, boolean formed, boolean active, List<String> foundLevelIds,
-                                 boolean recipeLocked, String lockedRecipeId) {
+                                 boolean recipeLocked, String lockedRecipeId, @Nullable Identifier machineId,
+                                 int controllerRole, int installedModuleCount, boolean moduleConnected,
+                                 @Nullable Identifier connectedHostId) {
         if (level == null || !level.isClientSide()) return;
         if (physicalFormed() != formed) {
             level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.FORMED, formed), 3);
@@ -481,14 +489,19 @@ public class MachineControllerBlockEntity extends BlockEntity {
             MachineLevel foundLevel = MachineLevelRegistry.getLevel(Identifier.parse(id));
             if (foundLevel != null) levels.put(foundLevel.typeId(), foundLevel);
         }
+        Machine resolvedMachine = machineId == null ? null : MachineRegistry.effectiveSnapshot().get(machineId);
+        runtime.structure().publishClientState(resolvedMachine, formed);
         runtime.components().replaceLevels(levels);
+        boolean module = controllerRole == 2 || (resolvedMachine != null && resolvedMachine.isModule());
+        ModuleConnectionStatus moduleStatus = module
+                ? (moduleConnected && connectedHostId != null
+                ? ModuleConnectionStatus.connected(connectedHostId)
+                : ModuleConnectionStatus.disconnected())
+                : ModuleConnectionStatus.notRequired();
+        runtime.publishModuleConnectionState(moduleStatus, installedModuleCount);
         this.clientRecipeLocked = recipeLocked;
         this.clientLockedRecipeId = recipeLocked && lockedRecipeId != null ? lockedRecipeId : "";
         publishRuntimeState();
-    }
-
-    public void applyClientState(String recipeName, boolean formed, boolean active, List<String> foundLevelIds) {
-        applyClientState(recipeName, formed, active, foundLevelIds, false, "");
     }
 
     public boolean hasClientActiveRecipe() { return clientActive; }
@@ -1699,27 +1712,17 @@ public class MachineControllerBlockEntity extends BlockEntity {
         clearStructureDiagnosticRequest();
         StructureRuntime structure = runtime.structure();
         Machine previousMachine = structure.machine();
-        long previousStructureVersion = structure.version();
-        structure.setFoundMachine(matchedMachine);
-        structure.setFoundPattern(rotatedPattern);
-        structure.setFoundCompiledPattern(compiledPattern);
-        int previousStage = structure.matchedStructureStage();
-        structure.setMatchedStructureStage(compiledPattern == null ? 1 : compiledPattern.stageNumber());
-        structure.setControllerFacing(facing);
-        structure.setMatchedRollFacing(rollFacing);
-        structure.setMachine(matchedMachine);
+        boolean structureChanged = structure.publishFormationState(matchedMachine, rotatedPattern, compiledPattern,
+                facing, rollFacing, compiledPattern == null ? 1 : compiledPattern.stageNumber());
         runtime.components().replaceLevels(levels);
         collectFoundModifiers(replacements);
         refreshCriticalStructureChunks();
         FORMED_CONTROLLERS.add(this);
         if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
-        if (previousStage != structure.matchedStructureStage()) structure.setVersion(structure.version() + 1L);
-        if ((previousMachine != null && previousMachine != matchedMachine)
-                || previousStructureVersion != structure.version()) {
+        if ((previousMachine != null && previousMachine != matchedMachine) || structureChanged) {
             stopFactoryController();
         }
         structure.setDirty(false);
-        structure.setFormed(true);
         if (!physicalFormed()) {
             updatePhysicalFormedState(true);
             notifyPreviewReceiversStructureFormed();
@@ -1994,20 +1997,24 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 && relative.getZ() <= box.maxZ();
     }
 
-    private void onStructureChunkUnloaded(ChunkPos chunkPos) {
+    private void onStructureChunkStateChanged() {
         StructureRuntime structure = runtime.structure();
         if (structure.scan() != null) invalidateStructureScan(StructureMatcher.InvalidationReason.UNLOADED);
+        boolean wasLoaded = structure.structureAreaLoaded();
+        boolean loaded = isStructureAreaLoaded();
         if (!isFormed() || structure.foundPattern() == null || structure.controllerFacing() == null) {
+            structure.setStructureAreaLoaded(loaded);
             publishRuntimeState();
             return;
         }
-        if (!structure.criticalChunks().contains(chunkPos)) {
+        if (wasLoaded == loaded) {
             publishRuntimeState();
             return;
         }
+        structure.setStructureAreaLoaded(loaded);
         structure.requestCheck();
         if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
-        pauseActiveForUnloadedStructure();
+        if (!loaded) pauseActiveForUnloadedStructure();
         setChanged();
         syncLevelState();
         publishRuntimeState();
@@ -2159,17 +2166,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
         Machine configuredMachine = structure.machine();
         PortRequirementSpec.Failure previousFormationFailure = structure.formationFailure();
         Object previousStructureError = structure.lastStructureError();
-        boolean wasFormed = physicalFormed();
+        boolean wasFormed = structure.formed() || physicalFormed();
         if (wasFormed && level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.clearConnectionsFor(serverLevel, this);
-        Identifier dropped = structure.foundMachine() == null ? null : structure.foundMachine().registryName();
         boolean hadActive = active != null;
         releaseStructureClaims();
         unbindSmartInterfaces();
         unlinkLinkedPorts();
         stopFactoryController();
         for (FactorySchedulerBlockEntity factory : factoryComponents()) factory.bindOwner(null);
-        structure.reset();
-        structure.setMachine(configuredMachine);
+        structure.reset(configuredMachine, hadActive);
         if (!clearFormationFailure) {
             structure.setFormationFailure(previousFormationFailure);
             structure.setLastStructureError(previousStructureError);
@@ -2194,7 +2199,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         lastFailureUnloc = null;
         recipeFailure = null;
         redstonePaused = false;
-        if (dropped != null || wasFormed || hadActive) structure.setVersion(structure.version() + 1L);
         markRecipeDirty();
         clearCandidateCache();
         if (wasFormed && updateBlockState) updatePhysicalFormedState(false);

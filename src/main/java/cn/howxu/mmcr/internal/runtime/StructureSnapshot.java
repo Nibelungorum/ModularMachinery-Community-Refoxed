@@ -37,17 +37,6 @@ public record StructureSnapshot(
         criticalChunks = Set.copyOf(criticalChunks == null ? Set.of() : criticalChunks);
     }
 
-    public StructureSnapshot(@Nullable Machine machine, @Nullable BlockArray pattern,
-                             @Nullable CompiledMachinePattern compiledPattern, @Nullable Direction facing,
-                             Direction rollFacing, int matchedStage, boolean formed, long version,
-                             @Nullable Object lastStructureError, @Nullable String structureMismatchDiagnostic,
-                             @Nullable PortRequirementSpec.Failure lastFormationFailure, boolean dirty,
-                             boolean structureAreaLoaded, Set<ChunkPos> criticalChunks) {
-        this(null, machine, pattern, compiledPattern, facing, rollFacing, matchedStage, formed, version,
-                lastStructureError, structureMismatchDiagnostic, lastFormationFailure, dirty,
-                structureAreaLoaded, criticalChunks);
-    }
-
     public static StructureSnapshot empty() {
         return new StructureSnapshot(null, null, null, null, null, Direction.SOUTH, 0,
                 false, 0L, null, null, null, true, true, Set.of());

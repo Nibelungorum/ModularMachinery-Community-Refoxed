@@ -93,7 +93,9 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
             var player = ctx.player();
             if (player == null) return;
             if (player.level().getBlockEntity(pos) instanceof MachineControllerBlockEntity controller) {
-                  controller.applyClientState(recipeName, formed, active, foundLevelIds, recipeLocked, lockedRecipeId);
+                  controller.applyClientState(recipeName, formed, active, foundLevelIds, recipeLocked, lockedRecipeId,
+                          machineId.isEmpty() ? null : Identifier.parse(machineId), controllerRole, installedModuleCount,
+                          moduleConnected, connectedHostId.isEmpty() ? null : Identifier.parse(connectedHostId));
             }
             if (player.containerMenu instanceof MachineControllerMenu menu
                     && menu.controllerPos().equals(pos)) {

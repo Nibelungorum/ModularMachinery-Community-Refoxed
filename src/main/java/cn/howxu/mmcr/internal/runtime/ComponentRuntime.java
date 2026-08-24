@@ -2,6 +2,8 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
+import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.machine.Machine;
@@ -45,8 +47,9 @@ public final class ComponentRuntime {
 
     public void replaceComponents(List<ProcessingComponent> components) {
         List<ProcessingComponent> nextComponents = List.copyOf(components == null ? List.of() : components);
-        List<MachineCapability> nextCapabilities = capabilitiesFor(nextComponents);
-        List<CapabilityIdentity> nextIdentity = capabilityIdentity(nextCapabilities);
+        CapabilityState capabilityState = capabilityStateFor(nextComponents);
+        List<MachineCapability> nextCapabilities = capabilityState.capabilities();
+        List<CapabilityIdentity> nextIdentity = capabilityState.identity();
         boolean componentsChanged = !this.components.equals(nextComponents);
         boolean capabilitiesChanged = !capabilityIdentity.equals(nextIdentity);
         this.components = nextComponents;
@@ -175,22 +178,22 @@ public final class ComponentRuntime {
         replaceModuleConnectionState(ModuleConnectionStatus.disconnected(), 0);
     }
 
-    private static List<MachineCapability> capabilitiesFor(List<ProcessingComponent> components) {
+    private static CapabilityState capabilityStateFor(List<ProcessingComponent> components) {
         List<MachineCapability> result = new ArrayList<>();
+        List<CapabilityIdentity> identities = new ArrayList<>();
         for (ProcessingComponent component : components) {
             if (component.getContainer() instanceof CapabilityHost host) {
                 try {
-                    result.addAll(host.capabilitySnapshot().capabilities());
+                    for (MachineCapability capability : host.capabilitySnapshot().capabilities()) {
+                        identities.add(CapabilityIdentity.of(component.getPos(), capability));
+                        result.add(capability);
+                    }
                 } catch (RuntimeException ignored) {
                     // A partially initialized port must not invalidate the controller runtime snapshot.
                 }
             }
         }
-        return List.copyOf(result);
-    }
-
-    private static List<CapabilityIdentity> capabilityIdentity(List<MachineCapability> capabilities) {
-        return capabilities.stream().map(CapabilityIdentity::of).toList();
+        return new CapabilityState(List.copyOf(result), List.copyOf(identities));
     }
 
     private static <K, V> Map<K, V> immutableMap(Map<K, V> values) {
@@ -224,13 +227,52 @@ public final class ComponentRuntime {
         return new CapabilityAggregate(storedEnergy, energyCapacity, primaryFluid, primaryOutputFluid);
     }
 
-    private record CapabilityIdentity(Identifier type, IOType ioType, List<String> tags, String storageType) {
-        private static CapabilityIdentity of(MachineCapability capability) {
-            return new CapabilityIdentity(capability.type().id(), capability.ioType(),
-                    List.copyOf(capability.view().tags()), capability.storage() == null
-                            ? "" : capability.storage().getClass().getName());
+    private record CapabilityState(List<MachineCapability> capabilities, List<CapabilityIdentity> identity) { }
+
+    private record CapabilityIdentity(BlockPos componentPos, Identifier type, IOType ioType, List<String> tags,
+                                      String storageType, Object storageIdentity) {
+        private static CapabilityIdentity of(BlockPos componentPos, MachineCapability capability) {
+            CapabilityStorage storage = capability.storage();
+            return new CapabilityIdentity(componentPos.immutable(), capability.type().id(), capability.ioType(),
+                    List.copyOf(capability.view().tags()), storage == null ? "" : storage.getClass().getName(),
+                    storageIdentity(storage));
+        }
+
+        private static Object storageIdentity(CapabilityStorage storage) {
+            if (storage == null) return null;
+            if (storage instanceof LongValueStorage value) {
+                return new LongStorageIdentity(value.capacity(), value.transferLimit(), value.amount());
+            }
+            if (storage instanceof FloatValueStorage value) {
+                return new FloatStorageIdentity(value.values());
+            }
+            if (storage instanceof ResourceStorage<?> resourceStorage) {
+                List<StorageSlotIdentity> slots = new ArrayList<>();
+                for (int slot = 0; slot < resourceStorage.size(); slot++) {
+                    Object resource = resourceStorage.resource(slot);
+                    long capacity = resource == null
+                            ? resourceStorage.capacity(slot, null)
+                            : resourceStorage.capacityResource(slot, resource);
+                    slots.add(new StorageSlotIdentity(resource, resourceStorage.amount(slot),
+                            capacity));
+                }
+                return new ResourceStorageIdentity(resourceStorage.resourceType().getName(), List.copyOf(slots));
+            }
+            return null;
         }
     }
+
+    private record LongStorageIdentity(long capacity, long transferLimit, long amount) { }
+
+    private record FloatStorageIdentity(Map<String, Float> values) {
+        private FloatStorageIdentity {
+            values = Map.copyOf(values);
+        }
+    }
+
+    private record ResourceStorageIdentity(String resourceType, List<StorageSlotIdentity> slots) { }
+
+    private record StorageSlotIdentity(Object resource, long amount, long capacity) { }
 
     /**
      * Immutable capability-level aggregate used by controller presentation callers.

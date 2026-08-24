@@ -59,6 +59,7 @@ public final class StructureDirtyEvents {
     }
 
     public static void onChunkLoaded(ChunkEvent.Load event) {
+        MachineControllerBlockEntity.markStructureChunkDirty(event.getLevel(), event.getChunk().getPos());
         if (event.getLevel() instanceof ServerLevel serverLevel) {
             ModuleConnectionCoordinator.enqueueCouplersInChunk(
                     serverLevel, event.getChunk().getPos());

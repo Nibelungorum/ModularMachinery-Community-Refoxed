@@ -54,9 +54,6 @@ public final class MachineControllerRuntime {
     }
 
     public ControllerRuntimeSnapshot snapshot() {
-        refreshCraftingContext();
-        craftingState = new CraftingStateSnapshot(craftingState.recipeId(), craftingState.status(), craftingState.failure(),
-                structure.version(), components.capabilityVersion(), components.modifierVersion());
         return new ControllerRuntimeSnapshot(structure.snapshot(), components.components(), components.capabilities(),
                 components.capabilityVersion(), components.modifierVersion(), components.stateVersion(),
                 components.foundModifiers(), components.foundLevels(), components.linkedPortPositions(),
@@ -65,7 +62,6 @@ public final class MachineControllerRuntime {
     }
 
     public CraftingContext craftingContext() {
-        refreshCraftingContext();
         return craftingContext;
     }
 
@@ -99,6 +95,7 @@ public final class MachineControllerRuntime {
 
     public void publishCraftingState(@Nullable Identifier recipeId, CraftingStatus status,
                                      @Nullable ExecutionStatus failure) {
+        refreshCraftingContext();
         craftingState = new CraftingStateSnapshot(recipeId, status, failure,
                 structure.version(), components.capabilityVersion(), components.modifierVersion());
     }
