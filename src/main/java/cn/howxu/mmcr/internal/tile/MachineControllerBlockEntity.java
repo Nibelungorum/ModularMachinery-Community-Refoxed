@@ -60,6 +60,9 @@ import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
+import cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot;
+import cn.howxu.mmcr.internal.runtime.FactoryLaneSnapshot;
+import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import cn.howxu.mmcr.internal.tile.StructureRuntime.StructureWorkSnapshot;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
@@ -218,7 +221,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 ? CraftingStatus.MISSING_STRUCTURE
                 : !structure.structureAreaLoaded() ? CraftingStatus.CHUNK_UNLOADED
                 : activeState
-                ? CraftingStatus.working()
+                ? redstonePaused ? CraftingStatus.paused() : CraftingStatus.working()
                 : lastFailureUnloc == null ? CraftingStatus.IDLE : CraftingStatus.failure(lastFailureUnloc);
         runtime.publishCraftingState(recipeId, status, craftingFailureStatus());
     }
@@ -609,13 +612,50 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public FactoryControllerSnapshot factoryControllerSnapshot() {
-        if (!hasFactoryController()) return FactoryControllerSnapshot.empty(getBlockPos());
-        FactoryRecipeScheduler scheduler = factoryScheduler();
-        StructureSnapshot structure = runtimeSnapshot().structure();
+        ControllerRuntimeSnapshot state = runtimeSnapshot();
+        Machine configuredMachine = state.structure().configuredMachine();
+        boolean factoryController = configuredMachine != null && configuredMachine.hasFactory()
+                && state.components().stream().anyMatch(component -> component.getContainer() instanceof FactorySchedulerBlockEntity);
+        if (!factoryController) return FactoryControllerSnapshot.empty(getBlockPos());
+        FactorySnapshot factory = state.factory();
+        StructureSnapshot structure = state.structure();
+        int activeThreadCount = (int) factory.presentationLanes().stream().filter(FactoryLaneSnapshot::active).count();
+        int maxParallelism = runtime.maxParallelism(configuredMachine);
+        int parallelSlots = (int) state.components().stream()
+                .filter(component -> component.getContainer() instanceof ParallelControllerBlockEntity)
+                .count();
+        String factoryFailure = failureUnloc(factory.failure());
+        if (factoryFailure.isEmpty()) factoryFailure = lastFailureUnloc == null ? "" : lastFailureUnloc;
         return new FactoryControllerSnapshot(getBlockPos(), structure.formed(), isRedstonePaused(),
-                scheduler.activeThreadCount(), scheduler.threadLimit(), scheduler.usedParallelism(),
-                getMaxParallelism(), structure.machine() == null ? "" : structure.machine().displayNameKey(), parallelControllerCount(),
-                getLastFailureUnloc(), scheduler.threadSnapshots());
+                activeThreadCount, factory.laneLimit(), factory.activeParallelism(), maxParallelism,
+                structure.machine() == null ? "" : structure.machine().displayNameKey(), parallelSlots,
+                factoryFailure, factoryThreadSnapshots(factory));
+    }
+
+    private static List<FactoryRecipeScheduler.ThreadSnapshot> factoryThreadSnapshots(FactorySnapshot factory) {
+        List<FactoryRecipeScheduler.ThreadSnapshot> snapshots = new ArrayList<>(factory.laneLimit());
+        int index = 0;
+        for (FactoryLaneSnapshot lane : factory.presentationLanes()) {
+            CraftingStateSnapshot state = lane.state();
+            snapshots.add(new FactoryRecipeScheduler.ThreadSnapshot(index++, lane.baseThread(), lane.coreThread(),
+                    lane.active(), state.recipeId() == null ? "" : state.recipeId().toString(), lane.tick(),
+                    lane.totalTick(), lane.parallelism(), lane.lastFailureUnloc(), lane.locked(), lane.lockedRecipeId()));
+        }
+        while (index < factory.laneLimit()) {
+            snapshots.add(new FactoryRecipeScheduler.ThreadSnapshot(index++, false, false, false,
+                    "", 0, 0, 1, "", false, ""));
+        }
+        return List.copyOf(snapshots);
+    }
+
+    private static String failureUnloc(@Nullable ExecutionStatus failure) {
+        if (failure == null) return "";
+        return switch (failure.details().getOrDefault("reason", "")) {
+            case "module_connection" -> "gui.mmcr.controller.failure.module_connection";
+            case "no_output_capacity" -> "gui.mmcr.controller.failure.missing_output";
+            case "insufficient_energy" -> "gui.mmcr.controller.failure.missing_energy";
+            default -> "gui.mmcr.controller.failure.missing_input";
+        };
     }
 
     public void sendFactoryControllerSnapshot(@Nullable ServerPlayer player) {
@@ -685,6 +725,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         boolean powered = level.getDirectSignalTo(getBlockPos()) > 0;
         if (powered) {
             redstonePaused = true;
+            runtime.pauseCrafting();
             if (hasFactoryController()) {
                 factoryScheduler().pause();
                 syncOpenFactoryControllerMenus();
@@ -696,11 +737,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return;
         }
         redstonePaused = false;
+        runtime.resumeCrafting();
         if (hasFactoryController()) {
             factoryScheduler().resume();
             syncOpenFactoryControllerMenus();
         }
         syncRuntimeStateIfChanged();
+        if (tickState.crafting().recipeId() != null || tickState.factory().active()) setActiveState(true);
         if (tickState.structure().formed() && tickState.structure().structureAreaLoaded()) {
             if (hasFactoryController()) {
                 tickFactoryRecipes();

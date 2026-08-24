@@ -46,7 +46,7 @@ public final class MachineControllerRuntime {
         this.controller = controller;
         this.structure = new StructureRuntime(controller);
         this.craftingRuntime = new CraftingRuntime(controller);
-        this.factoryRuntime = new FactoryRuntime(controller);
+        this.factoryRuntime = new FactoryRuntime();
         publishSnapshot();
     }
 
@@ -84,6 +84,16 @@ public final class MachineControllerRuntime {
 
     public FactoryRuntime factoryRuntime() {
         return factoryRuntime;
+    }
+
+    void pauseCrafting() {
+        craftingRuntime.pause();
+        factoryRuntime.pause();
+    }
+
+    void resumeCrafting() {
+        craftingRuntime.resume();
+        factoryRuntime.resume();
     }
 
     void publishStructureState(boolean structureAreaLoaded, boolean formed,

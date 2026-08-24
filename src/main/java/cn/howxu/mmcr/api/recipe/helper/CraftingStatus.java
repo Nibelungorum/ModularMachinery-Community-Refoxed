@@ -7,7 +7,8 @@ public final class CraftingStatus {
         CRAFTING,
         MISSING_STRUCTURE,
         CHUNK_UNLOADED,
-        NO_RECIPE
+        NO_RECIPE,
+        PAUSED
     }
 
     public static final CraftingStatus IDLE = new CraftingStatus(Status.IDLE, "");
@@ -30,6 +31,10 @@ public final class CraftingStatus {
         return new CraftingStatus(Status.CRAFTING, unlocMessage);
     }
 
+    public static CraftingStatus paused() {
+        return new CraftingStatus(Status.PAUSED, "");
+    }
+
     public static CraftingStatus failure(String unlocMessage) {
         return new CraftingStatus(Status.NO_RECIPE, unlocMessage);
     }
@@ -47,7 +52,11 @@ public final class CraftingStatus {
     }
 
     public boolean isCrafting() {
-        return this.status == Status.CRAFTING;
+        return this.status == Status.CRAFTING || this.status == Status.PAUSED;
+    }
+
+    public boolean isPaused() {
+        return this.status == Status.PAUSED;
     }
 
     public boolean isFailure() {
@@ -60,6 +69,7 @@ public final class CraftingStatus {
             case MISSING_STRUCTURE -> "mmcr.status.missing_structure";
             case CHUNK_UNLOADED -> "mmcr.status.chunk_unloaded";
             case NO_RECIPE -> "mmcr.status.no_recipe";
+            case PAUSED -> "mmcr.status.paused";
             default -> "";
         };
     }

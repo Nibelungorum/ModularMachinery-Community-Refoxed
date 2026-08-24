@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
+import cn.howxu.mmcr.internal.runtime.FactoryLaneSnapshot;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.storage.ValueInput;
@@ -203,5 +204,13 @@ public final class FactoryRecipeThread extends RecipeThread {
         }
         if (input.getBooleanOr("has_active", false)) thread.runtime.load(input.childOrEmpty("active_runtime"), controller.resourceDomain());
         return thread;
+    }
+
+    public FactoryLaneSnapshot snapshot() {
+        ActiveMachineRecipe active = getActiveRecipe();
+        return new FactoryLaneSnapshot(runtime.snapshot(), baseThread, coreThread, active != null,
+                active == null ? 0 : active.getTick(), active == null ? 0 : active.getTotalTick(),
+                active == null ? 1 : active.getParallelism(), getLastFailureUnloc(), lockedRecipeId != null,
+                lockedRecipeId == null ? "" : lockedRecipeId.toString());
     }
 }

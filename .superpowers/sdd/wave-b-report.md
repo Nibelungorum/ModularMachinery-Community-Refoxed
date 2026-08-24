@@ -27,6 +27,22 @@
 - Test and Gradle commands: intentionally not run, per Wave B constraints.
 - Test sources and GameTest sources: untouched.
 
+## Wave B Re-review Closure
+
+- `RecipeSearchTask` now applies the module connection gate before reporting success, records the same `module_connection` runtime failure semantics, and continues searching later candidates instead of handing an incompatible recipe to `CraftingRuntime.start()`.
+- `MachineControllerBlockEntity.factoryControllerSnapshot()` now consumes the published `ControllerRuntimeSnapshot.factory()` aggregate. `FactoryRuntime` publishes immutable lane presentation data together with runtime lane failures, progress, and locks, so network data does not re-aggregate scheduler state.
+- Redstone pause/resume is represented in `CraftingStatus` and the published crafting/factory snapshots. Runtime recipes remain active while physical block active is off; resume restores the working status and physical active state without resetting recipe progress or tick counters.
+- The unused `FactoryRuntime` controller reference and constructor parameter were removed; no compatibility constructor or adapter was added.
+
+## Re-review Static Verification
+
+- Runtime old-path `rg` scan: no matches for `RecipeCraftingContext`, concrete resource route helpers, or concrete item/fluid/energy port classes under `internal/runtime`.
+- Recipe adapter old-path `rg` scan: no matches for `RecipeCraftingContext`, context-pool calls, concrete resource route helpers, or concrete item/fluid/energy port classes under `internal/recipe`.
+- Runtime/presentation scan: `RecipeSearchTask` contains the module gate; `factoryControllerSnapshot()` consumes `ControllerRuntimeSnapshot.factory()` and has no scheduler aggregation calls; paused runtime transitions are explicit in `CraftingRuntime`/`FactoryRuntime`.
+- `git diff --check`: passed with no whitespace errors.
+- Test and Gradle commands: intentionally not run, per explicit re-review constraints.
+- Test sources and GameTest sources: untouched.
+
 ## Cross-Wave Risks
 
 - Existing tests still target the pre-Wave-B constructors and context-based APIs; they must be migrated in Wave E without restoring compatibility facades.

@@ -149,6 +149,14 @@ public final class CraftingRuntime {
         return activeRecipe != null;
     }
 
+    public void pause() {
+        if (active()) status = CraftingStatus.paused();
+    }
+
+    public void resume() {
+        if (active()) status = CraftingStatus.working();
+    }
+
     public @Nullable ExecutionStatus failure() {
         return failure;
     }

@@ -2,7 +2,6 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -10,6 +9,7 @@ import java.util.Comparator;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * Owns factory lanes and aggregates their crafting runtime snapshots.
@@ -17,16 +17,11 @@ import java.util.Map;
  * @author howxu <dev@howxu.cn>
  */
 public final class FactoryRuntime {
-    private final MachineControllerBlockEntity controller;
     private final List<CraftingRuntime> lanes = new ArrayList<>();
     private final Map<CraftingRuntime, Runnable> laneTickers = new IdentityHashMap<>();
+    private final Map<CraftingRuntime, Supplier<FactoryLaneSnapshot>> laneSnapshotters = new IdentityHashMap<>();
     private int laneLimit = 1;
     private @Nullable ExecutionStatus failure;
-
-    public FactoryRuntime(MachineControllerBlockEntity controller) {
-        if (controller == null) throw new IllegalArgumentException("controller must not be null");
-        this.controller = controller;
-    }
 
     public void tick(List<MachineRecipe> candidates, int maxParallelism) {
         for (CraftingRuntime runtime : List.copyOf(lanes)) {
@@ -48,23 +43,34 @@ public final class FactoryRuntime {
                 .map(CraftingRuntime::snapshot)
                 .filter(state -> state.recipeId() != null || state.failure() != null)
                 .toList();
-        return new FactorySnapshot(!active.isEmpty(), laneSnapshots, parallelism, laneLimit, failure);
+        List<FactoryLaneSnapshot> presentationLanes = lanes.stream()
+                .map(laneSnapshotters::get)
+                .map(Supplier::get)
+                .toList();
+        return new FactorySnapshot(!active.isEmpty(), laneSnapshots, presentationLanes,
+                parallelism, laneLimit, failure);
     }
 
-    public void add(CraftingRuntime runtime) {
-        add(runtime, () -> { });
-    }
-
-    public void add(CraftingRuntime runtime, Runnable ticker) {
-        if (runtime == null || lanes.contains(runtime)) return;
+    public void add(CraftingRuntime runtime, Runnable ticker, Supplier<FactoryLaneSnapshot> snapshotter) {
+        if (runtime == null || lanes.contains(runtime) || snapshotter == null) return;
         lanes.add(runtime);
         laneTickers.put(runtime, ticker == null ? () -> { } : ticker);
+        laneSnapshotters.put(runtime, snapshotter);
         recomputeFailure();
+    }
+
+    public void pause() {
+        for (CraftingRuntime runtime : List.copyOf(lanes)) runtime.pause();
+    }
+
+    public void resume() {
+        for (CraftingRuntime runtime : List.copyOf(lanes)) runtime.resume();
     }
 
     public void remove(CraftingRuntime runtime) {
         lanes.remove(runtime);
         laneTickers.remove(runtime);
+        laneSnapshotters.remove(runtime);
         recomputeFailure();
     }
 
@@ -101,6 +107,7 @@ public final class FactoryRuntime {
         for (CraftingRuntime runtime : lanes) runtime.invalidate();
         lanes.clear();
         laneTickers.clear();
+        laneSnapshotters.clear();
         failure = null;
     }
 

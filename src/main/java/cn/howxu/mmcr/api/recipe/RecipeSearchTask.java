@@ -1,8 +1,10 @@
 package cn.howxu.mmcr.api.recipe;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -48,6 +50,17 @@ public final class RecipeSearchTask {
 
         for (int recipeIndex = 0; recipeIndex < ordered.size(); recipeIndex++) {
             MachineRecipe recipe = ordered.get(recipeIndex);
+            if (!snapshot.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) {
+                ExecutionStatus moduleFailure = new ExecutionStatus(MMCR.id("crafting_runtime"),
+                        StatusSeverity.BLOCKED, MMCR.id("crafting_runtime"), Map.of("reason", "module_connection"));
+                float validity = validity(moduleFailure);
+                if (validity > bestValidity) {
+                    bestValidity = validity;
+                    bestFailure = moduleFailure;
+                    bestFailureUnloc = failureUnloc(moduleFailure);
+                }
+                continue;
+            }
             LevelInsufficientFailure levelFailure = levelFailure(recipe);
             if (levelFailure != null) {
                 return RecipeSearchResult.levelFailure(machineId, structureVersion,
@@ -130,6 +143,7 @@ public final class RecipeSearchTask {
         return switch (failure.details().getOrDefault("reason", "")) {
             case "insufficient_resource", "insufficient_energy" -> "gui.mmcr.controller.failure.missing_input";
             case "no_output_capacity" -> "gui.mmcr.controller.failure.missing_output";
+            case "module_connection" -> "gui.mmcr.controller.failure.module_connection";
             default -> "gui.mmcr.controller.failure.missing_input";
         };
     }

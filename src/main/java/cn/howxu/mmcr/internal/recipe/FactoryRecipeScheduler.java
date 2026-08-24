@@ -366,7 +366,7 @@ public final class FactoryRecipeScheduler {
     }
 
     private void register(FactoryRecipeThread thread) {
-        factoryRuntime.add(thread.runtime(), thread::tick);
+        factoryRuntime.add(thread.runtime(), thread::tick, thread::snapshot);
     }
 
     private void removeThreads(List<CraftingRuntime> removedRuntimes) {

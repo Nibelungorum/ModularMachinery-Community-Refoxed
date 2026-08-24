@@ -13,17 +13,19 @@ import java.util.List;
 public record FactorySnapshot(
         boolean active,
         List<CraftingStateSnapshot> lanes,
+        List<FactoryLaneSnapshot> presentationLanes,
         int activeParallelism,
         int laneLimit,
         @Nullable ExecutionStatus failure) {
 
     public FactorySnapshot {
         lanes = List.copyOf(lanes == null ? List.of() : lanes);
+        presentationLanes = List.copyOf(presentationLanes == null ? List.of() : presentationLanes);
         if (activeParallelism < 0) throw new IllegalArgumentException("activeParallelism must not be negative");
         if (laneLimit < 1) throw new IllegalArgumentException("laneLimit must be positive");
     }
 
     public static FactorySnapshot empty() {
-        return new FactorySnapshot(false, List.of(), 0, 1, null);
+        return new FactorySnapshot(false, List.of(), List.of(), 0, 1, null);
     }
 }
