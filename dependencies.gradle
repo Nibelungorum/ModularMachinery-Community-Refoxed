@@ -17,9 +17,6 @@ dependencies {
     // from howxu maven
     implementation("dev.latvian.mods:kubejs-neoforge:26.1.2-8.0.4-mmcr")
 
-    // Mek
-    // runtimeOnly "com.github.mekanism:Mekanism:26.1.2-10.8.0.homebaked:all"
-
     runtimeOnly "curse.maven:athena-841890:7970442"
     runtimeOnly "curse.maven:geckolib-388172:8327201"
 
@@ -48,6 +45,16 @@ dependencies {
 
     // sodium
     localRuntime "curse.maven:sodium-394468:8396481"
+
+    // mekanism from howxu maven
+    localRuntime "Mekanism:26.1.2-10.8.0.homebaked:all"
+    implementation "Mekanism:26.1.2-10.8.0.homebaked:api"
+
+    // guide me
+    implementation "curse.maven:guideme-1173950:8204880"
+
+    // patchouli book
+    implementation "curse.maven:patchouli-306770:8404543"
 }
 
 dependencies {

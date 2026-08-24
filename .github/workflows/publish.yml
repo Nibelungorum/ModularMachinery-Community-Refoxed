@@ -78,7 +78,7 @@ jobs:
         id: notes
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          DEEPSEEK_TOKEN: ${{ secrets.DEEPSEEK_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -89,27 +89,43 @@ jobs:
             range="${{ steps.version.outputs.tag }}"
           fi
 
-          changelog="$(git log "$range" --pretty=format:'- %s (%h)' --no-merges)"
-          if [ -z "$changelog" ]; then
-            changelog="- No changes found."
+          commit_data="$(git log "$range" --pretty=format:'%h %s' --no-merges)"
+          fallback="$(bash .github/scripts/format-release-notes.sh \
+            "${{ steps.version.outputs.version }}" <<< "$commit_data")"
+          full_list="$(bash .github/scripts/format-release-notes.sh --full <<< "$commit_data")"
+          if [ -z "$full_list" ]; then
+            full_list="- No changes found."
+          fi
+          changelog="${commit_data:-No changes found.}"
+
+          prompt_template="$(cat .github/prompts/release-notes.md)"
+          prompt="$(printf '%s\n\nRelease version: %s\nCommit range: %s\n\nCommits:\n%s' \
+            "$prompt_template" "${{ steps.version.outputs.version }}" "$range" "$changelog")"
+          generated=""
+          if [ -n "${DEEPSEEK_TOKEN:-}" ]; then
+            request="$(jq -n --arg model 'deepseek-v4-flash' --arg prompt "$prompt" \
+              '{model: $model, messages: [{role: "user", content: $prompt}], temperature: 0.2}')"
+            if response="$(curl --fail --silent --show-error --max-time 120 \
+              -X POST 'https://api.deepseek.com/chat/completions' \
+              -H 'Content-Type: application/json' \
+              -H "Authorization: Bearer ${DEEPSEEK_TOKEN}" \
+              --data "$request")"; then
+              generated="$(jq -er '.choices[0].message.content' <<< "$response" 2>/dev/null || true)"
+            fi
           fi
 
-          total_lines="$(printf '%s\n' "$changelog" | wc -l | tr -d ' ')"
+          if [ -z "$generated" ]; then
+            generated="$fallback"
+          else
+            generated="$(printf '# Release %s\n\n%s\n\n<details>\n<summary>Full commit list</summary>\n\n%s\n\n</details>\n' \
+              "${{ steps.version.outputs.version }}" "$generated" "$full_list")"
+          fi
+
           {
-            echo "body<<EOF"
-            if [ "$total_lines" -gt 20 ]; then
-              printf '%s\n' "$changelog" | sed -n '1,20p'
-              echo
-              echo "<details>"
-              echo "<summary>More changes</summary>"
-              echo
-              printf '%s\n' "$changelog" | sed -n '21,$p'
-              echo
-              echo "</details>"
-            else
-              printf '%s\n' "$changelog"
-            fi
-            echo "EOF"
+            delimiter="release_notes_${RANDOM}_${RANDOM}"
+            echo "body<<$delimiter"
+            printf '%s\n' "$generated"
+            echo "$delimiter"
           } >> "$GITHUB_OUTPUT"
 
       - name: Publish release artifacts
