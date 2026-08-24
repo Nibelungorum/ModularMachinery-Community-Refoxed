@@ -165,12 +165,17 @@ public final class SharedIoCoordinator {
 
         long controllerStructureVersion();
 
+        long controllerStateVersion();
+
         LongSupplier controllerStructureVersionSupplier();
+
+        LongSupplier controllerStateVersionSupplier();
 
         BooleanSupplier validator();
 
         default boolean isStillValid() {
             boolean valid = controllerStructureVersion() == controllerStructureVersionSupplier().getAsLong()
+                    && controllerStateVersion() == controllerStateVersionSupplier().getAsLong()
                     && validator().getAsBoolean();
             if (!valid) discard();
             return valid;
@@ -199,9 +204,11 @@ public final class SharedIoCoordinator {
         }
     }
 
-    public record StartRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey, long controllerStructureVersion,
+    public record StartRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
+                               long controllerStructureVersion, long controllerStateVersion,
                                int maximumParallelism, IntUnaryOperator transaction, IntConsumer committer,
-                               BooleanSupplier validator, LongSupplier controllerStructureVersionSupplier) implements Request {
+                               BooleanSupplier validator, LongSupplier controllerStructureVersionSupplier,
+                               LongSupplier controllerStateVersionSupplier) implements Request {
 
         @Override public long domainId() { return domain.id(); }
         @Override public long domainGeneration() { return domain.generation(); }
@@ -213,17 +220,21 @@ public final class SharedIoCoordinator {
         }
     }
 
-    public record TickRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey, long controllerStructureVersion,
+    public record TickRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
+                              long controllerStructureVersion, long controllerStateVersion,
                               BooleanSupplier transaction, BooleanSupplier validator,
-                              LongSupplier controllerStructureVersionSupplier) implements Request {
+                              LongSupplier controllerStructureVersionSupplier,
+                              LongSupplier controllerStateVersionSupplier) implements Request {
         @Override public long domainId() { return domain.id(); }
         @Override public long domainGeneration() { return domain.generation(); }
         @Override public boolean tryCommit() { return transaction.getAsBoolean(); }
     }
 
-    public record FinishRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey, long controllerStructureVersion,
+    public record FinishRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
+                                long controllerStructureVersion, long controllerStateVersion,
                                 BooleanSupplier transaction, BooleanSupplier validator,
-                                LongSupplier controllerStructureVersionSupplier) implements Request {
+                                LongSupplier controllerStructureVersionSupplier,
+                                LongSupplier controllerStateVersionSupplier) implements Request {
         @Override public long domainId() { return domain.id(); }
         @Override public long domainGeneration() { return domain.generation(); }
         @Override public boolean tryCommit() { return transaction.getAsBoolean(); }

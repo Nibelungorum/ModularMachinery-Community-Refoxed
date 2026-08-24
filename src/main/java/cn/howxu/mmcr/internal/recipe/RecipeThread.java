@@ -65,16 +65,16 @@ public abstract class RecipeThread {
             return false;
         }
         if (controller.shouldDelayConflictProneStart(result)) return false;
-        return startRecipe(result.recipe(), structureVersion);
+        return startRecipe(result.recipe(), availableParallelism, structureVersion);
     }
 
-    protected boolean startRecipe(MachineRecipe next, long structureVersion) {
-        if (next == null) return false;
+    protected boolean startRecipe(MachineRecipe next, int requestedParallelism, long structureVersion) {
+        if (next == null || requestedParallelism <= 0) return false;
         StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
         if (controller.getLevel() instanceof ServerLevel serverLevel && domain != null) {
-            return requestStart(serverLevel, domain, next, structureVersion);
+            return requestStart(serverLevel, domain, next, requestedParallelism, structureVersion);
         }
-        CraftingStatus state = runtime.start(next, runtimeParallelism(next));
+        CraftingStatus state = runtime.start(next, requestedParallelism);
         if (!state.isCrafting()) {
             onStartFailed();
             return false;
@@ -83,14 +83,8 @@ public abstract class RecipeThread {
         return true;
     }
 
-    private int runtimeParallelism(MachineRecipe recipe) {
-        int controllerLimit = controller.getMaxParallelism();
-        int recipeLimit = recipe.maxThreads() <= 0 ? controllerLimit : recipe.maxThreads();
-        return Math.max(1, Math.min(controllerLimit, recipeLimit));
-    }
-
     private boolean requestStart(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
-                                 MachineRecipe next, long structureVersion) {
+                                 MachineRecipe next, int requestedParallelism, long structureVersion) {
         long token = ++nextStartToken;
         startPending = true;
         pendingStartRecipe = next;
@@ -105,7 +99,8 @@ public abstract class RecipeThread {
                 domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
                 structureVersion,
-                runtimeParallelism(next),
+                snapshot.stateVersion(),
+                requestedParallelism,
                 requested -> {
                     if (!isPendingStart(token, next) || runtime.active()) return 0;
                     CraftingStatus state = runtime.start(next, requested);
@@ -122,7 +117,8 @@ public abstract class RecipeThread {
                     onStarted();
                 },
                 () -> isPendingStart(token, next) && domain.equals(controller.resourceDomain()),
-                () -> controller.runtimeSnapshot().structure().version()
+                () -> controller.runtimeSnapshot().structure().version(),
+                () -> controller.runtimeSnapshot().stateVersion()
         ));
         return true;
     }
@@ -191,11 +187,13 @@ public abstract class RecipeThread {
         pendingTickDomain = domain;
         long token = ++nextTickToken;
         pendingTickToken = token;
-        long structureVersion = controller.runtimeSnapshot().structure().version();
+        ControllerRuntimeSnapshot snapshot = controller.runtimeSnapshot();
+        long structureVersion = snapshot.structure().version();
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.TickRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
                 structureVersion,
+                snapshot.stateVersion(),
                 () -> {
                     if (!validateCurrentRuntime(token, domain)) return false;
                     boolean wasActive = runtime.active();
@@ -209,18 +207,21 @@ public abstract class RecipeThread {
                     return true;
                 },
                 () -> validateCurrentRuntime(token, domain),
-                () -> controller.runtimeSnapshot().structure().version()
+                () -> controller.runtimeSnapshot().structure().version(),
+                () -> controller.runtimeSnapshot().stateVersion()
         ));
     }
 
     private void requestFinish(ServerLevel level, StructureClaimRegistry.ResourceDomain domain, long token) {
         tickPending = true;
         pendingTickDomain = domain;
-        long structureVersion = controller.runtimeSnapshot().structure().version();
+        ControllerRuntimeSnapshot snapshot = controller.runtimeSnapshot();
+        long structureVersion = snapshot.structure().version();
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.FinishRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
                 structureVersion,
+                snapshot.stateVersion(),
                 () -> {
                     if (!validateCurrentRuntime(token, domain)) return false;
                     boolean wasActive = runtime.active();
@@ -229,7 +230,8 @@ public abstract class RecipeThread {
                     return true;
                 },
                 () -> validateCurrentRuntime(token, domain),
-                () -> controller.runtimeSnapshot().structure().version()
+                () -> controller.runtimeSnapshot().structure().version(),
+                () -> controller.runtimeSnapshot().stateVersion()
         ));
     }
 

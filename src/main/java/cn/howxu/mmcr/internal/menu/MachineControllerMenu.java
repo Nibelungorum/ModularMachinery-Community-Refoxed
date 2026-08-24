@@ -2,7 +2,6 @@ package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.api.machine.Machine;
-import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;

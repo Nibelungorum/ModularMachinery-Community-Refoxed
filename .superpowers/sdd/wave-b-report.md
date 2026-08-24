@@ -27,6 +27,29 @@
 - Test and Gradle commands: intentionally not run, per Wave B constraints.
 - Test sources and GameTest sources: untouched.
 
+## Wave B Final Important Re-review Closure
+
+- Shared start, tick, and finish requests now capture and validate `stateVersion` at coordinator resolution and through their pending/commit validators. Module connection state changes therefore discard asynchronous requests before capability work can commit.
+- `CraftingRuntime.start()` and `RecipeThread` now use the requested/available lane parallelism. `recipe.maxThreads()` remains a factory lane/thread-count limit in `FactoryRuntime.availableCandidates()` and is not a single-lane parallelism cap.
+- `CraftingRuntime.invalidate()` clears the active recipe and failure state before reset/failure publication. Reset paths can no longer republish a stale runtime failure after clearing the controller failure.
+- The unused `FactoryRecipeScheduler` import was removed from `MachineControllerMenu`; Wave D legacy context and parallelism calculator files remain unchanged.
+
+## Final Important Re-review Static Verification
+
+- Shared request scan: all six production start/tick/finish requests carry state-version snapshots and suppliers; `SharedIoCoordinator` validates both structure and state versions.
+- Parallelism scan: no `recipe.maxThreads()` use remains in `CraftingRuntime` or `RecipeThread`; only factory candidate lane accounting retains it.
+- `git diff --check`: passed with no whitespace errors.
+- Test and Gradle commands: intentionally not run, per explicit final re-review constraints.
+- Test sources and other docs: untouched.
+
+## Wave B Important Re-review Closure: Snapshot and Persistence
+
+- `FactorySnapshot` now owns the immutable factory presentation lanes, active lane count, maximum parallelism, and pause state alongside lane execution state and failure aggregation. `MachineControllerRuntime.publishSnapshot()` captures those values at one publication point.
+- Factory menu, network, Jade, and machine-state presentation paths consume the published factory snapshot. Factory ticking no longer sends a menu snapshot before the final crafting/structure/factory publication; lock and capacity mutations publish before presentation reads.
+- `pendingFactoryRuntimeInput` is consumed exactly once after structure/component state restoration and before any factory snapshot, factory menu snapshot, save, or runtime tick can observe the runtime. Save retains loaded lanes even when the current structure has not yet re-formed.
+- Shared version invalidation and asynchronous shared start/tick/finish failures synchronize structured `CraftingRuntime` failure into the controller failure key and final `CraftingStateSnapshot`; version invalidation no longer falls through to published IDLE state.
+- Static verification for this closure: `git diff --check` and targeted `rg`/CodeGraph source review only. Tests and Gradle commands remain intentionally unrun.
+
 ## Wave B Important Re-review Closure
 
 - Queued shared starts and shared tick/finish requests now include the redstone pause state in their final validators. A pause discards only the pending reservation/request, never the active runtime or its finish-pending state; resume therefore re-enters the existing search/tick/finish scheduling path.
@@ -48,7 +71,7 @@
 - Running crafting captures and compares `ControllerRuntimeSnapshot.stateVersion()`. `ComponentRuntime.replaceModuleConnectionState()` already advances this component/domain generation, so module disconnects invalidate both direct and shared tick/finish paths before another capability plan executes.
 - `RecipeSearchTask.hasMoreSpecificPendingInputCandidate()` now applies the same module connection gate as the main candidate loop, so an incompatible earlier recipe cannot introduce conflict delay.
 - `FactoryRuntime` now owns the `FactoryRecipeThread` lane collection, start reservations, recipe locks, lane creation/removal, idle cleanup, ticking, failure aggregation, persistence, and runtime-owned lane snapshots. `FactoryRecipeScheduler` retains only candidate filtering and lane-limit forwarding.
-- `FactorySnapshot` retains the brief record API without `presentationLanes`; controller/network consumers use runtime-owned `FactoryRuntime.ThreadSnapshot` values directly.
+- `FactorySnapshot` carries the immutable presentation lanes used by controller/network consumers together with factory execution aggregates.
 
 ## Final Review Static Verification
 

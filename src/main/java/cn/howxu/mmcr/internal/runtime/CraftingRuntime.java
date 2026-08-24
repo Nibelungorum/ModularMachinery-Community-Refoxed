@@ -63,10 +63,8 @@ public final class CraftingRuntime {
         if (!runtime.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) {
             return fail("module_connection");
         }
-        int parallelismLimit = recipe.maxThreads() <= 0
-                ? requestedParallelism : Math.min(requestedParallelism, recipe.maxThreads());
         CraftingContext context = context(runtime);
-        PlanningResult result = context.planStartResult(recipe, parallelismLimit);
+        PlanningResult result = context.planStartResult(recipe, requestedParallelism);
         CraftingPlan plan = result.plan();
         if (!result.successful() || plan == null) {
             return fail(result.failure());
@@ -227,6 +225,7 @@ public final class CraftingRuntime {
         consumedAtStart = Set.of();
         retainedInputs = Set.of();
         resourceDomain = null;
+        failure = null;
         status = CraftingStatus.IDLE;
     }
 

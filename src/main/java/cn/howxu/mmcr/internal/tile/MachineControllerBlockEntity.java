@@ -158,6 +158,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private long pendingSharedStartStructureVersion = Long.MIN_VALUE;
     private long pendingSharedStartCapabilityVersion = Long.MIN_VALUE;
     private long pendingSharedStartModifierVersion = Long.MIN_VALUE;
+    private long pendingSharedStartComponentStateVersion = Long.MIN_VALUE;
     private long nextSharedStartToken;
     private long pendingSharedStartToken;
     private boolean sharedTickPending;
@@ -2463,12 +2464,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
         pendingSharedStartStructureVersion = snapshot.structure().version();
         pendingSharedStartCapabilityVersion = snapshot.capabilityVersion();
         pendingSharedStartModifierVersion = snapshot.modifierVersion();
+        pendingSharedStartComponentStateVersion = snapshot.stateVersion();
         long token = ++nextSharedStartToken;
         pendingSharedStartToken = token;
         long runtimeStructureVersion = snapshot.structure().version();
         SharedIoCoordinator.get(serverLevel).enqueue(new SharedIoCoordinator.StartRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(getBlockPos(), "base"), runtimeStructureVersion,
+                snapshot.stateVersion(),
                 getMaxParallelism(),
                 requested -> {
                     if (!isPendingSharedStart(token, next, domain) || runtime.craftingRuntime().active()) return 0;
@@ -2492,8 +2495,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     lastFailureUnloc = null;
                     setChanged();
                 },
-                  () -> isPendingSharedStart(token, next, domain),
-                  () -> runtimeSnapshot().structure().version()
+                 () -> isPendingSharedStart(token, next, domain),
+                 () -> runtimeSnapshot().structure().version(),
+                 () -> runtimeSnapshot().stateVersion()
         ));
     }
 
@@ -2512,7 +2516,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         ControllerRuntimeSnapshot snapshot = runtimeSnapshot();
         if (snapshot.structure().version() != pendingSharedStartStructureVersion
                 || snapshot.capabilityVersion() != pendingSharedStartCapabilityVersion
-                || snapshot.modifierVersion() != pendingSharedStartModifierVersion) {
+                || snapshot.modifierVersion() != pendingSharedStartModifierVersion
+                || snapshot.stateVersion() != pendingSharedStartComponentStateVersion) {
             clearPendingSharedStart();
             recipeSearchRetryCounter++;
             return false;
@@ -2527,6 +2532,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         pendingSharedStartStructureVersion = Long.MIN_VALUE;
         pendingSharedStartCapabilityVersion = Long.MIN_VALUE;
         pendingSharedStartModifierVersion = Long.MIN_VALUE;
+        pendingSharedStartComponentStateVersion = Long.MIN_VALUE;
         pendingSharedStartToken = 0L;
     }
 
@@ -2550,9 +2556,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
         pendingSharedTickDomain = domain;
         long token = ++nextSharedTickToken;
         pendingSharedTickToken = token;
-        long runtimeStructureVersion = runtimeSnapshot().structure().version();
+        ControllerRuntimeSnapshot snapshot = runtimeSnapshot();
+        long runtimeStructureVersion = snapshot.structure().version();
         SharedIoCoordinator.get(serverLevel).enqueue(new SharedIoCoordinator.TickRequest(
                 domain, new SharedIoCoordinator.LaneKey(getBlockPos(), "base"), runtimeStructureVersion,
+                snapshot.stateVersion(),
                 () -> {
                     if (!validateSharedRuntime(token, domain)) return false;
                     boolean wasActive = runtime.craftingRuntime().active();
@@ -2569,14 +2577,17 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     return true;
                 },
                  () -> validateSharedRuntime(token, domain),
-                 () -> runtimeSnapshot().structure().version()
+                 () -> runtimeSnapshot().structure().version(),
+                 () -> runtimeSnapshot().stateVersion()
         ));
     }
 
     private void requestSharedFinish(ServerLevel level, StructureClaimRegistry.ResourceDomain domain, long token) {
-        long runtimeStructureVersion = runtimeSnapshot().structure().version();
+        ControllerRuntimeSnapshot snapshot = runtimeSnapshot();
+        long runtimeStructureVersion = snapshot.structure().version();
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.FinishRequest(
                 domain, new SharedIoCoordinator.LaneKey(getBlockPos(), "base"), runtimeStructureVersion,
+                snapshot.stateVersion(),
                 () -> {
                     if (!validateSharedRuntime(token, domain)) return false;
                     boolean wasActive = runtime.craftingRuntime().active();
@@ -2585,7 +2596,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     return true;
                 },
                  () -> validateSharedRuntime(token, domain),
-                 () -> runtimeSnapshot().structure().version()
+                 () -> runtimeSnapshot().structure().version(),
+                 () -> runtimeSnapshot().stateVersion()
         ));
     }
 

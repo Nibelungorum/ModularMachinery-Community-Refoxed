@@ -125,7 +125,7 @@ public final class FactoryRecipeThread extends RecipeThread {
                 || lastRecipeModifierSnapshotVersion != modifierSnapshotVersion
                 || lastRecipeComponentStateVersion != componentStateVersion
                 || !candidatesFor(candidates).contains(lastRecipe)) return false;
-        return startRecipe(lastRecipe, structureVersion);
+        return startRecipe(lastRecipe, availableParallelism, structureVersion);
     }
 
     public void rememberLastRecipe(MachineRecipe recipe, long structureVersion, long capabilitySnapshotVersion,
