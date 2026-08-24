@@ -44,6 +44,7 @@ public final class CraftingRuntime {
     private long structureVersion = Long.MIN_VALUE;
     private long capabilityVersion = Long.MIN_VALUE;
     private long modifierVersion = Long.MIN_VALUE;
+    private long componentStateVersion = Long.MIN_VALUE;
     private @Nullable StructureClaimRegistry.ResourceDomain resourceDomain;
     private CraftingStatus status = CraftingStatus.IDLE;
 
@@ -125,11 +126,11 @@ public final class CraftingRuntime {
         finishPlan = result.plan();
         if (!result.successful() || finishPlan == null) {
             activeRecipe.markFinishBlocked(currentGameTime());
-            return waiting(result.failure());
+            return finishBlocked(result.failure());
         }
         if (!finishPlan.commit()) {
             activeRecipe.markFinishBlocked(currentGameTime());
-            return waiting(finishPlan.failure());
+            return finishBlocked(finishPlan.failure());
         }
 
         activeRecipe.applyTickGrant(true, true, currentGameTime());
@@ -201,7 +202,8 @@ public final class CraftingRuntime {
         ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
         return structureVersion == runtime.structure().version()
                 && capabilityVersion == runtime.capabilityVersion()
-                && modifierVersion == runtime.modifierVersion();
+                && modifierVersion == runtime.modifierVersion()
+                && componentStateVersion == runtime.stateVersion();
     }
 
     public @Nullable StructureClaimRegistry.ResourceDomain resourceDomain() {
@@ -221,7 +223,7 @@ public final class CraftingRuntime {
 
     public void restore(ActiveMachineRecipe restored, @Nullable StructureClaimRegistry.ResourceDomain domain,
                         long restoredStructureVersion, long restoredCapabilityVersion,
-                        long restoredModifierVersion) {
+                        long restoredModifierVersion, long restoredComponentStateVersion) {
         if (restored == null || restored.getRecipe() == null) {
             invalidate();
             return;
@@ -234,6 +236,7 @@ public final class CraftingRuntime {
         structureVersion = restoredStructureVersion;
         capabilityVersion = restoredCapabilityVersion;
         modifierVersion = restoredModifierVersion;
+        componentStateVersion = restoredComponentStateVersion;
         ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
         List<MachineRequirement> requirements = restored.getRecipe().runtimeRequirements(contextModifiers(runtime));
         Set<Integer> consumed = new HashSet<>();
@@ -263,6 +266,7 @@ public final class CraftingRuntime {
             output.putLong("structure_version", structureVersion);
             output.putLong("capability_version", capabilityVersion);
             output.putLong("modifier_version", modifierVersion);
+            output.putLong("component_state_version", componentStateVersion);
             activeRecipe.serialize(output.child("recipe"));
         }
     }
@@ -275,7 +279,8 @@ public final class CraftingRuntime {
         restore(ActiveMachineRecipe.from(input.childOrEmpty("recipe")), domain,
                 input.getLongOr("structure_version", Long.MIN_VALUE),
                 input.getLongOr("capability_version", Long.MIN_VALUE),
-                input.getLongOr("modifier_version", Long.MIN_VALUE));
+                input.getLongOr("modifier_version", Long.MIN_VALUE),
+                input.getLongOr("component_state_version", Long.MIN_VALUE));
     }
 
     private CraftingStatus waiting(@Nullable ExecutionStatus nextFailure) {
@@ -288,6 +293,12 @@ public final class CraftingRuntime {
             finishPlan = null;
             resourceDomain = null;
         }
+        return status;
+    }
+
+    private CraftingStatus finishBlocked(@Nullable ExecutionStatus nextFailure) {
+        failure = nextFailure == null ? failure("finish") : nextFailure;
+        status = CraftingStatus.failure(failureUnloc(failure));
         return status;
     }
 
@@ -324,6 +335,7 @@ public final class CraftingRuntime {
         structureVersion = runtime.structure().version();
         capabilityVersion = runtime.capabilityVersion();
         modifierVersion = runtime.modifierVersion();
+        componentStateVersion = runtime.stateVersion();
         resourceDomain = controller.resourceDomain();
     }
 
@@ -374,6 +386,7 @@ public final class CraftingRuntime {
         return switch (status.details().getOrDefault("reason", "")) {
             case "module_connection" -> "gui.mmcr.controller.failure.module_connection";
             case "version_invalidated" -> "gui.mmcr.controller.failure.structure_changed";
+            case "finish", "no_output_capacity" -> "gui.mmcr.controller.failure.missing_output";
             case "per_tick" -> "gui.mmcr.controller.failure.missing_input";
             default -> "gui.mmcr.controller.failure.missing_input";
         };

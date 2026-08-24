@@ -34,6 +34,7 @@ public abstract class RecipeThread {
     private long pendingStartStructureVersion;
     private long pendingStartCapabilityVersion;
     private long pendingStartModifierVersion;
+    private long pendingStartComponentStateVersion;
     private boolean tickPending;
     private @Nullable StructureClaimRegistry.ResourceDomain pendingTickDomain;
     private long nextTickToken;
@@ -98,6 +99,7 @@ public abstract class RecipeThread {
         pendingStartStructureVersion = structureVersion;
         pendingStartCapabilityVersion = snapshot.capabilityVersion();
         pendingStartModifierVersion = snapshot.modifierVersion();
+        pendingStartComponentStateVersion = snapshot.stateVersion();
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.StartRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
@@ -133,7 +135,8 @@ public abstract class RecipeThread {
         ControllerRuntimeSnapshot snapshot = controller.runtimeSnapshot();
         if (snapshot.structure().version() != pendingStartStructureVersion
                 || snapshot.capabilityVersion() != pendingStartCapabilityVersion
-                || snapshot.modifierVersion() != pendingStartModifierVersion) {
+                || snapshot.modifierVersion() != pendingStartModifierVersion
+                || snapshot.stateVersion() != pendingStartComponentStateVersion) {
             clearPendingStart(token, recipe);
             return false;
         }
@@ -149,6 +152,7 @@ public abstract class RecipeThread {
         pendingStartStructureVersion = Long.MIN_VALUE;
         pendingStartCapabilityVersion = Long.MIN_VALUE;
         pendingStartModifierVersion = Long.MIN_VALUE;
+        pendingStartComponentStateVersion = Long.MIN_VALUE;
     }
 
     public void tick() {
@@ -259,6 +263,7 @@ public abstract class RecipeThread {
         pendingStartStructureVersion = Long.MIN_VALUE;
         pendingStartCapabilityVersion = Long.MIN_VALUE;
         pendingStartModifierVersion = Long.MIN_VALUE;
+        pendingStartComponentStateVersion = Long.MIN_VALUE;
         clearPendingTick();
     }
 

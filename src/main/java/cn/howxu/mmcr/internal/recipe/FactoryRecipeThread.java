@@ -4,7 +4,6 @@ import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
-import cn.howxu.mmcr.internal.runtime.FactoryLaneSnapshot;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.storage.ValueInput;
@@ -30,11 +29,10 @@ public final class FactoryRecipeThread extends RecipeThread {
     private final Set<MachineRecipe> recipeSet = new LinkedHashSet<>();
     private int idleTicks;
     private @Nullable MachineRecipe lastRecipe;
-    private @Nullable Identifier lockedRecipeId;
-    private boolean hadRecipeLock;
     private long lastRecipeStructureVersion = Long.MIN_VALUE;
     private long lastRecipeCapabilityVersion = Long.MIN_VALUE;
     private long lastRecipeModifierSnapshotVersion = Long.MIN_VALUE;
+    private long lastRecipeComponentStateVersion = Long.MIN_VALUE;
     private Runnable finishContinuation = () -> { };
 
     private FactoryRecipeThread(MachineControllerBlockEntity controller,
@@ -83,36 +81,23 @@ public final class FactoryRecipeThread extends RecipeThread {
     public boolean isCoreThread() { return coreThread; }
     public boolean isBaseThread() { return baseThread; }
     public String threadName() { return threadName; }
-    public @Nullable Identifier lockedRecipeId() { return lockedRecipeId; }
-    public boolean isRecipeLocked() { return lockedRecipeId != null; }
-    public void setLockedRecipeId(@Nullable Identifier lockedRecipeId) {
-        this.lockedRecipeId = lockedRecipeId;
-        if (lockedRecipeId != null) hadRecipeLock = true;
-    }
-    public boolean toggleRecipeLock() {
-        if (lockedRecipeId != null) {
-            lockedRecipeId = null;
-            return true;
-        }
-        if (runtime.recipe() == null) return false;
-        lockedRecipeId = runtime.recipe().id();
-        hadRecipeLock = true;
-        return true;
-    }
     @Override public String laneId() { return laneId; }
-    public boolean isTimedOut() { return !baseThread && !coreThread && !hadRecipeLock && isIdle() && idleTicks >= IDLE_TIMEOUT_TICKS; }
+    public boolean isTimedOut(boolean recipeLockUsed) {
+        return !baseThread && !coreThread && !recipeLockUsed && isIdle() && idleTicks >= IDLE_TIMEOUT_TICKS;
+    }
     public void tickIdle() { idleTicks = isIdle() ? idleTicks + 1 : 0; }
 
     @Override protected void onStarted() {
         idleTicks = 0;
         if (runtime.recipe() != null && controller != null) {
             ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
-            rememberLastRecipe(this.runtime.recipe(), runtime.structure().version(), runtime.modifierVersion());
+            rememberLastRecipe(this.runtime.recipe(), runtime.structure().version(), runtime.capabilityVersion(),
+                    runtime.modifierVersion(), runtime.stateVersion());
         }
     }
     @Override protected void onFinished() { idleTicks = 0; }
 
-    void setFinishContinuation(Runnable finishContinuation) {
+    public void setFinishContinuation(Runnable finishContinuation) {
         this.finishContinuation = finishContinuation == null ? () -> { } : finishContinuation;
     }
 
@@ -122,24 +107,34 @@ public final class FactoryRecipeThread extends RecipeThread {
 
     @Override
     public boolean searchAndStartRecipe(List<MachineRecipe> candidates, int availableParallelism, long structureVersion) {
+        return searchAndStartRecipe(candidates, availableParallelism, structureVersion, null);
+    }
+
+    public boolean searchAndStartRecipe(List<MachineRecipe> candidates, int availableParallelism,
+                                        long structureVersion, @Nullable Identifier lockedRecipeId) {
         return super.searchAndStartRecipe(candidatesFor(candidates), availableParallelism, structureVersion, lockedRecipeId);
     }
 
     public boolean tryRestartLastRecipe(List<MachineRecipe> candidates, int availableParallelism,
-                                        long structureVersion, long modifierSnapshotVersion) {
+                                        long structureVersion, long capabilitySnapshotVersion,
+                                        long modifierSnapshotVersion, long componentStateVersion,
+                                        @Nullable Identifier lockedRecipeId) {
         if (lockedRecipeId != null || lastRecipe == null || controller == null || availableParallelism <= 0
                 || lastRecipeStructureVersion != structureVersion
-                || lastRecipeCapabilityVersion != controller.runtimeSnapshot().capabilityVersion()
+                || lastRecipeCapabilityVersion != capabilitySnapshotVersion
                 || lastRecipeModifierSnapshotVersion != modifierSnapshotVersion
+                || lastRecipeComponentStateVersion != componentStateVersion
                 || !candidatesFor(candidates).contains(lastRecipe)) return false;
         return startRecipe(lastRecipe, structureVersion);
     }
 
-    public void rememberLastRecipe(MachineRecipe recipe, long structureVersion, long modifierSnapshotVersion) {
+    public void rememberLastRecipe(MachineRecipe recipe, long structureVersion, long capabilitySnapshotVersion,
+                                   long modifierSnapshotVersion, long componentStateVersion) {
         lastRecipe = recipe;
         lastRecipeStructureVersion = structureVersion;
-        lastRecipeCapabilityVersion = controller.runtimeSnapshot().capabilityVersion();
+        lastRecipeCapabilityVersion = capabilitySnapshotVersion;
         lastRecipeModifierSnapshotVersion = modifierSnapshotVersion;
+        lastRecipeComponentStateVersion = componentStateVersion;
     }
 
     @Override protected void onStartFailed() {
@@ -147,6 +142,7 @@ public final class FactoryRecipeThread extends RecipeThread {
         lastRecipeStructureVersion = Long.MIN_VALUE;
         lastRecipeCapabilityVersion = Long.MIN_VALUE;
         lastRecipeModifierSnapshotVersion = Long.MIN_VALUE;
+        lastRecipeComponentStateVersion = Long.MIN_VALUE;
     }
 
     public void setActiveRecipeForTesting(@Nullable ActiveMachineRecipe activeRecipe) {
@@ -154,7 +150,7 @@ public final class FactoryRecipeThread extends RecipeThread {
         else {
             ControllerRuntimeSnapshot snapshot = controller.runtimeSnapshot();
             runtime.restore(activeRecipe, controller.resourceDomain(), snapshot.structure().version(),
-                    snapshot.capabilityVersion(), snapshot.modifierVersion());
+                    snapshot.capabilityVersion(), snapshot.modifierVersion(), snapshot.stateVersion());
         }
     }
 
@@ -163,16 +159,13 @@ public final class FactoryRecipeThread extends RecipeThread {
         output.putBoolean("base", baseThread);
         output.putString("name", threadName);
         output.putInt("idle_ticks", idleTicks);
-        output.putBoolean("had_recipe_lock", hadRecipeLock);
-        if (lockedRecipeId != null) {
-            output.putString("locked_recipe", lockedRecipeId.toString());
-        }
         output.putBoolean("has_last", lastRecipe != null);
         if (lastRecipe != null) {
             output.putString("last_recipe", lastRecipe.id().toString());
             output.putLong("last_structure_version", lastRecipeStructureVersion);
             output.putLong("last_capability_version", lastRecipeCapabilityVersion);
             output.putLong("last_modifier_snapshot_version", lastRecipeModifierSnapshotVersion);
+            output.putLong("last_component_state_version", lastRecipeComponentStateVersion);
         }
         boolean hasActive = runtime.active();
         output.putBoolean("has_active", hasActive);
@@ -183,15 +176,6 @@ public final class FactoryRecipeThread extends RecipeThread {
         FactoryRecipeThread thread = new FactoryRecipeThread(controller,
                 input.getBooleanOr("core", false), input.getBooleanOr("base", false), input.getStringOr("name", ""));
         thread.idleTicks = input.getIntOr("idle_ticks", 0);
-        thread.hadRecipeLock = input.getBooleanOr("had_recipe_lock", false);
-        String lockedRecipeName = input.getStringOr("locked_recipe", "");
-        if (!lockedRecipeName.isEmpty()) {
-            Identifier lockedRecipeId = Identifier.parse(lockedRecipeName);
-            if (RecipeRegistry.getRecipe(lockedRecipeId) != null) {
-                thread.lockedRecipeId = lockedRecipeId;
-                thread.hadRecipeLock = true;
-            }
-        }
         if (input.getBooleanOr("has_last", false)) {
             String recipeName = input.getStringOr("last_recipe", "");
             Identifier recipeId = recipeName.isEmpty() ? null : Identifier.parse(recipeName);
@@ -200,17 +184,10 @@ public final class FactoryRecipeThread extends RecipeThread {
                 thread.lastRecipeStructureVersion = input.getLongOr("last_structure_version", Long.MIN_VALUE);
                 thread.lastRecipeCapabilityVersion = input.getLongOr("last_capability_version", Long.MIN_VALUE);
                 thread.lastRecipeModifierSnapshotVersion = input.getLongOr("last_modifier_snapshot_version", Long.MIN_VALUE);
+                thread.lastRecipeComponentStateVersion = input.getLongOr("last_component_state_version", Long.MIN_VALUE);
             }
         }
         if (input.getBooleanOr("has_active", false)) thread.runtime.load(input.childOrEmpty("active_runtime"), controller.resourceDomain());
         return thread;
-    }
-
-    public FactoryLaneSnapshot snapshot() {
-        ActiveMachineRecipe active = getActiveRecipe();
-        return new FactoryLaneSnapshot(runtime.snapshot(), baseThread, coreThread, active != null,
-                active == null ? 0 : active.getTick(), active == null ? 0 : active.getTotalTick(),
-                active == null ? 1 : active.getParallelism(), getLastFailureUnloc(), lockedRecipeId != null,
-                lockedRecipeId == null ? "" : lockedRecipeId.toString());
     }
 }

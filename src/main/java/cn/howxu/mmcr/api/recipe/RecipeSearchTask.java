@@ -125,6 +125,7 @@ public final class RecipeSearchTask {
             if (earlier.priority() != selectedRecipe.priority()
                     || earlier.inputRequirementCount() <= selectedRecipe.inputRequirementCount()
                     || !earlier.hasOverlappingInputs(selectedRecipe)) continue;
+            if (!snapshot.moduleConnectionStatus().canRunRecipe(earlier.requiredHostIds())) continue;
             CraftingContext context = context();
             PlanningResult inputs = context.planInputs(earlier, maxParallelism);
             PlanningResult outputs = context.planOutputs(earlier, maxParallelism);

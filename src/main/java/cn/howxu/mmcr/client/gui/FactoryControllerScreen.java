@@ -6,7 +6,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
-import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
+import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -101,7 +101,7 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     }
 
     static int threadIndexAt(int left, int top, int scroll, int mouseX, int mouseY,
-                             List<FactoryRecipeScheduler.ThreadSnapshot> threads) {
+                             List<FactoryRuntime.ThreadSnapshot> threads) {
         int listIndex = threadIndexAt(left, top, scroll, mouseX, mouseY);
         return listIndex >= 0 && listIndex < threads.size() ? threads.get(listIndex).index() : -1;
     }
@@ -189,7 +189,7 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     static int progressOverlayHeight() { return THREAD_ROW_HEIGHT - 1; }
     static int progressOverlayRight(int x, int progress) { return progressOverlayX(x) + progress; }
     static int progressOverlayBottom(int y) { return progressOverlayY(y) + progressOverlayHeight(); }
-    static List<Integer> threadOverlayColors(FactoryRecipeScheduler.ThreadSnapshot thread, int selectedThreadIndex) {
+    static List<Integer> threadOverlayColors(FactoryRuntime.ThreadSnapshot thread, int selectedThreadIndex) {
         List<Integer> colors = new ArrayList<>();
         if (progressWidth(thread.tick(), thread.totalTick()) > 0) colors.add(PROGRESS_THREAD_OVERLAY);
         if (thread.index() == selectedThreadIndex) colors.add(SELECTED_THREAD_OVERLAY);
@@ -236,7 +236,7 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
         for (int row = 0; row < visibleThreadCount; row++) {
             int index = scrollOffset + row;
             if (index >= menu.threads().size()) break;
-            FactoryRecipeScheduler.ThreadSnapshot thread = menu.threads().get(index);
+            FactoryRuntime.ThreadSnapshot thread = menu.threads().get(index);
             int y = topPos + THREAD_ROW_Y + row * (THREAD_ROW_HEIGHT + THREAD_ROW_GAP);
             int elementX = leftPos + THREAD_ROW_X;
             int selectedOverlayX = selectedOverlayX(elementX);
@@ -267,7 +267,7 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
             graphics.blit(RenderPipelines.GUI_TEXTURED, SCROLLER, scrollbarX, scrollbarY, 0, 0,
                     SCROLLBAR_HANDLE_WIDTH, SCROLLBAR_HANDLE_HEIGHT, 32, 32);
         }
-        FactoryRecipeScheduler.ThreadSnapshot selected = menu.selectedThread();
+        FactoryRuntime.ThreadSnapshot selected = menu.selectedThread();
         int x = leftPos + 113;
         int y = topPos + 12;
         graphics.pose().pushMatrix();

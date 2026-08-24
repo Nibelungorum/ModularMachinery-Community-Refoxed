@@ -27,6 +27,23 @@
 - Test and Gradle commands: intentionally not run, per Wave B constraints.
 - Test sources and GameTest sources: untouched.
 
+## Wave B Final Review Fixes
+
+- `CraftingRuntime.finish()` now keeps the active recipe, finish plan, and retry state when output planning or its root transaction fails. Only a successful output transaction reaches the finish cleanup path; per-tick cancellation remains isolated to `waiting()`.
+- Running crafting captures and compares `ControllerRuntimeSnapshot.stateVersion()`. `ComponentRuntime.replaceModuleConnectionState()` already advances this component/domain generation, so module disconnects invalidate both direct and shared tick/finish paths before another capability plan executes.
+- `RecipeSearchTask.hasMoreSpecificPendingInputCandidate()` now applies the same module connection gate as the main candidate loop, so an incompatible earlier recipe cannot introduce conflict delay.
+- `FactoryRuntime` now owns the `FactoryRecipeThread` lane collection, start reservations, recipe locks, lane creation/removal, idle cleanup, ticking, failure aggregation, persistence, and runtime-owned lane snapshots. `FactoryRecipeScheduler` retains only candidate filtering and lane-limit forwarding.
+- `FactorySnapshot` retains the brief record API without `presentationLanes`; controller/network consumers use runtime-owned `FactoryRuntime.ThreadSnapshot` values directly.
+
+## Final Review Static Verification
+
+- Runtime/recipe old-path `rg` scan: no matches for `RecipeCraftingContext`, concrete resource route helpers, or concrete item/fluid/energy port classes.
+- Scheduler ownership `rg` scan: no scheduler-owned lane list, reservation map, recipe lock state, lane tick/cleanup state, or presentation adapter.
+- Runtime dependency `rg` scan: `CraftingPlan`, `CraftingRuntime`, and `FactoryRuntime` remain present in the final runtime/recipe path.
+- `git diff --check`: passed with no whitespace errors.
+- Test and Gradle commands: intentionally not run, per explicit final review constraints.
+- Test sources and other docs: untouched.
+
 ## Wave B Re-review Closure
 
 - `RecipeSearchTask` now applies the module connection gate before reporting success, records the same `module_connection` runtime failure semantics, and continues searching later candidates instead of handing an incompatible recipe to `CraftingRuntime.start()`.

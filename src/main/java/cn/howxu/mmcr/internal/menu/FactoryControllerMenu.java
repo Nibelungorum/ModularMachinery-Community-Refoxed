@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.internal.network.FactoryControllerSnapshot;
-import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
+import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
@@ -85,7 +85,7 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
     public int activeThreadCount() { return snapshot.activeThreadCount(); }
     public int threadCount() { return snapshot.threadCount(); }
     public int currentParallelism() {
-        FactoryRecipeScheduler.ThreadSnapshot thread = selectedThread();
+        FactoryRuntime.ThreadSnapshot thread = selectedThread();
         return thread.active() ? thread.parallelism() : 0;
     }
     public int maxParallelism() { return snapshot.maxParallelism(); }
@@ -96,7 +96,7 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
         String failure = ControllerMenuState.failureKey(state.lastFailure.get());
         return failure == null ? "" : failure;
     }
-    public List<FactoryRecipeScheduler.ThreadSnapshot> threads() { return snapshot.threads(); }
+    public List<FactoryRuntime.ThreadSnapshot> threads() { return snapshot.threads(); }
 
     public void applySnapshot(FactoryControllerSnapshot snapshot) {
         if (!controllerPos.equals(snapshot.controllerPos())) return;
@@ -108,10 +108,10 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
         if (controllerPos.equals(snapshot.controllerPos())) lastSentSnapshot = snapshot;
     }
 
-    public FactoryRecipeScheduler.ThreadSnapshot selectedThread() {
+    public FactoryRuntime.ThreadSnapshot selectedThread() {
         return snapshot.threads().stream().filter(thread -> thread.index() == selectedThreadIndex).findFirst()
                 .orElseGet(() -> snapshot.threads().isEmpty()
-                        ? FactoryRecipeScheduler.ThreadSnapshot.idleBase() : snapshot.threads().getFirst());
+                        ? FactoryRuntime.ThreadSnapshot.idleBase() : snapshot.threads().getFirst());
     }
 
     public boolean selectedRecipeLocked() { return selectedThread().locked(); }

@@ -2,7 +2,7 @@ package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
-import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
+import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -40,7 +40,7 @@ public record PktFactoryControllerStatePayload(FactoryControllerSnapshot snapsho
         buf.writeVarInt(state.parallelSlots());
         buf.writeUtf(state.lastFailureUnloc(), MAX_STRING_LENGTH);
         buf.writeVarInt(state.threads().size());
-        for (FactoryRecipeScheduler.ThreadSnapshot thread : state.threads()) {
+        for (FactoryRuntime.ThreadSnapshot thread : state.threads()) {
             buf.writeVarInt(thread.index());
             buf.writeBoolean(thread.baseThread());
             buf.writeBoolean(thread.coreThread());
@@ -80,7 +80,7 @@ public record PktFactoryControllerStatePayload(FactoryControllerSnapshot snapsho
         if (size != count) {
             throw new IllegalArgumentException("Invalid factory thread snapshot size: " + size);
         }
-        List<FactoryRecipeScheduler.ThreadSnapshot> threads = new ArrayList<>(size);
+        List<FactoryRuntime.ThreadSnapshot> threads = new ArrayList<>(size);
         Set<Integer> indexes = new HashSet<>(size);
         for (int i = 0; i < size; i++) {
             int index = buf.readVarInt();
@@ -95,7 +95,7 @@ public record PktFactoryControllerStatePayload(FactoryControllerSnapshot snapsho
             int totalTick = buf.readVarInt();
             int parallelism = buf.readVarInt();
             validateThread(activeThread, tick, totalTick, parallelism);
-            threads.add(new FactoryRecipeScheduler.ThreadSnapshot(index, baseThread, coreThread, activeThread,
+            threads.add(new FactoryRuntime.ThreadSnapshot(index, baseThread, coreThread, activeThread,
                     recipeId, tick, totalTick, parallelism, buf.readUtf(MAX_STRING_LENGTH), buf.readBoolean(),
                     buf.readUtf(MAX_STRING_LENGTH)));
         }
@@ -117,7 +117,7 @@ public record PktFactoryControllerStatePayload(FactoryControllerSnapshot snapsho
             throw new IllegalArgumentException("Invalid factory parallel slot count: " + state.parallelSlots());
         }
         Set<Integer> indexes = new HashSet<>(count);
-        for (FactoryRecipeScheduler.ThreadSnapshot thread : state.threads()) {
+        for (FactoryRuntime.ThreadSnapshot thread : state.threads()) {
             if (thread == null || thread.index() < 0 || thread.index() >= count || !indexes.add(thread.index())) {
                 throw new IllegalArgumentException("Invalid factory thread snapshot index");
             }

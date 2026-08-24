@@ -60,8 +60,7 @@ import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
-import cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot;
-import cn.howxu.mmcr.internal.runtime.FactoryLaneSnapshot;
+import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import cn.howxu.mmcr.internal.tile.StructureRuntime.StructureWorkSnapshot;
@@ -169,7 +168,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private Map<UUID, Long> previewReceivers = new LinkedHashMap<>();
     private @Nullable Runnable factoryCapacityInvalidationCallbackForTesting;
     private @Nullable Runnable structureCheckCallbackForTesting;
-    private @Nullable ValueInput pendingFactorySchedulerInput;
+    private @Nullable ValueInput pendingFactoryRuntimeInput;
     private @Nullable MultiblockAssemblyService.BuildTaskRegistry buildTasks;
     private @Nullable ServerPlayer buildTaskOwner;
     private int buildTaskAge;
@@ -501,7 +500,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public int activeFactoryThreadCount() {
-        return hasFactoryController() ? factoryScheduler().activeLaneCount() : 0;
+        return hasFactoryController() ? runtime.factoryRuntime().activeLaneCount() : 0;
     }
 
     public boolean isPortUsedByActiveRecipe(BlockPos pos) {
@@ -545,7 +544,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public boolean toggleFactoryRecipeLock(int threadIndex) {
         if (hasFactoryController()) {
-            boolean toggled = factoryScheduler().toggleRecipeLock(threadIndex);
+            boolean toggled = runtime.factoryRuntime().toggleRecipeLock(threadIndex);
             if (toggled) setChanged();
             return toggled;
         }
@@ -592,12 +591,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         if (factoryScheduler == null) {
             factoryScheduler = new FactoryRecipeScheduler(1, runtime.factoryRuntime());
-            if (pendingFactorySchedulerInput != null) {
-                factoryScheduler.load(pendingFactorySchedulerInput, this);
-                pendingFactorySchedulerInput = null;
+            if (pendingFactoryRuntimeInput != null) {
+                runtime.factoryRuntime().load(pendingFactoryRuntimeInput, this);
+                pendingFactoryRuntimeInput = null;
             }
         }
-        factoryScheduler.ensureBaseThread(this);
+        runtime.factoryRuntime().ensureBaseLane(this);
         Machine configuredMachine = runtimeSnapshot().structure().configuredMachine();
         if (configuredMachine != null && configuredMachine.hasFactory()) {
             factoryScheduler.setThreadLimit(effectiveFactoryThreadLimit());
@@ -605,10 +604,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return factoryScheduler;
     }
 
-    public List<FactoryRecipeScheduler.ThreadSnapshot> factoryThreadSnapshots() {
+    public List<FactoryRuntime.ThreadSnapshot> factoryThreadSnapshots() {
         return hasFactoryController()
-                ? factoryScheduler().threadSnapshots()
-                : List.of(FactoryRecipeScheduler.ThreadSnapshot.idleBase());
+                ? runtime.factoryRuntime().threadSnapshots()
+                : List.of(FactoryRuntime.ThreadSnapshot.idleBase());
     }
 
     public FactoryControllerSnapshot factoryControllerSnapshot() {
@@ -619,7 +618,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (!factoryController) return FactoryControllerSnapshot.empty(getBlockPos());
         FactorySnapshot factory = state.factory();
         StructureSnapshot structure = state.structure();
-        int activeThreadCount = (int) factory.presentationLanes().stream().filter(FactoryLaneSnapshot::active).count();
+        int activeThreadCount = runtime.factoryRuntime().activeLaneCount();
         int maxParallelism = runtime.maxParallelism(configuredMachine);
         int parallelSlots = (int) state.components().stream()
                 .filter(component -> component.getContainer() instanceof ParallelControllerBlockEntity)
@@ -629,23 +628,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return new FactoryControllerSnapshot(getBlockPos(), structure.formed(), isRedstonePaused(),
                 activeThreadCount, factory.laneLimit(), factory.activeParallelism(), maxParallelism,
                 structure.machine() == null ? "" : structure.machine().displayNameKey(), parallelSlots,
-                factoryFailure, factoryThreadSnapshots(factory));
-    }
-
-    private static List<FactoryRecipeScheduler.ThreadSnapshot> factoryThreadSnapshots(FactorySnapshot factory) {
-        List<FactoryRecipeScheduler.ThreadSnapshot> snapshots = new ArrayList<>(factory.laneLimit());
-        int index = 0;
-        for (FactoryLaneSnapshot lane : factory.presentationLanes()) {
-            CraftingStateSnapshot state = lane.state();
-            snapshots.add(new FactoryRecipeScheduler.ThreadSnapshot(index++, lane.baseThread(), lane.coreThread(),
-                    lane.active(), state.recipeId() == null ? "" : state.recipeId().toString(), lane.tick(),
-                    lane.totalTick(), lane.parallelism(), lane.lastFailureUnloc(), lane.locked(), lane.lockedRecipeId()));
-        }
-        while (index < factory.laneLimit()) {
-            snapshots.add(new FactoryRecipeScheduler.ThreadSnapshot(index++, false, false, false,
-                    "", 0, 0, 1, "", false, ""));
-        }
-        return List.copyOf(snapshots);
+                factoryFailure, factoryThreadSnapshots());
     }
 
     private static String failureUnloc(@Nullable ExecutionStatus failure) {
@@ -727,7 +710,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
             redstonePaused = true;
             runtime.pauseCrafting();
             if (hasFactoryController()) {
-                factoryScheduler().pause();
                 syncOpenFactoryControllerMenus();
             }
             syncRuntimeStateIfChanged();
@@ -739,7 +721,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         redstonePaused = false;
         runtime.resumeCrafting();
         if (hasFactoryController()) {
-            factoryScheduler().resume();
             syncOpenFactoryControllerMenus();
         }
         syncRuntimeStateIfChanged();
@@ -840,12 +821,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
         List<MachineRecipe> candidates = recipesForMachine();
         FactoryRecipeScheduler scheduler = factoryScheduler();
         scheduler.setThreadLimit(effectiveFactoryThreadLimit());
-            StructureSnapshot structure = runtimeSnapshot().structure();
-        scheduler.syncCoreThreads(this, structure.machine(), candidates);
-        scheduler.tickThreads(this, candidates, structure.version(), maxParallelism, this::playFinishSound);
-        setActiveState(scheduler.activeThreadCount() > 0);
+        StructureSnapshot structure = runtimeSnapshot().structure();
+        FactoryRuntime factory = runtime.factoryRuntime();
+        factory.syncCoreLanes(this, structure.machine(), candidates);
+        factory.tick(scheduler.availableCandidates(candidates), maxParallelism, this::playFinishSound);
+        setActiveState(factory.activeLaneCount() > 0);
         syncRuntimeStateIfChanged();
-        if (scheduler.activeThreadCount() > 0) {
+        if (factory.activeLaneCount() > 0) {
             lastFailureUnloc = null;
             recipeFailure = null;
         }
@@ -2172,7 +2154,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void stopFactoryController() {
-        if (factoryScheduler != null) factoryScheduler.stopAll();
+        runtime.factoryRuntime().clear();
     }
 
     private void syncOpenFactoryControllerMenus() {
@@ -2727,14 +2709,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
             runtime.craftingRuntime().save(output.child("crafting_runtime"));
         }
         if (lockedRecipeId != null) output.putString("locked_recipe", lockedRecipeId.toString());
-        if (hasFactoryController()) factoryScheduler().save(output.child("factory_scheduler"));
+        if (hasFactoryController()) runtime.factoryRuntime().save(output.child("factory_runtime"));
     }
 
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
         try {
-            pendingFactorySchedulerInput = input.childOrEmpty("factory_scheduler");
+            pendingFactoryRuntimeInput = input.childOrEmpty("factory_runtime");
             StructureSnapshot currentStructure = runtimeSnapshot().structure();
             runtime.publishStructureState(currentStructure.structureAreaLoaded(), currentStructure.formed(),
                     currentStructure.configuredMachine(), Math.max(0, input.getIntOr("matched_structure_stage", 0)));

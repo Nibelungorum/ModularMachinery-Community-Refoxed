@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.menu;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
+import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -238,21 +239,21 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     private static int activeRecipeTick(@Nullable MachineControllerBlockEntity controller) {
         if (controller == null) return 0;
         if (controller.getActiveRecipe() != null) return controller.getTickCounter();
-        FactoryRecipeScheduler.ThreadSnapshot thread = activeFactoryThread(controller);
+        FactoryRuntime.ThreadSnapshot thread = activeFactoryThread(controller);
         return thread == null ? 0 : thread.tick();
     }
 
     private static int activeRecipeTotalTick(@Nullable MachineControllerBlockEntity controller) {
         if (controller == null) return 0;
         if (controller.getActive() != null) return controller.getActive().getTotalTick();
-        FactoryRecipeScheduler.ThreadSnapshot thread = activeFactoryThread(controller);
+        FactoryRuntime.ThreadSnapshot thread = activeFactoryThread(controller);
         return thread == null ? 0 : thread.totalTick();
     }
 
-    private static @Nullable FactoryRecipeScheduler.ThreadSnapshot activeFactoryThread(MachineControllerBlockEntity controller) {
+    private static @Nullable FactoryRuntime.ThreadSnapshot activeFactoryThread(MachineControllerBlockEntity controller) {
         if (!controller.hasFactoryController()) return null;
         return controller.factoryThreadSnapshots().stream()
-                .filter(FactoryRecipeScheduler.ThreadSnapshot::active)
+                .filter(FactoryRuntime.ThreadSnapshot::active)
                 .findFirst()
                 .orElse(null);
     }
@@ -309,7 +310,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         MachineControllerBlockEntity controller = resolvedOwner();
         if (!controller.hasFactoryController()) return controller.recipeLocked();
         return controller.factoryThreadSnapshots().stream().findFirst()
-                .map(FactoryRecipeScheduler.ThreadSnapshot::locked).orElse(false);
+                .map(FactoryRuntime.ThreadSnapshot::locked).orElse(false);
     }
 
     public int installedModuleCount() {
@@ -362,7 +363,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         if (owner == null && controller.hasClientRecipeLock()) return controller.clientLockedRecipeId();
         if (!controller.hasFactoryController()) return controller.lockedRecipeId() == null ? null : controller.lockedRecipeId().toString();
         return controller.factoryThreadSnapshots().stream().findFirst()
-                .map(FactoryRecipeScheduler.ThreadSnapshot::lockedRecipeId).filter(id -> !id.isEmpty()).orElse(null);
+                .map(FactoryRuntime.ThreadSnapshot::lockedRecipeId).filter(id -> !id.isEmpty()).orElse(null);
     }
 
     public BlockPos controllerPos() { return pos; }
