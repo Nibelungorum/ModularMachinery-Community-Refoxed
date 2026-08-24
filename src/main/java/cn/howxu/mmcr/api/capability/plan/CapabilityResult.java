@@ -13,12 +13,11 @@ import java.util.Objects;
  */
 public record CapabilityResult(boolean success, ExecutionStatus status) {
     /**
-     * Creates a successful result. The varargs parameter is required because a
-     * record component already owns the no-argument {@code success()} accessor.
+     * Creates a successful result.
      *
      * @return a successful result
      */
-    public static CapabilityResult success(Void... ignored) {
+    public static CapabilityResult successful() {
         return new CapabilityResult(true, null);
     }
 

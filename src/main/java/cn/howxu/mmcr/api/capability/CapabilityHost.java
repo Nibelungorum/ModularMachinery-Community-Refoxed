@@ -8,5 +8,9 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public interface CapabilityHost {
-    List<MachineCapability> capabilities();
+    CapabilitySnapshot capabilitySnapshot();
+
+    default List<MachineCapability> capabilities() {
+        return capabilitySnapshot().capabilities();
+    }
 }

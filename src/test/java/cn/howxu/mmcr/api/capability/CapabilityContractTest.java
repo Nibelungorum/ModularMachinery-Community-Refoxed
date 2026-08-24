@@ -34,6 +34,17 @@ class CapabilityContractTest {
     }
 
     @Test
+    void capability_operation_is_rolled_back_when_the_root_transaction_does_not_commit() {
+        TestCapability capability = new TestCapability();
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            capability.prepare(new TestRequest(1)).commit(transaction);
+        }
+
+        assertThat(capability.amount()).isZero();
+    }
+
+    @Test
     void host_exposes_an_immutable_capability_snapshot() {
         TestHost host = new TestHost(List.of(new TestCapability()));
         List<MachineCapability> snapshot = host.capabilities();
@@ -117,7 +128,7 @@ class CapabilityContractTest {
                 public CapabilityResult commit(TransactionContext transaction) {
                     journal.updateSnapshots(transaction);
                     pending += request.parallelism();
-                    return new CapabilityResult(true, null);
+                    return CapabilityResult.successful();
                 }
             };
         }
@@ -129,8 +140,8 @@ class CapabilityContractTest {
 
     private record TestHost(List<MachineCapability> values) implements CapabilityHost {
         @Override
-        public List<MachineCapability> capabilities() {
-            return List.copyOf(values);
+        public CapabilitySnapshot capabilitySnapshot() {
+            return new CapabilitySnapshot(values);
         }
     }
 }
