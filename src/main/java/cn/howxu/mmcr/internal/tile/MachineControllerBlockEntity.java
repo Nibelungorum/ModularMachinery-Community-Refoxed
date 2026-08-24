@@ -29,6 +29,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
+import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
@@ -60,6 +61,9 @@ import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
+import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
+import cn.howxu.mmcr.internal.runtime.MachineControllerRuntime;
+import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -208,9 +212,72 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private int buildTaskAge;
     private final Map<Long, Integer> buildTaskPlacementsPerTickForTesting = new LinkedHashMap<>();
     private Set<ChunkPos> criticalStructureChunks = new HashSet<>();
+    private transient MachineControllerRuntime runtime;
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
+    }
+
+    public MachineControllerRuntime runtime() {
+        if (runtime == null) runtime = new MachineControllerRuntime(this);
+        return runtime;
+    }
+
+    public ControllerRuntimeSnapshot runtimeSnapshot() {
+        return runtime().snapshot();
+    }
+
+    public StructureSnapshot structureSnapshot() {
+        return runtime().structure().snapshot();
+    }
+
+    public List<MachineCapability> getCapabilities() {
+        return runtime().components().capabilities();
+    }
+
+    public long getCapabilityVersion() {
+        return runtime().components().capabilityVersion();
+    }
+
+    public void requestImmediateStructureCheckFromRuntime() {
+        requestImmediateStructureCheck();
+    }
+
+    public void onStructureBlockChangedFromRuntime(BlockPos changedPos) {
+        onStructureBlockChangedInternal(changedPos);
+    }
+
+    public void tickStructureRuntime(ServerLevel level, BlockPos controllerPos) {
+        if (level == null || level.isClientSide() || isRemoved()) return;
+        if (shouldCheckStructure()) checkStructure();
+    }
+
+    public void serverTickFromRuntime() {
+        serverTickInternal();
+    }
+
+    public StructureSnapshot structureSnapshotFromRuntime() {
+        boolean formed = getBlockState() != null && isFormed();
+        boolean structureAreaLoaded = getBlockPos() == null || isStructureAreaLoaded();
+        return new StructureSnapshot(foundMachine, foundPattern, foundCompiledPattern, controllerFacing,
+                matchedRollFacing, matchedStructureStage, formed, structureVersion, lastStructureError,
+                structureDirty, structureAreaLoaded, criticalStructureChunks());
+    }
+
+    public List<ProcessingComponent> legacyComponentsForRuntime() {
+        return List.copyOf(components);
+    }
+
+    public Map<String, List<RecipeModifier>> legacyModifiersForRuntime() {
+        return getFoundModifiers();
+    }
+
+    public Map<Identifier, MachineLevel> legacyLevelsForRuntime() {
+        return getFoundLevels();
+    }
+
+    public Set<BlockPos> legacyLinkedPortPositionsForRuntime() {
+        return Set.copyOf(linkedPortPositions());
     }
 
     private static Identifier machineIdFromState(BlockState state) {
@@ -360,6 +427,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void onStructureBlockChanged(BlockPos changedPos) {
+        runtime().structure().onBlockChanged(changedPos);
+    }
+
+    private void onStructureBlockChangedInternal(BlockPos changedPos) {
         if (structureScan != null) pendingStructureInvalidation = true;
         if (!isFormed()) {
             if (machine != null) requestImmediateStructureCheck();
@@ -669,6 +740,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void serverTick() {
+        if (level == null || level.isClientSide() || isRemoved()) {
+            return;
+        }
+        runtime().serverTick(level instanceof ServerLevel serverLevel ? serverLevel : null, getBlockPos());
+    }
+
+    private void serverTickInternal() {
         if (level == null || level.isClientSide() || isRemoved()) {
             return;
         }
@@ -1737,7 +1815,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 .map(SmartInterfaceBlockEntity.class::cast)
                 .toList();
         components.clear();
-        if (level == null || foundMachine == null || foundPattern == null) return;
+        if (level == null || foundMachine == null || foundPattern == null) {
+            return;
+        }
 
         unlinkLinkedPorts();
 

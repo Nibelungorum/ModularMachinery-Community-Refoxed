@@ -136,6 +136,17 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void controller_runtime_delegates_component_state_without_exposing_mutable_storage() throws Exception {
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        ProcessingComponent component = new ProcessingComponent(null, "input", BlockPos.ZERO);
+        setField(MachineControllerBlockEntity.class, controller, "components", new ArrayList<>(List.of(component)));
+
+        assertThat(controller.runtime().components().components()).containsExactly(component);
+        assertThat(controller.getComponents()).containsExactly(component);
+        assertThat(controller.getCapabilities()).isEmpty();
+    }
+
+    @Test
     void structure_candidates_are_highest_first_and_stage_state_resets() throws Exception {
         TestBootstrap.registerRuntimeBuiltins();
         MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();

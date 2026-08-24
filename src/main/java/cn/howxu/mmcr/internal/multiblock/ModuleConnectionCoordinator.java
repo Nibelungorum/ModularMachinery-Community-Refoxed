@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
+import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
@@ -105,7 +106,8 @@ public final class ModuleConnectionCoordinator {
 
     public static ModuleConnectionStatus connectionStatus(MachineControllerBlockEntity controller) {
         if (controller == null) return ModuleConnectionStatus.notRequired();
-        Machine moduleMachine = controller.getFoundMachine();
+        StructureSnapshot moduleStructure = controller.structureSnapshot();
+        Machine moduleMachine = moduleStructure.machine();
         if (moduleMachine == null || !moduleMachine.isModule()) return ModuleConnectionStatus.notRequired();
         if (!(controller.getLevel() instanceof ServerLevel level)) return ModuleConnectionStatus.disconnected();
         GlobalPos expectedModule = GlobalPos.of(level.dimension(), controller.getBlockPos());
@@ -117,7 +119,7 @@ public final class ModuleConnectionCoordinator {
             if (!level.dimension().equals(hostPos.get().dimension())) continue;
             BlockEntity hostEntity = level.getBlockEntity(hostPos.get().pos());
             if (!(hostEntity instanceof MachineControllerBlockEntity host)) continue;
-            Machine hostMachine = host.getFoundMachine();
+            Machine hostMachine = host.structureSnapshot().machine();
             if (hostMachine != null && canConnect(level, couplerPos, host, controller)) {
                 return ModuleConnectionStatus.connected(hostMachine.registryName());
             }
@@ -153,7 +155,7 @@ public final class ModuleConnectionCoordinator {
         for (BlockPos controllerPos : StructureClaimRegistry.get(level).claimedControllers()) {
             if (!(level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity module)
                     || !isFormedModule(module)) continue;
-            Machine moduleMachine = module.getFoundMachine();
+            Machine moduleMachine = module.structureSnapshot().machine();
             if (!hostMachine.acceptedModuleIds().contains(moduleMachine.registryName())) continue;
             Set<BlockPos> moduleCouplers = couplerWorldPositions(module);
             if (Collections.disjoint(hostCouplers, moduleCouplers)) continue;
@@ -167,8 +169,8 @@ public final class ModuleConnectionCoordinator {
     private static boolean canConnect(ServerLevel level, BlockPos couplerPos,
                                        MachineControllerBlockEntity host, MachineControllerBlockEntity module) {
         if (!isFormedHost(host) || !isFormedModule(module)) return false;
-        Machine hostMachine = host.getFoundMachine();
-        Machine moduleMachine = module.getFoundMachine();
+        Machine hostMachine = host.structureSnapshot().machine();
+        Machine moduleMachine = module.structureSnapshot().machine();
         if (!hostMachine.acceptedModuleIds().contains(moduleMachine.registryName())) return false;
         if (!couplerWorldPositions(host).contains(couplerPos) || !couplerWorldPositions(module).contains(couplerPos)) return false;
         if (!structureMatches(level, host) || !structureMatches(level, module)) return false;
@@ -222,13 +224,17 @@ public final class ModuleConnectionCoordinator {
     }
 
     private static boolean isFormedHost(MachineControllerBlockEntity controller) {
-        Machine machine = controller.getFoundMachine();
-        return controller.isFormed() && machine != null && machine.isHost() && compiled(controller) != null && facing(controller) != null;
+        StructureSnapshot structure = controller.structureSnapshot();
+        Machine machine = structure.machine();
+        return structure.formed() && machine != null && machine.isHost()
+                && structure.compiledPattern() != null && structure.facing() != null;
     }
 
     private static boolean isFormedModule(MachineControllerBlockEntity controller) {
-        Machine machine = controller.getFoundMachine();
-        return controller.isFormed() && machine != null && machine.isModule() && compiled(controller) != null && facing(controller) != null;
+        StructureSnapshot structure = controller.structureSnapshot();
+        Machine machine = structure.machine();
+        return structure.formed() && machine != null && machine.isModule()
+                && structure.compiledPattern() != null && structure.facing() != null;
     }
 
     private static boolean structureMatches(ServerLevel level, MachineControllerBlockEntity controller) {
@@ -272,11 +278,11 @@ public final class ModuleConnectionCoordinator {
     }
 
     private static CompiledMachinePattern compiled(MachineControllerBlockEntity controller) {
-        return controller.getFoundCompiledPattern();
+        return controller.structureSnapshot().compiledPattern();
     }
 
     private static Direction facing(MachineControllerBlockEntity controller) {
-        return controller.getControllerFacing();
+        return controller.structureSnapshot().facing();
     }
 
     private record MachineConnection(MachineControllerBlockEntity host, MachineControllerBlockEntity module) { }

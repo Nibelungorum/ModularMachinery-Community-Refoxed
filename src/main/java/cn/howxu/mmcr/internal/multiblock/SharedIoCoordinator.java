@@ -58,7 +58,8 @@ public final class SharedIoCoordinator {
 
     public void resolve(StructureClaimRegistry.ResourceDomain domain) {
         List<Request> requests = pending.stream()
-                .filter(request -> request.domainId() == domain.id())
+                .filter(request -> request.domainId() == domain.id()
+                        && request.domainGeneration() == domain.generation())
                 .toList();
         pending.removeAll(requests);
         pending.addAll(resolveDomain(domain, requests));
