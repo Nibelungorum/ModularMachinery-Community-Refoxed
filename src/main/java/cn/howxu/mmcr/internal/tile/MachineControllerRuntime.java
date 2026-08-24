@@ -16,6 +16,8 @@ import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
+import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
+import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
@@ -69,13 +71,17 @@ public final class MachineControllerRuntime {
     }
 
     void publishSnapshot() {
+        controller.ensureFactoryRuntimeLoaded();
+        StructureSnapshot structureSnapshot = structure.snapshot();
+        FactorySnapshot factorySnapshot = factoryRuntime.snapshot(
+                components.maxParallelism(structureSnapshot.configuredMachine()));
         CraftingStateSnapshot nextCrafting = controller.getLevel() != null && controller.getLevel().isClientSide()
                 ? craftingState : craftingRuntime.snapshot();
-        publishedSnapshot = new ControllerRuntimeSnapshot(structure.snapshot(), components.components(),
+        publishedSnapshot = new ControllerRuntimeSnapshot(structureSnapshot, components.components(),
                 components.capabilities(), components.capabilityVersion(), components.modifierVersion(),
                 components.stateVersion(), components.foundModifiers(), components.foundLevels(),
                 components.linkedPortPositions(), components.moduleConnectionStatus(), components.installedModuleCount(),
-                components.capabilityAggregate(), nextCrafting, factoryRuntime.snapshot());
+                components.capabilityAggregate(), nextCrafting, factorySnapshot);
     }
 
     public CraftingRuntime craftingRuntime() {
@@ -210,10 +216,6 @@ public final class MachineControllerRuntime {
                               @Nullable ExecutionStatus failure) {
         craftingState = new CraftingStateSnapshot(recipeId, status, failure,
                 structure.version(), components.capabilityVersion(), components.modifierVersion());
-        publishedSnapshot = new ControllerRuntimeSnapshot(structure.snapshot(), components.components(),
-                components.capabilities(), components.capabilityVersion(), components.modifierVersion(),
-                components.stateVersion(), components.foundModifiers(), components.foundLevels(),
-                components.linkedPortPositions(), components.moduleConnectionStatus(), components.installedModuleCount(),
-                components.capabilityAggregate(), craftingState, factoryRuntime.snapshot());
+        publishSnapshot();
     }
 }

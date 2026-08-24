@@ -24,10 +24,14 @@ final class ControllerMenuState {
         formed = add(menu, owner, controller -> controller.runtimeSnapshot().structure().formed() ? 1 : 0);
         active = add(menu, owner, controller -> controller.isRuntimeActive() ? 1 : 0);
         lastFailure = add(menu, owner, controller -> failureCode(controller.getLastFailureUnloc()));
-        redstonePaused = add(menu, owner, controller -> controller.isRedstonePaused() ? 1 : 0);
+        redstonePaused = add(menu, owner, controller -> {
+            var state = controller.runtimeSnapshot();
+            return state.crafting().status().isPaused() || state.factory().paused() ? 1 : 0;
+        });
         parallelControllerCount = add(menu, owner, MachineControllerBlockEntity::parallelControllerCount);
         currentParallelism = add(menu, owner, MachineControllerBlockEntity::currentParallelism);
-        maxParallelism = add(menu, owner, MachineControllerBlockEntity::getMaxParallelism);
+        maxParallelism = add(menu, owner, controller -> controller.hasFactoryController()
+                ? controller.runtimeSnapshot().factory().maxParallelism() : controller.getMaxParallelism());
     }
 
     private static DataSlot add(AbstractMachineMenu menu, MachineControllerBlockEntity owner,

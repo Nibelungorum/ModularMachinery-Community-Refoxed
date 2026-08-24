@@ -201,15 +201,17 @@ public final class FactoryRuntime {
         return List.copyOf(snapshots);
     }
 
-    public FactorySnapshot snapshot() {
+    public FactorySnapshot snapshot(int maxParallelism) {
         recomputeFailure();
         List<CraftingStateSnapshot> laneSnapshots = lanes.stream()
                 .map(FactoryRecipeThread::runtime)
                 .map(CraftingRuntime::snapshot)
                 .filter(state -> state.recipeId() != null || state.failure() != null)
                 .toList();
-        int parallelism = activeRuntimes().stream().mapToInt(CraftingRuntime::parallelism).sum();
-        return new FactorySnapshot(!activeRuntimes().isEmpty(), laneSnapshots, parallelism, laneLimit, failure);
+        List<CraftingRuntime> activeRuntimes = activeRuntimes();
+        int parallelism = activeRuntimes.stream().mapToInt(CraftingRuntime::parallelism).sum();
+        return new FactorySnapshot(!activeRuntimes.isEmpty(), laneSnapshots, parallelism, laneLimit,
+                activeRuntimes.size(), Math.max(1, maxParallelism), paused, threadSnapshots(), failure);
     }
 
     public void pause() {

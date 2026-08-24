@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.jade;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
+import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
@@ -28,19 +29,26 @@ public enum MachineControllerDataProvider implements IServerDataProvider<BlockAc
         var foundMachine = runtime.structure().machine();
         var boundMachine = runtime.structure().configuredMachine();
         var machine = foundMachine != null ? foundMachine : boundMachine;
-        ActiveMachineRecipe active = controller.getActive();
+        FactoryRuntime.ThreadSnapshot factoryThread = runtime.factory().presentationLanes().stream()
+                .filter(FactoryRuntime.ThreadSnapshot::active).findFirst().orElse(null);
+        ActiveMachineRecipe active = factoryThread == null ? controller.getActive() : null;
 
         data.putBoolean("formed", runtime.structure().formed());
         data.putBoolean("active", controller.isRuntimeActive());
         data.putInt("parallelism", controller.currentParallelism());
-        data.putInt("maxParallelism", active == null ? controller.getMaxParallelism() : active.getMaxParallelism());
+        data.putInt("maxParallelism", controller.hasFactoryController()
+                ? runtime.factory().maxParallelism() : active == null ? controller.getMaxParallelism() : active.getMaxParallelism());
         data.putInt("parallelSlots", controller.parallelControllerCount());
         data.putInt("maxParallelSlots", controller.maxParallelControllerCount());
         data.putBoolean("factorySupported", machine != null && machine.hasFactory());
         data.putBoolean("factoryPresent", controller.hasFactoryController());
-        data.putInt("factoryLanes", controller.activeFactoryThreadCount());
-        data.putInt("factoryThreadLimit", controller.hasFactoryController() ? controller.factoryScheduler().threadLimit() : 1);
-        if (active != null && active.getRecipe() != null) {
+        data.putInt("factoryLanes", runtime.factory().activeLaneCount());
+        data.putInt("factoryThreadLimit", runtime.factory().laneLimit());
+        if (factoryThread != null) {
+            data.putString("activeRecipe", factoryThread.recipeId());
+            data.putInt("tick", factoryThread.tick());
+            data.putInt("totalTick", factoryThread.totalTick());
+        } else if (active != null && active.getRecipe() != null) {
             data.putString("activeRecipe", active.getRecipe().id().toString());
             data.putInt("tick", active.getTick());
             data.putInt("totalTick", active.getTotalTick());

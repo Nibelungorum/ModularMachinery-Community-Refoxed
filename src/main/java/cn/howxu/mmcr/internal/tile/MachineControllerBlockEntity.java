@@ -181,7 +181,16 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public ControllerRuntimeSnapshot runtimeSnapshot() {
+        ensureFactoryRuntimeLoaded();
         return runtime.snapshot();
+    }
+
+    void ensureFactoryRuntimeLoaded() {
+        if (pendingFactoryRuntimeInput == null) return;
+        ValueInput input = pendingFactoryRuntimeInput;
+        pendingFactoryRuntimeInput = null;
+        runtime.factoryRuntime().load(input, this);
+        runtime.publishSnapshot();
     }
 
     public StructureSnapshot structureSnapshot() {
@@ -213,6 +222,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         runtime.publishComponentState(current.components(), current.foundModifiers(),
                 current.foundLevels(), current.linkedPortPositions());
         ControllerRuntimeSnapshot published = runtimeSnapshot();
+        syncCraftingFailure();
         StructureSnapshot structure = published.structure();
         boolean activeState = published.crafting().recipeId() != null || published.factory().active();
         Identifier recipeId = published.crafting().recipeId();
@@ -232,6 +242,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 ? new ExecutionStatus(MMCR.id("crafting_failure"), StatusSeverity.FAILURE,
                 MMCR.id("crafting"), Map.of("message", lastFailureUnloc))
                 : runtimeFailure;
+    }
+
+    private void syncCraftingFailure() {
+        String runtimeFailure = runtime.craftingRuntime().failureUnloc();
+        if (runtimeFailure != null) {
+            lastFailureUnloc = runtimeFailure;
+            recipeFailure = null;
+        }
     }
 
     private void validateRuntimeBoundary(ServerLevel runtimeLevel, BlockPos runtimePos) {
@@ -365,7 +383,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public ActiveMachineRecipe getActive() { return runtime.craftingRuntime().activeRecipe(); }
 
-    public @Nullable String getLastFailureUnloc() { return lastFailureUnloc; }
+    public @Nullable String getLastFailureUnloc() {
+        ControllerRuntimeSnapshot state = runtimeSnapshot();
+        String factoryFailure = failureUnloc(state.factory().failure());
+        if (!factoryFailure.isEmpty()) return factoryFailure;
+        String craftingFailure = failureUnloc(state.crafting().failure());
+        return craftingFailure.isEmpty() ? lastFailureUnloc : craftingFailure;
+    }
 
     public @Nullable LevelInsufficientFailure getRecipeFailure() { return recipeFailure; }
 
@@ -491,16 +515,20 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private boolean isRuntimeActive(ControllerRuntimeSnapshot state) {
-        if (!state.structure().formed() || redstonePaused || !state.structure().structureAreaLoaded()) return false;
+        if (!state.structure().formed() || !state.structure().structureAreaLoaded()
+                || state.crafting().status().isPaused() || state.factory().paused()) return false;
         return state.crafting().recipeId() != null || state.factory().active();
     }
 
     public int currentParallelism() {
+        ControllerRuntimeSnapshot state = runtimeSnapshot();
+        if (isFactoryController(state)) return state.factory().activeParallelism();
         return runtime.craftingRuntime().parallelism();
     }
 
     public int activeFactoryThreadCount() {
-        return hasFactoryController() ? runtime.factoryRuntime().activeLaneCount() : 0;
+        ControllerRuntimeSnapshot state = runtimeSnapshot();
+        return isFactoryController(state) ? state.factory().activeLaneCount() : 0;
     }
 
     public boolean isPortUsedByActiveRecipe(BlockPos pos) {
@@ -517,7 +545,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public int getMaxParallelism() {
-        Machine configuredMachine = runtimeSnapshot().structure().configuredMachine();
+        ControllerRuntimeSnapshot state = runtimeSnapshot();
+        Machine configuredMachine = state.structure().configuredMachine();
         return runtime.maxParallelism(configuredMachine);
     }
 
@@ -545,7 +574,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public boolean toggleFactoryRecipeLock(int threadIndex) {
         if (hasFactoryController()) {
             boolean toggled = runtime.factoryRuntime().toggleRecipeLock(threadIndex);
-            if (toggled) setChanged();
+            if (toggled) {
+                syncRuntimeStateIfChanged();
+                setChanged();
+            }
             return toggled;
         }
         if (threadIndex != 0) return false;
@@ -567,9 +599,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public boolean hasFactoryController() {
-        Machine configuredMachine = runtimeSnapshot().structure().configuredMachine();
-        if (configuredMachine == null || !configuredMachine.hasFactory()) return false;
-        return runtimeSnapshot().components().stream().anyMatch(component -> component.getContainer() instanceof FactorySchedulerBlockEntity);
+        return isFactoryController(runtimeSnapshot());
+    }
+
+    private static boolean isFactoryController(ControllerRuntimeSnapshot state) {
+        Machine configuredMachine = state.structure().configuredMachine();
+        return configuredMachine != null && configuredMachine.hasFactory()
+                && state.components().stream().anyMatch(component -> component.getContainer() instanceof FactorySchedulerBlockEntity);
     }
 
     public int effectiveFactoryThreadLimit() {
@@ -586,15 +622,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public FactoryRecipeScheduler factoryScheduler() {
+        ensureFactoryRuntimeLoaded();
         if (factoryScheduler == null && !hasFactoryController()) {
             throw new IllegalStateException("Factory scheduler requested without a formed factory controller");
         }
         if (factoryScheduler == null) {
             factoryScheduler = new FactoryRecipeScheduler(1, runtime.factoryRuntime());
-            if (pendingFactoryRuntimeInput != null) {
-                runtime.factoryRuntime().load(pendingFactoryRuntimeInput, this);
-                pendingFactoryRuntimeInput = null;
-            }
         }
         runtime.factoryRuntime().ensureBaseLane(this);
         Machine configuredMachine = runtimeSnapshot().structure().configuredMachine();
@@ -605,30 +638,26 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public List<FactoryRuntime.ThreadSnapshot> factoryThreadSnapshots() {
-        return hasFactoryController()
-                ? runtime.factoryRuntime().threadSnapshots()
+        ControllerRuntimeSnapshot state = runtimeSnapshot();
+        return isFactoryController(state)
+                ? state.factory().presentationLanes()
                 : List.of(FactoryRuntime.ThreadSnapshot.idleBase());
     }
 
     public FactoryControllerSnapshot factoryControllerSnapshot() {
         ControllerRuntimeSnapshot state = runtimeSnapshot();
-        Machine configuredMachine = state.structure().configuredMachine();
-        boolean factoryController = configuredMachine != null && configuredMachine.hasFactory()
-                && state.components().stream().anyMatch(component -> component.getContainer() instanceof FactorySchedulerBlockEntity);
-        if (!factoryController) return FactoryControllerSnapshot.empty(getBlockPos());
+        if (!isFactoryController(state)) return FactoryControllerSnapshot.empty(getBlockPos());
         FactorySnapshot factory = state.factory();
         StructureSnapshot structure = state.structure();
-        int activeThreadCount = runtime.factoryRuntime().activeLaneCount();
-        int maxParallelism = runtime.maxParallelism(configuredMachine);
         int parallelSlots = (int) state.components().stream()
                 .filter(component -> component.getContainer() instanceof ParallelControllerBlockEntity)
                 .count();
         String factoryFailure = failureUnloc(factory.failure());
-        if (factoryFailure.isEmpty()) factoryFailure = lastFailureUnloc == null ? "" : lastFailureUnloc;
-        return new FactoryControllerSnapshot(getBlockPos(), structure.formed(), isRedstonePaused(),
-                activeThreadCount, factory.laneLimit(), factory.activeParallelism(), maxParallelism,
+        if (factoryFailure.isEmpty()) factoryFailure = failureUnloc(state.crafting().failure());
+        return new FactoryControllerSnapshot(getBlockPos(), structure.formed(), factory.paused(),
+                factory.activeLaneCount(), factory.laneLimit(), factory.activeParallelism(), factory.maxParallelism(),
                 structure.machine() == null ? "" : structure.machine().displayNameKey(), parallelSlots,
-                factoryFailure, factoryThreadSnapshots());
+                factoryFailure, factory.presentationLanes());
     }
 
     private static String failureUnloc(@Nullable ExecutionStatus failure) {
@@ -637,6 +666,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
             case "module_connection" -> "gui.mmcr.controller.failure.module_connection";
             case "no_output_capacity" -> "gui.mmcr.controller.failure.missing_output";
             case "insufficient_energy" -> "gui.mmcr.controller.failure.missing_energy";
+            case "level_insufficient" -> "gui.mmcr.controller.failure.level_insufficient";
+            case "version_invalidated" -> "gui.mmcr.controller.failure.structure_changed";
             default -> "gui.mmcr.controller.failure.missing_input";
         };
     }
@@ -709,22 +740,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (powered) {
             redstonePaused = true;
             runtime.pauseCrafting();
-            if (hasFactoryController()) {
-                syncOpenFactoryControllerMenus();
-            }
-            syncRuntimeStateIfChanged();
             setActiveState(false);
-            syncRuntimeStateIfChanged();
             setChanged();
             return;
         }
         redstonePaused = false;
         runtime.resumeCrafting();
-        if (hasFactoryController()) {
-            syncOpenFactoryControllerMenus();
-        }
-        syncRuntimeStateIfChanged();
-        if (tickState.crafting().recipeId() != null || tickState.factory().active()) setActiveState(true);
+        if (runtime.craftingRuntime().active() || runtime.factoryRuntime().activeLaneCount() > 0) setActiveState(true);
         if (tickState.structure().formed() && tickState.structure().structureAreaLoaded()) {
             if (hasFactoryController()) {
                 tickFactoryRecipes();
@@ -734,6 +756,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         } finally {
             publishRuntimeState();
+            if (hasFactoryController()) syncOpenFactoryControllerMenus();
             broadcastStateIfChanged(activeBefore);
         }
     }
@@ -825,13 +848,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
         FactoryRuntime factory = runtime.factoryRuntime();
         factory.syncCoreLanes(this, structure.machine(), candidates);
         factory.tick(scheduler.availableCandidates(candidates), maxParallelism, this::playFinishSound);
-        setActiveState(factory.activeLaneCount() > 0);
-        syncRuntimeStateIfChanged();
-        if (factory.activeLaneCount() > 0) {
+        int activeLaneCount = factory.activeLaneCount();
+        setActiveState(activeLaneCount > 0);
+        if (activeLaneCount > 0) {
             lastFailureUnloc = null;
             recipeFailure = null;
         }
-        syncOpenFactoryControllerMenus();
     }
 
     private void checkStructure() {
@@ -2217,9 +2239,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private PktMachineStatePayload machineStatePayload(boolean activeNow, boolean formed, boolean recipeLocked, String lockedRecipe,
                                                        String machineId, int controllerRole, int installedModuleCount,
                                                        boolean moduleConnected, String connectedHostId) {
-        String name = runtime.craftingRuntime().recipe() == null ? "" : runtime.craftingRuntime().recipe().id().toString();
         ControllerRuntimeSnapshot runtimeState = runtimeSnapshot();
         var crafting = runtimeState.crafting();
+        var factoryThread = isFactoryController(runtimeState)
+                ? runtimeState.factory().presentationLanes().stream().findFirst().orElse(null) : null;
+        String name = factoryThread != null && !factoryThread.recipeId().isEmpty()
+                ? factoryThread.recipeId()
+                : crafting.recipeId() == null ? "" : crafting.recipeId().toString();
         return new PktMachineStatePayload(getBlockPos(), name, formed, activeNow,
                 runtimeState.foundLevels().values().stream().map(foundLevel -> foundLevel.id().toString()).toList(),
                 recipeLocked, lockedRecipe,
@@ -2451,6 +2477,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                         clearPendingSharedStart();
                         recipeSearchRetryCounter++;
                         lastFailureUnloc = runtime.craftingRuntime().failureUnloc();
+                        syncRuntimeStateIfChanged();
                         return 0;
                     }
                     return runtime.craftingRuntime().parallelism();
@@ -2576,8 +2603,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (isCurrentSharedRuntime(domain)) return true;
         if (pendingSharedTickDomain == null || pendingSharedTickDomain.equals(domain)) {
             if (runtime.craftingRuntime().active()) {
-                if (runtime.craftingRuntime().versionsCurrent()) runtime.craftingRuntime().invalidate();
-                else runtime.craftingRuntime().tick();
+                if (runtime.craftingRuntime().versionsCurrent()) {
+                    runtime.craftingRuntime().invalidate();
+                } else {
+                    runtime.craftingRuntime().tick();
+                    syncCraftingFailure();
+                }
             }
             clearSharedTickPending();
             setActiveState(false);
@@ -2594,14 +2625,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void completeSharedRuntime(boolean wasActive) {
         clearSharedTickPending();
-        lastFailureUnloc = runtime.craftingRuntime().failureUnloc();
+        syncCraftingFailure();
         if (wasActive && !runtime.craftingRuntime().active()) {
             boolean finished = runtime.craftingRuntime().failure() == null;
             lastFailureUnloc = finished ? null : runtime.craftingRuntime().failureUnloc();
             if (finished) playFinishSound();
             setActiveState(false);
-            syncRuntimeStateIfChanged();
         }
+        syncRuntimeStateIfChanged();
         setChanged();
     }
 
@@ -2710,6 +2741,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     @Override
     protected void saveAdditional(ValueOutput output) {
+        ensureFactoryRuntimeLoaded();
         super.saveAdditional(output);
         output.putInt("matched_structure_stage", runtimeSnapshot().structure().matchedStage());
         ValueOutput.TypedOutputList<String> levels = output.list("found_levels", Codec.STRING);
@@ -2722,14 +2754,16 @@ public class MachineControllerBlockEntity extends BlockEntity {
             runtime.craftingRuntime().save(output.child("crafting_runtime"));
         }
         if (lockedRecipeId != null) output.putString("locked_recipe", lockedRecipeId.toString());
-        if (hasFactoryController()) runtime.factoryRuntime().save(output.child("factory_runtime"));
+        if (hasFactoryController() || runtime.factoryRuntime().laneCount() > 0) {
+            runtime.factoryRuntime().save(output.child("factory_runtime"));
+        }
     }
 
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
         try {
-            pendingFactoryRuntimeInput = input.childOrEmpty("factory_runtime");
+            ValueInput factoryRuntimeInput = input.childOrEmpty("factory_runtime");
             StructureSnapshot currentStructure = runtimeSnapshot().structure();
             runtime.publishStructureState(currentStructure.structureAreaLoaded(), currentStructure.formed(),
                     currentStructure.configuredMachine(), Math.max(0, input.getIntOr("matched_structure_stage", 0)));
@@ -2751,6 +2785,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (!lockedRecipeName.isEmpty()) {
                 Identifier restoredLock = Identifier.parse(lockedRecipeName);
                 if (RecipeRegistry.getRecipe(restoredLock) != null) lockedRecipeId = restoredLock;
+            }
+            if (factoryRuntimeInput.getIntOr("lane_count", -1) >= 0) {
+                pendingFactoryRuntimeInput = factoryRuntimeInput;
+                ensureFactoryRuntimeLoaded();
             }
             if (input.getBooleanOr("has_active_runtime", false)) {
                 runtime.craftingRuntime().load(input.childOrEmpty("crafting_runtime"), resourceDomain());

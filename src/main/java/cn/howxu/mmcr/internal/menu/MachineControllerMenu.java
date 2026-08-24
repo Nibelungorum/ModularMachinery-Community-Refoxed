@@ -74,7 +74,10 @@ public class MachineControllerMenu extends AbstractMachineMenu {
             @Override public void set(int value) {}
         });
         this.redstonePaused = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return owner.isRedstonePaused() ? 1 : 0; }
+            @Override public int get() {
+                var state = owner.runtimeSnapshot();
+                return state.crafting().status().isPaused() || state.factory().paused() ? 1 : 0;
+            }
             @Override public void set(int value) {}
         });
         this.parallelControllerCount = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
@@ -86,16 +89,19 @@ public class MachineControllerMenu extends AbstractMachineMenu {
             @Override public void set(int value) {}
         });
         this.maxParallelism = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return owner.getMaxParallelism(); }
+            @Override public int get() {
+                return owner.hasFactoryController()
+                        ? owner.runtimeSnapshot().factory().maxParallelism() : owner.getMaxParallelism();
+            }
             @Override public void set(int value) {}
         });
         this.factoryControllerPresent = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return owner.getFactoryController() == null ? 0 : 1; }
+            @Override public int get() { return owner.hasFactoryController() ? 1 : 0; }
             @Override public void set(int value) {}
         });
         this.factoryThreadCount = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
             @Override public int get() {
-                return owner.hasFactoryController() ? owner.factoryScheduler().threadLimit() : 0;
+                return owner.hasFactoryController() ? owner.runtimeSnapshot().factory().laneLimit() : 0;
             }
             @Override public void set(int value) {}
         });
@@ -238,16 +244,22 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     private static int activeRecipeTick(@Nullable MachineControllerBlockEntity controller) {
         if (controller == null) return 0;
+        if (controller.hasFactoryController()) {
+            FactoryRuntime.ThreadSnapshot thread = activeFactoryThread(controller);
+            return thread == null ? 0 : thread.tick();
+        }
         if (controller.getActiveRecipe() != null) return controller.getTickCounter();
-        FactoryRuntime.ThreadSnapshot thread = activeFactoryThread(controller);
-        return thread == null ? 0 : thread.tick();
+        return 0;
     }
 
     private static int activeRecipeTotalTick(@Nullable MachineControllerBlockEntity controller) {
         if (controller == null) return 0;
+        if (controller.hasFactoryController()) {
+            FactoryRuntime.ThreadSnapshot thread = activeFactoryThread(controller);
+            return thread == null ? 0 : thread.totalTick();
+        }
         if (controller.getActive() != null) return controller.getActive().getTotalTick();
-        FactoryRuntime.ThreadSnapshot thread = activeFactoryThread(controller);
-        return thread == null ? 0 : thread.totalTick();
+        return 0;
     }
 
     private static @Nullable FactoryRuntime.ThreadSnapshot activeFactoryThread(MachineControllerBlockEntity controller) {
@@ -266,7 +278,9 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     public boolean isRedstonePaused() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        return (controller != null && controller.isRedstonePaused()) || redstonePaused.get() != 0;
+        if (controller == null) return redstonePaused.get() != 0;
+        var state = controller.runtimeSnapshot();
+        return state.crafting().status().isPaused() || state.factory().paused() || redstonePaused.get() != 0;
     }
 
     public int parallelControllerCount() {
@@ -284,18 +298,20 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     public int maxParallelism() {
         if (owner == null) return Math.max(1, maxParallelism.get());
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? Math.max(1, maxParallelism.get()) : controller.getMaxParallelism();
+        if (controller == null) return Math.max(1, maxParallelism.get());
+        return controller.hasFactoryController()
+                ? controller.runtimeSnapshot().factory().maxParallelism() : controller.getMaxParallelism();
     }
 
     public boolean hasFactoryController() {
         if (owner == null) return factoryControllerPresent.get() != 0;
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? factoryControllerPresent.get() != 0 : controller.getFactoryController() != null;
+        return controller == null ? factoryControllerPresent.get() != 0 : controller.hasFactoryController();
     }
 
     public int factoryThreadCount() {
         if (owner == null) return factoryThreadCount.get();
-        return owner.hasFactoryController() ? owner.factoryScheduler().threadLimit() : 0;
+        return owner.hasFactoryController() ? owner.runtimeSnapshot().factory().laneLimit() : 0;
     }
 
     public int factoryActiveThreadCount() {
