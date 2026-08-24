@@ -12,6 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +28,8 @@ public final class ComponentRuntime {
     private List<ProcessingComponent> components = List.of();
     private List<MachineCapability> capabilities = List.of();
     private long capabilityVersion;
+    private long modifierVersion;
+    private long craftingStateVersion;
     private Map<String, List<RecipeModifier>> foundModifiers = Map.of();
     private Map<Identifier, MachineLevel> foundLevels = Map.of();
     private Set<BlockPos> linkedPortPositions = Set.of();
@@ -36,10 +39,12 @@ public final class ComponentRuntime {
     public void replaceComponents(List<ProcessingComponent> components) {
         List<ProcessingComponent> nextComponents = List.copyOf(components == null ? List.of() : components);
         List<MachineCapability> nextCapabilities = capabilitiesFor(nextComponents);
-        if (this.components.equals(nextComponents) && this.capabilities.equals(nextCapabilities)) return;
+        boolean capabilitiesChanged = !this.capabilities.equals(nextCapabilities);
         this.components = nextComponents;
+        if (!capabilitiesChanged) return;
         this.capabilities = nextCapabilities;
         capabilityVersion++;
+        craftingStateVersion++;
     }
 
     public List<ProcessingComponent> components() {
@@ -54,12 +59,23 @@ public final class ComponentRuntime {
         return capabilityVersion;
     }
 
+    public long modifierVersion() {
+        return modifierVersion;
+    }
+
+    public long craftingStateVersion() {
+        return craftingStateVersion;
+    }
+
     public void replaceModifiers(Map<String, List<RecipeModifier>> modifiers) {
         Map<String, List<RecipeModifier>> next = new LinkedHashMap<>();
         if (modifiers != null) {
             modifiers.forEach((key, value) -> next.put(key, List.copyOf(value == null ? List.of() : value)));
         }
-        foundModifiers = Map.copyOf(next);
+        if (foundModifiers.equals(next)) return;
+        foundModifiers = Collections.unmodifiableMap(next);
+        modifierVersion++;
+        craftingStateVersion++;
     }
 
     public Map<String, List<RecipeModifier>> foundModifiers() {
@@ -71,7 +87,8 @@ public final class ComponentRuntime {
     }
 
     public void replaceLevels(Map<Identifier, MachineLevel> levels) {
-        foundLevels = Map.copyOf(levels == null ? Map.of() : levels);
+        Map<Identifier, MachineLevel> next = new LinkedHashMap<>(levels == null ? Map.of() : levels);
+        foundLevels = Collections.unmodifiableMap(next);
     }
 
     public Map<Identifier, MachineLevel> foundLevels() {

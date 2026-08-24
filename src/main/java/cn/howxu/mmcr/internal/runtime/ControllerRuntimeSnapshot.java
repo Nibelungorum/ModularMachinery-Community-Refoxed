@@ -4,10 +4,12 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 
 import java.util.List;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -25,6 +27,8 @@ public record ControllerRuntimeSnapshot(
         Map<String, List<RecipeModifier>> foundModifiers,
         Map<Identifier, MachineLevel> foundLevels,
         Set<BlockPos> linkedPortPositions,
+        ModuleConnectionStatus moduleConnectionStatus,
+        int installedModuleCount,
         FactorySnapshot factory) {
 
     public ControllerRuntimeSnapshot {
@@ -35,9 +39,12 @@ public record ControllerRuntimeSnapshot(
         if (foundModifiers != null) {
             foundModifiers.forEach((key, value) -> modifierCopy.put(key, List.copyOf(value == null ? List.of() : value)));
         }
-        foundModifiers = Map.copyOf(modifierCopy);
-        foundLevels = Map.copyOf(foundLevels == null ? Map.of() : foundLevels);
+        foundModifiers = Collections.unmodifiableMap(modifierCopy);
+        foundLevels = Collections.unmodifiableMap(new LinkedHashMap<>(foundLevels == null ? Map.of() : foundLevels));
         linkedPortPositions = Set.copyOf(linkedPortPositions == null ? Set.of() : linkedPortPositions);
+        moduleConnectionStatus = moduleConnectionStatus == null
+                ? ModuleConnectionStatus.disconnected() : moduleConnectionStatus;
+        if (installedModuleCount < 0) throw new IllegalArgumentException("installedModuleCount must not be negative");
         factory = factory == null ? FactorySnapshot.empty() : factory;
     }
 }

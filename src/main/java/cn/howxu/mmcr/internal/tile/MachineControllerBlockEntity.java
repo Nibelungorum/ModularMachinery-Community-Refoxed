@@ -102,6 +102,7 @@ import org.slf4j.LoggerFactory;
 import com.mojang.serialization.Codec;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -228,7 +229,17 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public StructureSnapshot structureSnapshot() {
-        return runtime().structure().snapshot();
+        MachineControllerRuntime controllerRuntime = runtime();
+        StructureSnapshot snapshot = controllerRuntime.structure().snapshot();
+        if (!controllerRuntime.structure().hasAuthoritativeState()
+                && snapshot.version() == 0L && !snapshot.formed() && snapshot.machine() == null
+                && snapshot.pattern() == null
+                && (foundMachine != null || foundPattern != null || foundCompiledPattern != null
+                || controllerFacing != null || matchedStructureStage != 0 || structureDirty != snapshot.dirty())) {
+            controllerRuntime.structure().accept(captureStructureSnapshotForRuntime());
+            snapshot = controllerRuntime.structure().snapshot();
+        }
+        return snapshot;
     }
 
     public List<MachineCapability> getCapabilities() {
@@ -248,20 +259,52 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void tickStructureRuntime(ServerLevel level, BlockPos controllerPos) {
-        if (level == null || level.isClientSide() || isRemoved()) return;
+        validateRuntimeBoundary(level, controllerPos);
+        if (level.isClientSide() || isRemoved()) return;
+        invalidateForControllerRotation();
         if (shouldCheckStructure()) checkStructure();
+        publishStructureStateToRuntime();
     }
 
     public void serverTickFromRuntime() {
         serverTickInternal();
+        publishStructureStateToRuntime();
     }
 
-    public StructureSnapshot structureSnapshotFromRuntime() {
-        boolean formed = getBlockState() != null && isFormed();
+    public void serverTickFromRuntime(ServerLevel level, BlockPos controllerPos) {
+        validateRuntimeBoundary(level, controllerPos);
+        serverTickFromRuntime();
+    }
+
+    public StructureSnapshot captureStructureSnapshotForRuntime() {
+        BlockState currentState = getBlockState();
+        boolean formed = currentState != null && currentState.hasProperty(MachineControllerBlock.FORMED)
+                && isFormed();
         boolean structureAreaLoaded = getBlockPos() == null || isStructureAreaLoaded();
         return new StructureSnapshot(foundMachine, foundPattern, foundCompiledPattern, controllerFacing,
                 matchedRollFacing, matchedStructureStage, formed, structureVersion, lastStructureError,
+                lastStructureMismatchDiagnostic,
                 structureDirty, structureAreaLoaded, criticalStructureChunks());
+    }
+
+    public StructureSnapshot structureSnapshotFromRuntime() {
+        return runtime().structure().snapshot();
+    }
+
+    private void publishStructureStateToRuntime() {
+        if (runtime != null) runtime.structure().publish(captureStructureSnapshotForRuntime());
+    }
+
+    private void validateRuntimeBoundary(ServerLevel runtimeLevel, BlockPos runtimePos) {
+        if (runtimeLevel == null || runtimePos == null) {
+            throw new IllegalArgumentException("Controller runtime requires a level and controller position");
+        }
+        if (level != null && level != runtimeLevel) {
+            throw new IllegalArgumentException("Controller runtime level does not match the controller");
+        }
+        if (getBlockPos() != null && !getBlockPos().equals(runtimePos)) {
+            throw new IllegalArgumentException("Controller runtime position does not match the controller");
+        }
     }
 
     public List<ProcessingComponent> legacyComponentsForRuntime() {
@@ -316,7 +359,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         for (var entry : foundModifiers.entrySet()) {
             snapshot.put(entry.getKey(), List.copyOf(entry.getValue()));
         }
-        return Map.copyOf(snapshot);
+        return Collections.unmodifiableMap(snapshot);
     }
 
     public Map<Identifier, MachineLevel> getFoundLevels() {
@@ -324,13 +367,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public @Nullable Object getLastStructureError() {
-        return lastStructureError;
+        return structureSnapshot().lastStructureError();
     }
 
     public void invalidateFormedStructure() {
         resetMachine();
         structureDirty = true;
         nextStructureCheckTick = -1L;
+        publishStructureStateToRuntime();
     }
 
     public void requestImmediateStructureCheck() {
@@ -345,6 +389,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             structureDiagnosticPlayerId = diagnosticPlayer.getUUID();
             structureDiagnosticDimension = level instanceof ServerLevel serverLevel ? serverLevel.dimension() : null;
         }
+        publishStructureStateToRuntime();
     }
 
     public int matcherInvocationCountForTesting() { return matcherInvocationCountForTesting; }
@@ -386,6 +431,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (before == f) return;
         level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.FORMED, f), 3);
         if (f) notifyPreviewReceiversStructureFormed();
+        publishStructureStateToRuntime();
     }
 
     public MachineRecipe getActiveRecipe() { return active == null ? null : active.getRecipe(); }
@@ -394,9 +440,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public ActiveMachineRecipe getActive() { return active; }
 
-    public long getStructureVersion() { return structureVersion; }
+    public long getStructureVersion() { return structureSnapshot().version(); }
 
-    public int getMatchedStructureStage() { return matchedStructureStage; }
+    public int getMatchedStructureStage() { return structureSnapshot().matchedStage(); }
 
     public long getModifierSnapshotVersion() { return modifierSnapshotVersion; }
 
@@ -414,15 +460,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public ModuleConnectionStatus moduleConnectionStatus() {
-        return ModuleConnectionCoordinator.connectionStatus(this);
+        return runtime().moduleConnectionStatus();
     }
 
     public int installedModuleCount() {
-        return ModuleConnectionCoordinator.installedModuleCount(this);
+        return runtime().installedModuleCount();
     }
 
     public Optional<Identifier> connectedHostId() {
-        ModuleConnectionStatus status = moduleConnectionStatus();
+        ModuleConnectionStatus status = runtime().moduleConnectionStatus();
         return status.connected() ? Optional.of(status.connectedHostId()) : Optional.empty();
     }
 
@@ -434,15 +480,23 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (structureScan != null) pendingStructureInvalidation = true;
         if (!isFormed()) {
             if (machine != null) requestImmediateStructureCheck();
+            publishStructureStateToRuntime();
             return;
         }
-        if (foundPattern == null || controllerFacing == null) return;
-        if (!isInsideCompiledBounds(changedPos)) return;
+        if (foundPattern == null || controllerFacing == null) {
+            publishStructureStateToRuntime();
+            return;
+        }
+        if (!isInsideCompiledBounds(changedPos)) {
+            publishStructureStateToRuntime();
+            return;
+        }
         structureDirty = true;
         if (structureScan != null) pendingStructureInvalidation = true;
         if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
         markRecipeDirty();
         setChanged();
+        publishStructureStateToRuntime();
     }
 
     public static void markStructureDirty(LevelAccessor level, BlockPos changedPos) {
@@ -743,7 +797,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (level == null || level.isClientSide() || isRemoved()) {
             return;
         }
-        runtime().serverTick(level instanceof ServerLevel serverLevel ? serverLevel : null, getBlockPos());
+        if (level instanceof ServerLevel serverLevel) {
+            runtime().serverTick(serverLevel, getBlockPos());
+        } else {
+            // Test and compatibility levels do not expose the ServerLevel boundary.
+            serverTickFromRuntime();
+        }
     }
 
     private void serverTickInternal() {
@@ -911,11 +970,16 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void checkStructure() {
+        runtime().structure().check();
+    }
+
+    public void runStructureCheckPassFromRuntime() {
         structureCheckActive = true;
         try {
             checkStructurePass();
         } finally {
             structureCheckActive = false;
+            publishStructureStateToRuntime();
         }
     }
 
@@ -2016,13 +2080,20 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void onStructureChunkUnloaded(ChunkPos chunkPos) {
         if (structureScan != null) invalidateStructureScan(StructureMatcher.InvalidationReason.UNLOADED);
-        if (!isFormed() || foundPattern == null || controllerFacing == null) return;
-        if (!criticalStructureChunks().contains(chunkPos)) return;
+        if (!isFormed() || foundPattern == null || controllerFacing == null) {
+            publishStructureStateToRuntime();
+            return;
+        }
+        if (!criticalStructureChunks().contains(chunkPos)) {
+            publishStructureStateToRuntime();
+            return;
+        }
         structureDirty = true;
         if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
         pauseActiveForUnloadedStructure();
         setChanged();
         syncLevelState();
+        publishStructureStateToRuntime();
     }
 
     private void syncLevelState() {
@@ -2221,6 +2292,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (wasFormed && updateBlockState) setFormed(false);
         setChanged();
         syncRuntimeStateIfChanged();
+        publishStructureStateToRuntime();
     }
 
     private void unbindSmartInterfaces() {
@@ -2950,6 +3022,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         restoredRecipeContext = true;
         structureDirty = true;
         setChanged();
+        publishStructureStateToRuntime();
     }
 
     @Override

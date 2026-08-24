@@ -24,6 +24,7 @@ public record StructureSnapshot(
         boolean formed,
         long version,
         @Nullable Object lastStructureError,
+        @Nullable String structureMismatchDiagnostic,
         boolean dirty,
         boolean structureAreaLoaded,
         Set<ChunkPos> criticalChunks) {
@@ -35,6 +36,6 @@ public record StructureSnapshot(
 
     public static StructureSnapshot empty() {
         return new StructureSnapshot(null, null, null, null, Direction.SOUTH, 0,
-                false, 0L, null, true, true, Set.of());
+                false, 0L, null, null, true, true, Set.of());
     }
 }
