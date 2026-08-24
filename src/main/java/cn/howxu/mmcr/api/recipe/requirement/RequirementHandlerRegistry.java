@@ -176,14 +176,14 @@ public final class RequirementHandlerRegistry {
         if (requirement.io() == RecipeModifier.IOType.INPUT && requirement.item() == null) {
             return blockedPlan(requirement, context, "missing_item_ingredient");
         }
-        boolean[] consumed = requirement.io() == RecipeModifier.IOType.INPUT
-                ? consumeDecisions(requirement.consumeChance(), parallelism) : new boolean[parallelism];
-        int maximum = itemMaximum(requirement, capabilities, parallelism, consumed, context.allowPartialOutputs());
+        int maximum = itemMaximum(requirement, capabilities, parallelism, context.allowPartialOutputs());
         if (maximum <= 0) {
             return blockedPlan(requirement, context,
                     requirement.io() == RecipeModifier.IOType.OUTPUT && context.allowPartialOutputs()
                             ? "no_output_capacity" : "insufficient_resource");
         }
+        boolean[] consumed = requirement.io() == RecipeModifier.IOType.INPUT
+                ? consumeDecisions(requirement.consumeChance(), parallelism) : new boolean[parallelism];
         if (requirement.io() == RecipeModifier.IOType.INPUT && requirement.consumeChance() <= 0F) {
             return new RequirementPlan(context.requirementIndex(), maximum, List.of(), null);
         }
@@ -248,21 +248,11 @@ public final class RequirementHandlerRegistry {
     }
 
     private static int itemMaximum(ItemRequirement requirement, List<MachineCapability> capabilities,
-                                   int requested, boolean[] consumed, boolean allowPartialOutputs) {
+                                   int requested, boolean allowPartialOutputs) {
         if (requirement.io() == RecipeModifier.IOType.INPUT) {
             long available = matchingItemAmount(requirement, capabilities);
             if (requirement.count() <= 0) return requested;
-            if (requirement.consumeChance() <= 0F) {
-                return (int) Math.min(requested, available / requirement.count());
-            }
-            int maximum = 0;
-            long consumedAmount = 0L;
-            for (int index = 0; index < requested; index++) {
-                if (consumed[index]) consumedAmount = saturatingAdd(consumedAmount, requirement.count());
-                if (consumedAmount > available) break;
-                maximum = index + 1;
-            }
-            return maximum;
+            return (int) Math.min(requested, available / requirement.count());
         }
         ItemStack stack = requirement.stack(null);
         if (allowPartialOutputs && stack.isEmpty()) return 0;
@@ -481,9 +471,7 @@ public final class RequirementHandlerRegistry {
         for (MachineCapability capability : capabilities) {
             if (!(capability.storage() instanceof LongValueStorage storage)) continue;
             long available = reservations.valueAvailable(storage, insert);
-            long movable = insert ? storage.insert(Math.min(remaining, available), true)
-                    : storage.extract(Math.min(remaining, available), true);
-            long moved = Math.min(remaining, Math.min(available, movable));
+            long moved = Math.min(remaining, Math.min(available, storage.transferLimit()));
             if (moved <= 0L || !reservations.reserveValue(storage, moved, insert)) continue;
             actions.add(new EnergyAction(capability, moved));
             remaining -= moved;

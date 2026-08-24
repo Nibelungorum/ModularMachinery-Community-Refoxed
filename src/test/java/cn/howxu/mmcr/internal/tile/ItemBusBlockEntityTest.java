@@ -59,7 +59,7 @@ class ItemBusBlockEntityTest {
     @Test
     void setter_rejects_over_capacity_without_clearing_existing_contents() {
         var handler = itemInputBus().getItemStackHandler(null);
-        ItemStack existing = new ItemStack(Items.IRON_INGOT, 5);
+        ItemStack existing = ironStack(5);
         handler.setStackInSlot(0, existing);
         int overCapacity = handler.getSlotLimit(0) + 1;
 
@@ -72,7 +72,7 @@ class ItemBusBlockEntityTest {
     @Test
     void malformed_items_input_preserves_existing_contents() {
         var handler = itemInputBus().getItemStackHandler(null);
-        ItemStack existing = new ItemStack(Items.IRON_INGOT, 5);
+        ItemStack existing = ironStack(5);
         handler.setStackInSlot(0, existing);
         CompoundTag malformed = new CompoundTag();
         malformed.putString("Items", "not an item list");
@@ -93,5 +93,11 @@ class ItemBusBlockEntityTest {
         var output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
                 HolderLookup.Provider.create(Stream.empty()));
         bus.saveAdditional(output);
+    }
+
+    private static ItemStack ironStack(int count) {
+        ItemStack stack = new ItemStack(Items.IRON_INGOT, count);
+        stack.set(DataComponents.MAX_STACK_SIZE, 64);
+        return stack;
     }
 }

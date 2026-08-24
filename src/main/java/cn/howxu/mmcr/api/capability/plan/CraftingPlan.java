@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.api.capability.plan;
 
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 
@@ -12,6 +14,11 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public final class CraftingPlan {
+    private static final ExecutionStatus UNSPECIFIED_OPERATION_FAILURE = new ExecutionStatus(
+            Identifier.fromNamespaceAndPath("mmcr", "crafting_plan_operation_failure"),
+            StatusSeverity.FAILURE,
+            Identifier.fromNamespaceAndPath("mmcr", "crafting_plan"),
+            java.util.Map.of("reason", "operation_failed_without_status"));
     private final List<RequirementPlan> requirements;
     private final int parallelism;
     private @Nullable ExecutionStatus failure;
@@ -36,7 +43,10 @@ public final class CraftingPlan {
                 for (CapabilityOperation operation : requirement.operations()) {
                     CapabilityResult result = operation.commit(transaction);
                     if (result == null || !result.success()) {
-                        if (failure == null && result != null) failure = result.status();
+                        if (failure == null) {
+                            failure = result == null || result.status() == null
+                                    ? UNSPECIFIED_OPERATION_FAILURE : result.status();
+                        }
                         return false;
                     }
                 }

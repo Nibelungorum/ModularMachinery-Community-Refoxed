@@ -66,7 +66,8 @@ public final class CraftingContext {
             requirementIndexes.add(index);
         }
         return new RequirementPlanner().plan(requirements, capabilities,
-                new PlanningContext(parallelism, 0, direction == RecipeModifier.IOType.OUTPUT && recipe.allowPartialOutputs()),
+                new PlanningContext(parallelism, 0,
+                        direction != RecipeModifier.IOType.INPUT && recipe.allowPartialOutputs()),
                 requirementIndexes);
     }
 }

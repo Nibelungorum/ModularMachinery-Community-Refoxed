@@ -29,6 +29,10 @@ public final class LongValueStorage extends SnapshotJournal<Long> implements Cap
         return capacity;
     }
 
+    public long transferLimit() {
+        return transferLimit;
+    }
+
     public long insert(long requested, boolean simulate) {
         return insertInternal(requested, simulate, true);
     }

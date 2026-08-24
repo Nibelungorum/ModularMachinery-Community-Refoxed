@@ -62,39 +62,36 @@ public final class RequirementPlanner {
         if (parallelism <= 0) {
             return new PlanningResult(null, failure(requirements.isEmpty() ? null : requirements.getFirst()));
         }
-        ExecutionStatus materializationFailure = null;
+        int selectedParallelism = 0;
+        ExecutionStatus reservationFailure = null;
         for (int candidate = parallelism; candidate > 0; candidate--) {
             PlanningReservations reservations = context.reservations().copy();
             boolean reservationsAvailable = true;
             for (int index = 0; index < plans.size(); index++) {
-                ExecutionStatus reservationFailure = plans.get(index).reserve(candidate, reservations);
-                if (reservationFailure != null) {
-                    materializationFailure = reservationFailure;
+                ExecutionStatus failure = plans.get(index).reserve(candidate, reservations);
+                if (failure != null) {
+                    reservationFailure = failure;
                     reservationsAvailable = false;
                     break;
                 }
             }
-            if (!reservationsAvailable) continue;
-
-            PlanningReservations materializationReservations = context.reservations().copy();
-            List<RequirementPlan> materialized = new ArrayList<>(plans.size());
-            boolean successful = true;
-            for (int index = 0; index < plans.size(); index++) {
-                RequirementPlan plan = plans.get(index);
-                RequirementPlan resolved = plan.materialize(candidate, materializationReservations,
-                        failure(requirements.get(index), "unsafe_operation_parallelism"));
-                if (!resolved.successful()) {
-                    materializationFailure = resolved.failure();
-                    successful = false;
-                    break;
-                }
-                materialized.add(resolved);
-            }
-            if (successful) {
-                return new PlanningResult(new CraftingPlan(materialized, candidate), null);
+            if (reservationsAvailable) {
+                selectedParallelism = candidate;
+                break;
             }
         }
-        return new PlanningResult(null, materializationFailure);
+        if (selectedParallelism <= 0) return new PlanningResult(null, reservationFailure);
+
+        PlanningReservations materializationReservations = context.reservations().copy();
+        List<RequirementPlan> materialized = new ArrayList<>(plans.size());
+        for (int index = 0; index < plans.size(); index++) {
+            RequirementPlan plan = plans.get(index);
+            RequirementPlan resolved = plan.materialize(selectedParallelism, materializationReservations,
+                    failure(requirements.get(index), "unsafe_operation_parallelism"));
+            if (!resolved.successful()) return new PlanningResult(null, resolved.failure());
+            materialized.add(resolved);
+        }
+        return new PlanningResult(new CraftingPlan(materialized, selectedParallelism), null);
     }
 
     private static List<MachineCapability> matchingCapabilities(MachineRequirement requirement,

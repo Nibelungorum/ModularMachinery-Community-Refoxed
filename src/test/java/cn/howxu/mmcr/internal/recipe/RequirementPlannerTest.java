@@ -32,6 +32,7 @@ import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import net.minecraft.resources.Identifier;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -227,11 +228,48 @@ class RequirementPlannerTest {
     }
 
     @Test
+    void does_not_retry_lower_candidates_after_materialization_failure() {
+        RequirementType<TestRequirement> failureType = new RequirementType<>(
+                Identifier.fromNamespaceAndPath("mmcr_test", "materialization_failure"));
+        AtomicInteger factoryCalls = new AtomicInteger();
+        ExecutionStatus materializationFailure = new ExecutionStatus(
+                failureType.id(), StatusSeverity.FAILURE, failureType.id(), java.util.Map.of("reason", "factory"));
+        TestCapability capability = new TestCapability(failureType.id(), IOType.INPUT, 2);
+        RequirementHandlerRegistry.register(new RequirementHandler<TestRequirement>() {
+            @Override
+            public RequirementType<TestRequirement> type() {
+                return failureType;
+            }
+
+            @Override
+            public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
+                                        PlanningContext context) {
+                return new RequirementPlan(context.requirementIndex(), 2, List.of(), null,
+                        (parallelism, reservations) -> {
+                            factoryCalls.incrementAndGet();
+                            return new RequirementPlan.OperationPlan(
+                                    List.of(capability.prepare(new TestRequest(parallelism))),
+                                    parallelism == 2 ? materializationFailure : null);
+                        }, (parallelism, reservations) -> null);
+            }
+        });
+
+        var result = new RequirementPlanner().plan(
+                List.of(new TestRequirement(failureType, RecipeModifier.IOType.INPUT)),
+                List.of(capability), new PlanningContext(2, 0));
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.failure()).isSameAs(materializationFailure);
+        assertThat(factoryCalls).hasValue(1);
+        assertThat(capability.requestedParallelisms()).containsExactly(2);
+    }
+
+    @Test
     void shares_and_rolls_back_reservations_between_candidate_and_final_materialization() {
         RequirementType<TestRequirement> reservationType = new RequirementType<>(
                 Identifier.fromNamespaceAndPath("mmcr_test", "shared_reservation_lifecycle"));
         BulkItemStorage storage = new BulkItemStorage(2, null);
-        storage.insert(ItemResource.of(Items.IRON_INGOT), 2, false);
+        storage.insert(ironResource(), 2, false);
         StorageCapability capability = new StorageCapability(reservationType.id(), IOType.INPUT, storage);
         PlanningReservations shared = new PlanningReservations();
         AtomicInteger factories = new AtomicInteger();
@@ -249,17 +287,17 @@ class RequirementPlannerTest {
                         (parallelism, reservations) -> {
                             factories.incrementAndGet();
                             assertThat(reservations.reserveExtract(
-                                    storage, 0, ItemResource.of(Items.IRON_INGOT), parallelism)).isTrue();
+                                    storage, 0, ironResource(), parallelism)).isTrue();
                             assertThat(reservations.amount(storage, 0)).isEqualTo(2 - parallelism * factories.get());
                             CapabilityRequests.ResourceAction<ItemResource> action =
-                                    new CapabilityRequests.ResourceAction<>(0, ItemResource.of(Items.IRON_INGOT),
+                                    new CapabilityRequests.ResourceAction<>(0, ironResource(),
                                             parallelism, false);
                             return new RequirementPlan.OperationPlan(List.of(capability.prepare(
                                     new CapabilityRequests.ResourceRequest<>(capability.type(), capability.ioType(),
                                             parallelism, List.of(action)))), null);
                         },
                         (parallelism, reservations) -> reservations.reserveExtract(
-                                storage, 0, ItemResource.of(Items.IRON_INGOT), parallelism)
+                                storage, 0, ironResource(), parallelism)
                                 ? null
                                 : new ExecutionStatus(reservationType.id(), StatusSeverity.BLOCKED, reservationType.id(),
                                 java.util.Map.of("reason", "shared_reservation")));
@@ -342,10 +380,10 @@ class RequirementPlannerTest {
     @Test
     void item_shortage_returns_a_real_operation_for_the_available_parallelism() {
         BulkItemStorage storage = new BulkItemStorage(64, null);
-        storage.insert(ItemResource.of(Items.IRON_INGOT), 1, false);
+        storage.insert(ironResource(), 1, false);
 
         var result = new RequirementPlanner().plan(
-                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1,
                         ItemStack.EMPTY)),
                 List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT, storage)),
                 new PlanningContext(2, 0));
@@ -381,7 +419,7 @@ class RequirementPlannerTest {
     void partial_item_output_commits_the_available_resource_amount() {
         BulkItemStorage storage = new BulkItemStorage(2, null);
         StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage);
-        ItemStack output = Items.IRON_INGOT.getDefaultInstance().copyWithCount(4);
+        ItemStack output = ironStack(4);
         assertThat(output.getCount()).isEqualTo(4);
         assertThat(storage.capacityResource(0, ItemResource.of(output))).isEqualTo(2);
         ItemRequirement requirement = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, output, 1F, List.of());
@@ -417,10 +455,28 @@ class RequirementPlannerTest {
     }
 
     @Test
+    void item_planning_and_commit_respect_the_resource_stack_limit() {
+        BulkItemStorage storage = new BulkItemStorage(128, null);
+        ItemStack output = ironStack(64);
+        StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, output)),
+                List.of(capability), new PlanningContext(2, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(1);
+        assertThat(capability.lastResourceRequest.actions()).singleElement()
+                .extracting(CapabilityRequests.ResourceAction::amount).isEqualTo(64L);
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.amount(0)).isEqualTo(64L);
+    }
+
+    @Test
     void partial_outputs_without_any_capacity_are_structured_blocked_failures() {
         var itemResult = new RequirementPlanner().plan(
                 List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
-                        Items.IRON_INGOT.getDefaultInstance(), 1F, List.of())),
+                        ironStack(1), 1F, List.of())),
                 List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT,
                         new BulkItemStorage(0, null))), new PlanningContext(1, 0, true));
         var fluidResult = new RequirementPlanner().plan(
@@ -440,7 +496,7 @@ class RequirementPlannerTest {
         var result = new RequirementPlanner().plan(
                 List.of(
                         new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
-                                Items.IRON_INGOT.getDefaultInstance(), 0F, List.of()),
+                                ironStack(1), 0F, List.of()),
                         new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                                 new FluidStack(Fluids.WATER, 1_000), 0F, List.of())),
                 List.of(), new PlanningContext(1, 0, true));
@@ -498,12 +554,12 @@ class RequirementPlannerTest {
     @Test
     void shared_item_slot_is_reserved_during_planning() {
         BulkItemStorage storage = new BulkItemStorage(64, null);
-        storage.insert(ItemResource.of(Items.IRON_INGOT), 1, false);
+        storage.insert(ironResource(), 1, false);
 
         var result = new RequirementPlanner().plan(
                 List.of(
-                        new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
-                        new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)),
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1, ItemStack.EMPTY),
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1, ItemStack.EMPTY)),
                 List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT, storage)),
                 new PlanningContext(1, 0));
 
@@ -515,12 +571,12 @@ class RequirementPlannerTest {
     @Test
     void shared_item_slot_lowers_parallelism_before_materializing_operations() {
         BulkItemStorage storage = new BulkItemStorage(64, null);
-        storage.insert(ItemResource.of(Items.IRON_INGOT), 2, false);
+        storage.insert(ironResource(), 2, false);
 
         var result = new RequirementPlanner().plan(
                 List.of(
-                        new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
-                        new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)),
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1, ItemStack.EMPTY),
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1, ItemStack.EMPTY)),
                 List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT, storage)),
                 new PlanningContext(2, 0));
 
@@ -570,15 +626,35 @@ class RequirementPlannerTest {
     }
 
     @Test
+    void planning_reservations_use_virtual_energy_state_for_both_transfer_orders() {
+        LongValueStorage outputThenInput = new LongValueStorage(10, 10, null);
+        outputThenInput.setAmount(5);
+        PlanningReservations first = new PlanningReservations();
+        assertThat(first.reserveValue(outputThenInput, 3, true)).isTrue();
+        assertThat(first.reserveValue(outputThenInput, 7, false)).isTrue();
+        assertThat(first.valueAvailable(outputThenInput, false)).isEqualTo(1L);
+
+        LongValueStorage inputThenOutput = new LongValueStorage(10, 10, null);
+        inputThenOutput.setAmount(5);
+        PlanningReservations second = new PlanningReservations();
+        assertThat(second.reserveValue(inputThenOutput, 3, false)).isTrue();
+        assertThat(second.reserveValue(inputThenOutput, 7, true)).isTrue();
+        assertThat(second.valueAvailable(inputThenOutput, false)).isEqualTo(9L);
+
+        LongValueStorage limited = new LongValueStorage(10, 5, null);
+        assertThat(new PlanningReservations().reserveValue(limited, 6, true)).isFalse();
+    }
+
+    @Test
     void built_in_item_and_fluid_handlers_commit_real_resource_storage_operations_in_order() {
         BulkItemStorage itemStorage = new BulkItemStorage(64, null);
-        itemStorage.insert(ItemResource.of(Items.IRON_INGOT), 2, false);
+        itemStorage.insert(ironResource(), 2, false);
         LongFluidStorage fluidStorage = new LongFluidStorage(2_000, null);
         fluidStorage.setFluid(new FluidStack(Fluids.WATER, 1_000));
 
         var result = new RequirementPlanner().plan(
                 List.of(
-                        new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY),
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 2, ItemStack.EMPTY),
                         new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1_000, FluidStack.EMPTY)
                 ),
                 List.of(
@@ -615,7 +691,7 @@ class RequirementPlannerTest {
         StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage);
         var result = new RequirementPlanner().plan(
                 List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
-                        Items.IRON_INGOT.getDefaultInstance(), 1F, List.of())),
+                        ironStack(1), 1F, List.of())),
                 List.of(capability), new PlanningContext(1, 0));
 
         assertThat(result.successful()).isTrue();
@@ -627,12 +703,43 @@ class RequirementPlannerTest {
     void zero_consume_chance_still_requires_the_full_input_inventory() {
         BulkItemStorage storage = new BulkItemStorage(64, null);
         var result = new RequirementPlanner().plan(
-                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2,
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 2,
                         ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0F)),
                 List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT, storage)),
                 new PlanningContext(1, 0));
 
         assertThat(result.successful()).isFalse();
+    }
+
+    @Test
+    void fractional_consume_chance_never_plans_an_empty_input_inventory() {
+        for (int attempt = 0; attempt < 64; attempt++) {
+            var result = new RequirementPlanner().plan(
+                    List.of(new ItemRequirement(RecipeModifier.IOType.INPUT,
+                            ironIngredient(), 1, ItemStack.EMPTY,
+                            1F, List.of(), DataComponentPredicateSet.EMPTY, 0.5F)),
+                    List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT,
+                            new BulkItemStorage(64, null))), new PlanningContext(1, 0));
+
+            assertThat(result.successful()).isFalse();
+        }
+    }
+
+    @Test
+    void full_context_plan_start_honors_partial_outputs() {
+        BulkItemStorage storage = new BulkItemStorage(2, null);
+        MachineRecipe recipe = new MachineRecipe(
+                Identifier.fromNamespaceAndPath("mmcr_test", "partial_context_start"),
+                Identifier.fromNamespaceAndPath("mmcr_test", "machine"), 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                        ironStack(4))),
+                false, List.of(), true);
+        CraftingContext context = new CraftingContext(new CapabilitySnapshot(List.of(
+                new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage))));
+
+        assertThat(context.planOutputs(recipe, 1).successful()).isTrue();
+        assertThat(context.planStart(recipe, 1)).isNotNull();
     }
 
     @Test
@@ -676,7 +783,7 @@ class RequirementPlannerTest {
         FluidHatchCapability fluid = (FluidHatchCapability) port("fluid_input_hatch").capabilitySnapshot().capabilities().getFirst();
         EnergyHatchCapability energy = (EnergyHatchCapability) port("energy_input_hatch_tiny").capabilitySnapshot().capabilities().getFirst();
         try (Transaction transaction = Transaction.openRoot()) {
-            item.storage().insert(0, ItemResource.of(Items.IRON_INGOT), 1, transaction);
+            item.storage().insert(0, ironResource(), 1, transaction);
             transaction.commit();
         }
         ((LongFluidStorage) fluid.storage()).setFluid(new FluidStack(Fluids.WATER, 1_000));
@@ -699,7 +806,7 @@ class RequirementPlannerTest {
 
         var result = new RequirementPlanner().plan(
                 List.of(
-                        new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1, ItemStack.EMPTY),
                         new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1_000,
                                  FluidStack.EMPTY),
                         new EnergyRequirement(RecipeModifier.IOType.INPUT, 4),
@@ -720,11 +827,11 @@ class RequirementPlannerTest {
     @Test
     void filtered_context_plans_keep_the_original_recipe_requirement_index() {
         MachineRequirement output = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
-                Items.IRON_INGOT.getDefaultInstance());
+                ironStack(1));
         MachineRequirement input = new ItemRequirement(RecipeModifier.IOType.INPUT,
-                Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY);
+                ironIngredient(), 1, ItemStack.EMPTY);
         BulkItemStorage storage = new BulkItemStorage(64, null);
-        storage.insert(ItemResource.of(Items.IRON_INGOT), 1, false);
+        storage.insert(ironResource(), 1, false);
         MachineRecipe recipe = new MachineRecipe(
                 Identifier.fromNamespaceAndPath("mmcr_test", "indexed_requirements"),
                 Identifier.fromNamespaceAndPath("mmcr_test", "machine"), 20,
@@ -737,6 +844,20 @@ class RequirementPlannerTest {
         assertThat(result.successful()).isTrue();
         assertThat(result.plan().requirements()).singleElement()
                 .extracting(RequirementPlan::requirementIndex).isEqualTo(1);
+    }
+
+    private static ItemStack ironStack(int count) {
+        ItemStack stack = Items.IRON_INGOT.getDefaultInstance().copyWithCount(count);
+        stack.set(DataComponents.MAX_STACK_SIZE, 64);
+        return stack;
+    }
+
+    private static ItemResource ironResource() {
+        return ItemResource.of(ironStack(1));
+    }
+
+    private static Ingredient ironIngredient() {
+        return Ingredient.of(Items.IRON_INGOT);
     }
 
     private record TestRequirement(RequirementType<TestRequirement> type, RecipeModifier.IOType io, List<String> tags)

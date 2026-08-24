@@ -58,9 +58,7 @@ public final class PlanningReservations {
     }
 
     public boolean reserveValue(LongValueStorage storage, long amount, boolean insert) {
-        if (amount <= 0L) return false;
-        long moved = insert ? storage.insert(amount, true) : storage.extract(amount, true);
-        if (moved < amount || valueAvailable(storage, insert) < amount) return false;
+        if (amount <= 0L || amount > storage.transferLimit() || valueAvailable(storage, insert) < amount) return false;
         values.merge(storage, insert ? amount : -amount, Long::sum);
         return true;
     }

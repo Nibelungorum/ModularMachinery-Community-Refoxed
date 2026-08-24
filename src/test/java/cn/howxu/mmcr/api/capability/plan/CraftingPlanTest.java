@@ -75,6 +75,45 @@ class CraftingPlanTest {
         assertThat(plan.failure()).isSameAs(FIRST_FAILURE);
     }
 
+    @Test
+    void reports_structured_failure_when_operation_returns_null() {
+        CraftingPlan plan = plan(transaction -> null);
+
+        assertThat(plan.commit()).isFalse();
+        assertThat(plan.failure()).isNotNull();
+        assertThat(plan.failure().severity()).isEqualTo(StatusSeverity.FAILURE);
+    }
+
+    @Test
+    void reports_structured_failure_when_failed_operation_has_no_status() {
+        CraftingPlan plan = plan(transaction -> new CapabilityResult(false, null));
+
+        assertThat(plan.commit()).isFalse();
+        assertThat(plan.failure()).isNotNull();
+        assertThat(plan.failure().severity()).isEqualTo(StatusSeverity.FAILURE);
+    }
+
+    @Test
+    void direct_materialization_uses_the_final_parallelism_as_maximum() {
+        CapabilityOperation operation = new CapabilityOperation() {
+            @Override
+            public CapabilityResult commit(TransactionContext transaction) {
+                return CapabilityResult.successful();
+            }
+
+            @Override
+            public CapabilityOperation forParallelism(int parallelism) {
+                return this;
+            }
+        };
+
+        RequirementPlan resolved = new RequirementPlan(0, 10, List.of(operation), null)
+                .preparedAt(10)
+                .materialize(3, new PlanningReservations(), FIRST_FAILURE);
+
+        assertThat(resolved.maxParallelism()).isEqualTo(3);
+    }
+
     private static CraftingPlan plan(CapabilityOperation... operations) {
         return new CraftingPlan(List.of(new RequirementPlan(0, 1, List.of(operations), null)), 1);
     }

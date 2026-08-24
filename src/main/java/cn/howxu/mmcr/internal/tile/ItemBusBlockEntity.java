@@ -346,7 +346,7 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
             if (stack == null || stack.isEmpty()) return false;
             ItemResource resource = itemResource(stack);
             return resource != null && !resource.isEmpty()
-                    && stack.getCount() <= storages[slot].capacity(0, null);
+                    && stack.getCount() <= storages[slot].capacity(0, resource);
         }
 
         private boolean replace(int slot, ItemStack stack) {
@@ -354,7 +354,7 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
             ItemResource incoming = stack.isEmpty() ? ItemResource.EMPTY : itemResource(stack);
             if (incoming == null) return false;
             long requested = stack.isEmpty() ? 0L : stack.getCount();
-            if (!incoming.isEmpty() && requested > storages[slot].capacity(0, null)) return false;
+            if (!incoming.isEmpty() && requested > storages[slot].capacity(0, incoming)) return false;
             if (!stack.isEmpty() && incoming.isEmpty()) return false;
 
             ItemResource current = storages[slot].resource(0);

@@ -18,7 +18,10 @@ import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
@@ -70,15 +73,16 @@ class CapabilityHostTest {
         ResourceStorage<ItemResource> storage = item.storage();
 
         assertThat(storage.size()).isGreaterThan(1);
+        ItemResource iron = ironResource();
         try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(storage.insert(0, ItemResource.of(net.minecraft.world.item.Items.IRON_INGOT), 3L, transaction))
+            assertThat(storage.insert(0, iron, 3L, transaction))
                     .isEqualTo(3L);
             assertThat(item.prepare(request(item)).commit(transaction).success()).isTrue();
             transaction.commit();
         }
 
         assertThat(storage.amount(0)).isEqualTo(3L);
-        assertThat(storage.resource(0)).isEqualTo(ItemResource.of(net.minecraft.world.item.Items.IRON_INGOT));
+        assertThat(storage.resource(0)).isEqualTo(iron);
     }
 
     @Test
@@ -120,6 +124,12 @@ class CapabilityHostTest {
             return new CapabilityRequests.ValueRequest(capability.type(), capability.ioType(), 1, 1, false);
         }
         return new TestRequest(capability.type(), capability.ioType(), 1);
+    }
+
+    private static ItemResource ironResource() {
+        ItemStack stack = Items.IRON_INGOT.getDefaultInstance();
+        stack.set(DataComponents.MAX_STACK_SIZE, 64);
+        return ItemResource.of(stack);
     }
 
     private static IOPortBlockEntity port(String id) {
