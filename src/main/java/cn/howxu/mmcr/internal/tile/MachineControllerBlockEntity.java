@@ -223,7 +223,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
         runtime.publishComponentState(current.components(), current.foundModifiers(),
                 current.foundLevels(), current.linkedPortPositions());
         ControllerRuntimeSnapshot published = runtimeSnapshot();
-        syncCraftingFailure();
+        if (runtime.craftingRuntime().active() || runtime.craftingRuntime().failure() != null) {
+            syncCraftingFailure();
+        }
         StructureSnapshot structure = published.structure();
         boolean activeState = published.crafting().recipeId() != null || published.factory().active();
         Identifier recipeId = published.crafting().recipeId();
@@ -247,10 +249,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void syncCraftingFailure() {
         String runtimeFailure = runtime.craftingRuntime().failureUnloc();
-        if (runtimeFailure != null) {
-            lastFailureUnloc = runtimeFailure;
-            recipeFailure = null;
-        }
+        lastFailureUnloc = runtimeFailure;
+        recipeFailure = null;
+    }
+
+    void syncFactoryFailure(@Nullable ExecutionStatus factoryFailure) {
+        lastFailureUnloc = factoryFailure == null ? null : failureUnloc(factoryFailure);
+        recipeFailure = null;
     }
 
     private void validateRuntimeBoundary(ServerLevel runtimeLevel, BlockPos runtimePos) {
@@ -2617,6 +2622,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (runtime.craftingRuntime().active()) {
                 if (runtime.craftingRuntime().versionsCurrent()) {
                     runtime.craftingRuntime().invalidate();
+                    syncCraftingFailure();
                 } else {
                     runtime.craftingRuntime().tick();
                     syncCraftingFailure();

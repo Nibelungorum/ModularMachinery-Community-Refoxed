@@ -373,6 +373,7 @@ public final class FactoryRuntime {
                 .filter(status -> status != null)
                 .findFirst()
                 .orElse(null);
+        if (controller != null) controller.syncFactoryFailure(failure);
     }
 
     /** Immutable runtime-owned lane snapshot. */

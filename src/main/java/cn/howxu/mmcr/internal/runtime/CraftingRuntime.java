@@ -316,6 +316,8 @@ public final class CraftingRuntime {
         startPlan = null;
         tickPlan = null;
         finishPlan = null;
+        consumedAtStart = Set.of();
+        retainedInputs = Set.of();
         resourceDomain = null;
         status = CraftingStatus.failure(failureUnloc(failure));
         return status;

@@ -124,3 +124,15 @@
 - `git diff --check`: passed with no whitespace errors.
 - Test and Gradle commands: intentionally not run, per Wave B constraints.
 - Test sources and GameTest sources: untouched.
+
+## Wave B Failure Cleanup Re-review
+
+- `syncCraftingFailure()` now clears the controller fallback when the shared crafting runtime recovers or is explicitly invalidated; `publishRuntimeState()` preserves unrelated search fallback until an explicit crafting synchronization occurs.
+- `FactoryRuntime.recomputeFailure()` now publishes the aggregate failure boundary to the controller, so lane removal, lane-limit trimming, and idle-timeout removal clear stale controller fallback when no failed lane remains.
+- `CraftingRuntime.invalidate(String)` now clears `consumedAtStart` and `retainedInputs` together with the other transient runtime state.
+
+## Failure Cleanup Static Verification
+
+- CodeGraph and source review covered shared runtime validation, factory lane removal/limit/timeout paths, controller failure publication, and both invalidate overloads.
+- Targeted `rg` scans confirmed the new sync and transient-state cleanup call sites; no tests or Gradle commands were run.
+- `git diff --check`: passed with no whitespace errors.
