@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.recipe;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
+import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
@@ -52,7 +53,8 @@ public final class RequirementPlanner {
             RequirementHandler<MachineRequirement> handler = handler(requirement.type());
             List<MachineCapability> matching = matchingCapabilities(requirement, capabilities);
             RequirementPlan requirementPlan = handler.plan(requirement, matching,
-                    new PlanningContext(parallelism, requirementIndexes.get(index), context.allowPartialOutputs()));
+                    new PlanningContext(context.requestedParallelism(), requirementIndexes.get(index),
+                            context.allowPartialOutputs(), context.reservations()));
             if (!requirementPlan.successful()) return new PlanningResult(null, requirementPlan.failure());
             parallelism = Math.min(parallelism, requirementPlan.maxParallelism());
             plans.add(requirementPlan);
@@ -60,7 +62,25 @@ public final class RequirementPlanner {
         if (parallelism <= 0) {
             return new PlanningResult(null, failure(requirements.isEmpty() ? null : requirements.getFirst()));
         }
-        return new PlanningResult(new CraftingPlan(plans, parallelism), null);
+        ExecutionStatus materializationFailure = null;
+        for (int candidate = parallelism; candidate > 0; candidate--) {
+            PlanningReservations reservations = new PlanningReservations();
+            List<RequirementPlan> materialized = new ArrayList<>(plans.size());
+            boolean successful = true;
+            for (RequirementPlan plan : plans) {
+                RequirementPlan resolved = plan.materialize(candidate, reservations);
+                if (!resolved.successful()) {
+                    materializationFailure = resolved.failure();
+                    successful = false;
+                    break;
+                }
+                materialized.add(resolved);
+            }
+            if (successful) {
+                return new PlanningResult(new CraftingPlan(materialized, candidate), null);
+            }
+        }
+        return new PlanningResult(null, materializationFailure);
     }
 
     private static List<MachineCapability> matchingCapabilities(MachineRequirement requirement,

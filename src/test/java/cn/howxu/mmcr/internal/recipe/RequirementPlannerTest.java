@@ -46,6 +46,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -115,6 +116,34 @@ class RequirementPlannerTest {
     }
 
     @Test
+    void calls_each_handler_once_and_normalizes_every_requirement_to_final_parallelism() {
+        RequirementType<TestRequirement> firstType = new RequirementType<>(
+                Identifier.fromNamespaceAndPath("mmcr_test", "planner_once_first"));
+        RequirementType<TestRequirement> secondType = new RequirementType<>(
+                Identifier.fromNamespaceAndPath("mmcr_test", "planner_once_second"));
+        AtomicInteger firstCalls = new AtomicInteger();
+        AtomicInteger secondCalls = new AtomicInteger();
+        RequirementHandlerRegistry.register(new LimitedHandler(firstType, 4, firstCalls));
+        RequirementHandlerRegistry.register(new LimitedHandler(secondType, 2, secondCalls));
+
+        var result = new RequirementPlanner().plan(
+                List.of(new TestRequirement(firstType, RecipeModifier.IOType.INPUT),
+                        new TestRequirement(secondType, RecipeModifier.IOType.INPUT)),
+                List.of(new TestCapability(firstType.id(), IOType.INPUT, 4),
+                        new TestCapability(secondType.id(), IOType.INPUT, 2)),
+                new PlanningContext(8, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(firstCalls).hasValue(1);
+        assertThat(secondCalls).hasValue(1);
+        assertThat(result.plan().parallelism()).isEqualTo(2);
+        assertThat(result.plan().requirements()).allSatisfy(plan -> {
+            assertThat(plan.maxParallelism()).isEqualTo(2);
+            assertThat(plan.operations()).isNotEmpty();
+        });
+    }
+
+    @Test
     void carries_a_structured_handler_failure() {
         RequirementType<TestRequirement> failureType = new RequirementType<>(
                 Identifier.fromNamespaceAndPath("mmcr_test", "planner_failure_requirement"));
@@ -172,6 +201,136 @@ class RequirementPlannerTest {
         assertThat(result.successful()).isTrue();
         assertThat(result.plan().commit()).isTrue();
         assertThat(storage.amount()).isEqualTo(6);
+    }
+
+    @Test
+    void item_shortage_returns_a_real_operation_for_the_available_parallelism() {
+        BulkItemStorage storage = new BulkItemStorage(64, null);
+        storage.insert(ItemResource.of(Items.IRON_INGOT), 1, false);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
+                        ItemStack.EMPTY)),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT, storage)),
+                new PlanningContext(2, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(1);
+        assertThat(result.plan().requirements()).singleElement().satisfies(plan ->
+                assertThat(plan.operations()).isNotEmpty());
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.amount(0)).isZero();
+    }
+
+    @Test
+    void fluid_shortage_returns_a_real_operation_for_the_available_parallelism() {
+        LongFluidStorage storage = new LongFluidStorage(2_000, null);
+        storage.setFluid(new FluidStack(Fluids.WATER, 1_000));
+
+        var result = new RequirementPlanner().plan(
+                List.of(new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1_000,
+                        FluidStack.EMPTY)),
+                List.of(new StorageCapability(FluidRequirement.TYPE.id(), IOType.INPUT, storage)),
+                new PlanningContext(2, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(1);
+        assertThat(result.plan().requirements()).singleElement().satisfies(plan ->
+                assertThat(plan.operations()).isNotEmpty());
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.getAmountAsLong()).isZero();
+    }
+
+    @Test
+    void energy_shortage_returns_a_real_operation_for_the_available_parallelism() {
+        LongValueStorage storage = new LongValueStorage(100, 100, null);
+        storage.setAmount(4);
+        MachineCapability capability = new StorageCapability(EnergyRequirement.TYPE.id(), IOType.INPUT, storage);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 4)),
+                List.of(capability), new PlanningContext(2, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(1);
+        assertThat(result.plan().requirements()).singleElement().satisfies(plan ->
+                assertThat(plan.operations()).isNotEmpty());
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.amount()).isZero();
+    }
+
+    @Test
+    void shared_item_slot_is_reserved_during_planning() {
+        BulkItemStorage storage = new BulkItemStorage(64, null);
+        storage.insert(ItemResource.of(Items.IRON_INGOT), 1, false);
+
+        var result = new RequirementPlanner().plan(
+                List.of(
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT, storage)),
+                new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.failure()).isNotNull();
+        assertThat(storage.amount(0)).isEqualTo(1);
+    }
+
+    @Test
+    void shared_item_slot_lowers_parallelism_before_materializing_operations() {
+        BulkItemStorage storage = new BulkItemStorage(64, null);
+        storage.insert(ItemResource.of(Items.IRON_INGOT), 2, false);
+
+        var result = new RequirementPlanner().plan(
+                List.of(
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT, storage)),
+                new PlanningContext(2, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(1);
+        assertThat(result.plan().requirements()).allSatisfy(plan -> {
+            assertThat(plan.maxParallelism()).isEqualTo(1);
+            assertThat(plan.operations()).isNotEmpty();
+        });
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.amount(0)).isZero();
+    }
+
+    @Test
+    void shared_fluid_slot_is_reserved_during_planning() {
+        LongFluidStorage storage = new LongFluidStorage(2_000, null);
+        storage.setFluid(new FluidStack(Fluids.WATER, 1_000));
+
+        var result = new RequirementPlanner().plan(
+                List.of(
+                        new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1_000,
+                                FluidStack.EMPTY),
+                        new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1_000,
+                                FluidStack.EMPTY)),
+                List.of(new StorageCapability(FluidRequirement.TYPE.id(), IOType.INPUT, storage)),
+                new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.failure()).isNotNull();
+        assertThat(storage.getAmountAsLong()).isEqualTo(1_000);
+    }
+
+    @Test
+    void shared_energy_storage_is_reserved_during_planning() {
+        LongValueStorage storage = new LongValueStorage(100, 100, null);
+        storage.setAmount(4);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 4),
+                        new EnergyRequirement(RecipeModifier.IOType.INPUT, 4)),
+                List.of(new StorageCapability(EnergyRequirement.TYPE.id(), IOType.INPUT, storage)),
+                new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.failure()).isNotNull();
+        assertThat(storage.amount()).isEqualTo(4);
     }
 
     @Test
@@ -251,6 +410,58 @@ class RequirementPlannerTest {
 
         assertThat(result.successful()).isFalse();
         assertThat(result.failure().details()).containsEntry("reason", "missing_smart_interface");
+    }
+
+    @Test
+    void smart_output_checks_later_capabilities_after_an_interface_miss() {
+        FloatValueStorage first = new FloatValueStorage();
+        FloatValueStorage second = new FloatValueStorage();
+        second.set("mode", 1F);
+
+        var result = new RequirementPlanner().plan(
+                List.of(cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.output("mode", 9F)),
+                List.of(
+                        new StorageCapability(cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.TYPE.id(),
+                                IOType.OUTPUT, first),
+                        new StorageCapability(cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.TYPE.id(),
+                                IOType.OUTPUT, second)),
+                new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().requirements()).singleElement().satisfies(plan ->
+                assertThat(plan.operations()).isNotEmpty());
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(second.value("mode")).contains(9F);
+    }
+
+    @Test
+    void rolls_back_real_item_fluid_and_energy_operations_when_later_energy_operation_fails() {
+        BulkItemStorage item = new BulkItemStorage(64, null);
+        item.insert(ItemResource.of(Items.IRON_INGOT), 1, false);
+        LongFluidStorage fluid = new LongFluidStorage(2_000, null);
+        fluid.setFluid(new FluidStack(Fluids.WATER, 1_000));
+        LongValueStorage energy = new LongValueStorage(100, 100, null);
+        energy.setAmount(4);
+
+        var result = new RequirementPlanner().plan(
+                List.of(
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
+                        new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1_000,
+                                FluidStack.EMPTY),
+                        new EnergyRequirement(RecipeModifier.IOType.INPUT, 4)),
+                List.of(
+                        new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT, item),
+                        new StorageCapability(FluidRequirement.TYPE.id(), IOType.INPUT, fluid),
+                        new FailingStorageCapability(EnergyRequirement.TYPE.id(), IOType.INPUT, energy)),
+                new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().requirements()).allSatisfy(plan ->
+                assertThat(plan.operations()).isNotEmpty());
+        assertThat(result.plan().commit()).isFalse();
+        assertThat(item.amount(0)).isEqualTo(1);
+        assertThat(fluid.getAmountAsLong()).isEqualTo(1_000);
+        assertThat(energy.amount()).isEqualTo(4);
     }
 
     @Test
@@ -356,7 +567,18 @@ class RequirementPlannerTest {
         }
     }
 
-    private static final class StorageCapability implements MachineCapability {
+    private record LimitedHandler(RequirementType<TestRequirement> type, int limit, AtomicInteger calls)
+            implements RequirementHandler<TestRequirement> {
+        @Override
+        public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
+                                    PlanningContext context) {
+            calls.incrementAndGet();
+            return new RequirementPlan(context.requirementIndex(), limit,
+                    List.of(transaction -> CapabilityResult.successful()), null);
+        }
+    }
+
+    private static class StorageCapability implements MachineCapability {
         private final CapabilityType type;
         private final IOType ioType;
         private final CapabilityStorage storage;
@@ -408,6 +630,19 @@ class RequirementPlannerTest {
                         : CapabilityResult.failure(new ExecutionStatus(type.id(), StatusSeverity.BLOCKED,
                                 type.id(), java.util.Map.of()));
             }
+            if (request instanceof CapabilityRequests.ValueRequest valueRequest
+                    && storage instanceof LongValueStorage longStorage) {
+                return transaction -> {
+                    longStorage.updateSnapshots(transaction);
+                    long moved = valueRequest.insert()
+                            ? longStorage.insert(valueRequest.amount(), false)
+                            : longStorage.extract(valueRequest.amount(), false);
+                    return moved == valueRequest.amount()
+                            ? CapabilityResult.successful()
+                            : CapabilityResult.failure(new ExecutionStatus(type.id(), StatusSeverity.BLOCKED,
+                                    type.id(), java.util.Map.of()));
+                };
+            }
             CapabilityRequests.ResourceRequest<?> resourceRequest = (CapabilityRequests.ResourceRequest<?>) request;
             if (!(storage instanceof ResourceStorage<?> resourceStorage)) {
                 return transaction -> CapabilityResult.failure(new ExecutionStatus(
@@ -423,6 +658,19 @@ class RequirementPlannerTest {
                 }
                 return CapabilityResult.successful();
             };
+        }
+    }
+
+    private static final class FailingStorageCapability extends StorageCapability {
+        private FailingStorageCapability(Identifier type, IOType ioType, CapabilityStorage storage) {
+            super(type, ioType, storage);
+        }
+
+        @Override
+        public CapabilityOperation prepare(cn.howxu.mmcr.api.capability.CapabilityRequest request) {
+            return transaction -> CapabilityResult.failure(new ExecutionStatus(
+                    request.type().id(), StatusSeverity.FAILURE, request.type().id(),
+                    java.util.Map.of("reason", "forced_failure")));
         }
     }
 }
