@@ -389,22 +389,22 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     public long totalStoredEnergy() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? 0L : controller.totalStoredEnergy();
+        return controller == null ? 0L : controller.runtimeSnapshot().totalStoredEnergy();
     }
 
     public long totalCapacityEnergy() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? 0L : controller.totalCapacityEnergy();
+        return controller == null ? 0L : controller.runtimeSnapshot().totalCapacityEnergy();
     }
 
     public FluidStack primaryFluid() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? FluidStack.EMPTY : controller.primaryFluid();
+        return controller == null ? FluidStack.EMPTY : controller.runtimeSnapshot().primaryFluid();
     }
 
     public FluidStack primaryOutputFluid() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? FluidStack.EMPTY : controller.primaryOutputFluid();
+        return controller == null ? FluidStack.EMPTY : controller.runtimeSnapshot().primaryOutputFluid();
     }
 
     private static int failureCode(@Nullable String key) {

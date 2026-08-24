@@ -2,12 +2,17 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
-import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Coordinates structure, component, and future recipe/factory runtime state for one controller.
@@ -42,16 +47,12 @@ public final class MachineControllerRuntime {
     }
 
     public ControllerRuntimeSnapshot snapshot() {
-        syncComponentState();
-        components.refreshModuleConnectionState(controller);
-        if (craftingStateVersion != components.craftingStateVersion()) {
-            craftingContext = new CraftingContext(new CapabilitySnapshot(components.capabilities()), components.modifierList());
-            craftingStateVersion = components.craftingStateVersion();
-        }
+        refreshCraftingContext();
         return new ControllerRuntimeSnapshot(structure.snapshot(),
                 components.components(), components.capabilities(), components.capabilityVersion(),
                 components.foundModifiers(), components.foundLevels(), components.linkedPortPositions(),
                 components.moduleConnectionStatus(), components.installedModuleCount(),
+                components.capabilityAggregate(),
                 FactorySnapshot.empty());
     }
 
@@ -60,12 +61,11 @@ public final class MachineControllerRuntime {
     }
 
     public ComponentRuntime components() {
-        syncComponentState();
         return components;
     }
 
     public CraftingContext craftingContext() {
-        snapshot();
+        refreshCraftingContext();
         return craftingContext;
     }
 
@@ -73,20 +73,25 @@ public final class MachineControllerRuntime {
         return components.craftingStateVersion();
     }
 
-    public ModuleConnectionStatus moduleConnectionStatus() {
+    public void publishComponentState(List<ProcessingComponent> nextComponents,
+                                      Map<String, List<RecipeModifier>> modifiers,
+                                      Map<Identifier, MachineLevel> levels,
+                                      Set<BlockPos> linkedPositions) {
+        components.replaceComponents(nextComponents);
+        components.replaceModifiers(modifiers);
+        components.replaceLevels(levels);
+        components.replaceLinkedPortPositions(linkedPositions);
         components.refreshModuleConnectionState(controller);
-        return components.moduleConnectionStatus();
+        refreshCraftingContext();
     }
 
-    public int installedModuleCount() {
+    public void refreshModuleConnectionState() {
         components.refreshModuleConnectionState(controller);
-        return components.installedModuleCount();
     }
 
-    private void syncComponentState() {
-        components.replaceComponents(controller.legacyComponentsForRuntime());
-        components.replaceModifiers(controller.legacyModifiersForRuntime());
-        components.replaceLevels(controller.legacyLevelsForRuntime());
-        components.replaceLinkedPortPositions(controller.legacyLinkedPortPositionsForRuntime());
+    private void refreshCraftingContext() {
+        if (craftingStateVersion == components.craftingStateVersion()) return;
+        craftingContext = new CraftingContext(new CapabilitySnapshot(components.capabilities()), components.modifierList());
+        craftingStateVersion = components.craftingStateVersion();
     }
 }

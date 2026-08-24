@@ -40,6 +40,7 @@ public final class ModuleConnectionCoordinator {
         coupler.clearConnection();
         if (existing.isPresent()) {
             MachineConnection connection = existing.get();
+            refreshRuntimeConnectionState(connection);
             if (interfacesOverlap(connection.host(), connection.module())) {
                 invalidateHost(level, connection.host());
                 return;
@@ -216,6 +217,12 @@ public final class ModuleConnectionCoordinator {
     private static void restoreConnection(ServerLevel level, ModuleCouplerBlockEntity coupler, MachineConnection connection) {
         coupler.setConnection(GlobalPos.of(level.dimension(), connection.host().getBlockPos()),
                 GlobalPos.of(level.dimension(), connection.module().getBlockPos()));
+        refreshRuntimeConnectionState(connection);
+    }
+
+    private static void refreshRuntimeConnectionState(MachineConnection connection) {
+        connection.host().runtime().refreshModuleConnectionState();
+        connection.module().runtime().refreshModuleConnectionState();
     }
 
     private static void invalidateHost(ServerLevel level, MachineControllerBlockEntity host) {

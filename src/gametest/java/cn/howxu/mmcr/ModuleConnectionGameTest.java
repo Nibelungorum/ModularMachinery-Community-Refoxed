@@ -118,7 +118,7 @@ public class ModuleConnectionGameTest {
                 ? helper.getBlockEntity(modulePos, MachineControllerBlockEntity.class) : null;
         if (host != null) host.setMachine(hostMachine);
         if (module != null) module.setMachine(moduleMachine);
-        return new Fixture(host, module, coupler, hostInterface);
+        return new Fixture(host, module, helper.absolutePos(coupler), hostInterface);
     }
 
     private static void registerForGameTest(DynamicMachine machine) {

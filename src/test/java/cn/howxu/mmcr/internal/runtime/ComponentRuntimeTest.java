@@ -160,7 +160,8 @@ class ComponentRuntimeTest {
         Identifier hostId = Identifier.fromNamespaceAndPath("mmcr_test", "host");
         ControllerRuntimeSnapshot snapshot = new ControllerRuntimeSnapshot(
                 StructureSnapshot.empty(), List.of(), List.of(), 0L, Map.of(), Map.of(), Set.of(),
-                ModuleConnectionStatus.connected(hostId), 2, FactorySnapshot.empty());
+                ModuleConnectionStatus.connected(hostId), 2,
+                new ComponentRuntime.CapabilityAggregate(0L, 0L, null, null), FactorySnapshot.empty());
 
         assertThat(snapshot.moduleConnectionStatus()).isEqualTo(ModuleConnectionStatus.connected(hostId));
         assertThat(snapshot.installedModuleCount()).isEqualTo(2);
@@ -176,12 +177,32 @@ class ComponentRuntimeTest {
         Map<String, List<RecipeModifier>> modifiers = new LinkedHashMap<>();
         modifiers.put("duration", List.of(new RecipeModifier("duration", RecipeModifier.IOType.INPUT,
                 2F, RecipeModifier.Operation.MULTIPLY, false)));
-        setField(controller, "foundModifiers", modifiers);
+        runtime.components().replaceModifiers(modifiers);
 
         CraftingContext second = runtime.craftingContext();
 
         assertThat(second).isNotSameAs(first);
         assertThat(runtime.craftingStateVersion()).isGreaterThan(0L);
+    }
+
+    @Test
+    void attached_controller_snapshot_does_not_refresh_from_legacy_component_fields() throws Exception {
+        MachineControllerBlockEntity controller = unconstructedController();
+        Map<String, List<RecipeModifier>> initial = new LinkedHashMap<>();
+        initial.put("initial", List.of(new RecipeModifier("initial", RecipeModifier.IOType.INPUT,
+                1F, RecipeModifier.Operation.ADD, false)));
+        setField(controller, "foundModifiers", initial);
+
+        ControllerRuntimeSnapshot first = controller.runtimeSnapshot();
+        Map<String, List<RecipeModifier>> changed = new LinkedHashMap<>();
+        changed.put("changed", List.of(new RecipeModifier("changed", RecipeModifier.IOType.INPUT,
+                2F, RecipeModifier.Operation.MULTIPLY, false)));
+        setField(controller, "foundModifiers", changed);
+
+        ControllerRuntimeSnapshot second = controller.runtimeSnapshot();
+
+        assertThat(second.foundModifiers()).isEqualTo(first.foundModifiers());
+        assertThat(controller.runtime().craftingContext()).isNotNull();
     }
 
     private static ProcessingComponent component(BlockEntity host, String tag) {

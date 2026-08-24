@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
+import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -29,6 +30,7 @@ public record ControllerRuntimeSnapshot(
         Set<BlockPos> linkedPortPositions,
         ModuleConnectionStatus moduleConnectionStatus,
         int installedModuleCount,
+        ComponentRuntime.CapabilityAggregate capabilityAggregate,
         FactorySnapshot factory) {
 
     public ControllerRuntimeSnapshot {
@@ -45,6 +47,24 @@ public record ControllerRuntimeSnapshot(
         moduleConnectionStatus = moduleConnectionStatus == null
                 ? ModuleConnectionStatus.disconnected() : moduleConnectionStatus;
         if (installedModuleCount < 0) throw new IllegalArgumentException("installedModuleCount must not be negative");
+        capabilityAggregate = capabilityAggregate == null
+                ? new ComponentRuntime.CapabilityAggregate(0L, 0L, null, null) : capabilityAggregate;
         factory = factory == null ? FactorySnapshot.empty() : factory;
+    }
+
+    public long totalStoredEnergy() {
+        return capabilityAggregate.storedEnergy();
+    }
+
+    public long totalCapacityEnergy() {
+        return capabilityAggregate.energyCapacity();
+    }
+
+    public FluidStack primaryFluid() {
+        return capabilityAggregate.primaryFluid();
+    }
+
+    public FluidStack primaryOutputFluid() {
+        return capabilityAggregate.primaryOutputFluid();
     }
 }

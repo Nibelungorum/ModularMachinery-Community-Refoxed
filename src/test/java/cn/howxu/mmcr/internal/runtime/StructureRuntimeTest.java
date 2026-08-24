@@ -8,6 +8,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,9 +54,11 @@ class StructureRuntimeTest {
         unsafeField.setAccessible(true);
         sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
         MachineControllerBlockEntity controller = (MachineControllerBlockEntity) unsafe.allocateInstance(MachineControllerBlockEntity.class);
+        setField(controller, "components", new ArrayList<>());
+        setField(controller, "foundModifiers", new LinkedHashMap<>());
         StructureRuntime runtime = new StructureRuntime(controller);
         StructureSnapshot accepted = new StructureSnapshot(null, null, null, Direction.NORTH,
-                Direction.EAST, 3, true, 9L, "error", "mismatch", false, false,
+                Direction.EAST, 3, true, 9L, "error", "mismatch", null, false, false,
                 Set.of(new ChunkPos(1, 2)));
 
         runtime.accept(accepted);
@@ -68,7 +72,7 @@ class StructureRuntimeTest {
     void snapshot_keeps_both_error_and_block_mismatch_diagnostics() {
         StructureRuntime runtime = new StructureRuntime();
         StructureSnapshot accepted = new StructureSnapshot(null, null, null, Direction.SOUTH,
-                Direction.SOUTH, 1, false, 2L, "level-error", "block-mismatch", true, true, Set.of());
+                Direction.SOUTH, 1, false, 2L, "level-error", "block-mismatch", null, true, true, Set.of());
 
         runtime.accept(accepted);
 
@@ -91,10 +95,63 @@ class StructureRuntimeTest {
     }
 
     @Test
+    void attached_runtime_snapshot_does_not_read_back_controller_structure_fields() throws Exception {
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+        MachineControllerBlockEntity controller = (MachineControllerBlockEntity) unsafe.allocateInstance(MachineControllerBlockEntity.class);
+        setField(controller, "components", new ArrayList<>());
+        setField(controller, "foundModifiers", new LinkedHashMap<>());
+        StructureRuntime runtime = controller.runtime().structure();
+        StructureSnapshot accepted = new StructureSnapshot(null, null, null, Direction.NORTH,
+                Direction.EAST, 3, true, 9L, "error", "mismatch", null, false, false,
+                Set.of(new ChunkPos(1, 2)));
+
+        runtime.accept(accepted);
+        setField(controller, "structureVersion", 1L);
+        setField(controller, "matchedStructureStage", 0);
+
+        assertThat(controller.structureSnapshot()).isEqualTo(accepted);
+        assertThat(controller.getStructureVersion()).isEqualTo(9L);
+        assertThat(controller.getMatchedStructureStage()).isEqualTo(3);
+    }
+
+    @Test
+    void detached_invalidation_updates_execution_and_published_state_together() {
+        StructureRuntime runtime = new StructureRuntime();
+
+        runtime.publish(new StructureRuntime.ExecutionState(
+                new StructureSnapshot(null, null, null, Direction.SOUTH, Direction.SOUTH,
+                        1, false, 2L, null, "mismatch", null, false, true, Set.of()),
+                null, null, null, null, null, false, 0L, 0L, 0, -1L,
+                null, false, null, null));
+
+        runtime.requestCheck();
+
+        assertThat(runtime.snapshot().dirty()).isTrue();
+        Field executionStateField;
+        try {
+            executionStateField = StructureRuntime.class.getDeclaredField("executionState");
+            executionStateField.setAccessible(true);
+            StructureRuntime.ExecutionState executionState =
+                    (StructureRuntime.ExecutionState) executionStateField.get(runtime);
+            assertThat(executionState.snapshot().dirty()).isTrue();
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError(exception);
+        }
+    }
+
+    @Test
     void tick_requires_the_runtime_boundary_arguments() {
         StructureRuntime runtime = new StructureRuntime();
 
         assertThatThrownBy(() -> runtime.tick(null, null))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    private static void setField(Object target, String name, Object value) throws Exception {
+        Field field = MachineControllerBlockEntity.class.getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(target, value);
     }
 }

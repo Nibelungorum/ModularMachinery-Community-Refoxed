@@ -495,6 +495,9 @@ class MachineControllerBlockEntityRecipeDelayTest {
         @SuppressWarnings("unchecked")
         List<ProcessingComponent> components = (List<ProcessingComponent>) fieldValue(MachineControllerBlockEntity.class, controller, "components");
         components.add(new ProcessingComponent(null, parallel, parallel.getBlockPos(), BlockPos.ZERO, List.of(), null));
+        controller.runtime().publishComponentState(controller.legacyComponentsForRuntime(),
+                controller.legacyModifiersForRuntime(), controller.legacyLevelsForRuntime(),
+                controller.legacyLinkedPortPositionsForRuntime());
     }
 
     private static ParallelControllerBlockEntity parallelController(ParallelTier tier, BlockPos pos) throws Exception {

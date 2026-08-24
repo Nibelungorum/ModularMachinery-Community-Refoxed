@@ -255,10 +255,10 @@ class MachineControllerMenuTest {
     void formed_controller_menu_becomes_invalid_when_structure_unforms() throws Exception {
         MachineControllerBlockEntity controller = controllerWithMachine(MMCR.id("test_cube"));
         controller.setLevel(LevelStub.createWithBlockEntities(List.of(controller)));
-        controller.getLevel().setBlock(controller.getBlockPos(), controller.getBlockState().setValue(MachineControllerBlock.FORMED, true), 3);
+        controller.setFormed(true);
 
         assertThat(MenuSupport.controllerStillPresentAndFormed(controller)).isTrue();
-        controller.getLevel().setBlock(controller.getBlockPos(), controller.getBlockState().setValue(MachineControllerBlock.FORMED, false), 3);
+        controller.setFormed(false);
 
         assertThat(MenuSupport.controllerStillPresentAndFormed(controller)).isFalse();
     }
@@ -278,9 +278,9 @@ class MachineControllerMenuTest {
         controller.setLevel(LevelStub.createWithBlockEntities(List.of(controller)));
         MachineControllerMenu menu = new MachineControllerMenu(1, emptyInventory(), controller);
 
-        controller.getLevel().setBlock(controller.getBlockPos(), controller.getBlockState().setValue(MachineControllerBlock.FORMED, true), 3);
+        controller.setFormed(true);
         assertThat(menu.wasFormedDuringSession()).isTrue();
-        controller.getLevel().setBlock(controller.getBlockPos(), controller.getBlockState().setValue(MachineControllerBlock.FORMED, false), 3);
+        controller.setFormed(false);
 
         assertThat(MenuSupport.controllerStillPresentAndFormed(controller)).isFalse();
     }

@@ -301,10 +301,10 @@ class MachineControllerBlockEntityTest {
     void noHatchesReturnsZeroEnergyAndEmptyFluid() throws Exception {
         MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
         initializeComponents(controller);
-        assertThat(controller.totalStoredEnergy()).isZero();
-        assertThat(controller.totalCapacityEnergy()).isZero();
-        assertThat(controller.primaryFluid()).isEqualTo(FluidStack.EMPTY);
-        assertThat(controller.primaryOutputFluid()).isEqualTo(FluidStack.EMPTY);
+        assertThat(controller.runtimeSnapshot().totalStoredEnergy()).isZero();
+        assertThat(controller.runtimeSnapshot().totalCapacityEnergy()).isZero();
+        assertThat(controller.runtimeSnapshot().primaryFluid()).isEqualTo(FluidStack.EMPTY);
+        assertThat(controller.runtimeSnapshot().primaryOutputFluid()).isEqualTo(FluidStack.EMPTY);
     }
 
     @Test
@@ -1535,8 +1535,8 @@ class MachineControllerBlockEntityTest {
         second.getMutableEnergyStorage().forceInsert(300, false);
         MachineControllerBlockEntity controller = controllerWithEnergyHatches(first, second);
 
-        assertThat(controller.totalStoredEnergy()).isEqualTo(500);
-        assertThat(controller.totalCapacityEnergy()).isEqualTo(first.getMutableEnergyStorage().getCapacityAsLong() * 2L);
+        assertThat(controller.runtimeSnapshot().totalStoredEnergy()).isEqualTo(500);
+        assertThat(controller.runtimeSnapshot().totalCapacityEnergy()).isEqualTo(first.getMutableEnergyStorage().getCapacityAsLong() * 2L);
     }
 
     @Test
@@ -1546,8 +1546,8 @@ class MachineControllerBlockEntityTest {
         input.getMutableFluidStorage().setFluid(new FluidStack(Fluids.WATER, 500));
         MachineControllerBlockEntity controller = controllerWithFluidHatch(input);
 
-        assertThat(controller.primaryFluid().getFluid()).isEqualTo(Fluids.WATER);
-        assertThat(controller.primaryFluid().getAmount()).isEqualTo(500);
+        assertThat(controller.runtimeSnapshot().primaryFluid().getFluid()).isEqualTo(Fluids.WATER);
+        assertThat(controller.runtimeSnapshot().primaryFluid().getAmount()).isEqualTo(500);
     }
 
     @Test
@@ -1557,8 +1557,8 @@ class MachineControllerBlockEntityTest {
         output.getMutableFluidStorage().setFluid(new FluidStack(Fluids.LAVA, 250));
         MachineControllerBlockEntity controller = controllerWithFluidHatch(output);
 
-        assertThat(controller.primaryOutputFluid().getFluid()).isEqualTo(Fluids.LAVA);
-        assertThat(controller.primaryOutputFluid().getAmount()).isEqualTo(250);
+        assertThat(controller.runtimeSnapshot().primaryOutputFluid().getFluid()).isEqualTo(Fluids.LAVA);
+        assertThat(controller.runtimeSnapshot().primaryOutputFluid().getAmount()).isEqualTo(250);
     }
 
     @Test
@@ -3351,6 +3351,9 @@ class MachineControllerBlockEntityTest {
         componentsField.setAccessible(true);
         List<ProcessingComponent> list = (List<ProcessingComponent>) componentsField.get(controller);
         list.add(new ProcessingComponent(null, parallel, parallel.getBlockPos(), BlockPos.ZERO, List.of(), null));
+        controller.runtime().publishComponentState(controller.legacyComponentsForRuntime(),
+                controller.legacyModifiersForRuntime(), controller.legacyLevelsForRuntime(),
+                controller.legacyLinkedPortPositionsForRuntime());
     }
 
     private static void initializePortAppearance(IOPortBlockEntity port) throws ReflectiveOperationException {

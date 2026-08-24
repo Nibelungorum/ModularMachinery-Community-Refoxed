@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.runtime;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.ChunkPos;
 import org.jetbrains.annotations.Nullable;
@@ -25,6 +26,7 @@ public record StructureSnapshot(
         long version,
         @Nullable Object lastStructureError,
         @Nullable String structureMismatchDiagnostic,
+        @Nullable PortRequirementSpec.Failure lastFormationFailure,
         boolean dirty,
         boolean structureAreaLoaded,
         Set<ChunkPos> criticalChunks) {
@@ -36,6 +38,6 @@ public record StructureSnapshot(
 
     public static StructureSnapshot empty() {
         return new StructureSnapshot(null, null, null, null, Direction.SOUTH, 0,
-                false, 0L, null, null, true, true, Set.of());
+                false, 0L, null, null, null, true, true, Set.of());
     }
 }

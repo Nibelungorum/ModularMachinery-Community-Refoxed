@@ -43,6 +43,13 @@ public final class StructureRuntime {
 
         public ExecutionState {
             snapshot = snapshot == null ? StructureSnapshot.empty() : snapshot;
+            if (snapshot.lastFormationFailure() == null && formationFailure != null) {
+                snapshot = new StructureSnapshot(snapshot.machine(), snapshot.pattern(), snapshot.compiledPattern(),
+                        snapshot.facing(), snapshot.rollFacing(), snapshot.matchedStage(), snapshot.formed(), snapshot.version(),
+                        snapshot.lastStructureError(), snapshot.structureMismatchDiagnostic(), formationFailure,
+                        snapshot.dirty(), snapshot.structureAreaLoaded(), snapshot.criticalChunks());
+            }
+            formationFailure = snapshot.lastFormationFailure();
         }
 
         private static ExecutionState empty(StructureSnapshot snapshot) {
@@ -69,7 +76,7 @@ public final class StructureRuntime {
 
     public void requestCheck() {
         if (controller == null) {
-            state = withDirty(state);
+            publish(withDirty(executionState));
             return;
         }
         controller.requestImmediateStructureCheckFromRuntime();
@@ -78,7 +85,7 @@ public final class StructureRuntime {
 
     public void onBlockChanged(BlockPos position) {
         if (controller == null) {
-            state = withDirty(state);
+            publish(withDirty(executionState));
             return;
         }
         controller.onStructureBlockChangedFromRuntime(position);
@@ -135,10 +142,16 @@ public final class StructureRuntime {
         return authoritative;
     }
 
-    private static StructureSnapshot withDirty(StructureSnapshot snapshot) {
-        return new StructureSnapshot(snapshot.machine(), snapshot.pattern(), snapshot.compiledPattern(), snapshot.facing(),
-                snapshot.rollFacing(), snapshot.matchedStage(), snapshot.formed(), snapshot.version(),
-                snapshot.lastStructureError(), snapshot.structureMismatchDiagnostic(), true,
+    private static ExecutionState withDirty(ExecutionState executionState) {
+        StructureSnapshot snapshot = executionState.snapshot();
+        StructureSnapshot dirty = new StructureSnapshot(snapshot.machine(), snapshot.pattern(), snapshot.compiledPattern(),
+                snapshot.facing(), snapshot.rollFacing(), snapshot.matchedStage(), snapshot.formed(), snapshot.version(),
+                snapshot.lastStructureError(), snapshot.structureMismatchDiagnostic(), snapshot.lastFormationFailure(), true,
                 snapshot.structureAreaLoaded(), snapshot.criticalChunks());
+        return new ExecutionState(dirty, executionState.scan(), executionState.scanMachine(), executionState.scanCandidate(),
+                executionState.previousMismatch(), executionState.previousMismatchPattern(), executionState.pendingInvalidation(),
+                executionState.scanSteppedTick(), executionState.scanStartedTick(), executionState.checkCounter(),
+                executionState.nextCheckTick(), executionState.formationFailure(), executionState.diagnosticRequested(),
+                executionState.diagnosticPlayerId(), executionState.diagnosticDimension());
     }
 }

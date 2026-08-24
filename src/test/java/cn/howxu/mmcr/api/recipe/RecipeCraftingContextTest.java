@@ -1776,6 +1776,9 @@ class RecipeCraftingContextTest {
         List<ProcessingComponent> list = (List<ProcessingComponent>) components.get(controller);
         list.clear();
         list.addAll(replacements);
+        controller.runtime().publishComponentState(controller.legacyComponentsForRuntime(),
+                controller.legacyModifiersForRuntime(), controller.legacyLevelsForRuntime(),
+                controller.legacyLinkedPortPositionsForRuntime());
     }
 
     private static MachineComponent componentFor(BlockEntity port) {
