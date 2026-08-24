@@ -19,6 +19,7 @@ import net.neoforged.neoforge.items.ItemStackHandler;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 
 import java.util.function.IntConsumer;
+import org.jetbrains.annotations.Nullable;
 
 public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
 
@@ -226,20 +227,47 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
 
         @Override
         public void deserialize(ValueInput input) {
+            ItemStack[] candidates = new ItemStack[getSlots()];
+            boolean[] present = new boolean[getSlots()];
+            boolean valid = true;
+            var entries = input.listOrEmpty("Items", ItemStackWithSlot.CODEC);
+            for (ItemStackWithSlot entry : entries) {
+                if (entry == null) {
+                    valid = false;
+                    break;
+                }
+                int slot = entry.slot();
+                if (slot < 0 || slot >= getSlots() || present[slot] || !canDeserialize(slot, entry.stack())) {
+                    valid = false;
+                    break;
+                }
+                present[slot] = true;
+                candidates[slot] = entry.stack().copy();
+            }
+            if (!valid) return;
+
             suppressChanges = true;
             try {
                 for (int slot = 0; slot < getSlots(); slot++) replace(slot, ItemStack.EMPTY);
-                input.listOrEmpty("Items", ItemStackWithSlot.CODEC).forEach(slot -> {
-                    if (slot.isValidInContainer(getSlots())) replace(slot.slot(), slot.stack());
-                });
+                for (int slot = 0; slot < getSlots(); slot++) {
+                    if (present[slot]) replace(slot, candidates[slot]);
+                }
             } finally {
                 suppressChanges = false;
             }
         }
 
+        private boolean canDeserialize(int slot, ItemStack stack) {
+            if (stack == null || stack.isEmpty()) return false;
+            ItemResource resource = itemResource(stack);
+            return resource != null && !resource.isEmpty()
+                    && stack.getCount() <= storages[slot].capacity(0, null);
+        }
+
         private boolean replace(int slot, ItemStack stack) {
             if (stack == null) return false;
-            ItemResource incoming = stack.isEmpty() ? ItemResource.EMPTY : ItemResource.of(stack);
+            ItemResource incoming = stack.isEmpty() ? ItemResource.EMPTY : itemResource(stack);
+            if (incoming == null) return false;
             long requested = stack.isEmpty() ? 0L : stack.getCount();
             if (!incoming.isEmpty() && requested > storages[slot].capacity(0, null)) return false;
             if (!stack.isEmpty() && incoming.isEmpty()) return false;
@@ -255,6 +283,14 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
             if (inserted > 0L) storages[slot].extract(incoming, inserted, false);
             if (currentAmount > 0L) storages[slot].insert(current, currentAmount, false);
             return false;
+        }
+
+        private @Nullable ItemResource itemResource(ItemStack stack) {
+            try {
+                return ItemResource.of(stack);
+            } catch (RuntimeException ignored) {
+                return null;
+            }
         }
 
         private void storageChanged(int slot) {
