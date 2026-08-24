@@ -174,8 +174,10 @@ class PublicRecipeBuilderTest {
             assertThat(smart.minValue()).isEqualTo(1F);
             assertThat(smart.maxValue()).isEqualTo(2F);
         });
-        assertThat(recipe.requirements()).anySatisfy(requirement -> assertThat(requirement.type()).isEqualTo("fluid"));
-        assertThat(recipe.requirements()).anySatisfy(requirement -> assertThat(requirement.type()).isEqualTo("energy"));
+        assertThat(recipe.requirements()).anySatisfy(requirement -> assertThat(requirement.type())
+                .isEqualTo(cn.howxu.mmcr.api.recipe.requirement.FluidRequirement.TYPE));
+        assertThat(recipe.requirements()).anySatisfy(requirement -> assertThat(requirement.type())
+                .isEqualTo(cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement.TYPE));
         assertThat(recipe.modifiers()).singleElement().satisfies(modifier -> {
             assertThat(modifier.getTarget()).isEqualTo("item");
             assertThat(modifier.getIOTarget()).isEqualTo(cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.OUTPUT);
