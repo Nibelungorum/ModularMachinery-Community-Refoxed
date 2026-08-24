@@ -48,6 +48,8 @@ public final class SharedIoCoordinator {
             StructureClaimRegistry.ResourceDomain domain = registry.domainFor(request.laneKey().controllerPos());
             if (domain != null && request.domainId() == domain.id() && request.domainGeneration() == domain.generation()) {
                 requestsByDomain.computeIfAbsent(domain, ignored -> new ArrayList<>()).add(request);
+            } else {
+                request.discard();
             }
         }
         pending.clear();
@@ -168,8 +170,14 @@ public final class SharedIoCoordinator {
         BooleanSupplier validator();
 
         default boolean isStillValid() {
-            return controllerStructureVersion() == controllerStructureVersionSupplier().getAsLong()
+            boolean valid = controllerStructureVersion() == controllerStructureVersionSupplier().getAsLong()
                     && validator().getAsBoolean();
+            if (!valid) discard();
+            return valid;
+        }
+
+        default void discard() {
+            validator().getAsBoolean();
         }
 
         boolean tryCommit();

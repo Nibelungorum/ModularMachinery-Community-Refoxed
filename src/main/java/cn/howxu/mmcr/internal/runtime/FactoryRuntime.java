@@ -32,8 +32,8 @@ public final class FactoryRuntime {
         for (CraftingRuntime runtime : List.copyOf(lanes)) {
             Runnable ticker = laneTickers.get(runtime);
             if (ticker != null) ticker.run();
-            if (runtime.failure() != null) failure = runtime.failure();
         }
+        recomputeFailure();
     }
 
     public List<CraftingRuntime> activeRuntimes() {
@@ -41,10 +41,14 @@ public final class FactoryRuntime {
     }
 
     public FactorySnapshot snapshot() {
+        recomputeFailure();
         List<CraftingRuntime> active = activeRuntimes();
         int parallelism = active.stream().mapToInt(CraftingRuntime::parallelism).sum();
-        return new FactorySnapshot(!active.isEmpty(), active.stream().map(CraftingRuntime::snapshot).toList(),
-                parallelism, laneLimit, failure);
+        List<CraftingStateSnapshot> laneSnapshots = lanes.stream()
+                .map(CraftingRuntime::snapshot)
+                .filter(state -> state.recipeId() != null || state.failure() != null)
+                .toList();
+        return new FactorySnapshot(!active.isEmpty(), laneSnapshots, parallelism, laneLimit, failure);
     }
 
     public void add(CraftingRuntime runtime) {
@@ -55,21 +59,38 @@ public final class FactoryRuntime {
         if (runtime == null || lanes.contains(runtime)) return;
         lanes.add(runtime);
         laneTickers.put(runtime, ticker == null ? () -> { } : ticker);
+        recomputeFailure();
     }
 
     public void remove(CraftingRuntime runtime) {
         lanes.remove(runtime);
         laneTickers.remove(runtime);
+        recomputeFailure();
     }
 
-    public void setLaneLimit(int laneLimit) {
+    public int laneCount() {
+        return lanes.size();
+    }
+
+    public boolean contains(CraftingRuntime runtime) {
+        return lanes.contains(runtime);
+    }
+
+    public List<CraftingRuntime> setLaneLimit(int laneLimit, @Nullable CraftingRuntime protectedLane) {
         this.laneLimit = Math.max(1, laneLimit);
+        List<CraftingRuntime> removedRuntimes = new ArrayList<>();
         while (lanes.size() > this.laneLimit) {
-            CraftingRuntime removed = lanes.stream().min(Comparator.comparingInt(CraftingRuntime::parallelism)).orElse(null);
+            CraftingRuntime removed = lanes.stream()
+                    .filter(runtime -> runtime != protectedLane)
+                    .min(Comparator.comparingInt(CraftingRuntime::parallelism))
+                    .orElse(null);
             if (removed == null) break;
             removed.invalidate();
             remove(removed);
+            removedRuntimes.add(removed);
         }
+        recomputeFailure();
+        return List.copyOf(removedRuntimes);
     }
 
     public int laneLimit() {
@@ -81,5 +102,13 @@ public final class FactoryRuntime {
         lanes.clear();
         laneTickers.clear();
         failure = null;
+    }
+
+    private void recomputeFailure() {
+        failure = lanes.stream()
+                .map(CraftingRuntime::failure)
+                .filter(status -> status != null)
+                .findFirst()
+                .orElse(null);
     }
 }

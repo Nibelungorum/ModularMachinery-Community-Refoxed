@@ -211,7 +211,9 @@ public final class CraftingRuntime {
         status = CraftingStatus.IDLE;
     }
 
-    public void restore(ActiveMachineRecipe restored, @Nullable StructureClaimRegistry.ResourceDomain domain) {
+    public void restore(ActiveMachineRecipe restored, @Nullable StructureClaimRegistry.ResourceDomain domain,
+                        long restoredStructureVersion, long restoredCapabilityVersion,
+                        long restoredModifierVersion) {
         if (restored == null || restored.getRecipe() == null) {
             invalidate();
             return;
@@ -221,8 +223,10 @@ public final class CraftingRuntime {
         tickPlan = null;
         finishPlan = null;
         resourceDomain = domain;
+        structureVersion = restoredStructureVersion;
+        capabilityVersion = restoredCapabilityVersion;
+        modifierVersion = restoredModifierVersion;
         ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
-        captureVersions(runtime);
         List<MachineRequirement> requirements = restored.getRecipe().runtimeRequirements(contextModifiers(runtime));
         Set<Integer> consumed = new HashSet<>();
         Set<Integer> retained = new HashSet<>();
@@ -247,7 +251,12 @@ public final class CraftingRuntime {
     public void save(ValueOutput output) {
         boolean present = activeRecipe != null && activeRecipe.getRecipe() != null;
         output.putBoolean("active", present);
-        if (present) activeRecipe.serialize(output.child("recipe"));
+        if (present) {
+            output.putLong("structure_version", structureVersion);
+            output.putLong("capability_version", capabilityVersion);
+            output.putLong("modifier_version", modifierVersion);
+            activeRecipe.serialize(output.child("recipe"));
+        }
     }
 
     public void load(ValueInput input, @Nullable StructureClaimRegistry.ResourceDomain domain) {
@@ -255,7 +264,10 @@ public final class CraftingRuntime {
             invalidate();
             return;
         }
-        restore(ActiveMachineRecipe.from(input.childOrEmpty("recipe")), domain);
+        restore(ActiveMachineRecipe.from(input.childOrEmpty("recipe")), domain,
+                input.getLongOr("structure_version", Long.MIN_VALUE),
+                input.getLongOr("capability_version", Long.MIN_VALUE),
+                input.getLongOr("modifier_version", Long.MIN_VALUE));
     }
 
     private CraftingStatus waiting(@Nullable ExecutionStatus nextFailure) {

@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.BlockPos;
@@ -13,7 +14,6 @@ import net.minecraft.world.level.storage.ValueOutput;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -30,7 +30,6 @@ public final class FactoryRecipeScheduler {
     private int threadLimit;
     private int perThreadParallelLimit;
     private boolean paused;
-    private final List<Lane> lanes = new ArrayList<>();
     private final List<FactoryRecipeThread> threads = new ArrayList<>();
     private final Map<FactoryRecipeThread, Identifier> startReservations = new IdentityHashMap<>();
     private final FactoryRuntime factoryRuntime;
@@ -42,41 +41,18 @@ public final class FactoryRecipeScheduler {
         this.perThreadParallelLimit = this.threadLimit;
         if (factoryRuntime == null) throw new IllegalArgumentException("factoryRuntime must not be null");
         this.factoryRuntime = factoryRuntime;
-        this.factoryRuntime.setLaneLimit(this.threadLimit);
-    }
-
-    public boolean startLane(Lane lane) {
-        if (lane == null || !hasCapacity()) return false;
-        lane.start();
-        lanes.add(lane);
-        return true;
+        this.factoryRuntime.setLaneLimit(this.threadLimit, null);
     }
 
     public boolean hasCapacity() {
-        return lanes.size() < threadLimit;
+        return factoryRuntime.laneCount() < threadLimit;
     }
 
     public int laneCapacity() {
-        return Math.max(0, threadLimit - lanes.size());
-    }
-
-    public void tick() {
-        tick(0L);
-    }
-
-    public void tick(long gameTime) {
-        Iterator<Lane> iterator = lanes.iterator();
-        while (iterator.hasNext()) {
-            Lane lane = iterator.next();
-            if (lane.tick(gameTime)) iterator.remove();
-        }
+        return Math.max(0, threadLimit - factoryRuntime.laneCount());
     }
 
     public void stopAll() {
-        for (Lane lane : lanes) {
-            lane.stop();
-        }
-        lanes.clear();
         for (FactoryRecipeThread thread : threads) thread.invalidate();
         factoryRuntime.clear();
         threads.clear();
@@ -99,7 +75,7 @@ public final class FactoryRecipeScheduler {
     }
 
     public int activeLaneCount() {
-        return lanes.size() + activeThreadCount();
+        return factoryRuntime.activeRuntimes().size();
     }
 
     public int threadLimit() {
@@ -108,17 +84,7 @@ public final class FactoryRecipeScheduler {
 
     public void setThreadLimit(int threadLimit) {
         this.threadLimit = Math.max(1, threadLimit);
-        factoryRuntime.setLaneLimit(this.threadLimit);
-        while (threads.size() > this.threadLimit) {
-            FactoryRecipeThread removed = threads.removeLast();
-            removed.invalidate();
-            factoryRuntime.remove(removed.runtime());
-            startReservations.remove(removed);
-        }
-        while (lanes.size() > this.threadLimit) {
-            Lane removed = lanes.removeLast();
-            removed.stop();
-        }
+        removeThreads(trimRuntimeLanes());
     }
 
     public int availableParallelism() {
@@ -151,9 +117,11 @@ public final class FactoryRecipeScheduler {
     public void ensureBaseThread(MachineControllerBlockEntity controller) {
         this.controller = controller;
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
-        if (!threads.isEmpty() && threads.getFirst().isBaseThread()) return;
+        if (!threads.isEmpty() && threads.getFirst().isBaseThread()
+                && factoryRuntime.contains(threads.getFirst().runtime())) return;
         threads.removeIf(thread -> {
             if (!thread.isBaseThread()) return false;
+            startReservations.remove(thread);
             return true;
         });
         FactoryRecipeThread base = FactoryRecipeThread.base(controller);
@@ -187,6 +155,8 @@ public final class FactoryRecipeScheduler {
     }
 
     private Map<Identifier, Integer> activeRecipeCounts() {
+        startReservations.entrySet().removeIf(entry -> !threads.contains(entry.getKey())
+                || (!entry.getKey().isStartPending() && entry.getKey().getActiveRecipe() == null));
         Map<Identifier, Integer> counts = new LinkedHashMap<>();
         for (Identifier recipeId : startReservations.values()) counts.merge(recipeId, 1, Integer::sum);
         for (FactoryRecipeThread thread : threads) {
@@ -265,6 +235,7 @@ public final class FactoryRecipeScheduler {
         Runnable finishCallback = onFinished == null ? () -> { } : onFinished;
         ensureBaseThread(controller);
         this.perThreadParallelLimit = Math.max(1, parallelLimit);
+        removeThreads(trimRuntimeLanes());
         List<MachineRecipe> candidateSnapshot = List.copyOf(candidates == null ? List.of() : candidates);
         long modifierSnapshotVersion = controller == null ? Long.MIN_VALUE : controller.runtimeSnapshot().modifierVersion();
         for (FactoryRecipeThread thread : List.copyOf(threads)) {
@@ -279,10 +250,13 @@ public final class FactoryRecipeScheduler {
         for (FactoryRecipeThread thread : List.copyOf(threads)) {
             thread.tickIdle();
             if (thread.isTimedOut()) {
+                thread.invalidate();
                 threads.remove(thread);
                 factoryRuntime.remove(thread.runtime());
+                startReservations.remove(thread);
             }
         }
+        removeThreads(trimRuntimeLanes());
         if (controller == null || candidateSnapshot.isEmpty()) {
             clearFinishedThreadContinuations();
             return;
@@ -297,7 +271,7 @@ public final class FactoryRecipeScheduler {
             boolean started = thread.searchAndStartRecipe(availableCandidates, availableParallelism, structureVersion);
             reserveStart(thread, started);
         }
-        while (threads.size() < threadLimit && availableParallelism() > 0) {
+        while (factoryRuntime.laneCount() < threadLimit && availableParallelism() > 0) {
             List<MachineRecipe> availableCandidates = availableCandidates(candidateSnapshot);
             if (availableCandidates.isEmpty()) break;
             FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, "factory-" + nextFactoryLaneId++);
@@ -332,6 +306,8 @@ public final class FactoryRecipeScheduler {
     private void reserveStart(FactoryRecipeThread thread, boolean started) {
         if (started && thread.getPendingStartRecipe() != null) {
             startReservations.put(thread, thread.getPendingStartRecipe().id());
+        } else {
+            startReservations.remove(thread);
         }
     }
 
@@ -345,7 +321,10 @@ public final class FactoryRecipeScheduler {
 
     public void addThreadForTesting(FactoryRecipeThread thread) {
         if (thread != null && !threads.contains(thread)) threads.add(thread);
-        if (thread != null) register(thread);
+        if (thread != null) {
+            register(thread);
+            removeThreads(trimRuntimeLanes());
+        }
     }
 
     public void save(ValueOutput output) {
@@ -357,10 +336,11 @@ public final class FactoryRecipeScheduler {
 
     public void load(ValueInput input, MachineControllerBlockEntity controller) {
         this.controller = controller;
+        factoryRuntime.clear();
         threads.clear();
         startReservations.clear();
         threadLimit = Math.max(1, input.getIntOr("thread_limit", threadLimit));
-        factoryRuntime.setLaneLimit(threadLimit);
+        factoryRuntime.setLaneLimit(threadLimit, null);
         paused = input.getBooleanOr("paused", false);
         int count = Math.max(0, input.getIntOr("thread_count", 0));
         for (int i = 0; i < count; i++) {
@@ -376,6 +356,7 @@ public final class FactoryRecipeScheduler {
             } catch (NumberFormatException ignored) {
             }
         }
+        removeThreads(trimRuntimeLanes());
         ensureBaseThread(controller);
         for (FactoryRecipeThread thread : threads) {
             if (thread.isStartPending() && thread.getPendingStartRecipe() != null) {
@@ -386,6 +367,25 @@ public final class FactoryRecipeScheduler {
 
     private void register(FactoryRecipeThread thread) {
         factoryRuntime.add(thread.runtime(), thread::tick);
+    }
+
+    private void removeThreads(List<CraftingRuntime> removedRuntimes) {
+        if (removedRuntimes.isEmpty()) return;
+        threads.removeIf(thread -> {
+            if (!removedRuntimes.contains(thread.runtime())) return false;
+            thread.invalidate();
+            startReservations.remove(thread);
+            return true;
+        });
+    }
+
+    private List<CraftingRuntime> trimRuntimeLanes() {
+        CraftingRuntime baseRuntime = threads.stream()
+                .filter(FactoryRecipeThread::isBaseThread)
+                .map(FactoryRecipeThread::runtime)
+                .findFirst()
+                .orElse(null);
+        return factoryRuntime.setLaneLimit(threadLimit, baseRuntime);
     }
 
     public static RecipeSnapshot captureSnapshot(Identifier recipeId,
@@ -408,18 +408,6 @@ public final class FactoryRecipeScheduler {
                     component.tags()));
         }
         return new RecipeSnapshot(recipeId, Math.max(1, parallelism), structureVersion, componentSnapshots);
-    }
-
-    public interface Lane {
-        default void start() { }
-
-        default boolean tick(long gameTime) {
-            return tick();
-        }
-
-        boolean tick();
-
-        void stop();
     }
 
     public record RecipeSnapshot(Identifier recipeId, int parallelism, long structureVersion,

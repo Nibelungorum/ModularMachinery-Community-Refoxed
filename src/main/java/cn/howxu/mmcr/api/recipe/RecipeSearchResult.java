@@ -15,6 +15,8 @@ public record RecipeSearchResult(
         boolean success,
         Identifier machineId,
         long structureVersion,
+        long capabilityVersion,
+        long modifierVersion,
         @Nullable MachineRecipe recipe,
         @Nullable String failureUnloc,
         @Nullable ExecutionStatus failure,
@@ -35,25 +37,25 @@ public record RecipeSearchResult(
     }
 
     public static RecipeSearchResult success(MachineRecipe recipe, Identifier machineId, long structureVersion,
+                                              long capabilityVersion, long modifierVersion,
                                               boolean hasMoreSpecificPendingInputCandidate) {
-        return new RecipeSearchResult(true, machineId, structureVersion, recipe, null, null, null, 1.0F,
+        return new RecipeSearchResult(true, machineId, structureVersion, capabilityVersion, modifierVersion,
+                recipe, null, null, null, 1.0F,
                 hasMoreSpecificPendingInputCandidate);
     }
 
-    public static RecipeSearchResult success(MachineRecipe recipe, Identifier machineId, long structureVersion) {
-        return success(recipe, machineId, structureVersion, false);
-    }
-
     public static RecipeSearchResult failure(Identifier machineId, long structureVersion,
-                                             @Nullable String failureUnloc, @Nullable ExecutionStatus failure,
-                                             float validity) {
-        return new RecipeSearchResult(false, machineId, structureVersion, null, failureUnloc, failure, null,
-                validity, false);
+                                              long capabilityVersion, long modifierVersion,
+                                              @Nullable String failureUnloc, @Nullable ExecutionStatus failure,
+                                              float validity) {
+        return new RecipeSearchResult(false, machineId, structureVersion, capabilityVersion, modifierVersion,
+                null, failureUnloc, failure, null, validity, false);
     }
 
     public static RecipeSearchResult levelFailure(Identifier machineId, long structureVersion,
-                                                  LevelInsufficientFailure levelFailure) {
-        return new RecipeSearchResult(false, machineId, structureVersion, null,
+                                                   long capabilityVersion, long modifierVersion,
+                                                   LevelInsufficientFailure levelFailure) {
+        return new RecipeSearchResult(false, machineId, structureVersion, capabilityVersion, modifierVersion, null,
                 "gui.mmcr.controller.failure.level_insufficient", null, levelFailure, 1.0F, false);
     }
 }

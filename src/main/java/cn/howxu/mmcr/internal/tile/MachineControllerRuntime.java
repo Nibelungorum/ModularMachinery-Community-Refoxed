@@ -39,6 +39,7 @@ public final class MachineControllerRuntime {
     private final CraftingRuntime craftingRuntime;
     private final FactoryRuntime factoryRuntime;
     private CraftingStateSnapshot craftingState = CraftingStateSnapshot.empty(0L, 0L, 0L);
+    private ControllerRuntimeSnapshot publishedSnapshot;
 
     MachineControllerRuntime(MachineControllerBlockEntity controller) {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
@@ -46,6 +47,7 @@ public final class MachineControllerRuntime {
         this.structure = new StructureRuntime(controller);
         this.craftingRuntime = new CraftingRuntime(controller);
         this.factoryRuntime = new FactoryRuntime(controller);
+        publishSnapshot();
     }
 
     public void serverTick(ServerLevel level, BlockPos controllerPos) {
@@ -63,13 +65,17 @@ public final class MachineControllerRuntime {
     }
 
     public ControllerRuntimeSnapshot snapshot() {
-        CraftingStateSnapshot publishedCrafting = controller.getLevel() != null && controller.getLevel().isClientSide()
+        return publishedSnapshot;
+    }
+
+    void publishSnapshot() {
+        CraftingStateSnapshot nextCrafting = controller.getLevel() != null && controller.getLevel().isClientSide()
                 ? craftingState : craftingRuntime.snapshot();
-        return new ControllerRuntimeSnapshot(structure.snapshot(), components.components(), components.capabilities(),
-                components.capabilityVersion(), components.modifierVersion(), components.stateVersion(),
-                components.foundModifiers(), components.foundLevels(), components.linkedPortPositions(),
-                components.moduleConnectionStatus(), components.installedModuleCount(), components.capabilityAggregate(),
-                publishedCrafting, factoryRuntime.snapshot());
+        publishedSnapshot = new ControllerRuntimeSnapshot(structure.snapshot(), components.components(),
+                components.capabilities(), components.capabilityVersion(), components.modifierVersion(),
+                components.stateVersion(), components.foundModifiers(), components.foundLevels(),
+                components.linkedPortPositions(), components.moduleConnectionStatus(), components.installedModuleCount(),
+                components.capabilityAggregate(), nextCrafting, factoryRuntime.snapshot());
     }
 
     public CraftingRuntime craftingRuntime() {
@@ -86,6 +92,7 @@ public final class MachineControllerRuntime {
         structure.setFormed(formed);
         structure.setMachine(configuredMachine);
         structure.setMatchedStructureStage(matchedStage);
+        publishSnapshot();
     }
 
     void requestStructureCheck() {
@@ -132,20 +139,26 @@ public final class MachineControllerRuntime {
     boolean publishFormationState(Machine machine, BlockArray pattern,
                                   @Nullable CompiledMachinePattern compiledPattern,
                                   Direction facing, Direction rollFacing, int matchedStage) {
-        return structure.publishFormationState(machine, pattern, compiledPattern, facing, rollFacing, matchedStage);
+        boolean changed = structure.publishFormationState(machine, pattern, compiledPattern, facing, rollFacing, matchedStage);
+        publishSnapshot();
+        return changed;
     }
 
     boolean publishClientStructureState(@Nullable Machine machine, boolean formed,
                                         boolean structureAreaLoaded) {
-        return structure.publishClientState(machine, formed, structureAreaLoaded);
+        boolean changed = structure.publishClientState(machine, formed, structureAreaLoaded);
+        publishSnapshot();
+        return changed;
     }
 
     void resetStructure(@Nullable Machine configuredMachine, boolean forceVersion) {
         structure.reset(configuredMachine, forceVersion);
+        publishSnapshot();
     }
 
     void publishCriticalStructureChunks(Set<ChunkPos> criticalChunks) {
         structure.setCriticalChunks(criticalChunks);
+        publishSnapshot();
     }
 
     int maxParallelism(@Nullable Machine machine) {
@@ -166,10 +179,12 @@ public final class MachineControllerRuntime {
         components.replaceModifiers(modifiers);
         components.replaceLevels(levels);
         components.replaceLinkedPortPositions(linkedPositions);
+        publishSnapshot();
     }
 
     void publishModuleConnectionState(ModuleConnectionStatus status, int installedModuleCount) {
         components.replaceModuleConnectionState(status, installedModuleCount);
+        publishSnapshot();
     }
 
     void refreshModuleConnectionState() {
@@ -185,5 +200,10 @@ public final class MachineControllerRuntime {
                               @Nullable ExecutionStatus failure) {
         craftingState = new CraftingStateSnapshot(recipeId, status, failure,
                 structure.version(), components.capabilityVersion(), components.modifierVersion());
+        publishedSnapshot = new ControllerRuntimeSnapshot(structure.snapshot(), components.components(),
+                components.capabilities(), components.capabilityVersion(), components.modifierVersion(),
+                components.stateVersion(), components.foundModifiers(), components.foundLevels(),
+                components.linkedPortPositions(), components.moduleConnectionStatus(), components.installedModuleCount(),
+                components.capabilityAggregate(), craftingState, factoryRuntime.snapshot());
     }
 }

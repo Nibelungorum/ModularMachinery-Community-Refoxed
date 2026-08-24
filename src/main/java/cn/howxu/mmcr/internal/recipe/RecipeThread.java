@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
+import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.resources.Identifier;
@@ -30,8 +31,13 @@ public abstract class RecipeThread {
     private @Nullable StructureClaimRegistry.ResourceDomain pendingStartDomain;
     private long nextStartToken;
     private long pendingStartToken;
+    private long pendingStartStructureVersion;
+    private long pendingStartCapabilityVersion;
+    private long pendingStartModifierVersion;
     private boolean tickPending;
     private @Nullable StructureClaimRegistry.ResourceDomain pendingTickDomain;
+    private long nextTickToken;
+    private long pendingTickToken;
 
     protected RecipeThread(MachineControllerBlockEntity controller) {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
@@ -45,15 +51,18 @@ public abstract class RecipeThread {
 
     protected boolean searchAndStartRecipe(List<MachineRecipe> candidates, int availableParallelism,
                                            long structureVersion, @Nullable Identifier lockedRecipeId) {
-        Identifier machineId = controller.runtimeSnapshot().structure().machine() == null
+        ControllerRuntimeSnapshot snapshot = controller.runtimeSnapshot();
+        Identifier machineId = snapshot.structure().machine() == null
                 ? null : controller.runtimeSnapshot().structure().machine().registryName();
         if (machineId == null || availableParallelism <= 0) return false;
-        RecipeSearchResult result = new RecipeSearchTask(controller.runtimeSnapshot(), machineId, structureVersion,
+        RecipeSearchResult result = new RecipeSearchTask(snapshot, machineId, structureVersion,
                 availableParallelism, candidates, lockedRecipeId).compute();
         if (!result.success()) {
+            controller.clearPendingConflictStart();
             onStartSearchFailed(result.failureUnloc());
             return false;
         }
+        if (controller.shouldDelayConflictProneStart(result)) return false;
         return startRecipe(result.recipe(), structureVersion);
     }
 
@@ -85,13 +94,17 @@ public abstract class RecipeThread {
         pendingStartRecipe = next;
         pendingStartDomain = domain;
         pendingStartToken = token;
+        ControllerRuntimeSnapshot snapshot = controller.runtimeSnapshot();
+        pendingStartStructureVersion = structureVersion;
+        pendingStartCapabilityVersion = snapshot.capabilityVersion();
+        pendingStartModifierVersion = snapshot.modifierVersion();
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.StartRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
                 structureVersion,
                 runtimeParallelism(next),
                 requested -> {
-                    if (!isPendingStart(token, next)) return 0;
+                    if (!isPendingStart(token, next) || runtime.active()) return 0;
                     CraftingStatus state = runtime.start(next, requested);
                     if (!state.isCrafting()) {
                         clearPendingStart(token, next);
@@ -101,7 +114,7 @@ public abstract class RecipeThread {
                     return runtime.parallelism();
                 },
                 granted -> {
-                    if (!isPendingStart(token, next)) return;
+                    if (!isPendingStart(token, next) || !runtime.active()) return;
                     clearPendingStart(token, next);
                     onStarted();
                 },
@@ -112,36 +125,46 @@ public abstract class RecipeThread {
     }
 
     private boolean isPendingStart(long token, MachineRecipe recipe) {
-        return startPending && pendingStartToken == token && pendingStartRecipe == recipe
-                && pendingStartDomain != null && pendingStartDomain.equals(controller.resourceDomain());
+        if (!startPending || pendingStartToken != token || pendingStartRecipe != recipe) return false;
+        if (pendingStartDomain == null || !pendingStartDomain.equals(controller.resourceDomain())) {
+            clearPendingStart(token, recipe);
+            return false;
+        }
+        ControllerRuntimeSnapshot snapshot = controller.runtimeSnapshot();
+        if (snapshot.structure().version() != pendingStartStructureVersion
+                || snapshot.capabilityVersion() != pendingStartCapabilityVersion
+                || snapshot.modifierVersion() != pendingStartModifierVersion) {
+            clearPendingStart(token, recipe);
+            return false;
+        }
+        return true;
     }
 
     private void clearPendingStart(long token, MachineRecipe recipe) {
-        if (!isPendingStart(token, recipe)) return;
+        if (!startPending || pendingStartToken != token || pendingStartRecipe != recipe) return;
         startPending = false;
         pendingStartRecipe = null;
         pendingStartDomain = null;
         pendingStartToken = 0L;
+        pendingStartStructureVersion = Long.MIN_VALUE;
+        pendingStartCapabilityVersion = Long.MIN_VALUE;
+        pendingStartModifierVersion = Long.MIN_VALUE;
     }
 
     public void tick() {
-        if (startPending && !isCurrentDomain(pendingStartDomain)) {
-            startPending = false;
-            pendingStartRecipe = null;
-            pendingStartDomain = null;
-            pendingStartToken = 0L;
+        if (startPending && !isPendingStart(pendingStartToken, pendingStartRecipe)) {
+            clearPendingStart(pendingStartToken, pendingStartRecipe);
         }
         if (!runtime.active()) return;
-        if (tickPending && !isCurrentDomain(pendingTickDomain)) {
-            tickPending = false;
-            pendingTickDomain = null;
-        }
+        if (tickPending && !validateCurrentRuntime(pendingTickToken, pendingTickDomain)) clearPendingTick();
         if (tickPending) return;
 
         StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
         if (controller.getLevel() instanceof ServerLevel level && domain != null) {
             if (runtime.finishPending()) {
-                requestFinish(level, domain);
+                long token = ++nextTickToken;
+                pendingTickToken = token;
+                requestFinish(level, domain, token);
             } else {
                 requestTick(level, domain);
             }
@@ -156,25 +179,30 @@ public abstract class RecipeThread {
     private void requestTick(ServerLevel level, StructureClaimRegistry.ResourceDomain domain) {
         tickPending = true;
         pendingTickDomain = domain;
+        long token = ++nextTickToken;
+        pendingTickToken = token;
         long structureVersion = controller.runtimeSnapshot().structure().version();
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.TickRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
                 structureVersion,
                 () -> {
-                    if (!isCurrentRuntime(domain)) return false;
+                    if (!validateCurrentRuntime(token, domain)) return false;
                     boolean wasActive = runtime.active();
                     runtime.tick();
-                    if (runtime.finishPending()) requestFinish(level, domain);
+                    if (runtime.finishPending()) {
+                        requestFinish(level, domain, token);
+                        return true;
+                    }
                     completeIfFinished(wasActive);
                     return true;
                 },
-                () -> isCurrentRuntime(domain),
+                () -> validateCurrentRuntime(token, domain),
                 () -> controller.runtimeSnapshot().structure().version()
         ));
     }
 
-    private void requestFinish(ServerLevel level, StructureClaimRegistry.ResourceDomain domain) {
+    private void requestFinish(ServerLevel level, StructureClaimRegistry.ResourceDomain domain, long token) {
         tickPending = true;
         pendingTickDomain = domain;
         long structureVersion = controller.runtimeSnapshot().structure().version();
@@ -183,24 +211,39 @@ public abstract class RecipeThread {
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
                 structureVersion,
                 () -> {
-                    if (!isCurrentRuntime(domain)) return false;
+                    if (!validateCurrentRuntime(token, domain)) return false;
                     boolean wasActive = runtime.active();
                     runtime.finish();
                     completeIfFinished(wasActive);
                     return true;
                 },
-                () -> isCurrentRuntime(domain),
+                () -> validateCurrentRuntime(token, domain),
                 () -> controller.runtimeSnapshot().structure().version()
         ));
     }
 
-    private boolean isCurrentRuntime(StructureClaimRegistry.ResourceDomain domain) {
-        return runtime.active() && domain.equals(controller.resourceDomain()) && runtime.versionsCurrent();
+    private boolean validateCurrentRuntime(long token, @Nullable StructureClaimRegistry.ResourceDomain domain) {
+        if (!tickPending || pendingTickToken != token) return false;
+        if (!runtime.active() || domain == null || !domain.equals(controller.resourceDomain())) {
+            clearPendingTick();
+            return false;
+        }
+        if (!runtime.versionsCurrent()) {
+            runtime.tick();
+            clearPendingTick();
+            return false;
+        }
+        return true;
+    }
+
+    private void clearPendingTick() {
+        tickPending = false;
+        pendingTickDomain = null;
+        pendingTickToken = 0L;
     }
 
     private void completeIfFinished(boolean wasActive) {
-        tickPending = false;
-        pendingTickDomain = null;
+        clearPendingTick();
         if (wasActive && !runtime.active() && runtime.failure() == null) {
             onFinished();
             onRecipeFinished();
@@ -213,8 +256,10 @@ public abstract class RecipeThread {
         pendingStartRecipe = null;
         pendingStartDomain = null;
         pendingStartToken = 0L;
-        tickPending = false;
-        pendingTickDomain = null;
+        pendingStartStructureVersion = Long.MIN_VALUE;
+        pendingStartCapabilityVersion = Long.MIN_VALUE;
+        pendingStartModifierVersion = Long.MIN_VALUE;
+        clearPendingTick();
     }
 
     protected void onStartSearchFailed(@Nullable String failureUnloc) {
@@ -238,7 +283,4 @@ public abstract class RecipeThread {
     public int usedParallelism() { return runtime.parallelism(); }
     public CraftingRuntime runtime() { return runtime; }
 
-    private boolean isCurrentDomain(@Nullable StructureClaimRegistry.ResourceDomain domain) {
-        return domain != null && domain.equals(controller.resourceDomain());
-    }
 }

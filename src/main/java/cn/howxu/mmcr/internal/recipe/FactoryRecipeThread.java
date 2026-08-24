@@ -32,6 +32,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     private @Nullable Identifier lockedRecipeId;
     private boolean hadRecipeLock;
     private long lastRecipeStructureVersion = Long.MIN_VALUE;
+    private long lastRecipeCapabilityVersion = Long.MIN_VALUE;
     private long lastRecipeModifierSnapshotVersion = Long.MIN_VALUE;
     private Runnable finishContinuation = () -> { };
 
@@ -127,6 +128,7 @@ public final class FactoryRecipeThread extends RecipeThread {
                                         long structureVersion, long modifierSnapshotVersion) {
         if (lockedRecipeId != null || lastRecipe == null || controller == null || availableParallelism <= 0
                 || lastRecipeStructureVersion != structureVersion
+                || lastRecipeCapabilityVersion != controller.runtimeSnapshot().capabilityVersion()
                 || lastRecipeModifierSnapshotVersion != modifierSnapshotVersion
                 || !candidatesFor(candidates).contains(lastRecipe)) return false;
         return startRecipe(lastRecipe, structureVersion);
@@ -135,18 +137,24 @@ public final class FactoryRecipeThread extends RecipeThread {
     public void rememberLastRecipe(MachineRecipe recipe, long structureVersion, long modifierSnapshotVersion) {
         lastRecipe = recipe;
         lastRecipeStructureVersion = structureVersion;
+        lastRecipeCapabilityVersion = controller.runtimeSnapshot().capabilityVersion();
         lastRecipeModifierSnapshotVersion = modifierSnapshotVersion;
     }
 
     @Override protected void onStartFailed() {
         lastRecipe = null;
         lastRecipeStructureVersion = Long.MIN_VALUE;
+        lastRecipeCapabilityVersion = Long.MIN_VALUE;
         lastRecipeModifierSnapshotVersion = Long.MIN_VALUE;
     }
 
     public void setActiveRecipeForTesting(@Nullable ActiveMachineRecipe activeRecipe) {
         if (activeRecipe == null) runtime.invalidate();
-        else runtime.restore(activeRecipe, controller.resourceDomain());
+        else {
+            ControllerRuntimeSnapshot snapshot = controller.runtimeSnapshot();
+            runtime.restore(activeRecipe, controller.resourceDomain(), snapshot.structure().version(),
+                    snapshot.capabilityVersion(), snapshot.modifierVersion());
+        }
     }
 
     public void save(ValueOutput output) {
@@ -162,6 +170,7 @@ public final class FactoryRecipeThread extends RecipeThread {
         if (lastRecipe != null) {
             output.putString("last_recipe", lastRecipe.id().toString());
             output.putLong("last_structure_version", lastRecipeStructureVersion);
+            output.putLong("last_capability_version", lastRecipeCapabilityVersion);
             output.putLong("last_modifier_snapshot_version", lastRecipeModifierSnapshotVersion);
         }
         boolean hasActive = runtime.active();
@@ -188,6 +197,7 @@ public final class FactoryRecipeThread extends RecipeThread {
             thread.lastRecipe = RecipeRegistry.getRecipe(recipeId);
             if (thread.lastRecipe != null) {
                 thread.lastRecipeStructureVersion = input.getLongOr("last_structure_version", Long.MIN_VALUE);
+                thread.lastRecipeCapabilityVersion = input.getLongOr("last_capability_version", Long.MIN_VALUE);
                 thread.lastRecipeModifierSnapshotVersion = input.getLongOr("last_modifier_snapshot_version", Long.MIN_VALUE);
             }
         }
