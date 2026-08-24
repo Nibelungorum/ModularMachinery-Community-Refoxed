@@ -29,7 +29,6 @@ public enum MachineControllerDataProvider implements IServerDataProvider<BlockAc
         var machine = foundMachine != null ? foundMachine : boundMachine;
         ActiveMachineRecipe active = controller.getActive();
 
-        if (machine != null) data.putString("machine", machine.registryName().toString());
         data.putBoolean("formed", controller.isFormed());
         data.putBoolean("active", controller.isRuntimeActive());
         data.putInt("parallelism", controller.currentParallelism());

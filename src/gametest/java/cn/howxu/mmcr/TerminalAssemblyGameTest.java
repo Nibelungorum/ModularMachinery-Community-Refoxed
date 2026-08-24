@@ -49,11 +49,12 @@ public class TerminalAssemblyGameTest {
 
         helper.assertTrue(result.interactionResult() == InteractionResult.SUCCESS, "Build succeeds in creative service mode");
         helper.assertTrue(result.changedBlocks() == template.size() - 1, "Build places only missing structure blocks");
-        helper.runAtTickTime(1, () -> {
-            helper.assertTrue(helper.getLevel().getBlockState(missingPos).is(ModBlocks.CASING.get()), "Missing block is built");
-            helper.assertTrue(helper.getLevel().getBlockState(occupiedPos).is(preexistingBlock), "Occupied block is preserved");
-            helper.succeed();
-        });
+        helper.startSequence()
+                .thenWaitUntil(() -> {
+                    helper.assertTrue(helper.getLevel().getBlockState(missingPos).is(ModBlocks.CASING.get()), "Missing block is built");
+                    helper.assertTrue(helper.getLevel().getBlockState(occupiedPos).is(preexistingBlock), "Occupied block is preserved");
+                })
+                .thenExecute(helper::succeed);
     }
 
     public void demolishSkipsAirAndNonMatchingBlocks(GameTestHelper helper) {

@@ -37,7 +37,6 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
 
     static List<String> lineKeys(Snapshot snapshot) {
         List<String> keys = new ArrayList<>();
-        if (!snapshot.machine().isEmpty()) keys.add("machine");
         keys.add("structure");
         keys.add("state");
         if (!snapshot.hasFactoryController() && !snapshot.activeRecipe().isEmpty()) keys.add("recipe");
@@ -50,7 +49,6 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
 
     private static Component lineValue(Snapshot snapshot, String key) {
         return switch (key) {
-            case "machine" -> Component.literal(snapshot.machine()).withStyle(ChatFormatting.WHITE);
             case "structure" -> Component.translatable("jade.mmcr.machine_controller.structure." + (snapshot.formed() ? "formed" : "unformed"))
                     .withStyle(snapshot.formed() ? ChatFormatting.GREEN : ChatFormatting.RED);
             case "state" -> Component.translatable("jade.mmcr.machine_controller.status." + snapshot.status());
@@ -75,7 +73,6 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
     }
 
     record Snapshot(
-            String machine,
             boolean formed,
             boolean active,
             String activeRecipe,
@@ -99,7 +96,6 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
 
         static Snapshot from(CompoundTag tag) {
             return new Snapshot(
-                    tag.getStringOr("machine", ""),
                     tag.getBooleanOr("formed", false),
                     tag.getBooleanOr("active", false),
                     tag.getStringOr("activeRecipe", ""),
