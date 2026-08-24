@@ -1,9 +1,11 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -56,6 +58,10 @@ public record RecipeSearchResult(
                                                    long capabilityVersion, long modifierVersion,
                                                    LevelInsufficientFailure levelFailure) {
         return new RecipeSearchResult(false, machineId, structureVersion, capabilityVersion, modifierVersion, null,
-                "gui.mmcr.controller.failure.level_insufficient", null, levelFailure, 1.0F, false);
+                "gui.mmcr.controller.failure.level_insufficient",
+                new ExecutionStatus(Identifier.fromNamespaceAndPath("mmcr", "crafting_runtime"),
+                        StatusSeverity.BLOCKED, Identifier.fromNamespaceAndPath("mmcr", "crafting_runtime"),
+                        Map.of("reason", "level_insufficient")),
+                levelFailure, 1.0F, false);
     }
 }

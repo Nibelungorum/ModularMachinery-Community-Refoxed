@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.recipe;
 
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
@@ -60,7 +61,7 @@ public abstract class RecipeThread {
                 availableParallelism, candidates, lockedRecipeId).compute();
         if (!result.success()) {
             controller.clearPendingConflictStart();
-            onStartSearchFailed(result.failureUnloc());
+            onStartSearchFailed(result.failure());
             return false;
         }
         if (controller.shouldDelayConflictProneStart(result)) return false;
@@ -128,6 +129,10 @@ public abstract class RecipeThread {
 
     private boolean isPendingStart(long token, MachineRecipe recipe) {
         if (!startPending || pendingStartToken != token || pendingStartRecipe != recipe) return false;
+        if (controller.isRedstonePaused()) {
+            clearPendingStart(token, recipe);
+            return false;
+        }
         if (pendingStartDomain == null || !pendingStartDomain.equals(controller.resourceDomain())) {
             clearPendingStart(token, recipe);
             return false;
@@ -166,6 +171,7 @@ public abstract class RecipeThread {
         StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
         if (controller.getLevel() instanceof ServerLevel level && domain != null) {
             if (runtime.finishPending()) {
+                if (!runtime.shouldRetryFinish()) return;
                 long token = ++nextTickToken;
                 pendingTickToken = token;
                 requestFinish(level, domain, token);
@@ -195,7 +201,8 @@ public abstract class RecipeThread {
                     boolean wasActive = runtime.active();
                     runtime.tick();
                     if (runtime.finishPending()) {
-                        requestFinish(level, domain, token);
+                        if (runtime.shouldRetryFinish()) requestFinish(level, domain, token);
+                        else clearPendingTick();
                         return true;
                     }
                     completeIfFinished(wasActive);
@@ -228,6 +235,10 @@ public abstract class RecipeThread {
 
     private boolean validateCurrentRuntime(long token, @Nullable StructureClaimRegistry.ResourceDomain domain) {
         if (!tickPending || pendingTickToken != token) return false;
+        if (controller.isRedstonePaused()) {
+            clearPendingTick();
+            return false;
+        }
         if (!runtime.active() || domain == null || !domain.equals(controller.resourceDomain())) {
             clearPendingTick();
             return false;
@@ -267,7 +278,8 @@ public abstract class RecipeThread {
         clearPendingTick();
     }
 
-    protected void onStartSearchFailed(@Nullable String failureUnloc) {
+    protected void onStartSearchFailed(@Nullable ExecutionStatus failure) {
+        runtime.recordSearchFailure(failure);
     }
 
     protected abstract void onStarted();

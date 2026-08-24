@@ -2474,6 +2474,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
                                          StructureClaimRegistry.ResourceDomain domain) {
         if (!sharedStartPending || pendingSharedStartToken != token || pendingSharedStartRecipe != next
                 || pendingSharedStartDomain == null || !pendingSharedStartDomain.equals(domain)) return false;
+        if (redstonePaused) {
+            clearPendingSharedStart();
+            return false;
+        }
         if (!isCurrentSharedDomain(domain)) {
             clearPendingSharedStart();
             return false;
@@ -2508,6 +2512,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         if (sharedTickPending) return;
         if (runtime.craftingRuntime().finishPending()) {
+            if (!runtime.craftingRuntime().shouldRetryFinish()) return;
             sharedTickPending = true;
             pendingSharedTickDomain = domain;
             pendingSharedTickToken = ++nextSharedTickToken;
@@ -2526,7 +2531,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     boolean wasActive = runtime.craftingRuntime().active();
                     runtime.craftingRuntime().tick();
                     if (runtime.craftingRuntime().finishPending()) {
-                        requestSharedFinish(serverLevel, domain, token);
+                        if (runtime.craftingRuntime().shouldRetryFinish()) {
+                            requestSharedFinish(serverLevel, domain, token);
+                        } else {
+                            clearSharedTickPending();
+                        }
                         return true;
                     }
                     completeSharedRuntime(wasActive);
@@ -2554,12 +2563,16 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private boolean isCurrentSharedRuntime(StructureClaimRegistry.ResourceDomain domain) {
-        return runtime.craftingRuntime().active() && runtime.craftingRuntime().versionsCurrent()
+        return !redstonePaused && runtime.craftingRuntime().active() && runtime.craftingRuntime().versionsCurrent()
                 && isCurrentSharedDomain(domain);
     }
 
     private boolean validateSharedRuntime(long token, @Nullable StructureClaimRegistry.ResourceDomain domain) {
         if (!sharedTickPending || pendingSharedTickToken != token) return false;
+        if (redstonePaused) {
+            clearSharedTickPending();
+            return false;
+        }
         if (isCurrentSharedRuntime(domain)) return true;
         if (pendingSharedTickDomain == null || pendingSharedTickDomain.equals(domain)) {
             if (runtime.craftingRuntime().active()) {

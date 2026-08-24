@@ -197,6 +197,15 @@ public final class CraftingRuntime {
         return activeRecipe != null && activeRecipe.isFinishPending();
     }
 
+    public boolean shouldRetryFinish() {
+        return activeRecipe != null && activeRecipe.shouldRetryFinish(currentGameTime());
+    }
+
+    public void recordSearchFailure(@Nullable ExecutionStatus nextFailure) {
+        failure = nextFailure == null ? failure("recipe_search") : nextFailure;
+        status = CraftingStatus.failure(failureUnloc(failure));
+    }
+
     public boolean versionsCurrent() {
         if (!active()) return true;
         ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
@@ -385,6 +394,7 @@ public final class CraftingRuntime {
         if (status == null) return "";
         return switch (status.details().getOrDefault("reason", "")) {
             case "module_connection" -> "gui.mmcr.controller.failure.module_connection";
+            case "level_insufficient" -> "gui.mmcr.controller.failure.level_insufficient";
             case "version_invalidated" -> "gui.mmcr.controller.failure.structure_changed";
             case "finish", "no_output_capacity" -> "gui.mmcr.controller.failure.missing_output";
             case "per_tick" -> "gui.mmcr.controller.failure.missing_input";

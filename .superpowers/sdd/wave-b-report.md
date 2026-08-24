@@ -27,6 +27,21 @@
 - Test and Gradle commands: intentionally not run, per Wave B constraints.
 - Test sources and GameTest sources: untouched.
 
+## Wave B Important Re-review Closure
+
+- Queued shared starts and shared tick/finish requests now include the redstone pause state in their final validators. A pause discards only the pending reservation/request, never the active runtime or its finish-pending state; resume therefore re-enters the existing search/tick/finish scheduling path.
+- `RecipeThread` pending start/tick/finish validators use the same pause gate, so factory lanes cannot consume inputs or commit outputs from a request resolved after redstone pause.
+- Finish-pending scheduling now checks `CraftingRuntime.shouldRetryFinish()` before enqueueing another finish request, including the shared-controller callback path.
+- `RecipeThread.onStartSearchFailed` records the search `ExecutionStatus` in its lane `CraftingRuntime`; level failures now carry structured status data, and `FactoryRuntime` retains per-lane and global failure snapshots through its existing aggregation.
+
+## Important Re-review Static Verification
+
+- Runtime/recipe old-path `rg` scan: no matches for `RecipeCraftingContext`, concrete resource route helpers, or concrete item/fluid/energy port classes.
+- Runtime/recipe dependency `rg` scan: `CraftingPlan`, `CraftingRuntime`, and `FactoryRuntime` remain present.
+- `git diff --check`: passed with no whitespace errors.
+- Test and Gradle commands: intentionally not run, per explicit re-review constraints.
+- Test sources and other docs: untouched.
+
 ## Wave B Final Review Fixes
 
 - `CraftingRuntime.finish()` now keeps the active recipe, finish plan, and retry state when output planning or its root transaction fails. Only a successful output transaction reaches the finish cleanup path; per-tick cancellation remains isolated to `waiting()`.
