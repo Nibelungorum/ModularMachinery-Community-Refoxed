@@ -1217,7 +1217,8 @@ public final class RecipeCraftingContext {
         int parallelism = inputLimit < 0 ? requestedParallelism : Math.min(requestedParallelism, inputLimit);
         while (parallelism > 0) {
             activeRecipe.setParallelism(parallelism);
-            if (canStartCrafting(activeRecipe) && activeRecipe.start(this, activeRecipe.getParallelism())) {
+            if (canStartCrafting(activeRecipe)
+                    && startCrafting(recipe, activeRecipe.getParallelism(), activeRecipe.inputConsumptionPlan())) {
                 return activeRecipe.getParallelism();
             }
             parallelism--;

@@ -2,8 +2,6 @@ package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
-import cn.howxu.mmcr.api.recipe.CraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -37,9 +35,9 @@ public final class FactoryRecipeThread extends RecipeThread {
     private long lastRecipeModifierSnapshotVersion = Long.MIN_VALUE;
     private Runnable finishContinuation = () -> { };
 
-    private FactoryRecipeThread(MachineControllerBlockEntity controller, CraftingContextPool contextPool,
+    private FactoryRecipeThread(MachineControllerBlockEntity controller,
                                   boolean coreThread, boolean baseThread, String threadName) {
-        super(controller, contextPool);
+        super(controller);
         this.coreThread = coreThread;
         this.baseThread = baseThread;
         this.threadName = threadName == null ? "" : threadName;
@@ -47,21 +45,21 @@ public final class FactoryRecipeThread extends RecipeThread {
                 : this.threadName.startsWith("factory-") ? this.threadName : "factory";
     }
 
-    public static FactoryRecipeThread simple(MachineControllerBlockEntity controller, CraftingContextPool contextPool) {
-        return simple(controller, contextPool, "factory");
+    public static FactoryRecipeThread simple(MachineControllerBlockEntity controller) {
+        return simple(controller, "factory");
     }
 
-    public static FactoryRecipeThread simple(MachineControllerBlockEntity controller, CraftingContextPool contextPool, String laneId) {
-        return new FactoryRecipeThread(controller, contextPool, false, false, laneId);
+    public static FactoryRecipeThread simple(MachineControllerBlockEntity controller, String laneId) {
+        return new FactoryRecipeThread(controller, false, false, laneId);
     }
 
-    public static FactoryRecipeThread base(MachineControllerBlockEntity controller, CraftingContextPool contextPool) {
-        return new FactoryRecipeThread(controller, contextPool, false, true, "");
+    public static FactoryRecipeThread base(MachineControllerBlockEntity controller) {
+        return new FactoryRecipeThread(controller, false, true, "");
     }
 
-    public static FactoryRecipeThread core(MachineControllerBlockEntity controller, CraftingContextPool contextPool,
+    public static FactoryRecipeThread core(MachineControllerBlockEntity controller,
                                            String threadName, Set<MachineRecipe> recipes) {
-        FactoryRecipeThread thread = new FactoryRecipeThread(controller, contextPool, true, false, threadName);
+        FactoryRecipeThread thread = new FactoryRecipeThread(controller, true, false, threadName);
         thread.recipeSet.addAll(recipes == null ? Set.of() : recipes);
         return thread;
     }
@@ -94,8 +92,8 @@ public final class FactoryRecipeThread extends RecipeThread {
             lockedRecipeId = null;
             return true;
         }
-        if (activeRecipe == null || activeRecipe.getRecipe() == null) return false;
-        lockedRecipeId = activeRecipe.getRecipe().id();
+        if (runtime.recipe() == null) return false;
+        lockedRecipeId = runtime.recipe().id();
         hadRecipeLock = true;
         return true;
     }
@@ -105,9 +103,9 @@ public final class FactoryRecipeThread extends RecipeThread {
 
     @Override protected void onStarted() {
         idleTicks = 0;
-        if (activeRecipe != null && controller != null) {
+        if (runtime.recipe() != null && controller != null) {
             ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
-            rememberLastRecipe(activeRecipe.getRecipe(), runtime.structure().version(), runtime.modifierVersion());
+            rememberLastRecipe(this.runtime.recipe(), runtime.structure().version(), runtime.modifierVersion());
         }
     }
     @Override protected void onFinished() { idleTicks = 0; }
@@ -131,9 +129,7 @@ public final class FactoryRecipeThread extends RecipeThread {
                 || lastRecipeStructureVersion != structureVersion
                 || lastRecipeModifierSnapshotVersion != modifierSnapshotVersion
                 || !candidatesFor(candidates).contains(lastRecipe)) return false;
-        ActiveMachineRecipe next = new ActiveMachineRecipe(lastRecipe, availableParallelism);
-        var nextContext = contextPool.borrow(next, controller);
-        return startRecipe(next, nextContext, structureVersion);
+        return startRecipe(lastRecipe, structureVersion);
     }
 
     public void rememberLastRecipe(MachineRecipe recipe, long structureVersion, long modifierSnapshotVersion) {
@@ -149,7 +145,8 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     public void setActiveRecipeForTesting(@Nullable ActiveMachineRecipe activeRecipe) {
-        this.activeRecipe = activeRecipe;
+        if (activeRecipe == null) runtime.invalidate();
+        else runtime.restore(activeRecipe, controller.resourceDomain());
     }
 
     public void save(ValueOutput output) {
@@ -167,18 +164,13 @@ public final class FactoryRecipeThread extends RecipeThread {
             output.putLong("last_structure_version", lastRecipeStructureVersion);
             output.putLong("last_modifier_snapshot_version", lastRecipeModifierSnapshotVersion);
         }
-        boolean hasActive = activeRecipe != null && context != null;
+        boolean hasActive = runtime.active();
         output.putBoolean("has_active", hasActive);
-        if (hasActive) {
-            activeRecipe.serialize(output.child("active_recipe"));
-            context.serialize(output.child("active_context"));
-        }
-        output.putString("status", status.name());
+        if (hasActive) runtime.save(output.child("active_runtime"));
     }
 
-    public static FactoryRecipeThread load(ValueInput input, MachineControllerBlockEntity controller,
-                                           CraftingContextPool contextPool) {
-        FactoryRecipeThread thread = new FactoryRecipeThread(controller, contextPool,
+    public static FactoryRecipeThread load(ValueInput input, MachineControllerBlockEntity controller) {
+        FactoryRecipeThread thread = new FactoryRecipeThread(controller,
                 input.getBooleanOr("core", false), input.getBooleanOr("base", false), input.getStringOr("name", ""));
         thread.idleTicks = input.getIntOr("idle_ticks", 0);
         thread.hadRecipeLock = input.getBooleanOr("had_recipe_lock", false);
@@ -199,19 +191,7 @@ public final class FactoryRecipeThread extends RecipeThread {
                 thread.lastRecipeModifierSnapshotVersion = input.getLongOr("last_modifier_snapshot_version", Long.MIN_VALUE);
             }
         }
-        try {
-            thread.status = Status.valueOf(input.getStringOr("status", Status.IDLE.name()));
-        } catch (IllegalArgumentException ignored) {
-            thread.status = Status.IDLE;
-        }
-        if (input.getBooleanOr("has_active", false)) {
-            thread.activeRecipe = ActiveMachineRecipe.from(input.childOrEmpty("active_recipe"));
-            if (thread.activeRecipe.getRecipe() == null) thread.activeRecipe = null;
-        }
-        if (thread.activeRecipe != null && controller != null) {
-            thread.context = RecipeCraftingContext.from(controller, input.childOrEmpty("active_context"));
-        }
-        if (thread.activeRecipe == null) thread.status = Status.IDLE;
+        if (input.getBooleanOr("has_active", false)) thread.runtime.load(input.childOrEmpty("active_runtime"), controller.resourceDomain());
         return thread;
     }
 }

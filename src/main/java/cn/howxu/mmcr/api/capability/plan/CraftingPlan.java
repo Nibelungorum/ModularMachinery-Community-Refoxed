@@ -2,11 +2,14 @@ package cn.howxu.mmcr.api.capability.plan;
 
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.List;
+import java.util.Map;
+import java.util.function.IntPredicate;
 
 /**
  * Executes all prepared requirement operations as one atomic transaction.
@@ -21,13 +24,20 @@ public final class CraftingPlan {
             java.util.Map.of("reason", "operation_failed_without_status"));
     private final List<RequirementPlan> requirements;
     private final int parallelism;
+    private final Map<Integer, RecipeModifier.IOType> directions;
     private @Nullable ExecutionStatus failure;
 
     public CraftingPlan(List<RequirementPlan> requirements, int parallelism) {
+        this(requirements, parallelism, Map.of());
+    }
+
+    public CraftingPlan(List<RequirementPlan> requirements, int parallelism,
+                        Map<Integer, RecipeModifier.IOType> directions) {
         if (requirements == null) throw new IllegalArgumentException("requirements must not be null");
         if (parallelism <= 0) throw new IllegalArgumentException("parallelism must be positive");
         this.requirements = List.copyOf(requirements);
         this.parallelism = parallelism;
+        this.directions = Map.copyOf(directions == null ? Map.of() : directions);
         for (RequirementPlan requirement : this.requirements) {
             if (requirement.failure() != null) {
                 failure = requirement.failure();
@@ -37,9 +47,33 @@ public final class CraftingPlan {
     }
 
     public boolean commit() {
+        return commit(ignored -> true);
+    }
+
+    public boolean commitInputs() {
+        return commit(requirementIndex -> directions.get(requirementIndex) == RecipeModifier.IOType.INPUT);
+    }
+
+    public boolean commitOutputs() {
+        return commit(requirementIndex -> directions.get(requirementIndex) == RecipeModifier.IOType.OUTPUT);
+    }
+
+    public boolean commitInputsExcept(java.util.Set<Integer> excludedRequirementIndexes) {
+        java.util.Set<Integer> excluded = excludedRequirementIndexes == null ? java.util.Set.of() : excludedRequirementIndexes;
+        return commit(requirementIndex -> directions.get(requirementIndex) == RecipeModifier.IOType.INPUT
+                && !excluded.contains(requirementIndex));
+    }
+
+    public boolean hasOperations(int requirementIndex) {
+        return requirements.stream().anyMatch(requirement -> requirement.requirementIndex() == requirementIndex
+                && !requirement.operations().isEmpty());
+    }
+
+    private boolean commit(IntPredicate selector) {
         if (failure != null) return false;
         try (Transaction transaction = Transaction.openRoot()) {
             for (RequirementPlan requirement : requirements) {
+                if (!selector.test(requirement.requirementIndex())) continue;
                 for (CapabilityOperation operation : requirement.operations()) {
                     CapabilityResult result = operation.commit(transaction);
                     if (result == null || !result.success()) {

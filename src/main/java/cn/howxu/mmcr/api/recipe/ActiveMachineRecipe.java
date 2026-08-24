@@ -114,10 +114,6 @@ public final class ActiveMachineRecipe {
         this.totalTick = Math.max(0, totalTick);
     }
 
-    public void refreshTotalTick(RecipeCraftingContext context) {
-        this.totalTick = context.levelModifiedDuration(recipe);
-    }
-
     public int getMaxParallelism() {
         return maxParallelism;
     }
@@ -230,56 +226,12 @@ public final class ActiveMachineRecipe {
         FINISHED
     }
 
-    public boolean start(RecipeCraftingContext context) {
-        if (recipe == null) {
-            return false;
-        }
-        if (!canRunOnConnectedHost(context)) {
-            return false;
-        }
-        if (inputConsumptionPlan == null) {
-            inputConsumptionPlan = context.createInputConsumptionPlan(recipe, parallelism);
-        }
-        boolean started = context.startCrafting(recipe, parallelism, inputConsumptionPlan);
-        if (started) {
-            refreshTotalTick(context);
-        }
-        return started;
-    }
-
-    public boolean start(RecipeCraftingContext context, int parallelism) {
-        if (!canRunOnConnectedHost(context)) return false;
-        setParallelism(parallelism);
-        inputConsumptionPlan = context.createInputConsumptionPlan(recipe, this.parallelism);
-        boolean started = context.startCrafting(recipe, this.parallelism, inputConsumptionPlan);
-        if (started) {
-            refreshTotalTick(context);
-        } else {
-            inputConsumptionPlan = null;
-        }
-        return started;
-    }
-
     public InputConsumptionPlan inputConsumptionPlan() {
         return inputConsumptionPlan == null ? new InputConsumptionPlan(List.of()) : inputConsumptionPlan;
     }
 
-    public boolean canStartCrafting(RecipeCraftingContext context) {
-        refreshTotalTick(context);
-        return context.canStartCrafting(this);
-    }
-
-    public boolean canRestartCrafting(RecipeCraftingContext context) {
-        refreshTotalTick(context);
-        return context.canRestartCrafting(this);
-    }
-
-    public boolean canRunOnConnectedHost(RecipeCraftingContext context) {
-        return recipe != null && context != null && context.canRunRecipeOnConnectedHost(recipe);
-    }
-
-    private int highestStartableParallelism(RecipeCraftingContext context) {
-        return Math.max(1, ParallelRecipeCalculator.maxStartableParallelism(context, recipe, maxParallelism));
+    public void setInputConsumptionPlan(InputConsumptionPlan inputConsumptionPlan) {
+        this.inputConsumptionPlan = inputConsumptionPlan;
     }
 
     public boolean shouldRetryFinish(int gameTime) {

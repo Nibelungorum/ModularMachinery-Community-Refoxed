@@ -1,124 +1,83 @@
 package cn.howxu.mmcr.api.recipe;
 
-import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
-import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
-import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.plan.PlanningResult;
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.items.IItemHandler;
 import org.jetbrains.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.util.List;
 import java.util.Comparator;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 
 /**
+ * Searches immutable controller snapshots and returns a recipe handle for a runtime.
+ *
  * @author howxu <dev@howxu.cn>
  */
 public final class RecipeSearchTask {
-
-    private static final Logger LOG = LoggerFactory.getLogger(RecipeSearchTask.class);
-
-    private final MachineControllerBlockEntity controller;
+    private final ControllerRuntimeSnapshot snapshot;
     private final Identifier machineId;
     private final long structureVersion;
     private final int maxParallelism;
     private final List<MachineRecipe> candidates;
-    private final CraftingContextPool contextPool;
-    private final @Nullable RecipeCandidateIndex candidateIndex;
     private final @Nullable Identifier lockedRecipeId;
 
-    public RecipeSearchTask(MachineControllerBlockEntity controller,
-                            Identifier machineId,
-                            long structureVersion,
-                            int maxParallelism,
-                            List<MachineRecipe> candidates,
-                            CraftingContextPool contextPool) {
-        this(controller, machineId, structureVersion, maxParallelism, candidates, contextPool, null, null);
-    }
-
-    public RecipeSearchTask(MachineControllerBlockEntity controller,
-                            Identifier machineId,
-                            long structureVersion,
-                            int maxParallelism,
-                            List<MachineRecipe> candidates,
-                            CraftingContextPool contextPool,
-                            @Nullable RecipeCandidateIndex candidateIndex,
+    public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, Identifier machineId, long structureVersion,
+                            int maxParallelism, List<MachineRecipe> candidates,
                             @Nullable Identifier lockedRecipeId) {
-        this.controller = controller;
+        if (snapshot == null || machineId == null) throw new IllegalArgumentException("snapshot and machineId are required");
+        this.snapshot = snapshot;
         this.machineId = machineId;
         this.structureVersion = structureVersion;
         this.maxParallelism = Math.max(1, maxParallelism);
-        this.candidates = List.copyOf(candidates);
-        this.contextPool = contextPool;
-        this.candidateIndex = candidateIndex;
+        this.candidates = List.copyOf(candidates == null ? List.of() : candidates);
         this.lockedRecipeId = lockedRecipeId;
-    }
-
-    public RecipeSearchTask(MachineControllerBlockEntity controller,
-                            Identifier machineId,
-                            long structureVersion,
-                            int maxParallelism,
-                            List<MachineRecipe> candidates,
-                            CraftingContextPool contextPool,
-                            RecipeCandidateIndex candidateIndex) {
-        this(controller, machineId, structureVersion, maxParallelism, candidates, contextPool, candidateIndex, null);
     }
 
     public RecipeSearchResult compute() {
         @Nullable String bestFailureUnloc = null;
-        @Nullable RequirementFailure bestFailure = null;
-        @Nullable MachineRecipe bestFailureRecipe = null;
+        @Nullable ExecutionStatus bestFailure = null;
         float bestValidity = 0.0F;
-        Map<RecipeCraftingContext.ItemMatchKey, Boolean> itemMatchCache = new HashMap<>();
         List<MachineRecipe> ordered = orderedCandidates(searchCandidates());
+        CraftingContext context = context();
 
         for (int recipeIndex = 0; recipeIndex < ordered.size(); recipeIndex++) {
             MachineRecipe recipe = ordered.get(recipeIndex);
-            ActiveMachineRecipe activeRecipe = new ActiveMachineRecipe(recipe, maxParallelism);
-            RecipeCraftingContext context = null;
-            context = contextPool.borrow(activeRecipe, controller);
-            context.setItemMatchCache(itemMatchCache);
-            if (context.simulateInputs(recipe)) {
-                LevelInsufficientFailure levelFailure = levelFailure(recipe);
-                if (levelFailure != null) {
-                    context.clearItemMatchCache();
-                    contextPool.returnContext(context);
-                    return RecipeSearchResult.levelFailure(machineId, structureVersion, levelFailure);
-                }
-            }
-            if (activeRecipe.canStartCrafting(context)) {
+            LevelInsufficientFailure levelFailure = levelFailure(recipe);
+            if (levelFailure != null) return RecipeSearchResult.levelFailure(machineId, structureVersion, levelFailure);
+            PlanningResult result = context.planStartResult(recipe, maxParallelism);
+            if (result.successful()) {
                 boolean conflictProne = lockedRecipeId == null
-                        && hasMoreSpecificPendingInputCandidate(recipe, recipeIndex, ordered, itemMatchCache);
-                context.clearItemMatchCache();
-                return RecipeSearchResult.success(activeRecipe, context, machineId, structureVersion, conflictProne);
+                        && hasMoreSpecificPendingInputCandidate(recipe, recipeIndex, ordered);
+                return RecipeSearchResult.success(recipe, machineId, structureVersion, conflictProne);
             }
-            float validity = validity(context.getLastFailureUnloc(), context.getLastRequirementFailure());
+            float validity = validity(result.failure());
             if (validity > bestValidity) {
                 bestValidity = validity;
-                bestFailureUnloc = context.getLastFailureUnloc();
-                bestFailure = context.getLastRequirementFailure();
-                bestFailureRecipe = recipe;
+                bestFailure = result.failure();
+                bestFailureUnloc = failureUnloc(result.failure());
             }
-            context.clearItemMatchCache();
-            contextPool.returnContext(context);
         }
-
         return RecipeSearchResult.failure(machineId, structureVersion, bestFailureUnloc, bestFailure, bestValidity);
     }
 
+    private CraftingContext context() {
+        return new CraftingContext(new CapabilitySnapshot(snapshot.capabilities()), modifiers());
+    }
+
+    private List<RecipeModifier> modifiers() {
+        return snapshot.foundModifiers().values().stream().flatMap(List::stream).toList();
+    }
+
     private @Nullable LevelInsufficientFailure levelFailure(MachineRecipe recipe) {
-        var foundLevels = controller.runtimeSnapshot().foundLevels();
         for (LevelRequirement requirement : recipe.levelRequirements()) {
             MachineLevel required = MachineLevelRegistry.getLevel(requirement.levelId());
-            MachineLevel actual = foundLevels.get(requirement.typeId());
+            MachineLevel actual = snapshot.foundLevels().get(requirement.typeId());
             if (required == null || actual == null || actual.priority() < required.priority()) {
                 return new LevelInsufficientFailure(requirement.typeId(), requirement.levelId(),
                         actual == null ? null : actual.id());
@@ -127,8 +86,8 @@ public final class RecipeSearchTask {
         return null;
     }
 
-    private List<MachineRecipe> orderedCandidates(List<MachineRecipe> candidates) {
-        return candidates.stream()
+    private List<MachineRecipe> orderedCandidates(List<MachineRecipe> values) {
+        return values.stream()
                 .sorted(Comparator.comparingInt(MachineRecipe::priority)
                         .thenComparing(Comparator.comparingInt(MachineRecipe::inputRequirementCount).reversed())
                         .thenComparing(MachineRecipe::id))
@@ -136,58 +95,37 @@ public final class RecipeSearchTask {
     }
 
     private List<MachineRecipe> searchCandidates() {
-        if (lockedRecipeId != null) {
-            return candidates.stream()
-                    .filter(recipe -> lockedRecipeId.equals(recipe.id()))
-                    .findFirst()
-                    .map(List::of)
-                    .orElseGet(List::of);
-        }
-        if (candidateIndex == null) return candidates;
-        LinkedHashSet<Item> inputItems = new LinkedHashSet<>();
-        for (ProcessingComponent component : controller.runtimeSnapshot().components()) {
-            if (!(component.getContainer() instanceof ItemInputBusBlockEntity bus)) continue;
-            IItemHandler handler = bus.getItemHandler(null);
-            for (int slot = 0; slot < handler.getSlots(); slot++) {
-                ItemStack stack = handler.getStackInSlot(slot);
-                if (!stack.isEmpty()) inputItems.add(stack.getItem());
-            }
-        }
-        if (inputItems.isEmpty()) return candidates;
-        return candidateIndex.candidates(inputItems);
+        if (lockedRecipeId == null) return candidates;
+        return candidates.stream().filter(recipe -> lockedRecipeId.equals(recipe.id())).findFirst().map(List::of)
+                .orElseGet(List::of);
     }
 
-    private boolean hasMoreSpecificPendingInputCandidate(MachineRecipe selectedRecipe,
-                                                         int selectedRecipeIndex,
-                                                         List<MachineRecipe> ordered,
-                                                         Map<RecipeCraftingContext.ItemMatchKey, Boolean> itemMatchCache) {
-        for (int i = 0; i < selectedRecipeIndex; i++) {
-            MachineRecipe earlier = ordered.get(i);
+    private boolean hasMoreSpecificPendingInputCandidate(MachineRecipe selectedRecipe, int selectedIndex,
+                                                          List<MachineRecipe> ordered) {
+        for (int index = 0; index < selectedIndex; index++) {
+            MachineRecipe earlier = ordered.get(index);
             if (earlier.priority() != selectedRecipe.priority()
                     || earlier.inputRequirementCount() <= selectedRecipe.inputRequirementCount()
                     || !earlier.hasOverlappingInputs(selectedRecipe)) continue;
-            ActiveMachineRecipe activeRecipe = new ActiveMachineRecipe(earlier, maxParallelism);
-            RecipeCraftingContext context = contextPool.borrow(activeRecipe, controller);
-            context.setItemMatchCache(itemMatchCache);
-            boolean missingInputs = !context.simulateInputs(earlier);
-            String failureUnloc = context.getLastFailureUnloc();
-            boolean outputAvailable = context.simulateOutputs(earlier);
-            context.clearItemMatchCache();
-            contextPool.returnContext(context);
-            if (missingInputs && outputAvailable && RecipeCraftingContext.FAILURE_MISSING_INPUT.equals(failureUnloc)) return true;
+            CraftingContext context = context();
+            PlanningResult inputs = context.planInputs(earlier, maxParallelism);
+            PlanningResult outputs = context.planOutputs(earlier, maxParallelism);
+            if (!inputs.successful() && outputs.successful()) return true;
         }
         return false;
     }
 
-    public static float validity(@Nullable String failureUnloc, @Nullable RequirementFailure failure) {
-        if (failure == null) return failureUnloc == null ? 0.0F : 0.01F;
-        float componentScore = failure.searchedComponents().isEmpty() ? 0.1F : 0.3F;
-        float matchScore = failure.matchedComponents().isEmpty() ? 0.0F : 0.2F;
-        float amountScore = 0.0F;
-        if (failure.required() > 0) {
-            amountScore = Math.min(0.49F, (float) failure.available() / (float) failure.required() * 0.49F);
-        }
-        float indexScore = Math.min(0.01F, failure.requirementIndex() * 0.001F);
-        return componentScore + matchScore + amountScore + indexScore;
+    private static float validity(@Nullable ExecutionStatus failure) {
+        if (failure == null) return 0.0F;
+        return failure.severity() == cn.howxu.mmcr.api.capability.status.StatusSeverity.BLOCKED ? 0.5F : 0.1F;
+    }
+
+    private static @Nullable String failureUnloc(@Nullable ExecutionStatus failure) {
+        if (failure == null) return null;
+        return switch (failure.details().getOrDefault("reason", "")) {
+            case "insufficient_resource", "insufficient_energy" -> "gui.mmcr.controller.failure.missing_input";
+            case "no_output_capacity" -> "gui.mmcr.controller.failure.missing_output";
+            default -> "gui.mmcr.controller.failure.missing_input";
+        };
     }
 }

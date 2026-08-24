@@ -2,9 +2,9 @@ package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.api.recipe.CraftingContextPool;
 import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
@@ -32,20 +32,17 @@ public final class FactoryRecipeScheduler {
     private boolean paused;
     private final List<Lane> lanes = new ArrayList<>();
     private final List<FactoryRecipeThread> threads = new ArrayList<>();
-    private final Map<FactoryRecipeThread, Boolean> threadWasActive = new IdentityHashMap<>();
     private final Map<FactoryRecipeThread, Identifier> startReservations = new IdentityHashMap<>();
-    private final CraftingContextPool contextPool;
+    private final FactoryRuntime factoryRuntime;
+    private @org.jetbrains.annotations.Nullable MachineControllerBlockEntity controller;
     private long nextFactoryLaneId;
 
-    public FactoryRecipeScheduler(int threadLimit) {
-        this(threadLimit, CraftingContextPool.global());
-    }
-
-    public FactoryRecipeScheduler(int threadLimit, CraftingContextPool contextPool) {
+    public FactoryRecipeScheduler(int threadLimit, FactoryRuntime factoryRuntime) {
         this.threadLimit = Math.max(1, threadLimit);
         this.perThreadParallelLimit = this.threadLimit;
-        this.contextPool = contextPool;
-        ensureBaseThread(null, contextPool);
+        if (factoryRuntime == null) throw new IllegalArgumentException("factoryRuntime must not be null");
+        this.factoryRuntime = factoryRuntime;
+        this.factoryRuntime.setLaneLimit(this.threadLimit);
     }
 
     public boolean startLane(Lane lane) {
@@ -81,10 +78,9 @@ public final class FactoryRecipeScheduler {
         }
         lanes.clear();
         for (FactoryRecipeThread thread : threads) thread.invalidate();
+        factoryRuntime.clear();
         threads.clear();
-        threadWasActive.clear();
         startReservations.clear();
-        ensureBaseThread(null, contextPool);
     }
 
     public void pause() {
@@ -112,10 +108,11 @@ public final class FactoryRecipeScheduler {
 
     public void setThreadLimit(int threadLimit) {
         this.threadLimit = Math.max(1, threadLimit);
+        factoryRuntime.setLaneLimit(this.threadLimit);
         while (threads.size() > this.threadLimit) {
             FactoryRecipeThread removed = threads.removeLast();
             removed.invalidate();
-            threadWasActive.remove(removed);
+            factoryRuntime.remove(removed.runtime());
             startReservations.remove(removed);
         }
         while (lanes.size() > this.threadLimit) {
@@ -151,16 +148,17 @@ public final class FactoryRecipeScheduler {
         return threads.get(index).toggleRecipeLock();
     }
 
-    public void ensureBaseThread(MachineControllerBlockEntity controller, CraftingContextPool contextPool) {
+    public void ensureBaseThread(MachineControllerBlockEntity controller) {
+        this.controller = controller;
+        if (controller == null) throw new IllegalArgumentException("controller must not be null");
         if (!threads.isEmpty() && threads.getFirst().isBaseThread()) return;
         threads.removeIf(thread -> {
             if (!thread.isBaseThread()) return false;
-            threadWasActive.remove(thread);
             return true;
         });
-        FactoryRecipeThread base = FactoryRecipeThread.base(controller, contextPool == null ? this.contextPool : contextPool);
+        FactoryRecipeThread base = FactoryRecipeThread.base(controller);
         threads.addFirst(base);
-        threadWasActive.put(base, false);
+        register(base);
     }
 
     public List<ThreadSnapshot> threadSnapshots() {
@@ -210,9 +208,8 @@ public final class FactoryRecipeScheduler {
         return maxThreads <= 0 || activeCounts.getOrDefault(recipe.id(), 0) < maxThreads;
     }
 
-    public void syncCoreThreads(MachineControllerBlockEntity controller, Machine machine, List<MachineRecipe> candidates,
-                                 CraftingContextPool contextPool) {
-        ensureBaseThread(controller, contextPool);
+    public void syncCoreThreads(MachineControllerBlockEntity controller, Machine machine, List<MachineRecipe> candidates) {
+        ensureBaseThread(controller);
         Map<Identifier, MachineRecipe> byId = new LinkedHashMap<>();
         for (MachineRecipe recipe : candidates == null ? List.<MachineRecipe>of() : candidates) {
             byId.putIfAbsent(recipe.id(), recipe);
@@ -237,9 +234,9 @@ public final class FactoryRecipeScheduler {
                 }
                 FactoryRecipeThread thread = existingCoreThreads.remove(spec.name());
                 if (thread == null) {
-                    thread = FactoryRecipeThread.core(controller, contextPool == null ? this.contextPool : contextPool, spec.name(), recipes);
+                    thread = FactoryRecipeThread.core(controller, spec.name(), recipes);
+                    register(thread);
                 } else {
-                    thread.bindController(controller);
                     thread.replaceRecipeSet(recipes);
                 }
                 reconciled.add(thread);
@@ -247,7 +244,7 @@ public final class FactoryRecipeScheduler {
         }
         for (FactoryRecipeThread removed : existingCoreThreads.values()) {
             removed.invalidate();
-            threadWasActive.remove(removed);
+            factoryRuntime.remove(removed.runtime());
         }
         reconciled.addAll(dynamicThreads);
         threads.clear();
@@ -255,34 +252,35 @@ public final class FactoryRecipeScheduler {
     }
 
     public void tickThreads(MachineControllerBlockEntity controller, List<MachineRecipe> candidates,
-                            long structureVersion, int parallelLimit, CraftingContextPool contextPool) {
-        tickThreads(controller, candidates, structureVersion, parallelLimit, contextPool, () -> { });
+                            long structureVersion, int parallelLimit) {
+        tickThreads(controller, candidates, structureVersion, parallelLimit, () -> { });
     }
 
     public void tickThreads(MachineControllerBlockEntity controller, List<MachineRecipe> candidates,
-                            long structureVersion, int parallelLimit, CraftingContextPool contextPool,
+                            long structureVersion, int parallelLimit,
                             Runnable onFinished) {
         if (paused) {
             return;
         }
         Runnable finishCallback = onFinished == null ? () -> { } : onFinished;
-        ensureBaseThread(controller, contextPool);
+        ensureBaseThread(controller);
         this.perThreadParallelLimit = Math.max(1, parallelLimit);
         List<MachineRecipe> candidateSnapshot = List.copyOf(candidates == null ? List.of() : candidates);
         long modifierSnapshotVersion = controller == null ? Long.MIN_VALUE : controller.runtimeSnapshot().modifierVersion();
         for (FactoryRecipeThread thread : List.copyOf(threads)) {
             if (!thread.isStartPending() && thread.getActiveRecipe() == null) startReservations.remove(thread);
             if (thread.getActiveRecipe() != null) startReservations.remove(thread);
-            thread.bindController(controller);
             thread.setFinishContinuation(() -> {
                 finishCallback.run();
                 continueFinishedThread(thread, candidateSnapshot, structureVersion, modifierSnapshotVersion);
             });
-            thread.tick();
+        }
+        factoryRuntime.tick(candidateSnapshot, perThreadParallelLimit);
+        for (FactoryRecipeThread thread : List.copyOf(threads)) {
             thread.tickIdle();
             if (thread.isTimedOut()) {
                 threads.remove(thread);
-                threadWasActive.remove(thread);
+                factoryRuntime.remove(thread.runtime());
             }
         }
         if (controller == null || candidateSnapshot.isEmpty()) {
@@ -302,15 +300,13 @@ public final class FactoryRecipeScheduler {
         while (threads.size() < threadLimit && availableParallelism() > 0) {
             List<MachineRecipe> availableCandidates = availableCandidates(candidateSnapshot);
             if (availableCandidates.isEmpty()) break;
-            FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, contextPool == null ? this.contextPool : contextPool,
-                    "factory-" + nextFactoryLaneId++);
+            FactoryRecipeThread thread = FactoryRecipeThread.simple(controller, "factory-" + nextFactoryLaneId++);
             threads.add(thread);
-            threadWasActive.put(thread, false);
+            register(thread);
             boolean started = thread.searchAndStartRecipe(availableCandidates, availableParallelism(), structureVersion);
             reserveStart(thread, started);
             if (!started) break;
         }
-        for (FactoryRecipeThread thread : threads) threadWasActive.put(thread, thread.getActiveRecipe() != null);
         clearFinishedThreadContinuations();
     }
 
@@ -348,9 +344,8 @@ public final class FactoryRecipeScheduler {
     }
 
     public void addThreadForTesting(FactoryRecipeThread thread) {
-        ensureBaseThread(null, contextPool);
         if (thread != null && !threads.contains(thread)) threads.add(thread);
-        if (thread != null) threadWasActive.putIfAbsent(thread, thread.getActiveRecipe() != null);
+        if (thread != null) register(thread);
     }
 
     public void save(ValueOutput output) {
@@ -360,16 +355,18 @@ public final class FactoryRecipeScheduler {
         for (int i = 0; i < threads.size(); i++) threads.get(i).save(output.child("thread_" + i));
     }
 
-    public void load(ValueInput input, MachineControllerBlockEntity controller, CraftingContextPool contextPool) {
+    public void load(ValueInput input, MachineControllerBlockEntity controller) {
+        this.controller = controller;
         threads.clear();
-        threadWasActive.clear();
         startReservations.clear();
         threadLimit = Math.max(1, input.getIntOr("thread_limit", threadLimit));
+        factoryRuntime.setLaneLimit(threadLimit);
         paused = input.getBooleanOr("paused", false);
         int count = Math.max(0, input.getIntOr("thread_count", 0));
         for (int i = 0; i < count; i++) {
-            threads.add(FactoryRecipeThread.load(input.childOrEmpty("thread_" + i), controller,
-                    contextPool == null ? this.contextPool : contextPool));
+            FactoryRecipeThread thread = FactoryRecipeThread.load(input.childOrEmpty("thread_" + i), controller);
+            threads.add(thread);
+            register(thread);
         }
         for (FactoryRecipeThread thread : threads) {
             String laneId = thread.laneId();
@@ -379,13 +376,16 @@ public final class FactoryRecipeScheduler {
             } catch (NumberFormatException ignored) {
             }
         }
-        ensureBaseThread(controller, contextPool);
+        ensureBaseThread(controller);
         for (FactoryRecipeThread thread : threads) {
-            threadWasActive.put(thread, thread.getActiveRecipe() != null);
             if (thread.isStartPending() && thread.getPendingStartRecipe() != null) {
                 startReservations.put(thread, thread.getPendingStartRecipe().id());
             }
         }
+    }
+
+    private void register(FactoryRecipeThread thread) {
+        factoryRuntime.add(thread.runtime(), thread::tick);
     }
 
     public static RecipeSnapshot captureSnapshot(Identifier recipeId,

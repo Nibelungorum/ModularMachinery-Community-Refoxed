@@ -2,53 +2,41 @@ package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
-import cn.howxu.mmcr.api.recipe.CraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
-import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
-
-import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
+import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import org.jetbrains.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
 /**
- * State holder for one server-side recipe execution thread.
+ * Scheduling and event adapter for one crafting runtime.
  *
  * @author howxu <dev@howxu.cn>
  */
 public abstract class RecipeThread {
-    private static final Logger LOG = LoggerFactory.getLogger(RecipeThread.class);
-
     public enum Status { IDLE, WORKING, WAITING, FAILED }
 
-    protected @Nullable MachineControllerBlockEntity controller;
-    protected final CraftingContextPool contextPool;
-    protected @Nullable ActiveMachineRecipe activeRecipe;
-    protected @Nullable RecipeCraftingContext context;
-    protected Status status = Status.IDLE;
-    protected @Nullable String lastFailureUnloc;
+    protected final MachineControllerBlockEntity controller;
+    protected final CraftingRuntime runtime;
     private boolean startPending;
     private @Nullable MachineRecipe pendingStartRecipe;
-    private @Nullable RecipeCraftingContext pendingStartContext;
     private @Nullable StructureClaimRegistry.ResourceDomain pendingStartDomain;
     private long nextStartToken;
     private long pendingStartToken;
     private boolean tickPending;
     private @Nullable StructureClaimRegistry.ResourceDomain pendingTickDomain;
 
-    protected RecipeThread(MachineControllerBlockEntity controller, CraftingContextPool contextPool) {
+    protected RecipeThread(MachineControllerBlockEntity controller) {
+        if (controller == null) throw new IllegalArgumentException("controller must not be null");
         this.controller = controller;
-        this.contextPool = contextPool;
+        this.runtime = new CraftingRuntime(controller);
     }
 
     public boolean searchAndStartRecipe(List<MachineRecipe> candidates, int availableParallelism, long structureVersion) {
@@ -57,296 +45,179 @@ public abstract class RecipeThread {
 
     protected boolean searchAndStartRecipe(List<MachineRecipe> candidates, int availableParallelism,
                                            long structureVersion, @Nullable Identifier lockedRecipeId) {
-        Identifier machineId = controller == null || controller.runtimeSnapshot().structure().machine() == null
+        Identifier machineId = controller.runtimeSnapshot().structure().machine() == null
                 ? null : controller.runtimeSnapshot().structure().machine().registryName();
         if (machineId == null || availableParallelism <= 0) return false;
-        RecipeSearchResult result = new RecipeSearchTask(controller, machineId, structureVersion,
-                availableParallelism, candidates, contextPool, null, lockedRecipeId).compute();
+        RecipeSearchResult result = new RecipeSearchTask(controller.runtimeSnapshot(), machineId, structureVersion,
+                availableParallelism, candidates, lockedRecipeId).compute();
         if (!result.success()) {
-            lastFailureUnloc = result.levelFailure() == null
-                    ? result.failureUnloc()
-                    : "gui.mmcr.controller.failure.level_insufficient";
-            status = Status.FAILED;
+            onStartSearchFailed(result.failureUnloc());
             return false;
         }
-        ActiveMachineRecipe next = result.activeRecipe();
-        RecipeCraftingContext nextContext = result.context();
-        return startRecipe(next, nextContext, structureVersion);
+        return startRecipe(result.recipe(), structureVersion);
     }
 
-    protected boolean startRecipe(ActiveMachineRecipe next, RecipeCraftingContext nextContext, long structureVersion) {
-        StructureClaimRegistry.ResourceDomain domain = resourceDomain();
-        if (controller != null && controller.getLevel() instanceof ServerLevel serverLevel && domain != null) {
-            return requestStart(serverLevel, domain, next, nextContext, structureVersion);
+    protected boolean startRecipe(MachineRecipe next, long structureVersion) {
+        if (next == null) return false;
+        StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
+        if (controller.getLevel() instanceof ServerLevel serverLevel && domain != null) {
+            return requestStart(serverLevel, domain, next, structureVersion);
         }
-        int granted = nextContext.commitStart(next, next.getMaxParallelism());
-        if (granted <= 0) {
-            contextPool.returnContext(nextContext);
-            lastFailureUnloc = nextContext.getLastFailureUnloc();
-            status = Status.FAILED;
+        CraftingStatus state = runtime.start(next, runtimeParallelism(next));
+        if (!state.isCrafting()) {
             onStartFailed();
             return false;
         }
-        activeRecipe = next;
-        context = nextContext;
-        status = Status.WORKING;
-        lastFailureUnloc = null;
-        controller.clearLastFailureOnRecipeStart();
         onStarted();
         return true;
     }
 
+    private int runtimeParallelism(MachineRecipe recipe) {
+        int controllerLimit = controller.getMaxParallelism();
+        int recipeLimit = recipe.maxThreads() <= 0 ? controllerLimit : recipe.maxThreads();
+        return Math.max(1, Math.min(controllerLimit, recipeLimit));
+    }
+
     private boolean requestStart(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
-                                 ActiveMachineRecipe next, RecipeCraftingContext nextContext, long structureVersion) {
-        long startToken = ++nextStartToken;
+                                 MachineRecipe next, long structureVersion) {
+        long token = ++nextStartToken;
         startPending = true;
-        pendingStartRecipe = next.getRecipe();
-        pendingStartContext = nextContext;
+        pendingStartRecipe = next;
         pendingStartDomain = domain;
-        pendingStartToken = startToken;
+        pendingStartToken = token;
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.StartRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
                 structureVersion,
-                next.getMaxParallelism(),
-requested -> {
-            if (!isPendingStart(startToken, nextContext)) return 0;
-            int granted = nextContext.commitStart(next, requested);
-            if (granted <= 0) {
-                lastFailureUnloc = nextContext.getLastFailureUnloc();
-                status = Status.FAILED;
-                clearPendingStart(startToken, nextContext);
-                contextPool.returnContext(nextContext);
-                onStartFailed();
-            }
-            return granted;
-        },
+                runtimeParallelism(next),
+                requested -> {
+                    if (!isPendingStart(token, next)) return 0;
+                    CraftingStatus state = runtime.start(next, requested);
+                    if (!state.isCrafting()) {
+                        clearPendingStart(token, next);
+                        onStartFailed();
+                        return 0;
+                    }
+                    return runtime.parallelism();
+                },
                 granted -> {
-                    if (!isPendingStart(startToken, nextContext)) return;
-                    clearPendingStart(startToken, nextContext);
-                    next.refreshTotalTick(nextContext);
-                    activeRecipe = next;
-                    context = nextContext;
-                    status = Status.WORKING;
-                    lastFailureUnloc = null;
+                    if (!isPendingStart(token, next)) return;
+                    clearPendingStart(token, next);
                     onStarted();
                 },
-                () -> isPendingStart(startToken, nextContext) && domain.equals(resourceDomain()),
+                () -> isPendingStart(token, next) && domain.equals(controller.resourceDomain()),
                 () -> controller.runtimeSnapshot().structure().version()
         ));
         return true;
     }
 
-    private boolean isPendingStart(long startToken, RecipeCraftingContext startContext) {
-        return startPending && pendingStartToken == startToken && pendingStartContext == startContext;
+    private boolean isPendingStart(long token, MachineRecipe recipe) {
+        return startPending && pendingStartToken == token && pendingStartRecipe == recipe
+                && pendingStartDomain != null && pendingStartDomain.equals(controller.resourceDomain());
     }
 
-    private void clearPendingStart(long startToken, RecipeCraftingContext startContext) {
-        if (!isPendingStart(startToken, startContext)) return;
+    private void clearPendingStart(long token, MachineRecipe recipe) {
+        if (!isPendingStart(token, recipe)) return;
         startPending = false;
         pendingStartRecipe = null;
-        pendingStartContext = null;
         pendingStartDomain = null;
         pendingStartToken = 0L;
     }
 
     public void tick() {
-        if (startPending) {
-            if (pendingStartContext == null) {
-                startPending = false;
-                pendingStartDomain = null;
-                pendingStartToken = 0L;
-            } else if (!pendingStartContext.isStructureVersionCurrent() || !isCurrentDomain(pendingStartDomain)) {
-                RecipeCraftingContext pendingContext = pendingStartContext;
-                clearPendingStart(pendingStartToken, pendingContext);
-                contextPool.returnContext(pendingContext);
-            }
+        if (startPending && !isCurrentDomain(pendingStartDomain)) {
+            startPending = false;
+            pendingStartRecipe = null;
+            pendingStartDomain = null;
+            pendingStartToken = 0L;
         }
-        if (activeRecipe == null || context == null) return;
-        if (!activeRecipe.canRunOnConnectedHost(context)) {
-            failActiveRecipeForInvalidModuleConnection();
-            return;
-        }
+        if (!runtime.active()) return;
         if (tickPending && !isCurrentDomain(pendingTickDomain)) {
             tickPending = false;
             pendingTickDomain = null;
         }
         if (tickPending) return;
-        StructureClaimRegistry.ResourceDomain domain = resourceDomain();
-        if (controller != null && controller.getLevel() instanceof ServerLevel level && domain != null) {
-            if (activeRecipe.isFinishPending()) {
-                requestFinishIfReady(level, domain, activeRecipe, context, controller.runtimeSnapshot().structure().version());
-                return;
+
+        StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
+        if (controller.getLevel() instanceof ServerLevel level && domain != null) {
+            if (runtime.finishPending()) {
+                requestFinish(level, domain);
+            } else {
+                requestTick(level, domain);
             }
-            requestTick(level, domain, activeRecipe, context, controller.runtimeSnapshot().structure().version());
             return;
         }
-        boolean resourcesGranted = context.commitSynchronousIoTick(activeRecipe.getRecipe(), activeRecipe.getParallelism(), activeRecipe.inputConsumptionPlan());
-        boolean outputsCommitted = resourcesGranted && activeRecipe.needsFinishCommit()
-                && context.commitSynchronousOutputs(activeRecipe.getRecipe(), activeRecipe.getParallelism());
-        applyTick(activeRecipe, context, resourcesGranted, outputsCommitted, 0);
+        boolean wasActive = runtime.active();
+        runtime.tick();
+        if (runtime.finishPending()) runtime.finish();
+        completeIfFinished(wasActive);
     }
 
-    private void failActiveRecipeForInvalidModuleConnection() {
-        if (activeRecipe == null || context == null) return;
-        activeRecipe.doFailureAction(controller == null || controller.runtimeSnapshot().structure().machine() == null
-                ? null : controller.runtimeSnapshot().structure().machine().failureAction());
-        lastFailureUnloc = RecipeCraftingContext.FAILURE_MODULE_CONNECTION;
-        if (activeRecipe.getRecipe().doesCancelRecipeOnPerTickFailure()) {
-            contextPool.returnContext(context);
-            activeRecipe = null;
-            context = null;
-            status = Status.FAILED;
-        } else {
-            status = Status.WAITING;
-        }
-    }
-
-    private void requestTick(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
-                              ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext, long structureVersion) {
-        int gameTime = (int) level.getGameTime();
+    private void requestTick(ServerLevel level, StructureClaimRegistry.ResourceDomain domain) {
         tickPending = true;
         pendingTickDomain = domain;
+        long structureVersion = controller.runtimeSnapshot().structure().version();
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.TickRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
                 structureVersion,
                 () -> {
-                    if (!isActive(recipe, recipeContext, domain)) return false;
-                    if (!recipe.canRunOnConnectedHost(recipeContext)) {
-                        tickPending = false;
-                        pendingTickDomain = null;
-                        failActiveRecipeForInvalidModuleConnection();
-                        return false;
-                    }
-                    if (recipe.needsFinishCommit()
-                            && !recipeContext.simulateOutputs(recipe.getRecipe(), recipe.getParallelism())) {
-                        applyTick(recipe, recipeContext, false, false, gameTime);
-                        tickPending = true;
-                        return false;
-                    }
-                    boolean granted = recipeContext.coordinatorIoTick(recipe.getRecipe(), recipe.getParallelism(), recipe.inputConsumptionPlan()).getAsBoolean();
-                    if (!granted) {
-                        applyTick(recipe, recipeContext, false, false, gameTime);
-                        tickPending = true;
-                        return false;
-                    }
-                    if (granted && recipe.needsFinishCommit()) {
-                        recipe.beginFinishCommit();
-                        requestFinish(level, domain, recipe, recipeContext, structureVersion, gameTime);
-                    }
-                    if (granted && !recipe.needsFinishCommit()) applyTick(recipe, recipeContext, true, false, gameTime);
+                    if (!isCurrentRuntime(domain)) return false;
+                    boolean wasActive = runtime.active();
+                    runtime.tick();
+                    if (runtime.finishPending()) requestFinish(level, domain);
+                    completeIfFinished(wasActive);
                     return true;
                 },
-                () -> isActive(recipe, recipeContext, domain),
+                () -> isCurrentRuntime(domain),
                 () -> controller.runtimeSnapshot().structure().version()
         ));
     }
 
-    private void requestFinish(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
-                                ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext, long structureVersion, int gameTime) {
+    private void requestFinish(ServerLevel level, StructureClaimRegistry.ResourceDomain domain) {
+        tickPending = true;
+        pendingTickDomain = domain;
+        long structureVersion = controller.runtimeSnapshot().structure().version();
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.FinishRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
                 structureVersion,
                 () -> {
-                    if (!isActive(recipe, recipeContext, domain)) return false;
-                    if (!recipe.canRunOnConnectedHost(recipeContext)) {
-                        tickPending = false;
-                        pendingTickDomain = null;
-                        failActiveRecipeForInvalidModuleConnection();
-                        return false;
-                    }
-                    applyTick(recipe, recipeContext, true,
-                            recipeContext.coordinatorOutputs(recipe.getRecipe(), recipe.getParallelism()).getAsBoolean(), gameTime);
+                    if (!isCurrentRuntime(domain)) return false;
+                    boolean wasActive = runtime.active();
+                    runtime.finish();
+                    completeIfFinished(wasActive);
                     return true;
                 },
-                () -> isActive(recipe, recipeContext, domain),
+                () -> isCurrentRuntime(domain),
                 () -> controller.runtimeSnapshot().structure().version()
         ));
     }
 
-    private void requestFinishIfReady(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
-                                      ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext, long structureVersion) {
-        int gameTime = (int) level.getGameTime();
-        if (!recipe.shouldRetryFinish(gameTime)) {
-            status = Status.WAITING;
-            return;
-        }
-        tickPending = true;
-        pendingTickDomain = domain;
-        requestFinish(level, domain, recipe, recipeContext, structureVersion, gameTime);
+    private boolean isCurrentRuntime(StructureClaimRegistry.ResourceDomain domain) {
+        return runtime.active() && domain.equals(controller.resourceDomain()) && runtime.versionsCurrent();
     }
 
-    private boolean isActive(ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext,
-                             StructureClaimRegistry.ResourceDomain domain) {
-        return activeRecipe == recipe && context == recipeContext && domain.equals(resourceDomain());
-    }
-
-    private void applyTick(ActiveMachineRecipe recipe, RecipeCraftingContext recipeContext,
-                            boolean resourcesGranted, boolean outputsCommitted, int gameTime) {
+    private void completeIfFinished(boolean wasActive) {
         tickPending = false;
         pendingTickDomain = null;
-        ActiveMachineRecipe.TickStatus tickStatus = recipe.applyTickGrant(resourcesGranted, outputsCommitted, gameTime);
-        if (tickStatus == ActiveMachineRecipe.TickStatus.FINISHED) {
-            contextPool.returnContext(recipeContext);
-            activeRecipe = null;
-            context = null;
-            status = Status.IDLE;
-            lastFailureUnloc = null;
+        if (wasActive && !runtime.active() && runtime.failure() == null) {
             onFinished();
             onRecipeFinished();
-        } else if (tickStatus == ActiveMachineRecipe.TickStatus.CANCELLED) {
-            lastFailureUnloc = context.getLastFailureUnloc();
-            contextPool.returnContext(context);
-            activeRecipe = null;
-            context = null;
-            status = Status.FAILED;
-        } else if (tickStatus == ActiveMachineRecipe.TickStatus.WAITING) {
-            lastFailureUnloc = recipeContext.getLastFailureUnloc();
-            if (missingRetainedInput(recipe, recipeContext)) {
-                contextPool.returnContext(recipeContext);
-                activeRecipe = null;
-                context = null;
-                status = Status.FAILED;
-            } else {
-                status = Status.WAITING;
-            }
-        } else {
-            status = Status.WORKING;
         }
-    }
-
-    private static boolean missingRetainedInput(ActiveMachineRecipe recipe, RecipeCraftingContext context) {
-        var failure = context.getLastRequirementFailure();
-        if (failure == null || failure.requirementIndex() < 0) return false;
-        List<MachineRequirement> requirements = recipe.getRecipe().runtimeRequirements();
-        if (failure.requirementIndex() >= requirements.size()) return false;
-        return requirements.get(failure.requirementIndex()) instanceof ItemRequirement item
-                && item.io() == RecipeModifier.IOType.INPUT && item.consumeChance() == 0F;
     }
 
     public void invalidate() {
-        if (context != null) contextPool.returnContext(context);
-        if (pendingStartContext != null) {
-            RecipeCraftingContext pendingContext = pendingStartContext;
-            clearPendingStart(pendingStartToken, pendingContext);
-            contextPool.returnContext(pendingContext);
-        }
-        activeRecipe = null;
+        runtime.invalidate();
+        startPending = false;
         pendingStartRecipe = null;
-        context = null;
+        pendingStartDomain = null;
+        pendingStartToken = 0L;
         tickPending = false;
         pendingTickDomain = null;
-        status = Status.IDLE;
     }
 
-    public void bindController(MachineControllerBlockEntity controller) {
-        if (this.controller == controller) return;
-        this.controller = controller;
-        if (activeRecipe != null && context == null && controller != null) {
-            context = contextPool.borrow(activeRecipe, controller);
-        }
+    protected void onStartSearchFailed(@Nullable String failureUnloc) {
     }
 
     protected abstract void onStarted();
@@ -355,20 +226,19 @@ requested -> {
     protected void onStartFailed() { }
     protected String laneId() { return "base"; }
 
-    public @Nullable ActiveMachineRecipe getActiveRecipe() { return activeRecipe; }
-    public Status getStatus() { return status; }
-    public @Nullable String getLastFailureUnloc() { return lastFailureUnloc; }
-    public boolean isIdle() { return !startPending && activeRecipe == null && context == null; }
+    public @Nullable ActiveMachineRecipe getActiveRecipe() { return runtime.activeRecipe(); }
+    public Status getStatus() {
+        if (runtime.active()) return runtime.finishPending() ? Status.WAITING : Status.WORKING;
+        return runtime.failure() == null ? Status.IDLE : Status.FAILED;
+    }
+    public @Nullable String getLastFailureUnloc() { return runtime.failureUnloc(); }
+    public boolean isIdle() { return !startPending && !runtime.active(); }
     public boolean isStartPending() { return startPending; }
     public @Nullable MachineRecipe getPendingStartRecipe() { return pendingStartRecipe; }
-    public int usedParallelism() { return activeRecipe == null ? 0 : activeRecipe.getParallelism(); }
+    public int usedParallelism() { return runtime.parallelism(); }
+    public CraftingRuntime runtime() { return runtime; }
 
     private boolean isCurrentDomain(@Nullable StructureClaimRegistry.ResourceDomain domain) {
-        return domain != null && domain.equals(resourceDomain());
-    }
-
-    private @Nullable StructureClaimRegistry.ResourceDomain resourceDomain() {
-        if (controller == null || !(controller.getLevel() instanceof ServerLevel level)) return null;
-        return StructureClaimRegistry.get(level).domainFor(controller.getBlockPos());
+        return domain != null && domain.equals(controller.resourceDomain());
     }
 }

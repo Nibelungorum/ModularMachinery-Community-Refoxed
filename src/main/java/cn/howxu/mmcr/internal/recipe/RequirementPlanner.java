@@ -16,7 +16,9 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.util.IOType;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.IntStream;
 
 /**
@@ -84,14 +86,16 @@ public final class RequirementPlanner {
 
         PlanningReservations materializationReservations = context.reservations().copy();
         List<RequirementPlan> materialized = new ArrayList<>(plans.size());
+        Map<Integer, RecipeModifier.IOType> directions = new LinkedHashMap<>();
         for (int index = 0; index < plans.size(); index++) {
             RequirementPlan plan = plans.get(index);
             RequirementPlan resolved = plan.materialize(selectedParallelism, materializationReservations,
                     failure(requirements.get(index), "unsafe_operation_parallelism"));
             if (!resolved.successful()) return new PlanningResult(null, resolved.failure());
             materialized.add(resolved);
+            directions.put(requirementIndexes.get(index), requirements.get(index).io());
         }
-        return new PlanningResult(new CraftingPlan(materialized, selectedParallelism), null);
+        return new PlanningResult(new CraftingPlan(materialized, selectedParallelism, directions), null);
     }
 
     private static List<MachineCapability> matchingCapabilities(MachineRequirement requirement,

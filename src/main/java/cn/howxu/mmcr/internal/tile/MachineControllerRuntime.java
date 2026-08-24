@@ -1,12 +1,10 @@
 package cn.howxu.mmcr.internal.tile;
 
-import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
-import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -16,7 +14,8 @@ import cn.howxu.mmcr.internal.multiblock.ModuleConnectionCoordinator;
 import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot;
-import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
+import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
+import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
@@ -37,16 +36,16 @@ public final class MachineControllerRuntime {
     private final MachineControllerBlockEntity controller;
     private final StructureRuntime structure;
     private final ComponentRuntime components = new ComponentRuntime();
-    private CraftingContext craftingContext = new CraftingContext(new CapabilitySnapshot(List.of()));
+    private final CraftingRuntime craftingRuntime;
+    private final FactoryRuntime factoryRuntime;
     private CraftingStateSnapshot craftingState = CraftingStateSnapshot.empty(0L, 0L, 0L);
-    private long contextCapabilityVersion = Long.MIN_VALUE;
-    private long contextModifierVersion = Long.MIN_VALUE;
-    private long contextStateVersion = Long.MIN_VALUE;
 
     MachineControllerRuntime(MachineControllerBlockEntity controller) {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
         this.controller = controller;
         this.structure = new StructureRuntime(controller);
+        this.craftingRuntime = new CraftingRuntime(controller);
+        this.factoryRuntime = new FactoryRuntime(controller);
     }
 
     public void serverTick(ServerLevel level, BlockPos controllerPos) {
@@ -64,15 +63,21 @@ public final class MachineControllerRuntime {
     }
 
     public ControllerRuntimeSnapshot snapshot() {
+        CraftingStateSnapshot publishedCrafting = controller.getLevel() != null && controller.getLevel().isClientSide()
+                ? craftingState : craftingRuntime.snapshot();
         return new ControllerRuntimeSnapshot(structure.snapshot(), components.components(), components.capabilities(),
                 components.capabilityVersion(), components.modifierVersion(), components.stateVersion(),
                 components.foundModifiers(), components.foundLevels(), components.linkedPortPositions(),
-                components.moduleConnectionStatus(), components.installedModuleCount(), components.capabilityAggregate(), craftingState,
-                FactorySnapshot.empty());
+                components.moduleConnectionStatus(), components.installedModuleCount(), components.capabilityAggregate(),
+                publishedCrafting, factoryRuntime.snapshot());
     }
 
-    public CraftingContext craftingContext() {
-        return craftingContext;
+    public CraftingRuntime craftingRuntime() {
+        return craftingRuntime;
+    }
+
+    public FactoryRuntime factoryRuntime() {
+        return factoryRuntime;
     }
 
     void publishStructureState(boolean structureAreaLoaded, boolean formed,
@@ -161,7 +166,6 @@ public final class MachineControllerRuntime {
         components.replaceModifiers(modifiers);
         components.replaceLevels(levels);
         components.replaceLinkedPortPositions(linkedPositions);
-        refreshCraftingContext();
     }
 
     void publishModuleConnectionState(ModuleConnectionStatus status, int installedModuleCount) {
@@ -179,18 +183,7 @@ public final class MachineControllerRuntime {
 
     void publishCraftingState(@Nullable Identifier recipeId, CraftingStatus status,
                               @Nullable ExecutionStatus failure) {
-        refreshCraftingContext();
         craftingState = new CraftingStateSnapshot(recipeId, status, failure,
                 structure.version(), components.capabilityVersion(), components.modifierVersion());
-    }
-
-    private void refreshCraftingContext() {
-        if (contextCapabilityVersion == components.capabilityVersion()
-                && contextModifierVersion == components.modifierVersion()
-                && contextStateVersion == components.stateVersion()) return;
-        craftingContext = new CraftingContext(new CapabilitySnapshot(components.capabilities()), components.modifierList());
-        contextCapabilityVersion = components.capabilityVersion();
-        contextModifierVersion = components.modifierVersion();
-        contextStateVersion = components.stateVersion();
     }
 }

@@ -1,21 +1,23 @@
 package cn.howxu.mmcr.api.recipe;
 
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 
 /**
+ * Immutable recipe-search handle. Execution is installed only by a CraftingRuntime.
+ *
  * @author howxu <dev@howxu.cn>
  */
 public record RecipeSearchResult(
         boolean success,
         Identifier machineId,
         long structureVersion,
-        @Nullable ActiveMachineRecipe activeRecipe,
-        @Nullable RecipeCraftingContext context,
+        @Nullable MachineRecipe recipe,
         @Nullable String failureUnloc,
-        @Nullable RequirementFailure requirementFailure,
+        @Nullable ExecutionStatus failure,
         @Nullable LevelInsufficientFailure levelFailure,
         float validity,
         boolean hasMoreSpecificPendingInputCandidate) {
@@ -23,38 +25,35 @@ public record RecipeSearchResult(
     public RecipeSearchResult {
         Objects.requireNonNull(machineId, "machineId");
         if (success) {
-            Objects.requireNonNull(activeRecipe, "activeRecipe");
-            Objects.requireNonNull(context, "context");
-            if (failureUnloc != null || requirementFailure != null || levelFailure != null) {
+            Objects.requireNonNull(recipe, "recipe");
+            if (failureUnloc != null || failure != null || levelFailure != null) {
                 throw new IllegalArgumentException("Successful recipe search results must not carry a failure");
             }
-        } else if (activeRecipe != null || context != null) {
-            throw new IllegalArgumentException("Failed recipe search results must not carry active recipe state");
+        } else if (recipe != null) {
+            throw new IllegalArgumentException("Failed recipe search results must not carry a recipe");
         }
     }
 
-    public static RecipeSearchResult success(ActiveMachineRecipe activeRecipe,
-                                             RecipeCraftingContext context,
-                                             Identifier machineId,
-                                             long structureVersion,
-                                             boolean hasMoreSpecificPendingInputCandidate) {
-        return new RecipeSearchResult(true, machineId, structureVersion, activeRecipe, context, null, null, null, 1.0F, hasMoreSpecificPendingInputCandidate);
+    public static RecipeSearchResult success(MachineRecipe recipe, Identifier machineId, long structureVersion,
+                                              boolean hasMoreSpecificPendingInputCandidate) {
+        return new RecipeSearchResult(true, machineId, structureVersion, recipe, null, null, null, 1.0F,
+                hasMoreSpecificPendingInputCandidate);
     }
 
-    public static RecipeSearchResult success(ActiveMachineRecipe activeRecipe, RecipeCraftingContext context, Identifier machineId, long structureVersion) {
-        return success(activeRecipe, context, machineId, structureVersion, false);
+    public static RecipeSearchResult success(MachineRecipe recipe, Identifier machineId, long structureVersion) {
+        return success(recipe, machineId, structureVersion, false);
     }
 
-    public static RecipeSearchResult failure(Identifier machineId,
-                                             long structureVersion,
-                                             @Nullable String failureUnloc,
-                                             @Nullable RequirementFailure requirementFailure,
+    public static RecipeSearchResult failure(Identifier machineId, long structureVersion,
+                                             @Nullable String failureUnloc, @Nullable ExecutionStatus failure,
                                              float validity) {
-        return new RecipeSearchResult(false, machineId, structureVersion, null, null, failureUnloc, requirementFailure, null, validity, false);
+        return new RecipeSearchResult(false, machineId, structureVersion, null, failureUnloc, failure, null,
+                validity, false);
     }
 
     public static RecipeSearchResult levelFailure(Identifier machineId, long structureVersion,
                                                   LevelInsufficientFailure levelFailure) {
-        return new RecipeSearchResult(false, machineId, structureVersion, null, null, null, null, levelFailure, 1.0F, false);
+        return new RecipeSearchResult(false, machineId, structureVersion, null,
+                "gui.mmcr.controller.failure.level_insufficient", null, levelFailure, 1.0F, false);
     }
 }

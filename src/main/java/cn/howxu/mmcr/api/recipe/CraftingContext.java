@@ -11,6 +11,7 @@ import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Plans recipe capability operations from an immutable capability snapshot.
@@ -32,16 +33,27 @@ public final class CraftingContext {
     }
 
     public PlanningResult planInputs(MachineRecipe recipe, int parallelism) {
-        return plan(recipe, parallelism, RecipeModifier.IOType.INPUT);
+        return planInputs(recipe, parallelism, Set.of(), Set.of());
+    }
+
+    public PlanningResult planInputs(MachineRecipe recipe, int parallelism,
+                                     Set<Integer> consumedAtStart, Set<Integer> retainedInputs) {
+        return plan(recipe, parallelism, RecipeModifier.IOType.INPUT,
+                consumedAtStart == null ? Set.of() : consumedAtStart,
+                retainedInputs == null ? Set.of() : retainedInputs);
     }
 
     public PlanningResult planOutputs(MachineRecipe recipe, int parallelism) {
-        return plan(recipe, parallelism, RecipeModifier.IOType.OUTPUT);
+        return plan(recipe, parallelism, RecipeModifier.IOType.OUTPUT, Set.of(), Set.of());
     }
 
     public CraftingPlan planStart(MachineRecipe recipe, int requestedParallelism) {
-        PlanningResult result = plan(recipe, requestedParallelism, null);
+        PlanningResult result = plan(recipe, requestedParallelism, null, Set.of(), Set.of());
         return result.successful() ? result.plan() : null;
+    }
+
+    public PlanningResult planStartResult(MachineRecipe recipe, int requestedParallelism) {
+        return plan(recipe, requestedParallelism, null, Set.of(), Set.of());
     }
 
     public void setModifiers(List<RecipeModifier> modifiers) {
@@ -54,7 +66,8 @@ public final class CraftingContext {
         setModifiers(modifiers);
     }
 
-    private PlanningResult plan(MachineRecipe recipe, int parallelism, RecipeModifier.IOType direction) {
+    private PlanningResult plan(MachineRecipe recipe, int parallelism, RecipeModifier.IOType direction,
+                                Set<Integer> consumedAtStart, Set<Integer> retainedInputs) {
         if (recipe == null) throw new IllegalArgumentException("recipe must not be null");
         List<MachineRequirement> requirements = new ArrayList<>();
         List<Integer> requirementIndexes = new ArrayList<>();
@@ -62,6 +75,12 @@ public final class CraftingContext {
         for (int index = 0; index < recipeRequirements.size(); index++) {
             MachineRequirement requirement = recipeRequirements.get(index);
             if (direction != null && requirement.io() != direction) continue;
+            if (consumedAtStart.contains(index)) continue;
+            if (retainedInputs.contains(index) && requirement instanceof cn.howxu.mmcr.api.recipe.requirement.ItemRequirement item
+                    && item.io() == RecipeModifier.IOType.INPUT && item.consumeChance() > 0F) {
+                requirement = new cn.howxu.mmcr.api.recipe.requirement.ItemRequirement(item.io(), item.item(), item.count(),
+                        item.stack(null), item.chance(), item.tags(), item.components(), 0F);
+            }
             requirements.add(requirement);
             requirementIndexes.add(index);
         }
