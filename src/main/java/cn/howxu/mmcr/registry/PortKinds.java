@@ -4,6 +4,8 @@ import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
+import cn.howxu.mmcr.internal.capability.CapabilityFactories;
+import cn.howxu.mmcr.internal.capability.CapabilityFactories.CapabilityFactory;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidInputHatchBlockEntity;
@@ -25,7 +27,12 @@ public final class PortKinds {
             String id,
             IOType ioType,
             BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory)
-            implements IOPortKind {}
+            implements IOPortKind {
+        @Override
+        public List<CapabilityFactory> capabilityFactories() {
+            return List.of();
+        }
+    }
 
     public record ItemBusKind(
             String id,
@@ -37,6 +44,11 @@ public final class PortKinds {
         @Override
         public Optional<ItemBusSize> itemBusSize() {
             return Optional.of(size);
+        }
+
+        @Override
+        public List<CapabilityFactory> capabilityFactories() {
+            return List.of(CapabilityFactories.ITEM_BUS);
         }
     }
 
@@ -51,6 +63,11 @@ public final class PortKinds {
         public Optional<FluidHatchSize> fluidHatchSize() {
             return Optional.of(size);
         }
+
+        @Override
+        public List<CapabilityFactory> capabilityFactories() {
+            return List.of(CapabilityFactories.FLUID_HATCH);
+        }
     }
 
     public record EnergyHatchKind(
@@ -63,6 +80,11 @@ public final class PortKinds {
         @Override
         public Optional<EnergyHatchSize> energyHatchSize() {
             return Optional.of(size);
+        }
+
+        @Override
+        public List<CapabilityFactory> capabilityFactories() {
+            return List.of(CapabilityFactories.ENERGY_HATCH);
         }
     }
 

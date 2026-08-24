@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.CapabilityHost;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType;
@@ -30,7 +32,7 @@ import java.util.EnumSet;
 import java.util.ArrayList;
 import java.util.List;
 
-public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity implements MachineComponentTile {
+public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity implements MachineComponentTile, CapabilityHost {
     private static final String AUTO_IO_KEY = "auto_io";
     private static final int AUTO_IO_MIN_DELAY = 5;
     private static final int AUTO_IO_MAX_DELAY = 60;
@@ -40,6 +42,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     private int autoIODelay = AUTO_IO_MAX_DELAY;
     private int autoIOTicksUntilTransfer;
     private EnumSet<Direction> autoIOCandidateSides = EnumSet.noneOf(Direction.class);
+    private CapabilitySnapshot capabilitySnapshot;
 
     protected IOPortBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
         super(type, pos, state);
@@ -70,6 +73,16 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     public abstract IOType ioType();
 
     public abstract IOPortKind kind();
+
+    @Override
+    public CapabilitySnapshot capabilitySnapshot() {
+        if (capabilitySnapshot == null) {
+            capabilitySnapshot = new CapabilitySnapshot(kind().capabilityFactories().stream()
+                    .map(factory -> factory.create(this))
+                    .toList());
+        }
+        return capabilitySnapshot;
+    }
 
     public AutoIOConfig autoIOConfig() {
         return autoIOConfig;

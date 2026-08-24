@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.event;
 
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
@@ -64,14 +65,12 @@ public final class ModCapabilities {
 
     private static List<IOPortKind> nativeCapabilityPorts() {
         return PortKinds.all().stream()
-                .filter(kind -> kind.itemBusSize().isPresent()
-                        || kind.fluidHatchSize().isPresent()
-                        || kind.energyHatchSize().isPresent())
+                .filter(kind -> !kind.capabilityFactories().isEmpty())
                 .toList();
     }
 
     private static void registerNativePort(RegisterCapabilitiesEvent event, IOPortKind kind) {
-        if (kind.itemBusSize().isPresent()) {
+        if (kind.capabilityFactories().contains(CapabilityFactories.ITEM_BUS)) {
             boolean canInsert = kind.ioType() == IOType.INPUT;
             event.registerBlockEntity(
                     ITEM_BLOCK,
@@ -79,7 +78,7 @@ public final class ModCapabilities {
                     (be, side) -> be instanceof ItemBusBlockEntity ib && ib.isAutoIOSideExposed(side)
                             ? new LegacyItemHandlerAdapter(ib.getItemStackHandler(side), canInsert, true)
                             : null);
-        } else if (kind.fluidHatchSize().isPresent()) {
+        } else if (kind.capabilityFactories().contains(CapabilityFactories.FLUID_HATCH)) {
             boolean canInsert = kind.ioType() == IOType.INPUT;
             event.registerBlockEntity(
                     FLUID_BLOCK,
@@ -87,7 +86,7 @@ public final class ModCapabilities {
                     (be, side) -> be instanceof FluidHatchBlockEntity fh && fh.isAutoIOSideExposed(side)
                             ? new DirectionalFluidHandler(fh.getResourceHandler(side), canInsert, !canInsert)
                             : null);
-        } else if (kind.energyHatchSize().isPresent()) {
+        } else if (kind.capabilityFactories().contains(CapabilityFactories.ENERGY_HATCH)) {
             boolean canInsert = kind.ioType() == IOType.INPUT;
             event.registerBlockEntity(
                     ENERGY_BLOCK,

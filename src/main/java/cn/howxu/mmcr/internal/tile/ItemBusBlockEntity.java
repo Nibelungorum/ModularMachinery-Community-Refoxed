@@ -4,6 +4,7 @@ import com.mojang.serialization.Codec;
 import cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.BulkItemStorage;
+import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -45,6 +46,15 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
     public IItemHandler getItemHandler(Direction side) { return handler; }
 
     public ItemStackHandler getItemStackHandler(Direction side) { return handler; }
+
+    public ResourceStorage<ItemResource> getResourceStorage() {
+        if (!(handler instanceof ResourceStorage<?> storage)) {
+            throw new IllegalStateException("Item bus handler does not expose resource storage");
+        }
+        @SuppressWarnings("unchecked")
+        ResourceStorage<ItemResource> itemStorage = (ResourceStorage<ItemResource>) storage;
+        return itemStorage;
+    }
 
     public void dropContents() {
         if (level == null || level.isClientSide()) return;
@@ -138,7 +148,7 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
      *
      * @author howxu <dev@howxu.cn>
      */
-    private static final class StorageItemHandler extends ItemStackHandler {
+    private static final class StorageItemHandler extends ItemStackHandler implements ResourceStorage<ItemResource> {
         private final BulkItemStorage[] storages;
         private final IntConsumer onChange;
         private boolean suppressChanges;
@@ -214,6 +224,47 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
         public boolean isItemValid(int slot, ItemStack stack) {
             validateSlotIndex(slot);
             return true;
+        }
+
+        @Override
+        public int size() {
+            return getSlots();
+        }
+
+        @Override
+        public ItemResource resource(int slot) {
+            validateSlotIndex(slot);
+            return storages[slot].resource(0);
+        }
+
+        @Override
+        public long amount(int slot) {
+            validateSlotIndex(slot);
+            return storages[slot].amount(0);
+        }
+
+        @Override
+        public long capacity(int slot, @Nullable ItemResource resource) {
+            validateSlotIndex(slot);
+            return storages[slot].capacity(0, resource);
+        }
+
+        @Override
+        public boolean isValid(int slot, ItemResource resource) {
+            validateSlotIndex(slot);
+            return storages[slot].isValid(0, resource);
+        }
+
+        @Override
+        public long insert(int slot, ItemResource resource, long amount, net.neoforged.neoforge.transfer.transaction.TransactionContext transaction) {
+            validateSlotIndex(slot);
+            return storages[slot].insert(0, resource, amount, transaction);
+        }
+
+        @Override
+        public long extract(int slot, ItemResource resource, long amount, net.neoforged.neoforge.transfer.transaction.TransactionContext transaction) {
+            validateSlotIndex(slot);
+            return storages[slot].extract(0, resource, amount, transaction);
         }
 
         @Override

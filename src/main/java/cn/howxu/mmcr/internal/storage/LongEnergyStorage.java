@@ -34,6 +34,10 @@ public final class LongEnergyStorage extends SnapshotJournal<Long> implements En
         return storage.amount();
     }
 
+    public LongValueStorage storage() {
+        return storage;
+    }
+
     public void setAmount(long value) {
         storage.setAmount(value);
     }
