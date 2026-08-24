@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
@@ -23,12 +24,12 @@ import java.util.List;
 /**
  * @author howxu <dev@howxu.cn>
  */
-public sealed interface MachineRequirement permits ItemRequirement, FluidRequirement, EnergyRequirement, SmartInterfaceRequirement {
+public interface MachineRequirement {
 
     Codec<List<String>> TAGS_CODEC = Codec.STRING.listOf();
     Codec<MachineRequirement> CODEC = Codec.of(MachineRequirement::encode, MachineRequirement::decode);
 
-    String type();
+    RequirementType<? extends MachineRequirement> type();
 
     RecipeModifier.IOType io();
 
@@ -36,16 +37,20 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
         return List.of();
     }
 
-    boolean simulate(RecipeCraftingContext context, int requirementIndex);
+    default boolean simulate(RecipeCraftingContext context, int requirementIndex) {
+        return RequirementHandlerRegistry.simulate(this, context, requirementIndex);
+    }
 
-    boolean commit(RecipeCraftingContext context, int requirementIndex);
+    default boolean commit(RecipeCraftingContext context, int requirementIndex) {
+        return RequirementHandlerRegistry.commit(this, context, requirementIndex);
+    }
 
     default int maxInputParallelism(RecipeCraftingContext context, int limit) {
-        return -1;
+        return RequirementHandlerRegistry.maxInputParallelism(this, context, limit);
     }
 
     default boolean ioTick(RecipeCraftingContext context, int requirementIndex) {
-        return true;
+        return RequirementHandlerRegistry.ioTick(this, context, requirementIndex);
     }
 
     static MachineRequirement fromInput(MachineIngredient ingredient) {
@@ -80,7 +85,7 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
 
     private static <T> DataResult<T> encode(MachineRequirement requirement, DynamicOps<T> ops, T prefix) {
         var builder = ops.mapBuilder()
-                .add("type", ops.createString(requirement.type()))
+                .add("type", ops.createString(requirement.type().id().getPath()))
                 .add("io", RecipeModifier.IO_TYPE_CODEC.encodeStart(ops, requirement.io()).getOrThrow());
         if (!requirement.tags().isEmpty()) {
             builder = builder.add("tags", requirement.tags(), TAGS_CODEC);
@@ -130,23 +135,33 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
                 .map(requirement -> Pair.of(requirement, input));
     }
 
-    private static <T> DataResult<MachineRequirement> decodeByType(String type, DynamicOps<T> ops, T input) {
-        return switch (type) {
-            case "item" -> decodeItem(ops, input);
-            case "fluid" -> decodeFluid(ops, input);
-            case "energy" -> {
-                RecipeModifier.IOType io = ops.get(input, "io")
-                        .flatMap(value -> ops.getStringValue(value))
-                        .map(RecipeModifier.IOType::byKey)
-                        .map(t -> t == null ? RecipeModifier.IOType.INPUT : t)
-                        .result()
-                        .orElse(RecipeModifier.IOType.INPUT);
-                List<String> tags = decodeTags(ops, input);
-                yield ops.get(input, "fe_per_tick")
-                        .flatMap(ops::getNumberValue)
-                        .<MachineRequirement>map(fePerTick -> new EnergyRequirement(io, fePerTick.intValue(), tags));
-            }
-            case "smart_interface" -> decodeIo(ops, input).flatMap(io -> ops.get(input, "interface_type")
+    private static <T> DataResult<MachineRequirement> decodeByType(String serializedType, DynamicOps<T> ops, T input) {
+        Identifier typeId;
+        try {
+            typeId = serializedType.contains(":") ? Identifier.parse(serializedType) : MMCR.id(serializedType);
+        } catch (IllegalArgumentException e) {
+            return DataResult.error(() -> "Invalid requirement type: " + serializedType);
+        }
+        RequirementType<MachineRequirement> type = new RequirementType<>(typeId);
+        if (RequirementHandlerRegistry.handlerFor(type) == null) {
+            return DataResult.error(() -> "Unknown requirement type: " + serializedType);
+        }
+        if (ItemRequirement.TYPE.equals(type)) return decodeItem(ops, input);
+        if (FluidRequirement.TYPE.equals(type)) return decodeFluid(ops, input);
+        if (EnergyRequirement.TYPE.equals(type)) {
+            RecipeModifier.IOType io = ops.get(input, "io")
+                    .flatMap(value -> ops.getStringValue(value))
+                    .map(RecipeModifier.IOType::byKey)
+                    .map(t -> t == null ? RecipeModifier.IOType.INPUT : t)
+                    .result()
+                    .orElse(RecipeModifier.IOType.INPUT);
+            List<String> tags = decodeTags(ops, input);
+            return ops.get(input, "fe_per_tick")
+                    .flatMap(ops::getNumberValue)
+                    .<MachineRequirement>map(fePerTick -> new EnergyRequirement(io, fePerTick.intValue(), tags));
+        }
+        if (SmartInterfaceRequirement.TYPE.equals(type)) {
+            return decodeIo(ops, input).flatMap(io -> ops.get(input, "interface_type")
                     .flatMap(ops::getStringValue)
                     .flatMap(interfaceType -> ops.get(input, "min_value")
                             .flatMap(ops::getNumberValue)
@@ -154,8 +169,8 @@ public sealed interface MachineRequirement permits ItemRequirement, FluidRequire
                                     .flatMap(ops::getNumberValue)
                                     .<MachineRequirement>map(maxValue -> new SmartInterfaceRequirement(io, interfaceType,
                                             minValue.floatValue(), maxValue.floatValue())))));
-            default -> DataResult.error(() -> "Unknown requirement type: " + type);
-        };
+        }
+        return DataResult.error(() -> "Unknown requirement type: " + serializedType);
     }
 
     private static <T> DataResult<MachineRequirement> decodeItem(DynamicOps<T> ops, T input) {

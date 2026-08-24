@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
-import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 
 /**
@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
  */
 public record SmartInterfaceRequirement(RecipeModifier.IOType io, String interfaceType, float minValue, float maxValue)
         implements MachineRequirement {
+    public static final RequirementType<SmartInterfaceRequirement> TYPE = new RequirementType<>(MMCR.id("smart_interface"));
 
     public SmartInterfaceRequirement {
         if (io == null) throw new IllegalArgumentException("io null");
@@ -15,6 +16,11 @@ public record SmartInterfaceRequirement(RecipeModifier.IOType io, String interfa
         if (!Float.isFinite(minValue) || !Float.isFinite(maxValue) || minValue > maxValue) {
             throw new IllegalArgumentException("invalid smart interface value range");
         }
+    }
+
+    @Override
+    public RequirementType<SmartInterfaceRequirement> type() {
+        return TYPE;
     }
 
     public static SmartInterfaceRequirement input(String type, float value) {
@@ -29,25 +35,4 @@ public record SmartInterfaceRequirement(RecipeModifier.IOType io, String interfa
         return new SmartInterfaceRequirement(RecipeModifier.IOType.OUTPUT, type, value, value);
     }
 
-    @Override
-    public String type() {
-        return "smart_interface";
-    }
-
-    @Override
-    public boolean simulate(RecipeCraftingContext context, int requirementIndex) {
-        if (io == RecipeModifier.IOType.INPUT) {
-            boolean matches = context.smartInterfaceValue(interfaceType)
-                    .filter(value -> value >= minValue && value <= maxValue)
-                    .isPresent();
-            if (!matches) context.setRequirementFailure(context.smartInterfaceFailureMessage(interfaceType), null);
-            return matches;
-        }
-        return context.hasSmartInterface(interfaceType);
-    }
-
-    @Override
-    public boolean commit(RecipeCraftingContext context, int requirementIndex) {
-        return io == RecipeModifier.IOType.INPUT || context.setSmartInterfaceValue(interfaceType, minValue);
-    }
 }

@@ -148,6 +148,8 @@ public final class MachineRecipeSyncCodec {
                 buf.writeFloat(smartInterface.minValue());
                 buf.writeFloat(smartInterface.maxValue());
             }
+            default -> throw new IllegalArgumentException(
+                    "Unsupported machine requirement for network encoding: " + value.type().id());
         }
     }
 

@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
-import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
-import cn.howxu.mmcr.api.recipe.helper.EnergyRecipeIo;
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 
 import java.util.List;
@@ -10,6 +9,7 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public record EnergyRequirement(RecipeModifier.IOType io, int fePerTick, List<String> tags) implements MachineRequirement {
+    public static final RequirementType<EnergyRequirement> TYPE = new RequirementType<>(MMCR.id("energy"));
 
     public EnergyRequirement(int fePerTick) {
         this(RecipeModifier.IOType.INPUT, fePerTick, List.of());
@@ -29,36 +29,8 @@ public record EnergyRequirement(RecipeModifier.IOType io, int fePerTick, List<St
     }
 
     @Override
-    public String type() {
-        return "energy";
+    public RequirementType<EnergyRequirement> type() {
+        return TYPE;
     }
 
-    @Override
-    public RecipeModifier.IOType io() {
-        return io;
-    }
-
-    @Override
-    public boolean simulate(RecipeCraftingContext context, int requirementIndex) {
-        return io == RecipeModifier.IOType.INPUT
-                ? context.simulateEnergyInput(requirementIndex, this)
-                : context.simulateEnergyOutput(requirementIndex, this);
-    }
-
-    @Override
-    public boolean commit(RecipeCraftingContext context, int requirementIndex) {
-        return io == RecipeModifier.IOType.INPUT
-                ? context.collectEnergyInputRoute(requirementIndex)
-                : context.collectEnergyOutputRoute(requirementIndex);
-    }
-
-    @Override
-    public boolean ioTick(RecipeCraftingContext context, int requirementIndex) {
-        if (io == RecipeModifier.IOType.INPUT) {
-            if (EnergyRecipeIo.consumeInputs(context.taggedEnergyStorages(tags), fePerTick, 1)) return true;
-            return context.simulateEnergyInput(requirementIndex, this);
-        }
-        if (EnergyRecipeIo.produceOutputs(context.taggedEnergyOutputs(tags), fePerTick, 1)) return true;
-        return context.simulateEnergyOutput(requirementIndex, this);
-    }
 }
