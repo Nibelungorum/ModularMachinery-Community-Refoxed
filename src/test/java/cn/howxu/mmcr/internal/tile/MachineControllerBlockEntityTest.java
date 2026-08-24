@@ -2869,6 +2869,41 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void ordinary_structure_chunk_unload_does_not_pause_active_recipe() throws Exception {
+        BlockPos controllerPos = new BlockPos(10, 4, 10);
+        BlockPos ordinaryPos = controllerPos.offset(20, 0, 0);
+        BlockArray pattern = new BlockArray(Map.of(
+                ordinaryPos.subtract(controllerPos), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+        DynamicMachine machine = new DynamicMachine(MMCR.id("ordinary_chunk_machine"), "Ordinary Chunk", pattern);
+        MachineRegistry.register(machine);
+
+        MachineControllerBlockEntity controller = controllerBlockEntityWithoutRunningMinecraftConstructor();
+        initializeComponents(controller);
+        var controllerBlock = testControllerBlock(machine);
+        var controllerState = testControllerState(controllerBlock);
+        setField(BlockEntity.class, controller, "worldPosition", controllerPos);
+        setField(BlockEntity.class, controller, "blockState", controllerState);
+        Level level = LevelStub.create(Map.of(
+                controllerPos, controllerBlock,
+                ordinaryPos, Blocks.IRON_BLOCK), List.of(controller));
+        setField(BlockEntity.class, controller, "level", level);
+
+        assertThat(invokeTryFormMachine(controller, machine, Direction.SOUTH)).isTrue();
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("ordinary_chunk_recipe"), machine.registryName(), 100,
+                List.of(), List.of());
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, 1);
+        setField(MachineControllerBlockEntity.class, controller, "active", active);
+        setField(MachineControllerBlockEntity.class, controller, "context", new RecipeCraftingContext(controller));
+
+        MachineControllerBlockEntity.markStructureChunkDirty(level,
+                new ChunkPos(ordinaryPos.getX() >> 4, ordinaryPos.getZ() >> 4));
+
+        assertThat((boolean) fieldValue(MachineControllerBlockEntity.class, controller, "structureDirty")).isFalse();
+        assertThat(controller.getActive()).isSameAs(active);
+        assertThat(fieldValue(MachineControllerBlockEntity.class, controller, "pausedActive")).isNull();
+    }
+
+    @Test
     void chunk_unload_stops_factory_lanes_when_single_active_slot_is_empty() throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
         var factoryMachine = new DynamicMachine(

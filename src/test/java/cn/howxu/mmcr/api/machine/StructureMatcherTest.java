@@ -126,7 +126,7 @@ class StructureMatcherTest {
     }
 
     @Test
-    void area_loaded_checks_every_chunk_touched_by_bounding_box() {
+    void compiled_matching_does_not_require_every_bounding_box_chunk_loaded() {
         BlockArray pattern = new BlockArray(Map.of(
                 BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE),
                 new BlockPos(20, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE)));
@@ -138,7 +138,7 @@ class StructureMatcherTest {
                 Set.of(LevelStub.chunkKey(0, 0)));
 
         assertThat(StructureMatcher.isAreaLoaded(compiled, Direction.SOUTH, level, controllerPos)).isFalse();
-        assertThat(StructureMatcher.matchesCompiled(compiled, Direction.SOUTH, level, controllerPos)).isFalse();
+        assertThat(StructureMatcher.matchesCompiled(compiled, Direction.SOUTH, level, controllerPos)).isTrue();
     }
 
     @Test

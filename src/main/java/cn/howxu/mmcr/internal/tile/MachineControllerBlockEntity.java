@@ -207,6 +207,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable ServerPlayer buildTaskOwner;
     private int buildTaskAge;
     private final Map<Long, Integer> buildTaskPlacementsPerTickForTesting = new LinkedHashMap<>();
+    private Set<ChunkPos> criticalStructureChunks = new HashSet<>();
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
@@ -913,12 +914,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
             structureDirty = true;
             nextStructureCheckTick = -1L;
         }
-    }
-
-    private boolean isStructureAreaLoaded() {
-        if (foundCompiledPattern == null || controllerFacing == null || level == null) return true;
-        if (!hasCompiledFacing(foundCompiledPattern, controllerFacing)) return true;
-        return StructureMatcher.isAreaLoaded(foundCompiledPattern, controllerFacing, level, getBlockPos());
     }
 
     private int structureCheckIntervalTicks() {
@@ -1667,6 +1662,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         foundLevels = levels;
         collectFoundModifiers(replacements);
+        refreshCriticalStructureChunks();
         FORMED_CONTROLLERS.add(this);
         if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
         if (previousStage != matchedStructureStage) structureVersion++;
@@ -1941,7 +1937,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private void onStructureChunkUnloaded(ChunkPos chunkPos) {
         if (structureScan != null) invalidateStructureScan(StructureMatcher.InvalidationReason.UNLOADED);
         if (!isFormed() || foundPattern == null || controllerFacing == null) return;
-        if (!compiledBoundsTouchesChunk(chunkPos)) return;
+        if (!criticalStructureChunks().contains(chunkPos)) return;
         structureDirty = true;
         if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
         pauseActiveForUnloadedStructure();
@@ -1966,15 +1962,34 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
     }
 
-    private boolean compiledBoundsTouchesChunk(ChunkPos chunkPos) {
-        BoundingBox box = hasCompiledFacing(foundCompiledPattern, controllerFacing)
-                ? foundCompiledPattern.boundingBox(controllerFacing)
-                : boundingBox(foundPattern);
-        int minChunkX = (getBlockPos().getX() + box.minX()) >> 4;
-        int maxChunkX = (getBlockPos().getX() + box.maxX()) >> 4;
-        int minChunkZ = (getBlockPos().getZ() + box.minZ()) >> 4;
-        int maxChunkZ = (getBlockPos().getZ() + box.maxZ()) >> 4;
-        return chunkPos.x() >= minChunkX && chunkPos.x() <= maxChunkX && chunkPos.z() >= minChunkZ && chunkPos.z() <= maxChunkZ;
+    private void refreshCriticalStructureChunks() {
+        criticalStructureChunks().clear();
+        criticalStructureChunks().add(new ChunkPos(getBlockPos().getX() >> 4, getBlockPos().getZ() >> 4));
+        if (level == null || foundPattern == null || controllerFacing == null) return;
+        for (BlockPos relativePos : componentPositions()) {
+            BlockEntity blockEntity = level.getBlockEntity(getBlockPos().offset(relativePos));
+            if (blockEntity instanceof IOPortBlockEntity
+                    || blockEntity instanceof SmartInterfaceBlockEntity
+                    || blockEntity instanceof ModuleCouplerBlockEntity) {
+                BlockPos blockPos = blockEntity.getBlockPos();
+                criticalStructureChunks().add(new ChunkPos(blockPos.getX() >> 4, blockPos.getZ() >> 4));
+            }
+        }
+    }
+
+    private Set<ChunkPos> criticalStructureChunks() {
+        if (criticalStructureChunks == null) criticalStructureChunks = new HashSet<>();
+        return criticalStructureChunks;
+    }
+
+    private boolean isStructureAreaLoaded() {
+        if (level == null) return true;
+        ChunkPos controllerChunk = new ChunkPos(getBlockPos().getX() >> 4, getBlockPos().getZ() >> 4);
+        for (ChunkPos chunkPos : criticalStructureChunks()) {
+            if (chunkPos.equals(controllerChunk)) continue;
+            if (!level.hasChunk(chunkPos.x(), chunkPos.z())) return false;
+        }
+        return true;
     }
 
     private static boolean hasCompiledFacing(@Nullable CompiledMachinePattern compiled, @Nullable Direction facing) {
@@ -2091,6 +2106,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         foundMachine = null;
         foundPattern = null;
         foundCompiledPattern = null;
+        criticalStructureChunks().clear();
         matchedStructureStage = 0;
         controllerFacing = null;
         matchedRollFacing = Direction.SOUTH;

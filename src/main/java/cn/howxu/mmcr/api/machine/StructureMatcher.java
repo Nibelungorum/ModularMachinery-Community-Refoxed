@@ -232,7 +232,6 @@ public final class StructureMatcher {
 
     public static boolean matchesCompiled(CompiledMachinePattern compiled, Direction facing, Direction rollFacing,
                                           Level level, BlockPos ctrlPos, boolean stateSensitive) {
-        if (!isAreaLoaded(compiled, facing, level, ctrlPos)) return false;
         return matchesCompiledLoaded(compiled, facing, rollFacing, level, ctrlPos, Map.of(), stateSensitive);
     }
 
@@ -240,7 +239,6 @@ public final class StructureMatcher {
                                           Level level, BlockPos ctrlPos,
                                           Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
                                           boolean stateSensitive) {
-        if (!isAreaLoaded(compiled, facing, level, ctrlPos)) return false;
         return matchesCompiledLoaded(compiled, facing, rollFacing, level, ctrlPos, replacements, stateSensitive);
     }
 
