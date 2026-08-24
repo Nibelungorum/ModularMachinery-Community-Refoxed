@@ -155,7 +155,18 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
         @Override
         public void setStackInSlot(int slot, ItemStack stack) {
             validateSlotIndex(slot);
-            replace(slot, stack);
+            boolean wasSuppressingChanges = suppressChanges;
+            suppressChanges = true;
+            boolean replaced;
+            try {
+                replaced = replace(slot, stack);
+            } finally {
+                suppressChanges = wasSuppressingChanges;
+            }
+            if (!replaced) {
+                throw new IllegalArgumentException("Item stack cannot fit in slot " + slot);
+            }
+            if (!wasSuppressingChanges) onChange.accept(slot);
         }
 
         @Override
@@ -172,7 +183,10 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
             validateSlotIndex(slot);
             if (!isItemValid(slot, stack)) return stack;
             ItemResource resource = ItemResource.of(stack);
-            long inserted = storages[slot].insert(resource, stack.getCount(), simulate);
+            long limit = Math.min((long) getSlotLimit(slot), stack.getMaxStackSize());
+            long available = limit - storages[slot].amount(0);
+            if (available <= 0L) return stack;
+            long inserted = storages[slot].insert(resource, Math.min(stack.getCount(), available), simulate);
             return inserted == stack.getCount()
                     ? ItemStack.EMPTY
                     : stack.copyWithCount(stack.getCount() - (int) inserted);
@@ -184,7 +198,7 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
             validateSlotIndex(slot);
             ItemResource resource = storages[slot].resource(0);
             if (resource.isEmpty()) return ItemStack.EMPTY;
-            long extracted = storages[slot].extract(resource, amount, simulate);
+            long extracted = storages[slot].extract(resource, Math.min(amount, resource.getMaxStackSize()), simulate);
             return extracted == 0L ? ItemStack.EMPTY : resource.toStack((int) extracted);
         }
 
@@ -223,10 +237,24 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
             }
         }
 
-        private void replace(int slot, ItemStack stack) {
+        private boolean replace(int slot, ItemStack stack) {
+            if (stack == null) return false;
+            ItemResource incoming = stack.isEmpty() ? ItemResource.EMPTY : ItemResource.of(stack);
+            long requested = stack.isEmpty() ? 0L : stack.getCount();
+            if (!incoming.isEmpty() && requested > storages[slot].capacity(0, null)) return false;
+            if (!stack.isEmpty() && incoming.isEmpty()) return false;
+
             ItemResource current = storages[slot].resource(0);
+            long currentAmount = storages[slot].amount(0);
             if (!current.isEmpty()) storages[slot].extract(current, Long.MAX_VALUE, false);
-            if (!stack.isEmpty()) storages[slot].insert(ItemResource.of(stack), stack.getCount(), false);
+            if (requested == 0L) return true;
+
+            long inserted = storages[slot].insert(incoming, requested, false);
+            if (inserted == requested) return true;
+
+            if (inserted > 0L) storages[slot].extract(incoming, inserted, false);
+            if (currentAmount > 0L) storages[slot].insert(current, currentAmount, false);
+            return false;
         }
 
         private void storageChanged(int slot) {

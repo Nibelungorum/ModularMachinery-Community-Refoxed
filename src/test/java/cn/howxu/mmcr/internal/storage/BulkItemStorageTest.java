@@ -71,4 +71,19 @@ class BulkItemStorageTest {
 
         assertThat(storage.amount(0)).isEqualTo(25L);
     }
+
+    @Test
+    void uncommitted_transaction_restores_resource_and_amount() {
+        BulkItemStorage storage = new BulkItemStorage(100L, () -> {});
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(storage.insert(0, iron, 25L, transaction)).isEqualTo(25L);
+            assertThat(storage.resource(0)).isEqualTo(iron);
+            assertThat(storage.amount(0)).isEqualTo(25L);
+        }
+
+        assertThat(storage.resource(0)).isEqualTo(ItemResource.EMPTY);
+        assertThat(storage.amount(0)).isZero();
+    }
 }
