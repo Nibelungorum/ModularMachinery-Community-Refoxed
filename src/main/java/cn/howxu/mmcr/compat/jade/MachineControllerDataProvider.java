@@ -1,10 +1,9 @@
 package cn.howxu.mmcr.compat.jade;
 
-import cn.howxu.mmcr.api.recipe.MachineComponent;
-import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
+import cn.howxu.mmcr.internal.runtime.MachineStateSnapshot;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
@@ -29,23 +28,22 @@ public enum MachineControllerDataProvider implements IServerDataProvider<BlockAc
         if (!(accessor.getTarget() instanceof MachineControllerBlockEntity controller)) return;
 
         ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
-        var machineState = SYNC_RUNTIME.machineState(runtime);
+        MachineStateSnapshot machineState = SYNC_RUNTIME.machineState(runtime);
         FactorySnapshot factory = SYNC_RUNTIME.factoryState(runtime);
-        var machine = SYNC_RUNTIME.machine(runtime);
-        data.putBoolean("formed", machineState.structure().formed());
-        data.putBoolean("active", SYNC_RUNTIME.active(runtime));
-        data.putInt("parallelism", SYNC_RUNTIME.currentParallelism(runtime));
-        data.putInt("maxParallelism", SYNC_RUNTIME.maxParallelism(runtime));
+        data.putBoolean("formed", machineState.formed());
+        data.putBoolean("active", machineState.active());
+        data.putInt("parallelism", machineState.parallelism());
+        data.putInt("maxParallelism", machineState.maxParallelism());
         data.putInt("parallelSlots", factory.parallelSlots());
-        data.putInt("maxParallelSlots", SYNC_RUNTIME.maxParallelControllerCount(runtime));
-        data.putBoolean("factorySupported", machine != null && machine.hasFactory());
-        data.putBoolean("factoryPresent", SYNC_RUNTIME.factoryControllerPresent(runtime));
+        data.putInt("maxParallelSlots", machineState.maxParallelControllerCount());
+        data.putBoolean("factorySupported", runtime.factorySupported());
+        data.putBoolean("factoryPresent", machineState.factoryControllerPresent());
         data.putInt("factoryLanes", factory.activeLaneCount());
         data.putInt("factoryThreadLimit", factory.laneLimit());
-        String activeRecipe = SYNC_RUNTIME.activeRecipe(runtime);
+        String activeRecipe = machineState.activeRecipe();
         if (!activeRecipe.isEmpty()) data.putString("activeRecipe", activeRecipe);
-        data.putInt("tick", SYNC_RUNTIME.tick(runtime));
-        data.putInt("totalTick", SYNC_RUNTIME.totalTick(runtime));
+        data.putInt("tick", machineState.tick());
+        data.putInt("totalTick", machineState.totalTick());
 
         int itemInputs = 0;
         int itemOutputs = 0;
@@ -53,10 +51,9 @@ public enum MachineControllerDataProvider implements IServerDataProvider<BlockAc
         int fluidOutputs = 0;
         int energyInputs = 0;
         int energyOutputs = 0;
-        for (ProcessingComponent processingComponent : runtime.components()) {
-            MachineComponent component = processingComponent.getComponent();
-            if (component == null || component.kind() == null) continue;
-            switch (component.kind().id()) {
+        for (ControllerRuntimeSnapshot.ComponentPresentation component : machineState.components()) {
+            if (component.kindId() == null) continue;
+            switch (component.kindId()) {
                 case "item_input_bus" -> itemInputs++;
                 case "item_output_bus" -> itemOutputs++;
                 case "fluid_input_hatch" -> fluidInputs++;

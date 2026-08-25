@@ -44,7 +44,7 @@ public abstract class RecipeThread {
     protected RecipeThread(MachineControllerBlockEntity controller) {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
         this.controller = controller;
-        this.runtime = new CraftingRuntime(controller);
+        this.runtime = new CraftingRuntime(controller, controller.componentRuntime());
     }
 
     public boolean searchAndStartRecipe(List<MachineRecipe> candidates, int availableParallelism, long structureVersion) {
@@ -58,7 +58,7 @@ public abstract class RecipeThread {
                 ? null : controller.runtimeSnapshot().structure().machine().registryName();
         if (machineId == null || availableParallelism <= 0) return false;
         RecipeSearchResult result = new RecipeSearchTask(snapshot, machineId, structureVersion,
-                availableParallelism, candidates, lockedRecipeId).compute();
+                availableParallelism, candidates, lockedRecipeId, controller.componentRuntime().capabilities()).compute();
         if (!result.success()) {
             controller.clearPendingConflictStart();
             onStartSearchFailed(result.failure());

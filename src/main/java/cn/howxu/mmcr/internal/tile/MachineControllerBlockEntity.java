@@ -60,6 +60,7 @@ import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
+import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
@@ -188,6 +189,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return runtime.snapshot();
     }
 
+    public ComponentRuntime componentRuntime() {
+        return runtime.componentRuntime();
+    }
+
     void ensureFactoryRuntimeLoaded() {
         if (pendingFactoryRuntimeInput == null) return;
         ValueInput input = pendingFactoryRuntimeInput;
@@ -222,7 +227,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         ControllerRuntimeSnapshot current = runtimeSnapshot();
         runtime.publishStructureState(isStructureAreaLoaded(current.structure()), current.structure().formed(),
                 current.structure().configuredMachine(), current.structure().matchedStage());
-        runtime.publishComponentState(current.components(), current.foundModifiers(),
+        runtime.publishComponentState(runtime.components(), current.foundModifiers(),
                 current.foundLevels(), current.linkedPortPositions());
         ControllerRuntimeSnapshot published = runtimeSnapshot();
         if (published.crafting().recipeId() != null || published.crafting().failure() != null) {
@@ -306,7 +311,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         ControllerRuntimeSnapshot current = runtimeSnapshot();
         runtime.publishStructureState(isStructureAreaLoaded(current.structure()), current.structure().formed(), m,
                 current.structure().matchedStage());
-        runtime.publishComponentState(current.components(), current.foundModifiers(), Map.of(),
+        runtime.publishComponentState(runtime.components(), current.foundModifiers(), Map.of(),
                 current.linkedPortPositions());
         markRecipeDirty();
         setChanged();
@@ -547,18 +552,17 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public int currentParallelism() {
         ControllerRuntimeSnapshot state = runtimeSnapshot();
-        if (isFactoryController(state)) return state.factory().activeParallelism();
-        return runtime.craftingRuntime().parallelism();
+        return SYNC_RUNTIME.machineState(state).parallelism();
     }
 
     public int activeFactoryThreadCount() {
         ControllerRuntimeSnapshot state = runtimeSnapshot();
-        return isFactoryController(state) ? state.factory().activeLaneCount() : 0;
+        return SYNC_RUNTIME.machineState(state).activeFactoryThreadCount();
     }
 
     public boolean isPortUsedByActiveRecipe(BlockPos pos) {
         return runtime.craftingRuntime().active()
-                && runtimeSnapshot().components().stream().anyMatch(component -> component.getPos().equals(pos));
+                && runtime.components().stream().anyMatch(component -> component.getPos().equals(pos));
     }
 
     public void markRecipeDirty() {
@@ -570,24 +574,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public int getMaxParallelism() {
-        ControllerRuntimeSnapshot state = runtimeSnapshot();
-        Machine configuredMachine = state.structure().configuredMachine();
-        return runtime.maxParallelism(configuredMachine);
+        return SYNC_RUNTIME.machineState(runtimeSnapshot()).maxParallelism();
     }
 
     public int parallelControllerCount() {
-        int count = 0;
-        for (ProcessingComponent component : runtimeSnapshot().components()) {
-            if (component.getContainer() instanceof ParallelControllerBlockEntity) count++;
-        }
-        return count;
+        return SYNC_RUNTIME.machineState(runtimeSnapshot()).parallelControllerCount();
     }
 
     public int maxParallelControllerCount() {
-        Machine configuredMachine = runtimeSnapshot().structure().configuredMachine();
-        if (configuredMachine == null || !configuredMachine.parallelizable()) return 0;
-        int maxParallelism = Math.max(1, configuredMachine.maxParallelism());
-        return maxParallelism == Integer.MAX_VALUE ? Integer.MAX_VALUE : maxParallelism;
+        return SYNC_RUNTIME.machineState(runtimeSnapshot()).maxParallelControllerCount();
     }
 
     public @Nullable FactorySchedulerBlockEntity getFactoryController() {
@@ -629,9 +624,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private static boolean isFactoryController(ControllerRuntimeSnapshot state) {
-        Machine configuredMachine = state.structure().configuredMachine();
-        return configuredMachine != null && configuredMachine.hasFactory()
-                && state.components().stream().anyMatch(component -> component.getContainer() instanceof FactorySchedulerBlockEntity);
+        return SYNC_RUNTIME.factoryControllerPresent(state);
     }
 
     public int effectiveFactoryThreadLimit() {
@@ -692,7 +685,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public int factorySchedulerThreadCount() {
         long total = 0;
-        for (ProcessingComponent component : runtimeSnapshot().components()) {
+        for (ProcessingComponent component : runtime.components()) {
             if (component.getContainer() instanceof FactorySchedulerBlockEntity scheduler) {
                 total += scheduler.threadCount();
                 if (total >= Integer.MAX_VALUE) return Integer.MAX_VALUE;
@@ -702,7 +695,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     List<FactorySchedulerBlockEntity> factoryComponents() {
-        return runtimeSnapshot().components().stream()
+        return runtime.components().stream()
                 .map(ProcessingComponent::getContainer)
                 .filter(FactorySchedulerBlockEntity.class::isInstance)
                 .map(FactorySchedulerBlockEntity.class::cast)
@@ -1696,7 +1689,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         ControllerRuntimeSnapshot current = runtimeSnapshot();
         List<RecipeModifier> beforeModifiers = current.foundModifiers().values().stream().flatMap(List::stream).toList();
         Map<String, List<RecipeModifier>> foundModifiers = collectFoundModifiers(replacements);
-        runtime.publishComponentState(current.components(), foundModifiers, levels, current.linkedPortPositions());
+        runtime.publishComponentState(runtime.components(), foundModifiers, levels, current.linkedPortPositions());
         List<RecipeModifier> afterModifiers = foundModifiers.values().stream().flatMap(List::stream).toList();
         if (!beforeModifiers.equals(afterModifiers)) markRecipeDirty();
         refreshCriticalStructureChunks();
@@ -1759,7 +1752,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private void clearFoundModifiers() {
         ControllerRuntimeSnapshot current = runtimeSnapshot();
         if (current.foundModifiers().isEmpty()) return;
-        runtime.publishComponentState(current.components(), Map.of(), current.foundLevels(),
+        runtime.publishComponentState(runtime.components(), Map.of(), current.foundLevels(),
                 current.linkedPortPositions());
         markRecipeDirty();
     }
@@ -1771,7 +1764,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         BlockArray matchedPattern = structure.pattern();
         List<FactorySchedulerBlockEntity> previousFactories = factoryComponents();
         for (FactorySchedulerBlockEntity factory : previousFactories) factory.bindOwner(null);
-        List<SmartInterfaceBlockEntity> previousSmartInterfaces = runtimeSnapshot().components().stream()
+        List<SmartInterfaceBlockEntity> previousSmartInterfaces = runtime.components().stream()
                 .map(ProcessingComponent::getContainer)
                 .filter(SmartInterfaceBlockEntity.class::isInstance)
                 .map(SmartInterfaceBlockEntity.class::cast)
@@ -1843,7 +1836,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         ControllerRuntimeSnapshot current = runtimeSnapshot();
         Set<BlockPos> linkedPortPositions = current.linkedPortPositions();
         if (level == null) {
-            runtime.publishComponentState(current.components(), current.foundModifiers(), current.foundLevels(), Set.of());
+            runtime.publishComponentState(runtime.components(), current.foundModifiers(), current.foundLevels(), Set.of());
             return;
         }
         if (runtimeSnapshot().structure().pattern() != null) {
@@ -1859,7 +1852,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 linkedAppearance.unlinkControllerAppearance(getBlockPos());
             }
         }
-        runtime.publishComponentState(current.components(), current.foundModifiers(), current.foundLevels(), Set.of());
+        runtime.publishComponentState(runtime.components(), current.foundModifiers(), current.foundLevels(), Set.of());
     }
 
     private List<BlockPos> componentPositions() {
@@ -2096,7 +2089,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         int fluidOutputs = 0;
         int energyInputs = 0;
         int energyOutputs = 0;
-        for (ProcessingComponent processingComponent : runtimeSnapshot().components()) {
+        for (ProcessingComponent processingComponent : runtime.components()) {
             var component = processingComponent.getComponent();
             if (component == null || component.kind() == null) continue;
             switch (component.kind().id()) {
@@ -2229,7 +2222,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         RecipeSearchResult result;
         try {
             result = new RecipeSearchTask(runtimeSnapshot(), machineId, runtimeSnapshot().structure().version(),
-                    maxParallelism, candidates, lockedRecipeId).compute();
+                    maxParallelism, candidates, lockedRecipeId, componentRuntime().capabilities()).compute();
         } catch (RuntimeException e) {
             LOG.warn("[Ctrl#{}] tryStartNewRecipe: recipe search failed at pos={}; retrying later", instanceId, getBlockPos(), e);
             clearPendingConflictStart();
@@ -2760,7 +2753,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 if (foundLevel != null) restoredLevels.put(foundLevel.typeId(), foundLevel);
             });
             ControllerRuntimeSnapshot current = runtimeSnapshot();
-            runtime.publishComponentState(current.components(), current.foundModifiers(), restoredLevels,
+            runtime.publishComponentState(runtime.components(), current.foundModifiers(), restoredLevels,
                     current.linkedPortPositions());
             lastFailureUnloc = null;
             String lockedRecipeName = input.getStringOr("locked_recipe", "");

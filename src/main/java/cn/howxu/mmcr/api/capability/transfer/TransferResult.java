@@ -14,5 +14,6 @@ import org.jetbrains.annotations.Nullable;
 public record TransferResult(boolean successful, long amount, @Nullable ExecutionStatus failure) {
     public TransferResult {
         if (amount < 0L) throw new IllegalArgumentException("amount must not be negative");
+        if (successful != (amount > 0L)) throw new IllegalArgumentException("successful must match amount");
     }
 }

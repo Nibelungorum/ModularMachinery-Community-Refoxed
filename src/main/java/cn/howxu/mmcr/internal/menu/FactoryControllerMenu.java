@@ -95,6 +95,7 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
     public int maxParallelism() { return snapshot.maxParallelism(); }
     public String machineName() { return snapshot.machineName(); }
     public int parallelSlots() { return snapshot.parallelSlots(); }
+    public List<String> foundLevelIds() { return snapshot.foundLevelIds(); }
     public String lastFailureUnloc() {
         String failure = SYNC_RUNTIME.failureMessage(snapshot);
         if (!failure.isEmpty()) return failure;

@@ -22,7 +22,8 @@ public record FactorySnapshot(
         List<FactoryRuntime.ThreadSnapshot> presentationLanes,
         String machineName,
         int parallelSlots,
-        @Nullable ExecutionStatus failure) {
+        @Nullable ExecutionStatus failure,
+        List<String> foundLevelIds) {
 
     public FactorySnapshot {
         machineName = machineName == null ? "" : machineName;
@@ -33,10 +34,11 @@ public record FactorySnapshot(
         if (maxParallelism < 1) throw new IllegalArgumentException("maxParallelism must be positive");
         presentationLanes = List.copyOf(presentationLanes == null ? List.of() : presentationLanes);
         if (parallelSlots < 0) throw new IllegalArgumentException("parallelSlots must not be negative");
+        foundLevelIds = List.copyOf(foundLevelIds == null ? List.of() : foundLevelIds);
     }
 
     public static FactorySnapshot empty() {
         return new FactorySnapshot(false, false, List.of(), 0, 1, 0, 1,
-                false, List.of(), "", 0, null);
+                false, List.of(), "", 0, null, List.of());
     }
 }

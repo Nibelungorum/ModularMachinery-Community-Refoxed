@@ -1,10 +1,9 @@
 package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
-import cn.howxu.mmcr.api.machine.Machine;
-import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
-import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
+import cn.howxu.mmcr.internal.runtime.MachineStateSnapshot;
+import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -20,6 +19,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.Optional;
 
 public class MachineControllerMenu extends AbstractMachineMenu {
@@ -48,65 +48,60 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     private int clientControllerRole;
     private @Nullable Identifier clientMachineId;
     private @Nullable Identifier clientConnectedHostId;
+    private @Nullable PktMachineStatePayload clientSnapshot;
 
     public MachineControllerMenu(int containerId, Inventory playerInv, MachineControllerBlockEntity owner) {
         super(ModUIs.MACHINE_CONTROLLER.get(), containerId);
         this.owner = owner;
         this.level = playerInv.player == null ? null : playerInv.player.level();
         this.pos = owner == null ? BlockPos.ZERO : owner.getBlockPos();
-        wasFormedDuringSession = owner != null && owner.runtimeSnapshot().structure().formed();
+        wasFormedDuringSession = owner != null && machineState(owner).formed();
         this.formed = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return owner.runtimeSnapshot().structure().formed() ? 1 : 0; }
+            @Override public int get() { return machineState(owner).formed() ? 1 : 0; }
             @Override public void set(int value) {}
         });
         this.active = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return SYNC_RUNTIME.active(owner.runtimeSnapshot()) ? 1 : 0; }
+            @Override public int get() { return machineState(owner).active() ? 1 : 0; }
             @Override public void set(int value) {}
         });
         this.activeTick = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return activeRecipeTick(owner); }
+            @Override public int get() { return machineState(owner).tick(); }
             @Override public void set(int value) {}
         });
         this.activeTotalTick = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return activeRecipeTotalTick(owner); }
+            @Override public int get() { return machineState(owner).totalTick(); }
             @Override public void set(int value) {}
         });
         this.lastFailure = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return failureCode(SYNC_RUNTIME.failureMessage(owner.runtimeSnapshot())); }
+            @Override public int get() { return failureCode(SYNC_RUNTIME.failureMessage(machineState(owner).failure())); }
             @Override public void set(int value) {}
         });
         this.redstonePaused = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() {
-                var state = owner.runtimeSnapshot();
-                return state.crafting().status().isPaused() || state.factory().paused() ? 1 : 0;
-            }
+            @Override public int get() { return machineState(owner).redstonePaused() ? 1 : 0; }
             @Override public void set(int value) {}
         });
         this.parallelControllerCount = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return SYNC_RUNTIME.parallelControllerCount(owner.runtimeSnapshot()); }
+            @Override public int get() { return machineState(owner).parallelControllerCount(); }
             @Override public void set(int value) {}
         });
         this.currentParallelism = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return SYNC_RUNTIME.currentParallelism(owner.runtimeSnapshot()); }
+            @Override public int get() { return machineState(owner).parallelism(); }
             @Override public void set(int value) {}
         });
         this.maxParallelism = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return SYNC_RUNTIME.maxParallelism(owner.runtimeSnapshot()); }
+            @Override public int get() { return machineState(owner).maxParallelism(); }
             @Override public void set(int value) {}
         });
         this.factoryControllerPresent = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return SYNC_RUNTIME.factoryControllerPresent(owner.runtimeSnapshot()) ? 1 : 0; }
+            @Override public int get() { return machineState(owner).factoryControllerPresent() ? 1 : 0; }
             @Override public void set(int value) {}
         });
         this.factoryThreadCount = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() {
-                ControllerRuntimeSnapshot runtime = owner.runtimeSnapshot();
-                return SYNC_RUNTIME.factoryControllerPresent(runtime) ? runtime.factory().laneLimit() : 0;
-            }
+            @Override public int get() { return machineState(owner).factoryThreadCount(); }
             @Override public void set(int value) {}
         });
         this.factoryActiveThreadCount = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return SYNC_RUNTIME.activeFactoryThreadCount(owner.runtimeSnapshot()); }
+            @Override public int get() { return machineState(owner).activeFactoryThreadCount(); }
             @Override public void set(int value) {}
         });
         this.recipeLocked = ControllerMenuState.addRecipeLockSlot(this, owner);
@@ -116,7 +111,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.clientControllerRole = controllerRoleSyncValue(owner);
         this.clientMachineId = machineIdFor(owner);
         this.clientConnectedHostId = owner == null ? null
-                : owner.runtimeSnapshot().moduleConnectionStatus().connectedHostId();
+                : machineState(owner).connectedHostId().isEmpty() ? null : Identifier.parse(machineState(owner).connectedHostId());
         addControllerPlayerSlots(playerInv);
     }
 
@@ -208,180 +203,168 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     }
 
     public @Nullable Identifier machineId() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        Machine machine = controller == null ? null : controller.runtimeSnapshot().structure().configuredMachine();
-        Identifier id = machine == null ? null : machine.registryName();
-        return id == null ? clientMachineId : id;
+        if (clientSnapshot != null) return identifierOrNull(clientSnapshot.machineId());
+        MachineStateSnapshot state = localState();
+        return state == null ? clientMachineId : identifierOrNull(state.machineId());
     }
 
     public boolean isFormed() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? formed.get() != 0 : controller.runtimeSnapshot().structure().formed();
+        if (clientSnapshot != null) return clientSnapshot.formed();
+        MachineStateSnapshot state = localState();
+        return state == null ? formed.get() != 0 : state.formed();
     }
 
     boolean wasFormedDuringSession() {
-        if (owner != null && owner.runtimeSnapshot().structure().formed()) wasFormedDuringSession = true;
+        if (isFormed()) wasFormedDuringSession = true;
         return wasFormedDuringSession;
     }
 
     public boolean hasActiveRecipe() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? active.get() != 0 : SYNC_RUNTIME.active(controller.runtimeSnapshot())
-                || activeFactoryThread(controller) != null || active.get() != 0;
+        if (clientSnapshot != null) return clientSnapshot.active();
+        MachineStateSnapshot state = localState();
+        return state == null ? active.get() != 0 : state.active();
     }
 
     public int activeRecipeTick() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? activeTick.get() : activeRecipeTick(controller);
+        if (clientSnapshot != null) return clientSnapshot.tick();
+        MachineStateSnapshot state = localState();
+        return state == null ? activeTick.get() : state.tick();
     }
 
     public int activeRecipeTotalTick() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? activeTotalTick.get() : activeRecipeTotalTick(controller);
-    }
-
-    private static int activeRecipeTick(@Nullable MachineControllerBlockEntity controller) {
-        if (controller == null) return 0;
-        ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
-        FactoryRuntime.ThreadSnapshot thread = activeFactoryThread(controller);
-        return thread == null ? runtime.crafting().tick() : thread.tick();
-    }
-
-    private static int activeRecipeTotalTick(@Nullable MachineControllerBlockEntity controller) {
-        if (controller == null) return 0;
-        ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
-        FactoryRuntime.ThreadSnapshot thread = activeFactoryThread(controller);
-        return thread == null ? runtime.crafting().totalTick() : thread.totalTick();
-    }
-
-    private static @Nullable FactoryRuntime.ThreadSnapshot activeFactoryThread(MachineControllerBlockEntity controller) {
-        ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
-        if (!SYNC_RUNTIME.factoryControllerPresent(runtime)) return null;
-        return runtime.factory().presentationLanes().stream()
-                .filter(FactoryRuntime.ThreadSnapshot::active)
-                .findFirst()
-                .orElse(null);
+        if (clientSnapshot != null) return clientSnapshot.totalTick();
+        MachineStateSnapshot state = localState();
+        return state == null ? activeTotalTick.get() : state.totalTick();
     }
 
     public @Nullable String lastFailureMessage() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        if (controller != null) return SYNC_RUNTIME.failureMessage(controller.runtimeSnapshot());
+        if (clientSnapshot != null) {
+            String failure = SYNC_RUNTIME.failureMessage(clientSnapshot.failure());
+            return failure.isEmpty() ? failureKey(lastFailure.get()) : failure;
+        }
+        MachineStateSnapshot state = localState();
+        if (state != null) return SYNC_RUNTIME.failureMessage(state.failure());
         return failureKey(lastFailure.get());
     }
 
     public boolean isRedstonePaused() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        if (controller == null) return redstonePaused.get() != 0;
-        var state = controller.runtimeSnapshot();
-        return state.crafting().status().isPaused() || state.factory().paused() || redstonePaused.get() != 0;
+        if (clientSnapshot != null) return clientSnapshot.redstonePaused();
+        MachineStateSnapshot state = localState();
+        return state == null ? redstonePaused.get() != 0 : state.redstonePaused();
     }
 
     public int parallelControllerCount() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? parallelControllerCount.get()
-                : SYNC_RUNTIME.parallelControllerCount(controller.runtimeSnapshot());
+        if (clientSnapshot != null) return parallelControllerCount.get();
+        MachineStateSnapshot state = localState();
+        return state == null ? parallelControllerCount.get() : state.parallelControllerCount();
     }
 
     public int currentParallelism() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? currentParallelism.get()
-                : SYNC_RUNTIME.currentParallelism(controller.runtimeSnapshot());
+        if (clientSnapshot != null) return clientSnapshot.parallelism();
+        MachineStateSnapshot state = localState();
+        return state == null ? currentParallelism.get() : state.parallelism();
     }
 
     public int maxParallelism() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        if (controller == null) return Math.max(1, maxParallelism.get());
-        return SYNC_RUNTIME.maxParallelism(controller.runtimeSnapshot());
+        if (clientSnapshot != null) return clientSnapshot.maxParallelism();
+        MachineStateSnapshot state = localState();
+        return state == null ? Math.max(1, maxParallelism.get()) : state.maxParallelism();
     }
 
     public boolean hasFactoryController() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? factoryControllerPresent.get() != 0
-                : SYNC_RUNTIME.factoryControllerPresent(controller.runtimeSnapshot());
+        if (clientSnapshot != null) return factoryControllerPresent.get() != 0;
+        MachineStateSnapshot state = localState();
+        return state == null ? factoryControllerPresent.get() != 0 : state.factoryControllerPresent();
     }
 
     public int factoryThreadCount() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        if (controller == null) return factoryThreadCount.get();
-        ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
-        return SYNC_RUNTIME.factoryControllerPresent(runtime) ? runtime.factory().laneLimit() : 0;
+        if (clientSnapshot != null) return factoryThreadCount.get();
+        MachineStateSnapshot state = localState();
+        return state == null ? factoryThreadCount.get() : state.factoryThreadCount();
     }
 
     public int factoryActiveThreadCount() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? factoryActiveThreadCount.get()
-                : SYNC_RUNTIME.activeFactoryThreadCount(controller.runtimeSnapshot());
+        if (clientSnapshot != null) return factoryActiveThreadCount.get();
+        MachineStateSnapshot state = localState();
+        return state == null ? factoryActiveThreadCount.get() : state.activeFactoryThreadCount();
     }
 
     public boolean recipeLocked() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? recipeLocked.get() != 0 : SYNC_RUNTIME.recipeLocked(controller.runtimeSnapshot());
+        if (clientSnapshot != null) return clientSnapshot.recipeLocked();
+        MachineStateSnapshot state = localState();
+        return state == null ? recipeLocked.get() != 0 : state.recipeLocked();
     }
 
     public int installedModuleCount() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? installedModuleCount.get() : controller.runtimeSnapshot().installedModuleCount();
+        if (clientSnapshot != null) return clientSnapshot.installedModuleCount();
+        MachineStateSnapshot state = localState();
+        return state == null ? installedModuleCount.get() : state.installedModuleCount();
     }
 
     public Optional<Identifier> connectedHostId() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        if (controller == null) return moduleConnected.get() == 0 ? Optional.empty() : Optional.ofNullable(clientConnectedHostId);
-        var status = controller.runtimeSnapshot().moduleConnectionStatus();
-        return status.connected() ? Optional.of(status.connectedHostId()) : Optional.empty();
+        if (clientSnapshot != null) return Optional.ofNullable(identifierOrNull(clientSnapshot.connectedHostId()));
+        MachineStateSnapshot state = localState();
+        if (state == null) return moduleConnected.get() == 0 ? Optional.empty() : Optional.ofNullable(clientConnectedHostId);
+        return state.moduleConnected() ? Optional.ofNullable(identifierOrNull(state.connectedHostId())) : Optional.empty();
     }
 
     public boolean isHostController() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        return resolvedControllerRole(controller == null ? 0 : controllerRoleSyncValue(controller),
-                controllerRole.get(), clientControllerRole) == 1;
+        return controllerRoleValue() == 1;
     }
 
     public boolean isModuleController() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        return resolvedControllerRole(controller == null ? 0 : controllerRoleSyncValue(controller),
-                controllerRole.get(), clientControllerRole) == 2;
+        return controllerRoleValue() == 2;
     }
 
     static int resolvedControllerRole(int localRole, int syncedRole, int initialRole) {
         return localRole != 0 ? localRole : syncedRole != 0 ? syncedRole : initialRole;
     }
 
-    public void applyModuleStatus(int installedModuleCount, boolean moduleConnected, @Nullable Identifier connectedHostId) {
-        this.installedModuleCount.set(Math.max(0, installedModuleCount));
-        this.moduleConnected.set(moduleConnected && connectedHostId != null ? 1 : 0);
-        this.clientConnectedHostId = moduleConnected ? connectedHostId : null;
-    }
-
-    public void applyClientControllerState(@Nullable Identifier machineId, int controllerRole, int installedModuleCount,
-                                           boolean moduleConnected, @Nullable Identifier connectedHostId) {
-        this.clientMachineId = machineId;
-        this.clientControllerRole = controllerRole;
-        this.controllerRole.set(controllerRole);
-        applyModuleStatus(installedModuleCount, moduleConnected, connectedHostId);
+    public void applyClientSnapshot(PktMachineStatePayload snapshot) {
+        this.clientSnapshot = snapshot;
+        this.clientMachineId = identifierOrNull(snapshot.machineId());
+        this.clientControllerRole = snapshot.controllerRole();
+        this.clientConnectedHostId = identifierOrNull(snapshot.connectedHostId());
+        this.formed.set(snapshot.formed() ? 1 : 0);
+        this.active.set(snapshot.active() ? 1 : 0);
+        this.activeTick.set(snapshot.tick());
+        this.activeTotalTick.set(snapshot.totalTick());
+        this.lastFailure.set(failureCode(SYNC_RUNTIME.failureMessage(snapshot.failure())));
+        this.redstonePaused.set(snapshot.redstonePaused() ? 1 : 0);
+        this.currentParallelism.set(snapshot.parallelism());
+        this.maxParallelism.set(snapshot.maxParallelism());
+        this.factoryControllerPresent.set(snapshot.factoryControllerPresent() ? 1 : 0);
+        this.factoryThreadCount.set(snapshot.factoryThreadCount());
+        this.factoryActiveThreadCount.set(snapshot.activeFactoryThreadCount());
+        this.parallelControllerCount.set(snapshot.parallelControllerCount());
+        this.recipeLocked.set(snapshot.recipeLocked() ? 1 : 0);
+        this.installedModuleCount.set(Math.max(0, snapshot.installedModuleCount()));
+        this.moduleConnected.set(snapshot.moduleConnected() && this.clientConnectedHostId != null ? 1 : 0);
+        this.controllerRole.set(snapshot.controllerRole());
     }
 
     public @Nullable String lockedRecipeId() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        if (controller == null) return null;
-        String lockedRecipe = SYNC_RUNTIME.lockedRecipeId(controller.runtimeSnapshot());
+        if (clientSnapshot != null) return clientSnapshot.recipeLocked() ? clientSnapshot.lockedRecipeId() : null;
+        MachineStateSnapshot state = localState();
+        if (state == null) return null;
+        String lockedRecipe = state.lockedRecipeId();
         return lockedRecipe.isEmpty() ? null : lockedRecipe;
+    }
+
+    public List<String> foundLevelIds() {
+        if (clientSnapshot != null) return clientSnapshot.foundLevelIds();
+        MachineStateSnapshot state = localState();
+        return state == null ? List.of() : state.foundLevelIds();
     }
 
     public BlockPos controllerPos() { return pos; }
 
     public static int controllerRoleSyncValue(MachineControllerBlockEntity controller) {
-        var structure = controller == null ? null : controller.runtimeSnapshot().structure();
-        Machine machine = structure == null ? null : structure.configuredMachine();
-        if (machine == null && structure != null) machine = structure.machine();
-        if (machine == null) return 0;
-        if (machine.isHost()) return 1;
-        if (machine.isModule()) return 2;
-        return 0;
+        return controller == null ? 0 : SYNC_RUNTIME.machineState(controller.runtimeSnapshot()).controllerRole();
     }
 
     private static @Nullable Identifier machineIdFor(@Nullable MachineControllerBlockEntity controller) {
-        Machine machine = controller == null ? null : controller.runtimeSnapshot().structure().configuredMachine();
-        return machine == null ? null : machine.registryName();
+        return controller == null ? null : identifierOrNull(SYNC_RUNTIME.machineState(controller.runtimeSnapshot()).machineId());
     }
 
     private static void writeOptionalIdentifier(RegistryFriendlyByteBuf buf, @Nullable Identifier id) {
@@ -394,23 +377,46 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     }
 
     public long totalStoredEnergy() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? 0L : controller.runtimeSnapshot().totalStoredEnergy();
+        if (clientSnapshot != null) return clientSnapshot.totalStoredEnergy();
+        MachineStateSnapshot state = localState();
+        return state == null ? 0L : state.totalStoredEnergy();
     }
 
     public long totalCapacityEnergy() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? 0L : controller.runtimeSnapshot().totalCapacityEnergy();
+        if (clientSnapshot != null) return clientSnapshot.totalCapacityEnergy();
+        MachineStateSnapshot state = localState();
+        return state == null ? 0L : state.totalCapacityEnergy();
     }
 
     public FluidStack primaryFluid() {
-        MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? FluidStack.EMPTY : controller.runtimeSnapshot().primaryFluid();
+        if (clientSnapshot != null) return clientSnapshot.primaryFluid();
+        MachineStateSnapshot state = localState();
+        return state == null ? FluidStack.EMPTY : state.primaryFluid();
     }
 
     public FluidStack primaryOutputFluid() {
+        if (clientSnapshot != null) return clientSnapshot.primaryOutputFluid();
+        MachineStateSnapshot state = localState();
+        return state == null ? FluidStack.EMPTY : state.primaryOutputFluid();
+    }
+
+    private @Nullable MachineStateSnapshot localState() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? FluidStack.EMPTY : controller.runtimeSnapshot().primaryOutputFluid();
+        return controller == null ? null : machineState(controller);
+    }
+
+    private int controllerRoleValue() {
+        if (clientSnapshot != null) return clientSnapshot.controllerRole();
+        MachineStateSnapshot state = localState();
+        return state == null ? resolvedControllerRole(0, controllerRole.get(), clientControllerRole) : state.controllerRole();
+    }
+
+    private static MachineStateSnapshot machineState(MachineControllerBlockEntity controller) {
+        return SYNC_RUNTIME.machineState(controller.runtimeSnapshot());
+    }
+
+    private static @Nullable Identifier identifierOrNull(String value) {
+        return value == null || value.isEmpty() ? null : Identifier.parse(value);
     }
 
     private static int failureCode(@Nullable String key) {

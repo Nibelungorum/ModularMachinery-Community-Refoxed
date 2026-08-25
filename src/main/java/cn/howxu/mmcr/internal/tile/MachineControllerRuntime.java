@@ -47,7 +47,7 @@ public final class MachineControllerRuntime {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
         this.controller = controller;
         this.structure = new StructureRuntime(controller);
-        this.craftingRuntime = new CraftingRuntime(controller);
+        this.craftingRuntime = new CraftingRuntime(controller, components);
         this.factoryRuntime = new FactoryRuntime();
         publishSnapshot();
     }
@@ -76,11 +76,34 @@ public final class MachineControllerRuntime {
         FactorySnapshot factorySnapshot = factoryRuntime.snapshot();
         CraftingStateSnapshot nextCrafting = controller.getLevel() != null && controller.getLevel().isClientSide()
                 ? craftingState : craftingRuntime.snapshot();
-        publishedSnapshot = new ControllerRuntimeSnapshot(structureSnapshot, components.components(),
-                components.capabilities(), components.capabilityVersion(), components.modifierVersion(),
+        Machine machine = structureSnapshot.machine() != null ? structureSnapshot.machine() : structureSnapshot.configuredMachine();
+        boolean factorySupported = machine != null && machine.hasFactory();
+        boolean factoryControllerPresent = factorySupported && components.components().stream()
+                .anyMatch(component -> component.getContainer() instanceof FactorySchedulerBlockEntity);
+        int parallelControllerCount = (int) components.components().stream()
+                .filter(component -> component.getContainer() instanceof ParallelControllerBlockEntity)
+                .count();
+        int maxParallelControllerCount = machine != null && machine.parallelizable()
+                ? Math.max(1, machine.maxParallelism()) : 0;
+        int controllerRole = machine == null ? 0 : machine.isHost() ? 1 : machine.isModule() ? 2 : 0;
+        publishedSnapshot = new ControllerRuntimeSnapshot(structureSnapshot, components.capabilityVersion(),
+                components.modifierVersion(),
                 components.stateVersion(), components.foundModifiers(), components.foundLevels(),
                 components.linkedPortPositions(), components.moduleConnectionStatus(), components.installedModuleCount(),
-                components.capabilityAggregate(), nextCrafting, factorySnapshot);
+                components.capabilityAggregate(), nextCrafting, factorySnapshot, components.componentPresentations(),
+                components.capabilityPresentations(), components.foundLevels().values().stream()
+                        .map(level -> level.id().toString()).toList(),
+                machine == null ? "" : machine.registryName().toString(),
+                machine == null ? "" : machine.displayNameKey(), controllerRole, factorySupported, factoryControllerPresent,
+                parallelControllerCount, maxParallelControllerCount, components.maxParallelism(machine));
+    }
+
+    List<ProcessingComponent> components() {
+        return components.components();
+    }
+
+    ComponentRuntime componentRuntime() {
+        return components;
     }
 
     public CraftingRuntime craftingRuntime() {

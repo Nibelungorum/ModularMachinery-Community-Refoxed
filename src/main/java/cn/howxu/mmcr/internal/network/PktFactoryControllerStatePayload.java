@@ -31,6 +31,7 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
         implements CustomPacketPayload {
     public static final int MAX_THREAD_SNAPSHOTS = 1024;
     public static final int MAX_LANE_SNAPSHOTS = 1024;
+    public static final int MAX_LEVEL_SNAPSHOTS = 1024;
     public static final int MAX_STRING_LENGTH = 256;
     public static final Type<PktFactoryControllerStatePayload> TYPE = new Type<>(MMCR.id("factory_controller_state"));
     public static final StreamCodec<RegistryFriendlyByteBuf, PktFactoryControllerStatePayload> STREAM_CODEC =
@@ -54,6 +55,8 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
         buf.writeBoolean(state.paused());
         buf.writeUtf(state.machineName(), MAX_STRING_LENGTH);
         buf.writeVarInt(state.parallelSlots());
+        buf.writeVarInt(state.foundLevelIds().size());
+        for (String id : state.foundLevelIds()) buf.writeUtf(id, MAX_STRING_LENGTH);
         writeFailure(buf, state.failure());
         buf.writeVarInt(state.lanes().size());
         for (CraftingStateSnapshot lane : state.lanes()) writeCrafting(buf, lane);
@@ -72,6 +75,9 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
         boolean paused = buf.readBoolean();
         String machineName = buf.readUtf(MAX_STRING_LENGTH);
         int parallelSlots = buf.readVarInt();
+        int levelSize = readCount(buf, MAX_LEVEL_SNAPSHOTS, "machine level");
+        List<String> foundLevelIds = new ArrayList<>(levelSize);
+        for (int i = 0; i < levelSize; i++) foundLevelIds.add(buf.readUtf(MAX_STRING_LENGTH));
         ExecutionStatus failure = readFailure(buf);
         int laneSize = readCount(buf, MAX_LANE_SNAPSHOTS, "crafting lane");
         List<CraftingStateSnapshot> lanes = new ArrayList<>(laneSize);
@@ -87,7 +93,7 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
             threads.add(thread);
         }
         FactorySnapshot snapshot = new FactorySnapshot(formed, active, lanes, activeParallelism, laneLimit,
-                activeLaneCount, maxParallelism, paused, threads, machineName, parallelSlots, failure);
+                activeLaneCount, maxParallelism, paused, threads, machineName, parallelSlots, failure, foundLevelIds);
         validateSnapshot(snapshot);
         return new PktFactoryControllerStatePayload(pos, snapshot);
     }

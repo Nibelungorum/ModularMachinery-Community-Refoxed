@@ -22,7 +22,6 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.text.NumberFormat;
 
 /**
@@ -145,8 +144,13 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
                 Component.literal(NUMBER_FORMAT.format(threadCount)));
     }
 
-    static List<Component> levelLines(Map<?, MachineLevel> levels) {
-        return levels.values().stream().map(FactoryControllerScreen::levelLine).toList();
+    static List<Component> levelLines(List<String> levelIds) {
+        List<Component> lines = new ArrayList<>();
+        for (String levelId : levelIds) {
+            MachineLevel level = MachineLevelRegistry.getLevel(Identifier.parse(levelId));
+            if (level != null) lines.add(levelLine(level));
+        }
+        return List.copyOf(lines);
     }
 
     static String selectedFailureUnloc(FactoryControllerMenu menu) {
@@ -282,12 +286,9 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
                 x + font.width(Component.translatable("gui.mmcr.controller.status_label")) + 4, lineY,
                 controllerStatusColor(menu.isFormed(), selected.active()), true);
         lineY = nextDetailY(lineY);
-        var owner = menu.resolvedOwner();
-        if (owner != null) {
-            for (Component levelLine : levelLines(owner.runtimeSnapshot().foundLevels())) {
-                graphics.text(font, levelLine, x, lineY, STATUS_LABEL_COLOR, true);
-                lineY = nextDetailY(lineY);
-            }
+        for (Component levelLine : levelLines(menu.foundLevelIds())) {
+            graphics.text(font, levelLine, x, lineY, STATUS_LABEL_COLOR, true);
+            lineY = nextDetailY(lineY);
         }
         String failure = selectedFailureUnloc(menu);
         if (!failure.isEmpty()) {

@@ -3,11 +3,11 @@ package cn.howxu.mmcr.internal.runtime;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
-import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
@@ -69,6 +69,37 @@ public final class ComponentRuntime {
 
     public List<MachineCapability> capabilities() {
         return capabilities;
+    }
+
+    public List<ControllerRuntimeSnapshot.ComponentPresentation> componentPresentations() {
+        List<ControllerRuntimeSnapshot.ComponentPresentation> snapshots = new ArrayList<>(components.size());
+        for (ProcessingComponent component : components) {
+            MachineComponent machineComponent = component.getComponent();
+            snapshots.add(new ControllerRuntimeSnapshot.ComponentPresentation(
+                    component.getPos(),
+                    machineComponent == null || machineComponent.kind() == null ? null : machineComponent.kind().id(),
+                    machineComponent == null ? null : machineComponent.ioType(),
+                    component.tags()));
+        }
+        return List.copyOf(snapshots);
+    }
+
+    public List<ControllerRuntimeSnapshot.CapabilityPresentation> capabilityPresentations() {
+        List<ControllerRuntimeSnapshot.CapabilityPresentation> snapshots = new ArrayList<>(capabilities.size());
+        for (MachineCapability capability : capabilities) {
+            CapabilityStorage storage = capability.storage();
+            if (storage instanceof LongValueStorage value) {
+                snapshots.add(new ControllerRuntimeSnapshot.CapabilityPresentation(
+                        capability.type() == null ? null : capability.type().id(), capability.ioType(),
+                        value.amount(), value.capacity(), List.of()));
+            } else if (storage instanceof ResourceStorage<?> resourceStorage) {
+                snapshots.add(resourcePresentation(capability, resourceStorage));
+            } else {
+                snapshots.add(new ControllerRuntimeSnapshot.CapabilityPresentation(
+                        capability.type() == null ? null : capability.type().id(), capability.ioType(), 0L, 0L, List.of()));
+            }
+        }
+        return List.copyOf(snapshots);
     }
 
     public long capabilityVersion() {
@@ -214,6 +245,23 @@ public final class ComponentRuntime {
         return Collections.unmodifiableMap(new LinkedHashMap<>(values));
     }
 
+    private static ControllerRuntimeSnapshot.CapabilityPresentation resourcePresentation(
+            MachineCapability capability, ResourceStorage<?> storage) {
+        List<ControllerRuntimeSnapshot.StorageSlot> slots = new ArrayList<>(storage.size());
+        long amount = 0L;
+        long capacity = 0L;
+        for (int slot = 0; slot < storage.size(); slot++) {
+            Object resource = storage.resource(slot);
+            long slotAmount = storage.amount(slot);
+            long slotCapacity = storage.capacityResource(slot, resource);
+            slots.add(new ControllerRuntimeSnapshot.StorageSlot(String.valueOf(resource), slotAmount, slotCapacity));
+            amount += slotAmount;
+            capacity += slotCapacity;
+        }
+        return new ControllerRuntimeSnapshot.CapabilityPresentation(
+                capability.type() == null ? null : capability.type().id(), capability.ioType(), amount, capacity, slots);
+    }
+
     private static CapabilityAggregate capabilityAggregate(List<MachineCapability> capabilities) {
         long storedEnergy = 0L;
         long energyCapacity = 0L;
@@ -267,12 +315,10 @@ public final class ComponentRuntime {
             primaryOutputFluid = primaryOutputFluid == null ? FluidStack.EMPTY : primaryOutputFluid.copy();
         }
 
-        @Override
         public FluidStack primaryFluid() {
             return primaryFluid.copy();
         }
 
-        @Override
         public FluidStack primaryOutputFluid() {
             return primaryOutputFluid.copy();
         }

@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
@@ -17,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Searches immutable controller snapshots and returns a recipe handle for a runtime.
+ * Searches published controller state with the current execution capabilities and returns a recipe handle.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -28,10 +29,11 @@ public final class RecipeSearchTask {
     private final int maxParallelism;
     private final List<MachineRecipe> candidates;
     private final @Nullable Identifier lockedRecipeId;
+    private final List<MachineCapability> capabilities;
 
     public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, Identifier machineId, long structureVersion,
                             int maxParallelism, List<MachineRecipe> candidates,
-                            @Nullable Identifier lockedRecipeId) {
+                            @Nullable Identifier lockedRecipeId, List<MachineCapability> capabilities) {
         if (snapshot == null || machineId == null) throw new IllegalArgumentException("snapshot and machineId are required");
         this.snapshot = snapshot;
         this.machineId = machineId;
@@ -39,6 +41,7 @@ public final class RecipeSearchTask {
         this.maxParallelism = Math.max(1, maxParallelism);
         this.candidates = List.copyOf(candidates == null ? List.of() : candidates);
         this.lockedRecipeId = lockedRecipeId;
+        this.capabilities = List.copyOf(capabilities == null ? List.of() : capabilities);
     }
 
     public RecipeSearchResult compute() {
@@ -85,7 +88,7 @@ public final class RecipeSearchTask {
     }
 
     private CraftingContext context() {
-        return new CraftingContext(new CapabilitySnapshot(snapshot.capabilities()), modifiers());
+        return new CraftingContext(new CapabilitySnapshot(capabilities), modifiers());
     }
 
     private List<RecipeModifier> modifiers() {

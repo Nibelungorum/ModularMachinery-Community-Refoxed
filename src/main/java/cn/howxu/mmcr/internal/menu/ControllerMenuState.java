@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
+import cn.howxu.mmcr.internal.runtime.MachineStateSnapshot;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.inventory.Slot;
@@ -23,22 +24,19 @@ final class ControllerMenuState {
     final DataSlot maxParallelism;
 
     ControllerMenuState(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {
-        formed = add(menu, owner, controller -> controller.runtimeSnapshot().structure().formed() ? 1 : 0);
-        active = add(menu, owner, controller -> SYNC_RUNTIME.active(controller.runtimeSnapshot()) ? 1 : 0);
-        lastFailure = add(menu, owner, controller -> failureCode(SYNC_RUNTIME.failureMessage(controller.runtimeSnapshot())));
-        redstonePaused = add(menu, owner, controller -> {
-            var state = controller.runtimeSnapshot();
-            return state.crafting().status().isPaused() || state.factory().paused() ? 1 : 0;
-        });
-        parallelControllerCount = add(menu, owner, controller -> SYNC_RUNTIME.parallelControllerCount(controller.runtimeSnapshot()));
-        currentParallelism = add(menu, owner, controller -> SYNC_RUNTIME.currentParallelism(controller.runtimeSnapshot()));
-        maxParallelism = add(menu, owner, controller -> SYNC_RUNTIME.maxParallelism(controller.runtimeSnapshot()));
+        formed = add(menu, owner, state -> state.formed() ? 1 : 0);
+        active = add(menu, owner, state -> state.active() ? 1 : 0);
+        lastFailure = add(menu, owner, state -> failureCode(SYNC_RUNTIME.failureMessage(state.failure())));
+        redstonePaused = add(menu, owner, state -> state.redstonePaused() ? 1 : 0);
+        parallelControllerCount = add(menu, owner, MachineStateSnapshot::parallelControllerCount);
+        currentParallelism = add(menu, owner, MachineStateSnapshot::parallelism);
+        maxParallelism = add(menu, owner, MachineStateSnapshot::maxParallelism);
     }
 
     private static DataSlot add(AbstractMachineMenu menu, MachineControllerBlockEntity owner,
-                                ToIntFunction<MachineControllerBlockEntity> getter) {
+                                ToIntFunction<MachineStateSnapshot> getter) {
         return menu.addControllerDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return getter.applyAsInt(owner); }
+            @Override public int get() { return getter.applyAsInt(SYNC_RUNTIME.machineState(owner.runtimeSnapshot())); }
             @Override public void set(int value) { }
         });
     }
@@ -50,7 +48,7 @@ final class ControllerMenuState {
     static DataSlot addRecipeLockSlot(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {
         return menu.addControllerDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
             @Override public int get() {
-                return SYNC_RUNTIME.recipeLocked(owner.runtimeSnapshot()) ? 1 : 0;
+                return SYNC_RUNTIME.machineState(owner.runtimeSnapshot()).recipeLocked() ? 1 : 0;
             }
 
             @Override public void set(int value) { }
@@ -58,15 +56,15 @@ final class ControllerMenuState {
     }
 
     static DataSlot addInstalledModuleCountSlot(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {
-        return add(menu, owner, controller -> controller.runtimeSnapshot().installedModuleCount());
+        return add(menu, owner, MachineStateSnapshot::installedModuleCount);
     }
 
     static DataSlot addModuleConnectedSlot(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {
-        return add(menu, owner, controller -> controller.runtimeSnapshot().moduleConnectionStatus().connected() ? 1 : 0);
+        return add(menu, owner, state -> state.moduleConnected() ? 1 : 0);
     }
 
     static DataSlot addControllerRoleSlot(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {
-        return add(menu, owner, MachineControllerMenu::controllerRoleSyncValue);
+        return add(menu, owner, MachineStateSnapshot::controllerRole);
     }
 
     static void addControllerPlayerSlots(AbstractMachineMenu menu, Inventory inventory, int x) {

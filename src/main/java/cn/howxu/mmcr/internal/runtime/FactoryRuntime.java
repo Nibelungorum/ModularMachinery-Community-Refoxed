@@ -209,7 +209,8 @@ public final class FactoryRuntime {
         List<CraftingRuntime> activeRuntimes = activeRuntimes();
         int parallelism = activeRuntimes.stream().mapToInt(CraftingRuntime::parallelism).sum();
         return new FactorySnapshot(false, !activeRuntimes.isEmpty(), laneSnapshots, parallelism, laneLimit,
-                activeRuntimes.size(), Math.max(1, perThreadParallelLimit), paused, threadSnapshots(), "", 0, failure);
+                activeRuntimes.size(), Math.max(1, perThreadParallelLimit), paused, threadSnapshots(), "", 0, failure,
+                List.of());
     }
 
     public void pause() {

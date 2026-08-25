@@ -3,7 +3,6 @@ package cn.howxu.mmcr.internal.network;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
-import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
@@ -15,6 +14,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
+import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.ArrayList;
@@ -32,9 +32,14 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                                      List<String> foundLevelIds, boolean recipeLocked, String lockedRecipeId,
                                      String machineId, int controllerRole, int installedModuleCount,
                                      boolean moduleConnected, String connectedHostId,
-                                     CraftingStatus.Status craftingStatus, String craftingMessage,
-                                     ExecutionStatus failure, boolean structureAreaLoaded,
-                                     int tick, int totalTick, int parallelism, int maxParallelism)
+                                      CraftingStatus.Status craftingStatus, String craftingMessage,
+                                      ExecutionStatus failure, boolean structureAreaLoaded, boolean redstonePaused,
+                                      int tick, int totalTick, int parallelism, int maxParallelism,
+                                      boolean factoryControllerPresent, int factoryThreadCount,
+                                      int activeFactoryThreadCount, int parallelControllerCount,
+                                      int maxParallelControllerCount, long totalStoredEnergy,
+                                      long totalCapacityEnergy, FluidStack primaryFluid,
+                                      FluidStack primaryOutputFluid)
         implements CustomPacketPayload {
     private static final int MAX_STRING_LENGTH = 256;
     private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
@@ -47,26 +52,36 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         connectedHostId = connectedHostId == null ? "" : connectedHostId;
         craftingStatus = craftingStatus == null ? CraftingStatus.Status.IDLE : craftingStatus;
         craftingMessage = craftingMessage == null ? "" : craftingMessage;
-        if (tick < 0 || totalTick < 0 || tick > totalTick || parallelism < 0 || maxParallelism < 1) {
+        primaryFluid = primaryFluid == null ? FluidStack.EMPTY : primaryFluid.copy();
+        primaryOutputFluid = primaryOutputFluid == null ? FluidStack.EMPTY : primaryOutputFluid.copy();
+        if (tick < 0 || totalTick < 0 || tick > totalTick || parallelism < 0 || maxParallelism < 1
+                || factoryThreadCount < 0 || activeFactoryThreadCount < 0 || parallelControllerCount < 0
+                || maxParallelControllerCount < 0 || totalStoredEnergy < 0L || totalCapacityEnergy < 0L) {
             throw new IllegalArgumentException("Invalid machine presentation progress");
         }
     }
 
+    public FluidStack primaryFluid() {
+        return primaryFluid.copy();
+    }
+
+    public FluidStack primaryOutputFluid() {
+        return primaryOutputFluid.copy();
+    }
+
     public static PktMachineStatePayload from(BlockPos pos, ControllerRuntimeSnapshot runtime) {
         MachineStateSnapshot machineState = SYNC_RUNTIME.machineState(runtime);
-        String machineId = "";
-        Machine configuredMachine = runtime.structure().configuredMachine();
-        if (configuredMachine != null) machineId = configuredMachine.registryName().toString();
-        String lockedRecipe = SYNC_RUNTIME.lockedRecipeId(runtime);
-        return new PktMachineStatePayload(pos, SYNC_RUNTIME.activeRecipe(runtime),
-                machineState.structure().formed(), SYNC_RUNTIME.active(runtime), SYNC_RUNTIME.foundLevelIds(runtime),
-                SYNC_RUNTIME.recipeLocked(runtime), lockedRecipe, machineId, controllerRole(runtime),
-                machineState.installedModuleCount(), machineState.moduleConnected(),
-                machineState.moduleConnected() ? runtime.moduleConnectionStatus().connectedHostId().toString() : "",
-                machineState.crafting().status().getStatus(), machineState.crafting().status().getUnlocMessage(),
-                machineState.crafting().failure(), machineState.structure().structureAreaLoaded(),
-                SYNC_RUNTIME.tick(runtime), SYNC_RUNTIME.totalTick(runtime), SYNC_RUNTIME.currentParallelism(runtime),
-                SYNC_RUNTIME.maxParallelism(runtime));
+        return new PktMachineStatePayload(pos, machineState.activeRecipe(), machineState.formed(), machineState.active(),
+                machineState.foundLevelIds(), machineState.recipeLocked(), machineState.lockedRecipeId(),
+                machineState.machineId(), machineState.controllerRole(), machineState.installedModuleCount(),
+                machineState.moduleConnected(), machineState.connectedHostId(), machineState.craftingStatus(),
+                machineState.craftingMessage(), machineState.failure(), machineState.structureAreaLoaded(),
+                machineState.redstonePaused(),
+                machineState.tick(), machineState.totalTick(), machineState.parallelism(), machineState.maxParallelism(),
+                machineState.factoryControllerPresent(), machineState.factoryThreadCount(),
+                machineState.activeFactoryThreadCount(), machineState.parallelControllerCount(),
+                machineState.maxParallelControllerCount(), machineState.totalStoredEnergy(),
+                machineState.totalCapacityEnergy(), machineState.primaryFluid(), machineState.primaryOutputFluid());
     }
 
     public static boolean stateChanged(PktMachineStatePayload current, PktMachineStatePayload previous) {
@@ -86,10 +101,20 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                 || !current.craftingMessage.equals(previous.craftingMessage)
                 || !Objects.equals(current.failure, previous.failure)
                 || current.structureAreaLoaded != previous.structureAreaLoaded
+                || current.redstonePaused != previous.redstonePaused
                 || current.tick != previous.tick
                 || current.totalTick != previous.totalTick
                 || current.parallelism != previous.parallelism
-                || current.maxParallelism != previous.maxParallelism;
+                || current.maxParallelism != previous.maxParallelism
+                || current.factoryControllerPresent != previous.factoryControllerPresent
+                || current.factoryThreadCount != previous.factoryThreadCount
+                || current.activeFactoryThreadCount != previous.activeFactoryThreadCount
+                || current.parallelControllerCount != previous.parallelControllerCount
+                || current.maxParallelControllerCount != previous.maxParallelControllerCount
+                || current.totalStoredEnergy != previous.totalStoredEnergy
+                || current.totalCapacityEnergy != previous.totalCapacityEnergy
+                || !FluidStack.matches(current.primaryFluid, previous.primaryFluid)
+                || !FluidStack.matches(current.primaryOutputFluid, previous.primaryOutputFluid);
     }
 
     public static final Type<PktMachineStatePayload> TYPE = new Type<>(MMCR.id("machine_state"));
@@ -114,10 +139,20 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         buf.writeUtf(payload.craftingMessage, MAX_STRING_LENGTH);
         writeFailure(buf, payload.failure);
         buf.writeBoolean(payload.structureAreaLoaded);
+        buf.writeBoolean(payload.redstonePaused);
         buf.writeVarInt(payload.tick);
         buf.writeVarInt(payload.totalTick);
         buf.writeVarInt(payload.parallelism);
         buf.writeVarInt(payload.maxParallelism);
+        buf.writeBoolean(payload.factoryControllerPresent);
+        buf.writeVarInt(payload.factoryThreadCount);
+        buf.writeVarInt(payload.activeFactoryThreadCount);
+        buf.writeVarInt(payload.parallelControllerCount);
+        buf.writeVarInt(payload.maxParallelControllerCount);
+        buf.writeLong(payload.totalStoredEnergy);
+        buf.writeLong(payload.totalCapacityEnergy);
+        FluidStack.OPTIONAL_STREAM_CODEC.encode(buf, payload.primaryFluid);
+        FluidStack.OPTIONAL_STREAM_CODEC.encode(buf, payload.primaryOutputFluid);
     }
 
     private static PktMachineStatePayload read(RegistryFriendlyByteBuf buf) {
@@ -136,23 +171,19 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         int installedModuleCount = buf.readVarInt();
         boolean moduleConnected = buf.readBoolean();
         String connectedHostId = buf.readUtf(MAX_STRING_LENGTH);
-        CraftingStatus.Status status = CraftingStatus.Status.values()[buf.readVarInt()];
+        CraftingStatus.Status status = readEnum(CraftingStatus.Status.values(), buf.readVarInt(), "crafting status");
         String craftingMessage = buf.readUtf(MAX_STRING_LENGTH);
         ExecutionStatus failure = readFailure(buf);
         boolean structureAreaLoaded = buf.readBoolean();
+        boolean redstonePaused = buf.readBoolean();
         return new PktMachineStatePayload(pos, recipeName, formed, active, foundLevelIds,
                 recipeLocked, lockedRecipeId, machineId, controllerRole, installedModuleCount,
                 moduleConnected, connectedHostId, status, craftingMessage, failure, structureAreaLoaded,
-                buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt());
-    }
-
-    private static int controllerRole(ControllerRuntimeSnapshot runtime) {
-        Machine machine = runtime.structure().configuredMachine();
-        if (machine == null) machine = runtime.structure().machine();
-        if (machine == null) return 0;
-        if (machine.isHost()) return 1;
-        if (machine.isModule()) return 2;
-        return 0;
+                redstonePaused,
+                buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(),
+                buf.readBoolean(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(),
+                buf.readLong(), buf.readLong(), FluidStack.OPTIONAL_STREAM_CODEC.decode(buf),
+                FluidStack.OPTIONAL_STREAM_CODEC.decode(buf));
     }
 
     private static void writeFailure(RegistryFriendlyByteBuf buf, ExecutionStatus failure) {
@@ -171,7 +202,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
     private static ExecutionStatus readFailure(RegistryFriendlyByteBuf buf) {
         if (!buf.readBoolean()) return null;
         Identifier id = Identifier.parse(buf.readUtf(MAX_STRING_LENGTH));
-        StatusSeverity severity = StatusSeverity.values()[buf.readVarInt()];
+        StatusSeverity severity = readEnum(StatusSeverity.values(), buf.readVarInt(), "failure severity");
         Identifier source = Identifier.parse(buf.readUtf(MAX_STRING_LENGTH));
         int detailCount = buf.readVarInt();
         if (detailCount < 0 || detailCount > 1024) throw new IllegalArgumentException("Invalid failure detail count");
@@ -194,10 +225,13 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                         tick, totalTick, parallelism, maxParallelism);
             }
             if (player.containerMenu instanceof MachineControllerMenu menu && menu.controllerPos().equals(pos)) {
-                menu.applyClientControllerState(machineId.isEmpty() ? null : Identifier.parse(machineId), controllerRole,
-                        installedModuleCount, moduleConnected,
-                        connectedHostId.isEmpty() ? null : Identifier.parse(connectedHostId));
+                menu.applyClientSnapshot(this);
             }
         });
+    }
+
+    private static <T> T readEnum(T[] values, int ordinal, String name) {
+        if (ordinal < 0 || ordinal >= values.length) throw new IllegalArgumentException("Invalid " + name + ": " + ordinal);
+        return values[ordinal];
     }
 }

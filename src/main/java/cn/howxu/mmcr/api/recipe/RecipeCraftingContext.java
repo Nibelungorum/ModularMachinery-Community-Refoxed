@@ -519,7 +519,7 @@ public final class RecipeCraftingContext {
 
     public Map<String, Float> smartInterfaceValues() {
         Map<String, Float> result = new LinkedHashMap<>();
-        for (ProcessingComponent component : controller.runtimeSnapshot().components()) {
+        for (ProcessingComponent component : controller.componentRuntime().components()) {
             if (!(component.getContainer() instanceof SmartInterfaceBlockEntity smartInterface)) continue;
             if (!smartInterface.hasController(controller.getBlockPos())) continue;
             for (String type : smartInterface.parameterTypes()) {
@@ -534,7 +534,7 @@ public final class RecipeCraftingContext {
     }
 
     private Optional<SmartInterfaceBinding> smartInterface(String type) {
-        for (ProcessingComponent component : controller.runtimeSnapshot().components()) {
+        for (ProcessingComponent component : controller.componentRuntime().components()) {
             if (!(component.getContainer() instanceof SmartInterfaceBlockEntity smartInterface)) continue;
             if (smartInterface.hasController(controller.getBlockPos()) && smartInterface.value(type).isPresent()) {
                 return Optional.of(new SmartInterfaceBinding(smartInterface));
@@ -1762,7 +1762,7 @@ public final class RecipeCraftingContext {
         if (level == null) return List.of();
 
         List<T> matches = new ArrayList<>();
-        for (ProcessingComponent component : controller.runtimeSnapshot().components()) {
+        for (ProcessingComponent component : controller.componentRuntime().components()) {
             if (!type.isInstance(component.getContainer())) continue;
             if (!matchesIo(component.getContainer(), ioType)) continue;
             if (!tagsMatch(requiredTags, component.tags())) continue;
@@ -1780,7 +1780,7 @@ public final class RecipeCraftingContext {
         if (level == null) return List.of();
 
         List<T> matches = new ArrayList<>();
-        for (ProcessingComponent component : controller.runtimeSnapshot().components()) {
+        for (ProcessingComponent component : controller.componentRuntime().components()) {
             if (!type.isInstance(component.getContainer())) continue;
             if (!matchesIo(component.getContainer(), ioType)) continue;
             if (tagsMatch(requiredTags, component.tags())) continue;
@@ -1800,7 +1800,7 @@ public final class RecipeCraftingContext {
     }
 
     private @Nullable ItemBusBlockEntity itemBusAt(BlockPos pos, IOType ioType) {
-        for (ProcessingComponent component : controller.runtimeSnapshot().components()) {
+        for (ProcessingComponent component : controller.componentRuntime().components()) {
             if (!(component.getContainer() instanceof ItemBusBlockEntity bus)) continue;
             if (bus.ioType() == ioType && component.getPos().equals(pos)) return bus;
         }
@@ -1808,7 +1808,7 @@ public final class RecipeCraftingContext {
     }
 
     private @Nullable FluidHatchBlockEntity fluidHatchAt(BlockPos pos, IOType ioType) {
-        for (ProcessingComponent component : controller.runtimeSnapshot().components()) {
+        for (ProcessingComponent component : controller.componentRuntime().components()) {
             if (!(component.getContainer() instanceof FluidHatchBlockEntity hatch)) continue;
             if (hatch.ioType() == ioType && component.getPos().equals(pos)) return hatch;
         }
@@ -1848,7 +1848,7 @@ public final class RecipeCraftingContext {
         var level = controller.getLevel();
         if (level == null) return List.of();
         List<ItemOutputState> states = new ArrayList<>();
-        for (ProcessingComponent component : controller.runtimeSnapshot().components()) {
+        for (ProcessingComponent component : controller.componentRuntime().components()) {
             if (!(component.getContainer() instanceof ItemBusBlockEntity bus)) continue;
             if (!matchesIo(bus, IOType.OUTPUT)) continue;
             BlockEntity live = level.getBlockEntity(component.getPos());
@@ -1883,7 +1883,7 @@ public final class RecipeCraftingContext {
         var level = controller.getLevel();
         if (level == null) return List.of();
         List<FluidOutputState> states = new ArrayList<>();
-        for (ProcessingComponent component : controller.runtimeSnapshot().components()) {
+        for (ProcessingComponent component : controller.componentRuntime().components()) {
             if (!(component.getContainer() instanceof FluidHatchBlockEntity hatch)) continue;
             if (!matchesIo(hatch, IOType.OUTPUT)) continue;
             BlockEntity live = level.getBlockEntity(component.getPos());

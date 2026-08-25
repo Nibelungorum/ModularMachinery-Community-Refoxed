@@ -96,12 +96,11 @@ public final class MachineControllerScreen extends AbstractContainerScreen<Machi
         graphics.text(font, Component.translatable(controllerStatusKey(menu.isFormed(), active)), x + font.width(label) + 4, y,
                 controllerStatusColor(menu.isFormed(), active), true);
         int lineY = y + DETAIL_LINE_SPACING;
-        var owner = menu.resolvedOwner();
-        if (owner != null) {
-            for (MachineLevel level : owner.runtimeSnapshot().foundLevels().values()) {
-                graphics.text(font, levelLine(level), x, lineY, STATUS_LABEL_COLOR, true);
-                lineY += DETAIL_LINE_SPACING;
-            }
+        for (String levelId : menu.foundLevelIds()) {
+            MachineLevel level = MachineLevelRegistry.getLevel(Identifier.parse(levelId));
+            if (level == null) continue;
+            graphics.text(font, levelLine(level), x, lineY, STATUS_LABEL_COLOR, true);
+            lineY += DETAIL_LINE_SPACING;
         }
         String failure = menu.lastFailureMessage();
         if (failure != null) {

@@ -34,6 +34,7 @@ import java.util.Set;
  */
 public final class CraftingRuntime {
     private final MachineControllerBlockEntity controller;
+    private final ComponentRuntime components;
     private @Nullable ActiveMachineRecipe activeRecipe;
     private @Nullable CraftingPlan startPlan;
     private @Nullable CraftingPlan tickPlan;
@@ -48,9 +49,11 @@ public final class CraftingRuntime {
     private @Nullable StructureClaimRegistry.ResourceDomain resourceDomain;
     private CraftingStatus status = CraftingStatus.IDLE;
 
-    public CraftingRuntime(MachineControllerBlockEntity controller) {
+    public CraftingRuntime(MachineControllerBlockEntity controller, ComponentRuntime components) {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
+        if (components == null) throw new IllegalArgumentException("components must not be null");
         this.controller = controller;
+        this.components = components;
     }
 
     public CraftingStatus start(MachineRecipe recipe, int requestedParallelism) {
@@ -342,7 +345,7 @@ public final class CraftingRuntime {
     }
 
     private CraftingContext context(ControllerRuntimeSnapshot runtime) {
-        return new CraftingContext(new CapabilitySnapshot(runtime.capabilities()), contextModifiers(runtime));
+        return new CraftingContext(new CapabilitySnapshot(components.capabilities()), contextModifiers(runtime));
     }
 
     private List<RecipeModifier> contextModifiers(ControllerRuntimeSnapshot runtime) {
