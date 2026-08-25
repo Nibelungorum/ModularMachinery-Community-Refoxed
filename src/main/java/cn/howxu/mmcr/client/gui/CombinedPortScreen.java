@@ -14,6 +14,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -29,6 +30,8 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
     private static final int TEXT_COLOR = 0xFFE0E0E0;
     private static final int TANK_WIDTH = 20;
     private static final int TANK_HEIGHT = 61;
+    private static final int TANK_FRAME_X = 176;
+    private static final int TANK_FRAME_Y = 0;
     private static final int CAPABILITY_SELECTOR_X = 132;
     private static final int CAPABILITY_SELECTOR_Y = 4;
     private static final Layout LAYOUT = new Layout(CombinedPortMenu.FIRST_TANK_X,
@@ -75,16 +78,36 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
                 imageWidth, imageHeight, GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
         if (autoIOPage) return;
 
-        for (CombinedPortMenu.FluidTankLayout layout : menu.fluidTankLayouts()) {
-            FluidStorageEntry entry = menu.fluidEntries().stream()
-                    .filter(candidate -> candidate.slot() == layout.slot()).findFirst().orElse(null);
-            if (entry == null || entry.amount() <= 0 || entry.resource().isEmpty()) continue;
-            int filled = FluidGuiRenderer.fillHeight(entry.amount(), entry.capacity(), TANK_HEIGHT);
-            if (filled > 0) {
+        for (TankRenderOperation operation : tankRenderOperations(menu.fluidTankLayouts(), menu.fluidEntries())) {
+            if (operation.kind() == TankRenderOperation.Kind.FILL) {
+                FluidStorageEntry entry = operation.entry();
                 FluidGuiRenderer.drawFluid(graphics, entry.resource().toStack((int) Math.min(entry.amount(), Integer.MAX_VALUE)),
-                        leftPos + layout.x(), topPos + layout.y() + TANK_HEIGHT - filled, TANK_WIDTH, filled);
+                        leftPos + operation.x(), topPos + operation.y(), operation.width(), operation.height());
+            } else {
+                graphics.blit(RenderPipelines.GUI_TEXTURED, operation.texture(), leftPos + operation.x(), topPos + operation.y(),
+                        operation.sourceX(), operation.sourceY(), operation.width(), operation.height(),
+                        GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
             }
         }
+    }
+
+    static List<TankRenderOperation> tankRenderOperations(List<CombinedPortMenu.FluidTankLayout> layouts,
+                                                           List<FluidStorageEntry> entries) {
+        List<TankRenderOperation> operations = new ArrayList<>();
+        for (CombinedPortMenu.FluidTankLayout layout : layouts) {
+            FluidStorageEntry entry = entries.stream()
+                    .filter(candidate -> candidate.slot() == layout.slot()).findFirst().orElse(null);
+            if (entry != null && entry.amount() > 0 && !entry.resource().isEmpty()) {
+                int filled = FluidGuiRenderer.fillHeight(entry.amount(), entry.capacity(), TANK_HEIGHT);
+                if (filled > 0) {
+                    operations.add(new TankRenderOperation(TankRenderOperation.Kind.FILL, layout.x(),
+                            layout.y() + TANK_HEIGHT - filled, TANK_WIDTH, filled, 0, 0, null, entry));
+                }
+            }
+            operations.add(new TankRenderOperation(TankRenderOperation.Kind.FRAME, layout.x(), layout.y(),
+                    TANK_WIDTH, TANK_HEIGHT, TANK_FRAME_X, TANK_FRAME_Y, TEXTURE, null));
+        }
+        return operations;
     }
 
     @Override
@@ -110,5 +133,13 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
     record Layout(int firstTankX, int firstTankY, int secondTankX, int secondTankY,
                   int capabilitySelectorX, int capabilitySelectorY,
                   List<String> reservedCoordinates) {
+    }
+
+    record TankRenderOperation(Kind kind, int x, int y, int width, int height,
+                               int sourceX, int sourceY, Identifier texture, FluidStorageEntry entry) {
+        enum Kind {
+            FILL,
+            FRAME
+        }
     }
 }

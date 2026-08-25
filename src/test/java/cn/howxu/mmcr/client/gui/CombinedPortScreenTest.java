@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntry;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.ItemStorageEntry;
 import net.minecraft.world.level.material.Fluids;
@@ -56,6 +57,40 @@ class CombinedPortScreenTest {
         assertThat(layout.firstTankX()).isEqualTo(15);
         assertThat(layout.firstTankY()).isEqualTo(10);
         assertThat(layout.reservedCoordinates()).containsExactly("second_tank", "capability_selector");
+    }
+
+    @Test
+    void known_one_and_two_tank_layouts_fill_then_draw_the_guitank_frame() {
+        FluidStorageEntry first = new FluidStorageEntry(0, FluidResource.of(Fluids.WATER), 30L, 60L);
+        FluidStorageEntry second = new FluidStorageEntry(1, FluidResource.of(Fluids.WATER), 10L, 60L);
+        CombinedPortMenu.FluidTankLayout firstLayout = new CombinedPortMenu.FluidTankLayout(0, 15, 10);
+        CombinedPortMenu.FluidTankLayout secondLayout = new CombinedPortMenu.FluidTankLayout(1, 43, 10);
+
+        assertThat(CombinedPortScreen.tankRenderOperations(List.of(firstLayout), List.of(first)))
+                .extracting(operation -> operation.kind())
+                .containsExactly(CombinedPortScreen.TankRenderOperation.Kind.FILL,
+                        CombinedPortScreen.TankRenderOperation.Kind.FRAME);
+        assertThat(CombinedPortScreen.tankRenderOperations(List.of(firstLayout, secondLayout), List.of(first, second)))
+                .extracting(operation -> operation.kind())
+                .containsExactly(CombinedPortScreen.TankRenderOperation.Kind.FILL,
+                        CombinedPortScreen.TankRenderOperation.Kind.FRAME,
+                        CombinedPortScreen.TankRenderOperation.Kind.FILL,
+                        CombinedPortScreen.TankRenderOperation.Kind.FRAME);
+
+        CombinedPortScreen.TankRenderOperation frame = CombinedPortScreen.tankRenderOperations(
+                List.of(firstLayout), List.of(first)).get(1);
+        assertThat(frame.x()).isEqualTo(15);
+        assertThat(frame.y()).isEqualTo(10);
+        assertThat(frame.texture()).isEqualTo(MMCR.id("textures/gui/guitank.png"));
+        assertThat(frame.sourceX()).isEqualTo(176);
+        assertThat(frame.sourceY()).isZero();
+        assertThat(frame.width()).isEqualTo(20);
+        assertThat(frame.height()).isEqualTo(61);
+
+        CombinedPortScreen.TankRenderOperation secondFrame = CombinedPortScreen.tankRenderOperations(
+                List.of(firstLayout, secondLayout), List.of(first, second)).get(3);
+        assertThat(secondFrame.x()).isEqualTo(43);
+        assertThat(secondFrame.y()).isEqualTo(10);
     }
 
     private static void bindDeferredHolder(Object deferredHolder, Object value) throws Exception {
