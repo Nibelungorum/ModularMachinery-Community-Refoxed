@@ -192,7 +192,10 @@ public class MachineControllerBlock extends Block implements EntityBlock {
                 && level.getBlockEntity(pos) instanceof MachineControllerBlockEntity controller
                 && !controller.runtimeSnapshot().structure().formed()
             && player instanceof ServerPlayer serverPlayer) {
-            controller.sendStructurePreview(serverPlayer);
+            boolean previewSent = controller.sendStructurePreview(serverPlayer);
+            MMCR.LOG.info("[StructureDiagnostic][ShiftClick] pos={} player={} previewSent={} formed={} mainHandEmpty={} offHandEmpty={}",
+                    pos, serverPlayer.getName().getString(), previewSent, controller.runtimeSnapshot().structure().formed(),
+                    player.getMainHandItem().isEmpty(), player.getOffhandItem().isEmpty());
             controller.requestImmediateStructureCheck(serverPlayer);
             return InteractionResult.SUCCESS;
         }

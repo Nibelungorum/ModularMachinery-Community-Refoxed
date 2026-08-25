@@ -329,6 +329,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public void requestImmediateStructureCheck(@Nullable ServerPlayer diagnosticPlayer) {
         runtime.requestStructureCheck();
         if (diagnosticPlayer != null) {
+            LOG.info("[StructureDiagnostic][Request] pos={} player={} uuid={} dimension={}", getBlockPos(),
+                    diagnosticPlayer.getName().getString(), diagnosticPlayer.getUUID(),
+                    level instanceof ServerLevel serverLevel ? serverLevel.dimension() : "<none>");
             publishStructureWork(state -> state.withDiagnostic(true, diagnosticPlayer.getUUID(),
                     level instanceof ServerLevel serverLevel ? serverLevel.dimension() : null));
         }
@@ -1144,6 +1147,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void sendFormationFailureDiagnostic(ServerPlayer player, PortRequirementSpec.Failure failure) {
+        LOG.info("[StructureDiagnostic][Chat] pos={} player={} key={} portId={}", getBlockPos(), player.getName().getString(),
+                failure.portId().startsWith(SHARED_COMPONENT_CONFLICT)
+                        ? "message.mmcr.multiblock_shared_component_conflict" : "formation_failure", failure.portId());
         if (failure.portId().startsWith(SHARED_COMPONENT_CONFLICT)) {
             player.sendSystemMessage(Component.translatable(
                     "message.mmcr.multiblock_shared_component_conflict", failure.portId()));
@@ -1440,6 +1446,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     .claim(getBlockPos(), componentClaims(rotatedPattern, stageCompiled, facing));
             if (!result.accepted()) {
                 StructureClaimRegistry.Conflict conflict = result.conflict();
+                LOG.info("[StructureDiagnostic][SharedConflict] pos={} component={} owner={} diagnosticRequested={} diagnosticPlayer={}",
+                        getBlockPos(), conflict.componentPos(), conflict.ownerPos(), structureWorkSnapshot().diagnosticRequested(),
+                        structureWorkSnapshot().diagnosticPlayerId());
                 publishStructureWork(state -> state.withFormationFailure(new PortRequirementSpec.Failure(
                         SHARED_COMPONENT_CONFLICT + " component=" + conflict.componentPos()
                                 + " owner=" + conflict.ownerPos(),
@@ -1468,6 +1477,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         StructureSnapshot structure = runtimeSnapshot().structure();
         UUID playerId = work.diagnosticPlayerId();
         ResourceKey<Level> dimension = work.diagnosticDimension();
+        LOG.info("[StructureDiagnostic][Dispatch] pos={} mismatch={} playerId={} dimension={} failure={}", getBlockPos(),
+                mismatch != null, playerId, dimension, structure.lastFormationFailure());
         clearStructureDiagnosticRequest();
         if (mismatch != null) {
             if (structureDiagnosticCallbackForTesting != null) {
@@ -1475,6 +1486,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
             } else if (playerId != null && dimension != null && level instanceof ServerLevel serverLevel
                     && serverLevel.dimension().equals(dimension)) {
                 ServerPlayer player = serverLevel.getServer().getPlayerList().getPlayer(playerId);
+                LOG.info("[StructureDiagnostic][DispatchPlayer] pos={} found={} playerLevel={} dimensionMatches={}", getBlockPos(),
+                        player != null, player == null ? "<none>" : player.level().dimension(),
+                        player != null && player.level().dimension().equals(dimension));
                 if (player != null && player.level().dimension().equals(dimension)) {
                     sendStructureMismatchDiagnostic(player, mismatch);
                 }
@@ -1483,6 +1497,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (playerId != null && dimension != null && level instanceof ServerLevel serverLevel
                     && serverLevel.dimension().equals(dimension)) {
                 ServerPlayer player = serverLevel.getServer().getPlayerList().getPlayer(playerId);
+                LOG.info("[StructureDiagnostic][DispatchFailurePlayer] pos={} found={} playerLevel={} dimensionMatches={} failure={}",
+                        getBlockPos(), player != null, player == null ? "<none>" : player.level().dimension(),
+                        player != null && player.level().dimension().equals(dimension), structure.lastFormationFailure());
                 if (player != null && player.level().dimension().equals(dimension)) {
                     sendFormationFailureDiagnostic(player, structure.lastFormationFailure());
                 }
