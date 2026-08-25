@@ -78,6 +78,8 @@ public final class GameTestRegistry {
         register(event, "terminal_build_missing_stage_one_partial", 100, helper -> new TerminalAssemblyGameTest().survivalBuildRejectsWhenStageOneMaterialsAreMissing(helper));
         register(event, "terminal_build_across_ticks_duplicate", 200,
                 helper -> new TerminalAssemblyGameTest().buildCompletesAcrossTicksAndRejectsDuplicateSubmission(helper));
+        register(event, "terminal_build_structure_diagnostic", 100,
+                helper -> new TerminalAssemblyGameTest().completedBuildRequestsStructureDiagnostic(helper));
         register(event, "terminal_incremental_invalidation", 200,
                 helper -> new TerminalAssemblyGameTest().incrementalScanRestartsAfterPendingInvalidation(helper));
         register(event, "terminal_small_structure_diagnostic", 100,

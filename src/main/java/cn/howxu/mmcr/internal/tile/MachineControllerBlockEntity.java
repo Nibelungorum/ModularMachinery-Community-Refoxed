@@ -773,7 +773,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (owner.connection != null) task.takeCompletionReport().ifPresent(owner::sendSystemMessage);
             buildTaskOwner = null;
             buildTaskAge = 0;
-            runtime.requestStructureCheck();
+            requestImmediateStructureCheck(owner);
         }
         return true;
     }

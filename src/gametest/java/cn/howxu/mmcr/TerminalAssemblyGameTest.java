@@ -198,6 +198,27 @@ public class TerminalAssemblyGameTest {
         });
     }
 
+    public void completedBuildRequestsStructureDiagnostic(GameTestHelper helper) {
+        BlockPos controllerPos = new BlockPos(4, 1, 4);
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("test_cube")));
+        controller.setStructureCheckIntervalForTesting(1);
+        controller.setStructureScanBatchesForTesting(Config.DEFAULT_STRUCTURE_SCAN_BATCHES);
+        List<MultiblockAssemblyService.Placement> template = template(controller);
+        helper.getLevel().setBlock(template.getFirst().pos(), Blocks.COBBLESTONE.defaultBlockState(), 3);
+
+        int[] diagnostics = {0};
+        controller.setStructureDiagnosticCallbackForTesting(() -> diagnostics[0]++);
+        MultiblockAssemblyService.build(servicePlayer(helper), controller, true);
+
+        helper.runAtTickTime(20, () -> {
+            helper.assertTrue(diagnostics[0] == 1,
+                    "Completed terminal builds request a structure diagnostic when the structure is still invalid");
+            helper.succeed();
+        });
+    }
+
     public void incrementalScanRestartsAfterPendingInvalidation(GameTestHelper helper) {
         BlockPos controllerPos = new BlockPos(4, 1, 4);
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
