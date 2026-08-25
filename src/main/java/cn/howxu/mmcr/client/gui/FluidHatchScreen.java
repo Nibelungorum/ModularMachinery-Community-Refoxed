@@ -13,6 +13,8 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 import net.neoforged.neoforge.fluids.FluidStack;
 
+import java.util.List;
+
 /**
  * Fluid hatch screen.
  *
@@ -41,11 +43,24 @@ public final class FluidHatchScreen extends AbstractPortScreen<FluidHatchMenu> {
 
     @Override
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+        clearTooltipEntries();
         if (autoIOPage) return;
         graphics.text(font, title, titleLabelX, titleLabelY, TITLE_COLOR, false);
         FluidStack fluid = fluidStack();
-        if (!fluid.isEmpty()) graphics.text(font, Component.translatable("gui.mmcr.fluid", fluid.getHoverName()),
-                titleLabelX, titleLabelY + 10, TITLE_COLOR, false);
+        if (!fluid.isEmpty()) {
+            Component fluidName = fluid.getHoverName();
+            graphics.text(font, fluidName, titleLabelX, titleLabelY + 10, TITLE_COLOR, false);
+            addTooltip(leftPos + titleLabelX, topPos + titleLabelY + 10, font.width(fluidName), 10,
+                    tooltipLines(menu.fluidAmount(), menu.fluidCapacity(), fluidName));
+        }
+        if (menu.fluidCapacity() > 0) {
+            int textY = titleLabelY + (fluid.isEmpty() ? 12 : 19);
+            Component amount = Component.literal(ReadableNumber.format(menu.fluidAmount()) + " / "
+                    + ReadableNumber.format(menu.fluidCapacity()) + " mB");
+            graphics.text(font, amount, titleLabelX, textY, TITLE_COLOR, false);
+            addTooltip(leftPos + titleLabelX, topPos + textY, font.width(amount), 10,
+                    tooltipLines(menu.fluidAmount(), menu.fluidCapacity(), fluid.isEmpty() ? null : fluid.getHoverName()));
+        }
     }
 
     @Override
@@ -61,9 +76,14 @@ public final class FluidHatchScreen extends AbstractPortScreen<FluidHatchMenu> {
         }
         graphics.blit(RenderPipelines.GUI_TEXTURED, TEXTURE, leftPos + TANK_X, topPos + TANK_Y, 176, 0, TANK_W, TANK_H,
                 GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
-        int textY = titleLabelY + (fluid.isEmpty() ? 12 : 19);
-        graphics.text(font, Component.literal(ReadableNumber.format(menu.fluidAmount()) + " / "
-                        + ReadableNumber.format(menu.fluidCapacity()) + " mB"), leftPos + titleLabelX, topPos + textY, TITLE_COLOR, false);
+    }
+
+    static List<Component> tooltipLines(long stored, long capacity, Component resourceName) {
+        return resourceName == null
+                ? List.of(Component.literal(ReadableNumber.formatExact(stored) + " / "
+                        + ReadableNumber.formatExact(capacity) + " mB"))
+                : List.of(resourceName, Component.literal(ReadableNumber.formatExact(stored) + " / "
+                        + ReadableNumber.formatExact(capacity) + " mB"));
     }
 
     private FluidStack fluidStack() {

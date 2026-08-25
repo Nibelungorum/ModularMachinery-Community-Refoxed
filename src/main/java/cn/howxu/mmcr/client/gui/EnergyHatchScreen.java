@@ -11,6 +11,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 
+import java.util.List;
+
 /**
  * Energy hatch screen.
  *
@@ -40,7 +42,16 @@ public final class EnergyHatchScreen extends AbstractPortScreen<EnergyHatchMenu>
 
     @Override
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+        clearTooltipEntries();
         if (!autoIOPage) graphics.text(font, title, titleLabelX, titleLabelY, TITLE_COLOR, false);
+        if (!autoIOPage && menu.energyCapacity() > 0) {
+            Component amount = Component.literal(ReadableNumber.format(menu.storedEnergy()) + " / "
+                    + ReadableNumber.format(menu.energyCapacity()) + " FE");
+            int x = leftPos + titleLabelX;
+            int y = topPos + titleLabelY + 12;
+            graphics.text(font, amount, titleLabelX, titleLabelY + 12, TITLE_COLOR, false);
+            addTooltip(x, y, font.width(amount), 10, tooltipLines(menu.storedEnergy(), menu.energyCapacity()));
+        }
     }
 
     @Override
@@ -56,7 +67,10 @@ public final class EnergyHatchScreen extends AbstractPortScreen<EnergyHatchMenu>
         if (filled > 0) graphics.blit(RenderPipelines.GUI_TEXTURED, BAR_TEXTURE, leftPos + ENERGY_X,
                 topPos + ENERGY_Y + ENERGY_H - filled, 196, ENERGY_H - filled, ENERGY_W, filled,
                 GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
-        graphics.text(font, Component.literal(ReadableNumber.format(stored) + " / " + ReadableNumber.format(capacity) + " FE"),
-                leftPos + titleLabelX, topPos + titleLabelY + 12, TITLE_COLOR, false);
+    }
+
+    static List<Component> tooltipLines(long stored, long capacity) {
+        return List.of(Component.literal(ReadableNumber.formatExact(stored) + " / "
+                + ReadableNumber.formatExact(capacity) + " FE"));
     }
 }

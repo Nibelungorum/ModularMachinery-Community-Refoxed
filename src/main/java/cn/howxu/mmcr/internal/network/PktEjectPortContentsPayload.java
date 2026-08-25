@@ -2,7 +2,11 @@ package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
+import cn.howxu.mmcr.internal.menu.ExtendedCombinedMenu;
+import cn.howxu.mmcr.internal.menu.ExtendedFluidMenu;
+import cn.howxu.mmcr.internal.menu.ExtendedItemMenu;
 import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.menu.MenuSupport;
@@ -55,6 +59,10 @@ public record PktEjectPortContentsPayload(BlockPos pos, Identifier capabilityId)
     private static boolean hasPortMenuAt(AbstractContainerMenu menu, BlockPos pos, IOPortBlockEntity port) {
         return menu instanceof ItemBusMenu itemBus && itemBus.pos().equals(pos) && itemBus.owner() == port
                 || menu instanceof FluidHatchMenu fluidHatch && fluidHatch.pos().equals(pos) && fluidHatch.owner() == port
-                || menu instanceof EnergyHatchMenu energyHatch && energyHatch.pos().equals(pos) && energyHatch.owner() == port;
+                || menu instanceof EnergyHatchMenu energyHatch && energyHatch.pos().equals(pos) && energyHatch.owner() == port
+                || menu instanceof ExtendedItemMenu extendedItem && extendedItem.pos().equals(pos) && extendedItem.owner() == port
+                || menu instanceof ExtendedFluidMenu extendedFluid && extendedFluid.pos().equals(pos) && extendedFluid.owner() == port
+                || menu instanceof CombinedPortMenu combined && combined.pos().equals(pos) && combined.owner() == port
+                || menu instanceof ExtendedCombinedMenu extendedCombined && extendedCombined.pos().equals(pos) && extendedCombined.owner() == port;
     }
 }

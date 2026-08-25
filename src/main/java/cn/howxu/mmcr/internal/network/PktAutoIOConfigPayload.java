@@ -3,7 +3,11 @@ package cn.howxu.mmcr.internal.network;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.internal.autoio.AutoIOAction;
+import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
+import cn.howxu.mmcr.internal.menu.ExtendedCombinedMenu;
+import cn.howxu.mmcr.internal.menu.ExtendedFluidMenu;
+import cn.howxu.mmcr.internal.menu.ExtendedItemMenu;
 import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
@@ -63,7 +67,11 @@ public record PktAutoIOConfigPayload(BlockPos pos, Identifier capabilityId, Auto
         AbstractContainerMenu menu = player.containerMenu;
         boolean portMenu = menu instanceof ItemBusMenu itemBus && itemBus.pos().equals(pos)
                 || menu instanceof FluidHatchMenu fluidHatch && fluidHatch.pos().equals(pos)
-                || menu instanceof EnergyHatchMenu energyHatch && energyHatch.pos().equals(pos);
+                || menu instanceof EnergyHatchMenu energyHatch && energyHatch.pos().equals(pos)
+                || menu instanceof ExtendedItemMenu extendedItem && extendedItem.pos().equals(pos)
+                || menu instanceof ExtendedFluidMenu extendedFluid && extendedFluid.pos().equals(pos)
+                || menu instanceof CombinedPortMenu combined && combined.pos().equals(pos)
+                || menu instanceof ExtendedCombinedMenu extendedCombined && extendedCombined.pos().equals(pos);
         if (!portMenu) return false;
         return menu.stillValid(player) && (action != AutoIOAction.SET_SIDE || side != null);
     }
@@ -80,7 +88,11 @@ public record PktAutoIOConfigPayload(BlockPos pos, Identifier capabilityId, Auto
     static boolean ownsMenu(AbstractContainerMenu menu, IOPortBlockEntity port) {
         return menu instanceof ItemBusMenu itemBus && itemBus.owner() == port
                 || menu instanceof FluidHatchMenu fluidHatch && fluidHatch.owner() == port
-                || menu instanceof EnergyHatchMenu energyHatch && energyHatch.owner() == port;
+                || menu instanceof EnergyHatchMenu energyHatch && energyHatch.owner() == port
+                || menu instanceof ExtendedItemMenu extendedItem && extendedItem.owner() == port
+                || menu instanceof ExtendedFluidMenu extendedFluid && extendedFluid.owner() == port
+                || menu instanceof CombinedPortMenu combined && combined.owner() == port
+                || menu instanceof ExtendedCombinedMenu extendedCombined && extendedCombined.owner() == port;
     }
 
     private static <T> T readEnum(T[] values, int index) {

@@ -27,6 +27,14 @@ class ReadableNumberTest {
     }
 
     @Test
+    void formats_exact_long_values_without_si_suffixes() {
+        assertThat(ReadableNumber.formatExact(999_999L)).isEqualTo("999,999");
+        assertThat(ReadableNumber.formatExact(1_000_000L)).isEqualTo("1,000,000");
+        assertThat(ReadableNumber.formatExact(1_200_123_543_243L)).isEqualTo("1,200,123,543,243");
+        assertThat(ReadableNumber.formatExact(Long.MAX_VALUE)).isEqualTo("9,223,372,036,854,775,807");
+    }
+
+    @Test
     void formats_big_integer_and_big_decimal_values() {
         assertThat(ReadableNumber.format(BigInteger.valueOf(999_999))).isEqualTo("999,999");
         assertThat(ReadableNumber.format(BigInteger.valueOf(1_000_000))).isEqualTo("1.00M");
@@ -42,6 +50,7 @@ class ReadableNumberTest {
     @Test
     void rejects_negative_values() {
         assertThatThrownBy(() -> ReadableNumber.format(-1)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ReadableNumber.formatExact(-1)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> ReadableNumber.format(BigInteger.valueOf(-1))).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> ReadableNumber.format(new BigDecimal("-1"))).isInstanceOf(IllegalArgumentException.class);
     }

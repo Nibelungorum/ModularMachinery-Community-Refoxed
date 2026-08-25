@@ -35,6 +35,13 @@ public final class ReadableNumber {
         return formatBigDecimal(BigDecimal.valueOf(value));
     }
 
+    public static String formatExact(long value) {
+        if (value < 0) {
+            throw new IllegalArgumentException("value must be non-negative");
+        }
+        return INTEGER_FORMAT.format(value);
+    }
+
     public static String format(BigInteger value) {
         if (value.signum() < 0) {
             throw new IllegalArgumentException("value must be non-negative");
