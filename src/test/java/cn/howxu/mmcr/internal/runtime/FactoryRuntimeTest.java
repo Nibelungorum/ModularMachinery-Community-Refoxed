@@ -185,11 +185,26 @@ class FactoryRuntimeTest {
         runtime.setLaneLimit(2);
         runtime.tick(List.of(recipe("factory_isolated_failure", 20)), 1);
 
-        runtime.activeRuntimes().getFirst().recordSearchFailure(null);
+        CraftingRuntime failed = runtime.activeRuntimes().getFirst();
+        CraftingRuntime survivor = runtime.activeRuntimes().getLast();
+        failed.recordSearchFailure(null);
         runtime.recomputeFailure();
 
-        assertThat(runtime.snapshot().failure()).isNotNull();
+        FactorySnapshot snapshot = runtime.snapshot();
+        assertThat(snapshot.failure()).isNotNull();
+        assertThat(snapshot.failure().details()).containsExactly(java.util.Map.entry("reason", "recipe_search"));
         assertThat(runtime.activeLaneCount()).isEqualTo(2);
+        assertThat(failed.active()).isTrue();
+        assertThat(survivor.active()).isTrue();
+        assertThat(survivor.failure()).isNull();
+        assertThat(snapshot.presentationLanes()).hasSize(2);
+        assertThat(snapshot.presentationLanes().get(0).active()).isTrue();
+        assertThat(snapshot.presentationLanes().get(0).lastFailureUnloc())
+                .isEqualTo("gui.mmcr.controller.failure.missing_input");
+        assertThat(snapshot.presentationLanes().get(1).active()).isTrue();
+        assertThat(snapshot.presentationLanes().get(1).lastFailureUnloc()).isEmpty();
+        assertThat(snapshot.presentationLanes().get(1).recipeId()).isEqualTo(
+                snapshot.presentationLanes().get(0).recipeId());
     }
 
     @Test

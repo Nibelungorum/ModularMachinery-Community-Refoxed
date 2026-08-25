@@ -21,4 +21,23 @@ class MachineControllerBlockEntityRecipeDelayTest {
         assertThat(delay.shouldDelay(MMCR.id("broad"), true, 120)).isFalse();
         assertThat(delay.shouldDelay(MMCR.id("broad"), false, 121)).isFalse();
     }
+
+    @Test
+    void changing_the_conflicting_candidate_restarts_its_retry_window() {
+        RecipeStartDelay delay = new RecipeStartDelay();
+
+        assertThat(delay.shouldDelay(MMCR.id("broad"), true, 100)).isTrue();
+        assertThat(delay.shouldDelay(MMCR.id("specific"), true, 119)).isTrue();
+        assertThat(delay.shouldDelay(MMCR.id("specific"), true, 138)).isTrue();
+        assertThat(delay.shouldDelay(MMCR.id("specific"), true, 139)).isFalse();
+    }
+
+    @Test
+    void a_non_conflicting_search_clears_the_candidate_before_a_later_retry() {
+        RecipeStartDelay delay = new RecipeStartDelay();
+
+        assertThat(delay.shouldDelay(MMCR.id("broad"), true, 100)).isTrue();
+        assertThat(delay.shouldDelay(MMCR.id("broad"), false, 101)).isFalse();
+        assertThat(delay.shouldDelay(MMCR.id("broad"), true, 102)).isTrue();
+    }
 }

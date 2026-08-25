@@ -9,6 +9,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
@@ -74,6 +75,38 @@ class MachineControllerMenuTest {
         assertThat(menu.isFormed()).isTrue();
         assertThat(menu.installedModuleCount()).isEqualTo(4);
         buffer.release();
+    }
+
+    @Test
+    void module_menu_state_keeps_role_and_connected_host_identity_across_payload_updates() {
+        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null),
+                menuBuffer(new BlockPos(7, 8, 9), MMCR.id("module"), MMCR.id("host"), 2, true, 1));
+
+        assertThat(menu.isModuleController()).isTrue();
+        assertThat(menu.isHostController()).isFalse();
+        assertThat(menu.connectedHostId()).hasValue(MMCR.id("host"));
+        assertThat(menu.installedModuleCount()).isEqualTo(1);
+        assertThat(MachineControllerMenu.resolvedControllerRole(0, 2, 0)).isEqualTo(2);
+
+        menu.applyClientSnapshot(new PktMachineStatePayload(new BlockPos(7, 8, 9), "", true, false,
+                List.of(), false, "", "mmcr:module", 2, 0, false, "",
+                CraftingStatus.Status.IDLE, "", null, true, false,
+                0, 0, 0, 1, false, 0, 0, 0, 0, 0, 0,
+                FluidStack.EMPTY, FluidStack.EMPTY));
+
+        assertThat(menu.isModuleController()).isTrue();
+        assertThat(menu.connectedHostId()).isEmpty();
+        assertThat(menu.installedModuleCount()).isZero();
+    }
+
+    private static RegistryFriendlyByteBuf menuBuffer(BlockPos pos, Identifier machineId,
+                                                      Identifier connectedHostId, int role,
+                                                      boolean formed, int installedModules) {
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.buffer(),
+                RegistryAccess.EMPTY, ConnectionType.NEOFORGE);
+        MachineControllerMenu.writeClientOpenData(buffer, pos, machineId, connectedHostId, role, formed,
+                installedModules);
+        return buffer;
     }
 
     private static void bind(Object deferredHolder, MenuType<MachineControllerMenu> menuType) throws Exception {

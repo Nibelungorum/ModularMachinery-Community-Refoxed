@@ -5,6 +5,7 @@ import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -48,6 +49,47 @@ class AutoIOPortTest {
         assertThat(source.ejectContents()).isTrue();
         assertThat(source.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
         assertThat(target.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(3);
+    }
+
+    @Test
+    void auto_io_uses_only_enabled_sides_and_publishes_configuration_changes() {
+        ItemOutputBusBlockEntity source = RuntimeTestFixtures.itemOutput(BlockPos.ZERO);
+        ItemInputBusBlockEntity target = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        source.getItemStackHandler(null).setStackInSlot(0, stack(3));
+        Level level = LevelStub.createWithBlockEntities(List.of(source, target));
+        source.setLevel(level);
+        target.setLevel(level);
+        LevelStub.setCapability(level, ModCapabilities.ITEM_BLOCK, target.getBlockPos(),
+                itemHandler(target, true, false));
+        int updatesBefore = LevelStub.sentBlockUpdates(level);
+
+        source.setAutoIOEnabled(true);
+        source.setAllAutoIOSides(false);
+        source.setAutoIOSide(Direction.EAST, true);
+        for (int tick = 0; tick < 6; tick++) source.serverTick();
+
+        assertThat(source.autoIOConfig().enabled()).isTrue();
+        assertThat(source.autoIOConfig().enabledSides()).containsExactly(Direction.EAST);
+        assertThat(source.autoIOCandidateCount()).isEqualTo(1);
+        assertThat(source.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(target.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(3);
+        assertThat(LevelStub.sentBlockUpdates(level)).isGreaterThan(updatesBefore);
+    }
+
+    @Test
+    void full_ejection_moves_real_contents_to_the_available_adjacent_port() {
+        ItemInputBusBlockEntity source = RuntimeTestFixtures.itemInput(BlockPos.ZERO);
+        ItemOutputBusBlockEntity target = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0));
+        source.getItemStackHandler(null).setStackInSlot(0, stack(4));
+        Level level = LevelStub.createWithBlockEntities(List.of(source, target));
+        source.setLevel(level);
+        target.setLevel(level);
+        LevelStub.setCapability(level, ModCapabilities.ITEM_BLOCK, target.getBlockPos(),
+                itemHandler(target, true, false));
+
+        assertThat(source.ejectContents()).isTrue();
+        assertThat(source.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(target.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(4);
     }
 
     @Test

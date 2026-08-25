@@ -76,6 +76,11 @@ public final class MachineControllerRuntime {
         FactorySnapshot factorySnapshot = factoryRuntime.snapshot();
         CraftingStateSnapshot nextCrafting = controller.getLevel() != null && controller.getLevel().isClientSide()
                 ? craftingState : craftingRuntime.snapshot();
+        publishSnapshot(structureSnapshot, factorySnapshot, nextCrafting);
+    }
+
+    private void publishSnapshot(StructureSnapshot structureSnapshot, FactorySnapshot factorySnapshot,
+                                 CraftingStateSnapshot nextCrafting) {
         Machine machine = structureSnapshot.machine() != null ? structureSnapshot.machine() : structureSnapshot.configuredMachine();
         boolean factorySupported = machine != null && machine.hasFactory();
         boolean factoryControllerPresent = factorySupported && components.components().stream()
@@ -244,6 +249,6 @@ public final class MachineControllerRuntime {
         craftingState = new CraftingStateSnapshot(recipeId, status, failure,
                 structure.version(), components.capabilityVersion(), components.modifierVersion(),
                 tick, totalTick, parallelism, maxParallelism, recipeLocked, lockedRecipeId);
-        publishSnapshot();
+        publishSnapshot(structure.snapshot(), factoryRuntime.snapshot(), craftingState);
     }
 }

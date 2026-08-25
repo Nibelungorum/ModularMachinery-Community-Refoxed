@@ -106,6 +106,20 @@ class CraftingRuntimeTest {
     }
 
     @Test
+    void duplicateOutputRequirementsCommit_each_output_to_the_real_storage() {
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), output);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = recipe("runtime_duplicate_output", 1, List.of(
+                output(Items.IRON_NUGGET, 1), output(Items.IRON_NUGGET, 1)));
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        runtime.tick();
+        assertThat(runtime.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
+    }
+
+    @Test
     void redstonePauseAndResumeKeepTheActiveRuntime() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
@@ -206,6 +220,28 @@ class CraftingRuntimeTest {
         runtime.finish();
 
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+    }
+
+    @Test
+    void positive_output_and_consume_chance_commit_through_real_item_storage() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input, output);
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        ItemRequirement consumed = new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
+                ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 1F);
+        ItemRequirement produced = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                stack(Items.IRON_NUGGET, 1), 1F, List.of(), DataComponentPredicateSet.EMPTY, 1F);
+        MachineRecipe recipe = recipe("runtime_positive_chance", 1, List.of(consumed, produced));
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        runtime.tick();
+        runtime.finish();
+
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.IRON_NUGGET)).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
     }
 
     @Test

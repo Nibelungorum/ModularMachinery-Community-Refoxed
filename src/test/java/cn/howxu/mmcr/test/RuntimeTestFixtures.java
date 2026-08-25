@@ -17,8 +17,10 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.crafting.RecipeManager;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.Level;
@@ -28,6 +30,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Creates real controller and capability owners for final runtime tests.
@@ -95,9 +98,20 @@ public final class RuntimeTestFixtures {
     }
 
     public static void formStructure(MachineControllerBlockEntity controller, Machine machine, int stageNumber) {
+        formStructureWithComponents(controller, machine, stageNumber);
+    }
+
+    public static void formStructureWithComponents(MachineControllerBlockEntity controller, Machine machine,
+                                                   BlockEntity... components) {
+        formStructureWithComponents(controller, machine, 1, components);
+    }
+
+    public static void formStructureWithComponents(MachineControllerBlockEntity controller, Machine machine,
+                                                   int stageNumber, BlockEntity... components) {
         controller.setMachine(machine);
-        TestServerLevel level = newTestServerLevel(controller, machine, stageNumber);
+        TestServerLevel level = newTestServerLevel(controller, machine, stageNumber, List.of(components));
         controller.setLevel(level);
+        for (BlockEntity component : components) component.setLevel(level);
         for (int tick = 0; tick < 32 && !controller.structureSnapshot().formed(); tick++) {
             controller.tickStructure(level, controller.getBlockPos());
         }
@@ -106,11 +120,24 @@ public final class RuntimeTestFixtures {
         }
     }
 
+    public static void setLoadedChunks(Level level, Set<Long> loadedChunks) {
+        if (!(level instanceof TestServerLevel testLevel)) throw new IllegalArgumentException("Unexpected test level");
+        testLevel.loadedChunks = Set.copyOf(loadedChunks);
+    }
+
+    public static void advanceGameTime(Level level) {
+        if (!(level instanceof TestServerLevel testLevel)) throw new IllegalArgumentException("Unexpected test level");
+        testLevel.gameTime = Math.max(1L, testLevel.gameTime) + 1L;
+    }
+
     private static TestServerLevel newTestServerLevel(MachineControllerBlockEntity controller, Machine machine,
-                                                      int stageNumber) {
+                                                       int stageNumber, List<BlockEntity> components) {
         try {
             TestServerLevel level = (TestServerLevel) unsafe().allocateInstance(TestServerLevel.class);
-            setField(TestServerLevel.class, level, "blockEntities", Map.of(controller.getBlockPos(), controller));
+            Map<BlockPos, BlockEntity> blockEntities = new HashMap<>();
+            blockEntities.put(controller.getBlockPos(), controller);
+            for (BlockEntity component : components) blockEntities.put(component.getBlockPos(), component);
+            setField(TestServerLevel.class, level, "blockEntities", blockEntities);
             Map<BlockPos, BlockState> blocks = new HashMap<>();
             blocks.put(controller.getBlockPos(), controller.getBlockState());
             controller.assemblyPattern(machine, stageNumber).pattern().forEach((relative, predicate) ->
@@ -168,8 +195,11 @@ public final class RuntimeTestFixtures {
     }
 
     private static final class TestServerLevel extends ServerLevel {
+        private static final RecipeManager RECIPE_MANAGER = new RecipeManager(RegistryAccess.EMPTY);
         private Map<BlockPos, BlockEntity> blockEntities;
         private Map<BlockPos, BlockState> blocks;
+        private Set<Long> loadedChunks;
+        private long gameTime;
 
         private TestServerLevel() {
             super(null, null, null, null, Level.OVERWORLD, null, false, 0L, List.of(), false);
@@ -189,11 +219,13 @@ public final class RuntimeTestFixtures {
         }
 
         @Override public boolean hasChunk(int chunkX, int chunkZ) {
-            return true;
+            return loadedChunks == null || loadedChunks.contains(LevelStub.chunkKey(chunkX, chunkZ));
         }
 
-        @Override public long getGameTime() {
-            return 1L;
+        @Override public long getGameTime() { return Math.max(1L, gameTime); }
+
+        @Override public RecipeManager recipeAccess() {
+            return RECIPE_MANAGER;
         }
 
         @Override public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) {

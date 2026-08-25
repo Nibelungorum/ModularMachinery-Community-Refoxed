@@ -2227,6 +2227,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         clearPendingConflictStart();
         recipeSearchRetryCounter++;
+        runtime.craftingRuntime().recordSearchFailure(result.failure());
         lastFailureUnloc = result.failureUnloc();
         recipeFailure = result.levelFailure();
         if (recipeFailure != null) {

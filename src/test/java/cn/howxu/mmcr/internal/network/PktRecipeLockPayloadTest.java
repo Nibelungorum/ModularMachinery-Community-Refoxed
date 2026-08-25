@@ -4,8 +4,11 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
+import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -19,6 +22,8 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.neoforged.neoforge.network.connection.ConnectionType;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.minecraft.world.entity.Entity;
@@ -27,15 +32,19 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.RecipeManager;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.LevelData;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterEach;
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,6 +61,14 @@ class PktRecipeLockPayloadTest {
         bind(ModUIs.FACTORY_CONTROLLER,
                 new MenuType<>((containerId, inventory) -> FactoryControllerMenu.clientOpen(containerId, inventory),
                         FeatureFlags.VANILLA_SET));
+        bind(ModUIs.MACHINE_CONTROLLER,
+                new MenuType<>((containerId, inventory) -> MachineControllerMenu.clientOpen(containerId, inventory),
+                        FeatureFlags.VANILLA_SET));
+    }
+
+    @AfterEach
+    void clearRecipes() {
+        RecipeRegistry.clearForTesting();
     }
 
     @Test
@@ -128,6 +145,39 @@ class PktRecipeLockPayloadTest {
     }
 
     @Test
+    void server_handler_accepts_a_valid_formed_controller_thread_and_publishes_lock_state() throws Exception {
+        BlockPos controllerPos = new BlockPos(1, 2, 3);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos);
+        BlockArray pattern = new BlockArray(Map.of(new BlockPos(1, 0, 0),
+                new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+        DynamicMachine machine = new DynamicMachine(MMCR.id("recipe_lock_success"), "Recipe Lock Success",
+                pattern,
+                MachineControllerSpec.defaultsFor(MMCR.id("recipe_lock_success")));
+        RuntimeTestFixtures.formStructure(controller, machine);
+        TestServerLevel level = serverLevel(controller);
+        controller.setLevel(level);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("recipe_lock_success_recipe"), machine.registryName(), 20,
+                List.of(), List.of());
+        RecipeRegistry.register(recipe);
+        controller.tickRuntimeWork(level, controllerPos);
+
+        assertThat(controller.getActiveRecipe()).isEqualTo(recipe);
+
+        ServerPlayer player = player(level, controllerPos);
+        player.containerMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
+        PktRecipeLockPayload payload = new PktRecipeLockPayload(controllerPos, 0);
+
+        assertThat(PktRecipeLockPayload.toggleOnServer(player, payload)).isTrue();
+        assertThat(controller.recipeLocked()).isTrue();
+        assertThat(controller.lockedRecipeId()).isEqualTo(recipe.id());
+        assertThat(PktMachineStatePayload.from(controllerPos, controller.runtimeSnapshot()).recipeLocked()).isTrue();
+
+        assertThat(PktRecipeLockPayload.toggleOnServer(player, payload)).isTrue();
+        assertThat(controller.recipeLocked()).isFalse();
+        assertThat(PktMachineStatePayload.from(controllerPos, controller.runtimeSnapshot()).recipeLocked()).isFalse();
+    }
+
+    @Test
     void machine_state_payload_preserves_locked_recipe_id_and_detects_lock_changes() {
         String recipeId = "other_namespace:recipe_with_a_long_id";
         PktMachineStatePayload locked = machineState(true, recipeId);
@@ -147,6 +197,8 @@ class PktRecipeLockPayloadTest {
     private static TestServerLevel serverLevel(MachineControllerBlockEntity controller) throws Exception {
         TestServerLevel level = (TestServerLevel) unsafe().allocateInstance(TestServerLevel.class);
         level.controller = controller;
+        level.controllerState = controller.getBlockState();
+        setField(ServerLevel.class, level, "players", List.of());
         return level;
     }
 
@@ -154,6 +206,7 @@ class PktRecipeLockPayloadTest {
         ServerPlayer player = (ServerPlayer) unsafe().allocateInstance(ServerPlayer.class);
         setField(Entity.class, player, "level", level);
         setField(Entity.class, player, "position", Vec3.atCenterOf(pos));
+        player.connection = (ServerGamePacketListenerImpl) unsafe().allocateInstance(TestConnection.class);
         return player;
     }
 
@@ -177,7 +230,7 @@ class PktRecipeLockPayloadTest {
         field.set(target, value);
     }
 
-    private static void bind(Object deferredHolder, MenuType<FactoryControllerMenu> menuType) throws Exception {
+    private static void bind(Object deferredHolder, MenuType<?> menuType) throws Exception {
         Class<?> type = deferredHolder.getClass();
         Field holder = null;
         while (type != null && holder == null) {
@@ -193,20 +246,68 @@ class PktRecipeLockPayloadTest {
     }
 
     private static final class TestServerLevel extends ServerLevel {
+        private static final RecipeManager RECIPE_MANAGER = new RecipeManager(RegistryAccess.EMPTY);
+        private static final LevelData LEVEL_DATA = (LevelData) Proxy.newProxyInstance(
+                LevelData.class.getClassLoader(), new Class<?>[]{LevelData.class},
+                (proxy, method, arguments) -> method.getName().equals("getGameTime") ? 1L : null);
         private MachineControllerBlockEntity controller;
+        private BlockState controllerState;
 
         private TestServerLevel() {
             super(null, null, null, null, Level.OVERWORLD, null, false, 0L, List.of(), false);
         }
 
+        @Override public LevelData getLevelData() {
+            return LEVEL_DATA;
+        }
+
+        @Override public boolean isInValidBounds(BlockPos pos) {
+            return true;
+        }
+
+        @Override public RecipeManager recipeAccess() {
+            return RECIPE_MANAGER;
+        }
+
         @Override public BlockState getBlockState(BlockPos pos) {
             return controller != null && controller.getBlockPos().equals(pos)
-                    ? ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
+                    ? controllerState
                     : Blocks.AIR.defaultBlockState();
+        }
+
+        @Override public boolean setBlock(BlockPos pos, BlockState state, int flags) {
+            if (controller != null && controller.getBlockPos().equals(pos)) {
+                controllerState = state;
+                try {
+                    setField(net.minecraft.world.level.block.entity.BlockEntity.class, controller, "blockState", state);
+                } catch (Exception exception) {
+                    throw new AssertionError("Unable to update controller test state", exception);
+                }
+            }
+            return true;
+        }
+
+        @Override public boolean hasChunk(int chunkX, int chunkZ) {
+            return true;
+        }
+
+        @Override public void blockEntityChanged(BlockPos pos) {
+        }
+
+        @Override public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) {
         }
 
         @Override public net.minecraft.world.level.block.entity.BlockEntity getBlockEntity(BlockPos pos) {
             return controller != null && controller.getBlockPos().equals(pos) ? controller : null;
+        }
+    }
+
+    private static final class TestConnection extends ServerGamePacketListenerImpl {
+        private TestConnection() {
+            super(null, null, null, null);
+        }
+
+        @Override public void send(Packet<?> packet) {
         }
     }
 }
