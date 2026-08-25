@@ -1,10 +1,16 @@
 package cn.howxu.mmcr.internal.event;
 
-import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
+import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
-import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
+import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
+import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.port.PortFamilyIds;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
-import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.PortKinds;
@@ -19,6 +25,7 @@ import net.neoforged.neoforge.transfer.TransferPreconditions;
 import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.resource.Resource;
 import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
@@ -36,6 +43,9 @@ public final class ModCapabilities {
             Capabilities.Fluid.BLOCK;
     public static final BlockCapability<EnergyHandler, Direction> ENERGY_BLOCK =
             Capabilities.Energy.BLOCK;
+    private static final CapabilityType ITEM_TYPE = new CapabilityType(PortFamilyIds.ITEM);
+    private static final CapabilityType FLUID_TYPE = new CapabilityType(PortFamilyIds.FLUID);
+    private static final CapabilityType ENERGY_TYPE = new CapabilityType(PortFamilyIds.ENERGY);
 
     private ModCapabilities() {}
 
@@ -71,94 +81,67 @@ public final class ModCapabilities {
 
     private static void registerNativePort(RegisterCapabilitiesEvent event, IOPortKind kind) {
         if (kind.capabilityFactories().contains(CapabilityFactories.ITEM_BUS)) {
-            boolean canInsert = kind.ioType() == IOType.INPUT;
-            event.registerBlockEntity(
-                    ITEM_BLOCK,
-                    ModBlockEntities.BES.get(kind.id()).get(),
-                    (be, side) -> be instanceof ItemBusBlockEntity ib && ib.isAutoIOSideExposed(side)
-                            ? new ItemStackResourceHandler(ib.getItemStackHandler(side), canInsert, true)
-                            : null);
-        } else if (kind.capabilityFactories().contains(CapabilityFactories.FLUID_HATCH)) {
-            boolean canInsert = kind.ioType() == IOType.INPUT;
-            event.registerBlockEntity(
-                    FLUID_BLOCK,
-                    ModBlockEntities.BES.get(kind.id()).get(),
-                    (be, side) -> be instanceof FluidHatchBlockEntity fh && fh.isAutoIOSideExposed(side)
-                            ? new DirectionalFluidHandler(fh.getResourceHandler(side), canInsert, !canInsert)
-                            : null);
-        } else if (kind.capabilityFactories().contains(CapabilityFactories.ENERGY_HATCH)) {
-            boolean canInsert = kind.ioType() == IOType.INPUT;
-            event.registerBlockEntity(
-                    ENERGY_BLOCK,
-                    ModBlockEntities.BES.get(kind.id()).get(),
-                    (be, side) -> be instanceof EnergyHatchBlockEntity eh && eh.isAutoIOSideExposed(side)
-                            ? new DirectionalEnergyHandler(eh.getEnergyHandler(side), canInsert, !canInsert)
-                            : null);
+            registerItemPort(event, kind);
+        }
+        if (kind.capabilityFactories().contains(CapabilityFactories.FLUID_HATCH)) {
+            registerFluidPort(event, kind);
+        }
+        if (kind.capabilityFactories().contains(CapabilityFactories.ENERGY_HATCH)) {
+            registerEnergyPort(event, kind);
         }
     }
 
-    private static final class DirectionalFluidHandler implements ResourceHandler<FluidResource> {
-        private final ResourceHandler<FluidResource> handler;
-        private final boolean canInsert;
-        private final boolean canExtract;
+    private static void registerItemPort(RegisterCapabilitiesEvent event, IOPortKind kind) {
+        boolean canInsert = kind.ioType() == IOType.INPUT;
+        event.registerBlockEntity(
+                ITEM_BLOCK,
+                ModBlockEntities.BES.get(kind.id()).get(),
+                (be, side) -> {
+                    if (!(be instanceof IOPortBlockEntity port) || !port.isAutoIOSideExposed(ITEM_TYPE, side)) return null;
+                    MachineCapability capability = port.capability(ITEM_TYPE);
+                    if (!(capability instanceof ItemBusCapability item)) return null;
+                    if (be instanceof ItemBusBlockEntity ib) {
+                        return new ItemStackResourceHandler(ib.getItemStackHandler(side), canInsert, true);
+                    }
+                    return resourceStorageHandler(item.storage(), canInsert, true);
+                });
+    }
 
-        DirectionalFluidHandler(ResourceHandler<FluidResource> handler, boolean canInsert, boolean canExtract) {
-            this.handler = handler;
-            this.canInsert = canInsert;
-            this.canExtract = canExtract;
-        }
+    private static void registerFluidPort(RegisterCapabilitiesEvent event, IOPortKind kind) {
+        boolean canInsert = kind.ioType() == IOType.INPUT;
+        event.registerBlockEntity(
+                FLUID_BLOCK,
+                ModBlockEntities.BES.get(kind.id()).get(),
+                (be, side) -> {
+                    if (!(be instanceof IOPortBlockEntity port) || !port.isAutoIOSideExposed(FLUID_TYPE, side)) return null;
+                    MachineCapability capability = port.capability(FLUID_TYPE);
+                    if (capability == null || !(capability.storage() instanceof ResourceStorage<?> storage)) return null;
+                    return resourceStorageHandler(fluidStorage(storage), canInsert, !canInsert);
+                });
+    }
 
-        @Override
-        public int size() {
-            return handler.size();
-        }
+    private static void registerEnergyPort(RegisterCapabilitiesEvent event, IOPortKind kind) {
+        boolean canInsert = kind.ioType() == IOType.INPUT;
+        event.registerBlockEntity(
+                ENERGY_BLOCK,
+                ModBlockEntities.BES.get(kind.id()).get(),
+                (be, side) -> {
+                    if (!(be instanceof IOPortBlockEntity port) || !port.isAutoIOSideExposed(ENERGY_TYPE, side)) return null;
+                    MachineCapability capability = port.capability(ENERGY_TYPE);
+                    if (!(capability instanceof EnergyHatchCapability energy)) return null;
+                    return new DirectionalEnergyHandler(new EnergyHandlerAdapter(energy.storage()), canInsert, !canInsert);
+                });
+    }
 
-        @Override
-        public FluidResource getResource(int slot) {
-            checkSlot(slot);
-            return handler.getResource(slot);
-        }
+    @SuppressWarnings("unchecked")
+    private static ResourceStorage<FluidResource> fluidStorage(ResourceStorage<?> storage) {
+        return (ResourceStorage<FluidResource>) storage;
+    }
 
-        @Override
-        public long getAmountAsLong(int slot) {
-            checkSlot(slot);
-            return handler.getAmountAsLong(slot);
-        }
-
-        @Override
-        public long getCapacityAsLong(int slot, FluidResource resource) {
-            checkSlot(slot);
-            return handler.getCapacityAsLong(slot, resource);
-        }
-
-        @Override
-        public boolean isValid(int slot, FluidResource resource) {
-            checkSlot(slot);
-            TransferPreconditions.checkNonEmpty(resource);
-            return handler.isValid(slot, resource);
-        }
-
-        @Override
-        public int insert(int slot, FluidResource resource, int amount, TransactionContext tx) {
-            checkSlot(slot);
-            TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
-            if (!canInsert) return 0;
-            return handler.insert(slot, resource, amount, tx);
-        }
-
-        @Override
-        public int extract(int slot, FluidResource resource, int amount, TransactionContext tx) {
-            checkSlot(slot);
-            TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
-            if (!canExtract) return 0;
-            return handler.extract(slot, resource, amount, tx);
-        }
-
-        private void checkSlot(int slot) {
-            if (slot < 0 || slot >= handler.size()) {
-                throw new IndexOutOfBoundsException(slot);
-            }
-        }
+    private static <R extends Resource> ResourceHandler<R> resourceStorageHandler(ResourceStorage<R> storage,
+                                                                                    boolean canInsert,
+                                                                                    boolean canExtract) {
+        return new ResourceStorageHandler<>(storage, canInsert, canExtract);
     }
 
     private static final class DirectionalEnergyHandler implements EnergyHandler {
@@ -194,6 +177,64 @@ public final class ModCapabilities {
             TransferPreconditions.checkNonNegative(amount);
             if (!canExtract) return 0;
             return handler.extract(amount, tx);
+        }
+    }
+
+    private static final class EnergyHandlerAdapter implements EnergyHandler {
+        private final LongValueStorage storage;
+
+        private EnergyHandlerAdapter(LongValueStorage storage) {
+            this.storage = storage;
+        }
+
+        @Override public long getAmountAsLong() { return storage.amount(); }
+        @Override public long getCapacityAsLong() { return storage.capacity(); }
+        @Override public int insert(int amount, TransactionContext tx) {
+            storage.updateSnapshots(tx);
+            return (int) storage.insert(amount, false);
+        }
+        @Override public int extract(int amount, TransactionContext tx) {
+            storage.updateSnapshots(tx);
+            return (int) storage.extract(amount, false);
+        }
+    }
+
+    private static final class ResourceStorageHandler<R extends Resource> implements ResourceHandler<R> {
+        private final ResourceStorage<R> storage;
+        private final boolean canInsert;
+        private final boolean canExtract;
+
+        private ResourceStorageHandler(ResourceStorage<R> storage, boolean canInsert, boolean canExtract) {
+            this.storage = storage;
+            this.canInsert = canInsert;
+            this.canExtract = canExtract;
+        }
+
+        @Override public int size() { return storage.size(); }
+        @Override public R getResource(int slot) {
+            R resource = storage.resource(slot);
+            return resource == null ? emptyResource() : resource;
+        }
+        @Override public long getAmountAsLong(int slot) { return storage.amount(slot); }
+        @Override public long getCapacityAsLong(int slot, R resource) { return storage.capacity(slot, resource); }
+        @Override public boolean isValid(int slot, R resource) {
+            TransferPreconditions.checkNonEmpty(resource);
+            return storage.isValid(slot, resource);
+        }
+        @Override public int insert(int slot, R resource, int amount, TransactionContext tx) {
+            TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
+            return canInsert ? (int) storage.insert(slot, resource, amount, tx) : 0;
+        }
+        @Override public int extract(int slot, R resource, int amount, TransactionContext tx) {
+            TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
+            return canExtract ? (int) storage.extract(slot, resource, amount, tx) : 0;
+        }
+
+        @SuppressWarnings("unchecked")
+        private R emptyResource() {
+            if (storage.resourceType() == ItemResource.class) return (R) ItemResource.EMPTY;
+            if (storage.resourceType() == FluidResource.class) return (R) FluidResource.EMPTY;
+            throw new IllegalStateException("Missing empty resource for " + storage.resourceType().getName());
         }
     }
 

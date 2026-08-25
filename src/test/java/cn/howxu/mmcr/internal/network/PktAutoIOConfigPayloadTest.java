@@ -73,6 +73,15 @@ class PktAutoIOConfigPayloadTest {
     }
 
     @Test
+    void missing_capability_identity_is_rejected_before_update() throws Exception {
+        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null), BlockPos.ZERO);
+        ServerPlayer player = playerWith(menu);
+
+        assertThat(PktAutoIOConfigPayload.canUpdate(player, BlockPos.ZERO, null,
+                AutoIOAction.SET_ENABLED, null)).isFalse();
+    }
+
+    @Test
     void port_update_requires_the_menu_owner_to_be_the_target_port() {
         ItemInputBusBlockEntity owner = RuntimeTestFixtures.itemInput(BlockPos.ZERO);
         ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null), owner);

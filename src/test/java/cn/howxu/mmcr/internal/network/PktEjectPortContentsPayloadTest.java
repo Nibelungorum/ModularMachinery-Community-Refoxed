@@ -1,6 +1,11 @@
 package cn.howxu.mmcr.internal.network;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
@@ -51,7 +56,8 @@ class PktEjectPortContentsPayloadTest {
         ProbePort port = inputPort();
         ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), BlockPos.ZERO), PORT_POS);
 
-        assertThat(PktEjectPortContentsPayload.ejectOnServer(player, new PktEjectPortContentsPayload(PORT_POS))).isFalse();
+        assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
+                new PktEjectPortContentsPayload(PORT_POS, MMCR.id("item")))).isFalse();
         assertThat(port.ejectCalls).isZero();
     }
 
@@ -65,7 +71,8 @@ class PktEjectPortContentsPayloadTest {
             }
         }, PORT_POS);
 
-        assertThat(PktEjectPortContentsPayload.ejectOnServer(player, new PktEjectPortContentsPayload(PORT_POS))).isFalse();
+        assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
+                new PktEjectPortContentsPayload(PORT_POS, MMCR.id("item")))).isFalse();
         assertThat(port.ejectCalls).isZero();
     }
 
@@ -74,7 +81,8 @@ class PktEjectPortContentsPayloadTest {
         ProbePort port = inputPort();
         ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), PORT_POS), new BlockPos(100, 2, 3));
 
-        assertThat(PktEjectPortContentsPayload.ejectOnServer(player, new PktEjectPortContentsPayload(PORT_POS))).isFalse();
+        assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
+                new PktEjectPortContentsPayload(PORT_POS, MMCR.id("item")))).isFalse();
         assertThat(port.ejectCalls).isZero();
     }
 
@@ -83,7 +91,8 @@ class PktEjectPortContentsPayloadTest {
         ProbePort port = outputPort();
         ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), PORT_POS), PORT_POS);
 
-        assertThat(PktEjectPortContentsPayload.ejectOnServer(player, new PktEjectPortContentsPayload(PORT_POS))).isFalse();
+        assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
+                new PktEjectPortContentsPayload(PORT_POS, MMCR.id("item")))).isFalse();
         assertThat(port.ejectCalls).isZero();
     }
 
@@ -92,14 +101,25 @@ class PktEjectPortContentsPayloadTest {
         ProbePort port = inputPort();
         ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), PORT_POS), PORT_POS);
 
-        assertThat(PktEjectPortContentsPayload.ejectOnServer(player, new PktEjectPortContentsPayload(PORT_POS))).isTrue();
+        assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
+                new PktEjectPortContentsPayload(PORT_POS, MMCR.id("item")))).isTrue();
         assertThat(port.ejectCalls).isEqualTo(1);
+    }
+
+    @Test
+    void ejectPacketTargetsOnly_the_requested_capability() throws Exception {
+        ProbePort port = inputPort();
+        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), PORT_POS), PORT_POS);
+
+        assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
+                new PktEjectPortContentsPayload(PORT_POS, MMCR.id("fluid")))).isFalse();
+        assertThat(port.ejectCalls).isZero();
     }
 
     @Test
     void payload_round_trips_its_target_position() {
         var buffer = Unpooled.buffer();
-        PktEjectPortContentsPayload payload = new PktEjectPortContentsPayload(new BlockPos(3, 4, 5));
+        PktEjectPortContentsPayload payload = new PktEjectPortContentsPayload(new BlockPos(3, 4, 5), MMCR.id("item"));
 
         PktEjectPortContentsPayload.STREAM_CODEC.encode(buffer, payload);
         PktEjectPortContentsPayload decoded = PktEjectPortContentsPayload.STREAM_CODEC.decode(buffer);
@@ -112,7 +132,7 @@ class PktEjectPortContentsPayloadTest {
     void server_handler_rejects_missing_request_context() {
         assertThat(PktEjectPortContentsPayload.ejectOnServer(null, null)).isFalse();
         assertThat(PktEjectPortContentsPayload.ejectOnServer(null,
-                new PktEjectPortContentsPayload(BlockPos.ZERO))).isFalse();
+                new PktEjectPortContentsPayload(BlockPos.ZERO, MMCR.id("item")))).isFalse();
     }
 
     private static ProbePort inputPort() {
@@ -186,8 +206,28 @@ class PktEjectPortContentsPayloadTest {
 
         @Override public IOType ioType() { return ioType; }
         @Override public IOPortKind kind() { return kind; }
-        @Override public CapabilitySnapshot capabilitySnapshot() { return new CapabilitySnapshot(List.of()); }
+        @Override public CapabilitySnapshot capabilitySnapshot() {
+            CapabilityType type = new CapabilityType(MMCR.id("item"));
+            MachineCapability capability = new MachineCapability() {
+                @Override public CapabilityType type() { return type; }
+                @Override public IOType ioType() { return ioType; }
+                @Override public CapabilityView view() {
+                    return new CapabilityView() {
+                        @Override public CapabilityType type() { return type; }
+                        @Override public IOType ioType() { return ioType; }
+                    };
+                }
+                @Override public CapabilityOperation prepare(cn.howxu.mmcr.api.capability.CapabilityRequest request) {
+                    return null;
+                }
+            };
+            return new CapabilitySnapshot(List.of(capability));
+        }
         @Override public boolean ejectContents() {
+            ejectCalls++;
+            return true;
+        }
+        @Override public boolean ejectContents(CapabilityType capabilityType) {
             ejectCalls++;
             return true;
         }
