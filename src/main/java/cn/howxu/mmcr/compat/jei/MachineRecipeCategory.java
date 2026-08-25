@@ -112,7 +112,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
         addRegion(builder, recipe, layout.inputs(), true);
         addRegion(builder, recipe, layout.outputs(), false);
-        builder.moveRecipeTransferButton(layout.transferButtonX(), layout.transferButtonY());
+        builder.moveRecipeTransferButton(layout.transferButtonX(), layout.transferButtonY() - 3);
     }
 
     @Override

@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.mixin.compat.jei;
 
+import cn.howxu.mmcr.compat.jei.JeiRecipeBackground;
+import cn.howxu.mmcr.compat.jei.MachineRecipeCategory;
 import mezz.jei.api.gui.drawable.IScalableDrawable;
 import mezz.jei.api.recipe.IFocusGroup;
 import mezz.jei.api.recipe.category.IRecipeCategory;
@@ -8,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
 /**
- * Reserved hook for a future MMCR-specific JEI recipe-page background.
+ * Replaces JEI's recipe-page background with the MMCR background.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -26,6 +28,8 @@ abstract class JeiRecipeManagerMixin {
             IRecipeCategory<?> recipeCategory,
             Object recipe,
             IFocusGroup focusGroup) {
-        return original;
+        return recipeCategory instanceof MachineRecipeCategory
+                ? JeiRecipeBackground.INSTANCE
+                : original;
     }
 }
