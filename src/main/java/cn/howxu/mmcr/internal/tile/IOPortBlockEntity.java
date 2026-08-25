@@ -3,6 +3,8 @@ package cn.howxu.mmcr.internal.tile;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
+import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.internal.autoio.AutoIOConfig;
@@ -25,6 +27,8 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
+import net.neoforged.neoforge.transfer.item.ItemResource;
 
 import java.util.TreeMap;
 import java.util.EnumSet;
@@ -75,6 +79,18 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
     @Override
     public abstract CapabilitySnapshot capabilitySnapshot();
+
+    public ResourceStorage<ItemResource> itemStorage() {
+        throw new IllegalStateException("Port does not expose item storage: " + kind().id());
+    }
+
+    public ResourceStorage<FluidResource> fluidStorage() {
+        throw new IllegalStateException("Port does not expose fluid storage: " + kind().id());
+    }
+
+    public LongValueStorage getEnergyStorage() {
+        throw new IllegalStateException("Port does not expose energy storage: " + kind().id());
+    }
 
     public AutoIOConfig autoIOConfig() {
         return autoIOConfig;

@@ -12,10 +12,7 @@ import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
 import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
-import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
-import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
-import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
@@ -25,9 +22,9 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
  * @author howxu <dev@howxu.cn>
  */
 public final class CapabilityFactories {
-    public static final CapabilityFactory ITEM_BUS = port -> new ItemBusCapability(require(port, ItemBusBlockEntity.class));
-    public static final CapabilityFactory FLUID_HATCH = port -> new FluidHatchCapability(require(port, FluidHatchBlockEntity.class));
-    public static final CapabilityFactory ENERGY_HATCH = port -> new EnergyHatchCapability(require(port, EnergyHatchBlockEntity.class));
+    public static final CapabilityFactory ITEM_BUS = port -> new ItemBusCapability(port, port.itemStorage(), port.ioType());
+    public static final CapabilityFactory FLUID_HATCH = port -> new FluidHatchCapability(port, port.fluidStorage(), port.ioType());
+    public static final CapabilityFactory ENERGY_HATCH = port -> new EnergyHatchCapability(port, port.getEnergyStorage(), port.ioType());
 
     static final CapabilityType ITEM_TYPE = new CapabilityType(MMCR.id("item"));
     static final CapabilityType FLUID_TYPE = new CapabilityType(MMCR.id("fluid"));
@@ -112,10 +109,4 @@ public final class CapabilityFactories {
                 cn.howxu.mmcr.api.capability.status.StatusSeverity.BLOCKED, type.id(), java.util.Map.of("reason", reason));
     }
 
-    private static <T> T require(IOPortBlockEntity port, Class<T> type) {
-        if (!type.isInstance(port)) {
-            throw new IllegalArgumentException("Capability factory cannot handle " + port.getClass().getName());
-        }
-        return type.cast(port);
-    }
 }

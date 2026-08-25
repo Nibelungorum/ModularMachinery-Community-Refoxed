@@ -48,6 +48,11 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
 
     public ItemStackHandler getItemStackHandler(Direction side) { return handler; }
 
+    @Override
+    public ResourceStorage<ItemResource> itemStorage() {
+        return getResourceStorage();
+    }
+
     public ResourceStorage<ItemResource> getResourceStorage() {
         if (!(handler instanceof ResourceStorage<?> storage)) {
             throw new IllegalStateException("Item bus handler does not expose resource storage");

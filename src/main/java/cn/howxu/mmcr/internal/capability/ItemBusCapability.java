@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
@@ -19,16 +20,26 @@ import org.jetbrains.annotations.Nullable;
  * @author howxu <dev@howxu.cn>
  */
 public final class ItemBusCapability implements MachineCapability {
-    private final ItemBusBlockEntity port;
+    private final IOPortBlockEntity port;
     private final IOType ioType;
     private final ResourceStorage<ItemResource> storage;
     private final CapabilityView view;
 
-    public ItemBusCapability(ItemBusBlockEntity port) {
+    public ItemBusCapability(ResourceStorage<ItemResource> storage, IOType ioType) {
+        this(null, storage, ioType);
+    }
+
+    public ItemBusCapability(IOPortBlockEntity port, ResourceStorage<ItemResource> storage, IOType ioType) {
+        if (storage == null) throw new IllegalArgumentException("storage must not be null");
+        if (ioType == null) throw new IllegalArgumentException("ioType must not be null");
         this.port = port;
-        this.ioType = port.ioType();
-        this.storage = port.getResourceStorage();
+        this.ioType = ioType;
+        this.storage = storage;
         this.view = CapabilityFactories.view(type(), ioType);
+    }
+
+    public ItemBusCapability(ItemBusBlockEntity port) {
+        this(port, port.itemStorage(), port.ioType());
     }
 
     public ResourceStorage<ItemResource> storage() {
@@ -37,11 +48,11 @@ public final class ItemBusCapability implements MachineCapability {
 
     @Nullable
     public Level level() {
-        return port.getLevel();
+        return port == null ? null : port.getLevel();
     }
 
     public BlockPos position() {
-        return port.getBlockPos();
+        return port == null ? BlockPos.ZERO : port.getBlockPos();
     }
 
     public int transferLimit() {

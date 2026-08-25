@@ -6,8 +6,8 @@ import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
-import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
@@ -20,16 +20,26 @@ import org.jetbrains.annotations.Nullable;
  * @author howxu <dev@howxu.cn>
  */
 public final class FluidHatchCapability implements MachineCapability {
-    private final FluidHatchBlockEntity port;
+    private final IOPortBlockEntity port;
     private final IOType ioType;
-    private final LongFluidStorage storage;
+    private final ResourceStorage<FluidResource> storage;
     private final CapabilityView view;
 
-    public FluidHatchCapability(FluidHatchBlockEntity port) {
+    public FluidHatchCapability(ResourceStorage<FluidResource> storage, IOType ioType) {
+        this(null, storage, ioType);
+    }
+
+    public FluidHatchCapability(IOPortBlockEntity port, ResourceStorage<FluidResource> storage, IOType ioType) {
+        if (storage == null) throw new IllegalArgumentException("storage must not be null");
+        if (ioType == null) throw new IllegalArgumentException("ioType must not be null");
         this.port = port;
-        this.ioType = port.ioType();
-        this.storage = port.fluidStorage();
+        this.ioType = ioType;
+        this.storage = storage;
         this.view = CapabilityFactories.view(type(), ioType);
+    }
+
+    public FluidHatchCapability(FluidHatchBlockEntity port) {
+        this(port, port.fluidStorage(), port.ioType());
     }
 
     public ResourceStorage<FluidResource> storage() {
@@ -38,11 +48,11 @@ public final class FluidHatchCapability implements MachineCapability {
 
     @Nullable
     public Level level() {
-        return port.getLevel();
+        return port == null ? null : port.getLevel();
     }
 
     public BlockPos position() {
-        return port.getBlockPos();
+        return port == null ? BlockPos.ZERO : port.getBlockPos();
     }
 
     public int transferLimit() {

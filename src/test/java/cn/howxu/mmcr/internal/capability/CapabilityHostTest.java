@@ -11,6 +11,8 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.storage.LongFluidStorage;
+import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -116,6 +118,22 @@ class CapabilityHostTest {
         }
     }
 
+    @Test
+    void capability_factories_use_storage_protocols_from_the_host() {
+        StorageHost host = new StorageHost();
+
+        ItemBusCapability item = (ItemBusCapability) CapabilityFactories.ITEM_BUS.create(host);
+        FluidHatchCapability fluid = (FluidHatchCapability) CapabilityFactories.FLUID_HATCH.create(host);
+        EnergyHatchCapability energy = (EnergyHatchCapability) CapabilityFactories.ENERGY_HATCH.create(host);
+
+        assertThat(item.storage()).isSameAs(host.itemStorage());
+        assertThat(fluid.storage()).isSameAs(host.fluidStorage());
+        assertThat(energy.storage()).isSameAs(host.getEnergyStorage());
+        assertThat(item.ioType()).isEqualTo(IOType.INPUT);
+        assertThat(fluid.ioType()).isEqualTo(IOType.INPUT);
+        assertThat(energy.ioType()).isEqualTo(IOType.INPUT);
+    }
+
     private static CapabilityRequest request(MachineCapability capability) {
         if (capability.storage() instanceof ResourceStorage<?>) {
             return new CapabilityRequests.ResourceRequest<>(capability.type(), capability.ioType(), 1, List.of());
@@ -169,6 +187,25 @@ class CapabilityHostTest {
             }
             return capabilitySnapshot;
         }
+    }
+
+    private static final class StorageHost extends IOPortBlockEntity {
+        private final ResourceStorage<ItemResource> itemStorage = new LongResourceStorage<>(
+                ItemResource.class, 2, 100L, resource -> resource.isEmpty(), () -> {});
+        private final ResourceStorage<FluidResource> fluidStorage = new LongFluidStorage(2, 100L, () -> {});
+        private final LongValueStorage energyStorage = new LongValueStorage(100L, 20L, () -> {});
+
+        private StorageHost() {
+            super(ModBlockEntities.BES.get("item_input_bus").get(), BlockPos.ZERO,
+                    ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+        }
+
+        @Override public IOType ioType() { return IOType.INPUT; }
+        @Override public IOPortKind kind() { return PortKinds.ITEM_INPUT; }
+        @Override public CapabilitySnapshot capabilitySnapshot() { return new CapabilitySnapshot(List.of()); }
+        @Override public ResourceStorage<ItemResource> itemStorage() { return itemStorage; }
+        @Override public ResourceStorage<FluidResource> fluidStorage() { return fluidStorage; }
+        @Override public LongValueStorage getEnergyStorage() { return energyStorage; }
     }
 
     private record TestCapability(String id) implements MachineCapability {

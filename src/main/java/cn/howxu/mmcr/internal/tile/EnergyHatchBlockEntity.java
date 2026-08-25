@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
+import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -31,6 +32,11 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
 
     public LongEnergyStorage energyStorage() {
         return storage;
+    }
+
+    @Override
+    public LongValueStorage getEnergyStorage() {
+        return storage.storage();
     }
 
     @Override

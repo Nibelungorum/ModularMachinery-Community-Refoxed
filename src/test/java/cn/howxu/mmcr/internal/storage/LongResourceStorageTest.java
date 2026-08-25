@@ -2,9 +2,11 @@ package cn.howxu.mmcr.internal.storage;
 
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
+import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -98,5 +100,66 @@ class LongResourceStorageTest {
             transaction.commit();
         }
         assertThat(energy.getAmountAsLong()).isEqualTo(20L);
+    }
+
+    @Test
+    void merges_same_resource_and_keeps_different_resources_in_separate_slots() {
+        LongResourceStorage<ItemResource> storage = new LongResourceStorage<>(
+                ItemResource.class, 2, 100L, resource -> resource.isEmpty(), () -> {});
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        ItemResource gold = ItemResource.of(Items.GOLD_INGOT);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(storage.insert(0, iron, 60L, transaction)).isEqualTo(60L);
+            assertThat(storage.insert(0, iron, 50L, transaction)).isEqualTo(40L);
+            assertThat(storage.insert(1, gold, 25L, transaction)).isEqualTo(25L);
+            transaction.commit();
+        }
+
+        assertThat(storage.amount(0)).isEqualTo(100L);
+        assertThat(storage.resource(0)).isEqualTo(iron);
+        assertThat(storage.amount(1)).isEqualTo(25L);
+        assertThat(storage.resource(1)).isEqualTo(gold);
+    }
+
+    @Test
+    void rejects_new_resource_when_all_type_slots_are_occupied() {
+        LongResourceStorage<ItemResource> storage = new LongResourceStorage<>(
+                ItemResource.class, 2, 100L, resource -> resource.isEmpty(), () -> {});
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        ItemResource gold = ItemResource.of(Items.GOLD_INGOT);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(storage.insert(0, iron, 10L, transaction)).isEqualTo(10L);
+            assertThat(storage.insert(1, gold, 10L, transaction)).isEqualTo(10L);
+            transaction.commit();
+        }
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(storage.insert(0, gold, 1L, transaction)).isZero();
+            assertThat(storage.insert(1, iron, 1L, transaction)).isZero();
+            transaction.commit();
+        }
+    }
+
+    @Test
+    void supports_amounts_above_integer_range_and_rolls_back_transactions() {
+        long largeAmount = (long) Integer.MAX_VALUE + 10L;
+        LongResourceStorage<FluidResource> storage = new LongResourceStorage<>(
+                FluidResource.class, 1, largeAmount + 100L, resource -> resource.isEmpty(), () -> {});
+        FluidResource water = FluidResource.of(Fluids.WATER);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(storage.insert(0, water, largeAmount, transaction)).isEqualTo(largeAmount);
+            transaction.commit();
+        }
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(storage.extract(0, water, 5L, transaction)).isEqualTo(5L);
+            assertThat(storage.insert(0, water, 10L, transaction)).isEqualTo(10L);
+        }
+
+        assertThat(storage.amount(0)).isEqualTo(largeAmount);
+        assertThat(storage.resource(0)).isEqualTo(water);
     }
 }
