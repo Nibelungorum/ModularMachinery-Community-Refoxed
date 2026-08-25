@@ -45,7 +45,12 @@ import java.util.function.Supplier;
 
 public class IOPortBlock extends Block implements EntityBlock {
 
-    enum PortMenuKind { ITEM, FLUID, ENERGY, NONE }
+    enum PortMenuKind {
+        ITEM, FLUID, ENERGY,
+        EXTENDED_ITEM, EXTENDED_FLUID, EXTENDED_ENERGY,
+        COMBINED, EXTENDED_COMBINED,
+        NONE
+    }
 
     private final IOPortKind kind;
     private final Supplier<? extends BlockEntityType<?>> beType;
@@ -93,10 +98,11 @@ public class IOPortBlock extends Block implements EntityBlock {
         if (!level.isClientSide()) {
             MenuProvider provider = state.getMenuProvider(level, pos);
             if (provider != null) {
-                if (menuKindFor(kind.id()) == PortMenuKind.ITEM) {
+                PortMenuKind menuKind = menuKindFor(kind.id());
+                if (menuKind == PortMenuKind.ITEM) {
                     if (!(level.getBlockEntity(pos) instanceof ItemBusBlockEntity bus)) return InteractionResult.SUCCESS;
                     player.openMenu(provider, buffer -> ItemBusMenu.writeClientOpenData(buffer, pos, bus));
-                } else {
+                } else if (menuKind == PortMenuKind.FLUID || menuKind == PortMenuKind.ENERGY) {
                     player.openMenu(provider, pos);
                 }
             }
@@ -130,17 +136,29 @@ public class IOPortBlock extends Block implements EntityBlock {
     }
 
     static PortMenuKind menuKindFor(String id) {
-        if (matchesPortId(id, "item_input_bus") || matchesPortId(id, "item_output_bus")
-                || matchesPortId(id, "extended_item_input_bus") || matchesPortId(id, "extended_item_output_bus")) {
+        if (matchesPortId(id, "item_input_bus") || matchesPortId(id, "item_output_bus")) {
             return PortMenuKind.ITEM;
         }
-        if (matchesPortId(id, "fluid_input_hatch") || matchesPortId(id, "fluid_output_hatch")
-                || matchesPortId(id, "extended_fluid_input_hatch") || matchesPortId(id, "extended_fluid_output_hatch")) {
+        if (matchesPortId(id, "fluid_input_hatch") || matchesPortId(id, "fluid_output_hatch")) {
             return PortMenuKind.FLUID;
         }
-        if (matchesPortId(id, "energy_input_hatch") || matchesPortId(id, "energy_output_hatch")
-                || matchesPortId(id, "extended_energy_input_hatch") || matchesPortId(id, "extended_energy_output_hatch")) {
+        if (matchesPortId(id, "energy_input_hatch") || matchesPortId(id, "energy_output_hatch")) {
             return PortMenuKind.ENERGY;
+        }
+        if (matchesPortId(id, "extended_item_input_bus") || matchesPortId(id, "extended_item_output_bus")) {
+            return PortMenuKind.EXTENDED_ITEM;
+        }
+        if (matchesPortId(id, "extended_fluid_input_hatch") || matchesPortId(id, "extended_fluid_output_hatch")) {
+            return PortMenuKind.EXTENDED_FLUID;
+        }
+        if (matchesPortId(id, "extended_energy_input_hatch") || matchesPortId(id, "extended_energy_output_hatch")) {
+            return PortMenuKind.EXTENDED_ENERGY;
+        }
+        if (matchesPortId(id, "combined_input") || matchesPortId(id, "combined_output")) {
+            return PortMenuKind.COMBINED;
+        }
+        if (matchesPortId(id, "extended_combined_input") || matchesPortId(id, "extended_combined_output")) {
+            return PortMenuKind.EXTENDED_COMBINED;
         }
         return PortMenuKind.NONE;
     }
@@ -159,7 +177,7 @@ public class IOPortBlock extends Block implements EntityBlock {
                     level.getBlockEntity(pos) instanceof FluidHatchBlockEntity hatch ? hatch : null);
             case ENERGY -> new EnergyHatchMenu(containerId, playerInv,
                     level.getBlockEntity(pos) instanceof EnergyHatchBlockEntity hatch ? hatch : null);
-            case NONE -> null;
+            case EXTENDED_ITEM, EXTENDED_FLUID, EXTENDED_ENERGY, COMBINED, EXTENDED_COMBINED, NONE -> null;
         };
     }
 

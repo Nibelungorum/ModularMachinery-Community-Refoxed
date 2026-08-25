@@ -185,6 +185,17 @@ class ModEventRegistrationTest {
         }
     }
 
+    @Test
+    void generated_exact_ids_are_not_reused_as_family_aliases() {
+        for (String id : GENERATED_PORT_IDS) {
+            IOPortKind kind = PortKinds.all().stream()
+                    .filter(candidate -> candidate.id().equals(id))
+                    .findFirst().orElseThrow();
+            assertThat(kind.families()).isNotEmpty().allSatisfy(family ->
+                    assertThat(family.countAliases()).doesNotContain(id));
+        }
+    }
+
     private static ModEventRegistration.EventHandlers handlers(List<Class<?>> invoked) {
         return new ModEventRegistration.EventHandlers(
                 recording(invoked, RegisterCapabilitiesEvent.class),
