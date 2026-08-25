@@ -20,6 +20,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
 import cn.howxu.mmcr.test.TestBootstrap;
 import io.netty.buffer.Unpooled;
@@ -52,6 +53,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.LinkedHashSet;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import com.mojang.serialization.Lifecycle;
@@ -64,6 +66,7 @@ import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
 import com.mojang.serialization.JsonOps;
 import java.nio.charset.StandardCharsets;
+import java.util.stream.IntStream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -429,6 +432,73 @@ class RuntimeContentSnapshotTest {
     }
 
     @Test
+    void recipeCodecRejectsOversizedRequirementCountOnEncode() {
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("oversized_requirements_recipe"), MMCR.id("runtime_test_machine"), 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                Collections.nCopies(4097, new EnergyRequirement(1)));
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+
+        assertThatThrownBy(() -> MachineRecipeSyncCodec.encode(buf, recipe))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid requirement count");
+    }
+
+    @Test
+    void recipeCodecRejectsOversizedModifierCountOnEncode() {
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("oversized_modifiers_recipe"), MMCR.id("runtime_test_machine"), 20,
+                List.of(), List.of(), Collections.nCopies(1025,
+                        new RecipeModifier("target", RecipeModifier.IOType.INPUT, 1F,
+                                RecipeModifier.Operation.ADD, false)), 0, 1);
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+
+        assertThatThrownBy(() -> MachineRecipeSyncCodec.encode(buf, recipe))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid modifier count");
+    }
+
+    @Test
+    void recipeCodecRejectsOversizedLevelRequirementCountOnEncode() throws Exception {
+        Method writeLevels = MachineRecipeSyncCodec.class.getDeclaredMethod(
+                "writeLevelRequirements", RegistryFriendlyByteBuf.class, List.class);
+        writeLevels.setAccessible(true);
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+
+        assertThatThrownBy(() -> writeLevels.invoke(null, buf,
+                Collections.nCopies(1025, new LevelRequirement(MMCR.id("level_type"), MMCR.id("level")))))
+                .isInstanceOf(java.lang.reflect.InvocationTargetException.class)
+                .hasCauseInstanceOf(IllegalArgumentException.class)
+                .hasRootCauseMessage("Invalid level requirement count: 1025");
+    }
+
+    @Test
+    void recipeCodecRejectsOversizedRequiredHostCountOnEncode() {
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("oversized_hosts_recipe"), MMCR.id("runtime_test_machine"), 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
+                List.of(), false, hostIds(1025));
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+
+        assertThatThrownBy(() -> MachineRecipeSyncCodec.encode(buf, recipe))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid required host count");
+    }
+
+    @Test
+    void recipeCodecRejectsOversizedRequirementTagCountOnEncode() {
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("oversized_tags_recipe"), MMCR.id("runtime_test_machine"), 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(new EnergyRequirement(1, Collections.nCopies(1025, "tag"))));
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+
+        assertThatThrownBy(() -> MachineRecipeSyncCodec.encode(buf, recipe))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid tag count");
+    }
+
+    @Test
     void structureSyncCodecRejectsOversizedDeclarationCountOnEncode() {
         List<MachineStructureDefinition.Declaration> declarations = Collections.nCopies(1025,
                 structure(MMCR.id("runtime_test_machine")).declarations().getFirst());
@@ -491,6 +561,12 @@ class RuntimeContentSnapshotTest {
                 List.of(new ItemStack(Items.GOLD_INGOT, 4)),
                 List.of(), 0, 1, true, List.of(), List.of(), false,
                 List.of(), true, Set.of());
+    }
+
+    private static Set<Identifier> hostIds(int count) {
+        return IntStream.range(0, count)
+                .mapToObj(index -> MMCR.id("host_" + index))
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
     }
 
     private static String classBytes(Class<?> type) throws IOException {

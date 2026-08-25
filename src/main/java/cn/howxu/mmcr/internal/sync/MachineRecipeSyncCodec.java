@@ -84,6 +84,7 @@ public final class MachineRecipeSyncCodec {
     }
 
     private static void writeRequirements(RegistryFriendlyByteBuf buf, List<MachineRequirement> values) {
+        checkSize(values.size(), MAX_REQUIREMENTS, "requirement");
         buf.writeVarInt(values.size());
         for (MachineRequirement value : values) {
             writeRequirement(buf, value);
@@ -196,6 +197,7 @@ public final class MachineRecipeSyncCodec {
     }
 
     private static void writeModifiers(RegistryFriendlyByteBuf buf, List<RecipeModifier> values) {
+        checkSize(values.size(), MAX_MODIFIERS, "modifier");
         buf.writeVarInt(values.size());
         for (RecipeModifier value : values) {
             writeJsonWithRegistryCodec(buf, RecipeModifier.CODEC, value);
@@ -213,6 +215,7 @@ public final class MachineRecipeSyncCodec {
     }
 
     private static void writeLevelRequirements(RegistryFriendlyByteBuf buf, List<LevelRequirement> values) {
+        checkSize(values.size(), MAX_LEVEL_REQUIREMENTS, "level requirement");
         buf.writeVarInt(values.size());
         for (LevelRequirement value : values) {
             writeJsonWithRegistryCodec(buf, LevelRequirement.CODEC, value);
@@ -230,6 +233,7 @@ public final class MachineRecipeSyncCodec {
     }
 
     private static void writeRequiredHosts(RegistryFriendlyByteBuf buf, Set<Identifier> values) {
+        checkSize(values.size(), MAX_REQUIRED_HOSTS, "required host");
         buf.writeVarInt(values.size());
         for (Identifier value : values) {
             Identifier.STREAM_CODEC.encode(buf, value);
@@ -251,6 +255,7 @@ public final class MachineRecipeSyncCodec {
     }
 
     private static void writeStringList(RegistryFriendlyByteBuf buf, List<String> values) {
+        checkSize(values.size(), MAX_TAGS, "tag");
         buf.writeVarInt(values.size());
         for (String value : values) {
             ByteBufCodecs.STRING_UTF8.encode(buf, value);

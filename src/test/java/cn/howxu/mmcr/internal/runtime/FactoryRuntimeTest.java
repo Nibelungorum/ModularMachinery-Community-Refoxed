@@ -247,6 +247,20 @@ class FactoryRuntimeTest {
         assertThat(restored.snapshot().presentationLanes()).hasSize(2);
     }
 
+    @Test
+    void loadingCorruptLaneCountsIsBoundedBeforeAllocatingLanes() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        output.putInt("lane_limit", Integer.MAX_VALUE);
+        output.putInt("lane_count", 1025);
+
+        FactoryRuntime restored = new FactoryRuntime();
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), controller);
+
+        assertThat(restored.laneLimit()).isLessThanOrEqualTo(1024);
+        assertThat(restored.laneCount()).isLessThanOrEqualTo(1024);
+    }
+
     private static MachineRecipe recipe(String path, int duration) {
         return new MachineRecipe(Identifier.fromNamespaceAndPath(MMCR.MODID, path), MMCR.id("test_cube"),
                 duration, List.of(), List.of(), List.of(), 0, 2);

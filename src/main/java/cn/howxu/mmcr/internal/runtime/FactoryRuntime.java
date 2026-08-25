@@ -28,6 +28,7 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public final class FactoryRuntime {
+    private static final int MAX_LANES = 1024;
     private final List<FactoryRecipeThread> lanes = new ArrayList<>();
     private final Map<FactoryRecipeThread, Identifier> recipeLocks = new IdentityHashMap<>();
     private final Set<FactoryRecipeThread> recipeLockUsed = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
@@ -233,7 +234,7 @@ public final class FactoryRuntime {
     }
 
     public void setLaneLimit(int laneLimit) {
-        this.laneLimit = Math.max(1, laneLimit);
+        this.laneLimit = Math.min(MAX_LANES, Math.max(1, laneLimit));
         while (lanes.size() > this.laneLimit) {
             FactoryRecipeThread removed = lanes.stream()
                     .filter(lane -> !lane.isBaseThread())
@@ -274,9 +275,9 @@ public final class FactoryRuntime {
     public void load(ValueInput input, MachineControllerBlockEntity controller) {
         this.controller = controller;
         clear();
-        laneLimit = Math.max(1, input.getIntOr("lane_limit", laneLimit));
+        setLaneLimit(input.getIntOr("lane_limit", laneLimit));
         paused = input.getBooleanOr("paused", false);
-        int count = Math.max(0, input.getIntOr("lane_count", 0));
+        int count = Math.min(MAX_LANES, Math.max(0, input.getIntOr("lane_count", 0)));
         for (int index = 0; index < count; index++) {
             ValueInput laneInput = input.childOrEmpty("lane_" + index);
             FactoryRecipeThread lane = FactoryRecipeThread.load(laneInput, controller);
