@@ -3,12 +3,19 @@ package cn.howxu.mmcr.internal.runtime;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import org.junit.jupiter.api.AfterEach;
@@ -98,6 +105,56 @@ class FactoryRuntimeTest {
         assertThat(runtime.activeLaneCount()).isEqualTo(1);
         assertThat(runtime.contains(removed)).isFalse();
         assertThat(removed.active()).isFalse();
+    }
+
+    @Test
+    void idle_dynamic_lanes_are_cleaned_up_after_their_timeout() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        runtime.setLaneLimit(2);
+
+        runtime.tick(List.of(recipe("factory_idle_cleanup", 1)), 1);
+        assertThat(runtime.laneCount()).isEqualTo(2);
+        for (int tick = 0; tick <= 200; tick++) runtime.tick(List.of(), 1);
+
+        assertThat(runtime.laneCount()).isEqualTo(1);
+        assertThat(runtime.activeLaneCount()).isZero();
+    }
+
+    @Test
+    void shared_input_is_reserved_by_only_one_active_lane() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new net.minecraft.core.BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        ItemStack stack = new ItemStack(Items.IRON_INGOT, 1);
+        stack.set(DataComponents.MAX_STACK_SIZE, 64);
+        input.getItemStackHandler(null).setStackInSlot(0, stack);
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        runtime.setLaneLimit(2);
+
+        runtime.tick(List.of(new MachineRecipe(MMCR.id("factory_shared_input"), MMCR.id("test_cube"), 20,
+                List.of(), List.of(), List.of(), 0, 2, false, List.of(), List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
+                        ItemStack.EMPTY)))), 1);
+
+        assertThat(runtime.activeLaneCount()).isEqualTo(1);
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isZero();
+    }
+
+    @Test
+    void finished_lane_restarts_from_the_queued_candidate() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        MachineRecipe recipe = recipe("factory_restart", 1);
+
+        runtime.tick(List.of(recipe), 1);
+        runtime.tick(List.of(recipe), 1);
+
+        assertThat(runtime.activeLaneCount()).isEqualTo(1);
+        assertThat(runtime.activeRuntimes().getFirst().recipe()).isEqualTo(recipe);
+        assertThat(runtime.activeRuntimes().getFirst().tickCount()).isZero();
     }
 
     @Test

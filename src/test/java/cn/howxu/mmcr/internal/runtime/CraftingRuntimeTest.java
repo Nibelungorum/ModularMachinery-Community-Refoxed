@@ -2,9 +2,13 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
+import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -20,6 +24,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -116,6 +121,60 @@ class CraftingRuntimeTest {
 
         assertThat(runtime.active()).isFalse();
         assertThat(runtime.failure().details()).containsEntry("reason", "version_invalidated");
+    }
+
+    @Test
+    void perTickEnergyIsCommittedThroughTheRealEnergyCapability() {
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), energy);
+        energy.energyStorage().setAmount(10);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_energy"), MMCR.id("test_cube"), 3,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(new EnergyRequirement(2)));
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(8);
+        runtime.tick();
+
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(6);
+        assertThat(runtime.active()).isTrue();
+    }
+
+    @Test
+    void modifier_and_component_state_changes_invalidate_an_active_runtime() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = recipe("runtime_version_changes", 20, List.of());
+
+        runtime.start(recipe, 1);
+        controller.componentRuntime().replaceModifiers(Map.of("changed", List.of()));
+        RuntimeTestFixtures.republish(controller);
+        runtime.tick();
+        assertThat(runtime.failure().details()).containsEntry("reason", "version_invalidated");
+
+        runtime.start(recipe, 1);
+        controller.componentRuntime().replaceModuleConnectionState(ModuleConnectionStatus.connected(MMCR.id("host")), 1);
+        RuntimeTestFixtures.republish(controller);
+        runtime.tick();
+        assertThat(runtime.failure().details()).containsEntry("reason", "version_invalidated");
+    }
+
+    @Test
+    void zero_consume_chance_retains_the_input_across_start_and_tick() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_retain_input"), MMCR.id("test_cube"), 2,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
+                        ItemStack.EMPTY, 1F, List.of(),
+                        DataComponentPredicateSet.EMPTY, 0F)));
+
+        runtime.start(recipe, 1);
+        runtime.tick();
+
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
     }
 
     @Test

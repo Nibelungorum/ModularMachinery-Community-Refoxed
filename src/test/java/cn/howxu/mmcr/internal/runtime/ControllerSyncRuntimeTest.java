@@ -7,6 +7,8 @@ import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
@@ -67,6 +69,20 @@ class ControllerSyncRuntimeTest {
         assertThat(factory.presentationLanes()).hasSize(2).isUnmodifiable();
         assertThat(factory.foundLevelIds()).containsExactly("mmcr:steel");
         assertThat(factory.lanes()).isUnmodifiable();
+    }
+
+    @Test
+    void sync_runtime_consumes_a_published_controller_snapshot() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        var machine = controller.runtimeSnapshot().structure().configuredMachine();
+        RuntimeTestFixtures.publishStructure(controller, machine, true, 1, net.minecraft.core.Direction.NORTH,
+                net.minecraft.core.Direction.SOUTH);
+
+        MachineStateSnapshot state = new ControllerSyncRuntime().machineState(controller.runtimeSnapshot());
+
+        assertThat(state.formed()).isTrue();
+        assertThat(state.machineId()).isEqualTo("mmcr:test_cube");
+        assertThat(state.moduleConnected()).isFalse();
     }
 
     @Test

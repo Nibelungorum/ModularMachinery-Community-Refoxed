@@ -44,6 +44,7 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.world.level.entity.EntityTypeTest;
 import net.minecraft.world.level.material.Fluid;
+import net.neoforged.neoforge.capabilities.BlockCapability;
 
 import net.minecraft.core.particles.ExplosionParticleInfo;
 import net.minecraft.world.level.biome.Biome;
@@ -119,6 +120,10 @@ public final class LevelStub {
         ((TestLevel) level).blockEntities.put(blockEntity.getBlockPos(), blockEntity);
     }
 
+    public static <T, C> void setCapability(Level level, BlockCapability<T, C> capability, BlockPos pos, T value) {
+        ((TestLevel) level).capabilities.computeIfAbsent(capability, ignored -> new HashMap<>()).put(pos, value);
+    }
+
     public static void setDirectSignal(Level level, BlockPos pos, int signal) {
         ((TestLevel) level).directSignals.put(pos, signal);
     }
@@ -137,6 +142,7 @@ public final class LevelStub {
             level.blocks = new HashMap<>(blocks);
             level.directSignals = new HashMap<>();
             level.blockEntities = Map.of();
+            level.capabilities = new HashMap<>();
             level.random = RandomSource.create(0L);
             Field registryAccess = Level.class.getDeclaredField("registryAccess");
             registryAccess.setAccessible(true);
@@ -156,6 +162,7 @@ public final class LevelStub {
     private static final class TestLevel extends Level {
         private Map<BlockPos, BlockState> blocks;
         private Map<BlockPos, BlockEntity> blockEntities = Map.of();
+        private Map<BlockCapability<?, ?>, Map<BlockPos, Object>> capabilities = new HashMap<>();
         private Map<BlockPos, Integer> directSignals = new HashMap<>();
         private Set<Long> loadedChunks;
         private long gameTime;
@@ -172,6 +179,12 @@ public final class LevelStub {
 
         @Override public BlockEntity getBlockEntity(BlockPos pos) {
             return blockEntities.get(pos);
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public <T, C> T getCapability(BlockCapability<T, C> capability, BlockPos pos, C context) {
+            return (T) capabilities.getOrDefault(capability, Map.of()).get(pos);
         }
 
         @Override public int getDirectSignalTo(BlockPos pos) {
