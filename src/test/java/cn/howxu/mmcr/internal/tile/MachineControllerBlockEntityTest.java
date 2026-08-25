@@ -7,6 +7,8 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -94,6 +96,43 @@ class MachineControllerBlockEntityTest {
 
         assertThat(controller.structureSnapshot().structureAreaLoaded()).isFalse();
         assertThat(controller.structureSnapshot().version()).isGreaterThan(formedVersion);
+    }
+
+    @Test
+    void reforming_same_structure_refreshes_a_replaced_same_type_component_reference() {
+        BlockPos controllerPos = BlockPos.ZERO;
+        BlockPos componentPos = controllerPos.offset(-1, 0, 0);
+        DynamicMachine machine = new DynamicMachine(MMCR.id("controller_component_replacement"),
+                "Controller Component Replacement",
+                new BlockArray(Map.of(new BlockPos(1, 0, 0),
+                        new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()))),
+                MachineControllerSpec.defaultsFor(MMCR.id("controller_component_replacement")));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos);
+        ItemInputBusBlockEntity first = RuntimeTestFixtures.itemInput(componentPos);
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine, first);
+        CraftingRuntime crafting = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("controller_component_replacement_recipe"), machine.registryName(),
+                20, List.of(), List.of(), List.of(), 0, 1);
+        assertThat(crafting.start(recipe, 1).isCrafting()).isTrue();
+        long capabilityVersion = controller.runtimeSnapshot().capabilityVersion();
+        long componentStateVersion = controller.runtimeSnapshot().stateVersion();
+
+        ItemInputBusBlockEntity replacement = RuntimeTestFixtures.itemInput(componentPos);
+        RuntimeTestFixtures.replaceBlockEntity(controller, replacement);
+        controller.onStructureBlockChanged(componentPos);
+        for (int tick = 0; tick < 32 && controller.structureSnapshot().dirty(); tick++) {
+            RuntimeTestFixtures.advanceGameTime(controller.getLevel());
+            controller.tickStructure((net.minecraft.server.level.ServerLevel) controller.getLevel(), controllerPos);
+        }
+
+        assertThat(controller.structureSnapshot().formed()).isTrue();
+        assertThat(controller.runtimeSnapshot().capabilityVersion()).isGreaterThan(capabilityVersion);
+        assertThat(controller.runtimeSnapshot().stateVersion()).isGreaterThan(componentStateVersion);
+        assertThat(crafting.versionsCurrent()).isFalse();
+        assertThat(controller.componentRuntime().components()).extracting(component -> component.getContainer())
+                .containsExactly(replacement);
+        assertThat(controller.componentRuntime().capabilities())
+                .containsExactlyElementsOf(replacement.capabilitySnapshot().capabilities());
     }
 
     @Test

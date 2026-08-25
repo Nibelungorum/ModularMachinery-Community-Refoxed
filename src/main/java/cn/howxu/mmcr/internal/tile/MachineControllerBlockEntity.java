@@ -1697,7 +1697,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             notifyPreviewReceiversStructureFormed();
         }
         FORMED_CONTROLLERS.add(this);
-        if (structureChanged) updateComponents();
+        if (structureChanged || componentsNeedRefresh()) updateComponents();
         resumePausedRecipeAfterStructureCheck();
         clearCandidateCache();
         publishStructureWork(state -> state.withFormationFailure(null).withLastStructureError(null));
@@ -1823,6 +1823,24 @@ public class MachineControllerBlockEntity extends BlockEntity {
         runtime.publishComponentState(nextComponents, current.foundModifiers(),
                 current.foundLevels(), nextLinkedPortPositions);
         invalidateFactoryCapacity();
+    }
+
+    private boolean componentsNeedRefresh() {
+        if (level == null) return false;
+        List<BlockEntity> nextContainers = new ArrayList<>();
+        for (BlockPos relativePos : componentPositions()) {
+            BlockEntity entity = level.getBlockEntity(getBlockPos().offset(relativePos));
+            if (entity instanceof SmartInterfaceBlockEntity
+                    || entity instanceof ParallelControllerBlockEntity
+                    || entity instanceof FactorySchedulerBlockEntity
+                    || entity instanceof MachineComponentTile) {
+                nextContainers.add(entity);
+            }
+        }
+        List<BlockEntity> currentContainers = runtime.components().stream()
+                .map(ProcessingComponent::getContainer)
+                .toList();
+        return !currentContainers.equals(nextContainers);
     }
 
     private void unlinkLinkedPorts() {

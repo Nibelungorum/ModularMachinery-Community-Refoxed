@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.runtime;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -179,32 +180,49 @@ class FactoryRuntimeTest {
 
     @Test
     void failureInOneLaneIsPublishedWithoutDiscardingOtherActiveLanes() {
-        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new net.minecraft.core.BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        ItemStack stack = new ItemStack(Items.IRON_INGOT, 1);
+        stack.set(DataComponents.MAX_STACK_SIZE, 64);
+        input.getItemStackHandler(null).setStackInSlot(0, stack);
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
         runtime.setLaneLimit(2);
-        runtime.tick(List.of(recipe("factory_isolated_failure", 20)), 1);
+        MachineRecipe failingRecipe = new MachineRecipe(MMCR.id("factory_isolated_failure"), MMCR.id("test_cube"),
+                20, List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
+                        ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0F)));
+        MachineRecipe survivorRecipe = recipe("factory_isolated_survivor", 20);
+        List<MachineRecipe> candidates = List.of(failingRecipe, survivorRecipe);
+        runtime.tick(candidates, 1);
+        assertThat(runtime.activeLaneCount()).isEqualTo(2);
 
         CraftingRuntime failed = runtime.activeRuntimes().getFirst();
         CraftingRuntime survivor = runtime.activeRuntimes().getLast();
-        failed.recordSearchFailure(null);
-        runtime.recomputeFailure();
+        input.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
+        runtime.tick(candidates, 1);
 
         FactorySnapshot snapshot = runtime.snapshot();
+        assertThat(failed.recipe()).isEqualTo(failingRecipe);
+        assertThat(failed.failure()).isNotNull();
         assertThat(snapshot.failure()).isNotNull();
-        assertThat(snapshot.failure().details()).containsExactly(java.util.Map.entry("reason", "recipe_search"));
+        assertThat(snapshot.failure().details())
+                .containsExactly(java.util.Map.entry("reason", "insufficient_resource"));
         assertThat(runtime.activeLaneCount()).isEqualTo(2);
         assertThat(failed.active()).isTrue();
         assertThat(survivor.active()).isTrue();
         assertThat(survivor.failure()).isNull();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isZero();
         assertThat(snapshot.presentationLanes()).hasSize(2);
         assertThat(snapshot.presentationLanes().get(0).active()).isTrue();
-        assertThat(snapshot.presentationLanes().get(0).lastFailureUnloc())
-                .isEqualTo("gui.mmcr.controller.failure.missing_input");
+        assertThat(snapshot.lanes().get(0).failure()).isNotNull();
+        assertThat(snapshot.lanes().get(0).failure().details())
+                .containsExactly(java.util.Map.entry("reason", "insufficient_resource"));
         assertThat(snapshot.presentationLanes().get(1).active()).isTrue();
+        assertThat(snapshot.lanes().get(1).failure()).isNull();
         assertThat(snapshot.presentationLanes().get(1).lastFailureUnloc()).isEmpty();
-        assertThat(snapshot.presentationLanes().get(1).recipeId()).isEqualTo(
-                snapshot.presentationLanes().get(0).recipeId());
+        assertThat(snapshot.presentationLanes().get(0).recipeId()).isEqualTo(failingRecipe.id().toString());
+        assertThat(snapshot.presentationLanes().get(1).recipeId()).isEqualTo(survivorRecipe.id().toString());
     }
 
     @Test

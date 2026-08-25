@@ -61,6 +61,18 @@ class PktFactoryControllerStatePayloadTest {
     }
 
     @Test
+    void encoder_rejects_oversized_machine_level_snapshot() {
+        FactorySnapshot snapshot = new FactorySnapshot(false, false, List.of(), 0, 1, 0, 1,
+                false, List.of(FactoryRuntime.ThreadSnapshot.idleBase()), "", 0, null,
+                IntStream.range(0, PktFactoryControllerStatePayload.MAX_LEVEL_SNAPSHOTS + 1)
+                        .mapToObj(Integer::toString).toList());
+
+        assertThatThrownBy(() -> PktFactoryControllerStatePayload.STREAM_CODEC.encode(buffer(),
+                new PktFactoryControllerStatePayload(BlockPos.ZERO, snapshot)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void encoder_rejects_incomplete_presentation_lanes() {
         FactorySnapshot snapshot = new FactorySnapshot(false, false, List.of(), 0, 2, 0, 1,
                 false, List.of(FactoryRuntime.ThreadSnapshot.idleBase()), "", 0, null, List.of());

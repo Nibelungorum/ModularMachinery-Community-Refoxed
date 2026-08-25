@@ -193,7 +193,8 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
             throw new IllegalArgumentException("Invalid active factory lane count: " + state.activeLaneCount());
         }
         if (state.activeParallelism() < 0 || state.maxParallelism() < 1
-                || state.parallelSlots() < 0 || state.lanes().size() > MAX_LANE_SNAPSHOTS) {
+                || state.parallelSlots() < 0 || state.lanes().size() > MAX_LANE_SNAPSHOTS
+                || state.foundLevelIds().size() > MAX_LEVEL_SNAPSHOTS) {
             throw new IllegalArgumentException("Invalid factory snapshot values");
         }
         Set<Integer> indexes = new HashSet<>();

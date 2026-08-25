@@ -2,13 +2,10 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
-import cn.howxu.mmcr.internal.tile.StructureRuntime;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-
-import java.lang.reflect.Constructor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -26,19 +23,19 @@ class StructureRuntimeTest {
 
     @Test
     void newRuntimeStartsUnformedAndDirty() throws Exception {
-        StructureRuntime runtime = runtime();
+        MachineControllerBlockEntity controller = controller();
 
-        assertThat(runtime.formed()).isFalse();
-        assertThat(runtime.version()).isZero();
-        assertThat(runtime.snapshot().dirty()).isTrue();
+        assertThat(controller.structureSnapshot().formed()).isFalse();
+        assertThat(controller.structureSnapshot().version()).isEqualTo(1L);
+        assertThat(controller.structureSnapshot().dirty()).isTrue();
     }
 
     @Test
     void invalidationRequestKeepsThePublishedStructureSnapshotImmutable() throws Exception {
-        StructureRuntime runtime = runtime();
+        MachineControllerBlockEntity controller = controller();
 
-        runtime.requestCheck();
-        StructureSnapshot snapshot = runtime.snapshot();
+        controller.onStructureBlockChanged(controller.getBlockPos().offset(1, 0, 0));
+        StructureSnapshot snapshot = controller.structureSnapshot();
 
         assertThat(snapshot.dirty()).isTrue();
         assertThat(snapshot.criticalChunks()).isUnmodifiable();
@@ -47,29 +44,26 @@ class StructureRuntimeTest {
 
     @Test
     void structureBoundaryRequiresLevelAndControllerPosition() throws Exception {
-        StructureRuntime runtime = runtime();
+        MachineControllerBlockEntity controller = controller();
 
-        assertThatThrownBy(() -> runtime.tick(null, null))
+        assertThatThrownBy(() -> controller.tickStructure(null, null))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> runtime.onChunkStateChanged(null, null))
+        assertThatThrownBy(() -> controller.handleStructureChunkChanged(null, null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void repeatedCheckRequestsDoNotInventAFormationVersion() throws Exception {
-        StructureRuntime runtime = runtime();
+        MachineControllerBlockEntity controller = controller();
+        long configuredVersion = controller.structureSnapshot().version();
 
-        runtime.requestCheck();
-        runtime.requestCheck();
+        controller.onStructureBlockChanged(controller.getBlockPos().offset(1, 0, 0));
+        controller.onStructureBlockChanged(controller.getBlockPos().offset(1, 0, 0));
 
-        assertThat(runtime.version()).isZero();
+        assertThat(controller.structureSnapshot().version()).isEqualTo(configuredVersion);
     }
 
-    private static StructureRuntime runtime() throws Exception {
-        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
-        Constructor<StructureRuntime> constructor = StructureRuntime.class
-                .getDeclaredConstructor(MachineControllerBlockEntity.class);
-        constructor.setAccessible(true);
-        return constructor.newInstance(controller);
+    private static MachineControllerBlockEntity controller() {
+        return RuntimeTestFixtures.controller(MMCR.id("test_cube"));
     }
 }

@@ -84,6 +84,14 @@ public final class RuntimeTestFixtures {
         controller.setLevel(level);
     }
 
+    public static void replaceBlockEntity(MachineControllerBlockEntity controller, BlockEntity replacement) {
+        if (!(controller.getLevel() instanceof TestServerLevel level)) {
+            throw new IllegalArgumentException("Unexpected test level");
+        }
+        replacement.setLevel(level);
+        level.blockEntities.put(replacement.getBlockPos(), replacement);
+    }
+
     public static void publishStructure(MachineControllerBlockEntity controller, Machine machine, boolean formed) {
         controller.setMachine(machine);
         controller.setFormed(formed);
