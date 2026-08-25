@@ -1,11 +1,16 @@
 package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModUIs;
+import cn.howxu.mmcr.internal.port.ItemBusSize;
+import io.netty.buffer.Unpooled;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
@@ -15,6 +20,7 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.network.FriendlyByteBuf;
 import net.neoforged.neoforge.items.ItemStackHandler;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -22,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ItemBusMenuTest {
 
@@ -36,6 +43,67 @@ class ItemBusMenuTest {
         ItemBusMenu clientMenu = new ItemBusMenu(1, emptyInventory());
 
         assertThat(clientMenu.slots).hasSize(clientMenu.busSlotCount() + 36);
+    }
+
+    @Test
+    void client_open_uses_server_supplied_ludicrous_layout_without_client_owner() {
+        BlockPos pos = new BlockPos(4, 5, 6);
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+        buffer.writeBlockPos(pos);
+        buffer.writeEnum(ItemBusSize.LUDICROUS);
+        buffer.writeVarInt(ItemBusSize.LUDICROUS.slots());
+
+        ItemBusMenu clientMenu = ItemBusMenu.clientOpen(1, emptyInventory(), buffer);
+
+        assertThat(clientMenu.owner()).isNull();
+        assertThat(clientMenu.pos()).isEqualTo(pos);
+        assertThat(clientMenu.busSize()).isEqualTo(ItemBusSize.LUDICROUS);
+        assertThat(clientMenu.busSlotCount()).isEqualTo(32);
+        assertThat(clientMenu.busRows()).isEqualTo(4);
+        assertThat(clientMenu.busColumns()).isEqualTo(8);
+        assertThat(clientMenu.playerInventorySlotStart()).isEqualTo(32);
+        assertThat(clientMenu.slots).hasSize(32 + ItemBusMenu.PLAYER_INVENTORY_SLOT_COUNT);
+    }
+
+    @Test
+    void normal_server_layout_round_trips_to_client_without_owner() {
+        ItemInputBusBlockEntity serverOwner = new ItemInputBusBlockEntity(
+                new BlockPos(1, 2, 3), ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+        ItemBusMenu serverMenu = new ItemBusMenu(1, emptyInventory(), serverOwner);
+
+        ItemBusMenu clientMenu = clientMenuFromServer(serverMenu);
+
+        assertLayoutMatches(serverMenu, clientMenu);
+    }
+
+    @Test
+    void ludicrous_server_layout_round_trips_to_client_without_owner() {
+        ItemInputBusBlockEntity serverOwner = new ItemInputBusBlockEntity(
+                new BlockPos(4, 5, 6), ModBlocks.BLOCKS.get("item_input_bus_ludicrous").get().defaultBlockState());
+        ItemBusMenu serverMenu = new ItemBusMenu(1, emptyInventory(), serverOwner);
+
+        ItemBusMenu clientMenu = clientMenuFromServer(serverMenu);
+
+        assertLayoutMatches(serverMenu, clientMenu);
+    }
+
+    @Test
+    void client_open_rejects_invalid_server_size_or_slot_count() {
+        FriendlyByteBuf invalidSize = new FriendlyByteBuf(Unpooled.buffer());
+        invalidSize.writeBlockPos(BlockPos.ZERO);
+        invalidSize.writeVarInt(ItemBusSize.values().length);
+        invalidSize.writeVarInt(1);
+
+        assertThatThrownBy(() -> ItemBusMenu.clientOpen(1, emptyInventory(), invalidSize))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        FriendlyByteBuf invalidCount = new FriendlyByteBuf(Unpooled.buffer());
+        invalidCount.writeBlockPos(BlockPos.ZERO);
+        invalidCount.writeEnum(ItemBusSize.NORMAL);
+        invalidCount.writeVarInt(ItemBusSize.NORMAL.slots() + 1);
+
+        assertThatThrownBy(() -> ItemBusMenu.clientOpen(1, emptyInventory(), invalidCount))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -101,6 +169,25 @@ class ItemBusMenuTest {
 
     private static Inventory emptyInventory() {
         return new Inventory(null, null);
+    }
+
+    private static ItemBusMenu clientMenuFromServer(ItemBusMenu serverMenu) {
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+        ItemBusMenu.writeClientOpenData(buffer, serverMenu.pos(), serverMenu.owner());
+        return ItemBusMenu.clientOpen(1, emptyInventory(), buffer);
+    }
+
+    private static void assertLayoutMatches(ItemBusMenu serverMenu, ItemBusMenu clientMenu) {
+        assertThat(clientMenu.owner()).isNull();
+        assertThat(clientMenu.pos()).isEqualTo(serverMenu.pos());
+        assertThat(clientMenu.busSize()).isEqualTo(serverMenu.busSize());
+        assertThat(clientMenu.busSlotCount()).isEqualTo(serverMenu.busSlotCount());
+        assertThat(clientMenu.busRows()).isEqualTo(serverMenu.busRows());
+        assertThat(clientMenu.busColumns()).isEqualTo(serverMenu.busColumns());
+        assertThat(clientMenu.playerInventorySlotStart()).isEqualTo(serverMenu.playerInventorySlotStart());
+        assertThat(clientMenu.imageHeight()).isEqualTo(serverMenu.imageHeight());
+        assertThat(clientMenu.texturePath()).isEqualTo(serverMenu.texturePath());
+        assertThat(clientMenu.slots).hasSize(serverMenu.slots.size());
     }
 
     private static void bindItemComponents(Item item) {

@@ -12,8 +12,6 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.entity.BlockEntity;
 
 public class ItemBusMenu extends AbstractMachineMenu {
 
@@ -25,7 +23,6 @@ public class ItemBusMenu extends AbstractMachineMenu {
     public static final int PLAYER_INVENTORY_SLOT_COUNT = 36;
 
     private final ItemBusBlockEntity owner;
-    private final Level level;
     private final BlockPos pos;
     private final int busSlotCount;
     private final ItemBusSize busSize;
@@ -36,7 +33,6 @@ public class ItemBusMenu extends AbstractMachineMenu {
     public ItemBusMenu(int containerId, Inventory playerInv, ItemBusBlockEntity owner) {
         super(ModUIs.ITEM_BUS.get(), containerId);
         this.owner = owner;
-        this.level = playerInv.player == null ? null : playerInv.player.level();
         this.pos = owner == null ? BlockPos.ZERO : owner.getBlockPos();
         this.busSize = size(owner);
         this.busSlotCount = slotCount(owner);
@@ -52,21 +48,40 @@ public class ItemBusMenu extends AbstractMachineMenu {
     }
 
     public ItemBusMenu(int containerId, Inventory playerInv, BlockPos pos) {
+        this(containerId, playerInv, pos, ItemBusSize.NORMAL, DEFAULT_BUS_SLOT_COUNT);
+    }
+
+    private ItemBusMenu(int containerId, Inventory playerInv, BlockPos pos,
+                        ItemBusSize busSize, int busSlotCount) {
         super(ModUIs.ITEM_BUS.get(), containerId);
         this.owner = null;
-        this.level = playerInv.player == null ? null : playerInv.player.level();
         this.pos = pos;
-        IOPortBlockEntity resolved = resolvedPort();
-        this.busSize = size(resolved);
-        this.busSlotCount = slotCount(resolved);
-        this.busRows = rowsForSize(busSize);
-        this.busColumns = columnsForSize(busSize);
+        this.busSize = validateSize(busSize);
+        this.busSlotCount = validateSlotCount(this.busSize, busSlotCount);
+        this.busRows = rowsForSize(this.busSize);
+        this.busColumns = columnsForSize(this.busSize);
         addBusSlots(null);
         addPlayerSlots(playerInv);
     }
 
     public static ItemBusMenu clientOpen(int containerId, Inventory playerInv, FriendlyByteBuf buf) {
-        return new ItemBusMenu(containerId, playerInv, buf.readBlockPos());
+        BlockPos pos = buf.readBlockPos();
+        ItemBusSize busSize = readSize(buf);
+        int busSlotCount = buf.readVarInt();
+        return new ItemBusMenu(containerId, playerInv, pos, busSize, busSlotCount);
+    }
+
+    public static void writeClientOpenData(FriendlyByteBuf buf, BlockPos pos,
+                                           ItemBusSize busSize, int busSlotCount) {
+        ItemBusSize validatedSize = validateSize(busSize);
+        int validatedSlotCount = validateSlotCount(validatedSize, busSlotCount);
+        buf.writeBlockPos(pos);
+        buf.writeEnum(validatedSize);
+        buf.writeVarInt(validatedSlotCount);
+    }
+
+    public static void writeClientOpenData(FriendlyByteBuf buf, BlockPos pos, ItemBusBlockEntity owner) {
+        writeClientOpenData(buf, pos, size(owner), slotCount(owner));
     }
 
     public ItemBusBlockEntity owner() {
@@ -150,13 +165,6 @@ public class ItemBusMenu extends AbstractMachineMenu {
         }
     }
 
-    private IOPortBlockEntity resolvedPort() {
-        if (owner != null) return owner;
-        if (level == null) return null;
-        BlockEntity be = level.getBlockEntity(pos);
-        return be instanceof IOPortBlockEntity port ? port : null;
-    }
-
     private static int slotCount(IOPortBlockEntity owner) {
         if (owner == null) return DEFAULT_BUS_SLOT_COUNT;
         return owner.capabilitySnapshot().capabilities().stream()
@@ -168,6 +176,27 @@ public class ItemBusMenu extends AbstractMachineMenu {
 
     private static ItemBusSize size(IOPortBlockEntity owner) {
         return owner == null ? ItemBusSize.NORMAL : owner.kind().itemBusSize().orElse(ItemBusSize.NORMAL);
+    }
+
+    private static ItemBusSize readSize(FriendlyByteBuf buf) {
+        int ordinal = buf.readVarInt();
+        ItemBusSize[] values = ItemBusSize.values();
+        if (ordinal < 0 || ordinal >= values.length) {
+            throw new IllegalArgumentException("Invalid item bus size ordinal: " + ordinal);
+        }
+        return values[ordinal];
+    }
+
+    private static ItemBusSize validateSize(ItemBusSize size) {
+        if (size == null) throw new IllegalArgumentException("Item bus size must not be null");
+        return size;
+    }
+
+    private static int validateSlotCount(ItemBusSize size, int slots) {
+        if (slots < 1 || slots > size.slots()) {
+            throw new IllegalArgumentException("Invalid item bus slot count " + slots + " for " + size.id());
+        }
+        return slots;
     }
 
     private static ItemBusSize sizeForSlots(int slots) {

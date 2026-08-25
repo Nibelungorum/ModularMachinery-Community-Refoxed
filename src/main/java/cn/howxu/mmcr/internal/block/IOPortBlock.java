@@ -92,7 +92,14 @@ public class IOPortBlock extends Block implements EntityBlock {
                                                         Player player, BlockHitResult hit) {
         if (!level.isClientSide()) {
             MenuProvider provider = state.getMenuProvider(level, pos);
-            if (provider != null) player.openMenu(provider, pos);
+            if (provider != null) {
+                if (menuKindFor(kind.id()) == PortMenuKind.ITEM) {
+                    if (!(level.getBlockEntity(pos) instanceof ItemBusBlockEntity bus)) return InteractionResult.SUCCESS;
+                    player.openMenu(provider, buffer -> ItemBusMenu.writeClientOpenData(buffer, pos, bus));
+                } else {
+                    player.openMenu(provider, pos);
+                }
+            }
         }
         return InteractionResult.SUCCESS;
     }
