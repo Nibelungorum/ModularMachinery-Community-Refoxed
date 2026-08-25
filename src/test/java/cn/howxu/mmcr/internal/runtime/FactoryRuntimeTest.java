@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
+import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
@@ -26,9 +27,11 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
  * Final factory runtime behavior tests.
@@ -293,6 +296,18 @@ class FactoryRuntimeTest {
 
         assertThat(restored.laneLimit()).isLessThanOrEqualTo(1024);
         assertThat(restored.laneCount()).isLessThanOrEqualTo(1024);
+    }
+
+    @Test
+    void factory_search_exception_becomes_runtime_failure_instead_of_escaping() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
+        List<MachineRecipe> candidates = new ArrayList<>();
+        candidates.add(null);
+
+        assertThatCode(() -> thread.searchAndStartRecipe(candidates, 1, 0L)).doesNotThrowAnyException();
+        assertThat(thread.runtime().failure()).isNotNull();
+        assertThat(thread.runtime().failure().details()).containsEntry("reason", "recipe_search");
     }
 
     private static MachineRecipe recipe(String path, int duration) {

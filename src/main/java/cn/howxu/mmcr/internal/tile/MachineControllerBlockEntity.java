@@ -166,6 +166,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable Runnable factoryCapacityInvalidationCallbackForTesting;
     private @Nullable Runnable structureCheckCallbackForTesting;
     private @Nullable ValueInput pendingFactoryRuntimeInput;
+    private boolean restoringFactoryRuntime;
     private @Nullable MultiblockAssemblyService.BuildTaskRegistry buildTasks;
     private @Nullable ServerPlayer buildTaskOwner;
     private int buildTaskAge;
@@ -191,6 +192,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         ValueInput input = pendingFactoryRuntimeInput;
         pendingFactoryRuntimeInput = null;
         runtime.factoryRuntime().load(input, this);
+        restoringFactoryRuntime = true;
         runtime.publishSnapshot();
     }
 
@@ -263,12 +265,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (recipeRuntime == runtime.craftingRuntime()) {
             syncCraftingFailure();
             syncRuntimeStateIfChanged();
+            setChanged();
             return;
         }
         if (!runtime.factoryRuntime().contains(recipeRuntime)) return;
         runtime.factoryRuntime().recomputeFailure();
         runtime.publishSnapshot();
         syncRuntimeStateIfChanged();
+        setChanged();
     }
 
     private void validateRuntimeBoundary(ServerLevel runtimeLevel, BlockPos runtimePos) {
@@ -296,14 +300,18 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void setMachine(Machine m) {
-        stopFactoryController();
+        StructureSnapshot current = runtimeSnapshot().structure();
+        boolean bindingRestoredMachine = restoringFactoryRuntime
+                && current.configuredMachine() == null
+                && m != null;
+        if (!bindingRestoredMachine) stopFactoryController();
         invalidateStructureScan(StructureMatcher.InvalidationReason.PATTERN);
         clearFoundModifiers();
-        ControllerRuntimeSnapshot current = runtimeSnapshot();
-        runtime.publishStructureState(isStructureAreaLoaded(current.structure()), current.structure().formed(), m,
-                current.structure().matchedStage());
-        runtime.publishComponentState(runtime.components(), current.foundModifiers(), Map.of(),
-                current.linkedPortPositions());
+        ControllerRuntimeSnapshot currentState = runtimeSnapshot();
+        runtime.publishStructureState(isStructureAreaLoaded(currentState.structure()), currentState.structure().formed(), m,
+                currentState.structure().matchedStage());
+        runtime.publishComponentState(runtime.components(), currentState.foundModifiers(), Map.of(),
+                currentState.linkedPortPositions());
         runtime.refreshModuleConnectionState();
         setChanged();
         publishRuntimeState();
@@ -823,6 +831,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         FactoryRuntime factory = runtime.factoryRuntime();
         factory.syncCoreLanes(this, structure.machine(), candidates);
         factory.tick(scheduler.availableCandidates(candidates), maxParallelism, this::playFinishSound);
+        setChanged();
         int activeLaneCount = factory.activeLaneCount();
         setActiveState(activeLaneCount > 0);
         if (activeLaneCount > 0) {
@@ -1673,6 +1682,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
         clearStructureDiagnosticRequest();
         StructureSnapshot previousStructure = runtimeSnapshot().structure();
         Machine previousMachine = previousStructure.machine();
+        boolean preserveRestoredFactory = restoringFactoryRuntime
+                && previousStructure.configuredMachine() != null
+                && previousStructure.configuredMachine().registryName().equals(matchedMachine.registryName());
         boolean structureChanged = runtime.publishFormationState(matchedMachine, rotatedPattern, compiledPattern,
                 facing, rollFacing, compiledPattern == null ? 1 : compiledPattern.stageNumber());
         runtime.refreshModuleConnectionState();
@@ -1682,7 +1694,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         refreshCriticalStructureChunks();
         if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
         boolean componentsChanged = componentsNeedRefresh();
-        if ((previousMachine != null && previousMachine != matchedMachine) || structureChanged || componentsChanged) {
+        if (((previousMachine != null && previousMachine != matchedMachine) || structureChanged || componentsChanged)
+                && !preserveRestoredFactory) {
             stopFactoryController();
         }
         publishStructureWork(state -> state.withDirty(false));
@@ -1692,6 +1705,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         FORMED_CONTROLLERS.add(this);
         if (structureChanged || componentsChanged) updateComponents();
+        if (preserveRestoredFactory) {
+            runtime.craftingRuntime().rebindCurrentVersions();
+            runtime.factoryRuntime().rebindCurrentVersions();
+        }
+        restoringFactoryRuntime = false;
         resumePausedRecipeAfterStructureCheck();
         clearCandidateCache();
         publishStructureWork(state -> state.withFormationFailure(null).withLastStructureError(null));

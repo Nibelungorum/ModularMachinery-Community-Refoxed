@@ -58,8 +58,15 @@ public abstract class RecipeThread {
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
         Identifier machineId = machine == null ? null : machine.registryName();
         if (machineId == null || availableParallelism <= 0) return false;
-        RecipeSearchResult result = new RecipeSearchTask(snapshot, machineId, structureVersion,
-                availableParallelism, candidates, lockedRecipeId, controller.componentRuntime().capabilities()).compute();
+        RecipeSearchResult result;
+        try {
+            result = new RecipeSearchTask(snapshot, machineId, structureVersion,
+                    availableParallelism, candidates, lockedRecipeId, controller.componentRuntime().capabilities()).compute();
+        } catch (RuntimeException exception) {
+            controller.clearPendingConflictStart();
+            onStartSearchFailed(null);
+            return false;
+        }
         if (!result.success()) {
             controller.clearPendingConflictStart();
             onStartSearchFailed(result.failure());
@@ -210,9 +217,11 @@ public abstract class RecipeThread {
                     if (runtime.finishPending()) {
                         if (runtime.shouldRetryFinish()) requestFinish(level, domain, token);
                         else clearPendingTick();
+                        controller.syncRecipeRuntimeFailure(runtime);
                         return true;
                     }
                     completeIfFinished(wasActive);
+                    controller.syncRecipeRuntimeFailure(runtime);
                     return true;
                 },
                 () -> validateCurrentRuntime(token, domain),
@@ -236,6 +245,7 @@ public abstract class RecipeThread {
                     boolean wasActive = runtime.active();
                     runtime.finish();
                     completeIfFinished(wasActive);
+                    controller.syncRecipeRuntimeFailure(runtime);
                     return true;
                 },
                 () -> validateCurrentRuntime(token, domain),

@@ -279,6 +279,10 @@ public final class CraftingRuntime {
         failure = null;
     }
 
+    public void rebindCurrentVersions() {
+        if (active()) captureVersions(controller.runtimeSnapshot());
+    }
+
     public void save(ValueOutput output) {
         boolean present = activeRecipe != null && activeRecipe.getRecipe() != null;
         output.putBoolean("active", present);

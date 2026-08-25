@@ -8,6 +8,9 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
@@ -15,11 +18,13 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.server.level.ServerLevel;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -136,6 +141,51 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void factory_runtime_survives_initial_structure_recheck_after_load() {
+        Identifier machineId = MMCR.id("controller_factory_persistence");
+        DynamicMachine machine = new DynamicMachine(machineId, "Factory Persistence",
+                new BlockArray(Map.of(new BlockPos(1, 0, 0),
+                        new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get()))),
+                MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
+                1, false, true, 1);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(new BlockPos(1, 0, 0),
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler);
+        controller.componentRuntime().replaceComponents(List.of(
+                new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), BlockPos.ZERO, (String) null)));
+        controller.setFormed(true);
+        RuntimeTestFixtures.republish(controller);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("controller_factory_persistence_recipe"), machineId, 20,
+                List.of(), List.of());
+        RecipeRegistry.register(recipe);
+
+        controller.serverTick();
+        resolveSharedRequests(controller);
+        assertThat(controller.runtimeSnapshot().factory().active()).isTrue();
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()));
+        controller.saveAdditional(output);
+
+        MachineControllerBlockEntity restored = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        FactorySchedulerBlockEntity restoredScheduler = new FactorySchedulerBlockEntity(new BlockPos(1, 0, 0),
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        RuntimeTestFixtures.formStructureWithComponents(restored, machine, restoredScheduler);
+        restored.invalidateFormedStructure();
+        restored.setMachine(null);
+        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+        restored.setMachine(machine);
+
+        restored.tickStructure((ServerLevel) restored.getLevel(), restored.getBlockPos());
+
+        assertThat(restored.runtimeSnapshot().factory().active()).isTrue();
+        assertThat(restored.runtimeSnapshot().factory().presentationLanes().getFirst().recipeId())
+                .isEqualTo(recipe.id().toString());
+    }
+
+    @Test
     void reforming_same_structure_refreshes_a_replaced_same_type_component_reference() {
         BlockPos controllerPos = BlockPos.ZERO;
         BlockPos componentPos = controllerPos.offset(-1, 0, 0);
@@ -197,5 +247,11 @@ class MachineControllerBlockEntityTest {
         assertThat(failure).contains("reason=portRequirementMismatch")
                 .contains("portId=energy_input_hatch")
                 .contains("requiredMin=1");
+    }
+
+    private static void resolveSharedRequests(MachineControllerBlockEntity controller) {
+        if (controller.resourceDomain() != null) {
+            SharedIoCoordinator.get((ServerLevel) controller.getLevel()).resolve(controller.resourceDomain());
+        }
     }
 }

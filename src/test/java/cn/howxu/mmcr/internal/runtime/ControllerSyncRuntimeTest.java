@@ -152,6 +152,39 @@ class ControllerSyncRuntimeTest {
     }
 
     @Test
+    void factory_shared_tick_publishes_progress_in_the_same_resolve_pass() {
+        Identifier machineId = MMCR.id("sync_factory_immediate_progress");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        BlockPos schedulerPos = controller.getBlockPos().offset(-1, 0, 0);
+        BlockArray pattern = new BlockArray(Map.of(new BlockPos(1, 0, 0),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get())));
+        DynamicMachine machine = new DynamicMachine(machineId, "Sync Factory Immediate Progress", pattern,
+                MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
+                1, false, true, 1);
+        FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(schedulerPos,
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler);
+        controller.componentRuntime().replaceComponents(List.of(
+                new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), BlockPos.ZERO, (String) null)));
+        controller.setFormed(true);
+        RuntimeTestFixtures.republish(controller);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("sync_factory_immediate_recipe"), machineId, 20,
+                List.of(), List.of());
+        RecipeRegistry.register(recipe);
+
+        controller.serverTick();
+        resolveSharedRequests(controller);
+        int startedTick = controller.runtimeSnapshot().factory().presentationLanes().getFirst().tick();
+
+        RuntimeTestFixtures.advanceGameTime(controller.getLevel());
+        controller.serverTick();
+        resolveSharedRequests(controller);
+
+        assertThat(controller.runtimeSnapshot().factory().presentationLanes().getFirst().tick())
+                .isGreaterThan(startedTick);
+    }
+
+    @Test
     void factory_uses_machine_level_parallelism_bonus() {
         Identifier machineId = MMCR.id("sync_factory_level_parallelism");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);

@@ -306,6 +306,10 @@ public final class FactoryRuntime {
         setLaneLimit(laneLimit);
     }
 
+    public void rebindCurrentVersions() {
+        for (FactoryRecipeThread lane : lanes) lane.rebindCurrentVersions();
+    }
+
     private void continueFinishedLane(FactoryRecipeThread lane, List<MachineRecipe> candidates,
                                       long structureVersion, long capabilityVersion,
                                       long modifierVersion, long componentStateVersion) {

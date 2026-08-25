@@ -150,6 +150,16 @@ public final class FactoryRecipeThread extends RecipeThread {
         }
     }
 
+    public void rebindCurrentVersions() {
+        runtime.rebindCurrentVersions();
+        if (lastRecipe == null) return;
+        ControllerRuntimeSnapshot snapshot = controller.runtimeSnapshot();
+        lastRecipeStructureVersion = snapshot.structure().version();
+        lastRecipeCapabilityVersion = snapshot.capabilityVersion();
+        lastRecipeModifierVersion = snapshot.modifierVersion();
+        lastRecipeComponentStateVersion = snapshot.stateVersion();
+    }
+
     public void save(ValueOutput output) {
         output.putBoolean("core", coreThread);
         output.putBoolean("base", baseThread);
