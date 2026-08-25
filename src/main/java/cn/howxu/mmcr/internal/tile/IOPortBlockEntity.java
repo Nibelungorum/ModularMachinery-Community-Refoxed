@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.capability.transfer.TransferPolicy;
 import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
+import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.util.IOType;
@@ -84,6 +85,14 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     public abstract IOType ioType();
 
     public abstract IOPortKind kind();
+
+    @Override
+    public void setChanged() {
+        super.setChanged();
+        if (level != null && !level.isClientSide()) {
+            PktPortStorageSyncPayload.sendToViewers(this);
+        }
+    }
 
     @Override
     public abstract CapabilitySnapshot capabilitySnapshot();

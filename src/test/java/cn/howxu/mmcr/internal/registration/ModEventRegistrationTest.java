@@ -114,14 +114,16 @@ class ModEventRegistrationTest {
         assertThat(registrar.flows).containsExactly(
                 PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
                 PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
-                PacketFlow.CLIENTBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND,
-                PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND);
+                PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.SERVERBOUND,
+                PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND,
+                PacketFlow.SERVERBOUND);
         assertThat(registrar.types).containsExactly(
                 cn.howxu.mmcr.internal.network.PktMachineStatePayload.TYPE,
                 cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload.TYPE,
                 cn.howxu.mmcr.internal.network.PktControllerSpecsPayload.TYPE,
                 cn.howxu.mmcr.internal.network.PktMachineAppearancePayload.TYPE,
                 cn.howxu.mmcr.internal.network.PktRuntimeContentPayload.TYPE,
+                cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.TYPE,
                 cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload.TYPE,
                 cn.howxu.mmcr.internal.network.PktMultiblockPreviewPayload.TYPE,
                 cn.howxu.mmcr.internal.network.PktMultiblockDetectorPickPayload.TYPE,

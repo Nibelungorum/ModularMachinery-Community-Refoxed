@@ -18,6 +18,7 @@ import cn.howxu.mmcr.internal.network.PktMultiblockDetectorPickPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockPreviewPayload;
 import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
+import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
 import cn.howxu.mmcr.internal.network.PktSmartInterfaceUpdatePayload;
 import cn.howxu.mmcr.internal.network.RuntimeContentServerBridge;
@@ -127,8 +128,10 @@ public final class ModEventRegistration {
                         PktControllerSpecsPayload::handle)
                 .playToClient(PktMachineAppearancePayload.TYPE, PktMachineAppearancePayload.STREAM_CODEC,
                         PktMachineAppearancePayload::handle)
-                .playToClient(PktRuntimeContentPayload.TYPE, PktRuntimeContentPayload.STREAM_CODEC,
-                        PktRuntimeContentPayload::handle)
+                 .playToClient(PktRuntimeContentPayload.TYPE, PktRuntimeContentPayload.STREAM_CODEC,
+                         PktRuntimeContentPayload::handle)
+                 .playToClient(PktPortStorageSyncPayload.TYPE, PktPortStorageSyncPayload.STREAM_CODEC,
+                         PktPortStorageSyncPayload::handle)
                 .playToClient(PktMultiblockMismatchHighlightPayload.TYPE,
                         PktMultiblockMismatchHighlightPayload.STREAM_CODEC, PktMultiblockMismatchHighlightPayload::handle)
                 .playToClient(PktMultiblockPreviewPayload.TYPE, PktMultiblockPreviewPayload.STREAM_CODEC,

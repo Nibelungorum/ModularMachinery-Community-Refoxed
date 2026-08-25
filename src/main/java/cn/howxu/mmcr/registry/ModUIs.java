@@ -2,9 +2,13 @@ package cn.howxu.mmcr.registry;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
+import cn.howxu.mmcr.internal.menu.ExtendedCombinedMenu;
+import cn.howxu.mmcr.internal.menu.ExtendedFluidMenu;
+import cn.howxu.mmcr.internal.menu.ExtendedItemMenu;
 import cn.howxu.mmcr.internal.menu.FactorySchedulerMenu;
 import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
+import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.menu.SmartInterfaceMenu;
@@ -30,6 +34,18 @@ public final class ModUIs {
 
     public static final DeferredHolder<MenuType<?>, MenuType<EnergyHatchMenu>> ENERGY_HATCH =
             REGISTER.register("energy_hatch", () -> new MenuType<>((IContainerFactory<EnergyHatchMenu>) EnergyHatchMenu::clientOpen, FeatureFlags.VANILLA_SET));
+
+    public static final DeferredHolder<MenuType<?>, MenuType<ExtendedItemMenu>> EXTENDED_ITEM =
+            REGISTER.register("extended_item", () -> new MenuType<>((IContainerFactory<ExtendedItemMenu>) ExtendedItemMenu::clientOpen, FeatureFlags.VANILLA_SET));
+
+    public static final DeferredHolder<MenuType<?>, MenuType<ExtendedFluidMenu>> EXTENDED_FLUID =
+            REGISTER.register("extended_fluid", () -> new MenuType<>((IContainerFactory<ExtendedFluidMenu>) ExtendedFluidMenu::clientOpen, FeatureFlags.VANILLA_SET));
+
+    public static final DeferredHolder<MenuType<?>, MenuType<CombinedPortMenu>> COMBINED =
+            REGISTER.register("combined", () -> new MenuType<>((IContainerFactory<CombinedPortMenu>) CombinedPortMenu::clientOpen, FeatureFlags.VANILLA_SET));
+
+    public static final DeferredHolder<MenuType<?>, MenuType<ExtendedCombinedMenu>> EXTENDED_COMBINED =
+            REGISTER.register("extended_combined", () -> new MenuType<>((IContainerFactory<ExtendedCombinedMenu>) ExtendedCombinedMenu::clientOpen, FeatureFlags.VANILLA_SET));
 
     public static final DeferredHolder<MenuType<?>, MenuType<MachineControllerMenu>> MACHINE_CONTROLLER =
             REGISTER.register("machine_controller", () -> new MenuType<>((IContainerFactory<MachineControllerMenu>) MachineControllerMenu::clientOpen, FeatureFlags.VANILLA_SET));

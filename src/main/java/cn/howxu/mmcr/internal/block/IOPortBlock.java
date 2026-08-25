@@ -1,10 +1,19 @@
 package cn.howxu.mmcr.internal.block;
 
+import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
+import cn.howxu.mmcr.internal.menu.ExtendedCombinedMenu;
+import cn.howxu.mmcr.internal.menu.ExtendedFluidMenu;
+import cn.howxu.mmcr.internal.menu.ExtendedItemMenu;
 import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
+import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.ExtendedCombinedPortBlockEntity;
+import cn.howxu.mmcr.internal.tile.ExtendedFluidHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.ExtendedItemBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.util.IOType;
@@ -102,8 +111,25 @@ public class IOPortBlock extends Block implements EntityBlock {
                 if (menuKind == PortMenuKind.ITEM) {
                     if (!(level.getBlockEntity(pos) instanceof ItemBusBlockEntity bus)) return InteractionResult.SUCCESS;
                     player.openMenu(provider, buffer -> ItemBusMenu.writeClientOpenData(buffer, pos, bus));
-                } else if (menuKind == PortMenuKind.FLUID || menuKind == PortMenuKind.ENERGY) {
+                } else if (menuKind == PortMenuKind.FLUID || menuKind == PortMenuKind.ENERGY
+                        || menuKind == PortMenuKind.EXTENDED_ENERGY) {
                     player.openMenu(provider, pos);
+                } else if (menuKind == PortMenuKind.EXTENDED_ITEM) {
+                    if (!(level.getBlockEntity(pos) instanceof ExtendedItemBusBlockEntity bus)) return InteractionResult.SUCCESS;
+                    player.openMenu(provider, buffer -> ExtendedItemMenu.writeClientOpenData(buffer, bus));
+                    PktPortStorageSyncPayload.sendTo(player, bus);
+                } else if (menuKind == PortMenuKind.EXTENDED_FLUID) {
+                    if (!(level.getBlockEntity(pos) instanceof ExtendedFluidHatchBlockEntity hatch)) return InteractionResult.SUCCESS;
+                    player.openMenu(provider, buffer -> ExtendedFluidMenu.writeClientOpenData(buffer, hatch));
+                    PktPortStorageSyncPayload.sendTo(player, hatch);
+                } else if (menuKind == PortMenuKind.COMBINED) {
+                    if (!(level.getBlockEntity(pos) instanceof CombinedPortBlockEntity combined)) return InteractionResult.SUCCESS;
+                    player.openMenu(provider, buffer -> CombinedPortMenu.writeClientOpenData(buffer, combined));
+                    PktPortStorageSyncPayload.sendTo(player, combined);
+                } else if (menuKind == PortMenuKind.EXTENDED_COMBINED) {
+                    if (!(level.getBlockEntity(pos) instanceof ExtendedCombinedPortBlockEntity combined)) return InteractionResult.SUCCESS;
+                    player.openMenu(provider, buffer -> ExtendedCombinedMenu.writeClientOpenData(buffer, combined));
+                    PktPortStorageSyncPayload.sendTo(player, combined);
                 }
             }
         }
@@ -177,7 +203,17 @@ public class IOPortBlock extends Block implements EntityBlock {
                     level.getBlockEntity(pos) instanceof FluidHatchBlockEntity hatch ? hatch : null);
             case ENERGY -> new EnergyHatchMenu(containerId, playerInv,
                     level.getBlockEntity(pos) instanceof EnergyHatchBlockEntity hatch ? hatch : null);
-            case EXTENDED_ITEM, EXTENDED_FLUID, EXTENDED_ENERGY, COMBINED, EXTENDED_COMBINED, NONE -> null;
+            case EXTENDED_ITEM -> new ExtendedItemMenu(containerId, playerInv,
+                    level.getBlockEntity(pos) instanceof ExtendedItemBusBlockEntity bus ? bus : null);
+            case EXTENDED_FLUID -> new ExtendedFluidMenu(containerId, playerInv,
+                    level.getBlockEntity(pos) instanceof ExtendedFluidHatchBlockEntity hatch ? hatch : null);
+            case EXTENDED_ENERGY -> new EnergyHatchMenu(containerId, playerInv,
+                    level.getBlockEntity(pos) instanceof EnergyHatchBlockEntity hatch ? hatch : null);
+            case COMBINED -> new CombinedPortMenu(containerId, playerInv,
+                    level.getBlockEntity(pos) instanceof CombinedPortBlockEntity combined ? combined : null);
+            case EXTENDED_COMBINED -> new ExtendedCombinedMenu(containerId, playerInv,
+                    level.getBlockEntity(pos) instanceof ExtendedCombinedPortBlockEntity combined ? combined : null);
+            case NONE -> null;
         };
     }
 
