@@ -285,6 +285,7 @@
   "message.mmcr.multiblock_requirement.exact": "Requires exactly %s %s",
   "message.mmcr.multiblock_requirement.maximum": "At most %s %s",
   "message.mmcr.multiblock_requirement.minimum": "At least %s %s",
+  "message.mmcr.multiblock_shared_component_conflict": "Shared component conflict: %s",
   "message.mmcr.multiblock_requirement_mismatch": "%s",
   "message.mmcr.port_requirement.energy_input": "energy input port",
   "message.mmcr.port_requirement.energy_output": "energy output port",

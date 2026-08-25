@@ -170,6 +170,21 @@ class CraftingRuntimeTest {
     }
 
     @Test
+    void missingPerTickEnergyReportsMissingEnergy() {
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), energy);
+        energy.energyStorage().setAmount(2);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_missing_energy"), MMCR.id("test_cube"), 3,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(new EnergyRequirement(2)));
+
+        runtime.start(recipe, 1);
+        runtime.tick();
+
+        assertThat(runtime.failureUnloc()).isEqualTo("gui.mmcr.controller.failure.missing_energy");
+    }
+
+    @Test
     void modifier_and_component_state_changes_invalidate_an_active_runtime() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());

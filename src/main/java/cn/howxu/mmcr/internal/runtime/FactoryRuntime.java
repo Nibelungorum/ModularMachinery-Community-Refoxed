@@ -50,6 +50,9 @@ public final class FactoryRuntime {
         List<MachineRecipe> candidateSnapshot = List.copyOf(candidates == null ? List.of() : candidates);
         ControllerRuntimeSnapshot snapshot = controller.runtimeSnapshot();
         long structureVersion = snapshot.structure().version();
+        long capabilityVersion = snapshot.capabilityVersion();
+        long modifierVersion = snapshot.modifierVersion();
+        long componentStateVersion = snapshot.stateVersion();
         Runnable finishCallback = onFinished == null ? () -> { } : onFinished;
 
         for (FactoryRecipeThread lane : List.copyOf(lanes)) {
@@ -57,7 +60,8 @@ public final class FactoryRuntime {
             if (lane.runtime().active()) startReservations.remove(lane);
             lane.setFinishContinuation(() -> {
                 finishCallback.run();
-                continueFinishedLane(lane, candidateSnapshot, structureVersion);
+                continueFinishedLane(lane, candidateSnapshot, structureVersion, capabilityVersion,
+                        modifierVersion, componentStateVersion);
             });
             lane.tick();
         }
@@ -76,6 +80,8 @@ public final class FactoryRuntime {
             List<MachineRecipe> available = availableCandidates(candidateSnapshot);
             if (available.isEmpty()) break;
             Identifier lock = recipeLocks.get(lane);
+            if (lane.tryRestartLastRecipe(available, perThreadParallelLimit, structureVersion,
+                    capabilityVersion, modifierVersion, componentStateVersion, lock)) continue;
             reserveStart(lane, lane.searchAndStartRecipe(available, perThreadParallelLimit,
                     structureVersion, lock));
         }
@@ -301,11 +307,17 @@ public final class FactoryRuntime {
     }
 
     private void continueFinishedLane(FactoryRecipeThread lane, List<MachineRecipe> candidates,
-                                      long structureVersion) {
+                                      long structureVersion, long capabilityVersion,
+                                      long modifierVersion, long componentStateVersion) {
         if (paused || lane.getStatus() != RecipeThread.Status.IDLE || !lane.isIdle()) return;
         List<MachineRecipe> available = availableCandidates(candidates);
         if (available.isEmpty()) return;
         Identifier lock = recipeLocks.get(lane);
+        if (lane.tryRestartLastRecipe(available, perThreadParallelLimit, structureVersion,
+                capabilityVersion, modifierVersion, componentStateVersion, lock)) {
+            reserveStart(lane, true);
+            return;
+        }
         reserveStart(lane, lane.searchAndStartRecipe(available, perThreadParallelLimit,
                 structureVersion, lock));
     }

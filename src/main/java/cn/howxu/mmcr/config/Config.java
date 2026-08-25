@@ -8,7 +8,7 @@ public final class Config {
     public static final int DEFAULT_TERMINAL_MAX_DEMOLISH_BLOCKS = 131072;
     public static final int DEFAULT_BUILD_BLOCKS_PER_TICK = 256;
     public static final int DEFAULT_BUILD_TASK_TIMEOUT_TICKS = 20 * 60;
-    public static final int DEFAULT_STRUCTURE_SCAN_BATCHES = 5;
+    public static final int DEFAULT_STRUCTURE_SCAN_BATCHES = 10;
     public static final int DEFAULT_STRUCTURE_SENTINEL_COUNT = 16;
     public static final double DEFAULT_PREVIEW_RENDER_RADIUS = 64.0;
     public static final ModConfigSpec.IntValue MACHINE_CHECK_INTERVAL_TICKS;

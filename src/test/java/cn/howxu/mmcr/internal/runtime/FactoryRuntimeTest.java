@@ -7,9 +7,11 @@ import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.Identifier;
@@ -176,6 +178,38 @@ class FactoryRuntimeTest {
         assertThat(runtime.activeLaneCount()).isEqualTo(1);
         assertThat(runtime.activeRuntimes().getFirst().recipe()).isEqualTo(recipe);
         assertThat(runtime.activeRuntimes().getFirst().tickCount()).isZero();
+    }
+
+    @Test
+    void finished_lane_restarts_its_last_recipe_before_candidate_ordering() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        MachineRecipe cached = recipe("z_factory_cached", 1);
+        MachineRecipe fallback = recipe("a_factory_fallback", 1);
+
+        runtime.tick(List.of(cached), 1);
+        runtime.tick(List.of(fallback, cached), 1);
+
+        assertThat(runtime.activeRuntimes()).hasSize(1);
+        assertThat(runtime.activeRuntimes().getFirst().recipe()).isEqualTo(cached);
+    }
+
+    @Test
+    void factory_lane_missing_energy_is_not_reported_as_missing_input() {
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new net.minecraft.core.BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), energy);
+        energy.energyStorage().setAmount(2);
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_missing_energy"), MMCR.id("test_cube"), 3,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(new EnergyRequirement(2)));
+
+        runtime.tick(List.of(recipe), 1);
+        runtime.tick(List.of(recipe), 1);
+
+        assertThat(runtime.snapshot().presentationLanes().getFirst().lastFailureUnloc())
+                .isEqualTo("gui.mmcr.controller.failure.missing_energy");
     }
 
     @Test

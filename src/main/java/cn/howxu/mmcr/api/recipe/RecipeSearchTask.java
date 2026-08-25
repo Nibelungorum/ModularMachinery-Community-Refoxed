@@ -162,7 +162,8 @@ public final class RecipeSearchTask {
     private static @Nullable String failureUnloc(@Nullable ExecutionStatus failure) {
         if (failure == null) return null;
         return switch (failure.details().getOrDefault("reason", "")) {
-            case "insufficient_resource", "insufficient_energy" -> "gui.mmcr.controller.failure.missing_input";
+            case "insufficient_resource" -> "gui.mmcr.controller.failure.missing_input";
+            case "insufficient_energy" -> "gui.mmcr.controller.failure.missing_energy";
             case "no_output_capacity" -> "gui.mmcr.controller.failure.missing_output";
             case "module_connection" -> "gui.mmcr.controller.failure.module_connection";
             default -> "gui.mmcr.controller.failure.missing_input";

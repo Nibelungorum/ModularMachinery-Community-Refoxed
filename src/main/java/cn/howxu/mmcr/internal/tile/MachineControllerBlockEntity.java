@@ -121,6 +121,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private static final Logger LOG = LoggerFactory.getLogger(MachineControllerBlockEntity.class);
     private static final AtomicInteger INSTANCE_COUNTER = new AtomicInteger();
     private static final Set<MachineControllerBlockEntity> FORMED_CONTROLLERS = ConcurrentHashMap.newKeySet();
+    private static final String SHARED_COMPONENT_CONFLICT = "shared_component_conflict";
     private static final int PREVIEW_RECEIVER_WINDOW_TICKS = 8 * 20;
     private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
     private final int instanceId = INSTANCE_COUNTER.incrementAndGet();
@@ -1133,6 +1134,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void sendFormationFailureDiagnostic(ServerPlayer player, PortRequirementSpec.Failure failure) {
+        if (failure.portId().startsWith(SHARED_COMPONENT_CONFLICT)) {
+            player.sendSystemMessage(Component.translatable(
+                    "message.mmcr.multiblock_shared_component_conflict", failure.portId()));
+            return;
+        }
         player.sendSystemMessage(describeFormationFailure(failure));
     }
 
@@ -1425,7 +1431,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (!result.accepted()) {
                 StructureClaimRegistry.Conflict conflict = result.conflict();
                 publishStructureWork(state -> state.withFormationFailure(new PortRequirementSpec.Failure(
-                        "component_claim_conflict component=" + conflict.componentPos() + " owner=" + conflict.ownerPos(),
+                        SHARED_COMPONENT_CONFLICT + " component=" + conflict.componentPos()
+                                + " owner=" + conflict.ownerPos(),
                         0, 1, OptionalInt.empty(), PortRequirementSpec.FailureReason.MISSING)));
                 return false;
             }
@@ -1616,6 +1623,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     static String formationFailureDiagnostic(Machine candidate, Direction facing, BlockPos ctrlPos,
                                              PortRequirementSpec.Failure failure) {
+        if (failure.portId().startsWith(SHARED_COMPONENT_CONFLICT)) {
+            return "machine=" + candidate.registryName()
+                    + " facing=" + facing.name()
+                    + " controllerPos=" + ctrlPos
+                    + " reason=sharedComponentConflict"
+                    + " details=" + failure.portId();
+        }
         return "machine=" + candidate.registryName()
                 + " facing=" + facing.name()
                 + " controllerPos=" + ctrlPos
@@ -1666,7 +1680,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         runtime.publishComponentState(runtime.components(), foundModifiers, levels, current.linkedPortPositions());
         refreshCriticalStructureChunks();
         if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
-        if ((previousMachine != null && previousMachine != matchedMachine) || structureChanged) {
+        boolean componentsChanged = componentsNeedRefresh();
+        if ((previousMachine != null && previousMachine != matchedMachine) || structureChanged || componentsChanged) {
             stopFactoryController();
         }
         publishStructureWork(state -> state.withDirty(false));
@@ -1675,7 +1690,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             notifyPreviewReceiversStructureFormed();
         }
         FORMED_CONTROLLERS.add(this);
-        if (structureChanged || componentsNeedRefresh()) updateComponents();
+        if (structureChanged || componentsChanged) updateComponents();
         resumePausedRecipeAfterStructureCheck();
         clearCandidateCache();
         publishStructureWork(state -> state.withFormationFailure(null).withLastStructureError(null));

@@ -151,6 +151,45 @@ class ControllerSyncRuntimeTest {
     }
 
     @Test
+    void reforming_a_replaced_factory_component_clears_the_stale_active_lane() {
+        Identifier machineId = MMCR.id("sync_factory_reform_machine");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        BlockPos schedulerPos = controller.getBlockPos().offset(-1, 0, 0);
+        BlockArray pattern = new BlockArray(Map.of(new BlockPos(1, 0, 0),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get())));
+        DynamicMachine machine = new DynamicMachine(machineId, "Sync Factory Reform",
+                pattern,
+                MachineControllerSpec.defaultsFor(machineId),
+                PortRequirementSpec.none(), List.of(), Map.of(), 1, false, true, 1);
+        FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(schedulerPos,
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler);
+        controller.componentRuntime().replaceComponents(List.of(
+                new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), BlockPos.ZERO, (String) null)));
+        controller.setFormed(true);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("sync_factory_reform_recipe"), machineId, 20,
+                List.of(), List.of());
+        RecipeRegistry.register(recipe);
+
+        controller.serverTick();
+        resolveSharedRequests(controller);
+        assertThat(controller.runtimeSnapshot().factory().active()).isTrue();
+
+        FactorySchedulerBlockEntity replacement = new FactorySchedulerBlockEntity(schedulerPos,
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        RuntimeTestFixtures.replaceBlockEntity(controller, replacement);
+        controller.onStructureBlockChanged(schedulerPos);
+        for (int tick = 0; tick < 32 && controller.structureSnapshot().dirty(); tick++) {
+            RuntimeTestFixtures.advanceGameTime(controller.getLevel());
+            controller.tickStructure((ServerLevel) controller.getLevel(), controller.getBlockPos());
+        }
+
+        MachineStateSnapshot reformed = new ControllerSyncRuntime().machineState(controller.runtimeSnapshot());
+        assertThat(reformed.active()).isFalse();
+        assertThat(reformed.activeFactoryThreadCount()).isZero();
+    }
+
+    @Test
     void recipe_failure_is_projected_from_a_real_controller_start_attempt() {
         Identifier machineId = MMCR.id("sync_failure_machine");
         DynamicMachine machine = new DynamicMachine(machineId, "Sync Failure",

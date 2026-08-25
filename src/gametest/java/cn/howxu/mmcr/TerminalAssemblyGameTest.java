@@ -190,7 +190,7 @@ public class TerminalAssemblyGameTest {
                 helper.assertTrue(batchesThisTick <= 1, "The structure scanner performs at most one batch per tick");
             }
             helper.assertTrue(controller.scanBatchCountForTesting() >= Config.DEFAULT_STRUCTURE_SCAN_BATCHES,
-                    "All five structure scan batches execute");
+                    "All configured structure scan batches execute");
             helper.assertTrue(countPlacedStructureBlocks(helper, template) == expectedCount,
                     "Final placed structure block count is unchanged by duplicate submission");
             helper.assertTrue(controller.structureSnapshot().formed(), "Controller forms after the build completes");
@@ -227,7 +227,7 @@ public class TerminalAssemblyGameTest {
         List<MultiblockAssemblyService.Placement> template = template(controller);
         MultiblockAssemblyService.Placement changedPlacement = template.getLast();
         BlockPos changedPos = changedPlacement.pos();
-        controller.setStructureScanBatchesForTesting(Config.DEFAULT_STRUCTURE_SCAN_BATCHES);
+        controller.setStructureScanBatchesForTesting(5);
         controller.setStructureCheckIntervalForTesting(1);
         for (MultiblockAssemblyService.Placement placement : template) {
             helper.getLevel().setBlock(placement.pos(), placement.state(), 3);

@@ -126,16 +126,67 @@ public class SharedMultiblockIoGameTest {
         });
     }
 
+    public void exclusiveReplacementInvalidatesOneSharedController(GameTestHelper helper) {
+        BlockPos sharedComponent = new BlockPos(2, 2, 2);
+        MachineControllerBlockEntity first = placeController(helper, new BlockPos(0, 2, 2), sharedComponent,
+                "exclusive_replacement_first", true);
+        MachineControllerBlockEntity second = placeController(helper, new BlockPos(4, 2, 2), sharedComponent,
+                "exclusive_replacement_second", true);
+        helper.setBlock(sharedComponent, ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState());
+
+        helper.runAtTickTime(4, () -> {
+            helper.assertTrue(first.structureSnapshot().formed(), "first controller should form before replacement");
+            helper.assertTrue(second.structureSnapshot().formed(), "second controller should form before replacement");
+
+            helper.getLevel().removeBlock(helper.absolutePos(sharedComponent), false);
+            helper.setBlock(sharedComponent,
+                    ModBlocks.BLOCKS.get("parallel_controller_normal").get().defaultBlockState());
+            BlockPos absoluteSharedComponent = helper.absolutePos(sharedComponent);
+            first.onStructureBlockChanged(absoluteSharedComponent);
+            second.onStructureBlockChanged(absoluteSharedComponent);
+            helper.assertTrue(first.structureSnapshot().dirty() && second.structureSnapshot().dirty(),
+                    "both formed controllers are marked dirty after the shared component replacement");
+        });
+        helper.runAtTickTime(12, () -> {
+            boolean firstFormed = first.structureSnapshot().formed();
+            boolean secondFormed = second.structureSnapshot().formed();
+            helper.assertTrue(firstFormed != secondFormed,
+                    "an exclusive replacement must belong to exactly one controller: first=" + firstFormed
+                            + " second=" + secondFormed + " firstFailure=" + first.structureSnapshot().lastFormationFailure()
+                            + " secondFailure=" + second.structureSnapshot().lastFormationFailure());
+            MachineControllerBlockEntity rejected = firstFormed ? second : first;
+            var failure = rejected.structureSnapshot().lastFormationFailure();
+            helper.assertTrue(failure != null && failure.portId().startsWith("shared_component_conflict"),
+                    "the rejected controller records a shared component conflict");
+            helper.assertTrue(failure.portId().contains("component=") && failure.portId().contains("owner="),
+                    "the diagnostic identifies the invalid shared component");
+            helper.succeed();
+        });
+    }
+
     private static MachineControllerBlockEntity placeController(GameTestHelper helper, BlockPos controllerPos,
                                                                  BlockPos sharedPort, String path) {
+        return placeController(helper, controllerPos, sharedPort, path, false);
+    }
+
+    private static MachineControllerBlockEntity placeController(GameTestHelper helper, BlockPos controllerPos,
+                                                                 BlockPos sharedPort, String path,
+                                                                 boolean allowParallelReplacement) {
         Identifier machineId = MMCR.id("test_cube");
         helper.setBlock(controllerPos, ModBlocks.controllerFor(machineId).get().defaultBlockState()
                 .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
+        List<BlockPredicate> sharedChoices = allowParallelReplacement
+                ? List.of(
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus_huge").get()),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("energy_input_hatch").get()),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("parallel_controller_normal").get()))
+                : List.of(
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus_huge").get()),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("energy_input_hatch").get()));
         DynamicMachine machine = new DynamicMachine(MMCR.id(path), path,
-                new BlockArray(Map.of(sharedPort.subtract(controllerPos), new BlockPredicate.AnyOf(List.of(
-                        new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()),
-                        new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus_huge").get()),
-                        new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("energy_input_hatch").get()))))),
+                new BlockArray(Map.of(sharedPort.subtract(controllerPos), new BlockPredicate.AnyOf(sharedChoices))),
                 MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none());
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(machine);

@@ -408,6 +408,7 @@ public final class CraftingRuntime {
         return switch (status.details().getOrDefault("reason", "")) {
             case "module_connection" -> "gui.mmcr.controller.failure.module_connection";
             case "level_insufficient" -> "gui.mmcr.controller.failure.level_insufficient";
+            case "insufficient_energy" -> "gui.mmcr.controller.failure.missing_energy";
             case "version_invalidated" -> "gui.mmcr.controller.failure.structure_changed";
             case "finish", "no_output_capacity" -> "gui.mmcr.controller.failure.missing_output";
             case "per_tick" -> "gui.mmcr.controller.failure.missing_input";

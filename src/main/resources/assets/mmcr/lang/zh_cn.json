@@ -285,6 +285,7 @@
   "message.mmcr.multiblock_requirement.exact": "需要正好 %s 个%s",
   "message.mmcr.multiblock_requirement.maximum": "最多只能有 %s 个%s",
   "message.mmcr.multiblock_requirement.minimum": "至少需要 %s 个%s",
+  "message.mmcr.multiblock_shared_component_conflict": "共享方块冲突: %s",
   "message.mmcr.multiblock_requirement_mismatch": "%s",
   "message.mmcr.port_requirement.energy_input": "能量输入端口",
   "message.mmcr.port_requirement.energy_output": "能量输出端口",
