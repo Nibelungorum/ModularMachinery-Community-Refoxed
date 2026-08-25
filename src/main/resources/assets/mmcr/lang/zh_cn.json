@@ -122,6 +122,7 @@
   "container.mmcr.smart_interface": "智能接口",
 
   "gui.mmcr.controller.energy": "能量: %s / %s FE",
+  "gui.mmcr.port.empty": "无",
   "gui.mmcr.controller.failure.level_insufficient": "等级不足",
   "gui.mmcr.controller.failure.missing_energy": "缺少能量",
   "gui.mmcr.controller.failure.missing_input": "缺少输入",

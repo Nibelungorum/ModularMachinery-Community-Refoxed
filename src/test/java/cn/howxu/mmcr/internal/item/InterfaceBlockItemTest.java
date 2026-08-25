@@ -4,6 +4,7 @@ import cn.howxu.mmcr.client.model.DynamicOverlayBakedModel;
 import cn.howxu.mmcr.client.model.DynamicOverlayItemModel;
 import cn.howxu.mmcr.client.model.MachineModelDataKeys;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
+import cn.howxu.mmcr.internal.port.ExtendedEnergyHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
@@ -57,6 +58,20 @@ class InterfaceBlockItemTest {
                 .withStyle(ChatFormatting.GREEN));
         assertThat(tooltip.get(0).getSiblings().get(1).getStyle().getColor()).isNull();
         assertThat(tooltip.get(1).getSiblings().get(1).getStyle().getColor()).isNull();
+    }
+
+    @Test
+    void long_interface_quantities_use_exact_comma_separated_formatting() {
+        assertThat(InterfaceTooltips.energyTooltip(ExtendedEnergyHatchSize.ULTIMATE))
+                .extracting(Component::getString)
+                .containsExactly(
+                        "tooltip.mmcr.interface.capacity_label9,223,372,036,854,775,807 FE",
+                        "tooltip.mmcr.interface.rate_label9,223,372,036,854,775,807 FE/t");
+        assertThat(InterfaceTooltips.fluidTooltip(Long.MAX_VALUE, Long.MAX_VALUE))
+                .extracting(Component::getString)
+                .containsExactly(
+                        "tooltip.mmcr.interface.capacity_label9,223,372,036,854,775,807 mB",
+                        "tooltip.mmcr.interface.rate_label9,223,372,036,854,775,807 mB/t");
     }
 
     @Test

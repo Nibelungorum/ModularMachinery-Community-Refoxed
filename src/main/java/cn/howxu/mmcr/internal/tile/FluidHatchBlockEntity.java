@@ -69,6 +69,7 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
     private void markFluidChanged() {
         markAutoIOCacheDirty();
         notifyStorageChanged();
+        notifyControllerOfInputChange();
     }
 
     @Override

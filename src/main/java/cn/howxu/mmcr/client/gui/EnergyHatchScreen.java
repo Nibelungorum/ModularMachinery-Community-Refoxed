@@ -11,6 +11,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 
+import java.math.BigInteger;
 import java.util.List;
 
 /**
@@ -62,8 +63,7 @@ public final class EnergyHatchScreen extends AbstractPortScreen<EnergyHatchMenu>
         long capacity = menu.energyCapacity();
         if (autoIOPage || capacity <= 0) return;
         long stored = menu.storedEnergy();
-        int filled = stored <= 0 ? 0 : Math.min(ENERGY_H, Math.max(1, (int) Math.min((long) ENERGY_H,
-                Math.ceilDiv(stored * ENERGY_H, capacity))));
+        int filled = filledHeight(stored, capacity);
         if (filled > 0) graphics.blit(RenderPipelines.GUI_TEXTURED, BAR_TEXTURE, leftPos + ENERGY_X,
                 topPos + ENERGY_Y + ENERGY_H - filled, 196, ENERGY_H - filled, ENERGY_W, filled,
                 GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
@@ -72,5 +72,15 @@ public final class EnergyHatchScreen extends AbstractPortScreen<EnergyHatchMenu>
     static List<Component> tooltipLines(long stored, long capacity) {
         return List.of(Component.literal(ReadableNumber.formatExact(stored) + " / "
                 + ReadableNumber.formatExact(capacity) + " FE"));
+    }
+
+    static int filledHeight(long stored, long capacity) {
+        if (stored <= 0L || capacity <= 0L) return 0;
+        if (stored >= capacity) return ENERGY_H;
+        BigInteger height = BigInteger.valueOf(stored)
+                .multiply(BigInteger.valueOf(ENERGY_H))
+                .add(BigInteger.valueOf(capacity - 1L))
+                .divide(BigInteger.valueOf(capacity));
+        return Math.max(1, height.intValue());
     }
 }

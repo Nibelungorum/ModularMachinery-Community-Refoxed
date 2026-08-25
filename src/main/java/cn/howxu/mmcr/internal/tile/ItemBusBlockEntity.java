@@ -110,13 +110,6 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
         return inventoryEmpty;
     }
 
-    private void notifyControllerOfInputChange() {
-        if (ioType() != IOType.INPUT || level == null || level.isClientSide() || linkedControllerPos() == null) return;
-        if (level.getBlockEntity(linkedControllerPos()) instanceof MachineControllerBlockEntity controller) {
-            controller.onRecipeInputsChanged();
-        }
-    }
-
     @Override
     public abstract IOType ioType();
 

@@ -3,6 +3,7 @@ package cn.howxu.mmcr.client.gui;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntry;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.ItemStorageEntry;
 import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.core.Holder;
@@ -38,9 +39,16 @@ class ExtendedPortScreenTest {
                 new ItemStorageEntry(0, ItemResource.EMPTY, 0L, 64L))))
                 .singleElement()
                 .satisfies(line -> {
-                    assertThat(line.getString()).isEqualTo("无");
+                    assertThat(line.getString()).isEqualTo("gui.mmcr.port.empty");
                     assertThat(line.getStyle().getColor().getValue()).isEqualTo(ChatFormatting.GREEN.getColor());
                 });
+    }
+
+    @Test
+    void empty_extended_combined_storage_uses_the_localized_empty_state() {
+        assertThat(ExtendedCombinedScreen.displayLines(List.of(), List.of()))
+                .extracting(Component::getString)
+                .containsExactly("gui.mmcr.port.empty", "gui.mmcr.port.empty");
     }
 
     @Test

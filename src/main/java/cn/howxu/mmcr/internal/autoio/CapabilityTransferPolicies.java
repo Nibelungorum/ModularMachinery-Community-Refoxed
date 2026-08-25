@@ -24,6 +24,7 @@ import net.neoforged.neoforge.transfer.energy.EnergyHandlerUtil;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.resource.Resource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 import java.util.Map;
@@ -210,10 +211,10 @@ public final class CapabilityTransferPolicies {
             EnergyHandler adjacent = adjacentEnergy(energy, side);
             if (adjacent == null) return blocked("no_target");
             EnergyHandler internal = energyHandler(energy.storage());
-            int limit = (int) Math.min(energy.storage().transferLimit(), Integer.MAX_VALUE);
+            long limit = energy.storage().transferLimit();
             long moved = energy.ioType() == IOType.INPUT
-                    ? EnergyHandlerUtil.move(adjacent, internal, limit, null)
-                    : EnergyHandlerUtil.move(internal, adjacent, limit, null);
+                    ? moveEnergy(adjacent, internal, limit)
+                    : moveEnergy(internal, adjacent, limit);
             return moved(moved);
         }
 
@@ -223,8 +224,7 @@ public final class CapabilityTransferPolicies {
             if (energy.storage().amount() <= 0L) return blocked("no_work");
             EnergyHandler adjacent = adjacentEnergy(energy, side);
             if (adjacent == null) return blocked("no_target");
-            int limit = (int) Math.min(energy.storage().transferLimit(), Integer.MAX_VALUE);
-            long moved = EnergyHandlerUtil.move(energyHandler(energy.storage()), adjacent, limit, null);
+            long moved = moveEnergy(energyHandler(energy.storage()), adjacent, energy.storage().transferLimit());
             return moved(moved);
         }
 
@@ -280,5 +280,21 @@ public final class CapabilityTransferPolicies {
                 return (int) storage.extract(amount, false);
             }
         };
+    }
+
+    private static long moveEnergy(EnergyHandler from, EnergyHandler to, long requested) {
+        if (requested <= 0L) return 0L;
+        long moved = 0L;
+        try (Transaction transaction = Transaction.openRoot()) {
+            while (moved < requested) {
+                int chunk = (int) Math.min(requested - moved, Integer.MAX_VALUE);
+                int chunkMoved = EnergyHandlerUtil.move(from, to, chunk, transaction);
+                if (chunkMoved <= 0) break;
+                moved += chunkMoved;
+                if (chunkMoved < chunk) break;
+            }
+            transaction.commit();
+        }
+        return moved;
     }
 }

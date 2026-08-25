@@ -169,6 +169,37 @@ class ComponentRuntimeTest {
     }
 
     @Test
+    void energy_aggregate_saturates_when_multiple_long_capabilities_are_full() {
+        LongValueStorage firstStorage = new LongValueStorage(Long.MAX_VALUE, Long.MAX_VALUE, () -> {});
+        LongValueStorage secondStorage = new LongValueStorage(Long.MAX_VALUE, Long.MAX_VALUE, () -> {});
+        firstStorage.setAmount(Long.MAX_VALUE);
+        secondStorage.setAmount(Long.MAX_VALUE);
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(component(new TestCapabilityHost(List.of(
+                new TestCapability("first", firstStorage), new TestCapability("second", secondStorage))), "energy")));
+
+        assertThat(runtime.capabilityAggregate().storedEnergy()).isEqualTo(Long.MAX_VALUE);
+        assertThat(runtime.capabilityAggregate().energyCapacity()).isEqualTo(Long.MAX_VALUE);
+    }
+
+    @Test
+    void resource_presentation_saturates_multi_slot_long_amounts_and_capacity() {
+        LongResourceStorage<ItemResource> storage = new LongResourceStorage<>(
+                ItemResource.class, 2, Long.MAX_VALUE, resource -> resource.isEmpty(), () -> {});
+        ItemResource iron = ItemResource.of(net.minecraft.world.item.Items.IRON_INGOT);
+        storage.setContents(0, iron, Long.MAX_VALUE);
+        storage.setContents(1, iron, Long.MAX_VALUE);
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(component(
+                new TestCapabilityHost(List.of(new TestCapability("items", storage))), "items")));
+
+        ControllerRuntimeSnapshot.CapabilityPresentation presentation = runtime.capabilityPresentations().getFirst();
+
+        assertThat(presentation.amount()).isEqualTo(Long.MAX_VALUE);
+        assertThat(presentation.capacity()).isEqualTo(Long.MAX_VALUE);
+    }
+
+    @Test
     void modifier_version_changes_only_for_effective_modifier_changes_and_preserves_order() {
         RecipeModifier first = new RecipeModifier("first", RecipeModifier.IOType.INPUT, 1F,
                 RecipeModifier.Operation.ADD, false);

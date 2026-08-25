@@ -122,6 +122,7 @@
   "container.mmcr.smart_interface": "Smart Interface",
 
   "gui.mmcr.controller.energy": "Energy: %s / %s FE",
+  "gui.mmcr.port.empty": "Empty",
   "gui.mmcr.controller.failure.level_insufficient": "Insufficient Level",
   "gui.mmcr.controller.failure.missing_energy": "Missing Energy",
   "gui.mmcr.controller.failure.missing_input": "Missing Input",

@@ -5,6 +5,8 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.port.CombinedPortSize;
+import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.registry.ModBlockEntities;
@@ -94,6 +96,18 @@ class CombinedPortBlockEntityTest {
         assertThat(combined("combined_output_basic").kind().families())
                 .extracting(PortFamilyDescriptor::countAliases)
                 .containsExactlyInAnyOrder(List.of("item_output_bus"), List.of("fluid_output_hatch"));
+    }
+
+    @Test
+    void ordinaryCombinedFluidFamiliesUseTheFourHighestFluidDetectionTiers() {
+        List<FluidHatchSize> expected = List.of(
+                FluidHatchSize.BIG, FluidHatchSize.HUGE, FluidHatchSize.LUDICROUS, FluidHatchSize.VACUUM);
+
+        assertThat(List.of(CombinedPortSize.values()))
+                .extracting(size -> port("combined_input_" + size.id()).kind().families().stream()
+                        .filter(family -> family.familyId().equals(PortFamilyIds.FLUID))
+                        .findFirst().orElseThrow().detectionTier())
+                .containsExactlyElementsOf(expected.stream().map(FluidHatchSize::ordinal).toList());
     }
 
     @Test

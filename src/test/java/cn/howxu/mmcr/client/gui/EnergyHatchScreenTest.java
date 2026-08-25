@@ -23,4 +23,9 @@ class EnergyHatchScreenTest {
         assertThat(AbstractPortScreen.contains(30, 40, 80, 10, 109, 49)).isTrue();
         assertThat(AbstractPortScreen.contains(30, 40, 80, 10, 110, 49)).isFalse();
     }
+
+    @Test
+    void full_long_energy_capacity_fills_the_bar_without_overflowing() {
+        assertThat(EnergyHatchScreen.filledHeight(Long.MAX_VALUE, Long.MAX_VALUE)).isEqualTo(61);
+    }
 }

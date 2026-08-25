@@ -100,7 +100,7 @@ public final class ExtendedItemScreen extends AbstractPortScreen<ExtendedItemMen
     }
 
     private static Component emptyLine() {
-        return Component.literal("无").withStyle(ChatFormatting.GREEN);
+        return Component.translatable("gui.mmcr.port.empty").withStyle(ChatFormatting.GREEN);
     }
 
     private static List<ItemStorageEntry> nonEmptyEntries(List<ItemStorageEntry> entries) {

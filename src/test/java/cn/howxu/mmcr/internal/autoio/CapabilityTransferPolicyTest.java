@@ -14,12 +14,15 @@ import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.ExtendedEnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
+import cn.howxu.mmcr.registry.ModBlockEntities;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
@@ -151,6 +154,28 @@ class CapabilityTransferPolicyTest {
     }
 
     @Test
+    void extended_energy_auto_io_transfers_amounts_above_integer_range() {
+        ExtendedEnergyHatchBlockEntity input = extendedEnergy(
+                "extended_energy_input_hatch_ultimate", BlockPos.ZERO);
+        ExtendedEnergyHatchBlockEntity output = extendedEnergy(
+                "extended_energy_output_hatch_ultimate", new BlockPos(1, 0, 0));
+        Level level = LevelStub.createWithBlockEntities(List.of(input, output));
+        input.setLevel(level);
+        output.setLevel(level);
+        long amount = (long) Integer.MAX_VALUE + 1L;
+        output.energyStorage().setAmount(amount);
+        LevelStub.setCapability(level, ModCapabilities.ENERGY_BLOCK, output.getBlockPos(), output.getEnergyHandler(null));
+
+        var capability = input.capabilitySnapshot().capabilities().getFirst();
+        TransferResult result = CapabilityTransferPolicies.policyFor(capability).orElseThrow()
+                .transfer(capability, Direction.EAST);
+
+        assertThat(result.amount()).isEqualTo(amount);
+        assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(amount);
+        assertThat(output.energyStorage().getAmountAsLong()).isZero();
+    }
+
+    @Test
     void disabled_or_unavailable_side_does_not_mutate_real_storage() {
         Ports ports = connectedPorts();
         var input = ports.itemInput.capabilitySnapshot().capabilities().getFirst();
@@ -267,6 +292,11 @@ class CapabilityTransferPolicyTest {
                 energyInput, energyOutput));
         ports.forEach(port -> port.setLevel(level));
         return new Ports(level, itemInput, itemOutput, fluidInput, fluidOutput, energyInput, energyOutput);
+    }
+
+    private static ExtendedEnergyHatchBlockEntity extendedEnergy(String id, BlockPos position) {
+        return (ExtendedEnergyHatchBlockEntity) ModBlockEntities.BES.get(id).get().create(
+                position, ModBlocks.BLOCKS.get(id).get().defaultBlockState());
     }
 
     private static ItemStack stack(int count) {

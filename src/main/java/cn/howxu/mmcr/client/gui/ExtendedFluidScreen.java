@@ -100,7 +100,7 @@ public final class ExtendedFluidScreen extends AbstractPortScreen<ExtendedFluidM
     }
 
     private static Component emptyLine() {
-        return Component.literal("无").withStyle(ChatFormatting.GREEN);
+        return Component.translatable("gui.mmcr.port.empty").withStyle(ChatFormatting.GREEN);
     }
 
     private static List<FluidStorageEntry> nonEmptyEntries(List<FluidStorageEntry> entries) {

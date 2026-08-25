@@ -138,6 +138,7 @@ public class CombinedPortBlockEntity extends IOPortBlockEntity {
     private void markStorageChanged() {
         markAutoIOCacheDirty();
         notifyStorageChanged();
+        notifyControllerOfInputChange();
     }
 
     private static IOPortKind fallback(BlockState state) {

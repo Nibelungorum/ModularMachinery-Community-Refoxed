@@ -172,7 +172,9 @@ public class LongResourceStorage<R> extends SnapshotJournal<LongResourceStorage.
             resources.addAll(Collections.nCopies(amounts.length, null));
             Arrays.fill(amounts, 0L);
         }
-        onChange.run();
+        if (snapshot == null || !snapshot.resources().equals(resources) || !Arrays.equals(snapshot.amounts(), amounts)) {
+            onChange.run();
+        }
     }
 
     @Override

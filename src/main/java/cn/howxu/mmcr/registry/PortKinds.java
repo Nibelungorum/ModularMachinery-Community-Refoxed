@@ -206,7 +206,7 @@ public final class PortKinds {
         public List<PortFamilyDescriptor> families() {
             return List.of(
                     new PortFamilyDescriptor(PortFamilyIds.ITEM, ioType, itemTier(size), List.of(itemAlias(ioType))),
-                    new PortFamilyDescriptor(PortFamilyIds.FLUID, ioType, FluidHatchSize.VACUUM.ordinal(), List.of(fluidAlias(ioType))));
+                    new PortFamilyDescriptor(PortFamilyIds.FLUID, ioType, fluidTier(size), List.of(fluidAlias(ioType))));
         }
 
         @Override
@@ -380,6 +380,15 @@ public final class PortKinds {
             case ADVANCED -> ItemBusSize.REINFORCED.ordinal();
             case REINFORCED -> ItemBusSize.BIG.ordinal();
             case ULTIMATE -> ItemBusSize.HUGE.ordinal();
+        };
+    }
+
+    private static int fluidTier(CombinedPortSize size) {
+        return switch (size) {
+            case BASIC -> FluidHatchSize.BIG.ordinal();
+            case ADVANCED -> FluidHatchSize.HUGE.ordinal();
+            case REINFORCED -> FluidHatchSize.LUDICROUS.ordinal();
+            case ULTIMATE -> FluidHatchSize.VACUUM.ordinal();
         };
     }
 

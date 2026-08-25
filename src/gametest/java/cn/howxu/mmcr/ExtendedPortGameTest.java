@@ -21,6 +21,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.transfer.ResourceHandler;
+import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -33,6 +34,35 @@ import java.util.Map;
  * @author howxu <dev@howxu.cn>
  */
 public class ExtendedPortGameTest {
+
+    public void standaloneExtendedPortsExposeItemFluidAndEnergyCapabilities(GameTestHelper helper) {
+        BlockPos itemPos = new BlockPos(0, 1, 0);
+        BlockPos fluidPos = new BlockPos(1, 1, 0);
+        BlockPos energyPos = new BlockPos(2, 1, 0);
+        helper.setBlock(itemPos, ModBlocks.BLOCKS.get("extended_item_input_bus_basic").get().defaultBlockState());
+        helper.setBlock(fluidPos, ModBlocks.BLOCKS.get("extended_fluid_input_hatch_basic").get().defaultBlockState());
+        helper.setBlock(energyPos, ModBlocks.BLOCKS.get("extended_energy_input_hatch_reinforced").get().defaultBlockState());
+
+        ResourceHandler<ItemResource> items = capability(helper, itemPos, ModCapabilities.ITEM_BLOCK);
+        ResourceHandler<FluidResource> fluids = capability(helper, fluidPos, ModCapabilities.FLUID_BLOCK);
+        EnergyHandler energy = capability(helper, energyPos, ModCapabilities.ENERGY_BLOCK);
+        helper.assertTrue(items != null, "Standalone extended item capability is present");
+        helper.assertTrue(fluids != null, "Standalone extended fluid capability is present");
+        helper.assertTrue(energy != null, "Standalone extended energy capability is present");
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            helper.assertTrue(items.insert(0, ItemResource.of(Items.IRON_INGOT), Integer.MAX_VALUE, transaction)
+                            == Integer.MAX_VALUE,
+                    "Standalone extended item capability accepts long-backed amounts");
+            helper.assertTrue(fluids.insert(0, FluidResource.of(Fluids.WATER), Integer.MAX_VALUE, transaction)
+                            == Integer.MAX_VALUE,
+                    "Standalone extended fluid capability accepts long-backed amounts");
+            helper.assertTrue(energy.insert(Integer.MAX_VALUE, transaction) == Integer.MAX_VALUE,
+                    "Standalone extended energy capability accepts long-backed amounts");
+            transaction.commit();
+        }
+        helper.succeed();
+    }
 
     public void extendedCombinedPortTransfersBeyondIntegerRange(GameTestHelper helper) {
         BlockPos portPos = new BlockPos(0, 1, 0);
@@ -61,6 +91,14 @@ public class ExtendedPortGameTest {
         helper.assertTrue(port.fluidStorage().amount(0) > Integer.MAX_VALUE,
                 "Extended fluid storage preserves cumulative amounts above int range");
         helper.succeed();
+    }
+
+    private static <T> T capability(GameTestHelper helper, BlockPos pos,
+                                     net.neoforged.neoforge.capabilities.BlockCapability<T, Direction> capability) {
+        BlockPos worldPos = helper.absolutePos(pos);
+        BlockEntity blockEntity = helper.getLevel().getBlockEntity(worldPos);
+        return capability.getCapability(helper.getLevel(), worldPos, helper.getLevel().getBlockState(worldPos),
+                blockEntity, Direction.UP);
     }
 
     public void extendedCombinedPortPublishesFormedAppearance(GameTestHelper helper) {

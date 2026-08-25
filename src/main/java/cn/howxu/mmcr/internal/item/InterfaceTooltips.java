@@ -78,7 +78,7 @@ public final class InterfaceTooltips {
         return List.of(capacityLine(size.slots(), Component.translatable("tooltip.mmcr.interface.unit.tanks")));
     }
 
-    private static List<Component> fluidTooltip(long capacity, long transfer) {
+    static List<Component> fluidTooltip(long capacity, long transfer) {
         List<Component> lines = new ArrayList<>(2);
         lines.add(capacityLine(formatAmount(capacity, "mB")));
         lines.add(rateLine(formatAmount(transfer, "mB/t")));
@@ -93,7 +93,7 @@ public final class InterfaceTooltips {
         return energyTooltip(size.capacity(), size.transfer());
     }
 
-    private static List<Component> energyTooltip(long capacity, long transfer) {
+    static List<Component> energyTooltip(long capacity, long transfer) {
         List<Component> lines = new ArrayList<>(2);
         lines.add(capacityLine(formatAmount(capacity, "FE")));
         lines.add(rateLine(formatAmount(transfer, "FE/t")));
@@ -139,7 +139,7 @@ public final class InterfaceTooltips {
     }
 
     private static String formatAmount(long amount, String unit) {
-        return ReadableNumber.format(amount) + " " + unit;
+        return ReadableNumber.formatExact(amount) + " " + unit;
     }
 
     private InterfaceTooltips() {}

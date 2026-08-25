@@ -66,6 +66,8 @@ public final class GameTestRegistry {
                 helper -> new CombinedPortGameTest().combinedPortPublishesFormedAppearance(helper));
         register(event, "extended_combined_long_transfer", 100,
                 helper -> new ExtendedPortGameTest().extendedCombinedPortTransfersBeyondIntegerRange(helper));
+        register(event, "extended_standalone_capabilities", 100,
+                helper -> new ExtendedPortGameTest().standaloneExtendedPortsExposeItemFluidAndEnergyCapabilities(helper));
         register(event, "extended_combined_port_appearance", 100,
                 helper -> new ExtendedPortGameTest().extendedCombinedPortPublishesFormedAppearance(helper));
         register(event, "item_input_ejection_stops_after_first_target", 100, helper -> new AutoIOGameTest().itemInputEjectionStopsAfterFirstTarget(helper));

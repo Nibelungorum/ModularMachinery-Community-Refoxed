@@ -96,6 +96,13 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         sendStorageSnapshot();
     }
 
+    protected void notifyControllerOfInputChange() {
+        if (ioType() != IOType.INPUT || level == null || level.isClientSide() || linkedControllerPos() == null) return;
+        if (level.getBlockEntity(linkedControllerPos()) instanceof MachineControllerBlockEntity controller) {
+            controller.onRecipeInputsChanged();
+        }
+    }
+
     protected void sendStorageSnapshot() {
         if (level != null && !level.isClientSide()) PktPortStorageSyncPayload.sendToViewers(this);
     }

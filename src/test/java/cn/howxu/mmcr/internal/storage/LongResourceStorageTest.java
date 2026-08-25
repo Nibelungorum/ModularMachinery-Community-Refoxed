@@ -11,6 +11,8 @@ import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -53,6 +55,20 @@ class LongResourceStorageTest {
 
         assertThat(storage.amount(0)).isZero();
         assertThat(storage.resource(0)).isEqualTo(FluidResource.EMPTY);
+    }
+
+    @Test
+    void transaction_rollback_does_not_report_a_storage_change() {
+        AtomicInteger changes = new AtomicInteger();
+        LongFluidStorage storage = new LongFluidStorage(100L, changes::incrementAndGet);
+        FluidResource water = FluidResource.of(Fluids.WATER);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(storage.insert(0, water, 40L, transaction)).isEqualTo(40L);
+        }
+
+        assertThat(storage.amount(0)).isZero();
+        assertThat(changes).hasValue(0);
     }
 
     @Test

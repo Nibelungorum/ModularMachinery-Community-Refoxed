@@ -261,8 +261,8 @@ public final class ComponentRuntime {
             String resourceId = resource == null || (resource instanceof Resource empty && empty.isEmpty())
                     ? "" : String.valueOf(resource);
             slots.add(new ControllerRuntimeSnapshot.StorageSlot(resourceId, slotAmount, slotCapacity));
-            amount += slotAmount;
-            capacity += slotCapacity;
+            amount = saturatedAdd(amount, slotAmount);
+            capacity = saturatedAdd(capacity, slotCapacity);
         }
         return new ControllerRuntimeSnapshot.CapabilityPresentation(
                 capability.type() == null ? null : capability.type().id(), capability.ioType(), amount, capacity, slots);
@@ -275,8 +275,8 @@ public final class ComponentRuntime {
         FluidStack primaryOutputFluid = FluidStack.EMPTY;
         for (MachineCapability capability : capabilities) {
             if (capability.storage() instanceof LongValueStorage energy) {
-                storedEnergy += energy.amount();
-                energyCapacity += energy.capacity();
+                storedEnergy = saturatedAdd(storedEnergy, energy.amount());
+                energyCapacity = saturatedAdd(energyCapacity, energy.capacity());
             } else if (capability.storage() instanceof ResourceStorage<?> resourceStorage
                     && resourceStorage.resourceType() == FluidResource.class) {
                 for (int slot = 0; slot < resourceStorage.size(); slot++) {
@@ -293,6 +293,10 @@ public final class ComponentRuntime {
             }
         }
         return new CapabilityAggregate(storedEnergy, energyCapacity, primaryFluid, primaryOutputFluid);
+    }
+
+    private static long saturatedAdd(long current, long value) {
+        return value > 0L && current > Long.MAX_VALUE - value ? Long.MAX_VALUE : current + value;
     }
 
     private record CapabilityState(List<MachineCapability> capabilities, List<CapabilityIdentity> identity) { }

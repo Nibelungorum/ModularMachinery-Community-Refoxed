@@ -86,7 +86,7 @@ public final class ExtendedCombinedScreen extends AbstractPortScreen<ExtendedCom
         List<ItemStorageEntry> nonEmpty = entries.stream()
                 .filter(entry -> entry.amount() > 0 && !entry.resource().isEmpty()).toList();
         if (nonEmpty.isEmpty()) {
-            graphics.text(font, Component.literal("无").withStyle(net.minecraft.ChatFormatting.GREEN),
+            graphics.text(font, Component.translatable("gui.mmcr.port.empty").withStyle(net.minecraft.ChatFormatting.GREEN),
                     ROW_X, y, net.minecraft.ChatFormatting.GREEN.getColor(), false);
             return y + ROW_STEP;
         }
@@ -105,7 +105,7 @@ public final class ExtendedCombinedScreen extends AbstractPortScreen<ExtendedCom
         List<FluidStorageEntry> nonEmpty = entries.stream()
                 .filter(entry -> entry.amount() > 0 && !entry.resource().isEmpty()).toList();
         if (nonEmpty.isEmpty()) {
-            graphics.text(font, Component.literal("无").withStyle(net.minecraft.ChatFormatting.GREEN),
+            graphics.text(font, Component.translatable("gui.mmcr.port.empty").withStyle(net.minecraft.ChatFormatting.GREEN),
                     ROW_X, y, net.minecraft.ChatFormatting.GREEN.getColor(), false);
             return;
         }
