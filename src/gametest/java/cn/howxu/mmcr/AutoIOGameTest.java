@@ -1,7 +1,10 @@
 package cn.howxu.mmcr;
 
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
@@ -85,6 +88,114 @@ public class AutoIOGameTest {
             helper.assertTrue(outputStorage.getAmountAsLong() < 700, "Energy output hatch loses FE to auto output");
             helper.succeed();
         });
+    }
+
+    public void combinedInputAutoImportsCapabilitiesIndependently(GameTestHelper helper) {
+        BlockPos inputPos = new BlockPos(0, 1, 0);
+        BlockPos itemSourcePos = inputPos.relative(Direction.EAST);
+        BlockPos fluidSourcePos = inputPos.relative(Direction.WEST);
+        helper.setBlock(inputPos, ModBlocks.BLOCKS.get("combined_input_basic").get().defaultBlockState());
+        helper.setBlock(itemSourcePos, Blocks.CHEST.defaultBlockState());
+        helper.setBlock(fluidSourcePos, ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState());
+
+        CombinedPortBlockEntity input = helper.getBlockEntity(inputPos, CombinedPortBlockEntity.class);
+        ChestBlockEntity itemSource = helper.getBlockEntity(itemSourcePos, ChestBlockEntity.class);
+        FluidHatchBlockEntity fluidSource = helper.getBlockEntity(fluidSourcePos, FluidHatchBlockEntity.class);
+        itemSource.setItem(0, new ItemStack(Items.IRON_INGOT, 3));
+        fluidSource.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2_000), false);
+
+        CapabilityType itemType = capabilityType(input, "item");
+        CapabilityType fluidType = capabilityType(input, "fluid");
+        configureAutoIO(input, itemType, Direction.EAST);
+        configureAutoIO(input, fluidType, Direction.WEST);
+
+        final long[] fluidBeforeDisable = {0L};
+        helper.runAtTickTime(30, () -> {
+            helper.assertTrue(input.itemStorage().amount(0) > 0L, "Combined input imports items");
+            helper.assertTrue(input.fluidStorage().getAmountAsLong() > 0L, "Combined input imports fluids");
+
+            fluidBeforeDisable[0] = input.fluidStorage().getAmountAsLong();
+            input.setAutoIOSide(itemType, Direction.EAST, false);
+            itemSource.setItem(0, new ItemStack(Items.GOLD_INGOT, 2));
+            fluidSource.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 1_000), false);
+        });
+        helper.runAtTickTime(80, () -> {
+            helper.assertTrue(itemSource.getItem(0).is(Items.GOLD_INGOT)
+                            && itemSource.getItem(0).getCount() == 2,
+                    "Disabling only the item profile stops item input");
+            helper.assertTrue(input.fluidStorage().getAmountAsLong() > fluidBeforeDisable[0],
+                    "Disabling only the item profile keeps fluid input active");
+            helper.succeed();
+        });
+    }
+
+    public void combinedOutputAutoExportsCapabilitiesIndependently(GameTestHelper helper) {
+        BlockPos outputPos = new BlockPos(0, 1, 0);
+        BlockPos itemTargetPos = outputPos.relative(Direction.EAST);
+        BlockPos fluidTargetPos = outputPos.relative(Direction.WEST);
+        helper.setBlock(outputPos, ModBlocks.BLOCKS.get("combined_output_basic").get().defaultBlockState());
+        helper.setBlock(itemTargetPos, Blocks.CHEST.defaultBlockState());
+        helper.setBlock(fluidTargetPos, ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState());
+
+        CombinedPortBlockEntity output = helper.getBlockEntity(outputPos, CombinedPortBlockEntity.class);
+        ChestBlockEntity itemTarget = helper.getBlockEntity(itemTargetPos, ChestBlockEntity.class);
+        FluidHatchBlockEntity fluidTarget = helper.getBlockEntity(fluidTargetPos, FluidHatchBlockEntity.class);
+        output.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 3));
+        output.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2_000), false);
+
+        CapabilityType itemType = capabilityType(output, "item");
+        CapabilityType fluidType = capabilityType(output, "fluid");
+        configureAutoIO(output, itemType, Direction.EAST);
+        configureAutoIO(output, fluidType, Direction.WEST);
+
+        final long[] fluidBeforeDisable = {0L};
+        helper.runAtTickTime(30, () -> {
+            helper.assertTrue(itemTarget.getItem(0).is(Items.IRON_INGOT), "Combined output exports items");
+            helper.assertTrue(fluidTarget.fluidStorage().getAmountAsLong() > 0L, "Combined output exports fluids");
+
+            fluidBeforeDisable[0] = fluidTarget.fluidStorage().getAmountAsLong();
+            output.setAutoIOSide(itemType, Direction.EAST, false);
+            output.getItemStackHandler(null).setStackInSlot(1, new ItemStack(Items.GOLD_INGOT, 2));
+            output.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 1_000), false);
+        });
+        helper.runAtTickTime(120, () -> {
+            helper.assertTrue(itemTarget.getItem(1).isEmpty()
+                            && output.getItemStackHandler(null).getStackInSlot(1).getCount() == 2,
+                    "Disabling only the item profile stops item output");
+            helper.assertTrue(fluidTarget.fluidStorage().getAmountAsLong() > fluidBeforeDisable[0],
+                    "Disabling only the item profile keeps fluid output active");
+            helper.succeed();
+        });
+    }
+
+    public void combinedInputEjectionIsCapabilitySpecific(GameTestHelper helper) {
+        BlockPos inputPos = new BlockPos(0, 1, 0);
+        BlockPos itemTargetPos = inputPos.relative(Direction.EAST);
+        BlockPos fluidTargetPos = inputPos.relative(Direction.WEST);
+        helper.setBlock(inputPos, ModBlocks.BLOCKS.get("combined_input_basic").get().defaultBlockState());
+        helper.setBlock(itemTargetPos, Blocks.CHEST.defaultBlockState());
+        helper.setBlock(fluidTargetPos, ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState());
+
+        CombinedPortBlockEntity input = helper.getBlockEntity(inputPos, CombinedPortBlockEntity.class);
+        ChestBlockEntity itemTarget = helper.getBlockEntity(itemTargetPos, ChestBlockEntity.class);
+        FluidHatchBlockEntity fluidTarget = helper.getBlockEntity(fluidTargetPos, FluidHatchBlockEntity.class);
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.COBBLESTONE, 3));
+        input.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2_000), false);
+
+        CapabilityType itemType = capabilityType(input, "item");
+        CapabilityType fluidType = capabilityType(input, "fluid");
+        helper.assertTrue(input.ejectContents(itemType), "Item-specific ejection moves item contents");
+        helper.assertTrue(itemTarget.getItem(0).is(Items.COBBLESTONE), "Item ejection reaches the item handler");
+        helper.assertTrue(input.fluidStorage().getAmountAsLong() == 2_000,
+                "Item-specific ejection leaves fluid contents untouched");
+        helper.assertTrue(fluidTarget.fluidStorage().isEmpty(), "Item-specific ejection does not fill fluid handlers");
+
+        helper.assertTrue(input.ejectContents(fluidType), "Fluid-specific ejection moves fluid contents");
+        helper.assertTrue(fluidTarget.fluidStorage().getAmountAsLong() > 0L,
+                "Fluid ejection reaches the fluid handler");
+        helper.assertTrue(input.getItemStackHandler(null).getStackInSlot(0).isEmpty(),
+                "Fluid-specific ejection does not restore item contents");
+        helper.succeed();
     }
 
     public void itemInputEjectionStopsAfterFirstTarget(GameTestHelper helper) {
@@ -269,5 +380,19 @@ public class AutoIOGameTest {
         for (int slot = 1; slot < chest.getContainerSize(); slot++) {
             chest.setItem(slot, new ItemStack(Items.COBBLESTONE, 64));
         }
+    }
+
+    private static CapabilityType capabilityType(IOPortBlockEntity port, String id) {
+        return port.capabilitySnapshot().capabilities().stream()
+                .filter(capability -> capability.type().id().equals(MMCR.id(id)))
+                .map(capability -> capability.type())
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Missing combined capability: " + id));
+    }
+
+    private static void configureAutoIO(IOPortBlockEntity port, CapabilityType type, Direction side) {
+        port.setAutoIOEnabled(type, true);
+        port.setAllAutoIOSides(type, false);
+        port.setAutoIOSide(type, side, true);
     }
 }

@@ -56,6 +56,18 @@ public final class GameTestRegistry {
         // Disabled: CPU scheduling delays can cause this otherwise-correct test to fail intermittently.
         register(event, "auto_io_fluid_output", 120, helper -> new AutoIOGameTest().fluidOutputAutoExports(helper));
         register(event, "auto_io_energy_output", 120, helper -> new AutoIOGameTest().energyOutputAutoExports(helper));
+        register(event, "auto_io_combined_input", 120,
+                helper -> new AutoIOGameTest().combinedInputAutoImportsCapabilitiesIndependently(helper));
+        register(event, "auto_io_combined_output", 160,
+                helper -> new AutoIOGameTest().combinedOutputAutoExportsCapabilitiesIndependently(helper));
+        register(event, "combined_input_capability_ejection", 100,
+                helper -> new AutoIOGameTest().combinedInputEjectionIsCapabilitySpecific(helper));
+        register(event, "combined_port_appearance", 100,
+                helper -> new CombinedPortGameTest().combinedPortPublishesFormedAppearance(helper));
+        register(event, "extended_combined_long_transfer", 100,
+                helper -> new ExtendedPortGameTest().extendedCombinedPortTransfersBeyondIntegerRange(helper));
+        register(event, "extended_combined_port_appearance", 100,
+                helper -> new ExtendedPortGameTest().extendedCombinedPortPublishesFormedAppearance(helper));
         register(event, "item_input_ejection_stops_after_first_target", 100, helper -> new AutoIOGameTest().itemInputEjectionStopsAfterFirstTarget(helper));
         register(event, "item_input_ejection_continues_after_partial_target", 100, helper -> new AutoIOGameTest().itemInputEjectionContinuesAfterPartialTarget(helper));
         register(event, "item_input_ejection_preserves_remainder", 100, helper -> new AutoIOGameTest().itemInputEjectionPreservesRemainder(helper));
