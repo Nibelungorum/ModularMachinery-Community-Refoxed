@@ -43,6 +43,7 @@ import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockPreviewPayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewPredicates;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
@@ -1902,21 +1903,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
         for (BlockPos relativePos : positions) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
             if (!(level.getBlockEntity(worldPos) instanceof IOPortBlockEntity port)) continue;
-            counts.merge(port.kind().id(), 1, Integer::sum);
-            String baseId = basePortId(port.kind());
-            if (!baseId.equals(port.kind().id())) counts.merge(baseId, 1, Integer::sum);
+            IOPortKind kind = port.kind();
+            counts.merge(kind.id(), 1, Integer::sum);
+            for (PortFamilyDescriptor family : kind.families()) {
+                for (String alias : family.countAliases()) {
+                    if (!alias.equals(kind.id())) counts.merge(alias, 1, Integer::sum);
+                }
+            }
         }
         return PortRequirementSpec.PortCounts.of(counts);
-    }
-
-    private static String basePortId(IOPortKind kind) {
-        String family = kind.itemBusSize().isPresent() ? "item"
-                : kind.fluidHatchSize().isPresent() ? "fluid"
-                : kind.energyHatchSize().isPresent() ? "energy" : null;
-        if (family == null) return kind.id();
-        String direction = kind.ioType() == IOType.INPUT ? "input" : "output";
-        String suffix = family.equals("item") ? "bus" : "hatch";
-        return family + "_" + direction + "_" + suffix;
     }
 
     private List<IOPortKind> portKinds(BlockArray rotatedPattern, @Nullable CompiledMachinePattern compiledPattern, Direction facing) {

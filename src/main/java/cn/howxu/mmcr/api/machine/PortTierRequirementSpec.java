@@ -4,8 +4,11 @@ import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
+import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
+import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
 import cn.howxu.mmcr.util.IOType;
+import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -101,19 +104,22 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
 
         private boolean sameFamily(IOPortKind port) {
             if (port.ioType() != ioType) return false;
-            return switch (category) {
-                case ITEM -> port.itemBusSize().isPresent();
-                case FLUID -> port.fluidHatchSize().isPresent();
-                case ENERGY -> port.energyHatchSize().isPresent();
-            };
+            return family(port).isPresent();
         }
 
         private int tier(IOPortKind port) {
-            return switch (category) {
-                case ITEM -> port.itemBusSize().map(Enum::ordinal).orElse(-1);
-                case FLUID -> port.fluidHatchSize().map(Enum::ordinal).orElse(-1);
-                case ENERGY -> port.energyHatchSize().map(Enum::ordinal).orElse(-1);
+            return family(port).map(PortFamilyDescriptor::detectionTier).orElse(-1);
+        }
+
+        private Optional<PortFamilyDescriptor> family(IOPortKind port) {
+            Identifier familyId = switch (category) {
+                case ITEM -> PortFamilyIds.ITEM;
+                case FLUID -> PortFamilyIds.FLUID;
+                case ENERGY -> PortFamilyIds.ENERGY;
             };
+            return port.families().stream()
+                    .filter(family -> family.familyId().equals(familyId) && family.ioType() == ioType)
+                    .findFirst();
         }
     }
 

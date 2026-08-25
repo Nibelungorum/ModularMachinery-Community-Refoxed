@@ -4,19 +4,27 @@ import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
+import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.MachineStateSnapshot;
+import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
@@ -26,6 +34,7 @@ import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.server.level.ServerLevel;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -307,6 +316,93 @@ class MachineControllerBlockEntityTest {
         assertThat(failure).contains("reason=portRequirementMismatch")
                 .contains("portId=energy_input_hatch")
                 .contains("requiredMin=1");
+    }
+
+    @Test
+    void count_ports_adds_each_combined_input_family_alias_once() throws Exception {
+        BlockPos controllerPos = BlockPos.ZERO;
+        BlockPos portPos = controllerPos.offset(1, 0, 0);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos);
+        CombinedPort port = new CombinedPort(portPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+        controller.setLevel(LevelStub.create(Map.of(
+                controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get(),
+                portPos, ModBlocks.BLOCKS.get("item_input_bus").get()), List.of(controller, port)));
+
+        var method = MachineControllerBlockEntity.class.getDeclaredMethod(
+                "countPorts", BlockArray.class, CompiledMachinePattern.class, Direction.class);
+        method.setAccessible(true);
+        PortRequirementSpec.PortCounts counts = (PortRequirementSpec.PortCounts) method.invoke(
+                controller,
+                new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.Any())),
+                null,
+                Direction.SOUTH);
+
+        assertThat(counts.count("combined_input_test")).isEqualTo(1);
+        assertThat(counts.count("item_input_bus")).isEqualTo(1);
+        assertThat(counts.count("fluid_input_hatch")).isEqualTo(1);
+    }
+
+    @Test
+    void count_ports_adds_each_combined_output_family_alias_once() throws Exception {
+        BlockPos controllerPos = BlockPos.ZERO;
+        BlockPos portPos = controllerPos.offset(1, 0, 0);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos);
+        CombinedPort port = new CombinedPort(portPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState(), IOType.OUTPUT);
+        controller.setLevel(LevelStub.create(Map.of(
+                controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get(),
+                portPos, ModBlocks.BLOCKS.get("item_input_bus").get()), List.of(controller, port)));
+
+        var method = MachineControllerBlockEntity.class.getDeclaredMethod(
+                "countPorts", BlockArray.class, CompiledMachinePattern.class, Direction.class);
+        method.setAccessible(true);
+        PortRequirementSpec.PortCounts counts = (PortRequirementSpec.PortCounts) method.invoke(
+                controller,
+                new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.Any())),
+                null,
+                Direction.SOUTH);
+
+        assertThat(counts.count("combined_output_test")).isEqualTo(1);
+        assertThat(counts.count("item_output_bus")).isEqualTo(1);
+        assertThat(counts.count("fluid_output_hatch")).isEqualTo(1);
+    }
+
+    private static final class CombinedPort extends IOPortBlockEntity {
+        private static final IOPortKind INPUT_KIND = combinedKind(IOType.INPUT, "combined_input_test");
+        private static final IOPortKind OUTPUT_KIND = combinedKind(IOType.OUTPUT, "combined_output_test");
+        private final IOPortKind kind;
+
+        private CombinedPort(BlockPos pos, BlockState state) {
+            this(pos, state, IOType.INPUT);
+        }
+
+        private CombinedPort(BlockPos pos, BlockState state, IOType ioType) {
+            super(ModBlockEntities.BES.get("item_input_bus").get(), pos, state);
+            kind = ioType == IOType.INPUT ? INPUT_KIND : OUTPUT_KIND;
+        }
+
+        @Override
+        public IOType ioType() {
+            return kind.ioType();
+        }
+
+        @Override
+        public IOPortKind kind() {
+            return kind;
+        }
+
+        @Override
+        public CapabilitySnapshot capabilitySnapshot() {
+            return new CapabilitySnapshot(List.of());
+        }
+    }
+
+    private static IOPortKind combinedKind(IOType ioType, String id) {
+        return new PortKinds.CombinedKind(id, ioType, List.of(
+                new PortFamilyDescriptor(PortFamilyIds.ITEM, ioType, 2,
+                        List.of(ioType == IOType.INPUT ? "item_input_bus" : "item_output_bus")),
+                new PortFamilyDescriptor(PortFamilyIds.FLUID, ioType, 2,
+                        List.of(ioType == IOType.INPUT ? "fluid_input_hatch" : "fluid_output_hatch"))),
+                CombinedPort::new, List.of());
     }
 
     private static void resolveSharedRequests(MachineControllerBlockEntity controller) {

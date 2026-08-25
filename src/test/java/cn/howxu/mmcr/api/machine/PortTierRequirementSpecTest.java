@@ -2,15 +2,18 @@ package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
+import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
+import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
+import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.registry.PortKinds;
+import cn.howxu.mmcr.util.IOType;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
 import java.util.Map;
 
-import cn.howxu.mmcr.internal.port.IOPortKind;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class PortTierRequirementSpecTest {
@@ -74,6 +77,33 @@ class PortTierRequirementSpecTest {
     }
 
     @Test
+    void combined_input_kind_matches_item_and_fluid_requirements() {
+        IOPortKind kind = combinedKind(List.of(
+                new PortFamilyDescriptor(PortFamilyIds.ITEM, IOType.INPUT, ItemBusSize.NORMAL.ordinal(),
+                        List.of("item_input_bus")),
+                new PortFamilyDescriptor(PortFamilyIds.FLUID, IOType.INPUT, FluidHatchSize.NORMAL.ordinal(),
+                        List.of("fluid_input_hatch"))));
+        var spec = PortTierRequirementSpec.builder()
+                .minItemInput(ItemBusSize.NORMAL)
+                .minFluidInput(FluidHatchSize.NORMAL)
+                .build();
+
+        assertThat(spec.validate(List.of(kind))).isEmpty();
+    }
+
+    @Test
+    void extended_item_kind_matches_the_highest_item_requirement() {
+        IOPortKind kind = combinedKind(List.of(
+                new PortFamilyDescriptor(PortFamilyIds.ITEM, IOType.INPUT, ItemBusSize.LUDICROUS.ordinal() + 1,
+                        List.of("item_input_bus"))));
+        var spec = PortTierRequirementSpec.builder()
+                .minItemInput(ItemBusSize.LUDICROUS)
+                .build();
+
+        assertThat(spec.validate(List.of(kind))).isEmpty();
+    }
+
+    @Test
     void dynamic_machine_defaults_to_no_tier_requirements() {
         var machine = new DynamicMachine(
                 cn.howxu.mmcr.MMCR.id("tier_default_machine"),
@@ -89,5 +119,10 @@ class PortTierRequirementSpecTest {
                 .filter(kind -> kind.id().equals(id))
                 .findFirst()
                 .orElseThrow();
+    }
+
+    private static IOPortKind combinedKind(List<PortFamilyDescriptor> families) {
+        return new PortKinds.CombinedKind("combined_input_test", IOType.INPUT, families,
+                PortKinds.ITEM_INPUT.entityFactory(), List.of());
     }
 }

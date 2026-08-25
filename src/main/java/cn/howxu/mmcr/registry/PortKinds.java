@@ -4,6 +4,8 @@ import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
+import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
+import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories.CapabilityFactory;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
@@ -47,6 +49,12 @@ public final class PortKinds {
         }
 
         @Override
+        public List<PortFamilyDescriptor> families() {
+            return List.of(new PortFamilyDescriptor(PortFamilyIds.ITEM, ioType, size.ordinal(),
+                    List.of(ioType == IOType.INPUT ? "item_input_bus" : "item_output_bus")));
+        }
+
+        @Override
         public List<CapabilityFactory> capabilityFactories() {
             return List.of(CapabilityFactories.ITEM_BUS);
         }
@@ -62,6 +70,12 @@ public final class PortKinds {
         @Override
         public Optional<FluidHatchSize> fluidHatchSize() {
             return Optional.of(size);
+        }
+
+        @Override
+        public List<PortFamilyDescriptor> families() {
+            return List.of(new PortFamilyDescriptor(PortFamilyIds.FLUID, ioType, size.ordinal(),
+                    List.of(ioType == IOType.INPUT ? "fluid_input_hatch" : "fluid_output_hatch")));
         }
 
         @Override
@@ -83,8 +97,27 @@ public final class PortKinds {
         }
 
         @Override
+        public List<PortFamilyDescriptor> families() {
+            return List.of(new PortFamilyDescriptor(PortFamilyIds.ENERGY, ioType, size.ordinal(),
+                    List.of(ioType == IOType.INPUT ? "energy_input_hatch" : "energy_output_hatch")));
+        }
+
+        @Override
         public List<CapabilityFactory> capabilityFactories() {
             return List.of(CapabilityFactories.ENERGY_HATCH);
+        }
+    }
+
+    public record CombinedKind(
+            String id,
+            IOType ioType,
+            List<PortFamilyDescriptor> families,
+            BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory,
+            List<CapabilityFactory> capabilityFactories)
+            implements IOPortKind {
+        public CombinedKind {
+            families = List.copyOf(families);
+            capabilityFactories = List.copyOf(capabilityFactories);
         }
     }
 
