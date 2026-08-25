@@ -69,7 +69,7 @@ public class FluidHatchCapabilityGameTest {
             }
         }
 
-        outputHatch.getMutableFluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2000), false);
+        outputHatch.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2000), false);
 
         try (Transaction tx = Transaction.openRoot()) {
             int inserted = output.insert(0, FluidResource.of(Fluids.WATER), 500, tx);
@@ -90,7 +90,7 @@ public class FluidHatchCapabilityGameTest {
 
         FluidHatchBlockEntity input = helper.getBlockEntity(inputPos, FluidHatchBlockEntity.class);
         FluidHatchBlockEntity output = helper.getBlockEntity(outputPos, FluidHatchBlockEntity.class);
-        output.getMutableFluidStorage().setFluid(new FluidStack(Fluids.WATER, 1_000));
+        output.fluidStorage().setFluid(new FluidStack(Fluids.WATER, 1_000));
 
         ServerPlayer survival = servicePlayer(helper, false);
         survival.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.BUCKET, 2));
@@ -100,7 +100,7 @@ public class FluidHatchCapabilityGameTest {
                 "Output hatch consumes one bucket from an empty bucket stack");
         helper.assertTrue(survival.getInventory().contains(new ItemStack(Items.WATER_BUCKET)),
                 "Output hatch stows the filled bucket in inventory");
-        helper.assertTrue(output.getMutableFluidStorage().isEmpty(), "Output hatch transfers exactly one bucket");
+        helper.assertTrue(output.fluidStorage().isEmpty(), "Output hatch transfers exactly one bucket");
 
         survival.getInventory().clearContent();
         survival.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WATER_BUCKET));
@@ -108,32 +108,32 @@ public class FluidHatchCapabilityGameTest {
                 survival.getMainHandItem(), helper.getLevel(), survival, InteractionHand.MAIN_HAND, hit(input));
         helper.assertTrue(emptied.consumesAction() && survival.getMainHandItem().is(Items.BUCKET),
                 "Input hatch empties a filled bucket");
-        helper.assertTrue(FluidStack.isSameFluidSameComponents(input.getMutableFluidStorage().getFluidStack(), new FluidStack(Fluids.WATER, 1_000))
-                        && input.getMutableFluidStorage().getAmountAsLong() == 1_000,
+        helper.assertTrue(FluidStack.isSameFluidSameComponents(input.fluidStorage().getFluidStack(), new FluidStack(Fluids.WATER, 1_000))
+                        && input.fluidStorage().getAmountAsLong() == 1_000,
                 "Input hatch receives exactly one bucket");
 
-        input.getMutableFluidStorage().setFluid(new FluidStack(Fluids.LAVA, 1_000));
+        input.fluidStorage().setFluid(new FluidStack(Fluids.LAVA, 1_000));
         survival.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WATER_BUCKET));
         InteractionResult rejectedInput = helper.getLevel().getBlockState(input.getBlockPos()).useItemOn(
                 survival.getMainHandItem(), helper.getLevel(), survival, InteractionHand.MAIN_HAND, hit(input));
         helper.assertTrue(!rejectedInput.consumesAction() && survival.getMainHandItem().is(Items.WATER_BUCKET),
                 "Input hatch rejects a different fluid");
 
-        output.getMutableFluidStorage().setFluid(new FluidStack(Fluids.WATER, 1_000));
+        output.fluidStorage().setFluid(new FluidStack(Fluids.WATER, 1_000));
         survival.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.LAVA_BUCKET));
         InteractionResult rejectedOutput = helper.getLevel().getBlockState(output.getBlockPos()).useItemOn(
                 survival.getMainHandItem(), helper.getLevel(), survival, InteractionHand.MAIN_HAND, hit(output));
         helper.assertTrue(!rejectedOutput.consumesAction() && survival.getMainHandItem().is(Items.LAVA_BUCKET),
                 "Output hatch does not fill an already-filled bucket");
 
-        input.getMutableFluidStorage().setFluid(FluidStack.EMPTY);
+        input.fluidStorage().setFluid(FluidStack.EMPTY);
         ServerPlayer creative = servicePlayer(helper, true);
         creative.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WATER_BUCKET));
         InteractionResult creativeEmpty = helper.getLevel().getBlockState(input.getBlockPos()).useItemOn(
                 creative.getMainHandItem(), helper.getLevel(), creative, InteractionHand.MAIN_HAND, hit(input));
         helper.assertTrue(creativeEmpty.consumesAction() && creative.getMainHandItem().is(Items.WATER_BUCKET),
                 "Creative input hatch keeps the filled bucket");
-        helper.assertTrue(input.getMutableFluidStorage().getAmountAsLong() == 1_000,
+        helper.assertTrue(input.fluidStorage().getAmountAsLong() == 1_000,
                 "Creative input hatch still receives one bucket");
         helper.succeed();
     }

@@ -34,7 +34,7 @@ public class ModuleConnectionGameTest {
 
         helper.runAtTickTime(4, () -> {
             fixture.host().serverTick();
-            helper.assertTrue(fixture.host().isFormed(), "host forms with its module slot empty");
+            helper.assertTrue(fixture.host().structureSnapshot().formed(), "host forms with its module slot empty");
             helper.assertTrue(ModuleConnectionCoordinator.installedModuleCount(fixture.host()) == 0,
                     "empty host has no installed modules");
             helper.succeed();
@@ -46,8 +46,8 @@ public class ModuleConnectionGameTest {
 
         helper.runAtTickTime(4, () -> {
             fixture.module().serverTick();
-            helper.assertTrue(fixture.module().isFormed(), "module forms independently");
-            helper.assertTrue(!fixture.module().moduleConnectionStatus().canRunRecipe(Set.of(HOST_ID)),
+            helper.assertTrue(fixture.module().structureSnapshot().formed(), "module forms independently");
+            helper.assertTrue(!fixture.module().runtimeSnapshot().moduleConnectionStatus().canRunRecipe(Set.of(HOST_ID)),
                     "unconnected module cannot run a host-gated recipe");
             helper.succeed();
         });
@@ -58,11 +58,11 @@ public class ModuleConnectionGameTest {
 
         helper.runAtTickTime(4, () -> {
             formAndRefresh(fixture);
-            helper.assertTrue(fixture.host().isFormed(), "host forms before establishing a module connection");
-            helper.assertTrue(fixture.module().isFormed(), "module forms before establishing a module connection");
+            helper.assertTrue(fixture.host().structureSnapshot().formed(), "host forms before establishing a module connection");
+            helper.assertTrue(fixture.module().structureSnapshot().formed(), "module forms before establishing a module connection");
             helper.assertTrue(ModuleConnectionCoordinator.installedModuleCount(fixture.host()) == 1,
                     "shared coupler installs the formed module in the host");
-            helper.assertTrue(fixture.module().moduleConnectionStatus().canRunRecipe(Set.of(HOST_ID)),
+            helper.assertTrue(fixture.module().runtimeSnapshot().moduleConnectionStatus().canRunRecipe(Set.of(HOST_ID)),
                     "connected module can run a matching host-gated recipe");
             helper.succeed();
         });
@@ -73,8 +73,8 @@ public class ModuleConnectionGameTest {
 
         helper.runAtTickTime(4, () -> {
             formAndRefresh(fixture);
-            helper.assertTrue(!fixture.host().isFormed(), "shared interface invalidates the host");
-            helper.assertTrue(fixture.module().isFormed(), "interface conflict leaves module formed");
+            helper.assertTrue(!fixture.host().structureSnapshot().formed(), "shared interface invalidates the host");
+            helper.assertTrue(fixture.module().structureSnapshot().formed(), "interface conflict leaves module formed");
             helper.succeed();
         });
     }

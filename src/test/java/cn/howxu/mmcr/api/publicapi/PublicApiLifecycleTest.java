@@ -21,6 +21,7 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.api.PublicMachineDefinitionProviders;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
+import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
@@ -161,7 +162,7 @@ class PublicApiLifecycleTest {
         var definitions = new java.util.concurrent.atomic.AtomicReference<MMCRMachineDefinationsEvent>();
         var structures = new java.util.concurrent.atomic.AtomicReference<MMCRMachineStructuresEvent>();
         var recipes = new java.util.concurrent.atomic.AtomicReference<MMCRMachineRecipesEvent>();
-        MMCR.registerPublicApiLifecycleForTesting(
+        StartupContentRegistration.registerForTesting(
                 event -> {
                     observedEvents.add("MMCRMachineDefinationsEvent");
                     event.registerMachine(machineId, builder -> builder.displayNameKey("machine.mmcr.ordered_machine"));

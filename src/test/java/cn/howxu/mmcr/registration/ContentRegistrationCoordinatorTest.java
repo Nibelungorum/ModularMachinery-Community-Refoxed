@@ -270,7 +270,7 @@ class ContentRegistrationCoordinatorTest {
 
     @Test
     void production_startup_seam_commits_before_register_attachment() {
-        MMCR.registerProductionApiLifecycleForTesting();
+        StartupContentRegistration.registerProduction();
 
         assertThat(ContentRegistrationCoordinator.isCommitted()).isTrue();
         assertThat(MMCR.startupPhaseForTesting()).isEqualTo("COMMITTED");
@@ -308,7 +308,7 @@ class ContentRegistrationCoordinatorTest {
         StartupContentRegistration.markCollectingForTesting();
         StartupContentRegistration.markRegistersAttached();
 
-        MMCR.completeKubeJSStartupIfReady();
+        StartupContentRegistration.completeKubeJSStartupIfReady();
 
         assertThat(ContentRegistrationCoordinator.isCommitted()).isTrue();
     }

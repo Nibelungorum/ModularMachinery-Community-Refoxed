@@ -44,7 +44,7 @@ public class E2ERecipeRunGameTest {
         helper.setBlock(outputPos, ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState());
         BlockPos energyPos = new BlockPos(2, 2, 1);
         helper.setBlock(energyPos, ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState());
-        var energyInput = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).getMutableEnergyStorage();
+        var energyInput = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).energyStorage();
         while (energyInput.forceInsert(10000, false) > 0) {}
 
         Identifier machineId = Identifier.fromNamespaceAndPath(MMCR.MODID, "iron_compressor");
@@ -58,11 +58,13 @@ public class E2ERecipeRunGameTest {
         var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(machine);
         helper.runAtTickTime(120, () -> {
-            helper.assertTrue(controller.isFormed(), "Structure formed");
+            helper.assertTrue(controller.structureSnapshot().formed(), "Structure formed");
             ItemStack input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
             ItemStack input1 = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null).getStackInSlot(1);
             ItemStack output = helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
-            helper.assertTrue(input.isEmpty() && input1.isEmpty(), "Input ingots consumed");
+            helper.assertTrue(input.isEmpty() && input1.isEmpty(), "Input ingots consumed input0=" + input + " input1=" + input1
+                    + " crafting=" + controller.runtimeSnapshot().crafting() + " failure=" + controller.getLastFailureUnloc()
+                    + " recipeFailure=" + controller.getRecipeFailure());
             helper.assertTrue(output.is(Items.IRON_NUGGET), "Output is iron nugget");
             helper.succeed();
         });
@@ -82,7 +84,7 @@ public class E2ERecipeRunGameTest {
 
         BlockPos energyPos = controllerPos.offset(-2, 0, 0);
         helper.setBlock(energyPos, ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState());
-        var energyInput = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).getMutableEnergyStorage();
+        var energyInput = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).energyStorage();
         while (energyInput.forceInsert(10000, false) > 0) {}
 
         Map<BlockPos, BlockPredicate> pattern = new HashMap<>();
@@ -102,7 +104,7 @@ public class E2ERecipeRunGameTest {
         var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(machine);
         controller.serverTick();
-        helper.assertTrue(controller.isFormed(), "Structure formed");
+        helper.assertTrue(controller.structureSnapshot().formed(), "Structure formed");
         for (int tick = 0; tick < 20; tick++) controller.serverTick();
 
         ItemStack input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
@@ -123,7 +125,7 @@ public class E2ERecipeRunGameTest {
         helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
         BlockPos energyPos = controllerPos.offset(1, 0, 0);
         helper.setBlock(energyPos, ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState());
-        var energyInput = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).getMutableEnergyStorage();
+        var energyInput = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).energyStorage();
         while (energyInput.forceInsert(10000, false) > 0) {}
 
         BlockPos firstOutputPos = controllerPos.offset(0, 0, 1);
@@ -134,7 +136,7 @@ public class E2ERecipeRunGameTest {
         var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(machine);
         helper.runAtTickTime(10, () -> {
-            helper.assertTrue(controller.isFormed(), "Distillation tower forms before recipe starts");
+            helper.assertTrue(controller.structureSnapshot().formed(), "Distillation tower forms before recipe starts");
             insertCoal(helper, inputPos);
         });
         helper.runAtTickTime(35, () -> {
@@ -175,8 +177,8 @@ public class E2ERecipeRunGameTest {
 
     private static void assertDistillationStage(GameTestHelper helper, MachineControllerBlockEntity controller,
                                                 int expectedStage) {
-        helper.assertTrue(controller.isFormed(), "Distillation tower formed");
-        helper.assertTrue(controller.getMatchedStructureStage() == expectedStage,
+        helper.assertTrue(controller.structureSnapshot().formed(), "Distillation tower formed");
+        helper.assertTrue(controller.structureSnapshot().matchedStage() == expectedStage,
                 "Distillation tower matched stage " + expectedStage);
     }
 }

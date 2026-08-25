@@ -9,6 +9,7 @@ import com.google.gson.JsonElement;
 import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
@@ -21,6 +22,9 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
+import net.minecraft.util.ProblemReporter;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -29,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
@@ -296,8 +301,11 @@ class RecipeApiSmokeTest {
         active.setParallelism(2);
         active.getDataCompound().putInt("custom", 42);
 
-        var tag = active.serialize();
-        var back = new ActiveMachineRecipe(tag);
+        TagValueOutput output = TagValueOutput.createWithContext(
+                ProblemReporter.DISCARDING, HolderLookup.Provider.create(Stream.empty()));
+        active.serialize(output);
+        var back = ActiveMachineRecipe.from(TagValueInput.create(
+                ProblemReporter.DISCARDING, HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
 
         assertThat(back.getRecipe()).isEqualTo(recipe);
         assertThat(back.getTick()).isEqualTo(50);

@@ -48,26 +48,26 @@ public class MultiFactoryControllerGameTest {
         placeFactory(helper, secondPos);
         controller.serverTick();
 
-        helper.assertTrue(controller.isFormed(), "two factory controllers should form");
+        helper.assertTrue(controller.structureSnapshot().formed(), "two factory controllers should form");
         helper.assertTrue(factoryComponentCount(controller) == 2, "both factory capacities should be aggregated");
         helper.assertTrue(controller.factorySchedulerThreadCount() == 2, "both factory capacities should contribute threads");
 
         helper.setBlock(secondPos, Blocks.AIR.defaultBlockState());
         controller.onStructureBlockChanged(helper.absolutePos(secondPos));
         for (int tick = 0; tick < 25; tick++) controller.serverTick();
-        helper.assertTrue(!controller.isFormed(), "breaking a factory controller should release the structure");
+        helper.assertTrue(!controller.structureSnapshot().formed(), "breaking a factory controller should release the structure");
         helper.assertTrue(factoryComponentCount(controller) == 0, "released structure should have no stale capacities");
 
         placeFactory(helper, secondPos);
         controller.onStructureBlockChanged(helper.absolutePos(secondPos));
         for (int tick = 0; tick < 25; tick++) controller.serverTick();
-        helper.assertTrue(controller.isFormed(), "replacing the factory controller should reform");
+        helper.assertTrue(controller.structureSnapshot().formed(), "replacing the factory controller should reform");
         helper.assertTrue(factoryComponentCount(controller) == 2, "reformed structure should reacquire both capacities");
         helper.succeed();
     }
 
     private static long factoryComponentCount(MachineControllerBlockEntity controller) {
-        return controller.getComponents().stream()
+        return controller.componentRuntime().components().stream()
                 .filter(component -> component.getContainer() instanceof FactorySchedulerBlockEntity)
                 .count();
     }

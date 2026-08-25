@@ -2,6 +2,8 @@ package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.client.model.MachineModelDataKeys;
@@ -10,6 +12,7 @@ import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
@@ -70,7 +73,7 @@ class MachinePortAppearanceTest {
         IOPortBlockEntity port = itemInputBus();
         Identifier texture = Identifier.parse("kubejs:block/steel_casing");
 
-        port.bindControllerAppearance(new BlockPos(12, 4, 12), texture);
+        port.linkControllerAppearance(new BlockPos(12, 4, 12), texture);
 
         var tag = port.getUpdateTag(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
         assertThat(tag.getString("AppearanceBaseTexture")).contains(texture.toString());
@@ -189,14 +192,12 @@ class MachinePortAppearanceTest {
     }
 
     private static MachineControllerBlockEntity controller(BlockPos pos, boolean formed, Set<BlockPos> linkedPorts) throws Exception {
-        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
-        unsafeField.setAccessible(true);
-        MachineControllerBlockEntity controller = (MachineControllerBlockEntity) ((sun.misc.Unsafe) unsafeField.get(null))
-                .allocateInstance(MachineControllerBlockEntity.class);
-        setField(BlockEntity.class, controller, "worldPosition", pos);
-        setField(BlockEntity.class, controller, "blockState", ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
-                .setValue(MachineControllerBlock.FORMED, formed));
-        setField(MachineControllerBlockEntity.class, controller, "linkedPortPositions", linkedPorts);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), pos);
+        DynamicMachine machine = new DynamicMachine(MMCR.id("test_cube"), "test cube", new BlockArray(Map.of()));
+        RuntimeTestFixtures.publishStructure(controller, machine, formed, 1,
+                net.minecraft.core.Direction.SOUTH, net.minecraft.core.Direction.SOUTH);
+        controller.componentRuntime().replaceLinkedPortPositions(linkedPorts);
+        RuntimeTestFixtures.republish(controller);
         return controller;
     }
 

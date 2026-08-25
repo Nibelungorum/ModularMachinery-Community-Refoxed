@@ -50,7 +50,7 @@ public class SmartInterfaceGameTest {
         controller.setMachine(machine);
 
         controller.serverTick();
-        helper.assertTrue(controller.isFormed(), "Structure formed with smart interface");
+        helper.assertTrue(controller.structureSnapshot().formed(), "Structure formed with smart interface");
         helper.assertTrue(smartInterface.bindingFor(controllerWorldPos).map(binding -> binding.value() == 12F).orElse(false),
                 "Smart interface received its default binding");
         helper.assertTrue(smartInterface.setValue(0, 15F), "Smart interface accepts range-compatible input value");

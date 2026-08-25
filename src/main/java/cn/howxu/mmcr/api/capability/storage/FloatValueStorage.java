@@ -6,6 +6,7 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 /**
  * Transactional named float values used by smart-interface capabilities.
@@ -14,6 +15,15 @@ import java.util.Optional;
  */
 public final class FloatValueStorage extends SnapshotJournal<Map<String, Float>> implements CapabilityStorage {
     private final Map<String, Float> values = new LinkedHashMap<>();
+    private final Consumer<Map<String, Float>> rootCommitListener;
+
+    public FloatValueStorage() {
+        this(null);
+    }
+
+    public FloatValueStorage(Consumer<Map<String, Float>> rootCommitListener) {
+        this.rootCommitListener = rootCommitListener == null ? ignored -> {} : rootCommitListener;
+    }
 
     public Optional<Float> value(String key) {
         return Optional.ofNullable(values.get(key));
@@ -21,6 +31,11 @@ public final class FloatValueStorage extends SnapshotJournal<Map<String, Float>>
 
     public Map<String, Float> values() {
         return Map.copyOf(values);
+    }
+
+    public void replace(Map<String, Float> nextValues) {
+        values.clear();
+        if (nextValues != null) values.putAll(nextValues);
     }
 
     @Override
@@ -55,5 +70,6 @@ public final class FloatValueStorage extends SnapshotJournal<Map<String, Float>>
 
     @Override
     protected void onRootCommit(Map<String, Float> originalState) {
+        rootCommitListener.accept(Map.copyOf(values));
     }
 }

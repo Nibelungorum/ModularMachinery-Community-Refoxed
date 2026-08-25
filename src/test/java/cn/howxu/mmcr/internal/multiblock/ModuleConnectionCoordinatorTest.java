@@ -11,6 +11,7 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
@@ -92,11 +93,11 @@ class ModuleConnectionCoordinatorTest {
 
         assertThat(fixture.coupler().connectedHost()).isEmpty();
         assertThat(fixture.coupler().connectedModule()).isEmpty();
-        assertThat(fixture.host().isFormed()).isFalse();
-        assertThat(fixture.host().getFoundMachine()).isNull();
-        assertThat(fixture.host().getFoundCompiledPattern()).isNull();
-        assertThat(fixture.host().getComponents()).isEmpty();
-        assertThat(fixture.module().isFormed()).isTrue();
+        assertThat(fixture.host().structureSnapshot().formed()).isFalse();
+        assertThat(fixture.host().structureSnapshot().machine()).isNull();
+        assertThat(fixture.host().structureSnapshot().compiledPattern()).isNull();
+        assertThat(fixture.host().runtimeSnapshot().componentPresentations()).isEmpty();
+        assertThat(fixture.module().structureSnapshot().formed()).isTrue();
     }
 
     @Test
@@ -120,7 +121,7 @@ class ModuleConnectionCoordinatorTest {
                 MachineRole.HOST, Set.of(MODULE_ID), extraHostPos, fixture.couplerPos(), fixture.couplerPos().east(),
                 fixture.couplerPos().east(2));
         MachineControllerBlockEntity extraHost = controller(extraHostPos, extraHostMachine, true);
-        setField(BlockEntity.class, extraHost, "level", fixture.level());
+         RuntimeTestFixtures.attachLevel(extraHost, fixture.level());
         fixture.level().blocks.put(extraHostPos, controllerBlock(extraHostMachine.registryName()).defaultBlockState()
                 .setValue(MachineControllerBlock.FACING, Direction.SOUTH)
                 .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH)
@@ -147,7 +148,7 @@ class ModuleConnectionCoordinatorTest {
         Machine unrelatedHostMachine = machine(Identifier.fromNamespaceAndPath("mmcr_test", "unrelated_host"),
                 MachineRole.HOST, Set.of(MODULE_ID), unrelatedHostPos, unrelatedCoupler, unrelatedNormal, sharedModuleInterface);
         MachineControllerBlockEntity unrelatedHost = controller(unrelatedHostPos, unrelatedHostMachine, true);
-        setField(BlockEntity.class, unrelatedHost, "level", fixture.level());
+         RuntimeTestFixtures.attachLevel(unrelatedHost, fixture.level());
         fixture.level().blocks.put(unrelatedHostPos, controllerBlock(unrelatedHostMachine.registryName()).defaultBlockState()
                 .setValue(MachineControllerBlock.FACING, Direction.SOUTH)
                 .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH)
@@ -160,8 +161,8 @@ class ModuleConnectionCoordinatorTest {
 
         ModuleConnectionCoordinator.refresh(fixture.level(), fixture.couplerPos());
 
-        assertThat(unrelatedHost.isFormed()).isTrue();
-        assertThat(unrelatedHost.getFoundMachine()).isSameAs(unrelatedHostMachine);
+        assertThat(unrelatedHost.structureSnapshot().formed()).isTrue();
+        assertThat(unrelatedHost.structureSnapshot().machine()).isSameAs(unrelatedHostMachine);
         assertThat(fixture.coupler().connectedHost()).contains(GlobalPos.of(Level.OVERWORLD, fixture.hostPos()));
         assertThat(fixture.coupler().connectedModule()).contains(GlobalPos.of(Level.OVERWORLD, fixture.modulePos()));
     }
@@ -233,9 +234,9 @@ class ModuleConnectionCoordinatorTest {
         blocks.put(hostInterface, ModBlocks.SMART_INTERFACE.get());
         blocks.put(moduleInterface, ModBlocks.SMART_INTERFACE.get());
         TestServerLevel level = serverLevel(blocks, List.of(host, module, coupler), chunksLoaded);
-        setField(BlockEntity.class, host, "level", level);
-        setField(BlockEntity.class, module, "level", level);
-        setField(BlockEntity.class, coupler, "level", level);
+        RuntimeTestFixtures.attachLevel(host, level);
+        RuntimeTestFixtures.attachLevel(module, level);
+        coupler.setLevel(level);
         if (hostFormed) StructureClaimRegistry.get(level).claim(hostPos, List.of());
         if (moduleFormed) StructureClaimRegistry.get(level).claim(modulePos, List.of());
         return new FormationFixture(level, host, module, coupler, hostPos, modulePos, couplerPos);
@@ -252,25 +253,8 @@ class ModuleConnectionCoordinatorTest {
     }
 
     private static MachineControllerBlockEntity controller(BlockPos pos, Machine machine, boolean formed) throws Exception {
-        MachineControllerBlockEntity controller = (MachineControllerBlockEntity) unsafe().allocateInstance(MachineControllerBlockEntity.class);
-        setField(MachineControllerBlockEntity.class, controller, "machine", machine);
-        setField(MachineControllerBlockEntity.class, controller, "foundMachine", formed ? machine : null);
-        setField(MachineControllerBlockEntity.class, controller, "foundPattern",
-                formed ? MachinePatternCompiler.compile(machine).rotatedPattern(Direction.SOUTH) : null);
-        setField(MachineControllerBlockEntity.class, controller, "foundCompiledPattern",
-                formed ? MachinePatternCompiler.compile(machine) : null);
-        setField(MachineControllerBlockEntity.class, controller, "controllerFacing", formed ? Direction.SOUTH : null);
-        setField(MachineControllerBlockEntity.class, controller, "matchedRollFacing", Direction.SOUTH);
-        setField(MachineControllerBlockEntity.class, controller, "components", new ArrayList<>());
-        setField(MachineControllerBlockEntity.class, controller, "foundModifiers", new LinkedHashMap<>());
-        setField(MachineControllerBlockEntity.class, controller, "foundLevels", Map.of());
-        setField(MachineControllerBlockEntity.class, controller, "linkedPortPositions", new HashSet<>());
-        setField(BlockEntity.class, controller, "worldPosition", pos);
-        setField(BlockEntity.class, controller, "blockState", controllerBlock(machine.registryName()).defaultBlockState()
-                .setValue(MachineControllerBlock.FACING, Direction.SOUTH)
-                .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH)
-                .setValue(MachineControllerBlock.FORMED, formed)
-                .setValue(MachineControllerBlock.ACTIVE, false));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(cn.howxu.mmcr.MMCR.id("test_cube"), pos);
+        RuntimeTestFixtures.publishStructure(controller, machine, formed, 1, Direction.SOUTH, Direction.NORTH);
         return controller;
     }
 

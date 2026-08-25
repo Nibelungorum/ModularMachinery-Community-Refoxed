@@ -1,9 +1,11 @@
 package cn.howxu.mmcr.api.machine;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
@@ -130,9 +132,7 @@ class BuildPlacementConsistencyTest {
         assertThatThrownBy(() -> controller.assemblyPattern(machine, 0))
                 .isInstanceOf(IllegalArgumentException.class);
 
-        setField(MachineControllerBlockEntity.class, controller, "foundPattern", controller.assemblyPattern(machine, 2));
-        setField(MachineControllerBlockEntity.class, controller, "matchedStructureStage", 2);
-        setField(BlockEntity.class, controller, "blockState", controller.getBlockState().setValue(MachineControllerBlock.FORMED, true));
+        RuntimeTestFixtures.publishStructure(controller, machine, true, 2, Direction.SOUTH, Direction.NORTH);
 
         assertThat(controller.assemblyPattern(machine).pattern().keySet())
                 .containsExactlyInAnyOrderElementsOf(stage2.pattern().keySet());
@@ -212,15 +212,12 @@ class BuildPlacementConsistencyTest {
 
     private static MachineControllerBlockEntity controllerFor(Machine machine) throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
-        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
-        unsafeField.setAccessible(true);
-        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
-        var controller = (MachineControllerBlockEntity) unsafe.allocateInstance(MachineControllerBlockEntity.class);
-        BlockState state = ModBlocks.controllerFor(machine.registryName()).get().defaultBlockState()
+        var controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos);
+        BlockState state = controller.getBlockState()
                 .setValue(MachineControllerBlock.FACING, Direction.SOUTH)
                 .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH);
-        setField(BlockEntity.class, controller, "worldPosition", controllerPos);
         setField(BlockEntity.class, controller, "blockState", state);
+        RuntimeTestFixtures.publishStructure(controller, machine, false, 1, Direction.SOUTH, Direction.NORTH);
         return controller;
     }
 

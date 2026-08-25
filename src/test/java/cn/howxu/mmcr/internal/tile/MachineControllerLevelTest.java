@@ -17,6 +17,7 @@ import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -73,8 +74,8 @@ class MachineControllerLevelTest {
         MachineControllerBlockEntity controller = controllerWithSlots(Blocks.COPPER_BLOCK, Blocks.COPPER_BLOCK);
 
         assertThat(tryForm(controller)).isTrue();
-        assertThat(controller.getFoundLevels()).containsEntry(COIL_TYPE, copper);
-        assertThat(controller.isFormed()).isTrue();
+        assertThat(controller.runtimeSnapshot().foundLevels()).containsEntry(COIL_TYPE, copper);
+        assertThat(controller.structureSnapshot().formed()).isTrue();
     }
 
     @Test
@@ -82,8 +83,8 @@ class MachineControllerLevelTest {
         MachineControllerBlockEntity controller = controllerWithSlots(Blocks.COPPER_BLOCK, Blocks.IRON_BLOCK);
 
         assertThat(tryForm(controller)).isFalse();
-        assertThat(controller.getLastStructureError()).isInstanceOf(LevelMismatch.class);
-        LevelMismatch mismatch = (LevelMismatch) controller.getLastStructureError();
+        assertThat(controller.structureSnapshot().lastStructureError()).isInstanceOf(LevelMismatch.class);
+        LevelMismatch mismatch = (LevelMismatch) controller.structureSnapshot().lastStructureError();
         assertThat(mismatch.expected().id()).isEqualTo(copper.id());
         assertThat(mismatch.actual().id()).isEqualTo(kanthal.id());
         assertThat(mismatch.worldPos()).isEqualTo(controller.getBlockPos().offset(2, 0, 0));
@@ -94,8 +95,8 @@ class MachineControllerLevelTest {
         MachineControllerBlockEntity controller = controllerWithUnresolvedSlot();
 
         assertThat(tryForm(controller)).isFalse();
-        assertThat(controller.getLastStructureError()).isInstanceOf(LevelMismatch.class);
-        LevelMismatch mismatch = (LevelMismatch) controller.getLastStructureError();
+        assertThat(controller.structureSnapshot().lastStructureError()).isInstanceOf(LevelMismatch.class);
+        LevelMismatch mismatch = (LevelMismatch) controller.structureSnapshot().lastStructureError();
         assertThat(mismatch.expected()).isEqualTo(copper);
         assertThat(mismatch.actual()).isNull();
         assertThat(mismatch.worldPos()).isEqualTo(controller.getBlockPos().offset(2, 0, 0));
@@ -201,23 +202,18 @@ class MachineControllerLevelTest {
                 .levelSlot('B', COIL_TYPE)
                 .build(blockArray))));
 
-        MachineControllerBlockEntity controller = allocateController();
-        setField(MachineControllerBlockEntity.class, controller, "foundModifiers", new LinkedHashMap<>());
-        setField(MachineControllerBlockEntity.class, controller, "foundLevels", Map.of());
-        setField(MachineControllerBlockEntity.class, controller, "components", new ArrayList<>());
-        setField(MachineControllerBlockEntity.class, controller, "linkedPortPositions", new HashSet<>());
         BlockPos controllerPos = new BlockPos(10, 4, 10);
-        var controllerBlock = testControllerBlock();
-        var controllerState = controllerBlock.defaultBlockState()
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(cn.howxu.mmcr.MMCR.id("test_cube"), controllerPos);
+        controller.setMachine(MachineRegistry.getMachine(MACHINE_ID));
+        var controllerState = controller.getBlockState()
                 .setValue(MachineControllerBlock.FACING, Direction.SOUTH)
                 .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH);
-        setField(BlockEntity.class, controller, "worldPosition", controllerPos);
         setField(BlockEntity.class, controller, "blockState", controllerState);
         Level level = LevelStub.create(Map.of(
-                controllerPos, controllerBlock,
+                controllerPos, controllerState.getBlock(),
                 controllerPos.offset(1, 0, 0), first,
                 controllerPos.offset(2, 0, 0), second), List.of(controller));
-        setField(BlockEntity.class, controller, "level", level);
+        controller.setLevel(level);
         return controller;
     }
 
@@ -235,8 +231,8 @@ class MachineControllerLevelTest {
                 .levelSlot('B', COIL_TYPE)
                 .build(blockArray))));
         BlockPos controllerPos = controller.getBlockPos();
-        setField(BlockEntity.class, controller, "level", LevelStub.create(Map.of(
-                controllerPos, testControllerBlock(),
+        controller.setLevel(LevelStub.create(Map.of(
+                controllerPos, controller.getBlockState().getBlock(),
                 controllerPos.offset(1, 0, 0), Blocks.COPPER_BLOCK,
                 controllerPos.offset(2, 0, 0), Blocks.GOLD_BLOCK), List.of(controller)));
         return controller;
@@ -269,45 +265,18 @@ class MachineControllerLevelTest {
         MachineStructureRegistry.replaceDynamic(Map.of(MACHINE_ID, new MachineStructureDefinition(
                 MACHINE_ID, pattern, null, null, List.of(), MachineStructureRequirements.EMPTY)));
 
-        MachineControllerBlockEntity controller = allocateController();
-        setField(MachineControllerBlockEntity.class, controller, "foundModifiers", new LinkedHashMap<>());
-        setField(MachineControllerBlockEntity.class, controller, "foundLevels", Map.of());
-        setField(MachineControllerBlockEntity.class, controller, "components", new ArrayList<>());
-        setField(MachineControllerBlockEntity.class, controller, "linkedPortPositions", new HashSet<>());
         BlockPos controllerPos = new BlockPos(10, 4, 10);
-        var controllerBlock = testControllerBlock();
-        var controllerState = controllerBlock.defaultBlockState()
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(cn.howxu.mmcr.MMCR.id("test_cube"), controllerPos);
+        controller.setMachine(MachineRegistry.getMachine(MACHINE_ID));
+        var controllerState = controller.getBlockState()
                 .setValue(MachineControllerBlock.FACING, facing)
                 .setValue(MachineControllerBlock.ROLL_FACING, rollFacing);
-        setField(BlockEntity.class, controller, "worldPosition", controllerPos);
         setField(BlockEntity.class, controller, "blockState", controllerState);
         Map<BlockPos, Block> levelBlocks = new LinkedHashMap<>();
-        levelBlocks.put(controllerPos, controllerBlock);
+        levelBlocks.put(controllerPos, controllerState.getBlock());
         blocks.forEach((pos, block) -> levelBlocks.put(controllerPos.offset(pos), block));
-        setField(BlockEntity.class, controller, "level", LevelStub.create(levelBlocks, List.of(controller)));
+        controller.setLevel(LevelStub.create(levelBlocks, List.of(controller)));
         return controller;
-    }
-
-    private static MachineControllerBlock testControllerBlock() throws Exception {
-        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
-        unsafeField.setAccessible(true);
-        var block = (MachineControllerBlock) ((sun.misc.Unsafe) unsafeField.get(null))
-                .allocateInstance(MachineControllerBlock.class);
-        setField(MachineControllerBlock.class, block, "machineId", MACHINE_ID);
-        setField(BlockBehaviour.class, block, "properties", Blocks.IRON_BLOCK.properties());
-        var builder = new StateDefinition.Builder<Block, BlockState>(block);
-        builder.add(MachineControllerBlock.FACING,
-                MachineControllerBlock.ROLL_FACING,
-                MachineControllerBlock.FORMED,
-                MachineControllerBlock.ACTIVE);
-        var stateDefinition = builder.create(Block::defaultBlockState, BlockState::new);
-        setField(Block.class, block, "stateDefinition", stateDefinition);
-        setField(Block.class, block, "defaultBlockState", stateDefinition.any()
-                .setValue(MachineControllerBlock.FACING, Direction.NORTH)
-                .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH)
-                .setValue(MachineControllerBlock.FORMED, false)
-                .setValue(MachineControllerBlock.ACTIVE, false));
-        return block;
     }
 
     private static boolean tryForm(MachineControllerBlockEntity controller) throws Exception {
@@ -317,15 +286,14 @@ class MachineControllerLevelTest {
     private static boolean tryForm(MachineControllerBlockEntity controller, Direction facing) throws Exception {
         Method method = MachineControllerBlockEntity.class.getDeclaredMethod("tryFormMachine", Machine.class, Direction.class);
         method.setAccessible(true);
-        return (boolean) method.invoke(controller, MachineRegistry.getMachine(MACHINE_ID), facing);
+        boolean formed = (boolean) method.invoke(controller, MachineRegistry.getMachine(MACHINE_ID), facing);
+        cn.howxu.mmcr.test.RuntimeTestFixtures.republish(controller);
+        return formed;
     }
 
     private static void resetFormed(MachineControllerBlockEntity controller) throws Exception {
-        setField(MachineControllerBlockEntity.class, controller, "foundMachine", null);
-        setField(MachineControllerBlockEntity.class, controller, "foundPattern", null);
-        setField(MachineControllerBlockEntity.class, controller, "foundCompiledPattern", null);
-        setField(MachineControllerBlockEntity.class, controller, "controllerFacing", null);
-        setField(BlockEntity.class, controller, "blockState", controller.getBlockState().setValue(MachineControllerBlock.FORMED, false));
+        RuntimeTestFixtures.publishStructure(controller, MachineRegistry.getMachine(MACHINE_ID), false, 1,
+                controller.getBlockState().getValue(MachineControllerBlock.FACING), Direction.SOUTH);
     }
 
     private static MachineControllerSpec controllerSpec(boolean allowVerticalFacing, boolean requireVerticalFacing,

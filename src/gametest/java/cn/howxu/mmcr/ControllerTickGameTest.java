@@ -41,7 +41,7 @@ public class ControllerTickGameTest {
         helper.assertTrue(controller.boundMachine().isPresent(), "Controller binds the startup machine");
         controller.setMachine(MachineRegistry.getMachine(machineId));
         helper.runAtTickTime(10, () -> {
-            helper.assertTrue(controller.isFormed(), "Structure formed after bounded scan");
+            helper.assertTrue(controller.structureSnapshot().formed(), "Structure formed after bounded scan");
             helper.succeed();
         });
     }

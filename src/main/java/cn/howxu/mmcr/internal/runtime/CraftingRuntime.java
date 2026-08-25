@@ -77,6 +77,7 @@ public final class CraftingRuntime {
         }
 
         activeRecipe = new ActiveMachineRecipe(recipe, plan.parallelism());
+        activeRecipe.setParallelism(plan.parallelism());
         activeRecipe.setTotalTick(duration(recipe, runtime));
         startPlan = plan;
         tickPlan = null;

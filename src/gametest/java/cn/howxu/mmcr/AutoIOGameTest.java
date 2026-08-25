@@ -50,17 +50,17 @@ public class AutoIOGameTest {
 
         FluidHatchBlockEntity outputHatch = helper.getBlockEntity(outputPos, FluidHatchBlockEntity.class);
         FluidHatchBlockEntity receiver = helper.getBlockEntity(receiverPos, FluidHatchBlockEntity.class);
-        outputHatch.getMutableFluidStorage().forceInsert(new FluidStack(Fluids.WATER, 1000), false);
+        outputHatch.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 1000), false);
 
         outputHatch.toggleAutoIOEnabled();
         outputHatch.setAllAutoIOSides(false);
         outputHatch.setAutoIOSide(Direction.EAST, true);
         helper.runAtTickTime(60, outputHatch::serverTick);
         helper.runAtTickTime(80, () -> {
-            FluidStack exported = receiver.getMutableFluidStorage().getFluidStack();
+            FluidStack exported = receiver.fluidStorage().getFluidStack();
             helper.assertTrue(exported.getFluid() == Fluids.WATER, "Fluid output hatch exports water east");
             helper.assertTrue(exported.getAmount() > 0, "Fluid output hatch moves water into east receiver");
-            helper.assertTrue(outputHatch.getMutableFluidStorage().getAmountAsLong() < 1000, "Fluid output hatch loses water to auto output");
+            helper.assertTrue(outputHatch.fluidStorage().getAmountAsLong() < 1000, "Fluid output hatch loses water to auto output");
             helper.succeed();
         });
     }
@@ -73,7 +73,7 @@ public class AutoIOGameTest {
 
         EnergyHatchBlockEntity outputHatch = helper.getBlockEntity(outputPos, EnergyHatchBlockEntity.class);
         EnergyHatchBlockEntity receiver = helper.getBlockEntity(receiverPos, EnergyHatchBlockEntity.class);
-        var outputStorage = outputHatch.getMutableEnergyStorage();
+        var outputStorage = outputHatch.energyStorage();
         outputStorage.forceInsert(700, false);
 
         outputHatch.toggleAutoIOEnabled();
@@ -146,15 +146,15 @@ public class AutoIOGameTest {
         FluidHatchBlockEntity source = placeFluidInputPort(helper, new BlockPos(0, 1, 0));
         FluidHatchBlockEntity firstTarget = placeFluidInputPort(helper, new BlockPos(1, 1, 0));
         FluidHatchBlockEntity secondTarget = placeFluidInputPort(helper, new BlockPos(-1, 1, 0));
-        source.getMutableFluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2), false);
+        source.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2), false);
 
         helper.runAtTickTime(20, () -> {
             helper.assertTrue(source.ejectContents(), "Fluid input hatch ejects its contents");
-            long firstAmount = firstTarget.getMutableFluidStorage().getAmountAsLong();
-            long secondAmount = secondTarget.getMutableFluidStorage().getAmountAsLong();
+            long firstAmount = firstTarget.fluidStorage().getAmountAsLong();
+            long secondAmount = secondTarget.fluidStorage().getAmountAsLong();
             helper.assertTrue((firstAmount == 2 && secondAmount == 0) || (firstAmount == 0 && secondAmount == 2),
                     "Exactly one adjacent fluid target receives all contents");
-            helper.assertTrue(source.getMutableFluidStorage().isEmpty(), "Fluid input hatch is empty after a complete first transfer");
+            helper.assertTrue(source.fluidStorage().isEmpty(), "Fluid input hatch is empty after a complete first transfer");
             helper.succeed();
         });
     }
@@ -163,15 +163,15 @@ public class AutoIOGameTest {
         FluidHatchBlockEntity source = placeFluidInputPort(helper, new BlockPos(0, 1, 0));
         FluidHatchBlockEntity firstTarget = placeFluidInputPort(helper, new BlockPos(1, 1, 0));
         FluidHatchBlockEntity secondTarget = placeFluidInputPort(helper, new BlockPos(-1, 1, 0));
-        source.getMutableFluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2), false);
-        firstTarget.getMutableFluidStorage().forceInsert(new FluidStack(Fluids.WATER, 7999), false);
-        secondTarget.getMutableFluidStorage().forceInsert(new FluidStack(Fluids.WATER, 7999), false);
+        source.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2), false);
+        firstTarget.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 7999), false);
+        secondTarget.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 7999), false);
 
         helper.runAtTickTime(20, () -> {
             helper.assertTrue(source.ejectContents(), "Fluid input hatch ejects to partially available targets");
-            helper.assertTrue(firstTarget.getMutableFluidStorage().getAmountAsLong() == 8000, "First fluid target receives its remaining capacity");
-            helper.assertTrue(secondTarget.getMutableFluidStorage().getAmountAsLong() == 8000, "Second fluid target receives the remaining fluid");
-            helper.assertTrue(source.getMutableFluidStorage().isEmpty(), "Fluid input hatch is empty after both partial transfers");
+            helper.assertTrue(firstTarget.fluidStorage().getAmountAsLong() == 8000, "First fluid target receives its remaining capacity");
+            helper.assertTrue(secondTarget.fluidStorage().getAmountAsLong() == 8000, "Second fluid target receives the remaining fluid");
+            helper.assertTrue(source.fluidStorage().isEmpty(), "Fluid input hatch is empty after both partial transfers");
             helper.succeed();
         });
     }
@@ -180,15 +180,15 @@ public class AutoIOGameTest {
         FluidHatchBlockEntity source = placeFluidInputPort(helper, new BlockPos(0, 1, 0));
         FluidHatchBlockEntity firstTarget = placeFluidInputPort(helper, new BlockPos(1, 1, 0));
         FluidHatchBlockEntity secondTarget = placeFluidInputPort(helper, new BlockPos(-1, 1, 0));
-        source.getMutableFluidStorage().forceInsert(new FluidStack(Fluids.WATER, 3), false);
-        firstTarget.getMutableFluidStorage().forceInsert(new FluidStack(Fluids.WATER, 7999), false);
-        secondTarget.getMutableFluidStorage().forceInsert(new FluidStack(Fluids.WATER, 7999), false);
+        source.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 3), false);
+        firstTarget.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 7999), false);
+        secondTarget.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 7999), false);
 
         helper.runAtTickTime(20, () -> {
             helper.assertTrue(source.ejectContents(), "Fluid input hatch ejects until adjacent capacity is exhausted");
-            helper.assertTrue(firstTarget.getMutableFluidStorage().getAmountAsLong() == 8000, "First fluid target is filled");
-            helper.assertTrue(secondTarget.getMutableFluidStorage().getAmountAsLong() == 8000, "Second fluid target is filled");
-            helper.assertTrue(source.getMutableFluidStorage().getAmountAsLong() == 1, "Fluid input hatch preserves the remaining fluid");
+            helper.assertTrue(firstTarget.fluidStorage().getAmountAsLong() == 8000, "First fluid target is filled");
+            helper.assertTrue(secondTarget.fluidStorage().getAmountAsLong() == 8000, "Second fluid target is filled");
+            helper.assertTrue(source.fluidStorage().getAmountAsLong() == 1, "Fluid input hatch preserves the remaining fluid");
             helper.succeed();
         });
     }
@@ -197,15 +197,15 @@ public class AutoIOGameTest {
         EnergyHatchBlockEntity source = placeEnergyInputPort(helper, new BlockPos(0, 1, 0));
         EnergyHatchBlockEntity firstTarget = placeEnergyInputPort(helper, new BlockPos(1, 1, 0));
         EnergyHatchBlockEntity secondTarget = placeEnergyInputPort(helper, new BlockPos(-1, 1, 0));
-        source.getMutableEnergyStorage().forceInsert(2, false);
+        source.energyStorage().forceInsert(2, false);
 
         helper.runAtTickTime(20, () -> {
             helper.assertTrue(source.ejectContents(), "Energy input hatch ejects its contents");
-            long firstAmount = firstTarget.getMutableEnergyStorage().getAmountAsLong();
-            long secondAmount = secondTarget.getMutableEnergyStorage().getAmountAsLong();
+            long firstAmount = firstTarget.energyStorage().getAmountAsLong();
+            long secondAmount = secondTarget.energyStorage().getAmountAsLong();
             helper.assertTrue((firstAmount == 2 && secondAmount == 0) || (firstAmount == 0 && secondAmount == 2),
                     "Exactly one adjacent energy target receives all contents");
-            helper.assertTrue(source.getMutableEnergyStorage().getAmountAsLong() == 0, "Energy input hatch is empty after a complete first transfer");
+            helper.assertTrue(source.energyStorage().getAmountAsLong() == 0, "Energy input hatch is empty after a complete first transfer");
             helper.succeed();
         });
     }
@@ -214,15 +214,15 @@ public class AutoIOGameTest {
         EnergyHatchBlockEntity source = placeEnergyInputPort(helper, new BlockPos(0, 1, 0));
         EnergyHatchBlockEntity firstTarget = placeEnergyInputPort(helper, new BlockPos(1, 1, 0));
         EnergyHatchBlockEntity secondTarget = placeEnergyInputPort(helper, new BlockPos(-1, 1, 0));
-        source.getMutableEnergyStorage().forceInsert(2, false);
-        firstTarget.getMutableEnergyStorage().forceInsert(999999, false);
-        secondTarget.getMutableEnergyStorage().forceInsert(999999, false);
+        source.energyStorage().forceInsert(2, false);
+        firstTarget.energyStorage().forceInsert(999999, false);
+        secondTarget.energyStorage().forceInsert(999999, false);
 
         helper.runAtTickTime(20, () -> {
             helper.assertTrue(source.ejectContents(), "Energy input hatch ejects to partially available targets");
-            helper.assertTrue(firstTarget.getMutableEnergyStorage().getAmountAsLong() == 1000000, "First energy target receives its remaining capacity");
-            helper.assertTrue(secondTarget.getMutableEnergyStorage().getAmountAsLong() == 1000000, "Second energy target receives the remaining FE");
-            helper.assertTrue(source.getMutableEnergyStorage().getAmountAsLong() == 0, "Energy input hatch is empty after both partial transfers");
+            helper.assertTrue(firstTarget.energyStorage().getAmountAsLong() == 1000000, "First energy target receives its remaining capacity");
+            helper.assertTrue(secondTarget.energyStorage().getAmountAsLong() == 1000000, "Second energy target receives the remaining FE");
+            helper.assertTrue(source.energyStorage().getAmountAsLong() == 0, "Energy input hatch is empty after both partial transfers");
             helper.succeed();
         });
     }
@@ -231,15 +231,15 @@ public class AutoIOGameTest {
         EnergyHatchBlockEntity source = placeEnergyInputPort(helper, new BlockPos(0, 1, 0));
         EnergyHatchBlockEntity firstTarget = placeEnergyInputPort(helper, new BlockPos(1, 1, 0));
         EnergyHatchBlockEntity secondTarget = placeEnergyInputPort(helper, new BlockPos(-1, 1, 0));
-        source.getMutableEnergyStorage().forceInsert(3, false);
-        firstTarget.getMutableEnergyStorage().forceInsert(999999, false);
-        secondTarget.getMutableEnergyStorage().forceInsert(999999, false);
+        source.energyStorage().forceInsert(3, false);
+        firstTarget.energyStorage().forceInsert(999999, false);
+        secondTarget.energyStorage().forceInsert(999999, false);
 
         helper.runAtTickTime(20, () -> {
             helper.assertTrue(source.ejectContents(), "Energy input hatch ejects until adjacent capacity is exhausted");
-            helper.assertTrue(firstTarget.getMutableEnergyStorage().getAmountAsLong() == 1000000, "First energy target is filled");
-            helper.assertTrue(secondTarget.getMutableEnergyStorage().getAmountAsLong() == 1000000, "Second energy target is filled");
-            helper.assertTrue(source.getMutableEnergyStorage().getAmountAsLong() == 1, "Energy input hatch preserves the remaining FE");
+            helper.assertTrue(firstTarget.energyStorage().getAmountAsLong() == 1000000, "First energy target is filled");
+            helper.assertTrue(secondTarget.energyStorage().getAmountAsLong() == 1000000, "Second energy target is filled");
+            helper.assertTrue(source.energyStorage().getAmountAsLong() == 1, "Energy input hatch preserves the remaining FE");
             helper.succeed();
         });
     }

@@ -1,8 +1,14 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
+import cn.howxu.mmcr.api.capability.CapabilityHost;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.compat.kubejs.SmartInterfaceEvents;
 import cn.howxu.mmcr.compat.kubejs.SmartInterfaceUpdateEventJS;
+import cn.howxu.mmcr.internal.capability.SmartInterfaceCapability;
+import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -28,7 +34,7 @@ import java.util.Set;
  *
  * @author howxu <dev@howxu.cn>
  */
-public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
+public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity implements CapabilityHost {
     private static final String BINDINGS_KEY = "bindings";
     private static final String MACHINE_ID_KEY = "machineId";
     private static final String VALUES_KEY = "values";
@@ -38,6 +44,9 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
     private @Nullable Identifier machineId;
     private final Map<String, Float> values = new LinkedHashMap<>();
     private final Set<BlockPos> controllers = new LinkedHashSet<>();
+    private final FloatValueStorage capabilityStorage = new FloatValueStorage(this::applyCapabilityValues);
+    private final MachineCapability inputCapability = new SmartInterfaceCapability(capabilityStorage, IOType.INPUT);
+    private final MachineCapability outputCapability = new SmartInterfaceCapability(capabilityStorage, IOType.OUTPUT);
 
     public SmartInterfaceBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.SMART_INTERFACE.get(), pos, state);
@@ -45,6 +54,11 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
 
     public Optional<Identifier> machineId() {
         return Optional.ofNullable(machineId);
+    }
+
+    @Override
+    public CapabilitySnapshot capabilitySnapshot() {
+        return new CapabilitySnapshot(List.of(inputCapability, outputCapability));
     }
 
     public Set<BlockPos> controllerPositions() {
@@ -88,6 +102,7 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
         float oldValue = values.get(type);
         if (Float.compare(oldValue, value) == 0) return true;
         values.put(type, value);
+        capabilityStorage.set(type, value);
         changed();
         postUpdate(type, oldValue, value);
         return true;
@@ -98,6 +113,7 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
         for (SmartInterfaceType type : types.values()) {
             values.putIfAbsent(type.type(), type.defaultValue());
         }
+        capabilityStorage.replace(values);
     }
 
     public boolean bind(BlockPos controllerPos, Identifier machineId, String type, float value) {
@@ -160,6 +176,7 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
         });
         input.listOrEmpty(CONTROLLERS_KEY, ControllerEntry.CODEC).forEach(entry -> controllers.add(entry.pos().immutable()));
         if (values.isEmpty()) loadLegacyBindings(input);
+        capabilityStorage.replace(values);
     }
 
     private void loadLegacyBindings(ValueInput input) {
@@ -184,6 +201,13 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
         if (level == null || level.isClientSide() || machineId == null) return;
         SmartInterfaceEvents.post(new SmartInterfaceUpdateEventJS(worldPosition, machineId, type,
                 oldValue, newValue, List.copyOf(controllers)));
+    }
+
+    private void applyCapabilityValues(Map<String, Float> nextValues) {
+        boolean valuesChanged = !values.equals(nextValues);
+        values.clear();
+        values.putAll(nextValues);
+        if (valuesChanged) changed();
     }
 
     public record Binding(BlockPos controllerPos, Identifier machineId, String type, float value) {

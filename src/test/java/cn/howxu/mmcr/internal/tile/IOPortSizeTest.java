@@ -82,7 +82,7 @@ class IOPortSizeTest {
     }
 
     private static LongFluidStorage tank(FluidHatchBlockEntity hatch) {
-        return hatch.getMutableFluidStorage();
+        return hatch.fluidStorage();
     }
 
 }

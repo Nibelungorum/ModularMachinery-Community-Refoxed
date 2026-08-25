@@ -50,7 +50,7 @@ public class EnergyHatchCapabilityGameTest {
             tx.commit();
         }
 
-        var outputStorage = outputHatch.getMutableEnergyStorage();
+        var outputStorage = outputHatch.energyStorage();
         while (outputStorage.forceInsert(10000, false) > 0) {}
 
         try (Transaction tx = Transaction.openRoot()) {

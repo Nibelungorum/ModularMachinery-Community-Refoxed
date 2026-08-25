@@ -23,6 +23,7 @@ import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 import net.neoforged.neoforge.transfer.energy.EnergyHandlerUtil;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.resource.Resource;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 import java.util.Map;
@@ -224,7 +225,7 @@ public final class CapabilityTransferPolicies {
         }
     }
 
-    private static <R> ResourceHandler<R> resourceHandler(ResourceStorage<R> storage) {
+    private static <R extends Resource> ResourceHandler<R> resourceHandler(ResourceStorage<R> storage) {
         return new ResourceHandler<>() {
             @Override public int size() { return storage.size(); }
             @Override public R getResource(int slot) { return storage.resource(slot); }

@@ -5,8 +5,10 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.plan.PlanningResult;
+import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.api.recipe.RecipeCraftingContext;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -47,13 +49,13 @@ public class SharedMultiblockIoGameTest {
         helper.runAtTickTime(4, () -> {
             first.serverTick();
             second.serverTick();
-            helper.assertTrue(first.isFormed(), "first controller should form");
-            helper.assertTrue(second.isFormed(), "second controller should form through shared energy port");
+            helper.assertTrue(first.structureSnapshot().formed(), "first controller should form");
+            helper.assertTrue(second.structureSnapshot().formed(), "second controller should form through shared energy port");
             helper.destroyBlock(first.getBlockPos());
         });
         helper.runAtTickTime(8, () -> {
             IOPortBlockEntity port = helper.getBlockEntity(sharedEnergy, EnergyInputHatchBlockEntity.class);
-            helper.assertTrue(second.isFormed(), "second controller remains formed after first teardown");
+            helper.assertTrue(second.structureSnapshot().formed(), "second controller remains formed after first teardown");
             helper.assertTrue(port.linkedControllerPositions().contains(second.getBlockPos()), "shared port retains second owner");
             helper.succeed();
         });
@@ -104,7 +106,7 @@ public class SharedMultiblockIoGameTest {
             second.serverTick();
             energy.set(helper.getBlockEntity(sharedEnergy, EnergyInputHatchBlockEntity.class));
             domain.set(first.resourceDomain());
-            energy.get().getMutableEnergyStorage().forceInsert(15, false);
+            energy.get().energyStorage().forceInsert(15, false);
             enqueueTick(coordinator, domain.get(), first, recipe, firstTicks);
             enqueueTick(coordinator, domain.get(), second, recipe, secondTicks);
             coordinator.resolve(domain.get());
@@ -113,7 +115,7 @@ public class SharedMultiblockIoGameTest {
             helper.assertTrue(secondTicks.get() == 0, "second lane cannot receive a second finite energy grant in the same tick");
         });
         helper.runAtTickTime(5, () -> {
-            energy.get().getMutableEnergyStorage().forceInsert(15, false);
+            energy.get().energyStorage().forceInsert(15, false);
             enqueueTick(coordinator, domain.get(), first, recipe, firstTicks);
             enqueueTick(coordinator, domain.get(), second, recipe, secondTicks);
             coordinator.resolve(domain.get());
@@ -142,23 +144,36 @@ public class SharedMultiblockIoGameTest {
 
     private static void enqueueStart(SharedIoCoordinator coordinator, StructureClaimRegistry.ResourceDomain domain,
                                      MachineControllerBlockEntity controller, MachineRecipe recipe, AtomicInteger total) {
-        RecipeCraftingContext context = new RecipeCraftingContext(controller);
         coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain,
-                new SharedIoCoordinator.LaneKey(controller.getBlockPos(), "base"), controller.getStructureVersion(), 8,
-                requested -> context.commitStart(recipe, requested), total::addAndGet,
-                () -> controller.resourceDomain() != null && controller.resourceDomain().equals(domain), controller::getStructureVersion));
+                new SharedIoCoordinator.LaneKey(controller.getBlockPos(), "base"), controller.runtimeSnapshot().structure().version(),
+                controller.runtimeSnapshot().stateVersion(), 8,
+                requested -> {
+                    CraftingContext context = new CraftingContext(
+                            new CapabilitySnapshot(controller.componentRuntime().capabilities()));
+                    PlanningResult result = context.planStartResult(recipe, requested);
+                    if (!result.successful() || !result.plan().commitInputs()) return 0;
+                    return result.plan().parallelism();
+                }, total::addAndGet,
+                 () -> controller.resourceDomain() != null && controller.resourceDomain().equals(domain),
+                 () -> controller.runtimeSnapshot().structure().version(),
+                () -> controller.runtimeSnapshot().stateVersion()));
     }
 
     private static void enqueueTick(SharedIoCoordinator coordinator, StructureClaimRegistry.ResourceDomain domain,
                                     MachineControllerBlockEntity controller, MachineRecipe recipe, AtomicInteger ticks) {
-        RecipeCraftingContext context = new RecipeCraftingContext(controller);
         coordinator.enqueue(new SharedIoCoordinator.TickRequest(domain,
-                new SharedIoCoordinator.LaneKey(controller.getBlockPos(), "base"), controller.getStructureVersion(),
+                new SharedIoCoordinator.LaneKey(controller.getBlockPos(), "base"), controller.runtimeSnapshot().structure().version(),
+                controller.runtimeSnapshot().stateVersion(),
                 () -> {
-                    if (!context.coordinatorIoTick(recipe, 1).getAsBoolean()) return false;
+                    CraftingContext context = new CraftingContext(
+                            new CapabilitySnapshot(controller.componentRuntime().capabilities()));
+                    PlanningResult result = context.planInputs(recipe, 1);
+                    if (!result.successful() || !result.plan().commit()) return false;
                     ticks.incrementAndGet();
                     return true;
-                }, () -> controller.resourceDomain() != null && controller.resourceDomain().equals(domain), controller::getStructureVersion));
+                }, () -> controller.resourceDomain() != null && controller.resourceDomain().equals(domain),
+                () -> controller.runtimeSnapshot().structure().version(),
+                () -> controller.runtimeSnapshot().stateVersion()));
     }
 
     private static MachineRecipe itemRecipe(String path) {

@@ -10,6 +10,7 @@ import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponentMap;
@@ -25,8 +26,6 @@ import net.minecraft.world.level.storage.TagValueOutput;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Field;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -132,30 +131,24 @@ class FactorySchedulerBlockEntityTest {
     }
 
     private static MachineControllerBlockEntity createController() throws Exception {
-        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
-        unsafeField.setAccessible(true);
-        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
-        MachineControllerBlockEntity controller =
-                (MachineControllerBlockEntity) unsafe.allocateInstance(MachineControllerBlockEntity.class);
-        Field components = MachineControllerBlockEntity.class.getDeclaredField("components");
-        components.setAccessible(true);
-        components.set(controller, new ArrayList<ProcessingComponent>());
-        Identifier machineId = MMCR.id("factory_capacity_notification_test");
-        Field machine = MachineControllerBlockEntity.class.getDeclaredField("machine");
-        machine.setAccessible(true);
-        machine.set(controller, new DynamicMachine(machineId, "Factory Capacity Notification Test",
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        Identifier machineId = MMCR.id("test_cube");
+        DynamicMachine machine = new DynamicMachine(machineId, "Factory Capacity Notification Test",
                 new BlockArray(Map.of()), MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(),
-                List.of(), Map.of(), 1, false, true, 4));
+                List.of(), Map.of(), 1, false, true, 4);
+        RuntimeTestFixtures.publishStructure(controller, machine, true, 1,
+                net.minecraft.core.Direction.SOUTH, net.minecraft.core.Direction.SOUTH);
         return controller;
     }
 
     @SuppressWarnings("unchecked")
     private static void addFactoryComponent(MachineControllerBlockEntity controller,
-                                            FactorySchedulerBlockEntity scheduler) throws Exception {
-        Field field = MachineControllerBlockEntity.class.getDeclaredField("components");
-        field.setAccessible(true);
-        ((List<ProcessingComponent>) field.get(controller)).add(
-                new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), BlockPos.ZERO, List.of(), null));
+                                             FactorySchedulerBlockEntity scheduler) throws Exception {
+        List<ProcessingComponent> components = new java.util.ArrayList<>(controller.componentRuntime().components());
+        components.add(new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), BlockPos.ZERO, List.of(), null));
+        controller.componentRuntime().replaceComponents(components);
+        RuntimeTestFixtures.publishStructure(controller, controller.structureSnapshot().configuredMachine(), true, 1,
+                net.minecraft.core.Direction.SOUTH, net.minecraft.core.Direction.SOUTH);
     }
 
     private static void bindItemComponents(Item item) {

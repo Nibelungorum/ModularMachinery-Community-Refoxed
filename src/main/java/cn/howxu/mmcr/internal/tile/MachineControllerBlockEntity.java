@@ -308,6 +308,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 current.structure().matchedStage());
         runtime.publishComponentState(runtime.components(), current.foundModifiers(), Map.of(),
                 current.linkedPortPositions());
+        runtime.refreshModuleConnectionState();
         setChanged();
         publishRuntimeState();
     }
@@ -435,6 +436,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void handleStructureBlockChanged(BlockPos changedPos) {
+        if (getBlockPos().equals(changedPos)) return;
         if (structureWorkSnapshot().scan() != null) publishStructureWork(state -> state.withPendingInvalidation(true));
         StructureSnapshot structure = runtimeSnapshot().structure();
         if (!structure.formed()) {
@@ -1306,7 +1308,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         scanBatchCountForTesting++;
         scanBatchesPerTickForTesting.merge(level.getGameTime(), 1, Integer::sum);
-        StructureMatcher.ScanResult scanResult = runtime.stepStructureScan(level, getBlockPos());
+        StructureMatcher.ScanResult scanResult = runtime.stepStructureScan(serverLevel(), getBlockPos());
         if (scanResult.inProgress()) {
             publishStructureWork(state -> state.withNextCheckTick(level.getGameTime() + 1L));
             return false;
@@ -1351,7 +1353,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         scanBatchCountForTesting++;
         scanBatchesPerTickForTesting.merge(level.getGameTime(), 1, Integer::sum);
-        StructureMatcher.ScanResult scanResult = runtime.stepStructureScan(level, getBlockPos());
+        StructureMatcher.ScanResult scanResult = runtime.stepStructureScan(serverLevel(), getBlockPos());
         if (scanResult.inProgress()) {
             publishStructureWork(state -> state.withNextCheckTick(level.getGameTime() + 1L));
             return;
@@ -1400,6 +1402,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
         Machine validationMachine = compiled == null ? candidate : compiled.machine();
         var replacements = replacementsFor(validationMachine, compiled, facing, candidatePattern.pattern(), candidatePattern.rollFacing());
         validateAndFormMachine(candidate, facing, candidatePattern, validationMachine, candidatePattern.pattern(), compiled, replacements);
+    }
+
+    private ServerLevel serverLevel() {
+        if (level instanceof ServerLevel serverLevel) return serverLevel;
+        throw new IllegalStateException("Structure scan requires a server level");
     }
 
     private boolean validateAndFormMachine(Machine candidate, Direction facing, CandidatePattern candidatePattern,
@@ -1675,11 +1682,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
         Machine previousMachine = previousStructure.machine();
         boolean structureChanged = runtime.publishFormationState(matchedMachine, rotatedPattern, compiledPattern,
                 facing, rollFacing, compiledPattern == null ? 1 : compiledPattern.stageNumber());
+        runtime.refreshModuleConnectionState();
         ControllerRuntimeSnapshot current = runtimeSnapshot();
         Map<String, List<RecipeModifier>> foundModifiers = collectFoundModifiers(replacements);
         runtime.publishComponentState(runtime.components(), foundModifiers, levels, current.linkedPortPositions());
         refreshCriticalStructureChunks();
-        FORMED_CONTROLLERS.add(this);
         if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
         if ((previousMachine != null && previousMachine != matchedMachine) || structureChanged) {
             stopFactoryController();
@@ -1689,7 +1696,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
             updatePhysicalFormedState(true);
             notifyPreviewReceiversStructureFormed();
         }
-        updateComponents();
+        FORMED_CONTROLLERS.add(this);
+        if (structureChanged) updateComponents();
         resumePausedRecipeAfterStructureCheck();
         clearCandidateCache();
         publishStructureWork(state -> state.withFormationFailure(null).withLastStructureError(null));

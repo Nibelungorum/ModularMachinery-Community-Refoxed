@@ -3,7 +3,9 @@ package cn.howxu.mmcr.client.sound;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
 import net.minecraft.core.MappedRegistry;
@@ -95,7 +97,7 @@ class MachineSoundManagerTest {
 
         MachineSoundManager.ControllerDescriptor descriptor = MachineSoundManager.descriptorForTest(OVERWORLD, controller);
 
-        assertThat(controller.getFoundMachine()).isNull();
+        assertThat(controller.structureSnapshot().machine()).isNull();
         assertThat(descriptor.active()).isTrue();
         assertThat(descriptor.soundId()).isEqualTo(LOOP_SOUND);
     }
@@ -147,19 +149,14 @@ class MachineSoundManagerTest {
     }
 
     private static MachineControllerBlock testControllerBlock(Identifier machineId) throws Exception {
-        MappedRegistry<Block> registry = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
-        registry.unfreeze(true);
-        try {
-            MachineControllerBlock block = new MachineControllerBlock(machineId, Blocks.IRON_BLOCK.properties());
-            Registry.register(BuiltInRegistries.BLOCK, Identifier.fromNamespaceAndPath("test", machineId.getPath() + "_controller"), block);
-            return block;
-        } finally {
-            registry.freeze();
-        }
+        TestBootstrap.bindControllerForTesting(machineId);
+        return (MachineControllerBlock) ModBlocks.controllerFor(machineId).get();
     }
 
     private static MachineControllerBlockEntity controllerBlockEntityWithoutRunningMinecraftConstructor() throws Exception {
-        return (MachineControllerBlockEntity) unsafe().allocateInstance(MachineControllerBlockEntity.class);
+        Identifier machineId = Identifier.fromNamespaceAndPath("test", "client_synced_descriptor_machine");
+        TestBootstrap.bindControllerForTesting(machineId);
+        return RuntimeTestFixtures.controllerEntity(machineId, new BlockPos(4, 5, 6));
     }
 
     private static void setField(Class<?> owner, Object target, String name, Object value) throws Exception {

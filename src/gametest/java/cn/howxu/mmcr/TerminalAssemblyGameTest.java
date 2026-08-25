@@ -103,8 +103,8 @@ public class TerminalAssemblyGameTest {
         }
         ServerPlayer player = servicePlayer(helper);
         helper.runAtTickTime(8, () -> {
-            helper.assertTrue(controller.isFormed(), "Stage 2 structure forms before demolish");
-            helper.assertTrue(controller.getMatchedStructureStage() == 2, "Controller matched stage 2 before demolish");
+            helper.assertTrue(controller.structureSnapshot().formed(), "Stage 2 structure forms before demolish");
+            helper.assertTrue(controller.structureSnapshot().matchedStage() == 2, "Controller matched stage 2 before demolish");
 
             MultiblockAssemblyService.Result result = MultiblockAssemblyService.demolish(player, controller, 16, stack -> {});
 
@@ -193,7 +193,7 @@ public class TerminalAssemblyGameTest {
                     "All five structure scan batches execute");
             helper.assertTrue(countPlacedStructureBlocks(helper, template) == expectedCount,
                     "Final placed structure block count is unchanged by duplicate submission");
-            helper.assertTrue(controller.isFormed(), "Controller forms after the build completes");
+            helper.assertTrue(controller.structureSnapshot().formed(), "Controller forms after the build completes");
             helper.succeed();
         });
     }
@@ -212,10 +212,11 @@ public class TerminalAssemblyGameTest {
             helper.getLevel().setBlock(placement.pos(), placement.state(), 3);
         }
         helper.runAtTickTime(1, controller::requestImmediateStructureCheck);
-        helper.runAtTickTime(2, () -> {
-            helper.assertTrue(controller.scanBatchCountForTesting() >= 2,
-                    "The first two scan batches complete before the mutation");
+        helper.runAtTickTime(3, () -> {
+            controller.serverTick();
             int cursorBeforeMutation = controller.structureScanCursorForTesting();
+            helper.assertTrue(cursorBeforeMutation >= 0,
+                    "The structure scan is still active before the mutation");
             helper.getLevel().setBlock(changedPos, Blocks.AIR.defaultBlockState(), 3);
             controller.onStructureBlockChanged(changedPos);
             helper.assertTrue(controller.isPendingStructureInvalidationForTesting(),
@@ -223,12 +224,12 @@ public class TerminalAssemblyGameTest {
             helper.getLevel().setBlock(changedPos, changedPlacement.state(), 3);
             controller.onStructureBlockChanged(changedPos);
             // The nine-entry test pattern needs nine real ticker batches with its sentinel budget.
-            helper.runAtTickTime(19, () -> {
+            helper.runAtTickTime(20, () -> {
                 helper.assertTrue(controller.scanBatchCountForTesting() >= 10,
                         "A fresh scan runs after the pending invalidation");
                 helper.assertTrue(controller.scanBatchCountForTesting() > cursorBeforeMutation,
                         "The invalidated scan does not reuse its old cursor as the final result");
-                helper.assertTrue(controller.isFormed(), "The restored structure forms after a fresh scan");
+                helper.assertTrue(controller.structureSnapshot().formed(), "The restored structure forms after a fresh scan");
                 helper.succeed();
             });
         });

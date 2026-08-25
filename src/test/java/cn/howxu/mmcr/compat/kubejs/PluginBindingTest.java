@@ -18,6 +18,7 @@ import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.network.RuntimeContentServerBridge;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
+import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
@@ -480,7 +481,7 @@ class PluginBindingTest {
             new MMCRStartupEventJS().createMachine("mmcr:kubejs_startup_window_press").register();
 
             assertThat(MachineDefinitions.getRegistration(MMCR.id("kubejs_startup_window_press"))).isNull();
-            MMCR.completeKubeJSStartup();
+            StartupContentRegistration.completeKubeJSStartup();
 
             assertThat(MachineDefinitions.getRegistration(MMCR.id("kubejs_startup_window_press"))).isNotNull();
             assertThat(MachineDefinitions.isRegistryPhaseOpen()).isFalse();

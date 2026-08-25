@@ -6,17 +6,18 @@ import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Field;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -149,44 +150,14 @@ class SmartInterfaceBindingCoordinatorTest {
     }
 
     private static MachineControllerBlockEntity controller(BlockPos pos, Identifier machineId,
-                                                           Identifier texture) throws Exception {
-        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
-        unsafeField.setAccessible(true);
-        MachineControllerBlockEntity controller = (MachineControllerBlockEntity) ((sun.misc.Unsafe) unsafeField.get(null))
-                .allocateInstance(MachineControllerBlockEntity.class);
-        setField(BlockEntity.class, controller, "worldPosition", pos);
-        setField(MachineControllerBlockEntity.class, controller, "foundMachine", new Machine() {
-            @Override
-            public Identifier registryName() {
-                return machineId;
-            }
-
-            @Override
-            public String localizedName() {
-                return "Binding Test";
-            }
-
-            @Override
-            public BlockArray pattern() {
-                return new BlockArray(Map.of());
-            }
-
-            @Override
-            public MachineControllerSpec controller() {
-                return MachineControllerSpec.defaultsFor(registryName());
-            }
-
-            @Override
-            public MachineAppearanceSpec appearance() {
-                return new MachineAppearanceSpec(MMCR.id("block/basic_casing"), MMCR.id("block/basic_casing"), texture);
-            }
-        });
+                                                           Identifier texture) {
+        Machine machine = new cn.howxu.mmcr.api.machine.DynamicMachine(machineId, "Binding Test",
+                new BlockArray(Map.of()), MachineControllerSpec.defaultsFor(machineId),
+                new MachineAppearanceSpec(MMCR.id("block/basic_casing"), MMCR.id("block/basic_casing"), texture),
+                PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of());
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), pos);
+        RuntimeTestFixtures.publishStructure(controller, machine, true, 1, net.minecraft.core.Direction.SOUTH,
+                net.minecraft.core.Direction.SOUTH);
         return controller;
-    }
-
-    private static void setField(Class<?> declaringClass, Object target, String name, Object value) throws ReflectiveOperationException {
-        Field field = declaringClass.getDeclaredField(name);
-        field.setAccessible(true);
-        field.set(target, value);
     }
 }

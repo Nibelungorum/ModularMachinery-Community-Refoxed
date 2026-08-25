@@ -169,9 +169,6 @@ class CapabilityHostTest {
             }
             return capabilitySnapshot;
         }
-        @Override public cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType autoIOCapabilityType() {
-            return cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType.ITEM;
-        }
     }
 
     private record TestCapability(String id) implements MachineCapability {

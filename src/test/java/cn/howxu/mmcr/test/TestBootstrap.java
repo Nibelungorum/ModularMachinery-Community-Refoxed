@@ -22,7 +22,9 @@ import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
+import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
@@ -152,8 +154,18 @@ public final class TestBootstrap {
         MachineRegistry.rebuildCompiledCache();
     }
 
+    public static synchronized void bindControllerForTesting(Identifier machineId) {
+        ModBlocks.registerMachineControllers(List.of(machineId));
+        ModBlockEntities.registerMachineControllers(List.of(machineId));
+        try {
+            bindControllerBlockEntity(machineId);
+        } catch (Exception exception) {
+            throw new AssertionError("Unable to bind test controller " + machineId, exception);
+        }
+    }
+
     private static void registerTestEvents() {
-        MMCR.registerPublicApiLifecycleForTesting(
+        StartupContentRegistration.registerForTesting(
                 TestBootstrap::registerAllMachineDefinitions,
                 TestBootstrap::registerAllMachineStructures,
                 TestBootstrap::registerAllRecipes);
@@ -228,13 +240,32 @@ public final class TestBootstrap {
     }
 
     private static void bindController(Identifier machineId) throws Exception {
-        MachineControllerBlock block = controllerBlock(machineId);
-        bind(ModBlocks.controllerFor(machineId), block);
+        MachineControllerBlock block = bindControllerBlockEntity(machineId);
         String itemName = MachineControllerSpec.defaultsFor(machineId).id().getPath();
         DeferredHolder<Item, Item> itemHolder = ModItems.ITEMS.get(itemName);
         Item item = registerItem(itemHolder);
         bind(itemHolder, item);
         Item.BY_BLOCK.put(block, item);
+    }
+
+    private static MachineControllerBlock bindControllerBlockEntity(Identifier machineId) throws Exception {
+        MachineControllerBlock block = controllerBlock(machineId);
+        bind(ModBlocks.controllerFor(machineId), block);
+        if (!ModBlockEntities.controllerFor(machineId).isBound()) {
+            Identifier typeId = MachineControllerSpec.defaultsFor(machineId).id();
+            MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
+            BlockEntityType<?> type;
+            if (BuiltInRegistries.BLOCK_ENTITY_TYPE.containsKey(typeId)) {
+                type = BuiltInRegistries.BLOCK_ENTITY_TYPE.getValue(typeId);
+            } else {
+                blockEntities.unfreeze(true);
+                type = new BlockEntityType<>(MachineControllerBlockEntity::new, block);
+                Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, typeId, type);
+                blockEntities.freeze();
+            }
+            bind(ModBlockEntities.controllerFor(machineId), type);
+        }
+        return block;
     }
 
     private static MachineControllerBlock controllerBlock(Identifier machineId) {
@@ -379,6 +410,7 @@ public final class TestBootstrap {
 
     private static void bindAllVanillaItemComponents() {
         Fluids.WATER.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+        Fluids.LAVA.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         for (Item item : BuiltInRegistries.ITEM) {
             Holder.Reference<Item> holder = item.builtInRegistryHolder();
             try {

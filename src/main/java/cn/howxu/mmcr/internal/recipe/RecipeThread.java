@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
+import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
@@ -54,8 +55,9 @@ public abstract class RecipeThread {
     protected boolean searchAndStartRecipe(List<MachineRecipe> candidates, int availableParallelism,
                                            long structureVersion, @Nullable Identifier lockedRecipeId) {
         ControllerRuntimeSnapshot snapshot = controller.runtimeSnapshot();
-        Identifier machineId = snapshot.structure().machine() == null
-                ? null : controller.runtimeSnapshot().structure().machine().registryName();
+        Machine machine = snapshot.structure().machine() == null
+                ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
+        Identifier machineId = machine == null ? null : machine.registryName();
         if (machineId == null || availableParallelism <= 0) return false;
         RecipeSearchResult result = new RecipeSearchTask(snapshot, machineId, structureVersion,
                 availableParallelism, candidates, lockedRecipeId, controller.componentRuntime().capabilities()).compute();

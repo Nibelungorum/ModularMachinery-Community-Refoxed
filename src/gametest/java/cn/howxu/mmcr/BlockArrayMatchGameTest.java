@@ -22,7 +22,7 @@ public class BlockArrayMatchGameTest {
         var be = helper.getBlockEntity(ctrlPos, MachineControllerBlockEntity.class);
         be.setMachine(machine);
         helper.runAtTickTime(10, () -> {
-            helper.assertTrue(be.isFormed(), "Structure formed after bounded scan");
+            helper.assertTrue(be.structureSnapshot().formed(), "Structure formed after bounded scan");
             helper.succeed();
         });
     }

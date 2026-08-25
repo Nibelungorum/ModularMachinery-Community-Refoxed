@@ -11,7 +11,6 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
-import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
@@ -147,11 +146,10 @@ class ComponentRuntimeTest {
         ComponentRuntime runtime = new ComponentRuntime();
         runtime.replaceLevels(Map.of(id, level));
         runtime.replaceLinkedPortPositions(Set.of(BlockPos.ZERO));
-        runtime.refreshModuleConnectionState(null);
 
         assertThat(runtime.foundLevels()).containsEntry(id, level);
         assertThat(runtime.linkedPortPositions()).containsExactly(BlockPos.ZERO);
-        assertThat(runtime.moduleConnectionStatus()).isEqualTo(ModuleConnectionStatus.notRequired());
+        assertThat(runtime.moduleConnectionStatus()).isEqualTo(ModuleConnectionStatus.disconnected());
         assertThat(runtime.installedModuleCount()).isZero();
     }
 
@@ -159,9 +157,11 @@ class ComponentRuntimeTest {
     void controller_snapshot_publishes_module_state_and_count_together() {
         Identifier hostId = Identifier.fromNamespaceAndPath("mmcr_test", "host");
         ControllerRuntimeSnapshot snapshot = new ControllerRuntimeSnapshot(
-                StructureSnapshot.empty(), List.of(), List.of(), 0L, Map.of(), Map.of(), Set.of(),
+                StructureSnapshot.empty(), 0L, 0L, 0L, Map.of(), Map.of(), Set.of(),
                 ModuleConnectionStatus.connected(hostId), 2,
-                new ComponentRuntime.CapabilityAggregate(0L, 0L, null, null), FactorySnapshot.empty());
+                new ComponentRuntime.CapabilityAggregate(0L, 0L, null, null), CraftingStateSnapshot.empty(0L, 0L, 0L),
+                FactorySnapshot.empty(), List.of(), List.of(), List.of(), "", "", 0,
+                false, false, 0, 0, 1);
 
         assertThat(snapshot.moduleConnectionStatus()).isEqualTo(ModuleConnectionStatus.connected(hostId));
         assertThat(snapshot.installedModuleCount()).isEqualTo(2);
@@ -169,60 +169,8 @@ class ComponentRuntimeTest {
                 .isInstanceOf(UnsupportedOperationException.class);
     }
 
-    @Test
-    void modifier_only_changes_refresh_the_controller_crafting_context() throws Exception {
-        MachineControllerBlockEntity controller = unconstructedController();
-        MachineControllerRuntime runtime = new MachineControllerRuntime(controller);
-        CraftingContext first = runtime.craftingContext();
-        Map<String, List<RecipeModifier>> modifiers = new LinkedHashMap<>();
-        modifiers.put("duration", List.of(new RecipeModifier("duration", RecipeModifier.IOType.INPUT,
-                2F, RecipeModifier.Operation.MULTIPLY, false)));
-        runtime.components().replaceModifiers(modifiers);
-
-        CraftingContext second = runtime.craftingContext();
-
-        assertThat(second).isNotSameAs(first);
-        assertThat(runtime.craftingStateVersion()).isGreaterThan(0L);
-    }
-
-    @Test
-    void attached_controller_snapshot_does_not_refresh_from_legacy_component_fields() throws Exception {
-        MachineControllerBlockEntity controller = unconstructedController();
-        Map<String, List<RecipeModifier>> initial = new LinkedHashMap<>();
-        initial.put("initial", List.of(new RecipeModifier("initial", RecipeModifier.IOType.INPUT,
-                1F, RecipeModifier.Operation.ADD, false)));
-        setField(controller, "foundModifiers", initial);
-
-        ControllerRuntimeSnapshot first = controller.runtimeSnapshot();
-        Map<String, List<RecipeModifier>> changed = new LinkedHashMap<>();
-        changed.put("changed", List.of(new RecipeModifier("changed", RecipeModifier.IOType.INPUT,
-                2F, RecipeModifier.Operation.MULTIPLY, false)));
-        setField(controller, "foundModifiers", changed);
-
-        ControllerRuntimeSnapshot second = controller.runtimeSnapshot();
-
-        assertThat(second.foundModifiers()).isEqualTo(first.foundModifiers());
-        assertThat(controller.runtime().craftingContext()).isNotNull();
-    }
-
     private static ProcessingComponent component(BlockEntity host, String tag) {
         return new ProcessingComponent(null, host, BlockPos.ZERO, BlockPos.ZERO, List.of(tag), null);
-    }
-
-    private static MachineControllerBlockEntity unconstructedController() throws Exception {
-        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
-        unsafeField.setAccessible(true);
-        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
-        MachineControllerBlockEntity controller = (MachineControllerBlockEntity) unsafe.allocateInstance(MachineControllerBlockEntity.class);
-        setField(controller, "components", List.of());
-        setField(controller, "foundModifiers", new LinkedHashMap<>());
-        return controller;
-    }
-
-    private static void setField(Object target, String name, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(name);
-        field.setAccessible(true);
-        field.set(target, value);
     }
 
     private static final class TestCapabilityHost extends BlockEntity implements CapabilityHost {

@@ -193,7 +193,7 @@ public final class ComponentRuntime {
                 : Optional.empty();
     }
 
-    CapabilityAggregate capabilityAggregate() {
+    public CapabilityAggregate capabilityAggregate() {
         return capabilityAggregate;
     }
 
@@ -301,7 +301,7 @@ public final class ComponentRuntime {
         }
 
         private static Object storageIdentity(CapabilityStorage storage) {
-            return storage == null ? "<none>" : storage.contentFingerprint();
+            return storage;
         }
     }
 
